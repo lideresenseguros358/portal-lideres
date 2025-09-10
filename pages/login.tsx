@@ -1,7 +1,7 @@
 // /pages/login.tsx
 import React, { useState } from 'react';
 import { useRouter } from 'next/router';
-import { gsLogin } from '@/lib/gsheets';
+import { gsLogin } from '../src/lib/gsheets';
 
 export default function Login() {
   const r = useRouter();

@@ -15,7 +15,6 @@
     "incremental": true,
 
     "baseUrl": ".",                 // <-- IMPORTANTE
-    "paths": { "@/*": ["./src/*"] } // <-- alias @ apunta a /src
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx"],
   "exclude": ["node_modules"]
