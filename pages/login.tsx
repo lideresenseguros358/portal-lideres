@@ -28,7 +28,7 @@ const COLORS = {
   footerText: '#cfd3d8',
 };
 
-export default function Login(): jsx.Element {
+export default function Login() {
   const r = useRouter();
   const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
