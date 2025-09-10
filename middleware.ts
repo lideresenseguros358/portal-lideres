@@ -1,38 +1,37 @@
-// middleware.ts
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
-import jwt from 'jsonwebtoken';
+// /middleware.ts
+import { NextRequest, NextResponse } from 'next/server';
 
-const JWT_SECRET = process.env.JWT_SECRET!;
+const PROTECTED_PREFIX = '/app';
+
+function safeDateISO(x: string | null): Date | null {
+  if (!x) return null;
+  const d = new Date(x);
+  return isNaN(d.getTime()) ? null : d;
+}
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
-  // Solo proteger rutas /app
-  if (!pathname.startsWith('/app')) return NextResponse.next();
 
-  const cookie = req.cookies.get('portal_token')?.value || '';
-  if(!cookie){
-    const url = req.nextUrl.clone();
-    url.pathname = '/login';
-    return NextResponse.redirect(url);
-  }
-
-  try{
-    const payload = jwt.verify(cookie, JWT_SECRET) as any;
-    // Si es /app (router), redirige según rol
-    if(pathname === '/app' || pathname === '/app/'){
-      const url = req.nextUrl.clone();
-      url.pathname = payload.role === 'master' ? '/app/master' : '/app/broker';
-      return NextResponse.redirect(url);
-    }
+  // Solo proteger /app y subrutas
+  if (!pathname.startsWith(PROTECTED_PREFIX)) {
     return NextResponse.next();
-  }catch{
+  }
+
+  const session = req.cookies.get('portal_session')?.value ?? '';
+  const expISO = req.cookies.get('portal_expires')?.value ?? ''; // la pone el cliente al loguear
+  const exp = safeDateISO(expISO);
+
+  const unauth = !session || (exp && exp.getTime() <= Date.now());
+  if (unauth) {
     const url = req.nextUrl.clone();
     url.pathname = '/login';
+    url.search = `redirect=${encodeURIComponent(pathname)}`;
     return NextResponse.redirect(url);
   }
+
+  return NextResponse.next();
 }
 
 export const config = {
-  matcher: ['/app/:path*']
-}
+  matcher: ['/app/:path*'],
+};
