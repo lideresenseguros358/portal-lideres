@@ -1,6 +1,6 @@
 // pages/api/login.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { serialize as cookieSerialize, SerializeOptions } from 'cookie';
+import { serialize as cookieSerialize, CookieSerializeOptions } from 'cookie';
 import bcrypt from 'bcryptjs';
 import { supabaseAdmin } from '../../lib/supabase'; // tu helper de server (service role)
 
@@ -23,7 +23,7 @@ type ApiLoginRes = ApiLoginOk | ApiLoginErr;
 
 const SESSION_HOURS = Number(process.env.SESSION_HOURS || '24');
 
-const cookieOpts: SerializeOptions = {
+const cookieOpts: CookieSerializeOptions = {
   httpOnly: true,
   secure: true,
   sameSite: 'lax',
