@@ -1,112 +1,118 @@
-// /pages/api/login.ts
+// pages/api/login.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
-import type { SerializeOptions } from 'cookie';
-import { serialize as cookieSerialize } from 'cookie';
+import { serialize as cookieSerialize, SerializeOptions } from 'cookie';
+import bcrypt from 'bcryptjs';
+import { supabaseAdmin } from '../../lib/supabase'; // tu helper de server (service role)
 
 type Role = 'master' | 'broker';
 
-interface GSLoginResponse {
-  ok: boolean;
-  sessionId?: string;
-  role?: Role;
-  brokerEmail?: string;
-  expiresAt?: string; // ISO
-  error?: string;
+interface ApiLoginOk {
+  ok: true;
+  sessionId: string;
+  role: Role;
+  brokerEmail: string;
+  expiresAt: string; // ISO
 }
 
-function isRole(x: unknown): x is Role {
-  return x === 'master' || x === 'broker';
-}
-function safeStr(x: unknown): string | undefined {
-  return typeof x === 'string' ? x : undefined;
-}
-function isGSLogin(x: unknown): x is GSLoginResponse {
-  if (typeof x !== 'object' || x === null) return false;
-  const o = x as Record<string, unknown>;
-  if (typeof o.ok !== 'boolean') return false;
-  if (o.role !== undefined && !isRole(o.role)) return false;
-  if (o.sessionId !== undefined && typeof o.sessionId !== 'string') return false;
-  if (o.brokerEmail !== undefined && typeof o.brokerEmail !== 'string') return false;
-  if (o.expiresAt !== undefined && typeof o.expiresAt !== 'string') return false;
-  if (o.error !== undefined && typeof o.error !== 'string') return false;
-  return true;
+interface ApiLoginErr {
+  ok: false;
+  error: string;
 }
 
-const GSHEET_API_URL = process.env.GSHEET_API_URL!;
-const GSHEET_API_TOKEN = process.env.GSHEET_API_TOKEN!;
-const DEFAULT_SESSION_HOURS = Number(process.env.SESSION_HOURS ?? '24'); // fallback
+type ApiLoginRes = ApiLoginOk | ApiLoginErr;
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+const SESSION_HOURS = Number(process.env.SESSION_HOURS || '24');
+
+const cookieOpts: SerializeOptions = {
+  httpOnly: true,
+  secure: true,
+  sameSite: 'lax',
+  path: '/',
+  maxAge: SESSION_HOURS * 3600,
+};
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse<ApiLoginRes>) {
   if (req.method !== 'POST') {
-    res.status(405).json({ ok: false, error: 'Método no permitido' });
-    return;
+    return res.status(405).json({ ok: false, error: 'Method not allowed' });
   }
 
-  const email = safeStr(req.body?.email)?.trim();
-  const password = safeStr(req.body?.password)?.trim();
-  if (!email || !password) {
-    res.status(400).json({ ok: false, error: 'Faltan credenciales' });
-    return;
+  const { email, password } = (req.body ?? {}) as { email?: string; password?: string };
+  if (typeof email !== 'string' || typeof password !== 'string') {
+    return res.status(400).json({ ok: false, error: 'Faltan credenciales' });
   }
 
-  try {
-    const url = `${GSHEET_API_URL}?action=login&table=brokers&token=${encodeURIComponent(
-      GSHEET_API_TOKEN
-    )}`;
+  // 1) Buscar primero en profiles (email exacto)
+  const { data: profile, error: pErr } = await supabaseAdmin
+    .from('profiles')
+    .select('id, role, broker_id, full_name, email')
+    .eq('email', email)
+    .maybeSingle();
 
-    const gsRes = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-    });
-
-    const text = await gsRes.text();
-    let data: unknown;
-    try {
-      data = JSON.parse(text) as unknown;
-    } catch {
-      res.status(502).json({ ok: false, error: 'Respuesta no JSON desde GS API' });
-      return;
-    }
-
-    if (!isGSLogin(data)) {
-      res.status(502).json({ ok: false, error: 'Estructura inválida desde GS API' });
-      return;
-    }
-    if (!data.ok) {
-      res.status(401).json({ ok: false, error: data.error ?? 'Credenciales inválidas' });
-      return;
-    }
-
-    // Fecha de expiración (del API o fallback local)
-    const expIso = data.expiresAt
-      ? new Date(data.expiresAt)
-      : new Date(Date.now() + DEFAULT_SESSION_HOURS * 60 * 60 * 1000);
-
-    const cookieOptions: SerializeOptions = {
-      httpOnly: true,
-      sameSite: 'lax',
-      secure: process.env.NODE_ENV === 'production',
-      path: '/',
-      expires: expIso,
-    };
-
-    // Guarda cookie con el sessionId
-    const header = cookieSerialize('portal_session', data.sessionId ?? '', cookieOptions);
-    res.setHeader('Set-Cookie', header);
-
-    res.status(200).json({
-      ok: true,
-      sessionId: data.sessionId,
-      role: data.role,
-      brokerEmail: data.brokerEmail ?? email,
-      expiresAt: expIso.toISOString(),
-    });
-  } catch (e) {
-    res.status(500).json({
-      ok: false,
-      error: e instanceof Error ? e.message : 'Error de servidor',
-    });
+  if (pErr) {
+    return res.status(500).json({ ok: false, error: 'Error consultando perfiles' });
   }
+
+  // Fallback: si no hubiera profile todavía, intenta en brokers por correo
+  let brokerRow:
+    | {
+        id: string;
+        role: Role;
+        active: boolean;
+        passwordHash: string | null;
+        brokerEmail: string;
+      }
+    | null = null;
+
+  if (profile?.broker_id) {
+    const { data: b, error: bErr } = await supabaseAdmin
+      .from('brokers')
+      .select('id, role, active, "passwordHash", "brokerEmail"')
+      .eq('id', profile.broker_id)
+      .maybeSingle();
+
+    if (bErr) {
+      return res.status(500).json({ ok: false, error: 'Error consultando brokers' });
+    }
+    brokerRow = b as any;
+  } else {
+    // (case-insensitive)
+    const { data: b, error: bErr } = await supabaseAdmin
+      .from('brokers')
+      .select('id, role, active, "passwordHash", "brokerEmail"')
+      .ilike('brokerEmail', email)
+      .maybeSingle();
+
+    if (bErr) {
+      return res.status(500).json({ ok: false, error: 'Error consultando brokers' });
+    }
+    brokerRow = b as any;
+  }
+
+  if (!brokerRow) {
+    return res.status(404).json({ ok: false, error: 'Usuario no encontrado' });
+  }
+  if (!brokerRow.active) {
+    return res.status(403).json({ ok: false, error: 'Usuario inactivo' });
+  }
+
+  // 2) Validar contraseña (usando hash guardado en brokers.passwordHash)
+  const hash = brokerRow.passwordHash ?? '';
+  const okPass = await bcrypt.compare(password, hash);
+  if (!okPass) {
+    return res.status(401).json({ ok: false, error: 'Credenciales inválidas' });
+  }
+
+  // 3) Responder y setear cookie de sesión httpOnly
+  const sessionId = crypto.randomUUID();
+  const expiresAt = new Date(Date.now() + SESSION_HOURS * 3600 * 1000).toISOString();
+
+  res.setHeader('Set-Cookie', cookieSerialize('portal_session', sessionId, cookieOpts));
+
+  return res.status(200).json({
+    ok: true,
+    sessionId,
+    role: (profile?.role ?? brokerRow.role) as Role,
+    brokerEmail: brokerRow.brokerEmail,
+    expiresAt,
+  });
 }
-
