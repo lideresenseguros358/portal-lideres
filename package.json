@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@google-cloud/storage": "^7.17.1",
-    "@google-cloud/vision": "^3.5.3",
+    "@google-cloud/vision": "^4.3.2",
     "@supabase/supabase-js": "^2.57.4",
     "bcryptjs": "^2.4.3",
     "chart.js": "^4.4.3",
@@ -22,9 +22,9 @@
     "next": "15.0.3",
     "papaparse": "^5.3.5",
     "pdfkit": "^0.15.2",
-    "react": "^19.0.0",
+    "react": "^18.2.0",
     "react-chartjs-2": "^5.3.0",
-    "react-dom": "^19.0.0",
+    "react-dom": "^18.2.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
