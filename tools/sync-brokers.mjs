@@ -1,5 +1,7 @@
 // tools/sync-brokers.mjs
 // Sincroniza tabla "brokers" -> Supabase Auth usando Admin API v2
+// - Crea usuarios que falten con password temporal "Temporal123"
+// - Manda email de reset para que cada uno establezca su propia clave
 // Requiere SUPABASE_URL y SUPABASE_SERVICE_ROLE_KEY en .env / .env.local
 
 import { createClient } from '@supabase/supabase-js';
@@ -71,21 +73,29 @@ async function upsertBrokerUser(broker, existingUser) {
 
   const user_metadata = {
     broker_id: broker.id ?? null,
-    full_name: broker.name ?? null // usamos 'name' como nombre público
+    full_name: broker.name ?? null
   };
   const app_metadata = { role: 'broker' };
 
   if (!existingUser) {
+    // Crear con password temporal + enviar reset
+    const tempPassword = 'Temporal123';
     const { data, error } = await admin.auth.admin.createUser({
       email,
       email_confirm: true,
+      password: tempPassword,
       user_metadata,
       app_metadata
     });
     if (error) return { status: 'fallido', error };
-    return { status: 'creado', userId: data.user.id };
+
+    // envía link para que el usuario establezca su propia contraseña
+    await admin.auth.admin.generateLink({ type: 'password_reset', email });
+
+    return { status: 'creado', userId: data.user.id, user: data.user };
   }
 
+  // Actualizar metadatos si hiciera falta
   const mergedUserMeta = { ...(existingUser.user_metadata || {}), ...user_metadata };
   const mergedAppMeta  = { ...(existingUser.app_metadata  || {}), ...app_metadata  };
 
@@ -93,23 +103,23 @@ async function upsertBrokerUser(broker, existingUser) {
     JSON.stringify(existingUser.user_metadata || {}) !== JSON.stringify(mergedUserMeta) ||
     JSON.stringify(existingUser.app_metadata  || {}) !== JSON.stringify(mergedAppMeta);
 
-  if (!needsUpdate) return { status: 'actualizado_sin_cambios' };
+  if (!needsUpdate) return { status: 'actualizado_sin_cambios', user: existingUser };
 
   const { error } = await admin.auth.admin.updateUserById(existingUser.id, {
     user_metadata: mergedUserMeta,
     app_metadata: mergedAppMeta
   });
   if (error) return { status: 'fallido', error };
-  return { status: 'actualizado' };
+  return { status: 'actualizado', user: existingUser };
 }
 
 async function main() {
   console.time('sync');
 
-  // Solo columnas existentes: id, email, name
+  // Solo columnas existentes: id, email, name, auth_user_id (si la tienes)
   const { data: brokers, error: brokersError } = await admin
     .from('brokers')
-    .select('id, email, name')
+    .select('id, email, name, auth_user_id')
     .not('email', 'is', null);
 
   if (brokersError) {
@@ -127,7 +137,7 @@ async function main() {
     process.exit(1);
   }
 
-  let creados = 0, actualizados = 0, sinCambios = 0, omitidos = 0, fallidos = 0;
+  let creados = 0, actualizados = 0, sinCambios = 0, omitidos = 0, fallidos = 0, enlazados = 0;
 
   for (const b of brokers) {
     const existing = usersByEmail.get((b.email || '').toLowerCase());
@@ -140,7 +150,22 @@ async function main() {
         case 'omitido': omitidos++; break;
         case 'fallido': fallidos++; break;
       }
-      const tag = res.status.padEnd(21, ' ');
+
+      // Enlazar auth_user_id si no lo tiene
+      const userId = res.user?.id ?? existing?.id ?? null;
+      if (userId && !b.auth_user_id) {
+        const { error: upErr } = await admin
+          .from('brokers')
+          .update({ auth_user_id: userId })
+          .eq('id', b.id);
+        if (upErr) {
+          console.log(`   ! No se pudo enlazar auth_user_id para ${b.email}: ${upErr.message}`);
+        } else {
+          enlazados++;
+        }
+      }
+
+      const tag = res.status.padEnd(24, ' ');
       console.log(`Broker ${b.id ?? ''} (${b.email}) -> ${tag}${res.error ? res.error.message : ''}`);
     } catch (err) {
       fallidos++;
@@ -149,7 +174,7 @@ async function main() {
     await sleep(30);
   }
 
-  console.log(`\nResumen -> creados:${creados}, actualizados:${actualizados}, sin_cambios:${sinCambios}, omitidos:${omitidos}, fallidos:${fallidos}`);
+  console.log(`\nResumen -> creados:${creados}, actualizados:${actualizados}, sin_cambios:${sinCambios}, enlazados:${enlazados}, omitidos:${omitidos}, fallidos:${fallidos}`);
   console.timeEnd('sync');
 }
 
