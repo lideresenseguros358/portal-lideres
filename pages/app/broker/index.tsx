@@ -1,102 +1,76 @@
 // /pages/app/broker/index.tsx
 import React, { useEffect, useState } from 'react';
-import Head from 'next/head';
 import AppLayout from '../../../components/AppLayout';
 import KpiCard from '../../../components/dash/KpiCard';
 import Donut from '../../../components/dash/Donut';
-import Bars from '../../../components/dash/Bars';
 import MiniCalendar from '../../../components/dash/MiniCalendar';
+import Bars from '../../../components/dash/Bars';
 
-type CalEvt = { date: string; title: string };
-type Series = { label: string; data: number[] };
-
-type BrokerDashData = {
-  userName?: string;
-  lastFortnightAmount?: number;         // “Última Quincena”
-  morosidadOver60?: number;            // “Morosidad +60 Días”
-  pendingIdentify?: number;            // “Pendientes de identificar”
-  convivo?: { current: number; goal: number; split: number }; // donut
-  assa?:    { current: number; goal: number; split: number }; // donut
-  calendar?: CalEvt[];
-  // barras: meses 1..12 y dos series (2024, 2025) o similar
-  bars?: { labels: string[]; series: Series[] };
+type BrokerDash = {
+  last_fortnight: number;
+  aging_60: number;
+  pending_to_identify: number;
+  donut_conv: { current: number; goal: number; split: number };
+  donut_contest: { current: number; goal: number; split: number };
+  chart: { labels: string[]; series: { label: string; data: number[] }[] };
 };
 
 export default function BrokerDashboard() {
-  const [data, setData] = useState<BrokerDashData | null>(null);
-  const [err, setErr] = useState<string>('');
+  const [data, setData] = useState<BrokerDash | null>(null);
+  const [name, setName] = useState<string>('');
 
   useEffect(() => {
     let alive = true;
-    // Llama a tu endpoint actual
-    fetch('/api/dashboard/brokers')
-      .then(r => r.json())
-      .then(j => { if (alive) setData(j?.data ?? j); })
-      .catch(e => { if (alive) setErr(String(e?.message || e)); });
+    Promise.all([
+      fetch('/api/dashboard/brokers').then(r => r.ok ? r.json() : Promise.reject()),
+      fetch('/api/me').then(r => r.ok ? r.json() : { name: '' })
+    ])
+      .then(([d, me]) => { if (alive) { setData(d); setName(me?.name || ''); } })
+      .catch(() => {
+        if (alive) setData({
+          last_fortnight: 0, aging_60: 0, pending_to_identify: 0,
+          donut_conv: { current: 0, goal: 10000, split: 0 },
+          donut_contest: { current: 0, goal: 10000, split: 0 },
+          chart: { labels: ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'], series: [
+            { label: '2024', data: Array(12).fill(0) },
+            { label: '2025', data: Array(12).fill(0) },
+          ]},
+        });
+      });
     return () => { alive = false; };
   }, []);
 
-  if (err) {
-    return (
-      <AppLayout role="broker">
-        <div style={{ padding:16, color:'#b00' }}>Error: {err}</div>
-      </AppLayout>
-    );
-  }
-
   return (
-    <>
-      <Head>
-        <title>Líderes en Seguros | Dashboard (Broker)</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-      </Head>
+    <AppLayout role="broker" userName={name}>
+      <h1 style={{margin:'4px 0 14px', color:'#010139'}}>Bienvenido de vuelta {name || '(Broker)'}</h1>
 
-      <AppLayout role="broker">
-        <div style={{ padding:'8px 16px' }}>
-          <h1 style={{ color:'#0b2b2b', fontWeight:800, margin:'16px 0' }}>
-            Bienvenido de vuelta {data?.userName ? data.userName : '(Broker)'}
-          </h1>
-
-          {/* KPIs superiores */}
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:16 }}>
-            <KpiCard title="Última Quincena" value={`B/. ${Number(data?.lastFortnightAmount ?? 0).toFixed(2)}`} />
-            <KpiCard title="Morosidad +60 Días" value={`B/. ${Number(data?.morosidadOver60 ?? 0).toFixed(2)}`} />
-            <KpiCard title="Pendientes de identificar" value={String(data?.pendingIdentify ?? 0)} />
+      {!data ? <div>Cargando…</div> : (
+        <>
+          <div className="grid kpis">
+            <KpiCard title="Última Quincena" value={`B/. ${data.last_fortnight.toFixed(2)}`} />
+            <KpiCard title="Morosidad +60 Días" value={`B/. ${data.aging_60.toFixed(2)}`} />
+            <KpiCard title="Pendientes de identificar" value={String(data.pending_to_identify)} />
           </div>
 
-          {/* Donuts + Calendario */}
-          <div style={{ display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:16, marginTop:16 }}>
-            <Donut label="Convivio LISSA"
-                   current={Number(data?.convivo?.current ?? 0)}
-                   goal={Number(data?.convivo?.goal ?? 0)}
-                   split={Number(data?.convivo?.split ?? 0)} />
-            <Donut label="Concurso ASSA"
-                   current={Number(data?.assa?.current ?? 0)}
-                   goal={Number(data?.assa?.goal ?? 0)}
-                   split={Number(data?.assa?.split ?? 0)} />
-            <MiniCalendar events={(data?.calendar ?? []).map(evt => ({
-              date: evt.date,
-              count: 1 // or another logic to determine count
-            }))} />
+          <div className="grid donuts">
+            <Donut label="Convivio LISSA" current={data.donut_conv.current} goal={data.donut_conv.goal} split={data.donut_conv.split} />
+            <Donut label="Concurso ASSA" current={data.donut_contest.current} goal={data.donut_contest.goal} split={data.donut_contest.split} />
+            <MiniCalendar events={[]} />
           </div>
 
-          {/* Barras PMA anual */}
-          <div style={{ marginTop:16 }}>
-            <h2 style={{ textAlign:'center', fontWeight:800, margin:'8px 0' }}>
-              Acumulado Anual PMA <span style={{ fontSize:14, fontWeight:600, marginLeft:8 }}>
-                {data?.bars?.series?.map(s => s.label).filter(Boolean).join(' • ')}
-              </span>
-            </h2>
-            <Bars
-              labels={data?.bars?.labels ?? ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']}
-              series={data?.bars?.series ?? [
-                { label: '2024', data: Array(12).fill(0) },
-                { label: '2025', data: Array(12).fill(0) },
-              ]}
-            />
+          <div className="block">
+            <h2 style={{textAlign:'center'}}>Acumulado Anual PMA <span style={{color:'#666'}}>2024 • 2025</span></h2>
+            <Bars labels={data.chart.labels} series={data.chart.series} />
           </div>
-        </div>
-      </AppLayout>
-    </>
+        </>
+      )}
+
+      <style jsx>{`
+        .grid { display:grid; gap:16px; }
+        .kpis { grid-template-columns: repeat(auto-fit, minmax(220px,1fr)); margin-bottom: 12px; }
+        .donuts { grid-template-columns: repeat(auto-fit, minmax(260px,1fr)); margin-bottom: 12px; }
+        .block { background:#fff;border-radius:12px;box-shadow:0 6px 16px rgba(0,0,0,.12);padding:12px; }
+      `}</style>
+    </AppLayout>
   );
 }

@@ -9,64 +9,62 @@ type Props = {
 
 const itemsByRole: Record<'master'|'broker', { label: string; href: string }[]> = {
   broker: [
-    { label: 'Dashboard', href: '/app/broker' },
-    { label: 'Comisiones', href: '/app/broker?tab=commissions' },
-    { label: 'Mis clientes', href: '/app/broker?tab=clients' },
-    { label: 'Morosidad', href: '/app/broker?tab=aging' },
-    { label: 'Producción', href: '/app/broker?tab=production' },
-    { label: 'Descargas', href: '/app/broker?tab=downloads' },
-    { label: 'Knowledge', href: '/app/broker?tab=knowledge' },
-    { label: 'Agenda', href: '/app/broker?tab=agenda' },
+    { label: 'Dashboard',   href: '/app/broker' },
+    { label: 'Comisiones',  href: '/app/broker/commissions' },
+    { label: 'Mis clientes',href: '/app/broker/clients' },
+    { label: 'Morosidad',   href: '/app/broker/morosidad' },
+    { label: 'Producción',  href: '/app/broker/production' },
+    { label: 'Descargas',   href: '/app/broker/downloads' },
+    { label: 'Knowledge',   href: '/app/broker/knowledge' },
+    { label: 'Agenda',      href: '/app/broker/agenda' },
   ],
   master: [
-    { label: 'Dashboard', href: '/app/master' },
+    { label: 'Dashboard',   href: '/app/master' },
     { label: 'Base de datos', href: '/app/master?tab=db' },
-    { label: 'Corredores', href: '/app/master?tab=brokers' },
-    { label: 'Aseguradoras', href: '/app/master?tab=insurers' },
-    { label: 'Comisiones', href: '/app/master?tab=commissions' },
-    { label: 'Morosidad', href: '/app/master?tab=aging' },
-    // 👇 nuevo item:
+    { label: 'Corredores',  href: '/app/master/brokers' },
+    { label: 'Aseguradoras',href: '/app/master/insurers' },
+    { label: 'Comisiones',  href: '/app/master/commissions' },
+    { label: 'Morosidad',   href: '/app/master/morosidad' },
     { label: 'Solicitudes', href: '/app/master/solicitudes' },
-    { label: 'Producción', href: '/app/master?tab=production' },
-    { label: 'Descargas', href: '/app/master?tab=downloads' },
-    { label: 'Knowledge', href: '/app/master?tab=knowledge' },
-    { label: 'Agenda', href: '/app/master?tab=agenda' },
+    { label: 'Producción',  href: '/app/master/production' },
+    { label: 'Descargas',   href: '/app/master/downloads' },
+    { label: 'Knowledge',   href: '/app/master/knowledge' },
+    { label: 'Agenda',      href: '/app/master/agenda' },
   ],
 };
 
 export default function SideMenu({ open, onClose, role }: Props) {
   const items = itemsByRole[role];
-
   return (
-    <aside className={`sidenav ${open ? 'open' : ''}`}>
-      <div className="header">
-        <img src="/logo_alternativo.png" className="logo" alt="LISSA" />
-        <button className="close" onClick={onClose} aria-label="Cerrar menú">✕</button>
-      </div>
-
-      <nav>
-        {items.map((it) => (
-          <a key={it.href} href={it.href} onClick={onClose}>{it.label}</a>
-        ))}
-      </nav>
-
-      <a className="logout" href="/api/logout">Cerrar sesión</a>
+    <>
+      <aside className="sidenav" data-open={open}>
+        <div className="header">
+          <img src="/logo_alternativo.png" alt="LISSA" className="logo" />
+          <button className="close" onClick={onClose} aria-label="Cerrar menú">×</button>
+        </div>
+        <nav>
+          {items.map((it) => (
+            <a key={it.href} href={it.href} onClick={onClose}>{it.label}</a>
+          ))}
+        </nav>
+      </aside>
 
       <style jsx>{`
-        .sidenav { position: fixed; top: 0; left: 0; width: 300px;
-          transform: translateX(-102%); transition: 255ms ease; background:#fff;
-          height: 100vh; box-shadow: 0 0 16px rgba(0,0,0,.25); z-index: 1000; padding:12px; }
-        .sidenav.open { transform: translateX(0); }
-        .header { display:flex; align-items:center; justify-content:space-between; }
-        .logo { height:42px; }
-        .close { background:none; border:0; color:#fff; cursor:pointer; }
-        nav { display:flex; flex-direction:column; margin-top:12px; gap: 8px; }
-        nav a { color:#010139; text-decoration:none; font-weight:700; padding:12px 12px; border-radius:6px; transition: transform .1s ease, color .1s; }
-        nav a:hover { transform: scale(1.02); color:#8aaa19; }
-        .logout { position:absolute; bottom:12px; left:12px; color:#ff0b33; text-decoration:none; }
-        @media (max-width:420px) { .sidenav { width: 80vw; } }
+        .sidenav {
+          position: fixed; inset: 0 auto 0 0; width: 280px; transform: translateX(-100%);
+          background: #010139; color: #fff; z-index: 50; transition: transform .2s ease;
+          box-shadow: 4px 0 12px rgba(0,0,0,.25);
+        }
+        .sidenav[data-open="true"] { transform: translateX(0); }
+        .header { display:flex; align-items:center; gap:8px; padding: 12px; }
+        .logo { height: 46px; }
+        .close { margin-left:auto; background:transparent; border:0; color:#fff; font-size:20px; cursor:pointer; }
+        nav { display:flex; flex-direction:column; padding: 4px 12px 16px; }
+        nav a {
+          color:#fff; text-decoration:none; padding:10px 8px; border-radius:6px;
+        }
+        nav a:hover { background: rgba(255,255,255,.08); }
       `}</style>
-    </aside>
+    </>
   );
 }
-
