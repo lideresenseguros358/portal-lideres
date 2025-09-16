@@ -9,11 +9,11 @@ export type AuthedUser = {
   broker_id?: string | null;
 };
 
-/** Decodifica y valida el Bearer; devuelve perfil (role, broker_id). */
 export async function getUserFromAuthHeader(req: NextApiRequest): Promise<AuthedUser | null> {
   try {
-    const auth = req.headers.authorization ?? '';
-    const token = auth.toLowerCase().startsWith('bearer ') ? auth.slice(7).trim() : '';
+    const auth = req.headers.authorization || '';
+    const token = auth.toLowerCase().startsWith('bearer ') ? auth.slice(7) : '';
+
     if (!token) return null;
 
     const { data: userData, error: userErr } = await supabaseAdmin.auth.getUser(token);
@@ -26,19 +26,25 @@ export async function getUserFromAuthHeader(req: NextApiRequest): Promise<Authed
       .eq('id', uid)
       .maybeSingle();
 
-    return { id: uid, email: userData.user.email ?? undefined, role: profile?.role as any, broker_id: profile?.broker_id ?? null };
+    return {
+      id: uid,
+      email: userData.user.email || undefined,
+      role: (profile?.role as any) || undefined,
+      broker_id: profile?.broker_id ?? null,
+    };
   } catch {
     return null;
   }
 }
 
-export async function requireMaster(req: NextApiRequest): Promise<AuthedUser> {
+export async function requireUser(req: NextApiRequest) {
   const u = await getUserFromAuthHeader(req);
-  if (!u || u.role !== 'master') {
-    const err: any = new Error('No autorizado');
-    err.statusCode = 403;
-    throw err;
+  if (!u) {
+    const e: any = new Error('No auth token');
+    e.statusCode = 401;
+    throw e;
   }
   return u;
 }
+
 
