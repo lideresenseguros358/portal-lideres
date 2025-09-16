@@ -1,11 +1,13 @@
 // /lib/supabaseAdmin.ts
 import { createClient } from '@supabase/supabase-js';
 
-const url        = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
-// ⚠️ Este archivo NO debe importarse desde el navegador.
-// Úsalo sólo en /pages/api/* o en código de servidor.
+// Cliente admin para usar SOLO en el backend (API Routes, cron jobs, etc.)
 export const supabaseAdmin = createClient(url, serviceKey, {
-  auth: { persistSession: false, autoRefreshToken: false },
+  auth: {
+    persistSession: false,
+    autoRefreshToken: false,
+  },
 });
