@@ -1,5 +1,5 @@
 // /lib/notify.ts
-import { supabaseAdmin } from './supabase-client';
+import { supabase } from './supabase-client';
 
 type NotiPayload = {
   brokerId?: string | null;
@@ -19,7 +19,7 @@ export async function createNotification(p: NotiPayload) {
     body: p.body ?? '',
     meta: p.meta ?? {},
   };
-  const { error } = await supabaseAdmin.from('notifications').insert(payload);
+  const { error } = await supabase.from('notifications').insert(payload);
   if (error) throw error;
 }
 

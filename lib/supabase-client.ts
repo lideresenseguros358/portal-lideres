@@ -2,42 +2,39 @@
 import { createClient } from '@supabase/supabase-js';
 
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-// Cliente público (mantén la sesión en cliente)
-export const supabase = createClient(url, anonKey, {
+// Cliente PÚBLICO: seguro para el navegador
+export const supabase = createClient(url, anon, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
-    // evita errores en SSR
-    storage: typeof window !== 'undefined' ? window.localStorage : undefined,
   },
+  // evita crashear en SSR por localStorage
+  global: { headers: {} },
 });
 
-// Cliente admin (solo server / API routes)
-export const supabaseAdmin = createClient(url, serviceKey, {
-  auth: { persistSession: false, autoRefreshToken: false },
-});
-
-// ===== Encabezados con el Bearer actual =====
+// ====== Encabezados bearer actuales (para tus APIs) ======
 export async function getAuthHeaders(): Promise<Record<string, string>> {
   const { data } = await supabase.auth.getSession();
-  const token = data.session?.access_token;
-  const user = data.session?.user;
+  const t = data.session?.access_token;
+  const u = data.session?.user;
 
   const h: Record<string, string> = {};
-  if (token) h['Authorization'] = `Bearer ${token}`;
-  if (user?.id) h['x-user-id'] = user.id;
-  if (user?.email) h['x-user-email'] = user.email;
+  if (t) h.Authorization = `Bearer ${t}`;
+  if (u?.id) h['x-user-id'] = u.id;
+  if (u?.email) h['x-user-email'] = u.email;
   return h;
 }
 
-// ===== Fetch con contrato ok/data/error (compat) =====
+// ====== Fetch con contrato { ok, data, error } (compat) ======
 export type ApiJson<T = any> = { ok: boolean; data?: T; error?: string };
 
-export async function apiFetch<T = any>(input: string, init: RequestInit = {}): Promise<ApiJson<T>> {
+export async function apiFetch<T = any>(
+  input: string,
+  init: RequestInit = {}
+): Promise<ApiJson<T>> {
   const auth = await getAuthHeaders();
   const res = await fetch(input, { ...init, headers: { ...init.headers, ...auth } });
 
@@ -56,15 +53,11 @@ export async function apiFetch<T = any>(input: string, init: RequestInit = {}): 
     return { ok: false, error: String(msg ?? 'Request failed') };
   }
 
-  // Si el backend ya devuelve { ok, data, error }, respétalo
-  if (body && typeof body === 'object' && 'ok' in body && ('data' in body || 'error' in body)) {
+  if (body && typeof body === 'object' && 'ok' in body) {
     return body as ApiJson<T>;
   }
-
-  // Si es un JSON arbitrario o texto, lo ponemos en data
   return { ok: true, data: body as T };
 }
 
-// Alias para no tocar los imports existentes
+// Alias para mantener imports existentes
 export const authFetch = apiFetch;
-

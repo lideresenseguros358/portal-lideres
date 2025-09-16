@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { supabaseAdmin } from '../../../../lib/supabase-client';
+import { supabase } from '../../../../lib/supabase-client';
 import { requireMaster } from '../../_utils/auth';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -12,7 +12,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // … tu lógica existente (no la toco) …
     // Ejemplo mínimo para que compile:
-    const { data: reqRow, error: rErr } = await supabaseAdmin
+    const { data: reqRow, error: rErr } = await supabase
       .from('signup_requests')
       .select('*')
       .eq('id', request_id)
@@ -24,7 +24,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const password = String(reqRow.password ?? reqRow.plain_password ?? '');
     const role = make_master ? 'master' : (reqRow.role ?? 'broker');
 
-    const { data: created, error: cErr } = await supabaseAdmin.auth.admin.createUser({
+    const { data: created, error: cErr } = await supabase.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
@@ -34,7 +34,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (cErr) return res.status(400).json({ ok: false, error: cErr.message });
 
     // marca la solicitud como aprobada (si lo haces así)
-    await supabaseAdmin
+    await supabase
       .from('signup_requests')
       .update({ status: 'approved', decided_at: new Date().toISOString() })
       .eq('id', request_id);

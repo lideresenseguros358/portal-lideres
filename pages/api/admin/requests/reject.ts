@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { supabaseAdmin } from '../../../../lib/supabase-client';
+import { supabase } from '../../../../lib/supabase-client';
 import { requireMaster } from '../../_utils/auth';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -10,7 +10,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const { request_id } = (req.body ?? {}) as { request_id: string };
 
-    const { error } = await supabaseAdmin
+    const { error } = await supabase
       .from('signup_requests')
       .update({ status: 'rejected', decided_at: new Date().toISOString() })
       .eq('id', request_id);
