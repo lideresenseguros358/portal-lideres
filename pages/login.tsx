@@ -1,298 +1,149 @@
 // /pages/login.tsx
-import React, { useEffect, useState } from 'react';
-import { supabase } from '../lib/supabase'; // ajusta la ruta si tu lib vive en otro sitio
+import React, { useState, useMemo } from 'react';
+import Head from 'next/head';
+import Image from 'next/image';
+import { supabase } from '../lib/supabase-client'; // deja tu import como lo tengas
+import Link from 'next/link';
 
 function isEmail(v: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
 }
-function pwOk(v: string) {
-  return v.trim().length >= 6;
-}
+function pwOk(v: string) { return v.trim().length >= 6; }
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
-  const [pass, setPass] = useState('');
-  const [caps, setCaps] = useState(false);
+  const [pass, setPass]   = useState('');
   const [loading, setLoading] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
+  const [msg, setMsg] = useState<string|null>(null);
+  const [err, setErr] = useState<string|null>(null);
+  const [caps, setCaps] = useState(false);
 
-  // Rellena el email si quedó guardado
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem('portal_email') || '';
-      if (saved) setEmail(saved);
-    } catch {}
-  }, []);
-
-  const valid = isEmail(email) && pwOk(pass);
+  const valid = useMemo(() => isEmail(email) && pwOk(pass), [email, pass]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setMsg(null);
-    if (!valid) {
-      setMsg('Verifica tu correo y contraseña.');
-      return;
-    }
+    setErr(null); setMsg(null);
+    if (!valid) { setErr('Verifica tu correo y contraseña.'); return; }
     setLoading(true);
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password: pass,
+      const { error } = await supabase.auth.signInWithPassword({
+        email: email.trim(), password: pass
       });
       if (error) throw error;
 
-      const user = data.user;
-      if (!user) throw new Error('No auth user');
-
-      // Guarda email para la próxima
-      try { localStorage.setItem('portal_email', email.trim()); } catch {}
-
-      // 1) intenta rol desde app_metadata del token
-      let role: 'master' | 'broker' | undefined =
-        (user.app_metadata as any)?.role ||
-        (user.user_metadata as any)?.role;
-
-      // 2) si no hay rol en el token, intenta en profiles SIN .single()
-      if (!role) {
-        const uid = user.id;
-        const { data: prof, error: pErr } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', uid)
-          .limit(1)
-          .maybeSingle(); // ← evita "Cannot coerce..."
-
-        if (pErr) throw pErr;
-        role = (prof?.role as any) || undefined;
-      }
-
-      if (!role) throw new Error('No se pudo determinar el rol del usuario');
-
-      // Redirección
-      if (typeof window !== 'undefined') {
-        window.location.href = role === 'master' ? '/app/master' : '/app/broker';
-      }
-    } catch (err: any) {
-      setMsg(String(err?.message ?? err) || 'Error iniciando sesión');
+      // redirección por rol (lee desde local/session)
+      const { data: user } = await supabase.auth.getUser();
+      const role = (user.user?.app_metadata?.role ?? '') as 'master'|'broker'|'';
+      if (role === 'master') location.href = '/app/master';
+      else if (role === 'broker') location.href = '/app/broker';
+      else location.href = '/';
+    } catch (e: any) {
+      setErr(e?.message || 'Error iniciando sesión');
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="login-wrap">
-      {/* HEADER blanco con logo */}
-      <header className="topbar">
-        <div className="topbar-inner">
-          <img src="/logo.png" alt="Líderes en Seguros" className="logo" />
-        </div>
-      </header>
+    <>
+      <Head>
+        <title>Líderes en Seguros | Login</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+      </Head>
 
-      {/* CARD */}
-      <div className="login-card" role="region" aria-labelledby="title">
-        <h2 id="title" className="title">Portal Virtual</h2>
-        <h3 className="subtitle">Corredores</h3>
-        <p className="hint">Ingrese su usuario y contraseña</p>
+      <div className="page">
+        <header className="top">
+          <div className="logoBox">
+            {/* Usa tu logo real en /public/logo.svg ó ajusta ruta */}
+            <Image src="/logo.svg" alt="LISSA" width={120} height={40} />
+          </div>
+        </header>
 
-        <form onSubmit={onSubmit} className="form-grid" noValidate>
-          <input
-            className="full"
-            type="email"
-            placeholder="Usuario (correo)"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            aria-invalid={msg ? !isEmail(email) : undefined}
-          />
-          <input
-            className="full"
-            type="password"
-            placeholder="Contraseña"
-            value={pass}
-            onChange={(e) => setPass(e.target.value)}
-            onKeyUp={(e) => setCaps((e as any).getModifierState?.('CapsLock'))}
-            aria-invalid={msg ? !pwOk(pass) : undefined}
-          />
+        <main className="hero" aria-label="Fondo">
+          <div className="card" role="group" aria-labelledby="cardTitle">
+            <h1 id="cardTitle" className="title">Portal Virtual</h1>
+            <h2 className="title sub">Corredores</h2>
+            <p className="subtitle">Ingrese su usuario y contraseña</p>
 
-          {caps && <div className="warn full">Bloq Mayús activado</div>}
-          {msg && <div className="err full">{msg}</div>}
+            <form className="form" onSubmit={onSubmit} noValidate>
+              <input
+                className="input"
+                type="email"
+                placeholder="Usuario (correo)"
+                value={email}
+                onChange={(e)=>setEmail(e.target.value)}
+                aria-invalid={email ? !isEmail(email) : undefined}
+              />
+              <input
+                className="input"
+                type="password"
+                placeholder="Contraseña"
+                value={pass}
+                onChange={(e)=>setPass(e.target.value)}
+                onKeyUp={(e)=>setCaps((e as any).getModifierState?.('CapsLock'))}
+                aria-invalid={pass ? !pwOk(pass) : undefined}
+              />
+              {caps && <div className="warn">Bloq Mayús activado</div>}
+              {err &&  <div className="error">{err}</div>}
+              {msg &&  <div className="msg">{msg}</div>}
 
-          <button className="btn full" type="submit" disabled={!valid || loading}>
-            {loading ? 'Ingresando…' : 'Entrar'}
-          </button>
+              <button className="btn" type="submit" disabled={!valid || loading}>
+                {loading ? 'Ingresando…' : 'Entrar'}
+              </button>
 
-          <a className="link full" href="/app/auth/forgot">¿Olvidaste tu contraseña?</a>
-          <a className="link full" href="/app/auth/signup-request">Solicitar nuevo usuario</a>
-        </form>
+              <div className="links">
+                {/* ENLACES: deben existir /pages/app/auth/forgot.tsx y /pages/app/auth/signup-request.tsx */}
+                <Link href="/app/auth/forgot">¿Olvidaste tu contraseña?</Link>
+                <Link href="/app/auth/signup-request">Solicitar nuevo usuario</Link>
+              </div>
+            </form>
+          </div>
+        </main>
+
+        <footer className="bottom">
+          <div className="foot">
+            <div className="f1">
+              Regulado y Supervisado por la Superintendencia de Seguros y Reaseguros de Panamá - Licencia PJ750
+            </div>
+            <div className="f2">
+              Desarrollado por Líderes en Seguros | Todos los derechos reservados
+            </div>
+          </div>
+        </footer>
       </div>
 
-      {/* FOOTER */}
-      <footer className="footer">
-        <div className="footer-line">
-          Regulado y Supervisado por la Superintendencia de Seguros y Reaseguros de Panamá - Licencia PJ750
-        </div>
-        <div className="footer-sub">
-          Desarrollado por Líderes en Seguros | Todos los derechos reservados
-        </div>
-      </footer>
-
-      {/* ESTILOS */}
-      <style jsx global>{`
-        :root {
-          --olive: #8aaa19;
-          --bg-gray: #e6e6e6;
-          --txt: #1f2937;
-          --muted: #6b7280;
-          --err: #b00020;
-        }
-        html, body, #__next { height: 100%; }
-        body { margin: 0; font-family: Arial, Helvetica, sans-serif; background: var(--bg-gray); }
-      `}</style>
-
       <style jsx>{`
-        .login-wrap {
-          min-height: 100%;
-          background: url('/fondo_login.webp') center/cover no-repeat fixed;
-          position: relative;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-        }
-        /* overlay 35% negro */
-        .login-wrap::before {
-          content: '';
-          position: fixed;
-          inset: 0;
-          background: rgba(0,0,0,0.35);
-          pointer-events: none;
-        }
-
-        /* header blanco con logo a la izquierda */
-        .topbar {
-          width: 100%;
-          background: #fff;
-          position: relative;
-          z-index: 1;
-          box-shadow: 0 1px 2px rgba(0,0,0,0.06);
-        }
-        .topbar-inner {
-          max-width: 1200px;
-          margin: 0 auto;
-          height: 56px;
-          display: flex;
-          align-items: center;
-          padding: 0 16px;
-        }
-        .logo {
-          height: 36px;   /* tamaño pedido */
-          width: auto;
-          display: block;
-        }
-
-        .login-card {
-          position: relative;
-          z-index: 1;
-          width: 100%;
-          max-width: 560px;
-          margin: 56px 16px 0;
-          background: #fff;
-          border-radius: 12px;
-          box-shadow: 0 10px 30px rgba(0,0,0,0.15);
-          padding: 20px 20px 12px;
-        }
-
-        .title {
-          margin: 6px 0 0;
-          color: var(--txt);
-          font-size: 22px;
-          font-weight: 700;
-        }
-        .subtitle {
-          margin: 2px 0;
-          color: var(--olive);
-          font-size: 18px;
-          font-weight: 700;
-        }
-        .hint {
-          margin: 0 0 6px;
-          color: var(--muted);
-          font-size: 13px;
-        }
-
-        .form-grid {
-          display: grid;
-          grid-template-columns: 1fr;
-          gap: 10px;
-          margin-top: 8px;
-        }
-        .full { grid-column: 1 / -1; }
-
-        input {
-          width: 100%;
-          box-sizing: border-box;
-          padding: 12px 14px;
-          border: 1px solid #c3c9d2;
-          border-radius: 8px;
-          font-size: 14px;
-          outline: none;
-        }
-        input[aria-invalid="true"] {
-          border-color: var(--err);
-        }
-
-        .btn {
-          display: inline-block;
-          width: 100%;
-          background: #0b1539; /* tu botón azul oscuro */
-          color: #fff;
-          padding: 12px 16px;
-          border: 0;
-          border-radius: 8px;
-          font-weight: 700;
-          font-size: 14px;
-          cursor: pointer;
-        }
-        .btn:disabled {
-          opacity: .7;
-          cursor: not-allowed;
-        }
-
-        .warn { color: #d97706; font-size: 13px; }
-        .err  { color: var(--err); font-size: 13px; }
-
-        .link {
-          color: #0e8199;
-          text-decoration: none;
-          font-size: 14px;
-          text-align: center;
-          display: block;
-          padding: 6px 0 4px;
-        }
-        .link:hover { text-decoration: underline; }
-
-        .footer {
-          position: relative;
-          z-index: 1;
-          width: 100%;
-          text-align: center;
-          margin: 10px 0 18px;
-        }
-        .footer-line {
-          color: #d1d5db;         /* gris claro */
-          font-size: 9px;         /* 9px solicitado */
-          line-height: 1.2;
-        }
-        .footer-sub {
-          color: #d1d5db;
-          font-size: 8px;         /* subtítulo ~8px */
-          margin-top: 2px;
-        }
-
-        @media (max-width: 720px) {
-          .login-card { margin-top: 24px; }
-          .topbar-inner { height: 52px; }
-          .logo { height: 32px; }
+        :global(html,body,#__next){height:100%}
+        .page{min-height:100%;display:flex;flex-direction:column;font-family:Arial, Helvetica, sans-serif;background:#e6e6e6;}
+        .top{height:56px;background:#fff;display:flex;align-items:center;box-shadow:0 1px 6px rgba(0,0,0,.08)}
+        .logoBox{width:100%;max-width:1160px;margin:0 auto;padding:0 16px;display:flex;align-items:center}
+        .hero{flex:1;position:relative;background:url('/fondo_login.webp') center/cover no-repeat fixed;}
+        .hero:before{content:"";position:absolute;inset:0;background:rgba(0,0,0,.35);}
+        .card{position:relative;z-index:1;margin:64px auto;background:#fff;border-radius:16px;box-shadow:0 12px 36px rgba(0,0,0,.15);
+              padding:24px;width:92%;max-width:520px;}
+        .title{margin:0;text-align:center;color:#8AAA19;}
+        .title.sub{margin-top:2px;font-size:22px;font-weight:700}
+        .subtitle{margin:6px 0 16px;text-align:center;color:#777}
+        .form{display:grid;gap:12px}
+        .input{width:100%;height:44px;padding:10px 12px;border:1px solid #c9c9c9;border-radius:10px;font-size:14px}
+        .input[aria-invalid="true"]{border-color:#d33}
+        .warn{font-size:12px;color:#b36}
+        .error{font-size:13px;color:#b00020}
+        .msg{font-size:13px;color:#0a7}
+        .btn{height:44px;border:0;border-radius:10px;background:#0b1039;color:#fff;font-weight:700;cursor:pointer}
+        .btn:disabled{opacity:.6;cursor:not-allowed}
+        .links{display:flex;flex-direction:column;gap:8px;margin-top:6px;text-align:center}
+        .links :global(a){color:#1a2b88;text-decoration:none}
+        .links :global(a:hover){text-decoration:underline}
+        .bottom{background:#010139;padding:14px 0;margin-top:auto}
+        .foot{max-width:1160px;margin:0 auto;text-align:center;color:#cfd3de;font-size:9px;line-height:1.3}
+        .f2{font-size:8px;margin-top:3px}
+        @media (max-width:520px){
+          .card{margin:32px auto;padding:18px;border-radius:12px}
+          .title.sub{font-size:20px}
         }
       `}</style>
-    </div>
+    </>
   );
 }
+
