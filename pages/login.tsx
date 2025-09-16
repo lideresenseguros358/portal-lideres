@@ -53,7 +53,7 @@ export default function Login() {
         <div style={styles.headerInner}>
           <div style={styles.logoWrap}>
             {/* Ajusta el src con tu logo o usa <Image /> */}
-            <img src="/logo-lissa.png" alt="LISSA" style={styles.logo} />
+            <img src="/logo.png" alt="LISSA" style={styles.logo} />
           </div>
         </div>
       </header>

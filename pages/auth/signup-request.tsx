@@ -1,6 +1,6 @@
 // /pages/app/auth/signup-request.tsx
 import React, { useState } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase } from '../../lib/supabase';
 
 export default function SignupRequestPage() {
   const [form, setForm] = useState({
