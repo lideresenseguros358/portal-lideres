@@ -1,149 +1,205 @@
-// /pages/login.tsx
-import React, { useState, useMemo } from 'react';
-import Head from 'next/head';
-import Image from 'next/image';
-import { supabase } from '../lib/supabase-client'; // deja tu import como lo tengas
-import Link from 'next/link';
+// pages/login.tsx
+"use client"; // si estás usando app router, pon esto arriba
+import React, { useState } from "react";
+import Link from "next/link";
+import Image from "next/image";
+import { useRouter } from "next/router";
+import { supabase } from "../lib/supabase-client"; // ajusta la ruta si es distinta
 
-function isEmail(v: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
-}
-function pwOk(v: string) { return v.trim().length >= 6; }
+// colores
+const OLIVE = "#8aaa19";
+const FOOTER_BLUE = "#010139";
+const SUBTITLE_GRAY = "#6b6b6b";
 
-export default function LoginPage() {
-  const [email, setEmail] = useState('');
-  const [pass, setPass]   = useState('');
+export default function Login() {
+  const router = useRouter();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [msg, setMsg] = useState<string|null>(null);
-  const [err, setErr] = useState<string|null>(null);
-  const [caps, setCaps] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
 
-  const valid = useMemo(() => isEmail(email) && pwOk(pass), [email, pass]);
-
-  async function onSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setErr(null); setMsg(null);
-    if (!valid) { setErr('Verifica tu correo y contraseña.'); return; }
+    setMsg(null);
     setLoading(true);
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email: email.trim(), password: pass
+      // signInWithPassword v2
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
       });
-      if (error) throw error;
 
-      // redirección por rol (lee desde local/session)
-      const { data: user } = await supabase.auth.getUser();
-      const role = (user.user?.app_metadata?.role ?? '') as 'master'|'broker'|'';
-      if (role === 'master') location.href = '/app/master';
-      else if (role === 'broker') location.href = '/app/broker';
-      else location.href = '/';
-    } catch (e: any) {
-      setErr(e?.message || 'Error iniciando sesión');
+      if (error) {
+        setMsg(error.message || "Error en autenticación");
+        setLoading(false);
+        return;
+      }
+
+      // si se autentica correctamente, redirige según rol o a /app/master o /app/broker
+      // Si guardas role en profile, fetchéalo aquí y redirige.
+      // Ejemplo simple: redirige a /app/dashboard (ajusta)
+      router.replace("/app");
+    } catch (err: any) {
+      setMsg(String(err?.message ?? err ?? "Error inesperado"));
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <>
-      <Head>
-        <title>Líderes en Seguros | Login</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-      </Head>
-
-      <div className="page">
-        <header className="top">
-          <div className="logoBox">
-            {/* Usa tu logo real en /public/logo.svg ó ajusta ruta */}
-            <Image src="/logo.svg" alt="LISSA" width={120} height={40} />
+    <div style={styles.page}>
+      {/* Header: franja blanca con logo a la izquierda */}
+      <header style={styles.header}>
+        <div style={styles.headerInner}>
+          <div style={styles.logoWrap}>
+            {/* Ajusta el src con tu logo o usa <Image /> */}
+            <img src="/logo-lissa.png" alt="LISSA" style={styles.logo} />
           </div>
-        </header>
+        </div>
+      </header>
 
-        <main className="hero" aria-label="Fondo">
-          <div className="card" role="group" aria-labelledby="cardTitle">
-            <h1 id="cardTitle" className="title">Portal Virtual</h1>
-            <h2 className="title sub">Corredores</h2>
-            <p className="subtitle">Ingrese su usuario y contraseña</p>
+      {/* Background image */}
+      <div style={styles.bg} />
 
-            <form className="form" onSubmit={onSubmit} noValidate>
-              <input
-                className="input"
-                type="email"
-                placeholder="Usuario (correo)"
-                value={email}
-                onChange={(e)=>setEmail(e.target.value)}
-                aria-invalid={email ? !isEmail(email) : undefined}
-              />
-              <input
-                className="input"
-                type="password"
-                placeholder="Contraseña"
-                value={pass}
-                onChange={(e)=>setPass(e.target.value)}
-                onKeyUp={(e)=>setCaps((e as any).getModifierState?.('CapsLock'))}
-                aria-invalid={pass ? !pwOk(pass) : undefined}
-              />
-              {caps && <div className="warn">Bloq Mayús activado</div>}
-              {err &&  <div className="error">{err}</div>}
-              {msg &&  <div className="msg">{msg}</div>}
+      {/* Card centrado */}
+      <main style={styles.main}>
+        <div style={styles.card}>
+          <h1 style={styles.title}>Portal Virtual</h1>
+          <h2 style={styles.roleTitle}>Corredores</h2>
+          <p style={styles.subtitle}>Ingrese su usuario y contraseña</p>
 
-              <button className="btn" type="submit" disabled={!valid || loading}>
-                {loading ? 'Ingresando…' : 'Entrar'}
-              </button>
+          <form onSubmit={handleSubmit} style={styles.form}>
+            <input
+              aria-label="Email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="usuario@lideresenseguros.com"
+              style={styles.input}
+              required
+            />
+            <input
+              aria-label="Password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Contraseña"
+              style={styles.input}
+              required
+            />
 
-              <div className="links">
-                {/* ENLACES: deben existir /pages/app/auth/forgot.tsx y /pages/app/auth/signup-request.tsx */}
-                <Link href="/app/auth/forgot">¿Olvidaste tu contraseña?</Link>
-                <Link href="/app/auth/signup-request">Solicitar nuevo usuario</Link>
-              </div>
-            </form>
-          </div>
-        </main>
+            {msg && <div style={styles.error}>{msg}</div>}
 
-        <footer className="bottom">
-          <div className="foot">
-            <div className="f1">
-              Regulado y Supervisado por la Superintendencia de Seguros y Reaseguros de Panamá - Licencia PJ750
+            <button style={styles.button} disabled={loading}>
+              {loading ? "Entrando..." : "Entrar"}
+            </button>
+
+            <div style={styles.links}>
+              <Link href="/app/auth/forgot" legacyBehavior>
+                <a style={styles.link}>¿Olvidaste tu contraseña?</a>
+              </Link>
+              <Link href="/app/auth/signup-request" legacyBehavior>
+                <a style={styles.link}>Solicitar nuevo usuario</a>
+              </Link>
             </div>
-            <div className="f2">
-              Desarrollado por Líderes en Seguros | Todos los derechos reservados
-            </div>
-          </div>
-        </footer>
-      </div>
+          </form>
+        </div>
+      </main>
 
-      <style jsx>{`
-        :global(html,body,#__next){height:100%}
-        .page{min-height:100%;display:flex;flex-direction:column;font-family:Arial, Helvetica, sans-serif;background:#e6e6e6;}
-        .top{height:56px;background:#fff;display:flex;align-items:center;box-shadow:0 1px 6px rgba(0,0,0,.08)}
-        .logoBox{width:100%;max-width:1160px;margin:0 auto;padding:0 16px;display:flex;align-items:center}
-        .hero{flex:1;position:relative;background:url('/fondo_login.webp') center/cover no-repeat fixed;}
-        .hero:before{content:"";position:absolute;inset:0;background:rgba(0,0,0,.35);}
-        .card{position:relative;z-index:1;margin:64px auto;background:#fff;border-radius:16px;box-shadow:0 12px 36px rgba(0,0,0,.15);
-              padding:24px;width:92%;max-width:520px;}
-        .title{margin:0;text-align:center;color:#8AAA19;}
-        .title.sub{margin-top:2px;font-size:22px;font-weight:700}
-        .subtitle{margin:6px 0 16px;text-align:center;color:#777}
-        .form{display:grid;gap:12px}
-        .input{width:100%;height:44px;padding:10px 12px;border:1px solid #c9c9c9;border-radius:10px;font-size:14px}
-        .input[aria-invalid="true"]{border-color:#d33}
-        .warn{font-size:12px;color:#b36}
-        .error{font-size:13px;color:#b00020}
-        .msg{font-size:13px;color:#0a7}
-        .btn{height:44px;border:0;border-radius:10px;background:#0b1039;color:#fff;font-weight:700;cursor:pointer}
-        .btn:disabled{opacity:.6;cursor:not-allowed}
-        .links{display:flex;flex-direction:column;gap:8px;margin-top:6px;text-align:center}
-        .links :global(a){color:#1a2b88;text-decoration:none}
-        .links :global(a:hover){text-decoration:underline}
-        .bottom{background:#010139;padding:14px 0;margin-top:auto}
-        .foot{max-width:1160px;margin:0 auto;text-align:center;color:#cfd3de;font-size:9px;line-height:1.3}
-        .f2{font-size:8px;margin-top:3px}
-        @media (max-width:520px){
-          .card{margin:32px auto;padding:18px;border-radius:12px}
-          .title.sub{font-size:20px}
-        }
-      `}</style>
-    </>
+      {/* Footer franja azul */}
+      <footer style={styles.footerBar}>
+        <div style={styles.footerTextWrap}>
+          <div style={styles.footerLineSmall}>
+            Regulado y Supervisado por la Superintendencia de Seguros y Reaseguros de Panamá - Licencia PJ750
+          </div>
+          <div style={styles.footerLineTiny}>
+            Desarrollado por Líderes en Seguros | Todos los derechos reservados
+          </div>
+        </div>
+      </footer>
+    </div>
   );
 }
 
+/* Styles inline para no tocar CSS externo; puedes convertir a CSS module si prefieres */
+const styles: { [k: string]: React.CSSProperties } = {
+  page: { minHeight: "100vh", position: "relative", fontFamily: "Arial, sans-serif" },
+  header: {
+    background: "#fff",
+    padding: "12px 16px",
+    borderBottom: "1px solid rgba(0,0,0,0.03)",
+    position: "relative",
+    zIndex: 40
+  },
+  headerInner: { maxWidth: 1200, margin: "0 auto", display: "flex", alignItems: "center" },
+  logoWrap: { width: 140 },
+  logo: { maxWidth: "140px", height: "auto", objectFit: "contain" },
+
+  bg: {
+    backgroundImage: "url('/hero-panama.jpg')",
+    backgroundPosition: "center",
+    backgroundSize: "cover",
+    position: "absolute",
+    top: 64, // header height
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 1,
+    filter: "brightness(0.95)"
+  },
+
+  main: {
+    zIndex: 50,
+    position: "relative",
+    minHeight: "calc(100vh - 220px)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: "40px 20px"
+  },
+  card: {
+    width: "min(760px, 90%)",
+    background: "rgba(255,255,255,0.98)",
+    borderRadius: 12,
+    padding: "28px 32px",
+    boxShadow: "0 8px 24px rgba(0,0,0,0.18)",
+    textAlign: "center",
+    zIndex: 60
+  },
+  title: { margin: 0, fontSize: 22, fontWeight: 700, color: "#111" },
+  roleTitle: { margin: "6px 0 0", fontSize: 18, color: OLIVE, fontWeight: 700 },
+  subtitle: { margin: "8px 0 18px", color: SUBTITLE_GRAY, fontSize: 14 },
+
+  form: { display: "flex", flexDirection: "column", gap: 12, alignItems: "stretch" },
+  input: {
+    height: 44,
+    padding: "10px 14px",
+    borderRadius: 8,
+    border: "1px solid rgba(0,0,0,0.12)",
+    fontSize: 14,
+    outline: "none",
+  },
+  button: {
+    height: 46,
+    background: "#0b1b2f",
+    color: "#fff",
+    fontWeight: 700,
+    borderRadius: 8,
+    border: "none",
+    cursor: "pointer",
+  },
+  links: { display: "flex", justifyContent: "center", gap: 20, marginTop: 8 },
+  link: { color: SUBTITLE_GRAY, fontSize: 13, textDecoration: "underline", cursor: "pointer" },
+  error: { color: "crimson", fontSize: 13, textAlign: "center", marginTop: 6 },
+
+  footerBar: {
+    background: FOOTER_BLUE,
+    color: "#fff",
+    paddingTop: 16,
+    paddingBottom: 28,
+    marginTop: 24
+  },
+  footerTextWrap: { maxWidth: 1100, margin: "0 auto", textAlign: "center", fontSize: 11, color: "rgba(255,255,255,0.85)" },
+  footerLineSmall: { fontSize: 12, marginBottom: 6 },
+  footerLineTiny: { fontSize: 9, opacity: 0.85 }
+};
