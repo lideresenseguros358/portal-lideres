@@ -1,256 +1,190 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState, useMemo } from 'react';
 
-type Form = {
-  name: string;
-  brokerId: string;           // cédula/pasaporte
+type ReqBody = {
+  fullname: string;
+  doc_id: string;
   email: string;
   phone: string;
-  birthDate: string;          // yyyy-mm-dd
-  licenseNo: string;          // opcional
-  bank_id: string;
-  bank_account_no: string;
-  beneficiary_name: string;
-  beneficiary_id: string;
-  assaCode: string;
-  defaultPercent: string;     // número
-  plain_password: string;     // decide su contraseña
+  birthdate?: string | null;
+  broker_license?: string | null;
+  bank?: string | null;
+  bank_account_no?: string | null;
+  account_owner?: string | null;
+  account_owner_doc?: string | null;
+  same_owner?: boolean;
+  password: string;
 };
 
-const initial: Form = {
-  name: '', brokerId: '', email: '', phone: '',
-  birthDate: '', licenseNo: '', bank_id: '', bank_account_no: '',
-  beneficiary_name: '', beneficiary_id: '', assaCode: '', defaultPercent: '',
-  plain_password: '',
-};
-
-// ---------- helpers ----------
-function isEmail(v: string) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim()); }
-function maskId(v: string) { // deja dígitos y - . /
-  return v.replace(/[^0-9A-Za-z\-./]/g, '').slice(0, 25);
+function isEmail(v: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
 }
-function maskPhone(v: string) { // dígitos + separadores, salida 0000-0000 o 6000-0000-00 si es más largo
-  const d = v.replace(/\D/g, '').slice(0, 11);
-  if (d.length <= 8) return d.replace(/(\d{4})(\d{0,4})/, (_, a, b) => b ? `${a}-${b}` : a);
-  return d.replace(/(\d{4})(\d{4})(\d{0,3})/, (_, a, b, c) => c ? `${a}-${b}-${c}` : `${a}-${b}`);
-}
-function pctOk(v: string) { const n = Number(v); return !isNaN(n) && n >= 0 && n <= 100; }
-
-// fuerza de contraseña simple (0-4)
-function pwScore(v: string) {
-  let s = 0;
-  if (v.length >= 8) s++;
-  if (/[A-Z]/.test(v)) s++;
-  if (/[a-z]/.test(v)) s++;
-  if (/\d/.test(v) || /[^A-Za-z0-9]/.test(v)) s++;
-  return s;
-}
-function pwValid(v: string) { return pwScore(v) >= 3; }
 
 export default function SignupRequestPage() {
-  const [f, setF] = useState<Form>(initial);
-  const [sameId, setSameId] = useState(false);
+  // campos
+  const [fullname, setFullname] = useState('');
+  const [docId, setDocId] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [birthdate, setBirthdate] = useState('');
+  const [license, setLicense] = useState('');
+  const [bank, setBank] = useState('');
+  const [acct, setAcct] = useState('');
+  const [owner, setOwner] = useState('');
+  const [ownerDoc, setOwnerDoc] = useState('');
+  const [sameOwner, setSameOwner] = useState(false);
+  const [password, setPassword] = useState('');
+
+  const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
 
-  function set<K extends keyof Form>(k: K, v: Form[K]) {
-    setF((s) => ({ ...s, [k]: v }));
-  }
+  // si marcan "el mismo", copiamos dueño/cedula del titular
+  React.useEffect(() => {
+    if (sameOwner) {
+      setOwner(fullname);
+      setOwnerDoc(docId);
+    }
+  }, [sameOwner, fullname, docId]);
 
-  function onSameToggle(checked: boolean) {
-    setSameId(checked);
-    if (checked) set('beneficiary_id', f.brokerId);
-  }
-
-  const score = pwScore(f.plain_password);
-  const formValid = useMemo(() => {
+  const valid = useMemo(() => {
     return (
-      f.name.trim().length > 2 &&
-      f.brokerId.trim().length >= 5 &&
-      isEmail(f.email) &&
-      f.phone.replace(/\D/g, '').length >= 8 &&
-      !!f.birthDate &&
-      f.bank_id.trim().length >= 2 &&
-      f.bank_account_no.trim().length >= 6 &&
-      f.beneficiary_name.trim().length >= 2 &&
-      f.beneficiary_id.trim().length >= 5 &&
-      (f.defaultPercent === '' || pctOk(f.defaultPercent)) &&
-      pwValid(f.plain_password)
+      fullname.trim().length > 2 &&
+      docId.trim().length > 2 &&
+      isEmail(email) &&
+      password.trim().length >= 6
     );
-  }, [f]);
+  }, [fullname, docId, email, password]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setMsg(null); setErr(null);
-    if (!formValid) { setErr('Revisa los campos resaltados.'); return; }
+    setErr(null);
+    setMsg(null);
+    if (!valid) return;
+
     setLoading(true);
     try {
-      const payload = { ...f, defaultPercent: f.defaultPercent ? String(Number(f.defaultPercent) || 0) : '' };
-      const res = await fetch('/api/signup-request', {
+      const payload: ReqBody = {
+        fullname: fullname.trim(),
+        doc_id: docId.trim(),
+        email: email.trim().toLowerCase(),
+        phone: phone.trim(),
+        birthdate: birthdate || null,
+        broker_license: license || null,
+        bank: bank || null,
+        bank_account_no: acct || null,
+        account_owner: (owner || null),
+        account_owner_doc: (ownerDoc || null),
+        same_owner: sameOwner,
+        password: password.trim(),
+      };
+
+      const res = await fetch('/api/auth/signup-requests', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'content-type': 'application/json' },
         body: JSON.stringify(payload),
       });
+
       if (!res.ok) {
-        const txt = await res.text();
-        throw new Error(txt || 'No se pudo enviar la solicitud');
+        const text = await res.text();
+        throw new Error(text || `HTTP ${res.status}`);
       }
-      setMsg('Solicitud enviada. Un administrador aprobará tu acceso.');
-      setF(initial); setSameId(false);
+      setMsg('Solicitud enviada. Te contactaremos cuando sea aprobada.');
+      // limpiar
+      setFullname(''); setDocId(''); setEmail(''); setPhone('');
+      setBirthdate(''); setLicense(''); setBank(''); setAcct('');
+      setOwner(''); setOwnerDoc(''); setSameOwner(false); setPassword('');
     } catch (e: any) {
-      setErr(e?.message || 'Error enviando la solicitud');
+      setErr(e?.message ?? 'Error enviando solicitud');
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="login-wrap">
-      <div className="login-card" role="form" aria-labelledby="title">
-        <h2 id="title" style={{ color:'#6a8a10', marginTop:0 }}>Solicitud de nuevo usuario</h2>
-        <p>Completa tus datos. Un administrador aprobará tu acceso.</p>
+    <div className="wrap">
+      <div className="card">
+        <h2 className="title">Solicitud de nuevo usuario</h2>
+        <p className="sub">Completa tus datos. Un administrador aprobará tu acceso.</p>
 
-        <form onSubmit={onSubmit} className="form-grid" noValidate>
-          {/* Orden: nombre, cédula, correo, celular */}
-          <input
-            className="full"
-            placeholder="Nombre completo"
-            value={f.name}
-            onChange={e => set('name', e.target.value)}
-            aria-invalid={f.name.trim().length > 0 && f.name.trim().length <= 2}
-            required
-          />
-          <input
-            placeholder="Cédula / Pasaporte"
-            value={f.brokerId}
-            onChange={e => { const v = maskId(e.target.value); set('brokerId', v); if (sameId) set('beneficiary_id', v); }}
-            aria-invalid={f.brokerId !== '' && f.brokerId.trim().length < 5}
-            required
-          />
-          <input
-            type="email"
-            placeholder="Correo"
-            value={f.email}
-            onChange={e => set('email', e.target.value)}
-            aria-invalid={f.email !== '' && !isEmail(f.email)}
-            required
-          />
-          <input
-            placeholder="Celular"
-            value={f.phone}
-            onChange={e => set('phone', maskPhone(e.target.value))}
-            aria-invalid={f.phone !== '' && f.phone.replace(/\D/g, '').length < 8}
-            required
-          />
-
-          {/* separador visual */}
-          <div className="hint full" />
-
-          <div className="label">Fecha de nacimiento</div>
-          <div className="label">Licencia de corredor <span className="muted">(si no tiene dejar en blanco)</span></div>
-          <input
-            type="date"
-            value={f.birthDate}
-            onChange={e => set('birthDate', e.target.value)}
-            aria-invalid={f.birthDate === ''}
-            required
-          />
-          <input
-            placeholder="Licencia de corredor"
-            value={f.licenseNo}
-            onChange={e => set('licenseNo', e.target.value)}
-          />
-
-          <div className="label">Banco</div>
-          <div className="label">Número de cuenta</div>
-          <input
-            placeholder="Nombre o código del banco"
-            value={f.bank_id}
-            onChange={e => set('bank_id', e.target.value)}
-            aria-invalid={f.bank_id !== '' && f.bank_id.trim().length < 2}
-            required
-          />
-          <input
-            placeholder="Número de cuenta"
-            value={f.bank_account_no}
-            onChange={e => set('bank_account_no', e.target.value.replace(/[^\d\- ]/g, '').slice(0, 24))}
-            aria-invalid={f.bank_account_no !== '' && f.bank_account_no.trim().length < 6}
-            required
-          />
-
-          <div className="label">Dueño de la cuenta</div>
-          <div className="label">
-            Cédula del dueño de la cuenta{' '}
-            <label className="chk">
-              <input
-                type="checkbox"
-                checked={sameId}
-                onChange={e => onSameToggle(e.target.checked)}
-              />
-              <span>el mismo</span>
-            </label>
+        <form className="grid" onSubmit={onSubmit} noValidate>
+          <div className="field">
+            <label>Nombre completo</label>
+            <input value={fullname} onChange={e => setFullname(e.target.value)} />
           </div>
-          <input
-            placeholder="Nombre del dueño de la cuenta"
-            value={f.beneficiary_name}
-            onChange={e => set('beneficiary_name', e.target.value)}
-            aria-invalid={f.beneficiary_name !== '' && f.beneficiary_name.trim().length < 2}
-            required
-          />
-          <input
-            placeholder="Cédula del dueño"
-            value={f.beneficiary_id}
-            onChange={e => set('beneficiary_id', maskId(e.target.value))}
-            aria-invalid={f.beneficiary_id !== '' && f.beneficiary_id.trim().length < 5}
-            required
-          />
 
-          <div className="label">Código ASSA</div>
-          <div className="label">% por defecto</div>
-          <input
-            placeholder="Código ASSA"
-            value={f.assaCode}
-            onChange={e => set('assaCode', e.target.value.replace(/[^0-9A-Za-z\-]/g, '').slice(0, 16))}
-          />
-          <input
-            type="number"
-            step="0.01"
-            placeholder="0"
-            value={f.defaultPercent}
-            onChange={e => set('defaultPercent', e.target.value)}
-            aria-invalid={f.defaultPercent !== '' && !pctOk(f.defaultPercent)}
-          />
+          <div className="field">
+            <label>Cédula / Pasaporte</label>
+            <input value={docId} onChange={e => setDocId(e.target.value)} />
+          </div>
 
-          {/* contraseña con medidor */}
-          <div className="full">
-            <input
-              type="password"
-              placeholder="Contraseña"
-              value={f.plain_password}
-              onChange={e => set('plain_password', e.target.value)}
-              aria-invalid={f.plain_password !== '' && !pwValid(f.plain_password)}
-              required
-              style={{ width:'100%', padding:'12px 14px', border:'1px solid #ddd', borderRadius:8, fontSize:14 }}
-            />
-            <div className="meter" aria-hidden>
-              <div className={`meter-bar s${score}`} />
+          <div className="field">
+            <label>Correo</label>
+            <input type="email" value={email} onChange={e => setEmail(e.target.value)} aria-invalid={email ? !isEmail(email) : undefined}/>
+          </div>
+
+          <div className="field">
+            <label>Celular</label>
+            <input value={phone} onChange={e => setPhone(e.target.value)} />
+          </div>
+
+          <div className="field">
+            <label>Fecha de nacimiento</label>
+            <input type="date" value={birthdate} onChange={e => setBirthdate(e.target.value)} />
+          </div>
+
+          <div className="field">
+            <label>Licencia de corredor</label>
+            <input placeholder="si no tiene dejar en blanco" value={license} onChange={e => setLicense(e.target.value)} />
+          </div>
+
+          {/* Subtítulo de sección de banco */}
+          <div className="section" style={{gridColumn: '1 / -1'}}>
+            <h3>Cuenta bancaria para comisiones</h3>
+          </div>
+
+          <div className="field">
+            <label>Número de cuenta</label>
+            <input value={acct} onChange={e => setAcct(e.target.value)} />
+          </div>
+
+          <div className="field">
+            <label>Banco</label>
+            <input placeholder="Nombre o código del banco" value={bank} onChange={e => setBank(e.target.value)} />
+          </div>
+
+          <div className="field">
+            <label>Dueño de la cuenta</label>
+            <input value={owner} onChange={e => setOwner(e.target.value)} disabled={sameOwner}/>
+          </div>
+
+          <div className="field">
+            <label>Cédula del dueño de la cuenta</label>
+            <div className="row">
+              <input value={ownerDoc} onChange={e => setOwnerDoc(e.target.value)} disabled={sameOwner}/>
+              <label className="chk">
+                <input type="checkbox" checked={sameOwner} onChange={e => setSameOwner(e.target.checked)} />
+                <span>el mismo</span>
+              </label>
             </div>
-            <ul className="reqs">
-              <li className={f.plain_password.length >= 8 ? 'ok' : ''}>Mínimo 8 caracteres</li>
-              <li className={/[A-Z]/.test(f.plain_password) ? 'ok' : ''}>Una mayúscula</li>
-              <li className={/[a-z]/.test(f.plain_password) ? 'ok' : ''}>Una minúscula</li>
-              <li className={/\d/.test(f.plain_password) || /[^A-Za-z0-9]/.test(f.plain_password) ? 'ok' : ''}>
-                Un número o símbolo
-              </li>
-            </ul>
           </div>
 
-          {err && <div className="err full">{err}</div>}
-          {msg && <div className="ok full">{msg}</div>}
+          <div className="field" style={{gridColumn: '1 / -1'}}>
+            <label>Contraseña</label>
+            <input type="password" value={password} onChange={e => setPassword(e.target.value)} />
+            <small>Mínimo 6 caracteres.</small>
+          </div>
 
-          <button className="btn full" type="submit" disabled={!formValid || loading}>
-            {loading ? 'Enviando…' : 'Enviar solicitud'}
-          </button>
+          {(err || msg) && (
+            <div className={err ? 'alert err' : 'alert ok'} style={{gridColumn: '1 / -1'}}>
+              {err ?? msg}
+            </div>
+          )}
+
+          <div style={{gridColumn: '1 / -1'}}>
+            <button className="btn" type="submit" disabled={!valid || loading}>
+              {loading ? 'Enviando…' : 'Enviar solicitud'}
+            </button>
+          </div>
         </form>
       </div>
 
@@ -261,37 +195,68 @@ export default function SignupRequestPage() {
 }
 
 const globalCss = `
-html, body, #__next { height: 100%; }
-body { margin: 0; font-family: Arial, Helvetica, sans-serif; }
-.login-wrap { min-height: 100%; background:url('/fondo_login.webp') center/cover no-repeat fixed; position:relative; }
-.login-wrap::before { content:''; position:absolute; inset:0; background:rgba(0,0,0,.35); }
+  html, body, #__next { height: 100%; }
+  body { margin: 0; font-family: Arial, Helvetica, sans-serif; }
+  .wrap { min-height: 100%; background:url('/fondo_login.webp') center/cover no-repeat fixed; position:relative; }
+  .wrap::before { content:''; position:absolute; inset:0; background: rgba(0,0,0,.35); }
 `;
 
 const cardCss = `
-.login-card { position:relative; max-width:920px; margin:40px auto; background:#fff; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,.15); padding:24px; }
-.form-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-.full { grid-column:1 / -1; }
-.label { color:#333; font-weight:700; font-size:14px; align-self:end; }
-.muted { color:#888; font-weight:400; }
-.hint { height:4px; }
-.chk { display:inline-flex; align-items:center; gap:6px; font-weight:400; color:#333; margin-left:6px; }
-input, select { width:100%; padding:12px 14px; border:1px solid #ddd; border-radius:8px; font-size:14px; box-sizing:border-box; }
-input[aria-invalid="true"], select[aria-invalid="true"] { border-color:#c0392b; }
-.btn { background:#0e1039; color:#fff; border:none; padding:12px 16px; border-radius:8px; font-weight:700; cursor:pointer; }
-.btn:disabled { opacity:.7; cursor:not-allowed; }
-.err { color:#b00; font-size:13px; }
-.ok { color:#0a6; font-size:13px; }
+  .card {
+    position: relative;
+    max-width: 920px;
+    margin: 48px auto;
+    background:#fff;
+    border-radius:12px;
+    box-shadow: 0 10px 38px rgba(0,0,0,.15);
+    padding:28px;
+  }
+  .title { margin: 0 0 4px; color:#2b2b2b; }
+  .sub { margin:0 0 16px; color:#6b6b6b; }
 
-/* medidor */
-.meter { height:6px; background:#eee; border-radius:6px; margin-top:8px; overflow:hidden; }
-.meter-bar { height:100%; width:0%; transition:width .2s; background:#c0392b; }
-.meter-bar.s1 { width:25%; }
-.meter-bar.s2 { width:50%; background:#e67e22; }
-.meter-bar.s3 { width:75%; background:#f1c40f; }
-.meter-bar.s4 { width:100%; background:#27ae60; }
-.reqs { list-style:disc; padding-left:20px; margin:8px 0 0; color:#666; font-size:12px; }
-.reqs li.ok { color:#27ae60; }
+  .grid {
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px 16px;
+  }
+  .field { display:flex; flex-direction:column; }
+  label { color:#333; font-size:13px; margin-bottom:6px; }
+  input {
+    width:100%;
+    padding:12px 12px;
+    border: 1px solid #c9d3e0;
+    border-radius: 8px;
+    font-size:14px;
+    outline: none;
+  }
+  input[aria-invalid="true"] { border-color:#e05b5b; }
+  .row { display:flex; align-items:center; gap:12px; }
+  .chk { display:flex; align-items:center; gap:8px; white-space:nowrap; font-size:13px; color:#4a4a4a; }
+  .section h3 {
+    margin: 10px 0 6px;
+    font-size: 14px;
+    color:#2b2b2b;
+    border-top: 1px dashed #e7e7e7;
+    padding-top: 12px;
+  }
+  .btn {
+    display:inline-block;
+    width:100%;
+    background:#0e2139;
+    color:#fff;
+    border:none;
+    border-radius:8px;
+    padding:14px 16px;
+    font-weight:700;
+    cursor:pointer;
+  }
+  .btn:disabled { opacity:.65; cursor:not-allowed; }
+  .alert { padding:10px 12px; border-radius:8px; font-size:13px; }
+  .alert.ok { background:#eef9f0; color:#0c7b2d; border:1px solid #bfe7c9; }
+  .alert.err { background:#fff2f2; color:#b01010; border:1px solid #f0c5c5; }
 
-@media (max-width:960px){ .login-card{ margin:16px; } }
-@media (max-width:720px){ .form-grid{ grid-template-columns:1fr; } }
+  @media (max-width: 760px) {
+    .card { margin:16px; padding:20px; }
+    .grid { grid-template-columns: 1fr; }
+  }
 `;
