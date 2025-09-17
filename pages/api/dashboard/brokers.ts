@@ -1,6 +1,6 @@
 // /pages/api/dashboard/brokers.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { supabase } from '../../../lib/supabase-client';
+import { supabaseAdmin } from '../../../lib/supabase';
 import { requireUser } from '../_utils/auth';
 
 type ApiRes =
@@ -16,7 +16,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
 
     const brokerId = user.broker_id!;
     // KPIs del broker (ajusta a tus tablas reales)
-    const { data: lastFt } = await supabase
+    const { data: lastFt } = await supabaseAdmin
       .from('fortnights')
       .select('id')
       .eq('status', 'closed')
@@ -26,7 +26,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
 
     let lastFortnightAmount = 0;
     if (lastFt?.id) {
-      const { data } = await supabase
+      const { data } = await supabaseAdmin
         .from('commissions')
         .select('total_amount_net')
         .eq('fortnight_id', lastFt.id)
@@ -35,7 +35,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       lastFortnightAmount = (data || []).reduce((a: number, r: any) => a + Number(r.total_amount_net ?? 0), 0);
     }
 
-    const { data: mets } = await supabase
+    const { data: mets } = await supabaseAdmin
       .from('metrics_broker')
       .select('morosidad_over60, convivo_goal, convivo_split, assa_goal, assa_current')
       .eq('broker_id', brokerId)

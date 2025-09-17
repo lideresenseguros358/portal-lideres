@@ -1,5 +1,5 @@
 // /lib/notify.ts
-import { supabase } from './supabase-client';
+import { supabase } from './supabase';
 
 type NotiPayload = {
   brokerId?: string | null;

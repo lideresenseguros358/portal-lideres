@@ -1,60 +1,63 @@
-// /pages/app/master/index.tsx
+// pages/app/master/index.tsx
+import Head from 'next/head';
 import React, { useEffect, useState } from 'react';
 import AppLayout from '../../../components/AppLayout';
 import KpiCard from '../../../components/dash/KpiCard';
 import Bars from '../../../components/dash/Bars';
 
-type MasterDash = {
-  brokers_count: number;
-  insurers_count: number;
-  pending_requests: number;
-  chart: { labels: string[]; series: { label: string; data: number[] }[] };
+type Dash = {
+  last_fortnight_total: number;
+  pma_acumulado: number;
+  signup_pending: number;
+  bars?: { labels: string[]; s1: number[]; s2: number[] };
 };
 
 export default function MasterDashboard() {
-  const [data, setData] = useState<MasterDash | null>(null);
-  const [name, setName] = useState<string>('');
+  const [data, setData] = useState<Dash | null>(null);
 
   useEffect(() => {
     let alive = true;
-    Promise.all([
-      fetch('/api/dashboard/master').then(r => r.ok ? r.json() : Promise.reject()),
-      fetch('/api/me').then(r => r.ok ? r.json() : { name: '' }),
-    ]).then(([d, me]) => { if (alive) { setData(d); setName(me?.name || ''); } })
-      .catch(() => {
-        if (alive) setData({
-          brokers_count: 0, insurers_count: 0, pending_requests: 0,
-          chart: { labels: ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'],
-                   series: [{ label: 'Producción', data: Array(12).fill(0) }] },
-        });
-      });
+    (async () => {
+      try {
+        const r = await fetch('/api/dashboard/master');
+        const j = r.ok ? await r.json() : null;
+        if (!alive) return;
+        setData(j || { last_fortnight_total:0, pma_acumulado:0, signup_pending:0, bars:{ labels:[], s1:[], s2:[] }});
+      } catch {
+        if (alive) setData({ last_fortnight_total:0, pma_acumulado:0, signup_pending:0, bars:{ labels:[], s1:[], s2:[] }});
+      }
+    })();
     return () => { alive = false; };
   }, []);
 
   return (
-    <AppLayout role="master" userName={name}>
-      <h1 style={{margin:'4px 0 14px', color:'#010139'}}>Panel Administrativo {name && `• ${name}`}</h1>
+    <>
+      <Head><title>Líderes en Seguros | Panel Administrativo</title></Head>
+      <AppLayout role="master" title="Panel Administrativo">
+        <section className="grid3">
+          <KpiCard title="Última quincena (pagado)" value={`B/. ${Number(data?.last_fortnight_total||0).toFixed(2)}`} />
+          <KpiCard title="PMA acumulado" value={`B/. ${Number(data?.pma_acumulado||0).toFixed(2)}`} />
+          <KpiCard title="Solicitudes pendientes" value={String(data?.signup_pending||0)} />
+        </section>
 
-      {!data ? <div>Cargando…</div> : (
-        <>
-          <div className="grid kpis">
-            <KpiCard title="Corredores activos" value={String(data.brokers_count)} />
-            <KpiCard title="Aseguradoras" value={String(data.insurers_count)} />
-            <KpiCard title="Solicitudes pendientes" value={String(data.pending_requests)} />
-          </div>
+        <section className="panel">
+          <h2 className="panelTitle">Acumulado Anual PMA <small>2024 • 2025</small></h2>
+          <Bars
+            labels={data?.bars?.labels || []}
+            series={[
+              { label:'2024', data:data?.bars?.s1 || [] },
+              { label:'2025', data:data?.bars?.s2 || [] },
+            ]}
+          />
+        </section>
 
-          <div className="block">
-            <h2 style={{textAlign:'center'}}>Producción consolidada</h2>
-            <Bars labels={data.chart.labels} series={data.chart.series} />
-          </div>
-        </>
-      )}
-
-      <style jsx>{`
-        .grid { display:grid; gap:16px; }
-        .kpis { grid-template-columns: repeat(auto-fit, minmax(220px,1fr)); margin-bottom: 12px; }
-        .block { background:#fff;border-radius:12px;box-shadow:0 6px 16px rgba(0,0,0,.12);padding:12px; }
-      `}</style>
-    </AppLayout>
+        <style jsx>{`
+          .grid3 { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:16px; margin-bottom:16px; }
+          @media (max-width: 900px){ .grid3{ grid-template-columns:1fr; } }
+          .panelTitle { font-size:22px; margin: 10px 0; }
+          .panelTitle small { font-weight:700; margin-left:8px; }
+        `}</style>
+      </AppLayout>
+    </>
   );
 }

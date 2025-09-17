@@ -1,209 +1,170 @@
-// /pages/login.tsx
-import React, { useState } from 'react';
+// pages/login.tsx
+import Head from 'next/head';
 import { useRouter } from 'next/router';
+import React, { useState } from 'react';
 import Image from 'next/image';
-import { supabase } from '../lib/supabase-client'; // ajusta si tu ruta es distinta
+import { supabase } from '../lib/supabase'; // ajusta si tu path difiere
 
-// Colores
 const OLIVE = '#8aaa19';
 const FOOTER_BLUE = '#010139';
-const SUBTITLE_GRAY = '#6b6b6b';
+const SUBTITLES = '#6b6b6b';
 
 export default function Login() {
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMsg(null);
     setLoading(true);
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) throw error;
-
-      // lee perfil para decidir a dónde mandar
-      const uid = data.user?.id;
-      let role: 'broker' | 'master' = 'broker';
-      if (uid) {
-        const { data: p, error: pe } = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', uid)
-          .single();
-        if (!pe && p?.role) role = p.role as 'broker' | 'master';
-      }
-      router.replace(role === 'master' ? '/app/master' : '/app/broker');
+      // redirige según cookie/rol (tu middleware actual debe manejarlo)
+      router.push('/app/redirect'); // o la ruta que ya estás usando
     } catch (err: any) {
-      setMsg(err?.message || 'No se pudo iniciar sesión');
+      setMsg(err.message || 'Error al iniciar sesión');
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="login">
-      {/* Header blanco con logo a la IZQUIERDA (responsive) */}
-      <header className="top">
-        <div className="logoWrap">
-          <Image src="/logo.png" alt="Lissa" width={104} height={40} />
-        </div>
-      </header>
+    <>
+      <Head>
+        <title>Líderes en Seguros | Login</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+      </Head>
 
-      {/* Fondo con imagen (responsive cover) */}
-      <div className="bg" role="img" aria-label="Fondo Panamá" />
-
-      <main className="center">
-        <form className="card" onSubmit={handleSubmit}>
-          <h1 className="title">Portal Virtual</h1>
-          <h2 className="title olive">Corredores</h2>
-          <p className="subtitle">Ingrese su usuario y contraseña</p>
-
-          <input
-            type="email"
-            placeholder="correo@dominio.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
-          <input
-            type="password"
-            placeholder="Contraseña"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-          />
-
-          <button disabled={loading} aria-busy={loading}>
-            {loading ? 'Entrando…' : 'Entrar'}
-          </button>
-
-          <nav className="links">
-            <a href="/app/auth/forgot">¿Olvidaste tu contraseña?</a>
-            <a href="/app/auth/signup-request">Solicitar nuevo usuario</a>
-          </nav>
-
-          {msg && <div className="error">{msg}</div>}
-        </form>
-      </main>
-
-      {/* Footer dentro de franja azul oscuro */}
-      <footer className="footer">
-        <div className="footInner">
-          <div className="reg">
-            Regulado y Supervisado por la Superintendencia de Seguros y Reaseguros de Panamá - Licencia PJ750
+      <div className="page">
+        {/* header blanco con logo a la izquierda */}
+        <header className="topbar">
+          <div className="logoWrap">
+            <Image src="/logo.png" width={120} height={42} alt="LISSA" priority />
           </div>
-          <div className="sub">
-            Desarrollado por Líderes en Seguros | Todos los derechos reservados
-          </div>
+        </header>
+
+        {/* fondo + overlay */}
+        <div className="bg">
+          <Image
+            src="/fondo_login.jpg"
+            alt="Panamá"
+            fill
+            priority
+            style={{ objectFit: 'cover', objectPosition: 'center' }}
+          />
+          <div className="overlay" />
         </div>
-      </footer>
+
+        {/* Card centrado y angosto */}
+        <main className="center">
+          <form className="card" onSubmit={handleSubmit}>
+            <h1 className="title">Portal Virtual</h1>
+            <h2 className="subtitle">Corredores</h2>
+            <p className="helper">Ingrese su usuario y contraseña</p>
+
+            <input
+              type="email"
+              placeholder="correo@dominio.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              className="inp"
+            />
+            <input
+              type="password"
+              placeholder="Contraseña"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              className="inp"
+            />
+
+            {msg && <div className="error">{msg}</div>}
+
+            <button className="btn" disabled={loading}>
+              {loading ? 'Entrando…' : 'Entrar'}
+            </button>
+
+            <div className="links">
+              {/* rutas absolutas CORRECTAS dentro de /app/auth */}
+              <a href="/app/auth/forgot">¿Olvidaste tu contraseña?</a>
+              <a href="/app/auth/signup-request">Solicitar nuevo usuario</a>
+            </div>
+          </form>
+        </main>
+
+        {/* footer dentro de franja azul */}
+        <footer className="footer">
+          <div className="footInner">
+            <div className="footMain">
+              Regulado y Supervisado por la Superintendencia de Seguros y Reaseguros de Panamá — Licencia PJ750
+            </div>
+            <div className="footSub">
+              Desarrollado por Líderes en Seguros | Todos los derechos reservados
+            </div>
+          </div>
+        </footer>
+      </div>
+
+      <style jsx global>{`
+        * { box-sizing: border-box; font-family: Arial, Helvetica, sans-serif; }
+        html, body, #__next { height: 100%; }
+        a { color: #2d6cdf; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+      `}</style>
 
       <style jsx>{`
-        .login {
-          min-height: 100vh;
-          display: grid;
-          grid-template-rows: auto 1fr auto;
-          background: #e6e6e6;
-        }
-        .top {
-          background: #fff;
-          height: 56px;
-          display: flex;
-          align-items: center;
-          padding: 0 12px;
-          box-shadow: 0 1px 3px rgba(0,0,0,.08);
-        }
-        .logoWrap { display:flex; align-items:center; }
-        .bg {
-          position: fixed;
-          inset: 56px 0 96px 0; /* debajo del header y encima del footer */
-          background: url('/fondo_login.webp') center/cover no-repeat;
-          z-index: 0;
-        }
-        .center {
-          position: relative;
-          z-index: 1;
-          display: grid;
-          place-items: center;
-          padding: 24px 12px;
-        }
+        .page { min-height: 100vh; position: relative; background:#e6e6e6; }
+        .topbar { position: relative; z-index: 2; height: 56px; background: #fff; box-shadow: 0 1px 6px rgba(0,0,0,.08); display:flex; align-items:center; }
+        .logoWrap { margin-left: 16px; display:flex; align-items:center; }
+        .bg { position: absolute; inset: 56px 0 72px 0; }
+        .overlay { position:absolute; inset:0; background: rgba(0,0,0,.35); }
+        .center { position: relative; z-index: 2; display:flex; justify-content:center; align-items:center; padding: 32px 16px; min-height: calc(100vh - 56px - 72px); }
         .card {
           width: 100%;
-          max-width: 480px; /* más angosto */
+          max-width: 420px; /* angosto */
           background: #fff;
-          border-radius: 12px;
-          padding: 18px;
-          box-shadow: 0 8px 28px rgba(0,0,0,.12);
-        }
-        .title {
-          margin: 0;
+          border-radius: 14px;
+          box-shadow: 0 10px 26px rgba(0,0,0,.18);
+          padding: 22px 18px;
           text-align: center;
-          color: ${OLIVE};
-          font-weight: 800;
         }
-        .title.olive { margin-top: 2px; font-size: 18px; }
-        .subtitle {
-          margin: 6px 0 14px;
-          text-align: center;
-          color: ${SUBTITLE_GRAY};
-          font-size: 13px;
-        }
-        input {
+        .title { margin: 2px 0 0; color: ${OLIVE}; font-size: 26px; font-weight: 700; }
+        .subtitle { margin: 0; color: ${OLIVE}; font-size: 18px; font-weight: 700; }
+        .helper { margin: 4px 0 14px; color: ${SUBTITLES}; font-size: 13px; }
+        .inp {
           width: 100%;
-          height: 42px;                 /* NO altos */
-          border: 1px solid #e0e0e0;
+          border: 1px solid #d8d8d8;
+          background: #eef3f9;
           border-radius: 8px;
-          padding: 0 12px;
-          background: #f3f6fb;
-          margin-bottom: 10px;
-          outline: none;
+          padding: 10px 12px;   /* más delgado */
+          margin: 8px 0;
+          font-size: 14px;
         }
-        input:focus { border-color: ${OLIVE}; background:#fff; }
-        button {
+        .btn {
           width: 100%;
-          height: 40px;
           border: 0;
-          border-radius: 8px;
-          background: #0a1233;
+          background: #0b1039;
           color: #fff;
           font-weight: 700;
+          border-radius: 8px;
+          padding: 10px 14px;
+          margin-top: 8px;
           cursor: pointer;
         }
-        button[disabled] { opacity: .7; cursor: default; }
-        .links {
-          margin-top: 10px;
-          display: flex;
-          gap: 12px;
-          justify-content: center;
-          font-size: 12px;
-        }
-        .links a { color: #0a1233; text-decoration: underline; }
-        .error {
-          margin-top: 10px;
-          color: #b00020;
-          text-align: center;
-          font-size: 13px;
-        }
-        .footer {
-          background: ${FOOTER_BLUE};
-          color: #cfd3da;
-          padding: 8px 12px;
-        }
-        .footInner {
-          max-width: 1200px; margin: 0 auto; text-align:center;
-        }
-        .reg { font-size: 9px; line-height: 1.4; }
-        .sub { font-size: 8px; line-height: 1.2; }
-        @media (max-width: 480px) {
-          .card { max-width: 92vw; padding: 14px; }
-        }
+        .btn:disabled { opacity: .65; cursor: default; }
+        .links { display:flex; justify-content: space-between; gap: 12px; margin-top: 12px; font-size: 13px; }
+        .error { background:#fff2f0; border:1px solid #ffd6cc; color:#cc1f1a; border-radius:8px; padding:8px; margin:8px 0; font-size:13px; }
+
+        .footer { position: relative; z-index: 2; height: 72px; background: ${FOOTER_BLUE}; display:flex; align-items:center; justify-content:center; }
+        .footInner { text-align:center; line-height: 1.2; }
+        .footMain { color:#c9c9c9; font-size: 11px; }
+        .footSub  { color:#b5b5b5; font-size: 10px; margin-top: 4px; }
       `}</style>
-    </div>
+    </>
   );
 }

@@ -21,17 +21,7 @@ export default function AgendaPage(){
         <div className="grid">
           <div>
             <MiniCalendar
-              events={
-                events.reduce<{ date: string; count: number }[]>((acc, curr) => {
-                  const found = acc.find(e => e.date === curr.date);
-                  if (found) {
-                    found.count += 1;
-                  } else {
-                    acc.push({ date: curr.date, count: 1 });
-                  }
-                  return acc;
-                }, [])
-              }
+              events={events}
             />
           </div>
           <div className="legend">

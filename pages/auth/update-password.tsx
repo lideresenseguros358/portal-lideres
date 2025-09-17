@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { supabase } from '../../lib/supabase-client';
+import { supabase } from '../../lib/supabase';
 
 export default function UpdatePasswords() {
   const [pw, setPw] = useState(''); const [msg, setMsg] = useState(''); const [err, setErr] = useState('');

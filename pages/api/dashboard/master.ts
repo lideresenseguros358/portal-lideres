@@ -1,6 +1,6 @@
 // /pages/api/dashboard/masters.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { supabase } from '../../../lib/supabase-client';
+import { supabaseAdmin } from '../../../lib/supabase';
 import { requireUser } from '../_utils/auth';
 import { startOfMonth, endOfMonth, formatISO } from 'date-fns';
 
@@ -18,7 +18,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     const year = new Date().getFullYear();
 
     // KPI 1: PMA anual (producción acumulada)
-    const { data: prod, error: pErr } = await supabase
+    const { data: prod, error: pErr } = await supabaseAdmin
       .from('production_monthly')
       .select('amount, month, goal')
       .eq('year', year)
@@ -29,7 +29,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     const pmaYearTotal = (prod || []).reduce((a: number, r: any) => a + Number(r.amount ?? 0), 0);
 
     // KPI 2: Comisión anual oficina (post-descuentos)
-    const { data: comm, error: cErr } = await supabase
+    const { data: comm, error: cErr } = await supabaseAdmin
       .from('commissions')
       .select('total_amount_net');
 
@@ -37,7 +37,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     const commissionsYearOffice = (comm || []).reduce((a: number, r: any) => a + Number(r.total_amount_net ?? 0), 0);
 
     // KPI 3: Pendientes de identificar (última quincena cerrada)
-    const { data: lastFt, error: fErr } = await supabase
+    const { data: lastFt, error: fErr } = await supabaseAdmin
       .from('fortnights')
       .select('id')
       .eq('status', 'closed')
@@ -47,7 +47,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
 
     let pendingIdentify = 0;
     if (lastFt?.id) {
-      const { data: mets, error: mErr } = await supabase
+      const { data: mets, error: mErr } = await supabaseAdmin
         .from('metrics_broker')
         .select('pending_identify')
         .eq('fortnight_id', lastFt.id);
@@ -60,7 +60,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     const now = new Date();
     const t0 = formatISO(startOfMonth(now));
     const t1 = formatISO(endOfMonth(now));
-    const { data: evs, error: eErr } = await supabase
+    const { data: evs, error: eErr } = await supabaseAdmin
       .from('events')
       .select('date, title')
       .gte('date', t0)

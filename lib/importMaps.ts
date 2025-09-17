@@ -3,9 +3,48 @@
 
 // ------------------------- Tipos -------------------------
 export type InsurerKey =
-  | 'ACERTA' | 'ANCON' | 'ASSA' | 'BANESCO' | 'FEDPA' | 'GENERAL'
-  | 'IFS' | 'INTERNACIONAL' | 'REGIONAL' | 'MAPFRE' | 'MB' | 'OPTIMA'
-  | 'PALIG' | 'SURA' | 'VIVIR' | 'WWMEDICAL' | 'MERCANTIL' | 'ALIADO' | 'ASSISTCARD';
+  | 'ACERTA'
+  | 'ANCON'
+  | 'ASSA'
+  | 'BANESCO'
+  | 'FEDPA'
+  | 'GENERAL'
+  | 'IFS'
+  | 'INTERNACIONAL'
+  | 'REGIONAL'
+  | 'MAPFRE'
+  | 'MB'
+  | 'OPTIMA'
+  | 'PALIG'
+  | 'SURA'
+  | 'VIVIR'
+  | 'WWMEDICAL'
+  | 'MERCANTIL'
+  | 'ALIADO'
+  | 'ASSISTCARD';
+
+export const INSURERS: InsurerKey[] = [
+  'ACERTA',
+  'ANCON',
+  'ASSA',
+  'BANESCO',
+  'FEDPA',
+  'GENERAL',
+  'IFS',
+  'INTERNACIONAL',
+  'REGIONAL',
+  'MAPFRE',
+  'MB',
+  'OPTIMA',
+  'PALIG',
+  'SURA',
+  'VIVIR',
+  'WWMEDICAL',
+  'MERCANTIL',
+  'ALIADO',
+  'ASSISTCARD'
+];
+
 
 export type RowObj = Record<string, any> | string[];  // CSV/XLSX o arreglo
 export interface Normalized {
