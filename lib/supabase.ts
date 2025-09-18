@@ -1,62 +1,86 @@
 // lib/supabase.ts
 import { createClient } from '@supabase/supabase-js';
 
-/* ========= ENV requeridas =========
-NEXT_PUBLIC_SUPABASE_URL
-NEXT_PUBLIC_SUPABASE_ANON_KEY
-SUPABASE_SERVICE_ROLE_KEY
-==================================== */
+const supabaseUrl   = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const anonKey       = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const serviceKey    = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const anonKey     = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const serviceKey  = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+/** Cliente público (para componentes React) – tolerante a envs faltantes */
+function safeCreatePublic() {
+  if (!supabaseUrl || !anonKey) {
+    // Stub “seguro” que evita romper el render si aún no hay envs en Vercel
+    return createClient('https://invalid.local', 'invalid', {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true,
+      },
+      // Evitamos tocar localStorage en SSR
+      global: { headers: {} as Record<string, string> },
+    });
+  }
 
-/** Cliente público (para componentes React) */
-export const supabase = createClient(supabaseUrl, anonKey, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true,
-  },
-});
+  return createClient(supabaseUrl, anonKey, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
+    },
+  });
+}
 
-/** Cliente admin (solo usar en /pages/api/**) */
-export const supabaseAdmin = createClient(supabaseUrl, serviceKey, {
-  auth: {
-    persistSession: false,
-    autoRefreshToken: false,
-  },
-});
+/** Cliente admin (SOLO en /pages/api/**) */
+function safeCreateAdmin() {
+  if (!supabaseUrl || !serviceKey) {
+    return createClient('https://invalid.local', 'invalid', {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+      },
+      global: { headers: {} as Record<string, string> },
+    });
+  }
+  return createClient(supabaseUrl, serviceKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  });
+}
 
-/** Headers con el token de sesión actual (para fetch a APIs propias) */
+export const supabase = safeCreatePublic();
+export const supabaseAdmin = safeCreateAdmin();
+
+/** Headers con el token de sesión actual (para fetch a tus APIs propias) */
 export async function getAuthHeaders(): Promise<Record<string, string>> {
   const { data } = await supabase.auth.getSession();
   const token = data.session?.access_token;
+  const user = data.session?.user;
   const h: Record<string, string> = {};
   if (token) h['Authorization'] = `Bearer ${token}`;
-  const u = data.session?.user;
-  if (u?.id)    h['x-user-id'] = u.id;
-  if (u?.email) h['x-user-email'] = u.email;
+  if (user?.id) h['x-user-id'] = user.id;
+  if (user?.email) h['x-email'] = user.email;
   return h;
 }
 
-/** fetch helper que agrega los headers de auth y devuelve json si aplica */
+/** Helper de fetch que agrega headers de auth y devuelve json si aplica */
 export async function apiFetch<T = any>(
   input: string,
-  init: RequestInit = {}
+  init?: RequestInit
 ): Promise<{ ok: boolean; data?: T; error?: string }> {
   const auth = await getAuthHeaders();
-  const res = await fetch(input, { ...init, headers: { ...(init.headers || {}), ...auth } });
+  const res = await fetch(input, { ...(init || {}), headers: { ...(init?.headers || {}), ...auth } });
 
-  const ctype = res.headers.get('content-type') || '';
-  const body = ctype.includes('application/json') ? await res.json() : await res.text();
+  const ct = res.headers.get('content-type') || '';
+  const body = ct.includes('application/json') ? await res.json() : await res.text();
 
   if (!res.ok) {
     const msg =
-      (body && typeof body === 'object' && (body.error || (body as any).message)) ||
-      `HTTP ${res.status}`;
+      (body && typeof body === 'object' && (body as any).error) ||
+      (typeof body === 'string' ? body : `HTTP ${res.status}`);
     return { ok: false, error: String(msg) };
   }
+
   return { ok: true, data: body as T };
 }
 
