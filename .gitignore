@@ -9,7 +9,7 @@
 !.yarn/plugins
 !.yarn/releases
 !.yarn/versions
-/keys
+./keys/
 # testing
 /coverage
 
