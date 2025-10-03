@@ -18,6 +18,8 @@ keys/
 /.next/
 /out/
 
+keys/gcloud-key.json
+
 # production
 /build
 
