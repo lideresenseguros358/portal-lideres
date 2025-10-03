@@ -1,0 +1,515 @@
+[
+  {
+    "policyname": "advances_access",
+    "table_name": "advances",
+    "cmd": "SELECT",
+    "using_expr": "(is_master() OR (broker_id = auth.uid()))",
+    "check_expr": null,
+    "roles": "{public}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "advances_cud",
+    "table_name": "advances",
+    "cmd": "ALL",
+    "using_expr": "is_master()",
+    "check_expr": "is_master()",
+    "roles": "{authenticated}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "advances_read",
+    "table_name": "advances",
+    "cmd": "SELECT",
+    "using_expr": "(is_master() OR is_self(broker_id))",
+    "check_expr": null,
+    "roles": "{authenticated}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "settings_cud",
+    "table_name": "app_settings",
+    "cmd": "ALL",
+    "using_expr": "is_master()",
+    "check_expr": "is_master()",
+    "roles": "{authenticated}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "settings_read",
+    "table_name": "app_settings",
+    "cmd": "SELECT",
+    "using_expr": "is_master()",
+    "check_expr": null,
+    "roles": "{authenticated}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "audit_cud",
+    "table_name": "audit_logs",
+    "cmd": "ALL",
+    "using_expr": "is_master()",
+    "check_expr": "is_master()",
+    "roles": "{authenticated}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "audit_read",
+    "table_name": "audit_logs",
+    "cmd": "SELECT",
+    "using_expr": "is_master()",
+    "check_expr": null,
+    "roles": "{authenticated}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "brokers_cud_master",
+    "table_name": "brokers",
+    "cmd": "ALL",
+    "using_expr": "is_master()",
+    "check_expr": "is_master()",
+    "roles": "{authenticated}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "brokers_read_own",
+    "table_name": "brokers",
+    "cmd": "SELECT",
+    "using_expr": "((p_id = auth.uid()) OR is_master())",
+    "check_expr": null,
+    "roles": "{authenticated}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "case_checklist_access",
+    "table_name": "case_checklist",
+    "cmd": "SELECT",
+    "using_expr": "(is_master() OR (EXISTS ( SELECT 1\n   FROM cases c\n  WHERE ((c.id = case_checklist.case_id) AND ((c.broker_id = auth.uid()) OR (c.created_by = auth.uid()))))))",
+    "check_expr": null,
+    "roles": "{public}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "case_checklist_rw",
+    "table_name": "case_checklist",
+    "cmd": "ALL",
+    "using_expr": "(EXISTS ( SELECT 1\n   FROM cases c\n  WHERE ((c.id = case_checklist.case_id) AND (is_master() OR ((c.broker_id IS NOT NULL) AND is_self(c.broker_id)) OR (c.created_by = auth.uid())))))",
+    "check_expr": "(EXISTS ( SELECT 1\n   FROM cases c\n  WHERE ((c.id = case_checklist.case_id) AND (is_master() OR ((c.broker_id IS NOT NULL) AND is_self(c.broker_id)) OR (c.created_by = auth.uid())))))",
+    "roles": "{authenticated}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "case_files_access",
+    "table_name": "case_files",
+    "cmd": "SELECT",
+    "using_expr": "(is_master() OR (EXISTS ( SELECT 1\n   FROM cases c\n  WHERE ((c.id = case_files.case_id) AND ((c.broker_id = auth.uid()) OR (c.created_by = auth.uid()))))))",
+    "check_expr": null,
+    "roles": "{public}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "case_files_rw",
+    "table_name": "case_files",
+    "cmd": "ALL",
+    "using_expr": "(EXISTS ( SELECT 1\n   FROM cases c\n  WHERE ((c.id = case_files.case_id) AND (is_master() OR ((c.broker_id IS NOT NULL) AND is_self(c.broker_id)) OR (c.created_by = auth.uid())))))",
+    "check_expr": "(EXISTS ( SELECT 1\n   FROM cases c\n  WHERE ((c.id = case_files.case_id) AND (is_master() OR ((c.broker_id IS NOT NULL) AND is_self(c.broker_id)) OR (c.created_by = auth.uid())))))",
+    "roles": "{authenticated}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "cases_access",
+    "table_name": "cases",
+    "cmd": "SELECT",
+    "using_expr": "(is_master() OR (broker_id = auth.uid()) OR (created_by = auth.uid()))",
+    "check_expr": null,
+    "roles": "{public}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "cases_cud",
+    "table_name": "cases",
+    "cmd": "ALL",
+    "using_expr": "(is_master() OR ((broker_id IS NOT NULL) AND is_self(broker_id)) OR (created_by = auth.uid()))",
+    "check_expr": "(is_master() OR ((broker_id IS NOT NULL) AND is_self(broker_id)) OR (created_by = auth.uid()))",
+    "roles": "{authenticated}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "cases_read",
+    "table_name": "cases",
+    "cmd": "SELECT",
+    "using_expr": "(is_master() OR ((broker_id IS NOT NULL) AND is_self(broker_id)) OR (created_by = auth.uid()))",
+    "check_expr": null,
+    "roles": "{authenticated}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "check_batches_master",
+    "table_name": "check_batches",
+    "cmd": "ALL",
+    "using_expr": "is_master()",
+    "check_expr": "is_master()",
+    "roles": "{authenticated}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "check_items_access",
+    "table_name": "check_items",
+    "cmd": "SELECT",
+    "using_expr": "(is_master() OR (broker_id = auth.uid()))",
+    "check_expr": null,
+    "roles": "{public}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "check_items_master",
+    "table_name": "check_items",
+    "cmd": "ALL",
+    "using_expr": "is_master()",
+    "check_expr": "is_master()",
+    "roles": "{authenticated}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "check_items_read",
+    "table_name": "check_items",
+    "cmd": "SELECT",
+    "using_expr": "(is_master() OR is_self(broker_id))",
+    "check_expr": null,
+    "roles": "{authenticated}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "clients_cud_master",
+    "table_name": "clients",
+    "cmd": "ALL",
+    "using_expr": "is_master()",
+    "check_expr": "true",
+    "roles": "{authenticated}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "clients_cud_own",
+    "table_name": "clients",
+    "cmd": "ALL",
+    "using_expr": "is_self(broker_id)",
+    "check_expr": "is_self(broker_id)",
+    "roles": "{authenticated}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "clients_read_master",
+    "table_name": "clients",
+    "cmd": "SELECT",
+    "using_expr": "is_master()",
+    "check_expr": null,
+    "roles": "{authenticated}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "clients_read_own",
+    "table_name": "clients",
+    "cmd": "SELECT",
+    "using_expr": "(is_master() OR is_self(broker_id))",
+    "check_expr": null,
+    "roles": "{authenticated}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "comm_imports_master",
+    "table_name": "comm_imports",
+    "cmd": "ALL",
+    "using_expr": "is_master()",
+    "check_expr": "is_master()",
+    "roles": "{authenticated}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "comm_items_access",
+    "table_name": "comm_items",
+    "cmd": "SELECT",
+    "using_expr": "(is_master() OR (broker_id = auth.uid()))",
+    "check_expr": null,
+    "roles": "{public}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "comm_items_master",
+    "table_name": "comm_items",
+    "cmd": "ALL",
+    "using_expr": "is_master()",
+    "check_expr": "is_master()",
+    "roles": "{authenticated}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "comm_items_read",
+    "table_name": "comm_items",
+    "cmd": "SELECT",
+    "using_expr": "(is_master() OR ((broker_id IS NOT NULL) AND is_self(broker_id)))",
+    "check_expr": null,
+    "roles": "{authenticated}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "doctags_cud",
+    "table_name": "doc_tags",
+    "cmd": "ALL",
+    "using_expr": "is_master()",
+    "check_expr": "is_master()",
+    "roles": "{authenticated}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "doctags_read",
+    "table_name": "doc_tags",
+    "cmd": "SELECT",
+    "using_expr": "true",
+    "check_expr": null,
+    "roles": "{authenticated}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "doctagmap_rw",
+    "table_name": "download_doc_tags",
+    "cmd": "ALL",
+    "using_expr": "is_master()",
+    "check_expr": "is_master()",
+    "roles": "{authenticated}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "downloads_cud",
+    "table_name": "download_docs",
+    "cmd": "ALL",
+    "using_expr": "is_master()",
+    "check_expr": "is_master()",
+    "roles": "{authenticated}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "downloads_read",
+    "table_name": "download_docs",
+    "cmd": "SELECT",
+    "using_expr": "true",
+    "check_expr": null,
+    "roles": "{authenticated}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "attendees_cud",
+    "table_name": "event_attendees",
+    "cmd": "ALL",
+    "using_expr": "(is_master() OR is_self(broker_id))",
+    "check_expr": "(is_master() OR is_self(broker_id))",
+    "roles": "{authenticated}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "attendees_read",
+    "table_name": "event_attendees",
+    "cmd": "SELECT",
+    "using_expr": "(is_master() OR is_self(broker_id))",
+    "check_expr": null,
+    "roles": "{authenticated}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "events_cud",
+    "table_name": "events",
+    "cmd": "ALL",
+    "using_expr": "is_master()",
+    "check_expr": "is_master()",
+    "roles": "{authenticated}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "events_read",
+    "table_name": "events",
+    "cmd": "SELECT",
+    "using_expr": "true",
+    "check_expr": null,
+    "roles": "{authenticated}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "fbt_master",
+    "table_name": "fortnight_broker_totals",
+    "cmd": "ALL",
+    "using_expr": "is_master()",
+    "check_expr": "is_master()",
+    "roles": "{authenticated}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "fbt_read",
+    "table_name": "fortnight_broker_totals",
+    "cmd": "SELECT",
+    "using_expr": "(is_master() OR is_self(broker_id))",
+    "check_expr": null,
+    "roles": "{authenticated}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "fortnight_totals_access",
+    "table_name": "fortnight_broker_totals",
+    "cmd": "SELECT",
+    "using_expr": "(is_master() OR (broker_id = auth.uid()))",
+    "check_expr": null,
+    "roles": "{public}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "fortnights_master",
+    "table_name": "fortnights",
+    "cmd": "ALL",
+    "using_expr": "is_master()",
+    "check_expr": "is_master()",
+    "roles": "{authenticated}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "assa_codes_cud_master",
+    "table_name": "insurer_assa_codes",
+    "cmd": "ALL",
+    "using_expr": "is_master()",
+    "check_expr": "is_master()",
+    "roles": "{authenticated}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "assa_codes_read_all_auth",
+    "table_name": "insurer_assa_codes",
+    "cmd": "SELECT",
+    "using_expr": "true",
+    "check_expr": null,
+    "roles": "{authenticated}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "insurers_cud_master",
+    "table_name": "insurers",
+    "cmd": "ALL",
+    "using_expr": "is_master()",
+    "check_expr": "is_master()",
+    "roles": "{authenticated}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "insurers_read_all_auth",
+    "table_name": "insurers",
+    "cmd": "SELECT",
+    "using_expr": "true",
+    "check_expr": null,
+    "roles": "{authenticated}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "notifreads_rw",
+    "table_name": "notification_reads",
+    "cmd": "ALL",
+    "using_expr": "((profile_id = auth.uid()) OR is_master())",
+    "check_expr": "((profile_id = auth.uid()) OR is_master())",
+    "roles": "{authenticated}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "notifications_cud",
+    "table_name": "notifications",
+    "cmd": "ALL",
+    "using_expr": "is_master()",
+    "check_expr": "is_master()",
+    "roles": "{authenticated}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "notifications_read",
+    "table_name": "notifications",
+    "cmd": "SELECT",
+    "using_expr": "true",
+    "check_expr": null,
+    "roles": "{authenticated}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "policies_cud_master",
+    "table_name": "policies",
+    "cmd": "ALL",
+    "using_expr": "is_master()",
+    "check_expr": "is_master()",
+    "roles": "{authenticated}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "policies_cud_own",
+    "table_name": "policies",
+    "cmd": "ALL",
+    "using_expr": "is_self(broker_id)",
+    "check_expr": "is_self(broker_id)",
+    "roles": "{authenticated}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "policies_read_master",
+    "table_name": "policies",
+    "cmd": "SELECT",
+    "using_expr": "is_master()",
+    "check_expr": null,
+    "roles": "{authenticated}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "policies_read_own",
+    "table_name": "policies",
+    "cmd": "SELECT",
+    "using_expr": "(is_master() OR is_self(broker_id))",
+    "check_expr": null,
+    "roles": "{authenticated}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "production_cud",
+    "table_name": "production",
+    "cmd": "ALL",
+    "using_expr": "is_master()",
+    "check_expr": "is_master()",
+    "roles": "{authenticated}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "production_read",
+    "table_name": "production",
+    "cmd": "SELECT",
+    "using_expr": "(is_master() OR is_self(broker_id))",
+    "check_expr": null,
+    "roles": "{authenticated}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "profiles_read_own",
+    "table_name": "profiles",
+    "cmd": "SELECT",
+    "using_expr": "((id = auth.uid()) OR is_master())",
+    "check_expr": null,
+    "roles": "{authenticated}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "profiles_update_master",
+    "table_name": "profiles",
+    "cmd": "UPDATE",
+    "using_expr": "is_master()",
+    "check_expr": "is_master()",
+    "roles": "{authenticated}",
+    "permissive": "PERMISSIVE"
+  },
+  {
+    "policyname": "profiles_update_own",
+    "table_name": "profiles",
+    "cmd": "UPDATE",
+    "using_expr": "(id = auth.uid())",
+    "check_expr": "(id = auth.uid())",
+    "roles": "{authenticated}",
+    "permissive": "PERMISSIVE"
+  }
+]

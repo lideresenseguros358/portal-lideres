@@ -1,0 +1,67 @@
+[
+  {
+    "schema": "public",
+    "enum_name": "case_section",
+    "values": "SIN_CLASIFICAR, RAMOS_GENERALES, VIDA_ASSA, OTROS_PERSONAS"
+  },
+  {
+    "schema": "public",
+    "enum_name": "case_section_enum",
+    "values": "SIN_CLASIFICAR, RAMOS_GENERALES, VIDA_ASSA, OTROS_PERSONAS"
+  },
+  {
+    "schema": "public",
+    "enum_name": "case_status",
+    "values": "PENDIENTE_REVISION, EN_PROCESO, RESUELTO, DESCARTADO"
+  },
+  {
+    "schema": "public",
+    "enum_name": "case_status_enum",
+    "values": "PENDIENTE_REVISION, EN_PROCESO, FALTA_DOC, APLAZADO, RECHAZADO, APROBADO_PEND_PAGO, EMITIDO, CERRADO"
+  },
+  {
+    "schema": "public",
+    "enum_name": "case_type_enum",
+    "values": "COTIZACION, EMISION_GENERAL, EMISION_VIDA_ASSA_WEB, EMISION_VIDA_ASSA_NO_WEB, OTRO"
+  },
+  {
+    "schema": "public",
+    "enum_name": "event_audience",
+    "values": "ALL, SELECTED"
+  },
+  {
+    "schema": "public",
+    "enum_name": "fortnight_status_enum",
+    "values": "DRAFT, READY, PAID"
+  },
+  {
+    "schema": "public",
+    "enum_name": "map_kind",
+    "values": "COMMISSIONS, DELINQUENCY"
+  },
+  {
+    "schema": "public",
+    "enum_name": "policy_status_enum",
+    "values": "ACTIVA, CANCELADA, VENCIDA"
+  },
+  {
+    "schema": "public",
+    "enum_name": "porcents",
+    "values": "1, 0.94, 0.82, 0.8, 0.7, 0.6, 0.5, 0"
+  },
+  {
+    "schema": "public",
+    "enum_name": "role_enum",
+    "values": "master, broker"
+  },
+  {
+    "schema": "public",
+    "enum_name": "role_t",
+    "values": "master, broker"
+  },
+  {
+    "schema": "public",
+    "enum_name": "user_role",
+    "values": "MASTER, BROKER"
+  }
+]

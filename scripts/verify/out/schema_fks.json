@@ -1,0 +1,407 @@
+[
+  {
+    "table_schema": "public",
+    "table_name": "advances",
+    "constraint_name": "advances_broker_id_fkey",
+    "column_name": "broker_id",
+    "foreign_table_schema": "public",
+    "foreign_table_name": "brokers",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_schema": "public",
+    "table_name": "advances",
+    "constraint_name": "advances_created_by_fkey",
+    "column_name": "created_by",
+    "foreign_table_schema": "public",
+    "foreign_table_name": "profiles",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_schema": "public",
+    "table_name": "audit_logs",
+    "constraint_name": "audit_logs_created_by_fkey",
+    "column_name": "created_by",
+    "foreign_table_schema": "public",
+    "foreign_table_name": "profiles",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_schema": "public",
+    "table_name": "brokers",
+    "constraint_name": "brokers_id_fkey_profiles",
+    "column_name": "id",
+    "foreign_table_schema": "public",
+    "foreign_table_name": "profiles",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_schema": "public",
+    "table_name": "brokers",
+    "constraint_name": "brokers_p_fk_profiles",
+    "column_name": "p_id",
+    "foreign_table_schema": "public",
+    "foreign_table_name": "profiles",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_schema": "public",
+    "table_name": "case_checklist",
+    "constraint_name": "case_checklist_case_id_fkey",
+    "column_name": "case_id",
+    "foreign_table_schema": "public",
+    "foreign_table_name": "cases",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_schema": "public",
+    "table_name": "case_checklist",
+    "constraint_name": "case_checklist_completed_by_fkey",
+    "column_name": "completed_by",
+    "foreign_table_schema": "public",
+    "foreign_table_name": "profiles",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_schema": "public",
+    "table_name": "case_files",
+    "constraint_name": "case_files_case_id_fkey",
+    "column_name": "case_id",
+    "foreign_table_schema": "public",
+    "foreign_table_name": "cases",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_schema": "public",
+    "table_name": "case_files",
+    "constraint_name": "case_files_created_by_fkey",
+    "column_name": "created_by",
+    "foreign_table_schema": "public",
+    "foreign_table_name": "profiles",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_schema": "public",
+    "table_name": "cases",
+    "constraint_name": "cases_broker_id_fkey",
+    "column_name": "broker_id",
+    "foreign_table_schema": "public",
+    "foreign_table_name": "brokers",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_schema": "public",
+    "table_name": "cases",
+    "constraint_name": "cases_client_id_fkey",
+    "column_name": "client_id",
+    "foreign_table_schema": "public",
+    "foreign_table_name": "clients",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_schema": "public",
+    "table_name": "cases",
+    "constraint_name": "cases_created_by_fkey",
+    "column_name": "created_by",
+    "foreign_table_schema": "public",
+    "foreign_table_name": "profiles",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_schema": "public",
+    "table_name": "cases",
+    "constraint_name": "cases_insurer_id_fkey",
+    "column_name": "insurer_id",
+    "foreign_table_schema": "public",
+    "foreign_table_name": "insurers",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_schema": "public",
+    "table_name": "check_batches",
+    "constraint_name": "check_batches_created_by_fkey",
+    "column_name": "created_by",
+    "foreign_table_schema": "public",
+    "foreign_table_name": "profiles",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_schema": "public",
+    "table_name": "check_items",
+    "constraint_name": "check_items_batch_id_fkey",
+    "column_name": "batch_id",
+    "foreign_table_schema": "public",
+    "foreign_table_name": "check_batches",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_schema": "public",
+    "table_name": "check_items",
+    "constraint_name": "check_items_broker_id_fkey",
+    "column_name": "broker_id",
+    "foreign_table_schema": "public",
+    "foreign_table_name": "brokers",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_schema": "public",
+    "table_name": "clients",
+    "constraint_name": "clients_broker_id_fkey",
+    "column_name": "broker_id",
+    "foreign_table_schema": "public",
+    "foreign_table_name": "brokers",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_schema": "public",
+    "table_name": "comm_imports",
+    "constraint_name": "comm_imports_insurer_id_fkey",
+    "column_name": "insurer_id",
+    "foreign_table_schema": "public",
+    "foreign_table_name": "insurers",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_schema": "public",
+    "table_name": "comm_imports",
+    "constraint_name": "comm_imports_uploaded_by_fkey",
+    "column_name": "uploaded_by",
+    "foreign_table_schema": "public",
+    "foreign_table_name": "profiles",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_schema": "public",
+    "table_name": "comm_items",
+    "constraint_name": "comm_items_broker_id_fkey",
+    "column_name": "broker_id",
+    "foreign_table_schema": "public",
+    "foreign_table_name": "brokers",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_schema": "public",
+    "table_name": "comm_items",
+    "constraint_name": "comm_items_import_id_fkey",
+    "column_name": "import_id",
+    "foreign_table_schema": "public",
+    "foreign_table_name": "comm_imports",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_schema": "public",
+    "table_name": "comm_items",
+    "constraint_name": "comm_items_insurer_id_fkey",
+    "column_name": "insurer_id",
+    "foreign_table_schema": "public",
+    "foreign_table_name": "insurers",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_schema": "public",
+    "table_name": "download_doc_tags",
+    "constraint_name": "download_doc_tags_doc_id_fkey",
+    "column_name": "doc_id",
+    "foreign_table_schema": "public",
+    "foreign_table_name": "download_docs",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_schema": "public",
+    "table_name": "download_doc_tags",
+    "constraint_name": "download_doc_tags_tag_id_fkey",
+    "column_name": "tag_id",
+    "foreign_table_schema": "public",
+    "foreign_table_name": "doc_tags",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_schema": "public",
+    "table_name": "download_docs",
+    "constraint_name": "download_docs_created_by_fkey",
+    "column_name": "created_by",
+    "foreign_table_schema": "public",
+    "foreign_table_name": "profiles",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_schema": "public",
+    "table_name": "download_docs",
+    "constraint_name": "download_docs_insurer_id_fkey",
+    "column_name": "insurer_id",
+    "foreign_table_schema": "public",
+    "foreign_table_name": "insurers",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_schema": "public",
+    "table_name": "event_attendees",
+    "constraint_name": "event_attendees_broker_id_fkey",
+    "column_name": "broker_id",
+    "foreign_table_schema": "public",
+    "foreign_table_name": "brokers",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_schema": "public",
+    "table_name": "event_attendees",
+    "constraint_name": "event_attendees_event_id_fkey",
+    "column_name": "event_id",
+    "foreign_table_schema": "public",
+    "foreign_table_name": "events",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_schema": "public",
+    "table_name": "events",
+    "constraint_name": "events_created_by_fkey",
+    "column_name": "created_by",
+    "foreign_table_schema": "public",
+    "foreign_table_name": "profiles",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_schema": "public",
+    "table_name": "fortnight_broker_totals",
+    "constraint_name": "fortnight_broker_totals_broker_id_fkey",
+    "column_name": "broker_id",
+    "foreign_table_schema": "public",
+    "foreign_table_name": "brokers",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_schema": "public",
+    "table_name": "fortnight_broker_totals",
+    "constraint_name": "fortnight_broker_totals_fortnight_id_fkey",
+    "column_name": "fortnight_id",
+    "foreign_table_schema": "public",
+    "foreign_table_name": "fortnights",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_schema": "public",
+    "table_name": "fortnights",
+    "constraint_name": "fortnights_created_by_fkey",
+    "column_name": "created_by",
+    "foreign_table_schema": "public",
+    "foreign_table_name": "profiles",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_schema": "public",
+    "table_name": "insurer_assa_codes",
+    "constraint_name": "insurer_assa_codes_broker_id_fkey",
+    "column_name": "broker_id",
+    "foreign_table_schema": "public",
+    "foreign_table_name": "brokers",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_schema": "public",
+    "table_name": "insurer_assa_codes",
+    "constraint_name": "insurer_assa_codes_insurer_id_fkey",
+    "column_name": "insurer_id",
+    "foreign_table_schema": "public",
+    "foreign_table_name": "insurers",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_schema": "public",
+    "table_name": "insurer_delinquency_rules",
+    "constraint_name": "insurer_delinquency_rules_insurer_id_fkey",
+    "column_name": "insurer_id",
+    "foreign_table_schema": "public",
+    "foreign_table_name": "insurers",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_schema": "public",
+    "table_name": "insurer_mapping_rules",
+    "constraint_name": "insurer_mapping_rules_insurer_id_fkey",
+    "column_name": "insurer_id",
+    "foreign_table_schema": "public",
+    "foreign_table_name": "insurers",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_schema": "public",
+    "table_name": "insurer_mappings",
+    "constraint_name": "insurer_mappings_insurer_id_fkey",
+    "column_name": "insurer_id",
+    "foreign_table_schema": "public",
+    "foreign_table_name": "insurers",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_schema": "public",
+    "table_name": "notification_reads",
+    "constraint_name": "notification_reads_notification_id_fkey",
+    "column_name": "notification_id",
+    "foreign_table_schema": "public",
+    "foreign_table_name": "notifications",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_schema": "public",
+    "table_name": "notification_reads",
+    "constraint_name": "notification_reads_profile_id_fkey",
+    "column_name": "profile_id",
+    "foreign_table_schema": "public",
+    "foreign_table_name": "profiles",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_schema": "public",
+    "table_name": "notifications",
+    "constraint_name": "notifications_broker_id_fkey",
+    "column_name": "broker_id",
+    "foreign_table_schema": "public",
+    "foreign_table_name": "brokers",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_schema": "public",
+    "table_name": "policies",
+    "constraint_name": "policies_broker_id_fkey",
+    "column_name": "broker_id",
+    "foreign_table_schema": "public",
+    "foreign_table_name": "brokers",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_schema": "public",
+    "table_name": "policies",
+    "constraint_name": "policies_client_id_fkey",
+    "column_name": "client_id",
+    "foreign_table_schema": "public",
+    "foreign_table_name": "clients",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_schema": "public",
+    "table_name": "policies",
+    "constraint_name": "policies_insurer_id_fkey",
+    "column_name": "insurer_id",
+    "foreign_table_schema": "public",
+    "foreign_table_name": "insurers",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_schema": "public",
+    "table_name": "production",
+    "constraint_name": "production_broker_id_fkey",
+    "column_name": "broker_id",
+    "foreign_table_schema": "public",
+    "foreign_table_name": "brokers",
+    "foreign_column_name": "id"
+  },
+  {
+    "table_schema": "public",
+    "table_name": "profiles",
+    "constraint_name": "profiles_id_fkey_auth_users",
+    "column_name": "id",
+    "foreign_table_schema": "auth",
+    "foreign_table_name": "users",
+    "foreign_column_name": "id"
+  }
+]

@@ -1,0 +1,4 @@
+client_name,national_id,email,phone,address,policy_number,insurer_name,ramo,start_date,renewal_date,status,broker_email,percent_override
+Juan Pérez,8-123-4567,juan.perez@email.com,6000-0000,Calle 50 Ciudad de Panamá,POL-2024-001,ASSA,Autos,2024-01-15,2025-01-15,active,broker@lideresenseguros.com,15.5
+María García,E-8-12345,maria.garcia@email.com,6100-0000,,POL-2024-002,AIG,Vida,2024-02-01,2025-02-01,active,broker@lideresenseguros.com,
+Empresa XYZ S.A.,1234567-1-123456,contacto@xyz.com,300-0000,Ave Balboa Torre 1,POL-2024-003,MAPFRE,Incendio,2024-03-10,2025-03-10,active,broker@lideresenseguros.com,20.0

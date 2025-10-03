@@ -1,17 +1,7 @@
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  reactStrictMode: true,
+import type { NextConfig } from "next";
 
-  // No bloquear el build por ESLint en Vercel
-  eslint: {
-    ignoreDuringBuilds: true
-  },
-
-  // Si aún usas <img> o recursos remotos, evita sorpresas
-  images: {
-    unoptimized: true
-    // o define domains: ["..."] si luego usas <Image>
-  }
+const nextConfig: NextConfig = {
+  /* config options here */
 };
 
-module.exports = nextConfig;
+export default nextConfig;

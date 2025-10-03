@@ -1,0 +1,25 @@
+[dotenv@17.2.2] injecting env (12) from .env.local -- tip: ÔÜÖ´©Å  suppress all logs with { quiet: true }
+[seed] rule insert failure {
+  insurer: 'ACERTA',
+  payload: {
+    insurer_id: '5008990e-5e0b-4687-b4dc-3cd61c317f6e',
+    target_field: 'days',
+    aliases: [ 'd├¡as', 'dias', 'days', 'dias mora', 'dias atraso' ],
+    strategy: 'extract_numeric',
+    notes: null
+  },
+  message: 'new row for relation "insurer_mapping_rules" violates check constraint "insurer_mapping_rules_target_field_check"',
+  details: 'Failing row contains (9d6f235d-d379-4fcd-a377-378c4561294f, 5008990e-5e0b-4687-b4dc-3cd61c317f6e, days, extract_numeric, null, 2025-09-28 02:24:18.886569+00, ["d├¡as", "dias", "days", "dias mora", "dias atraso"]).',
+  hint: null,
+  code: '23514'
+}
+[seed] rule insert failure message: new row for relation "insurer_mapping_rules" violates check constraint "insurer_mapping_rules_target_field_check" | details: Failing row contains (9d6f235d-d379-4fcd-a377-378c4561294f, 5008990e-5e0b-4687-b4dc-3cd61c317f6e, days, extract_numeric, null, 2025-09-28 02:24:18.886569+00, ["d├¡as", "dias", "days", "dias mora", "dias atraso"]). | hint: null | code: 23514
+[seed] Failed while processing insurer ACERTA (5008990e-5e0b-4687-b4dc-3cd61c317f6e) Error: Failed to upsert mapping rule days for insurer ACERTA (5008990e-5e0b-4687-b4dc-3cd61c317f6e): new row for relation "insurer_mapping_rules" violates check constraint "insurer_mapping_rules_target_field_check"
+    at replaceRules (C:\Users\Samud\portal-lideres\scripts\seed\seed_insurer_mappings.ts:181:13)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async main (C:\Users\Samud\portal-lideres\scripts\seed\seed_insurer_mappings.ts:221:21)
+[seed] fatal error Error: Failed to upsert mapping rule days for insurer ACERTA (5008990e-5e0b-4687-b4dc-3cd61c317f6e): new row for relation "insurer_mapping_rules" violates check constraint "insurer_mapping_rules_target_field_check"
+    at replaceRules (C:\Users\Samud\portal-lideres\scripts\seed\seed_insurer_mappings.ts:181:13)
+    at process.processTicksAndRejections (node:internal/process/task_queues:105:5)
+    at async main (C:\Users\Samud\portal-lideres\scripts\seed\seed_insurer_mappings.ts:221:21)
+[seed] error details {}

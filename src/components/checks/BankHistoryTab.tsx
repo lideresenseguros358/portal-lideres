@@ -1,0 +1,250 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { FaPlus, FaChevronDown, FaChevronRight, FaFileImport } from 'react-icons/fa';
+import { actionGetBankTransfers } from '@/app/(app)/checks/actions';
+import ImportBankHistoryModal from './ImportBankHistoryModal';
+import { toast } from 'sonner';
+
+export default function BankHistoryTab() {
+  const [transfers, setTransfers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [filters, setFilters] = useState({
+    status: 'all',
+    startDate: '',
+    endDate: ''
+  });
+
+  const loadTransfers = async () => {
+    setLoading(true);
+    try {
+      const result = await actionGetBankTransfers(filters);
+      if (result.ok) {
+        setTransfers(result.data || []);
+      } else {
+        toast.error('Error al cargar historial');
+      }
+    } catch (error) {
+      toast.error('Error inesperado');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadTransfers();
+  }, [filters]);
+
+  const toggleRow = (id: string) => {
+    const newExpanded = new Set(expandedRows);
+    if (newExpanded.has(id)) {
+      newExpanded.delete(id);
+    } else {
+      newExpanded.add(id);
+    }
+    setExpandedRows(newExpanded);
+  };
+
+  const getStatusBadge = (status: string) => {
+    const badges = {
+      available: { label: 'Disponible', color: 'bg-green-100 text-green-800 border-green-300' },
+      partial: { label: 'Parcial', color: 'bg-yellow-100 text-yellow-800 border-yellow-300' },
+      exhausted: { label: 'Agotado', color: 'bg-gray-100 text-gray-800 border-gray-300' }
+    };
+    const badge = badges[status as keyof typeof badges] || badges.available;
+    return (
+      <span className={`px-3 py-1 rounded-full text-xs font-semibold border-2 ${badge.color}`}>
+        {badge.label}
+      </span>
+    );
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Header con filtros */}
+      <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-[#010139]">Historial de Banco</h2>
+          <p className="text-gray-600">Transferencias recibidas del Banco General</p>
+        </div>
+        
+        <button
+          onClick={() => setShowImportModal(true)}
+          className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-[#010139] to-[#020270] text-white rounded-xl hover:shadow-lg transition-all transform hover:scale-105 font-medium"
+        >
+          <FaFileImport />
+          Importar Historial
+        </button>
+      </div>
+
+      {/* Filtros */}
+      <div className="bg-white rounded-xl shadow-lg p-6 border-2 border-gray-100">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Estado</label>
+            <select
+              value={filters.status}
+              onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+              className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+            >
+              <option value="all">Todos</option>
+              <option value="available">Disponible</option>
+              <option value="partial">Parcial</option>
+              <option value="exhausted">Agotado</option>
+            </select>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Desde</label>
+            <input
+              type="date"
+              value={filters.startDate}
+              onChange={(e) => setFilters({ ...filters, startDate: e.target.value })}
+              className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Hasta</label>
+            <input
+              type="date"
+              value={filters.endDate}
+              onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
+              className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Tabla de Transferencias */}
+      <div className="bg-white rounded-xl shadow-lg overflow-hidden border-2 border-gray-100">
+        {loading ? (
+          <div className="p-12 text-center text-gray-500">
+            <div className="animate-spin w-8 h-8 border-4 border-[#010139] border-t-transparent rounded-full mx-auto mb-4"></div>
+            Cargando historial...
+          </div>
+        ) : transfers.length === 0 ? (
+          <div className="p-12 text-center text-gray-500">
+            <p className="text-lg mb-2">No hay transferencias registradas</p>
+            <p className="text-sm">Importa el historial del banco para comenzar</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
+                <tr>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Fecha</th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Referencia</th>
+                  <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Descripción</th>
+                  <th className="px-6 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">Monto</th>
+                  <th className="px-6 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">Usado</th>
+                  <th className="px-6 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">Disponible</th>
+                  <th className="px-6 py-4 text-center text-xs font-bold text-gray-700 uppercase tracking-wider">Estado</th>
+                  <th className="px-6 py-4"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {transfers.map((transfer) => {
+                  const isExpanded = expandedRows.has(transfer.id);
+                  const hasDetails = transfer.payment_details && transfer.payment_details.length > 0;
+                  
+                  return (
+                    <>
+                      <tr 
+                        key={transfer.id}
+                        className="hover:bg-gray-50 transition-colors cursor-pointer"
+                        onClick={() => hasDetails && toggleRow(transfer.id)}
+                      >
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          {new Date(transfer.date).toLocaleDateString('es-PA')}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="text-sm font-mono font-semibold text-[#010139]">
+                            {transfer.reference_number}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-gray-600 max-w-xs truncate">
+                          {transfer.description}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right">
+                          <span className="text-sm font-bold text-gray-900">
+                            ${parseFloat(transfer.amount).toFixed(2)}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right">
+                          <span className="text-sm font-semibold text-red-600">
+                            ${parseFloat(transfer.used_amount || 0).toFixed(2)}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right">
+                          <span className="text-sm font-semibold text-[#8AAA19]">
+                            ${parseFloat(transfer.remaining_amount || 0).toFixed(2)}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                          {getStatusBadge(transfer.status)}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                          {hasDetails && (
+                            isExpanded ? <FaChevronDown className="text-gray-400" /> : <FaChevronRight className="text-gray-400" />
+                          )}
+                        </td>
+                      </tr>
+                      
+                      {/* Detalles expandidos */}
+                      {isExpanded && hasDetails && (
+                        <tr>
+                          <td colSpan={8} className="px-6 py-4 bg-blue-50">
+                            <div className="space-y-2">
+                              <h4 className="font-semibold text-sm text-[#010139] mb-3">💳 Pagos Aplicados:</h4>
+                              {transfer.payment_details.map((detail: any) => (
+                                <div key={detail.id} className="bg-white rounded-lg p-3 border-l-4 border-[#8AAA19] flex items-center justify-between">
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-3">
+                                      <span className="font-medium text-gray-900">{detail.client_name}</span>
+                                      {detail.policy_number && (
+                                        <span className="text-sm text-gray-600">Póliza: {detail.policy_number}</span>
+                                      )}
+                                      {detail.insurer_name && (
+                                        <span className="text-sm text-gray-600">• {detail.insurer_name}</span>
+                                      )}
+                                    </div>
+                                    <div className="text-xs text-gray-500 mt-1">
+                                      {new Date(detail.paid_at).toLocaleString('es-PA')} • {detail.purpose}
+                                    </div>
+                                  </div>
+                                  <div className="text-right">
+                                    <span className="font-bold text-[#8AAA19]">
+                                      ${parseFloat(detail.amount_used).toFixed(2)}
+                                    </span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Modal de importación */}
+      {showImportModal && (
+        <ImportBankHistoryModal
+          onClose={() => setShowImportModal(false)}
+          onSuccess={() => {
+            loadTransfers();
+            setShowImportModal(false);
+          }}
+        />
+      )}
+    </div>
+  );
+}
