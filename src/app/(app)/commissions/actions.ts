@@ -29,6 +29,8 @@ type CommImportIns = TablesInsert<'comm_imports'>;
 type CommItemRow = Tables<'comm_items'>;
 type CommItemIns = TablesInsert<'comm_items'>;
 type CommItemUpd = TablesUpdate<'comm_items'>;
+type PendingItemRow = Tables<'pending_items'>;
+type PendingItemUpd = TablesUpdate<'pending_items'>;
 type AdvanceRow = Tables<'advances'>;
 type AdvanceIns = TablesInsert<'advances'>;
 type AdvanceLogRow = Tables<'advance_logs'>;
@@ -46,6 +48,7 @@ export async function actionUploadImport(formData: FormData) {
       total_amount: String(formData.get('total_amount') || '0'),
       fortnight_id: String(formData.get('fortnight_id') || ''),
       invert_negatives: String(formData.get('invert_negatives') || 'false'),
+      is_life_insurance: String(formData.get('is_life_insurance') || 'false'),
     };
 
     console.log('[SERVER] FormData:', { ...rawData, fileName: file?.name });
@@ -63,25 +66,27 @@ export async function actionUploadImport(formData: FormData) {
     
     console.log('[SERVER] Parsing file...');
     
-    // Get insurer mapping rules
+    // Get insurer mapping rules (including multi-column support for ASSA)
     const { data: mappingRules } = await supabase
       .from('insurer_mapping_rules')
-      .select('target_field, aliases')
-      .eq('insurer_id', parsed.insurer_id);
+      .select('target_field, aliases, commission_column_2_aliases, commission_column_3_aliases')
+      .eq('insurer_id', parsed.insurer_id) as any;
     
     console.log('[SERVER] Mapping rules:', mappingRules);
     
-    // Get insurer configuration for invert_negatives
+    // Get insurer configuration for invert_negatives and multi-column support (ASSA)
     const { data: insurerData } = await supabase
       .from('insurers')
-      .select('invert_negatives')
+      .select('invert_negatives, use_multi_commission_columns')
       .eq('id', parsed.insurer_id)
       .single();
     
-    const invertNegatives = insurerData?.invert_negatives || false;
+    const invertNegatives = (insurerData as any)?.invert_negatives || false;
+    const useMultiColumns = (insurerData as any)?.use_multi_commission_columns || false;
     console.log('[SERVER] Invert negatives from insurer config:', invertNegatives);
+    console.log('[SERVER] Use multi commission columns (ASSA):', useMultiColumns);
     
-    const rows = await parseCsvXlsx(file, mappingRules || [], invertNegatives);
+    const rows = await parseCsvXlsx(file, mappingRules || [], invertNegatives, useMultiColumns);
     console.log('[SERVER] Parsed rows:', rows.length);
     console.log('[SERVER] First 3 rows:', rows.slice(0, 3).map(r => ({
       policy: r.policy_number,
@@ -89,15 +94,16 @@ export async function actionUploadImport(formData: FormData) {
       amount: r.commission_amount
     })));
 
-    // 1. Create the comm_imports record with user-entered total_amount
+    // 1. Create the comm_imports record with user-entered total_amount and life insurance flag
     const { data: importRecord, error: importError } = await supabase
       .from('comm_imports')
-      .insert({
+      .insert([{
         insurer_id: parsed.insurer_id,
         period_label: parsed.fortnight_id,
         uploaded_by: userId,
         total_amount: parseFloat(parsed.total_amount),
-      } satisfies CommImportIns)
+        is_life_insurance: parsed.is_life_insurance === 'true',
+      }])
       .select()
       .single<CommImportRow>();
 
@@ -106,20 +112,59 @@ export async function actionUploadImport(formData: FormData) {
     
     console.log('[SERVER] Saved total_amount:', importRecord.total_amount, 'for import:', importRecord.id);
 
-    // 2. Prepare comm_items - sin broker_id = pendiente de identificar
-    const itemsToInsert: CommItemIns[] = rows.map(row => ({
-      import_id: importRecord.id,
-      insurer_id: parsed.insurer_id,
-      policy_number: row.policy_number || 'PENDIENTE',
-      gross_amount: row.commission_amount || 0,
-      insured_name: row.client_name || 'PENDIENTE DE IDENTIFICAR',
-      raw_row: row.raw_row,
-      // broker_id omitido = NULL en DB = pendiente de identificar
-    }));
+    // 2. Buscar pólizas existentes para identificar broker
+    const policyNumbers = rows.map(r => r.policy_number).filter(Boolean) as string[];
+    const { data: existingPolicies } = await supabase
+      .from('policies')
+      .select('policy_number, broker_id, client_id, clients(national_id)')
+      .in('policy_number', policyNumbers.length > 0 ? policyNumbers : ['__NONE__']);
 
-    console.log('[SERVER] Items to insert:', itemsToInsert.length);
+    const policyMap = new Map<string, { broker_id: string | null; client_id: string; national_id: string | null }>();
+    (existingPolicies || []).forEach((p: any) => {
+      policyMap.set(p.policy_number, {
+        broker_id: p.broker_id,
+        client_id: p.client_id,
+        national_id: p.clients?.national_id || null,
+      });
+    });
 
-    // 3. Insert comm_items
+    // 3. Separar: comm_items (identificados con broker) y pending_items (sin identificar)
+    const itemsToInsert: CommItemIns[] = [];
+    const pendingItemsToInsert: any[] = [];
+
+    for (const row of rows) {
+      const policyData = row.policy_number ? policyMap.get(row.policy_number) : null;
+      
+      // Si existe póliza con broker identificado, va a comm_items
+      if (policyData && policyData.broker_id) {
+        itemsToInsert.push({
+          import_id: importRecord.id,
+          insurer_id: parsed.insurer_id,
+          policy_number: row.policy_number || 'UNKNOWN',
+          gross_amount: row.commission_amount || 0,
+          insured_name: row.client_name || 'UNKNOWN',
+          raw_row: row.raw_row,
+          broker_id: policyData.broker_id,
+        });
+      } else {
+        // Sin broker identificado: va a pending_items con commission_raw (NO calculado con %)
+        pendingItemsToInsert.push({
+          insured_name: row.client_name || null,
+          policy_number: row.policy_number || 'UNKNOWN',
+          insurer_id: parsed.insurer_id,
+          commission_raw: row.commission_amount || 0, // RAW, no calculado
+          fortnight_id: parsed.fortnight_id,
+          import_id: importRecord.id,
+          status: 'open',
+          assigned_broker_id: null,
+        });
+      }
+    }
+
+    console.log('[SERVER] Items to insert (identified):', itemsToInsert.length);
+    console.log('[SERVER] Pending items (unidentified):', pendingItemsToInsert.length);
+
+    // 4. Insert comm_items (con cédula)
     if (itemsToInsert.length > 0) {
       const { error: itemsError } = await supabase
         .from('comm_items')
@@ -132,8 +177,24 @@ export async function actionUploadImport(formData: FormData) {
       console.log('[SERVER] Items inserted successfully');
     }
 
+    // 5. Insert pending_items (no identificados)
+    if (pendingItemsToInsert.length > 0) {
+      const { error: pendingError } = await supabase
+        .from('pending_items')
+        .insert(pendingItemsToInsert);
+      
+      if (pendingError) {
+        console.error('[SERVER] Error inserting pending items:', pendingError);
+        // No fallar el import completo, solo logear
+        console.log('[SERVER] Continuing despite pending items errors');
+      } else {
+        console.log('[SERVER] Pending items inserted successfully');
+      }
+    }
+
     const result = { 
       insertedCount: itemsToInsert.length,
+      pendingCount: pendingItemsToInsert.length,
       importId: importRecord.id,
       totalAmount: parsed.total_amount,
     };
@@ -159,6 +220,98 @@ export async function actionUploadImport(formData: FormData) {
     return {
       ok: false as const,
       error: errorMessage,
+    };
+  }
+}
+
+export async function actionMarkPendingAsPayNow(payload: { policy_number: string; item_ids?: string[] }) {
+  try {
+    const { userId } = await getAuthContext();
+    const supabase = getSupabaseAdmin();
+
+    let targetIds = payload.item_ids ?? [];
+
+    if (targetIds.length === 0) {
+      const { data: itemsByPolicy, error: fetchError } = await supabase
+        .from('pending_items')
+        .select('id')
+        .eq('policy_number', payload.policy_number)
+        .eq('status', 'open')
+        .returns<Pick<PendingItemRow, 'id'>[]>();
+
+      if (fetchError) throw fetchError;
+      targetIds = (itemsByPolicy || []).map(item => item.id);
+    }
+
+    if (targetIds.length === 0) {
+      return { ok: false as const, error: 'No hay pendientes abiertos para marcar como pagados.' };
+    }
+
+    const { data, error } = await supabase
+      .from('pending_items')
+      .update({
+        status: 'approved_pay_now',
+        action_type: 'pay_now',
+        assigned_by: userId,
+        assigned_at: new Date().toISOString(),
+      } satisfies PendingItemUpd)
+      .in('id', targetIds)
+      .select('id');
+
+    if (error) throw error;
+
+    revalidatePath('/(app)/commissions');
+    return { ok: true as const, data: { updated: data?.length || 0 } };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : 'Error desconocido',
+    };
+  }
+}
+
+export async function actionMarkPendingAsNextFortnight(payload: { policy_number: string; item_ids?: string[] }) {
+  try {
+    const { userId } = await getAuthContext();
+    const supabase = getSupabaseAdmin();
+
+    let targetIds = payload.item_ids ?? [];
+
+    if (targetIds.length === 0) {
+      const { data: itemsByPolicy, error: fetchError } = await supabase
+        .from('pending_items')
+        .select('id')
+        .eq('policy_number', payload.policy_number)
+        .eq('status', 'open')
+        .returns<Pick<PendingItemRow, 'id'>[]>();
+
+      if (fetchError) throw fetchError;
+      targetIds = (itemsByPolicy || []).map(item => item.id);
+    }
+
+    if (targetIds.length === 0) {
+      return { ok: false as const, error: 'No hay pendientes abiertos para enviar a la próxima quincena.' };
+    }
+
+    const { data, error } = await supabase
+      .from('pending_items')
+      .update({
+        status: 'approved_next',
+        action_type: 'next_fortnight',
+        assigned_by: userId,
+        assigned_at: new Date().toISOString(),
+      } satisfies PendingItemUpd)
+      .in('id', targetIds)
+      .select('id');
+
+    if (error) throw error;
+
+    revalidatePath('/(app)/commissions');
+    return { ok: true as const, data: { updated: data?.length || 0 } };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : 'Error desconocido',
     };
   }
 }
@@ -291,26 +444,38 @@ export async function actionGetAllAdvances() {
   }
 }
 
-// Get advances filtered by broker
+// Get advances filtered by broker and year
 export async function actionGetAdvances(brokerId?: string, year?: number) {
   const supabase = await getSupabaseAdmin();
   try {
     let query = supabase
       .from('advances')
       .select('*, brokers(id, name)')
-      .gt('amount', 0)
       .order('created_at', { ascending: false });
 
-    // CRITICAL: Filter by broker_id if provided
+    // Filter by broker_id if provided
     if (brokerId) {
       query = query.eq('broker_id', brokerId);
     }
 
+    // Filter by year if provided
+    if (year) {
+      const startDate = `${year}-01-01`;
+      const endDate = `${year}-12-31`;
+      query = query.gte('created_at', startDate).lte('created_at', endDate);
+    }
+
     const { data, error } = await query;
 
-    if (error) throw error;
+    if (error) {
+      console.error('[actionGetAdvances] Error:', error);
+      throw error;
+    }
+    
+    console.log('[actionGetAdvances] Loaded advances:', data?.length || 0);
     return { ok: true as const, data: data || [] };
   } catch (error) {
+    console.error('[actionGetAdvances] Exception:', error);
     return { ok: false as const, error: String(error) };
   }
 }
@@ -463,29 +628,42 @@ export async function actionResolveClaim(payload: unknown) {
   }
 }
 
-// Compatibility function for resolving pending groups
+// Assign pending items to a broker
 export async function actionResolvePendingGroups(payload: unknown) {
   try {
-    const parsed = payload as { 
-      broker_id: string; 
-      policy_number: string; 
-      item_ids?: string[] 
-    };
+    const parsed = ResolvePendingSchema.parse(payload);
     const supabase = getSupabaseAdmin();
 
-    let query = supabase
-      .from('comm_items')
-      .update({ broker_id: parsed.broker_id } satisfies CommItemUpd)
-      .eq('policy_number', parsed.policy_number)
-      .is('broker_id', null);
+    let targetIds = parsed.item_ids ?? [];
 
-    if (parsed.item_ids && parsed.item_ids.length > 0) {
-      query = query.in('id', parsed.item_ids);
+    if (targetIds.length === 0) {
+      const { data: itemsByPolicy, error: fetchError } = await supabase
+        .from('pending_items')
+        .select('id')
+        .eq('policy_number', parsed.policy_number)
+        .eq('status', 'open')
+        .returns<Pick<PendingItemRow, 'id'>[]>();
+
+      if (fetchError) throw fetchError;
+      targetIds = (itemsByPolicy || []).map(item => item.id);
     }
 
-    const { data, error } = await query.select();
+    if (targetIds.length === 0) {
+      return { ok: false as const, error: 'No hay pendientes abiertos para asignar.' };
+    }
 
-    if (error) throw new Error(error.message);
+    const { data, error } = await supabase
+      .from('pending_items')
+      .update({
+        assigned_broker_id: parsed.broker_id,
+        status: 'claimed',
+        assigned_at: new Date().toISOString(),
+      } satisfies PendingItemUpd)
+      .in('id', targetIds)
+      .eq('status', 'open')
+      .select('id');
+
+    if (error) throw error;
 
     revalidatePath('/(app)/commissions');
     return { ok: true as const, data: { updated: data?.length || 0 } };
@@ -774,9 +952,11 @@ export async function actionPayFortnight(fortnightId: string) {
 
     if (fError || !fortnight) throw new Error('Quincena no encontrada');
 
-    // Generate bank CSV
+    // Generate bank CSV with fortnight label
+    const fortnightLabel = `${fortnight.period_start} al ${fortnight.period_end}`;
     const csvContent = await buildBankCsv(
-      (fortnight as any).fortnight_broker_totals || []
+      (fortnight as any).fortnight_broker_totals || [],
+      fortnightLabel
     );
 
     // Update fortnight status to closed
@@ -806,38 +986,66 @@ export async function actionPayFortnight(fortnightId: string) {
 // Delete import
 export async function actionDeleteImport(importId: string) {
   try {
+    console.log('[actionDeleteImport] Iniciando eliminación de import:', importId);
     const supabase = getSupabaseAdmin();
 
-    // First, verify the import is part of a DRAFT fortnight
-    const { data: importData } = await supabase
+    // Get import data to verify it's from a DRAFT fortnight
+    const { data: importData, error: getError } = await supabase
       .from('comm_imports')
-      .select('*, fortnights!inner(status)')
+      .select('id, period_label')
       .eq('id', importId)
       .single();
 
-    if (!importData || (importData.fortnights as any)?.status !== 'DRAFT') {
+    console.log('[actionDeleteImport] Import encontrado:', importData);
+    
+    if (getError || !importData) {
+      console.error('[actionDeleteImport] Error buscando import:', getError);
+      return { ok: false as const, error: 'Importación no encontrada.' };
+    }
+
+    // Verify fortnight is DRAFT
+    const { data: fortnight, error: fortnightError } = await supabase
+      .from('fortnights')
+      .select('status')
+      .eq('id', importData.period_label)
+      .single();
+
+    console.log('[actionDeleteImport] Fortnight status:', fortnight?.status);
+
+    if (fortnightError || fortnight?.status !== 'DRAFT') {
       return { ok: false as const, error: 'Solo se pueden eliminar importaciones de quincenas en borrador.' };
     }
 
-    // Explicitly delete all comm_items first
-    const { error: itemsError } = await supabase
+    // Delete all comm_items associated with this import
+    console.log('[actionDeleteImport] Eliminando comm_items...');
+    const { error: itemsError, count: itemsCount } = await supabase
       .from('comm_items')
-      .delete()
+      .delete({ count: 'exact' })
       .eq('import_id', importId);
 
-    if (itemsError) throw new Error(`Error eliminando items: ${itemsError.message}`);
+    if (itemsError) {
+      console.error('[actionDeleteImport] Error eliminando items:', itemsError);
+      throw new Error(`Error eliminando items: ${itemsError.message}`);
+    }
+    console.log('[actionDeleteImport] Items eliminados:', itemsCount);
 
-    // Then delete the comm_imports record
+    // Delete the import record
+    console.log('[actionDeleteImport] Eliminando import...');
     const { error: importError } = await supabase
       .from('comm_imports')
       .delete()
       .eq('id', importId);
 
-    if (importError) throw new Error(`Error eliminando importación: ${importError.message}`);
+    if (importError) {
+      console.error('[actionDeleteImport] Error eliminando import:', importError);
+      throw new Error(`Error eliminando importación: ${importError.message}`);
+    }
 
+    console.log('[actionDeleteImport] ✓ Import eliminado exitosamente');
     revalidatePath('/(app)/commissions');
     return { ok: true as const };
   } catch (error) {
+    console.error('[actionDeleteImport] Exception:', error);
     return {
       ok: false as const,
       error: error instanceof Error ? error.message : 'Error desconocido',
@@ -846,7 +1054,7 @@ export async function actionDeleteImport(importId: string) {
 }
 
 // Get closed fortnights
-export async function actionGetClosedFortnights(year: number, month: number, fortnight?: number) {
+export async function actionGetClosedFortnights(year: number, month: number, fortnight?: number, brokerId?: string | null) {
   try {
     const supabase = getSupabaseAdmin();
     const startDate = new Date(year, month - 1, 1).toISOString();
@@ -907,6 +1115,14 @@ export async function actionGetClosedFortnights(year: number, month: number, for
         return acc;
       }, {} as Record<string, number>);
 
+      const filteredBrokers = brokerId
+        ? brokerTotals.filter((bt: any) => bt.broker_id === brokerId)
+        : brokerTotals;
+
+      if (brokerId && filteredBrokers.length === 0) {
+        return null;
+      }
+
       return {
         id: f.id,
         label: `Q${fortnightStart.getDate() <= 15 ? 1 : 2} - ${fortnightStart.toLocaleString('es-PA', { month: 'short', timeZone: 'UTC' })}. ${fortnightStart.getUTCFullYear()}`,
@@ -914,7 +1130,7 @@ export async function actionGetClosedFortnights(year: number, month: number, for
         total_paid_gross,
         total_office_profit,
         totalsByInsurer: Object.entries(totalsByInsurer).map(([name, total]) => ({ name, total })).sort((a, b) => b.total - a.total),
-        brokers: brokerTotals.map((bt: any) => ({
+        brokers: filteredBrokers.map((bt: any) => ({
           broker_id: bt.broker_id,
           broker_name: bt.brokers?.name || 'N/A',
           net_amount: bt.net_amount,
@@ -924,7 +1140,7 @@ export async function actionGetClosedFortnights(year: number, month: number, for
       };
     });
 
-    return { ok: true as const, data: formattedData };
+    return { ok: true as const, data: formattedData.filter(Boolean) };
   } catch (error) {
     return {
       ok: false as const,
@@ -961,20 +1177,45 @@ export async function actionGetLastClosedFortnight() {
   }
 }
 
-// Get pending items
+// Get pending items (sin broker asignado)
 export async function actionGetPendingItems() {
   try {
+    console.log('[actionGetPendingItems] Fetching pending_items...');
     const supabase = getSupabaseAdmin();
+
     const { data, error } = await supabase
-      .from('comm_items')
-      .select('*, insurers(name)')
-      .is('broker_id', null)
+      .from('pending_items')
+      .select(`
+        id,
+        insured_name,
+        policy_number,
+        commission_raw,
+        created_at,
+        status,
+        insurers ( name )
+      `)
+      .eq('status', 'open')
       .order('created_at', { ascending: true });
 
-    if (error) throw error;
+    if (error) {
+      console.error('[actionGetPendingItems] Error:', error);
+      throw error;
+    }
 
-    return { ok: true as const, data };
+    const formattedData = (data || []).map(item => ({
+      id: item.id,
+      policy_number: item.policy_number,
+      insured_name: item.insured_name,
+      gross_amount: Number((item as any).commission_raw) || 0,
+      created_at: item.created_at,
+      status: item.status,
+      insurers: item.insurers,
+    }));
+
+    console.log('[actionGetPendingItems] Found', formattedData.length, 'pending items');
+    return { ok: true as const, data: formattedData };
   } catch (error) {
+    console.error('[actionGetPendingItems] Exception:', error);
     return {
       ok: false as const,
       error: error instanceof Error ? error.message : 'Error desconocido',
@@ -1046,58 +1287,91 @@ export async function actionClaimPendingItem(itemIds: string[]) {
 // Delete draft fortnight
 export async function actionDeleteDraft(fortnightId: string) {
   try {
+    console.log('[actionDeleteDraft] Iniciando eliminación de borrador:', fortnightId);
     const supabase = getSupabaseAdmin();
 
     // Verify it's a draft
-    const { data: fortnight } = await supabase
+    const { data: fortnight, error: fortnightError } = await supabase
       .from('fortnights')
       .select('status')
       .eq('id', fortnightId)
       .single<Pick<FortnightRow, 'status'>>();
 
+    console.log('[actionDeleteDraft] Fortnight encontrada:', fortnight);
+    if (fortnightError) {
+      console.error('[actionDeleteDraft] Error buscando fortnight:', fortnightError);
+      throw fortnightError;
+    }
+
     if (fortnight?.status !== 'DRAFT') {
       return { ok: false as const, error: 'Solo se pueden eliminar quincenas en borrador.' };
     }
 
-    // Get all imports for this fortnight
+    // Delete fortnight_broker_totals FIRST (no dependencies)
+    console.log('[actionDeleteDraft] Eliminando totals...');
+    await supabase
+      .from('fortnight_broker_totals')
+      .delete()
+      .eq('fortnight_id', fortnightId);
+
+    // Delete temp imports if any (no dependencies)
+    console.log('[actionDeleteDraft] Eliminando temp imports...');
+    await supabase
+      .from('temp_client_imports')
+      .delete()
+      .eq('fortnight_id', fortnightId);
+
+    // Get all imports BEFORE deleting items
+    console.log('[actionDeleteDraft] Buscando imports...');
     const { data: imports } = await supabase
       .from('comm_imports')
       .select('id')
       .eq('period_label', fortnightId);
 
-    // Delete all comm_items for each import
+    console.log('[actionDeleteDraft] Imports encontrados:', imports?.length || 0);
+
+    // Delete comm_items by import_id
     if (imports && imports.length > 0) {
       for (const imp of imports) {
+        console.log('[actionDeleteDraft] Eliminando items de import:', imp.id);
         await supabase
           .from('comm_items')
           .delete()
           .eq('import_id', imp.id);
       }
-
-      // Delete all imports
+      
+      // Now delete imports
+      console.log('[actionDeleteDraft] Eliminando imports...');
       await supabase
         .from('comm_imports')
         .delete()
         .eq('period_label', fortnightId);
     }
 
-    // Delete fortnight_broker_totals
+    // Delete any orphan comm_items
+    console.log('[actionDeleteDraft] Eliminando items huérfanos...');
     await supabase
-      .from('fortnight_broker_totals')
+      .from('comm_items')
       .delete()
       .eq('fortnight_id', fortnightId);
 
-    // Delete the fortnight
-    const { error } = await supabase
+    // Finally, delete the fortnight itself
+    console.log('[actionDeleteDraft] Eliminando fortnight...');
+    const { error: deleteError } = await supabase
       .from('fortnights')
       .delete()
       .eq('id', fortnightId);
 
-    if (error) throw error;
+    if (deleteError) {
+      console.error('[actionDeleteDraft] Error eliminando fortnight:', deleteError);
+      throw deleteError;
+    }
 
+    console.log('[actionDeleteDraft] ✓ Borrador eliminado exitosamente');
     revalidatePath('/(app)/commissions');
     return { ok: true as const };
   } catch (error) {
+    console.error('[actionDeleteDraft] Exception:', error);
     return {
       ok: false as const,
       error: error instanceof Error ? error.message : 'Error desconocido',
@@ -1135,7 +1409,8 @@ export async function actionExportBankCsv(fortnightId: string) {
       return net > 0;
     });
 
-    const csvContent = await buildBankCsv(filteredTotals);
+    const fortnightLabel = `${fortnight.period_start} al ${fortnight.period_end}`;
+    const csvContent = await buildBankCsv(filteredTotals, fortnightLabel);
 
     return {
       ok: true as const,

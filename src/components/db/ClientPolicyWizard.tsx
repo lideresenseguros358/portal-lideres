@@ -142,42 +142,42 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-      <div className="bg-white rounded-xl max-w-2xl w-full my-8 shadow-2xl">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4 overflow-y-auto">
+      <div className="bg-white rounded-xl max-w-2xl w-full my-4 sm:my-8 shadow-2xl flex flex-col max-h-[95vh]">
         {/* Header */}
-        <div className="bg-gradient-to-r from-[#010139] to-[#020270] text-white p-6 flex items-center justify-between rounded-t-xl">
-          <h2 className="text-2xl font-bold">Nuevo Cliente y Póliza</h2>
+        <div className="bg-gradient-to-r from-[#010139] to-[#020270] text-white p-4 sm:p-6 flex items-center justify-between rounded-t-xl flex-shrink-0">
+          <h2 className="text-lg sm:text-2xl font-bold">Nuevo Cliente y Póliza</h2>
           <button onClick={onClose} className="text-white hover:text-gray-200 transition">
             <FaTimes size={24} />
           </button>
         </div>
 
         {/* Progress Steps */}
-        <div className="px-6 py-4 bg-gray-50 border-b">
+        <div className="px-3 sm:px-6 py-3 sm:py-4 bg-gray-50 border-b flex-shrink-0">
           <div className="flex items-center justify-between">
             {[1, 2, 3, 4].map((s) => (
-              <div key={s} className="flex items-center">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold transition-all ${
+              <div key={s} className="flex items-center flex-1">
+                <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-sm sm:text-base font-bold transition-all ${
                   step >= s ? 'bg-[#010139] text-white' : 'bg-gray-300 text-gray-600'
                 }`}>
-                  {step > s ? <FaCheckCircle /> : s}
+                  {step > s ? <FaCheckCircle className="text-xs sm:text-base" /> : s}
                 </div>
                 {s < 4 && (
-                  <div className={`h-1 w-16 mx-2 ${step > s ? 'bg-[#010139]' : 'bg-gray-300'}`} />
+                  <div className={`h-1 flex-1 mx-1 sm:mx-2 ${step > s ? 'bg-[#010139]' : 'bg-gray-300'}`} />
                 )}
               </div>
             ))}
           </div>
-          <div className="flex justify-between mt-2 text-sm text-gray-600">
-            <span>Cliente</span>
-            <span>Póliza</span>
-            <span>Asignación</span>
-            <span>Confirmar</span>
+          <div className="flex justify-between mt-2 text-xs sm:text-sm text-gray-600 px-1">
+            <span className="text-center">Cliente</span>
+            <span className="text-center">Póliza</span>
+            <span className="text-center">Asignación</span>
+            <span className="text-center">Confirmar</span>
           </div>
         </div>
 
         {/* Form Content */}
-        <div className="p-6 max-h-[50vh] overflow-y-auto">
+        <div className="p-4 sm:p-6 overflow-y-auto flex-1">
           {/* Step 1: Cliente */}
           {step === 1 && (
             <div className="space-y-4 animate-fadeIn">
@@ -449,10 +449,10 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
         </div>
 
         {/* Footer Actions */}
-        <div className="px-6 py-4 bg-gray-50 border-t flex items-center justify-between rounded-b-xl">
+        <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 border-t flex items-center justify-between rounded-b-xl flex-shrink-0">
           <button
             onClick={() => step > 1 ? setStep(step - 1) : onClose()}
-            className="px-6 py-2 text-gray-700 bg-white border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition"
+            className="px-4 sm:px-6 py-2 text-sm sm:text-base text-gray-700 bg-white border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition"
           >
             {step === 1 ? 'Cancelar' : 'Atrás'}
           </button>
@@ -460,7 +460,7 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
           {step < 4 ? (
             <button
               onClick={handleNext}
-              className="px-6 py-2 bg-[#010139] text-white rounded-lg hover:bg-[#8AAA19] transition transform hover:scale-105"
+              className="px-4 sm:px-6 py-2 text-sm sm:text-base bg-[#010139] text-white rounded-lg hover:bg-[#8AAA19] transition transform hover:scale-105"
             >
               Siguiente
             </button>
@@ -468,7 +468,7 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
             <button
               onClick={handleSubmit}
               disabled={loading}
-              className="px-6 py-2 bg-[#8AAA19] text-white rounded-lg hover:bg-[#010139] transition transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 sm:px-6 py-2 text-sm sm:text-base bg-[#8AAA19] text-white rounded-lg hover:bg-[#010139] transition transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? 'Creando...' : 'Crear Cliente'}
             </button>

@@ -131,7 +131,7 @@ export default function ImportForm({ insurers, draftFortnightId, onImport }: Pro
           <input
             id="file-upload"
             type="file"
-            accept=".csv,.xlsx,.pdf,.jpg,.png"
+            accept=".csv,.xlsx,.xls,.pdf,.jpg,.png"
             onChange={(e) => {
               const selectedFile = e.target.files?.[0];
               console.log('File selected:', selectedFile?.name);

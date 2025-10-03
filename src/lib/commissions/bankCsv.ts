@@ -4,17 +4,22 @@ type BrokerRow = Tables<'brokers'>;
 type FortnightBrokerTotal = Tables<'fortnight_broker_totals'>;
 
 interface BankCsvRow {
-  account_number: string;
-  beneficiary_name: string;
-  amount: number;
-  reference: string;
+  tipo_cuenta: string;
+  numero_cuenta: string;
+  numero_cedula: string;
+  nombre_completo: string;
+  monto: number;
+  concepto: string;
 }
 
 /**
  * Build bank CSV content from fortnight broker totals
+ * Formato Banco General:
+ * "Tipo de cuenta","Numero de cuenta","Numero de cedula o identificacion","Nombre completo","Monto","Concepto de pago"
  */
 export async function buildBankCsv(
-  totalsByBroker: Array<FortnightBrokerTotal & { broker?: BrokerRow }>
+  totalsByBroker: Array<FortnightBrokerTotal & { broker?: BrokerRow }>,
+  fortnightLabel?: string
 ): Promise<string> {
   const rows: BankCsvRow[] = [];
   
@@ -23,26 +28,30 @@ export async function buildBankCsv(
     const netAmount = Number(total.net_amount) || 0;
     if (netAmount <= 0) continue;
     
-    // Extract bank info from bank_snapshot or broker data
-    const bankSnapshot = total.bank_snapshot as any || {};
+    const broker = total.broker;
+    if (!broker) continue;
     
     rows.push({
-      account_number: bankSnapshot.account_no || total.broker?.bank_account_no || 'PENDING',
-      beneficiary_name: bankSnapshot.name || total.broker?.name || 'Unknown',
-      amount: netAmount,
-      reference: `COM-${total.fortnight_id?.slice(0, 8)}`,
+      tipo_cuenta: (broker as any).tipo_cuenta || 'Ahorro',
+      numero_cuenta: (broker as any).numero_cuenta || 'PENDIENTE',
+      numero_cedula: (broker as any).numero_cedula || 'PENDIENTE',
+      nombre_completo: (broker as any).nombre_completo || broker.name || 'PENDIENTE',
+      monto: netAmount,
+      concepto: `Pago comisiones ${fortnightLabel || 'quincena'}`,
     });
   }
   
-  // Build CSV content
-  const headers = ['Cuenta', 'Beneficiario', 'Monto', 'Referencia'];
+  // Build CSV content con headers Banco General
+  const headers = ['"Tipo de cuenta"', '"Numero de cuenta"', '"Numero de cedula o identificacion"', '"Nombre completo"', '"Monto"', '"Concepto de pago"'];
   const csvRows = [
     headers.join(','),
     ...rows.map(row => [
-      row.account_number,
-      `"${row.beneficiary_name}"`,
-      row.amount.toFixed(2),
-      row.reference,
+      `"${row.tipo_cuenta}"`,
+      `"${row.numero_cuenta}"`,
+      `"${row.numero_cedula}"`,
+      `"${row.nombre_completo}"`,
+      `"${row.monto.toFixed(2)}"`,
+      `"${row.concepto}"`,
     ].join(','))
   ];
   

@@ -270,9 +270,13 @@ export type Database = {
           license_no: string | null
           name: string | null
           national_id: string | null
+          nombre_completo: string | null
+          numero_cedula: string | null
+          numero_cuenta: string | null
           p_id: string
           percent_default: number | null
           phone: string | null
+          tipo_cuenta: string | null
         }
         Insert: {
           active?: boolean | null
@@ -288,9 +292,13 @@ export type Database = {
           license_no?: string | null
           name?: string | null
           national_id?: string | null
+          nombre_completo?: string | null
+          numero_cedula?: string | null
+          numero_cuenta?: string | null
           p_id: string
           percent_default?: number | null
           phone?: string | null
+          tipo_cuenta?: string | null
         }
         Update: {
           active?: boolean | null
@@ -306,9 +314,13 @@ export type Database = {
           license_no?: string | null
           name?: string | null
           national_id?: string | null
+          nombre_completo?: string | null
+          numero_cedula?: string | null
+          numero_cuenta?: string | null
           p_id?: string
           percent_default?: number | null
           phone?: string | null
+          tipo_cuenta?: string | null
         }
         Relationships: [
           {
@@ -658,6 +670,7 @@ export type Database = {
           created_at: string
           id: string
           insurer_id: string
+          is_life_insurance: boolean | null
           period_label: string
           total_amount: number | null
           uploaded_by: string | null
@@ -666,6 +679,7 @@ export type Database = {
           created_at?: string
           id?: string
           insurer_id: string
+          is_life_insurance?: boolean | null
           period_label: string
           total_amount?: number | null
           uploaded_by?: string | null
@@ -674,6 +688,7 @@ export type Database = {
           created_at?: string
           id?: string
           insurer_id?: string
+          is_life_insurance?: boolean | null
           period_label?: string
           total_amount?: number | null
           uploaded_by?: string | null
@@ -1185,6 +1200,8 @@ export type Database = {
       insurer_mapping_rules: {
         Row: {
           aliases: Json | null
+          commission_column_2_aliases: Json | null
+          commission_column_3_aliases: Json | null
           created_at: string
           id: string
           insurer_id: string
@@ -1194,6 +1211,8 @@ export type Database = {
         }
         Insert: {
           aliases?: Json | null
+          commission_column_2_aliases?: Json | null
+          commission_column_3_aliases?: Json | null
           created_at?: string
           id?: string
           insurer_id: string
@@ -1203,6 +1222,8 @@ export type Database = {
         }
         Update: {
           aliases?: Json | null
+          commission_column_2_aliases?: Json | null
+          commission_column_3_aliases?: Json | null
           created_at?: string
           id?: string
           insurer_id?: string
@@ -1265,6 +1286,7 @@ export type Database = {
           id: string
           invert_negatives: boolean | null
           name: string
+          use_multi_commission_columns: boolean | null
         }
         Insert: {
           active?: boolean | null
@@ -1272,6 +1294,7 @@ export type Database = {
           id?: string
           invert_negatives?: boolean | null
           name: string
+          use_multi_commission_columns?: boolean | null
         }
         Update: {
           active?: boolean | null
@@ -1279,6 +1302,7 @@ export type Database = {
           id?: string
           invert_negatives?: boolean | null
           name?: string
+          use_multi_commission_columns?: boolean | null
         }
         Relationships: []
       }
@@ -1445,6 +1469,89 @@ export type Database = {
           },
         ]
       }
+      pending_items: {
+        Row: {
+          action_type: string | null
+          assigned_at: string | null
+          assigned_broker_id: string | null
+          assigned_by: string | null
+          assignment_notes: string | null
+          commission_raw: number
+          created_at: string
+          fortnight_id: string | null
+          id: string
+          import_id: string | null
+          insured_name: string | null
+          insurer_id: string | null
+          policy_number: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          action_type?: string | null
+          assigned_at?: string | null
+          assigned_broker_id?: string | null
+          assigned_by?: string | null
+          assignment_notes?: string | null
+          commission_raw: number
+          created_at?: string
+          fortnight_id?: string | null
+          id?: string
+          import_id?: string | null
+          insured_name?: string | null
+          insurer_id?: string | null
+          policy_number: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          action_type?: string | null
+          assigned_at?: string | null
+          assigned_broker_id?: string | null
+          assigned_by?: string | null
+          assignment_notes?: string | null
+          commission_raw?: number
+          created_at?: string
+          fortnight_id?: string | null
+          id?: string
+          import_id?: string | null
+          insured_name?: string | null
+          insurer_id?: string | null
+          policy_number?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pending_items_assigned_broker_id_fkey"
+            columns: ["assigned_broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pending_items_fortnight_id_fkey"
+            columns: ["fortnight_id"]
+            isOneToOne: false
+            referencedRelation: "fortnights"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pending_items_import_id_fkey"
+            columns: ["import_id"]
+            isOneToOne: false
+            referencedRelation: "comm_imports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pending_items_insurer_id_fkey"
+            columns: ["insurer_id"]
+            isOneToOne: false
+            referencedRelation: "insurers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       pending_payments: {
         Row: {
           amount_to_pay: number
@@ -1492,6 +1599,38 @@ export type Database = {
           total_received?: number | null
         }
         Relationships: []
+      }
+      pending_policy: {
+        Row: {
+          client_name: string | null
+          created_at: string
+          id: string
+          pending_item_id: string
+          policy_number: string
+        }
+        Insert: {
+          client_name?: string | null
+          created_at?: string
+          id?: string
+          pending_item_id: string
+          policy_number: string
+        }
+        Update: {
+          client_name?: string | null
+          created_at?: string
+          id?: string
+          pending_item_id?: string
+          policy_number?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pending_policy_pending_item_id_fkey"
+            columns: ["pending_item_id"]
+            isOneToOne: false
+            referencedRelation: "pending_items"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       policies: {
         Row: {
@@ -1724,6 +1863,18 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: string
       }
+      assign_pending_to_office_after_3m: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
+      batch_update_clients_policies_from_commissions: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          errors: string[]
+          updated_clients: number
+          updated_policies: number
+        }[]
+      }
       cleanup_processed_temp_imports: {
         Args: Record<PropertyKey, never>
         Returns: number
@@ -1743,6 +1894,18 @@ export type Database = {
       ensure_auth_user_from_broker: {
         Args: { p_broker_id: string }
         Returns: string
+      }
+      get_pending_items_grouped: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          client_name: string
+          items: Json
+          oldest_date: string
+          policy_number: string
+          status: string
+          total_commission: number
+          total_items: number
+        }[]
       }
       is_master: {
         Args: Record<PropertyKey, never>

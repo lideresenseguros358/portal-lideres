@@ -80,7 +80,7 @@ export default function BrokerPreviewTab({ brokerId }: Props) {
     setLoading(true);
     try {
       const fortnightNum = selectedFortnight === 'all' ? undefined : parseInt(selectedFortnight, 10);
-      const result = await actionGetClosedFortnights(year, month, fortnightNum);
+      const result = await actionGetClosedFortnights(year, month, fortnightNum, brokerId);
       if (result.ok) {
         setFortnights((result.data as FortnightData[]) || []);
       } else {
@@ -124,13 +124,8 @@ export default function BrokerPreviewTab({ brokerId }: Props) {
   }, [initialFiltersApplied]);
 
   const filteredFortnights = useMemo(() => {
-    return fortnights
-      .map(fortnight => ({
-        ...fortnight,
-        brokers: fortnight.brokers.filter(broker => broker.broker_id === brokerId),
-      }))
-      .filter(fortnight => fortnight.brokers.length > 0);
-  }, [fortnights, brokerId]);
+    return fortnights.filter(fortnight => fortnight.brokers && fortnight.brokers.length > 0);
+  }, [fortnights]);
 
   const handleDownloadPdf = (
     event: MouseEvent<HTMLButtonElement>,
@@ -231,7 +226,7 @@ export default function BrokerPreviewTab({ brokerId }: Props) {
             </div>
             <div className="flex items-center gap-2 ml-auto">
               <Select value={String(year)} onValueChange={value => setYear(Number(value))}>
-                <SelectTrigger className="w-[120px] border-[#010139]/20">
+                <SelectTrigger className="w-20 sm:w-28 border-[#010139]/20">
                   <SelectValue placeholder="Año" />
                 </SelectTrigger>
                 <SelectContent>
@@ -244,7 +239,7 @@ export default function BrokerPreviewTab({ brokerId }: Props) {
               </Select>
 
               <Select value={String(month)} onValueChange={value => setMonth(Number(value))}>
-                <SelectTrigger className="w-[150px] border-[#010139]/20">
+                <SelectTrigger className="w-28 sm:w-36 border-[#010139]/20">
                   <SelectValue placeholder="Mes" />
                 </SelectTrigger>
                 <SelectContent>
@@ -260,7 +255,7 @@ export default function BrokerPreviewTab({ brokerId }: Props) {
                 value={selectedFortnight}
                 onValueChange={value => setSelectedFortnight(value as 'all' | '1' | '2')}
               >
-                <SelectTrigger className="w-[150px] border-[#010139]/20">
+                <SelectTrigger className="w-28 sm:w-36 border-[#010139]/20">
                   <SelectValue placeholder="Quincena" />
                 </SelectTrigger>
                 <SelectContent>

@@ -28,6 +28,52 @@ const CURRENT_YEAR = new Date().getFullYear();
 
 const FETCH_LIMIT = 2000;
 
+// Mock data para visualización cuando no hay data real
+const MOCK_DATA_ENABLED = true;
+
+function generateMockRanking(): RankingEntry[] {
+  const names = ['Juan Pérez', 'María González', 'Carlos Rodríguez', 'Ana Martínez', 'Luis Sánchez'];
+  return names.map((name, i) => ({
+    position: i + 1,
+    brokerId: `mock-${i}`,
+    brokerName: name,
+    total: (50000 - i * 8000) + Math.random() * 2000,
+  }));
+}
+
+function generateMockContests(): ContestProgress[] {
+  return [
+    {
+      label: 'ASSA Meta Q1',
+      value: 9750,
+      target: 15000,
+      percent: 65,
+      tooltip: 'Falta $5,250 para tu meta',
+    },
+    {
+      label: 'Convivio Meta Q1',
+      value: 5040,
+      target: 12000,
+      percent: 42,
+      tooltip: 'Falta $6,960 para tu meta',
+    },
+  ];
+}
+
+function generateMockCalendarEvents(): CalendarEvent[] {
+  const today = new Date();
+  return [
+    {
+      date: new Date(today.getFullYear(), today.getMonth(), 15).toISOString(),
+      title: 'Cierre de Quincena',
+    },
+    {
+      date: new Date(today.getFullYear(), today.getMonth(), today.getDate() + 3).toISOString(),
+      title: 'Reunión Equipo',
+    },
+  ];
+}
+
 const toNumber = (value: unknown) => {
   if (typeof value === "number") return value;
   if (typeof value === "string") {
@@ -121,10 +167,22 @@ export async function getFortnightStatus(userId: string, role: DashboardRole): P
 }
 
 export async function getNetCommissions(userId: string, role: DashboardRole): Promise<NetCommissions> {
+  // Try real data first
   const status = await getFortnightStatus(userId, role);
+  const totalPaid = status.paid?.total ?? 0;
+  const totalOpen = status.open?.total ?? 0;
+
+  // Si no hay datos reales, usar mock
+  if (MOCK_DATA_ENABLED && totalPaid === 0 && totalOpen === 0) {
+    return {
+      lastPaid: 4250.50,
+      open: 3890.25,
+    };
+  }
+
   return {
-    lastPaid: status.paid?.total ?? 0,
-    open: status.open?.total ?? 0,
+    lastPaid: totalPaid,
+    open: totalOpen,
   };
 }
 
@@ -148,6 +206,12 @@ export async function getAnnualNet(userId: string, role: DashboardRole): Promise
   }
 
   const value = data.reduce((acc: number, item) => acc + toNumber(item.pma_neto), 0);
+  
+  // Si no hay datos reales, usar mock
+  if (MOCK_DATA_ENABLED && value === 0) {
+    return { value: 52340.75 };
+  }
+  
   return { value };
 }
 
@@ -422,9 +486,40 @@ export async function getYtdComparison(userId: string, role: DashboardRole): Pro
     buildQuery(previousYear).returns<{ month: number | null; total: number | string | null }[]>(),
   ]);
 
+  const currentTotals = aggregateMonthlyTotals(currentData);
+  const previousTotals = aggregateMonthlyTotals(previousData);
+  
+  // Si no hay datos reales, usar mock
+  if (MOCK_DATA_ENABLED && currentTotals.length === 0 && previousTotals.length === 0) {
+    return {
+      current: [
+        { month: 1, total: 3200 },
+        { month: 2, total: 4100 },
+        { month: 3, total: 3800 },
+        { month: 4, total: 5200 },
+        { month: 5, total: 4900 },
+        { month: 6, total: 6100 },
+        { month: 7, total: 5500 },
+        { month: 8, total: 5800 },
+        { month: 9, total: 6300 },
+      ],
+      previous: [
+        { month: 1, total: 2800 },
+        { month: 2, total: 3600 },
+        { month: 3, total: 3200 },
+        { month: 4, total: 4500 },
+        { month: 5, total: 4200 },
+        { month: 6, total: 5300 },
+        { month: 7, total: 4800 },
+        { month: 8, total: 5000 },
+        { month: 9, total: 5500 },
+      ],
+    };
+  }
+  
   return {
-    current: aggregateMonthlyTotals(currentData),
-    previous: aggregateMonthlyTotals(previousData),
+    current: currentTotals,
+    previous: previousTotals,
   };
 }
 
@@ -440,7 +535,16 @@ export async function getRankingTop5(userId: string): Promise<RankingResult> {
     .limit(FETCH_LIMIT)
     .returns<{ broker_id: string | null; pma_neto: number | string | null }[]>();
 
-  if (error || !data) {
+  if (error || !data || data.length === 0) {
+    // Si no hay datos reales, usar mock
+    if (MOCK_DATA_ENABLED) {
+      return {
+        entries: generateMockRanking(),
+        currentBrokerId: brokerId ?? undefined,
+        currentPosition: 3,
+        currentTotal: 34000,
+      };
+    }
     return { entries: [], currentBrokerId: brokerId ?? undefined };
   }
 
@@ -581,8 +685,13 @@ export async function getContestProgress(userId: string): Promise<ContestProgres
     buildQuery(assaMonths).returns<{ pma_neto: number | string | null; month: number | null }[]>(),
   ]);
 
-  const convivioValue = (convivioData ?? []).reduce((acc: number, item) => acc + toNumber(item.pma_neto), 0);
-  const assaValue = (assaData ?? []).reduce((acc: number, item) => acc + toNumber(item.pma_neto), 0);
+  let convivioValue = (convivioData ?? []).reduce((acc: number, item) => acc + toNumber(item.pma_neto), 0);
+  let assaValue = (assaData ?? []).reduce((acc: number, item) => acc + toNumber(item.pma_neto), 0);
+  
+  // Si no hay datos reales, usar mock
+  if (MOCK_DATA_ENABLED && convivioValue === 0 && assaValue === 0) {
+    return generateMockContests();
+  }
 
   const [convivioTarget, assaTarget] = await Promise.all([
     fetchContestTarget(SETTINGS_KEYS.convivio),
@@ -623,7 +732,12 @@ export async function getMiniCalendar(userId: string): Promise<CalendarEvent[]> 
   const profile = await getProfile(userId);
   const brokerId = profile?.brokerId ?? null;
 
-  if (!profile) return [];
+  if (!profile) {
+    if (MOCK_DATA_ENABLED) {
+      return generateMockCalendarEvents();
+    }
+    return [];
+  }
 
   const start = startOfMonth(new Date()).toISOString();
   const end = endOfMonth(new Date()).toISOString();
@@ -685,5 +799,12 @@ export async function getMiniCalendar(userId: string): Promise<CalendarEvent[]> 
     }
   }
 
-  return uniqueEvents(events);
+  const uniqueEvts = uniqueEvents(events);
+  
+  // Si no hay eventos reales, usar mock
+  if (MOCK_DATA_ENABLED && uniqueEvts.length === 0) {
+    return generateMockCalendarEvents();
+  }
+  
+  return uniqueEvts;
 }

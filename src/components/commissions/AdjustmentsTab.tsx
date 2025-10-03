@@ -1,7 +1,12 @@
 'use client';
 
-import { useState, useEffect, useTransition, useCallback } from 'react';
-import { actionGetPendingItems, actionClaimPendingItem } from '@/app/(app)/commissions/actions';
+import { useState, useEffect, useCallback } from 'react';
+import {
+  actionGetPendingItems,
+  actionClaimPendingItem,
+  actionMarkPendingAsPayNow,
+  actionMarkPendingAsNextFortnight,
+} from '@/app/(app)/commissions/actions';
 import { toast } from 'sonner';
 import { FaChevronDown, FaChevronRight, FaCalendarAlt, FaExclamationTriangle, FaFileDownload, FaHistory } from 'react-icons/fa';
 import { Button } from '@/components/ui/button';
@@ -27,47 +32,27 @@ interface Props {
 }
 
 // Group items by policy_number
-function groupItemsByPolicy(items: any[]): any[] {
-  const groups: Record<string, any> = {};
-  
-  items.forEach((item) => {
-    const policyNumber = item.policy_number || 'NO_POLICY';
-    if (!groups[policyNumber]) {
-      groups[policyNumber] = {
-        policy_number: policyNumber,
-        items: [],
-        total_amount: 0,
-        insurers: new Set<string>(),
-        clients: new Set<string>(),
-        oldest_date: item.created_at,
-      };
-    }
-    
-    groups[policyNumber].items.push(item);
-    // Use Math.abs to ensure positive commission values
-    groups[policyNumber].total_amount += Math.abs(Number(item.gross_amount) || 0);
-    
-    // Add insurer name
-    if (item.insurers?.name) {
-      groups[policyNumber].insurers.add(item.insurers.name);
-    }
-    
-    // Add client name
-    if (item.insured_name) {
-      groups[policyNumber].clients.add(item.insured_name);
-    }
-    
-    // Track oldest date
-    if (new Date(item.created_at) < new Date(groups[policyNumber].oldest_date)) {
-      groups[policyNumber].oldest_date = item.created_at;
-    }
-  });
-  
-  return Object.values(groups);
-}
+type PendingItemDetail = {
+  id: string;
+  insured_name: string | null;
+  gross_amount: number;
+  created_at: string;
+  status: string;
+  insurer_name: string | null;
+};
+
+type PendingGroup = {
+  policy_number: string;
+  client_name: string | null;
+  insurer_names: string[];
+  total_amount: number;
+  oldest_date: string;
+  status: string;
+  items: PendingItemDetail[];
+};
 
 const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingCountChange, isShortcut }: Props) => {
-  const [pendingGroups, setPendingGroups] = useState<any[]>([]);
+  const [pendingGroups, setPendingGroups] = useState<PendingGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [showOldItemsWarning, setShowOldItemsWarning] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
@@ -75,12 +60,59 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
   const loadPendingItems = useCallback(async () => {
     setLoading(true);
     const result = await actionGetPendingItems();
+
     if (result.ok) {
-      const grouped = groupItemsByPolicy(result.data || []);
+      const grouped: PendingGroup[] = (result.data || []).reduce((acc: PendingGroup[], item: any) => {
+        const policyNumber = item.policy_number || 'SIN_POLIZA';
+        let group = acc.find(g => g.policy_number === policyNumber);
+
+        if (!group) {
+          group = {
+            policy_number: policyNumber,
+            client_name: item.client_name || item.insured_name || null,
+            insurer_names: item.insurers?.name ? [item.insurers.name] : [],
+            total_amount: 0,
+            oldest_date: item.created_at,
+            status: item.status,
+            items: [],
+          };
+          acc.push(group);
+        }
+
+        if (item.insurers?.name && !group.insurer_names.includes(item.insurers.name)) {
+          group.insurer_names.push(item.insurers.name);
+        }
+
+        group.total_amount += Math.abs(Number(item.gross_amount) || 0);
+        group.items.push({
+          id: item.id,
+          insured_name: item.insured_name || null,
+          gross_amount: Number(item.gross_amount) || 0,
+          created_at: item.created_at,
+          status: item.status,
+          insurer_name: item.insurers?.name || null,
+        });
+
+        if (new Date(item.created_at) < new Date(group.oldest_date)) {
+          group.oldest_date = item.created_at;
+        }
+
+        if (group.status === 'open' && item.status !== 'open') {
+          group.status = item.status;
+        }
+
+        return acc;
+      }, []);
+
       setPendingGroups(grouped);
+      setShowOldItemsWarning(grouped.some(g => {
+        const daysDiff = Math.floor((Date.now() - new Date(g.oldest_date).getTime()) / (1000 * 60 * 60 * 24));
+        return daysDiff >= 90;
+      }));
     } else {
       toast.error('Error al cargar pendientes', { description: result.error });
     }
+
     setLoading(false);
   }, []);
 
@@ -102,7 +134,7 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
   // Check for items older than 90 days
   const oldItems = pendingGroups.filter(group => {
     const daysDiff = Math.floor((Date.now() - new Date(group.oldest_date).getTime()) / (1000 * 60 * 60 * 24));
-    return daysDiff >= 90;
+    return daysDiff >= 90 && group.status === 'open';
   });
 
   const handleAssignToOffice = async () => {
@@ -154,21 +186,22 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
               <TableHead>Cliente | Aseguradora(s)</TableHead>
               <TableHead className="text-right">Total</TableHead>
               <TableHead className="text-right">Items</TableHead>
-              <TableHead className="text-center">Acción</TableHead>
+              <TableHead className="text-center">Estado</TableHead>
+              <TableHead className="text-center">Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {pendingGroups.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center h-24">
+                <TableCell colSpan={7} className="text-center h-24">
                   No hay items pendientes de asignación.
                 </TableCell>
               </TableRow>
             ) : (
-              pendingGroups.map((group: any) => {
+              pendingGroups.map((group) => {
                 const isExpanded = expandedGroups.has(group.policy_number);
                 const hasMultipleItems = group.items.length > 1;
-                
+
                 return (
                   <>
                     <TableRow key={group.policy_number}>
@@ -195,14 +228,14 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
                       <TableCell className="font-medium">{group.policy_number}</TableCell>
                       <TableCell>
                         <div className="flex flex-col gap-1">
-                          {Array.from(group.clients).length > 0 && (
+                          {group.client_name && (
                             <span className="font-semibold text-[#010139]">
-                              {Array.from(group.clients).join(', ')}
+                              {group.client_name}
                             </span>
                           )}
-                          {Array.from(group.insurers).length > 0 && (
+                          {group.insurer_names.length > 0 && (
                             <span className="text-sm text-gray-600">
-                              {Array.from(group.insurers).join(', ')}
+                              {group.insurer_names.join(', ')}
                             </span>
                           )}
                         </div>
@@ -210,21 +243,86 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
                       <TableCell className="text-right">{group.total_amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</TableCell>
                       <TableCell className="text-right">{group.items.length}</TableCell>
                       <TableCell className="text-center">
+                        <span
+                          className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold ${
+                            group.status === 'open'
+                              ? 'bg-amber-100 text-amber-700'
+                              : group.status === 'claimed'
+                              ? 'bg-blue-100 text-blue-700'
+                              : 'bg-gray-100 text-gray-600'
+                          }`}
+                        >
+                          {group.status === 'open' ? 'Pendiente' : group.status === 'claimed' ? 'Solicitado' : group.status.replace('_', ' ')}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-center">
                         {role === 'master' ? (
-                          <AssignBrokerDropdown 
-                            itemGroup={group}
-                            brokers={brokers}
-                            onSuccess={() => {
-                              loadPendingItems();
-                              onActionSuccess && onActionSuccess();
-                            }}
-                          />
+                          <div className="flex flex-col gap-2 justify-center">
+                            <div className="flex items-center gap-2 justify-center">
+                              <AssignBrokerDropdown
+                                itemGroup={{
+                                  policy_number: group.policy_number,
+                                  items: group.items.map(item => ({ id: item.id })),
+                                }}
+                                brokers={brokers}
+                                onSuccess={() => {
+                                  loadPendingItems();
+                                  onActionSuccess && onActionSuccess();
+                                }}
+                              />
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={group.status !== 'open'}
+                                onClick={async () => {
+                                  const result = await actionMarkPendingAsPayNow({
+                                    policy_number: group.policy_number,
+                                    item_ids: group.items.map(item => item.id),
+                                  });
+                                  if (result.ok) {
+                                    toast.success('Items marcados como pago inmediato.');
+                                    await loadPendingItems();
+                                    onActionSuccess && onActionSuccess();
+                                  } else {
+                                    toast.error('No se pudo marcar como pago ahora.', { description: result.error });
+                                  }
+                                }}
+                              >
+                                Pago ahora
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={group.status !== 'open'}
+                                onClick={async () => {
+                                  const result = await actionMarkPendingAsNextFortnight({
+                                    policy_number: group.policy_number,
+                                    item_ids: group.items.map(item => item.id),
+                                  });
+                                  if (result.ok) {
+                                    toast.success('Items enviados a próxima quincena.');
+                                    await loadPendingItems();
+                                    onActionSuccess && onActionSuccess();
+                                  } else {
+                                    toast.error('No se pudo enviar a próxima quincena.', { description: result.error });
+                                  }
+                                }}
+                              >
+                                Próxima quincena
+                              </Button>
+                            </div>
+                            {group.status !== 'open' && (
+                              <p className="text-[11px] text-gray-500 text-center">
+                                Solo se pueden resolver pendientes con estado `Pendiente`.
+                              </p>
+                            )}
+                          </div>
                         ) : (
-                          <Button 
-                            variant="outline" 
+                          <Button
+                            variant="outline"
                             size="sm"
                             onClick={async () => {
-                              const result = await actionClaimPendingItem(group.items.map((i: any) => i.id));
+                              const result = await actionClaimPendingItem(group.items.map((i) => i.id));
                               if (result.ok) {
                                 toast.success('Reclamo enviado exitosamente.');
                                 await loadPendingItems();
@@ -241,25 +339,29 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
                     </TableRow>
                     {isExpanded && hasMultipleItems && (
                       <TableRow>
-                        <TableCell colSpan={6} className="bg-gray-50 p-0">
+                        <TableCell colSpan={7} className="bg-gray-50 p-0">
                           <div className="px-4 py-2">
                             <Table>
                               <TableHeader>
                                 <TableRow className="border-0">
+                                  <TableHead className="text-xs">Item ID</TableHead>
                                   <TableHead className="text-xs">Cliente</TableHead>
+                                  <TableHead className="text-xs">Aseguradora</TableHead>
                                   <TableHead className="text-xs text-right">Monto</TableHead>
                                   <TableHead className="text-xs">Fecha</TableHead>
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
-                                {group.items.map((item: any, idx: number) => (
-                                  <TableRow key={idx} className="border-0">
-                                    <TableCell className="text-sm py-1">{item.insured_name || 'N/A'}</TableCell>
-                                    <TableCell className="text-sm py-1 text-right">
-                                      {Math.abs(Number(item.gross_amount)).toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                                {group.items.map((item) => (
+                                  <TableRow key={item.id} className="border-0">
+                                    <TableCell className="text-xs font-mono py-1">{item.id}</TableCell>
+                                    <TableCell className="text-xs py-1">{item.insured_name || 'N/A'}</TableCell>
+                                    <TableCell className="text-xs py-1">{item.insurer_name || 'N/A'}</TableCell>
+                                    <TableCell className="text-xs py-1 text-right">
+                                      {item.gross_amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
                                     </TableCell>
-                                    <TableCell className="text-sm py-1">
-                                      {new Date(item.created_at).toLocaleDateString()}
+                                    <TableCell className="text-xs py-1">
+                                      {new Date(item.created_at).toLocaleDateString('es-PA')}
                                     </TableCell>
                                   </TableRow>
                                 ))}
@@ -642,57 +744,17 @@ const PaidAdjustmentsView = () => {
 };
 
 export default function AdjustmentsTab({ role, brokerId, brokers, isShortcut, onActionSuccess, onPendingCountChange }: Props) {
-  const [_, startTransition] = useTransition();
-  const [key, setKey] = useState(0);
-
-  const handleActionSuccess = () => {
-    startTransition(() => {
-      setKey(prev => prev + 1);
-      if (onActionSuccess) onActionSuccess();
-    });
+  const handleSuccess = () => {
+    onActionSuccess?.();
   };
-
-  if (isShortcut) {
-    return (
-      <PendingItemsView 
-        key={key} 
-        role={role} 
-        brokerId={brokerId} 
-        brokers={brokers} 
-        onActionSuccess={handleActionSuccess}
-        onPendingCountChange={onPendingCountChange}
-        isShortcut={isShortcut}
-      />
-    );
-  }
-
-  if (role === 'broker') {
-    return (
-      <Card className="shadow-lg">
-        <CardHeader>
-          <CardTitle className="text-[#010139]">Mis Pendientes por Identificar</CardTitle>
-          <p className="text-sm text-muted-foreground">Aquí puedes ver los items de comisión que aún no han sido asignados y marcarlos como tuyos.</p>
-        </CardHeader>
-        <CardContent>
-          <PendingItemsView 
-            key={key} 
-            role={role} 
-            brokerId={brokerId} 
-            brokers={brokers} 
-            onActionSuccess={handleActionSuccess}
-            onPendingCountChange={onPendingCountChange}
-            isShortcut={isShortcut}
-          />
-        </CardContent>
-      </Card>
-    );
-  }
 
   return (
     <Card className="shadow-lg">
-      <CardHeader>
-        <CardTitle className="text-[#010139]">Ajustes de Comisión</CardTitle>
-        <p className="text-sm text-muted-foreground">Aquí puedes ver los ajustes de comisión que te corresponden.</p>
+      <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100">
+        <CardTitle className="text-[#010139] flex items-center gap-2">
+          <FaHistory />
+          Ajustes de Comisión
+        </CardTitle>
       </CardHeader>
       <CardContent className="p-0">
         <Tabs defaultValue="pending" className="w-full">
@@ -701,20 +763,19 @@ export default function AdjustmentsTab({ role, brokerId, brokers, isShortcut, on
             <TabsTrigger value="requests">Solicitudes 'mío'</TabsTrigger>
             <TabsTrigger value="paid">Pagados</TabsTrigger>
           </TabsList>
-          <div className="p-6">
+          <div className="p-6 space-y-6">
             <TabsContent value="pending">
-              <PendingItemsView 
-                key={key} 
-                role={role} 
-                brokerId={brokerId} 
-                brokers={brokers} 
-                onActionSuccess={handleActionSuccess}
+              <PendingItemsView
+                role={role}
+                brokerId={brokerId}
+                brokers={brokers}
+                onActionSuccess={handleSuccess}
                 onPendingCountChange={onPendingCountChange}
                 isShortcut={isShortcut}
               />
             </TabsContent>
             <TabsContent value="requests">
-              <RequestsView role={role} onActionSuccess={handleActionSuccess} />
+              <RequestsView role={role} onActionSuccess={handleSuccess} />
             </TabsContent>
             <TabsContent value="paid">
               <PaidAdjustmentsView />

@@ -74,73 +74,146 @@ export default function InsurersList({ initialInsurers }: InsurersListProps) {
   return (
     <div>
       {/* Actions Bar */}
-      <div className="actions-bar">
-        <div className="search-filter-bar">
-          <div className="search-input-wrapper">
-            <FaSearch className="search-icon" />
+      <div className="flex flex-col gap-4 mb-6 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-col gap-3 flex-1 sm:flex-row sm:items-center">
+          <div className="relative flex-1">
+            <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
             <input
               type="text"
               placeholder="Buscar aseguradoras..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="search-input"
+              className="w-full pl-10 pr-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition-colors"
             />
           </div>
-          <div className="filter-buttons">
-            <button onClick={() => setStatusFilter('all')} className={statusFilter === 'all' ? 'active' : ''}>Todas</button>
-            <button onClick={() => setStatusFilter('active')} className={statusFilter === 'active' ? 'active' : ''}>Activas</button>
-            <button onClick={() => setStatusFilter('inactive')} className={statusFilter === 'inactive' ? 'active' : ''}>Inactivas</button>
+          <div className="flex gap-2">
+            <button 
+              onClick={() => setStatusFilter('all')} 
+              className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                statusFilter === 'all' 
+                  ? 'bg-[#010139] text-white shadow-md' 
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              Todas
+            </button>
+            <button 
+              onClick={() => setStatusFilter('active')} 
+              className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                statusFilter === 'active' 
+                  ? 'bg-[#8AAA19] text-white shadow-md' 
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              Activas
+            </button>
+            <button 
+              onClick={() => setStatusFilter('inactive')} 
+              className={`px-4 py-2 rounded-lg font-medium transition-all ${
+                statusFilter === 'inactive' 
+                  ? 'bg-red-500 text-white shadow-md' 
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              Inactivas
+            </button>
           </div>
         </div>
-        <Link href="/insurers/new" className="btn-primary">
+        <Link 
+          href="/insurers/new" 
+          className="flex items-center justify-center gap-2 px-6 py-2 bg-[#010139] text-white rounded-lg hover:bg-[#8AAA19] transition-colors font-semibold shadow-lg"
+        >
           <FaPlus /> Nueva Aseguradora
         </Link>
       </div>
 
       {/* Insurers Grid */}
       {filteredInsurers.length === 0 ? (
-        <div className="empty-state">No se encontraron aseguradoras.</div>
+        <div className="text-center py-16 px-4 bg-white rounded-2xl shadow-lg">
+          <p className="text-gray-500 text-lg">No se encontraron aseguradoras.</p>
+        </div>
       ) : (
-        <div className="insurers-grid">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {filteredInsurers.map(insurer => (
             <div
               key={insurer.id}
-              className={`insurer-card-container ${isPending ? 'pending' : ''}`}
+              className={`bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 cursor-pointer min-h-[220px] ${
+                isPending ? 'opacity-50' : ''
+              }`}
               onClick={() => handleFlip(insurer.id)}
+              style={{ perspective: '1000px' }}
             >
-              <div className={`insurer-card ${flippedCards.includes(insurer.id) ? 'is-flipped' : ''}`}>
+              <div 
+                className={`relative w-full h-full transition-transform duration-600`}
+                style={{ 
+                  transformStyle: 'preserve-3d',
+                  transform: flippedCards.includes(insurer.id) ? 'rotateY(180deg)' : 'rotateY(0deg)'
+                }}
+              >
                 {/* Card Front */}
-                <div className="card-face card-front">
-                  <div className="card-header">
-                    <div className="logo-container">
-                      <div className="logo-placeholder">{insurer.name.charAt(0)}</div>
+                <div 
+                  className="absolute inset-0 flex flex-col p-6"
+                  style={{ backfaceVisibility: 'hidden' }}
+                >
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center text-gray-500 text-xl font-bold">
+                      {insurer.name.charAt(0)}
                     </div>
-                    <span className={`status-badge ${insurer.active ? 'active' : 'inactive'}`}>
+                    <span className={`px-3 py-1 rounded-full text-xs font-medium ${
+                      insurer.active 
+                        ? 'bg-green-100 text-green-700' 
+                        : 'bg-gray-100 text-gray-600'
+                    }`}>
                       {insurer.active ? 'Activa' : 'Inactiva'}
                     </span>
                   </div>
-                  <h3 className="insurer-name">{insurer.name}</h3>
-                  <div className="card-actions">
-                    <Link href={`/insurers/${insurer.id}/edit`} className="action-btn edit" title="Editar" onClick={(e) => e.stopPropagation()}>
+                  <h3 className="text-lg font-semibold text-[#010139] mb-auto flex-1">
+                    {insurer.name}
+                  </h3>
+                  <div className="flex justify-end gap-2 mt-5">
+                    <Link 
+                      href={`/insurers/${insurer.id}/edit`} 
+                      className="w-9 h-9 flex items-center justify-center rounded-lg bg-[#f6f6ff] text-gray-600 hover:bg-[#010139] hover:text-white transition-all" 
+                      title="Editar" 
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <FaEdit />
                     </Link>
-                    <button onClick={(e) => { e.stopPropagation(); handleClone(insurer.id); }} className="action-btn clone" title="Clonar">
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); handleClone(insurer.id); }} 
+                      className="w-9 h-9 flex items-center justify-center rounded-lg bg-[#f6f6ff] text-gray-600 hover:bg-[#8AAA19] hover:text-white transition-all" 
+                      title="Clonar"
+                    >
                       <FaClone />
                     </button>
-                    <button onClick={(e) => { e.stopPropagation(); handleToggle(insurer.id); }} className="action-btn toggle" title={insurer.active ? 'Desactivar' : 'Activar'}>
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); handleToggle(insurer.id); }} 
+                      className="w-9 h-9 flex items-center justify-center rounded-lg bg-[#f6f6ff] text-gray-600 hover:bg-orange-500 hover:text-white transition-all" 
+                      title={insurer.active ? 'Desactivar' : 'Activar'}
+                    >
                       {insurer.active ? <FaToggleOn /> : <FaToggleOff />}
                     </button>
                   </div>
                 </div>
                 {/* Card Back */}
-                <div className="card-face card-back">
-                  <div className="card-back-header">
-                    <h4 className="card-back-title">Contacto Principal</h4>
-                    <button onClick={(e) => { e.stopPropagation(); handleFlip(insurer.id); }} className="action-btn unflip" title="Volver">
+                <div 
+                  className="absolute inset-0 flex flex-col justify-center p-6"
+                  style={{ 
+                    backfaceVisibility: 'hidden',
+                    transform: 'rotateY(180deg)'
+                  }}
+                >
+                  <div className="flex justify-between items-center mb-4">
+                    <h4 className="text-base font-semibold text-[#010139]">Contacto Principal</h4>
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); handleFlip(insurer.id); }} 
+                      className="w-9 h-9 flex items-center justify-center rounded-lg bg-[#f6f6ff] text-gray-600 hover:bg-[#010139] hover:text-white transition-all" 
+                      title="Volver"
+                    >
                       <FaUndo />
                     </button>
                   </div>
-                  <div className="card-back-content">
+                  <div className="text-gray-600">
                     <p>No hay contacto registrado.</p>
                   </div>
                 </div>
@@ -149,228 +222,6 @@ export default function InsurersList({ initialInsurers }: InsurersListProps) {
           ))}
         </div>
       )}
-      
-      <style>{`
-        .actions-bar {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 20px;
-          background: white;
-          border-radius: 16px;
-          margin-bottom: 24px;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-        }
-        .search-filter-bar {
-          display: flex;
-          align-items: center;
-          gap: 16px;
-        }
-        .search-input-wrapper {
-          position: relative;
-        }
-        .search-icon {
-          position: absolute;
-          left: 12px;
-          top: 50%;
-          transform: translateY(-50%);
-          color: #999;
-        }
-        .search-input {
-          padding: 10px 10px 10px 36px;
-          border: 1px solid #ddd;
-          border-radius: 8px;
-          min-width: 300px;
-        }
-        .filter-buttons {
-          display: flex;
-          background: #f0f0f0;
-          border-radius: 8px;
-          padding: 4px;
-        }
-        .filter-buttons button {
-          padding: 6px 16px;
-          border: none;
-          background: transparent;
-          border-radius: 6px;
-          font-weight: 500;
-          cursor: pointer;
-          color: #666;
-        }
-        .filter-buttons button.active {
-          background: white;
-          color: #010139;
-          box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-        }
-        .btn-primary {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          padding: 10px 20px;
-          border-radius: 8px;
-          font-weight: 500;
-          text-decoration: none;
-          transition: all 0.2s ease;
-          background: #010139;
-          color: white;
-        }
-        .btn-primary:hover {
-          background: #8aaa19;
-        }
-
-        .insurers-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-          gap: 24px;
-        }
-                .card-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-start;
-          margin-bottom: 16px;
-        }
-        .logo-container {
-          height: 40px;
-          display: flex;
-          align-items: center;
-        }
-        .insurer-card-logo {
-          object-fit: contain;
-          object-position: left;
-          height: 100%;
-          width: auto;
-        }
-        .logo-placeholder {
-          width: 40px;
-          height: 40px;
-          border-radius: 8px;
-          background: #f0f0f0;
-          color: #999;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 20px;
-          font-weight: bold;
-        }
-        .status-badge {
-          padding: 4px 12px;
-          border-radius: 16px;
-          font-size: 12px;
-          font-weight: 500;
-        }
-        .status-badge.active {
-          background: #e8f5e9;
-          color: #4caf50;
-        }
-        .status-badge.inactive {
-          background: #f5f5f5;
-          color: #757575;
-        }
-        .insurer-name {
-          font-size: 18px;
-          font-weight: 600;
-          color: #010139;
-          margin-bottom: auto;
-          flex-grow: 1;
-        }
-        .card-actions {
-          margin-top: 20px;
-          display: flex;
-          justify-content: flex-end;
-          gap: 8px;
-        }
-        .action-btn {
-          width: 36px;
-          height: 36px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border: none;
-          border-radius: 8px;
-          cursor: pointer;
-          transition: all 0.2s;
-          background: #f6f6ff;
-          color: #666;
-          text-decoration: none;
-        }
-        .action-btn:hover {
-          color: white;
-        }
-        .action-btn.edit:hover { background: #010139; }
-        .action-btn.clone:hover { background: #8aaa19; }
-        .action-btn.toggle:hover { background: #ff9800; }
-        .empty-state {
-          text-align: center;
-          padding: 60px;
-          color: #666;
-          background: white;
-          border-radius: 16px;
-        }
-
-        /* Flip Card Styles */
-        .insurer-card-container {
-          perspective: 1000px;
-          background: white;
-          border-radius: 16px;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-          transition: all 0.2s ease;
-          cursor: pointer;
-          /* Add a minimum height to prevent collapse */
-          min-height: 220px;
-          position: relative;
-        }
-        .insurer-card-container:hover {
-          transform: translateY(-4px);
-          box-shadow: 0 8px 24px rgba(0,0,0,0.12);
-        }
-        .insurer-card {
-          position: relative;
-          width: 100%;
-          height: 100%;
-          transform-style: preserve-3d;
-          transition: transform 0.6s;
-        }
-        .insurer-card.is-flipped {
-          transform: rotateY(180deg);
-        }
-        .card-face {
-          position: absolute;
-          top: 0; left: 0;
-          width: 100%;
-          height: 100%;
-          backface-visibility: hidden;
-          display: flex;
-          flex-direction: column;
-          padding: 24px;
-          box-sizing: border-box; /* Ensure padding is included in dimensions */
-        }
-        .card-back {
-          transform: rotateY(180deg);
-          justify-content: center;
-          align-items: center;
-        }
-        .card-back-header {
-          position: absolute;
-          top: 24px;
-          left: 24px;
-          right: 24px;
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-        }
-        .card-back-title {
-          margin: 0;
-          font-size: 16px;
-          font-weight: 600;
-          color: #010139;
-        }
-        .card-back-content {
-          color: #666;
-          font-size: 14px;
-        }
-        .action-btn.unflip:hover { background: #757575; }
-
-      `}</style>
     </div>
   );
 }

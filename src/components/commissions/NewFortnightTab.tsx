@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { supabaseClient } from '@/lib/supabase/client';
-import { actionDeleteImport, actionRecalculateFortnight, actionDeleteDraft, actionPayFortnight, actionExportBankCsv } from '@/app/(app)/commissions/actions';
+import { actionDeleteImport, actionRecalculateFortnight, actionDeleteDraft, actionPayFortnight, actionExportBankCsv, actionToggleNotify } from '@/app/(app)/commissions/actions';
 import ImportForm from './ImportForm';
 import ImportedReportsList from './ImportedReportsList';
 import BrokerTotals from './BrokerTotals';
@@ -53,6 +53,8 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedBroker, setSelectedBroker] = useState<{ id: string; name: string } | null>(null);
   const [recalculationKey, setRecalculationKey] = useState(0);
+  const [notifyBrokers, setNotifyBrokers] = useState(initialDraft?.notify_brokers ?? false);
+  const [isTogglingNotify, setIsTogglingNotify] = useState(false);
 
   const forceRecalculate = () => setRecalculationKey(prev => prev + 1);
 
@@ -60,6 +62,7 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
   useEffect(() => {
     console.log('Draft fortnight changed:', initialDraft);
     setDraftFortnight(initialDraft);
+    setNotifyBrokers(initialDraft?.notify_brokers ?? false);
   }, [initialDraft]);
 
   const loadImportedReports = useCallback(async () => {
@@ -131,12 +134,8 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
       
       if (result.ok) {
         toast.success('Importación eliminada.');
-        
-        // Reload reports automáticamente
         await loadImportedReports();
         forceRecalculate();
-        
-        console.log('✓ Reportes recargados sin refresh');
       } else {
         toast.error('Error al eliminar importación', { description: result.error });
       }
@@ -182,6 +181,29 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
     }
   }, [draftFortnight, loadImportedReports]);
 
+  const handleToggleNotify = async () => {
+    if (!draftFortnight) return;
+
+    const nextValue = !notifyBrokers;
+    setIsTogglingNotify(true);
+    try {
+      const result = await actionToggleNotify(draftFortnight.id, nextValue);
+
+      if (result.ok) {
+        setNotifyBrokers(nextValue);
+        setDraftFortnight(prev => (prev ? { ...prev, notify_brokers: nextValue } : prev));
+        toast.success(nextValue ? 'Notificaciones para corredores activadas.' : 'Notificaciones para corredores desactivadas.');
+      } else {
+        toast.error('No se pudo actualizar la preferencia de notificación.', { description: result.error });
+      }
+    } catch (error) {
+      toast.error('Error inesperado al actualizar notificaciones.');
+      console.error('handleToggleNotify error:', error);
+    } finally {
+      setIsTogglingNotify(false);
+    }
+  };
+
   const handleGenerateCSV = async () => {
     if (!draftFortnight) return; // Safety check
     
@@ -216,14 +238,8 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
       
       if (result.ok) {
         toast.success('Borrador descartado exitosamente');
-        
-        // Immediately update UI
         setDraftFortnight(null);
-        setImportedReports([]);
-        
-        // Notify parent to refresh
         onFortnightCreated(null as any);
-        console.log('✓ Borrador descartado completamente');
       } else {
         toast.error(result.error || 'Error al descartar el borrador');
       }
@@ -311,22 +327,38 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
   return (
     <div className="space-y-6">
       {/* Draft Actions Bar */}
-      <div className="flex justify-between items-center p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+      <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-2">
           <FaExclamationCircle className="text-yellow-600" />
           <span className="text-sm font-medium text-yellow-800">
             Borrador de quincena {formatFortnightPeriod(draftFortnight.period_start, draftFortnight.period_end)}
           </span>
         </div>
-        <Button
-          variant="destructive"
-          size="sm"
-          onClick={() => setShowDiscardConfirm(true)}
-          className="bg-red-500 hover:bg-red-600 text-white"
-        >
-          <FaTrash className="mr-2" size={12} />
-          Descartar Borrador
-        </Button>
+        <div className="flex flex-col gap-2 md:items-end">
+          <div className="flex items-center gap-3">
+            <Button
+              variant={notifyBrokers ? 'default' : 'outline'}
+              size="sm"
+              disabled={isTogglingNotify}
+              onClick={handleToggleNotify}
+              className={notifyBrokers ? 'bg-[#010139] hover:bg-[#010139]/90 text-white' : ''}
+            >
+              {isTogglingNotify ? 'Guardando…' : notifyBrokers ? 'Notificar corredores: ON' : 'Notificar corredores: OFF'}
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setShowDiscardConfirm(true)}
+              className="bg-red-500 hover:bg-red-600 text-white"
+            >
+              <FaTrash className="mr-2" size={12} />
+              Descartar Borrador
+            </Button>
+          </div>
+          <p className="text-xs text-gray-500 md:text-right">
+            * Al activar notificaciones, se enviarán correos electrónicos a los corredores cuando se cierre la quincena.
+          </p>
+        </div>
       </div>
 
       {/* Section 1: Import Reports */}

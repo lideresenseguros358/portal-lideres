@@ -245,22 +245,25 @@ export default function DatabaseTabs({
           box-shadow: 0 4px 12px rgba(1, 1, 57, 0.1);
         }
         .view-toggle-btn {
-          display: flex;
+          display: inline-flex;
           align-items: center;
-          gap: 10px;
-          padding: 12px 24px;
+          justify-content: center;
+          gap: 8px;
+          padding: 10px 20px;
           border-radius: 12px;
           font-weight: 600;
-          font-size: 15px;
+          font-size: 14px;
           color: #666;
           text-decoration: none;
           transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
           position: relative;
           overflow: hidden;
+          white-space: nowrap;
         }
         .view-toggle-btn .icon {
-          font-size: 18px;
+          font-size: 16px;
           transition: all 0.3s ease;
+          flex-shrink: 0;
         }
         .view-toggle-btn:hover {
           color: #010139;

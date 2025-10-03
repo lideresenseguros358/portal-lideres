@@ -64,15 +64,15 @@ export default function BankHistoryTab() {
   return (
     <div className="space-y-6">
       {/* Header con filtros */}
-      <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-[#010139]">Historial de Banco</h2>
-          <p className="text-gray-600">Transferencias recibidas del Banco General</p>
+      <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-start sm:items-center justify-between">
+        <div className="flex-1">
+          <h2 className="text-xl sm:text-2xl font-bold text-[#010139]">Historial de Banco</h2>
+          <p className="text-sm sm:text-base text-gray-600">Transferencias recibidas del Banco General</p>
         </div>
         
         <button
           onClick={() => setShowImportModal(true)}
-          className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-[#010139] to-[#020270] text-white rounded-xl hover:shadow-lg transition-all transform hover:scale-105 font-medium"
+          className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-[#010139] to-[#020270] text-white rounded-xl hover:shadow-lg transition-all transform hover:scale-105 font-medium text-sm sm:text-base"
         >
           <FaFileImport />
           Importar Historial
@@ -80,14 +80,14 @@ export default function BankHistoryTab() {
       </div>
 
       {/* Filtros */}
-      <div className="bg-white rounded-xl shadow-lg p-6 border-2 border-gray-100">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 border-2 border-gray-100">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">Estado</label>
             <select
               value={filters.status}
               onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-              className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+              className="w-full px-3 sm:px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition-colors text-sm sm:text-base"
             >
               <option value="all">Todos</option>
               <option value="available">Disponible</option>
@@ -102,7 +102,7 @@ export default function BankHistoryTab() {
               type="date"
               value={filters.startDate}
               onChange={(e) => setFilters({ ...filters, startDate: e.target.value })}
-              className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+              className="w-full px-3 sm:px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition-colors text-sm sm:text-base"
             />
           </div>
           
@@ -112,7 +112,7 @@ export default function BankHistoryTab() {
               type="date"
               value={filters.endDate}
               onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
-              className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+              className="w-full px-3 sm:px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition-colors text-sm sm:text-base"
             />
           </div>
         </div>
@@ -131,8 +131,8 @@ export default function BankHistoryTab() {
             <p className="text-sm">Importa el historial del banco para comenzar</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
+          <div className="hidden md:block overflow-x-auto">
+            <table className="w-full min-w-[800px]">
               <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
                 <tr>
                   <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Fecha</th>
@@ -231,6 +231,114 @@ export default function BankHistoryTab() {
                 })}
               </tbody>
             </table>
+          </div>
+        )}
+        
+        {/* Vista móvil - Cards */}
+        {!loading && transfers.length > 0 && (
+          <div className="md:hidden divide-y divide-gray-200">
+            {transfers.map((transfer) => {
+              const isExpanded = expandedRows.has(transfer.id);
+              const hasDetails = transfer.payment_details && transfer.payment_details.length > 0;
+              
+              return (
+                <div key={transfer.id} className="p-4">
+                  <div 
+                    className="space-y-3"
+                    onClick={() => hasDetails && toggleRow(transfer.id)}
+                  >
+                    {/* Header con fecha y referencia */}
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <p className="text-xs text-gray-500">
+                          {new Date(transfer.date).toLocaleDateString('es-PA')}
+                        </p>
+                        <p className="text-sm font-mono font-bold text-[#010139] mt-1">
+                          {transfer.reference_number}
+                        </p>
+                      </div>
+                      {getStatusBadge(transfer.status)}
+                    </div>
+                    
+                    {/* Descripción */}
+                    {transfer.description && (
+                      <p className="text-sm text-gray-600 line-clamp-2">
+                        {transfer.description}
+                      </p>
+                    )}
+                    
+                    {/* Montos */}
+                    <div className="grid grid-cols-3 gap-2 pt-2 border-t">
+                      <div>
+                        <p className="text-xs text-gray-500">Monto</p>
+                        <p className="text-sm font-bold text-gray-900">
+                          ${parseFloat(transfer.amount).toFixed(2)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">Usado</p>
+                        <p className="text-sm font-semibold text-red-600">
+                          ${parseFloat(transfer.used_amount || 0).toFixed(2)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500">Disponible</p>
+                        <p className="text-sm font-semibold text-[#8AAA19]">
+                          ${parseFloat(transfer.remaining_amount || 0).toFixed(2)}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    {/* Indicador de expandible */}
+                    {hasDetails && (
+                      <div className="flex items-center justify-center pt-2">
+                        {isExpanded ? (
+                          <FaChevronDown className="text-gray-400 text-sm" />
+                        ) : (
+                          <FaChevronRight className="text-gray-400 text-sm" />
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Detalles expandidos */}
+                  {isExpanded && hasDetails && (
+                    <div className="mt-4 space-y-2 pt-4 border-t">
+                      <h4 className="font-semibold text-sm text-[#010139] mb-3">💳 Pagos Aplicados:</h4>
+                      {transfer.payment_details.map((detail: any) => (
+                        <div key={detail.id} className="bg-blue-50 rounded-lg p-3 border-l-4 border-[#8AAA19]">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <p className="font-medium text-sm text-gray-900 truncate">
+                                {detail.client_name}
+                              </p>
+                              {detail.policy_number && (
+                                <p className="text-xs text-gray-600 mt-1">
+                                  Póliza: {detail.policy_number}
+                                </p>
+                              )}
+                              {detail.insurer_name && (
+                                <p className="text-xs text-gray-600">
+                                  {detail.insurer_name}
+                                </p>
+                              )}
+                              <p className="text-xs text-gray-500 mt-1">
+                                {new Date(detail.paid_at).toLocaleDateString('es-PA')} • {detail.purpose}
+                              </p>
+                            </div>
+                            <div className="text-right flex-shrink-0">
+                              <span className="font-bold text-sm text-[#8AAA19]">
+                                ${parseFloat(detail.amount_used).toFixed(2)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

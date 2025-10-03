@@ -1,19 +1,37 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { FaHistory, FaClock } from 'react-icons/fa';
 import BankHistoryTab from './BankHistoryTab';
 import PendingPaymentsTab from './PendingPaymentsTab';
 import RegisterPaymentWizard from './RegisterPaymentWizard';
 
 export default function ChecksMainClient() {
+  const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<'history' | 'pending'>('history');
   const [showWizard, setShowWizard] = useState(false);
+  const [advanceId, setAdvanceId] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+
+  useEffect(() => {
+    const advance_id = searchParams.get('advance_id');
+    if (advance_id) {
+      setAdvanceId(advance_id);
+      setActiveTab('pending');
+      setShowWizard(true);
+    }
+  }, [searchParams]);
 
   const handleWizardSuccess = () => {
     // Forzar refresh de pending payments
     setRefreshKey(prev => prev + 1);
+    setAdvanceId(null);
+  };
+
+  const handleCloseWizard = () => {
+    setShowWizard(false);
+    setAdvanceId(null);
   };
 
   return (
@@ -65,8 +83,9 @@ export default function ChecksMainClient() {
         {/* Wizard Modal */}
         {showWizard && (
           <RegisterPaymentWizard
-            onClose={() => setShowWizard(false)}
+            onClose={handleCloseWizard}
             onSuccess={handleWizardSuccess}
+            advanceId={advanceId}
           />
         )}
       </div>

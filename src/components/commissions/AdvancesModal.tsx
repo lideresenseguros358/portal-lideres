@@ -142,7 +142,7 @@ export default function AdvancesModal({ isOpen, onClose, onSuccess, brokerId, br
                   <TableRow>
                     <TableHead>Razón del Adelanto</TableHead>
                     <TableHead className="text-right">Saldo Pendiente</TableHead>
-                    <TableHead className="w-[180px] text-right">Monto a Aplicar</TableHead>
+                    <TableHead className="min-w-[120px] text-right">Monto a Aplicar</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>

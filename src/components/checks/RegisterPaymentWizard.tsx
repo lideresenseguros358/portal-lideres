@@ -8,9 +8,10 @@ import { actionCreatePendingPayment, actionValidateReferences, actionGetInsurers
 interface WizardProps {
   onClose: () => void;
   onSuccess: () => void;
+  advanceId?: string | null;
 }
 
-export default function RegisterPaymentWizardNew({ onClose, onSuccess }: WizardProps) {
+export default function RegisterPaymentWizardNew({ onClose, onSuccess, advanceId }: WizardProps) {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [insurers, setInsurers] = useState<any[]>([]);

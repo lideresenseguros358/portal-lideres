@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { FaTimes, FaFileExcel, FaCheckCircle, FaExclamationTriangle } from 'react-icons/fa';
 import { toast } from 'sonner';
-import { parseBankHistoryXLSX, validateBankFile } from '@/lib/checks/bankParser';
+import { parseBankHistoryFile, validateBankFile } from '@/lib/checks/bankParser';
 import { actionImportBankHistoryXLSX } from '@/app/(app)/checks/actions';
 
 interface ImportBankHistoryModalNewProps {
@@ -33,11 +33,24 @@ export default function ImportBankHistoryModalNew({ onClose, onSuccess }: Import
     setLoading(true);
 
     try {
-      const transfers = await parseBankHistoryXLSX(selectedFile);
+      console.log('[IMPORT] Parseando archivo para preview...');
+      const transfers = await parseBankHistoryFile(selectedFile);
+      console.log('[IMPORT] Transferencias parseadas:', transfers.length);
+      console.log('[IMPORT] Primera transferencia:', transfers[0]);
+      
+      if (transfers.length === 0) {
+        toast.warning('No se encontraron transferencias en el archivo');
+        setFile(null);
+        setLoading(false);
+        return;
+      }
+      
       setPreview(transfers.slice(0, 10)); // Show first 10
       setShowPreview(true);
+      console.log('[IMPORT] Preview seteado, showPreview:', true);
       toast.success(`${transfers.length} transferencias encontradas`);
     } catch (error: any) {
+      console.error('[IMPORT] Error al parsear:', error);
       toast.error('Error al procesar archivo', { description: error.message });
       setFile(null);
     } finally {
@@ -51,7 +64,7 @@ export default function ImportBankHistoryModalNew({ onClose, onSuccess }: Import
     setLoading(true);
     try {
       console.log('Parseando archivo...');
-      const transfers = await parseBankHistoryXLSX(file);
+      const transfers = await parseBankHistoryFile(file);
       console.log('Transferencias parseadas:', transfers.length);
       
       if (transfers.length === 0) {
@@ -61,7 +74,12 @@ export default function ImportBankHistoryModalNew({ onClose, onSuccess }: Import
       }
       
       console.log('Llamando a action importar...');
-      const importResult = await actionImportBankHistoryXLSX(transfers);
+      const importResult = await actionImportBankHistoryXLSX(
+        transfers.map((t) => ({
+          ...t,
+          date: new Date(t.date),
+        }))
+      );
       console.log('Resultado:', importResult);
 
       if (importResult.ok && importResult.data) {
@@ -108,11 +126,11 @@ export default function ImportBankHistoryModalNew({ onClose, onSuccess }: Import
                     {file ? file.name : 'Click para seleccionar archivo Excel'}
                   </span>
                   <span className="text-sm text-gray-500">
-                    {loading ? 'Procesando...' : 'Formato: .xlsx o .xls'}
+                    {loading ? 'Procesando...' : 'Formato: .xlsx, .xls o .csv'}
                   </span>
                   <input
                     type="file"
-                    accept=".xlsx,.xls"
+                    accept=".xlsx,.xls,.csv"
                     onChange={handleFileSelect}
                     className="hidden"
                     disabled={loading}

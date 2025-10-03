@@ -647,25 +647,21 @@ export async function actionImportBankHistoryXLSX(transfers: Array<{
     }
     
     // Insert new transfers
-    const recordsToInsert: Array<{
-      date: string;
-      reference_number: string;
-      transaction_code: string;
-      description: string;
-      amount: number;
-    }> = [];
-    
-    for (const t of newTransfers) {
-      if (!t.date) continue;
-      recordsToInsert.push({
+    const nowIso = new Date().toISOString();
+    const recordsToInsert = newTransfers
+      .filter((t) => !!t.date)
+      .map((t) => ({
         date: t.date.toISOString().split('T')[0] as string,
         reference_number: t.reference_number,
         transaction_code: t.transaction_code || '',
         description: t.description || '',
-        amount: t.amount
-      });
-    }
-    
+        amount: t.amount,
+        imported_at: nowIso,
+        status: 'unclassified',
+        remaining_amount: t.amount,
+        used_amount: 0,
+      } satisfies TablesInsert<'bank_transfers'>));
+
     const { data, error } = await supabase
       .from('bank_transfers')
       .insert(recordsToInsert)
@@ -678,7 +674,8 @@ export async function actionImportBankHistoryXLSX(transfers: Array<{
       data: {
         imported: newTransfers.length,
         skipped: transfers.length - newTransfers.length,
-        message: `${newTransfers.length} nuevos, ${transfers.length - newTransfers.length} duplicados omitidos`
+        message: `${newTransfers.length} transferencias importadas, ${transfers.length - newTransfers.length} duplicados omitidos`,
+        records: data ?? [],
       }
     };
   } catch (error: any) {
@@ -776,13 +773,53 @@ export async function actionCreatePendingPayment(payment: {
     
     // Validate references exist in bank
     const refNumbers = payment.references.map(r => r.reference_number);
-    const { data: bankRefs } = await supabase
+    const { data: bankRefs, error: bankRefsError } = await supabase
       .from('bank_transfers')
-      .select('reference_number')
+      .select('id, reference_number, amount, used_amount, remaining_amount, status')
       .in('reference_number', refNumbers);
-    
-    const existingRefs = new Set((bankRefs || []).map((r: any) => r.reference_number));
-    const can_be_paid = payment.references.every(r => existingRefs.has(r.reference_number));
+
+    if (bankRefsError) throw bankRefsError;
+
+    const bankRefMap = new Map<string, {
+      id: string;
+      amount: number;
+      used_amount: number;
+      remaining_amount: number;
+      status: string | null;
+    }>();
+
+    (bankRefs || []).forEach((ref: any) => {
+      const amount = Number(ref.amount) || 0;
+      const used = Number(ref.used_amount) || 0;
+      const remaining = ref.remaining_amount !== null && ref.remaining_amount !== undefined
+        ? Number(ref.remaining_amount)
+        : amount - used;
+
+      bankRefMap.set(ref.reference_number, {
+        id: ref.id,
+        amount,
+        used_amount: used,
+        remaining_amount: remaining,
+        status: ref.status ?? null,
+      });
+    });
+
+    const can_be_paid = payment.references.every((ref) => bankRefMap.has(ref.reference_number));
+
+    const overdrawn = payment.references.find((ref) => {
+      const bankRef = bankRefMap.get(ref.reference_number);
+      if (!bankRef) return false;
+      const requested = Number(ref.amount_to_use);
+      return requested > bankRef.remaining_amount + 1e-2; // allow tiny float tolerance
+    });
+
+    if (overdrawn) {
+      const available = bankRefMap.get(overdrawn.reference_number)?.remaining_amount ?? 0;
+      return {
+        ok: false as const,
+        error: `La referencia ${overdrawn.reference_number} no tiene saldo suficiente (disponible ${available.toFixed(2)}).`
+      };
+    }
     
     // Insert pending payment
     const { data: pendingPayment, error: paymentError } = await supabase
@@ -812,11 +849,38 @@ export async function actionCreatePendingPayment(payment: {
         date: ref.date,
         amount: ref.amount,
         amount_to_use: ref.amount_to_use,
-        exists_in_bank: existingRefs.has(ref.reference_number)
+        exists_in_bank: bankRefMap.has(ref.reference_number)
       })));
-    
+
     if (refsError) throw refsError;
-    
+
+    for (const ref of payment.references) {
+      const transfer = bankRefMap.get(ref.reference_number);
+      if (!transfer) continue;
+
+      const requested = Number(ref.amount_to_use) || 0;
+      const newUsed = transfer.used_amount + requested;
+      const newRemaining = Math.max(transfer.amount - newUsed, 0);
+
+      const { error: updateTransferError } = await supabase
+        .from('bank_transfers')
+        .update({
+          used_amount: newUsed,
+          remaining_amount: newRemaining,
+          status: newRemaining <= 0 ? 'reserved_full' : 'reserved',
+        } satisfies TablesUpdate<'bank_transfers'>)
+        .eq('id', transfer.id);
+
+      if (updateTransferError) throw updateTransferError;
+
+      bankRefMap.set(ref.reference_number, {
+        ...transfer,
+        used_amount: newUsed,
+        remaining_amount: newRemaining,
+        status: newRemaining <= 0 ? 'reserved_full' : 'reserved',
+      });
+    }
+
     return { ok: true, data: pendingPayment };
   } catch (error: any) {
     console.error('Error creating pending payment:', error);
@@ -900,30 +964,31 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
       
       // Update each bank transfer
       for (const ref of refs) {
-        // Get current bank transfer
-        const { data: transfer } = await supabase
+        const { data: transfer, error: transferError } = await supabase
           .from('bank_transfers')
           .select('*')
           .eq('reference_number', ref.reference_number)
           .single();
-        
+
+        if (transferError) throw transferError;
         if (!transfer) continue;
-        
-        // Update used_amount
-        const newUsedAmount = Number(transfer.used_amount) + Number(ref.amount_to_use);
-        console.log(`Actualizando transfer ${transfer.reference_number}: ${transfer.used_amount} → ${newUsedAmount}`);
-        
+
+        const remainingAmount = transfer.remaining_amount !== null && transfer.remaining_amount !== undefined
+          ? Number(transfer.remaining_amount)
+          : Math.max(Number(transfer.amount) - Number(transfer.used_amount || 0), 0);
+
+        const status = remainingAmount <= 0 ? 'fully_applied' : 'reserved';
+
         const { error: updateError } = await supabase
           .from('bank_transfers')
           .update({
-            used_amount: newUsedAmount
-          })
+            status,
+          } satisfies TablesUpdate<'bank_transfers'>)
           .eq('id', transfer.id);
-        
+
         if (updateError) throw updateError;
         console.log('Transfer actualizado ✓');
-        
-        // Create payment detail
+
         const { error: detailError } = await supabase
           .from('payment_details')
           .insert([{
@@ -933,9 +998,10 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
             insurer_name: payment.insurer_name,
             client_name: payment.client_name,
             purpose: payment.purpose,
-            amount_used: ref.amount_to_use
+            amount_used: Number(ref.amount_to_use) || 0,
+            paid_at: new Date().toISOString(),
           }]);
-        
+
         if (detailError) throw detailError;
       }
       

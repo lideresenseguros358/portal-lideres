@@ -75,7 +75,7 @@ export default function BrokerYTDTab({ brokerId }: Props) {
       <div className="flex justify-between items-center">
         <h2 className="text-xl font-bold text-[#010139]">Mi Acumulado Anual</h2>
         <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
-          <SelectTrigger className="w-[120px]">
+          <SelectTrigger className="w-20 sm:w-28">
             <SelectValue placeholder="Año" />
           </SelectTrigger>
           <SelectContent>

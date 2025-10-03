@@ -91,7 +91,12 @@ export function PreviewTab({ role, brokerId }: Props) {
     if (!initialFiltersApplied) return;
     const loadData = async () => {
       const fortnightNum = selectedFortnight === 'all' ? undefined : parseInt(selectedFortnight, 10);
-      const result = await actionGetClosedFortnights(selectedYear, selectedMonth, fortnightNum);
+      const result = await actionGetClosedFortnights(
+        selectedYear,
+        selectedMonth,
+        fortnightNum,
+        role === 'broker' ? brokerId ?? null : undefined
+      );
       if (result.ok) {
         setFortnights(result.data as FortnightData[]);
       } else {
@@ -245,9 +250,12 @@ export function PreviewTab({ role, brokerId }: Props) {
     }, { totalImported: 0, totalPaidGross: 0, totalOfficeProfit: 0 });
   }, [fortnights]);
 
-  const dataToDisplay = role === 'broker'
-    ? fortnights.map(f => ({ ...f, brokers: f.brokers.filter(b => b.broker_id === brokerId) })).filter(f => f.brokers.length > 0)
-    : fortnights;
+  const dataToDisplay = useMemo(() => {
+    if (role === 'broker') {
+      return fortnights.filter((f) => f && f.brokers && f.brokers.length > 0);
+    }
+    return fortnights;
+  }, [fortnights, role]);
 
   return (
     <div className="space-y-6">
@@ -261,7 +269,7 @@ export function PreviewTab({ role, brokerId }: Props) {
             </div>
             <div className="flex items-center gap-2 ml-auto">
               <Select value={String(selectedYear)} onValueChange={(v) => setSelectedYear(Number(v))}>
-                <SelectTrigger className="w-[120px] border-[#010139]/20">
+                <SelectTrigger className="w-20 sm:w-28 border-[#010139]/20">
                   <SelectValue placeholder="Año" />
                 </SelectTrigger>
                 <SelectContent>
@@ -271,7 +279,7 @@ export function PreviewTab({ role, brokerId }: Props) {
                 </SelectContent>
               </Select>
               <Select value={String(selectedMonth)} onValueChange={(v) => setSelectedMonth(Number(v))}>
-                <SelectTrigger className="w-[150px] border-[#010139]/20">
+                <SelectTrigger className="w-28 sm:w-36 border-[#010139]/20">
                   <SelectValue placeholder="Mes" />
                 </SelectTrigger>
                 <SelectContent>
@@ -286,7 +294,7 @@ export function PreviewTab({ role, brokerId }: Props) {
                 value={selectedFortnight}
                 onValueChange={(value) => setSelectedFortnight(value as 'all' | '1' | '2')}
               >
-                <SelectTrigger className="w-[150px] border-[#010139]/20">
+                <SelectTrigger className="w-28 sm:w-36 border-[#010139]/20">
                   <SelectValue placeholder="Quincena" />
                 </SelectTrigger>
                 <SelectContent>

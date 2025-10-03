@@ -149,7 +149,7 @@ export function YTDTab({ role, brokerId }: Props) {
     <CardHeader className="flex-row items-center justify-between">
       <CardTitle className="text-[#010139]">{title}</CardTitle>
       <Select value={String(year)} onValueChange={(value) => setYear(Number(value))}>
-        <SelectTrigger className="w-[180px]"><SelectValue placeholder="Año" /></SelectTrigger>
+        <SelectTrigger className="w-32 sm:w-40"><SelectValue placeholder="Año" /></SelectTrigger>
         <SelectContent>{years.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent>
       </Select>
     </CardHeader>

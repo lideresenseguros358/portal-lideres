@@ -1,19 +1,44 @@
 import * as XLSX from 'xlsx';
+import Papa from 'papaparse';
 
 export interface BankTransferRow {
-  date: Date;
+  date: string; // ISO yyyy-mm-dd
   reference_number: string;
   transaction_code: string;
   description: string;
   amount: number;
 }
 
+type HeaderMap = {
+  dateIdx: number;
+  refIdx: number;
+  transIdx: number;
+  descIdx: number;
+  creditIdx: number;
+};
+
+const MONTH_MAP: Record<string, number> = {
+  ene: 0,
+  feb: 1,
+  mar: 2,
+  abr: 3,
+  may: 4,
+  jun: 5,
+  jul: 6,
+  ago: 7,
+  sept: 8,
+  sep: 8,
+  oct: 9,
+  nov: 10,
+  dic: 11,
+};
+
 /**
  * Parser para archivos XLSX del Banco General
  * Formato esperado:
  * - Fecha | Referencia | Transacción | Descripción | Débito | Crédito | Saldo total
  */
-export async function parseBankHistoryXLSX(file: File): Promise<BankTransferRow[]> {
+function parseBankHistoryXLSX(file: File): Promise<BankTransferRow[]> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     
@@ -50,15 +75,16 @@ export async function parseBankHistoryXLSX(file: File): Promise<BankTransferRow[
         
         // Obtener encabezados
         const headers = jsonData[headerIndex].map((h: any) => String(h || '').toLowerCase().trim());
-        
-        // Mapear índices de columnas
-        const dateIdx = headers.findIndex((h: string) => h.includes('fecha'));
-        const refIdx = headers.findIndex((h: string) => h.includes('referencia'));
-        const transIdx = headers.findIndex((h: string) => h.includes('transac') || h.includes('transacci'));
-        const descIdx = headers.findIndex((h: string) => h.includes('descri'));
-        const creditIdx = headers.findIndex((h: string) => h.includes('crédito') || h.includes('credito'));
-        
-        if (dateIdx === -1 || refIdx === -1 || creditIdx === -1) {
+
+        const headerMap: HeaderMap = {
+          dateIdx: headers.findIndex((h: string) => h.includes('fecha')),
+          refIdx: headers.findIndex((h: string) => h.includes('referencia')),
+          transIdx: headers.findIndex((h: string) => h.includes('transac') || h.includes('transacci')),
+          descIdx: headers.findIndex((h: string) => h.includes('descri')),
+          creditIdx: headers.findIndex((h: string) => h.includes('crédito') || h.includes('credito')),
+        };
+
+        if (headerMap.dateIdx === -1 || headerMap.refIdx === -1 || headerMap.creditIdx === -1) {
           throw new Error('Columnas requeridas no encontradas: Fecha, Referencia, Crédito');
         }
         
@@ -69,68 +95,17 @@ export async function parseBankHistoryXLSX(file: File): Promise<BankTransferRow[
           const row = jsonData[i];
           if (!Array.isArray(row) || row.length === 0) continue;
           
-          // Obtener valores
-          const dateValue = row[dateIdx];
-          const refValue = row[refIdx];
-          const creditValue = row[creditIdx];
-          
-          // Saltar si no hay crédito (solo procesamos ingresos)
-          if (!creditValue || creditValue === '' || creditValue === 0) continue;
-          
-          // Parsear fecha
-          let date: Date;
-          if (typeof dateValue === 'number') {
-            // Excel serial date
-            date = XLSX.SSF.parse_date_code(dateValue);
-          } else if (typeof dateValue === 'string') {
-            // Formato DD-MMM-YYYY o similar
-            const parts = dateValue.split('-');
-            if (parts.length === 3) {
-              const monthMap: { [key: string]: number } = {
-                'ene': 0, 'feb': 1, 'mar': 2, 'abr': 3, 'may': 4, 'jun': 5,
-                'jul': 6, 'ago': 7, 'sep': 8, 'oct': 9, 'nov': 10, 'dic': 11
-              };
-              const day = parseInt(parts[0] || '0');
-              const monthStr = (parts[1] || '').toLowerCase().substring(0, 3);
-              const year = parseInt(parts[2] || '0');
-              const month = monthMap[monthStr] ?? 0;
-              
-              if (month !== undefined && !isNaN(day) && !isNaN(year)) {
-                date = new Date(year, month, day);
-              } else {
-                date = new Date(dateValue);
-              }
-            } else {
-              date = new Date(dateValue);
-            }
-          } else {
-            continue; // Saltar fila sin fecha válida
+          const transfer = normalizeTransferRow(
+            row[headerMap.dateIdx],
+            row[headerMap.refIdx],
+            headerMap.transIdx !== -1 ? row[headerMap.transIdx] : '',
+            headerMap.descIdx !== -1 ? row[headerMap.descIdx] : '',
+            row[headerMap.creditIdx]
+          );
+
+          if (transfer) {
+            transfers.push(transfer);
           }
-          
-          if (isNaN(date.getTime())) continue;
-          
-          // Parsear referencia
-          const reference = String(refValue).trim();
-          if (!reference || reference === '') continue;
-          
-          // Parsear monto
-          let amount = 0;
-          if (typeof creditValue === 'number') {
-            amount = creditValue;
-          } else if (typeof creditValue === 'string') {
-            // Limpiar formato: $115.00 → 115.00
-            amount = parseFloat(creditValue.replace(/[$,]/g, ''));
-          }
-          
-          if (isNaN(amount) || amount <= 0) continue;
-          
-          transfers.push({
-            date,
-            reference_number: reference,
-            transaction_code: transIdx !== -1 ? String(row[transIdx] || '').trim() : '',
-            description: descIdx !== -1 ? String(row[descIdx] || '').trim() : '',
-            amount
-          });
         }
         
         resolve(transfers);
@@ -144,19 +119,156 @@ export async function parseBankHistoryXLSX(file: File): Promise<BankTransferRow[
   });
 }
 
+function parseBankHistoryCSV(file: File): Promise<BankTransferRow[]> {
+  return new Promise((resolve, reject) => {
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      transformHeader: (header) => header.toLowerCase().trim(),
+      complete: (results) => {
+        try {
+          const rows = results.data as Record<string, any>[];
+          const transfers: BankTransferRow[] = [];
+
+          rows.forEach((row) => {
+            const keys = Object.keys(row);
+            const headerMap: HeaderMap = {
+              dateIdx: keys.findIndex((k) => k.includes('fecha')),
+              refIdx: keys.findIndex((k) => k.includes('referencia')),
+              transIdx: keys.findIndex((k) => k.includes('transac') || k.includes('transacci')),
+              descIdx: keys.findIndex((k) => k.includes('descri')),
+              creditIdx: keys.findIndex((k) => k.includes('crédito') || k.includes('credito') || k.includes('monto')), // fallback
+            };
+
+            if (headerMap.dateIdx === -1 || headerMap.refIdx === -1 || headerMap.creditIdx === -1) {
+              return;
+            }
+
+            const values = keys.map((k) => row[k]);
+            const transfer = normalizeTransferRow(
+              values[headerMap.dateIdx],
+              values[headerMap.refIdx],
+              headerMap.transIdx !== -1 ? values[headerMap.transIdx] : '',
+              headerMap.descIdx !== -1 ? values[headerMap.descIdx] : '',
+              values[headerMap.creditIdx]
+            );
+
+            if (transfer) {
+              transfers.push(transfer);
+            }
+          });
+
+          resolve(transfers);
+        } catch (error) {
+          reject(error);
+        }
+      },
+      error: (error) => reject(error)
+    });
+  });
+}
+
+function normalizeTransferRow(
+  rawDate: any,
+  rawReference: any,
+  rawTransaction: any,
+  rawDescription: any,
+  rawAmount: any
+): BankTransferRow | null {
+  // Parse date
+  const date = parseDateValue(rawDate);
+  if (!date) return null;
+
+  const reference = String(rawReference ?? '').trim();
+  if (!reference) return null;
+
+  const amount = parseAmountValue(rawAmount);
+  if (amount <= 0) return null;
+
+  return {
+    date,
+    reference_number: reference,
+    transaction_code: String(rawTransaction ?? '').trim(),
+    description: String(rawDescription ?? '').trim(),
+    amount,
+  };
+}
+
+function parseDateValue(value: any): string | null {
+  if (value === null || value === undefined || value === '') return null;
+
+  let date: Date | null = null;
+
+  if (typeof value === 'number') {
+    const parsed = XLSX.SSF.parse_date_code(value);
+    if (parsed) {
+      date = new Date(parsed.y, parsed.m - 1, parsed.d);
+    }
+  } else if (typeof value === 'string') {
+    const sanitized = value.trim();
+
+    const parts = sanitized.split('-');
+    if (parts.length === 3) {
+      const day = parseInt(parts[0] || '0', 10);
+      const monthStr = (parts[1] || '').toLowerCase().substring(0, 3);
+      const year = parseInt(parts[2] || '0', 10);
+      const month = MONTH_MAP[monthStr];
+      if (!isNaN(day) && !isNaN(year) && month !== undefined) {
+        date = new Date(year, month, day);
+      }
+    }
+
+    if (!date || isNaN(date.getTime())) {
+      const parsed = new Date(sanitized);
+      if (!isNaN(parsed.getTime())) {
+        date = parsed;
+      }
+    }
+  }
+
+  if (!date || isNaN(date.getTime())) return null;
+
+  return date.toISOString().split('T')[0] as string;
+}
+
+function parseAmountValue(value: any): number {
+  if (value === null || value === undefined || value === '') return 0;
+  if (typeof value === 'number') return value;
+  if (typeof value === 'string') {
+    const cleaned = value.replace(/[$,]/g, '').trim();
+    const parsed = parseFloat(cleaned);
+    return isNaN(parsed) ? 0 : parsed;
+  }
+  return 0;
+}
+
+export async function parseBankHistoryFile(file: File): Promise<BankTransferRow[]> {
+  const ext = file.name.split('.').pop()?.toLowerCase();
+  if (ext === 'csv') {
+    return parseBankHistoryCSV(file);
+  }
+  return parseBankHistoryXLSX(file);
+}
+
 /**
  * Validar formato del archivo
  */
 export function validateBankFile(file: File): { valid: boolean; error?: string } {
   // Verificar extensión
   const ext = file.name.split('.').pop()?.toLowerCase();
-  if (ext !== 'xlsx' && ext !== 'xls') {
-    return { valid: false, error: 'El archivo debe ser formato Excel (.xlsx o .xls)' };
+  if (ext !== 'xlsx' && ext !== 'xls' && ext !== 'csv') {
+    return { valid: false, error: 'El archivo debe ser formato Excel (.xlsx, .xls) o CSV (.csv)' };
   }
   
   // Verificar tamaño (máx 10MB)
   if (file.size > 10 * 1024 * 1024) {
     return { valid: false, error: 'El archivo es demasiado grande (máx 10MB)' };
+  }
+
+  // Verificar mimetype básico
+  const allowedTypes = ['application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'text/csv', 'application/csv'];
+  if (file.type && !allowedTypes.includes(file.type)) {
+    return { valid: false, error: 'Tipo de archivo no soportado' };
   }
   
   return { valid: true };

@@ -1,30 +1,78 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import Image from 'next/image';
 
-export default function LoadingPage() {
+interface LoadingPageProps {
+  isLoading?: boolean;
+  onComplete?: () => void;
+}
+
+export default function LoadingPage({ isLoading = true, onComplete }: LoadingPageProps) {
+  const [fadeOut, setFadeOut] = useState(false);
+
+  useEffect(() => {
+    if (!isLoading) {
+      // Iniciar fade out
+      setFadeOut(true);
+      // Llamar onComplete después de la animación
+      const timer = setTimeout(() => {
+        onComplete?.();
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [isLoading, onComplete]);
+
   return (
-    <div className="fixed inset-0 bg-white flex items-center justify-center z-50">
-      <div className="relative w-32 h-32 md:w-48 md:h-48 animate-bounce-subtle">
+    <div 
+      className={`fixed inset-0 bg-white flex items-center justify-center z-[9999] transition-opacity duration-500 ${
+        fadeOut ? 'opacity-0' : 'opacity-100'
+      }`}
+      style={{
+        animation: fadeOut ? 'none' : 'fadeIn 500ms ease-in-out'
+      }}
+    >
+      <div className="relative w-32 h-32 md:w-48 md:h-48 animate-pulse-bounce">
         <Image
           src="/emblema.png"
-          alt="Loading..."
+          alt="Cargando..."
           fill
           className="object-contain"
           priority
         />
       </div>
+      
       <style jsx global>{`
-        @keyframes bounce-subtle {
-          0%, 100% {
-            transform: translateY(0);
+        @keyframes fadeIn {
+          from {
+            opacity: 0;
           }
-          50% {
-            transform: translateY(-10px);
+          to {
+            opacity: 1;
           }
         }
-        .animate-bounce-subtle {
-          animation: bounce-subtle 2s ease-in-out infinite;
+        
+        @keyframes pulse-bounce {
+          0%, 100% {
+            transform: scale(1) translateY(0);
+            opacity: 1;
+          }
+          25% {
+            transform: scale(1.05) translateY(-8px);
+            opacity: 0.9;
+          }
+          50% {
+            transform: scale(1.1) translateY(-15px);
+            opacity: 0.85;
+          }
+          75% {
+            transform: scale(1.05) translateY(-8px);
+            opacity: 0.9;
+          }
+        }
+        
+        .animate-pulse-bounce {
+          animation: pulse-bounce 2s ease-in-out infinite;
         }
       `}</style>
     </div>

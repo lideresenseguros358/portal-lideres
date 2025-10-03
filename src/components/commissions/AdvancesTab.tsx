@@ -274,7 +274,7 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
           </div>
           <div className="flex items-center gap-4">
             <Select value={String(year)} onValueChange={(value) => setYear(Number(value))}>
-              <SelectTrigger className="w-[120px] border-[#010139]/20">
+              <SelectTrigger className="w-20 sm:w-28 border-[#010139]/20">
                 <SelectValue placeholder="Año" />
               </SelectTrigger>
               <SelectContent>

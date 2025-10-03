@@ -11,12 +11,14 @@ type CommItemIns = TablesInsert<'comm_items'>;
 interface MappingRule {
   target_field: string;
   aliases: any;
+  commission_column_2_aliases?: any;
+  commission_column_3_aliases?: any;
 }
 
 /**
  * Parse XLSX file using xlsx library
  */
-async function parseXlsxFile(file: File, mappingRules: MappingRule[] = [], invertNegatives: boolean = false): Promise<ParsedRow[]> {
+async function parseXlsxFile(file: File, mappingRules: MappingRule[] = [], invertNegatives: boolean = false, useMultiColumns: boolean = false): Promise<ParsedRow[]> {
   console.log('[PARSER] Parsing XLSX file:', file.name);
   console.log('[PARSER] Using mapping rules:', mappingRules);
   
@@ -60,20 +62,35 @@ async function parseXlsxFile(file: File, mappingRules: MappingRule[] = [], inver
   let policyIndex = -1;
   let insuredIndex = -1;
   let amountIndex = -1;
+  let amount2Index = -1; // ASSA: Vida 1er año
+  let amount3Index = -1; // ASSA: Vida renovación
   
   if (mappingRules && mappingRules.length > 0) {
     // Use configured mapping
     for (const rule of mappingRules) {
       const aliases = Array.isArray(rule.aliases) ? rule.aliases : [];
+      const aliases2 = Array.isArray(rule.commission_column_2_aliases) ? rule.commission_column_2_aliases : [];
+      const aliases3 = Array.isArray(rule.commission_column_3_aliases) ? rule.commission_column_3_aliases : [];
       
       for (let i = 0; i < headers.length; i++) {
         const header = headers[i];
         if (!header) continue;
+        
+        // Primera columna de comisión
         if (aliases.some((alias: string) => header.toLowerCase().includes(alias.toLowerCase()))) {
-          // Map target_field to column indices
           if (rule.target_field === 'policy') policyIndex = i;
           if (rule.target_field === 'insured') insuredIndex = i;
           if (rule.target_field === 'commission') amountIndex = i;
+        }
+        
+        // Segunda columna (ASSA: Vida 1er año)
+        if (useMultiColumns && aliases2.length > 0 && aliases2.some((alias: string) => header.toLowerCase().includes(alias.toLowerCase()))) {
+          amount2Index = i;
+        }
+        
+        // Tercera columna (ASSA: Vida renovación)
+        if (useMultiColumns && aliases3.length > 0 && aliases3.some((alias: string) => header.toLowerCase().includes(alias.toLowerCase()))) {
+          amount3Index = i;
         }
       }
     }
@@ -91,11 +108,13 @@ async function parseXlsxFile(file: File, mappingRules: MappingRule[] = [], inver
     );
   }
   
-  console.log('[PARSER] Column mapping:', { policyIndex, insuredIndex, amountIndex });
+  console.log('[PARSER] Column mapping:', { policyIndex, insuredIndex, amountIndex, amount2Index, amount3Index });
   console.log('[PARSER] Mapped columns:', {
     policy: policyIndex >= 0 ? headers[policyIndex] : 'NOT FOUND',
     insured: insuredIndex >= 0 ? headers[insuredIndex] : 'NOT FOUND',
-    amount: amountIndex >= 0 ? headers[amountIndex] : 'NOT FOUND'
+    amount: amountIndex >= 0 ? headers[amountIndex] : 'NOT FOUND',
+    amount2: amount2Index >= 0 ? headers[amount2Index] : 'NOT USED',
+    amount3: amount3Index >= 0 ? headers[amount3Index] : 'NOT USED'
   });
   
   // Parse data rows
@@ -117,26 +136,53 @@ async function parseXlsxFile(file: File, mappingRules: MappingRule[] = [], inver
     const policyNumber = policyIndex >= 0 && values[policyIndex] ? String(values[policyIndex]).trim() : null;
     const insuredName = insuredIndex >= 0 && values[insuredIndex] ? String(values[insuredIndex]).trim() : null;
     
-    // Parse amount
+    // Parse amount - Sum multiple columns if ASSA (useMultiColumns = true)
     let grossAmount = 0;
+    
+    // Columna 1 (principal)
     if (amountIndex >= 0 && values[amountIndex]) {
       const amountValue = values[amountIndex];
       if (typeof amountValue === 'number') {
-        grossAmount = amountValue;
+        grossAmount += amountValue;
       } else {
         const amountStr = String(amountValue).replace(/[$,]/g, '').trim();
         const parsed = parseFloat(amountStr);
-        grossAmount = isNaN(parsed) ? 0 : parsed;
-      }
-      
-      // Invert sign if configured
-      if (invertNegatives) {
-        grossAmount = grossAmount * -1;
+        grossAmount += isNaN(parsed) ? 0 : parsed;
       }
     }
     
-    // Only add rows with at least policy number or amount (include negatives)
-    if (policyNumber || grossAmount !== 0) {
+    // Columna 2 (ASSA: Vida 1er año)
+    if (useMultiColumns && amount2Index >= 0 && values[amount2Index]) {
+      const amountValue = values[amount2Index];
+      if (typeof amountValue === 'number') {
+        grossAmount += amountValue;
+      } else {
+        const amountStr = String(amountValue).replace(/[$,]/g, '').trim();
+        const parsed = parseFloat(amountStr);
+        grossAmount += isNaN(parsed) ? 0 : parsed;
+      }
+    }
+    
+    // Columna 3 (ASSA: Vida renovación)
+    if (useMultiColumns && amount3Index >= 0 && values[amount3Index]) {
+      const amountValue = values[amount3Index];
+      if (typeof amountValue === 'number') {
+        grossAmount += amountValue;
+      } else {
+        const amountStr = String(amountValue).replace(/[$,]/g, '').trim();
+        const parsed = parseFloat(amountStr);
+        grossAmount += isNaN(parsed) ? 0 : parsed;
+      }
+    }
+    
+    // Invert sign if configured
+    if (invertNegatives) {
+      grossAmount = grossAmount * -1;
+    }
+    
+    // Excluir rows con 0.00 (excepto si viene de ASSA que puede tener códigos especiales)
+    // Solo agregar si tiene policy_number Y amount diferente de 0
+    if (policyNumber && grossAmount !== 0) {
       rows.push({
         policy_number: policyNumber,
         client_name: insuredName,
@@ -156,12 +202,13 @@ async function parseXlsxFile(file: File, mappingRules: MappingRule[] = [], inver
 /**
  * Parse CSV or XLSX file into rows
  */
-export async function parseCsvXlsx(file: File, mappingRules: MappingRule[] = [], invertNegatives: boolean = false): Promise<ParsedRow[]> {
+export async function parseCsvXlsx(file: File, mappingRules: MappingRule[] = [], invertNegatives: boolean = false, useMultiColumns: boolean = false): Promise<ParsedRow[]> {
   console.log('[PARSER] Starting to parse file:', file.name);
+  console.log('[PARSER] Use multi columns (ASSA):', useMultiColumns);
   
   // Check if it's XLSX
   if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
-    return parseXlsxFile(file, mappingRules, invertNegatives);
+    return parseXlsxFile(file, mappingRules, invertNegatives, useMultiColumns);
   }
   
   // Otherwise parse as CSV

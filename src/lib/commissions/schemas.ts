@@ -5,6 +5,7 @@ export const UploadImportSchema = z.object({
   total_amount: z.string(), // Comes from form as string
   fortnight_id: z.string().uuid('ID de quincena inválido'),
   invert_negatives: z.string().optional().default('false'),
+  is_life_insurance: z.string().optional().default('false'),
 });
 
 export const CreateDraftSchema = z.object({
