@@ -5,6 +5,7 @@ import { FaUpload, FaCog, FaCheckCircle } from 'react-icons/fa';
 import { actionGetActiveInsurers, actionImportDelinquency } from '@/app/(app)/delinquency/actions';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export default function ImportTab() {
   const [insurers, setInsurers] = useState<any[]>([]);
@@ -191,39 +192,39 @@ export default function ImportTab() {
         <div className="space-y-4">
           {/* Insurer Selection */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-xs sm:text-sm font-semibold text-gray-600 mb-2 uppercase">
               Aseguradora <span className="text-red-500">*</span>
             </label>
-            <select
-              value={selectedInsurer}
-              onChange={(e) => setSelectedInsurer(e.target.value)}
-              className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition-colors"
-            >
-              <option value="">Selecciona una aseguradora</option>
-              {insurers.map((ins) => (
-                <option key={ins.id} value={ins.id}>
-                  {ins.name}
-                </option>
-              ))}
-            </select>
+            <Select value={selectedInsurer} onValueChange={setSelectedInsurer}>
+              <SelectTrigger className="w-full border-2 border-gray-300 focus:border-[#8AAA19]">
+                <SelectValue placeholder="SELECCIONA UNA ASEGURADORA" />
+              </SelectTrigger>
+              <SelectContent>
+                {insurers.map((ins) => (
+                  <SelectItem key={ins.id} value={ins.id}>
+                    {ins.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Cutoff Date */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-xs sm:text-sm font-semibold text-gray-600 mb-2 uppercase">
               Fecha de Corte <span className="text-red-500">*</span>
             </label>
             <input
               type="date"
               value={cutoffDate}
               onChange={(e) => setCutoffDate(e.target.value)}
-              className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition-colors"
+              className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition-colors text-sm sm:text-base"
             />
           </div>
 
           {/* File Upload */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-xs sm:text-sm font-semibold text-gray-600 mb-2 uppercase">
               Archivo <span className="text-red-500">*</span>
             </label>
             <input

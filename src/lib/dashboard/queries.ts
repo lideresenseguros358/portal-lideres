@@ -28,6 +28,21 @@ const CURRENT_YEAR = new Date().getFullYear();
 
 const FETCH_LIMIT = 2000;
 
+const MONTH_NAMES = [
+  "Enero",
+  "Febrero",
+  "Marzo",
+  "Abril",
+  "Mayo",
+  "Junio",
+  "Julio",
+  "Agosto",
+  "Septiembre",
+  "Octubre",
+  "Noviembre",
+  "Diciembre",
+];
+
 // Mock data para visualización cuando no hay data real
 const MOCK_DATA_ENABLED = true;
 
@@ -680,14 +695,31 @@ export async function getRankingTop5(userId: string): Promise<RankingResult> {
       brokerName: nameMap.get(item.broker_id) ?? "",
       total: toNumber(item.total),
     }))
-    .sort((a, b) => b.total - a.total);
+    .sort((a, b) => {
+      if (b.total !== a.total) {
+        return b.total - a.total;
+      }
+      return (nameMap.get(a.brokerId) ?? "").localeCompare(nameMap.get(b.brokerId) ?? "");
+    });
 
-  // Mostrar top 5 completo para todos (sin ocultar totales)
+  if (ranking.length < 5) {
+    const { data: extraBrokers } = await supabase
+      .from("brokers")
+      .select("id, name")
+      .limit(10)
+      .returns<{ id: string | null; name: string | null }[]>();
+
+    (extraBrokers ?? []).forEach((broker) => {
+      if (!broker?.id) return;
+      if (ranking.some((item) => item.brokerId === broker.id)) return;
+      ranking.push({ brokerId: broker.id, brokerName: broker.name ?? "", total: 0 });
+    });
+  }
+
   const entries: RankingEntry[] = ranking.slice(0, 5).map((item, index) => ({
     brokerId: item.brokerId,
     brokerName: item.brokerName,
     position: index + 1,
-    total: item.total, // Siempre mostrar total
   }));
 
   let currentPosition: number | undefined;
@@ -714,7 +746,6 @@ export async function getRankingTop5(userId: string): Promise<RankingResult> {
     entries,
     currentBrokerId: brokerId ?? undefined,
     currentPosition,
-    currentTotal,
   };
 }
 
@@ -793,14 +824,18 @@ export async function getContestProgress(userId: string): Promise<ContestProgres
   const convivioYear = convivioConfig.year ?? currentYear;
 
   // Generar arrays de meses para cada concurso
-  const convivioMonths = Array.from(
-    { length: convivioConfig.end_month - convivioConfig.start_month + 1 },
-    (_, idx) => convivioConfig.start_month + idx
-  );
-  const assaMonths = Array.from(
-    { length: assaConfig.end_month - assaConfig.start_month + 1 },
-    (_, idx) => assaConfig.start_month + idx
-  );
+  const buildMonthsRange = (start: number, end: number) => {
+    if (start <= end) {
+      return Array.from({ length: end - start + 1 }, (_, idx) => start + idx);
+    }
+    // Rango cruzando el año: ejemplo start=9, end=3 => 9..12 y 1..3
+    const firstSegment = Array.from({ length: 12 - start + 1 }, (_, idx) => start + idx);
+    const secondSegment = Array.from({ length: end }, (_, idx) => idx + 1);
+    return [...firstSegment, ...secondSegment];
+  };
+
+  const convivioMonths = buildMonthsRange(convivioConfig.start_month, convivioConfig.end_month);
+  const assaMonths = buildMonthsRange(assaConfig.start_month, assaConfig.end_month);
 
   const buildQuery = (months: number[], year: number) => {
     let query = supabase
@@ -902,6 +937,9 @@ export async function getContestProgress(userId: string): Promise<ContestProgres
       quotaType: assaQuotaType,
       targetDouble: assaConfig.goal_double,
       enableDoubleGoal: assaConfig.enable_double_goal,
+      periodLabel: `${MONTH_NAMES[(assaConfig.start_month - 1 + 12) % 12] ?? ""} - ${MONTH_NAMES[(assaConfig.end_month - 1 + 12) % 12] ?? ""}`,
+      startMonth: assaConfig.start_month,
+      endMonth: assaConfig.end_month,
     },
     {
       label: "Convivio LISSA",
@@ -913,6 +951,9 @@ export async function getContestProgress(userId: string): Promise<ContestProgres
       quotaType: convivioQuotaType,
       targetDouble: convivioConfig.goal_double,
       enableDoubleGoal: true, // Convivio siempre tiene doble
+      periodLabel: `${MONTH_NAMES[(convivioConfig.start_month - 1 + 12) % 12] ?? ""} - ${MONTH_NAMES[(convivioConfig.end_month - 1 + 12) % 12] ?? ""}`,
+      startMonth: convivioConfig.start_month,
+      endMonth: convivioConfig.end_month,
     },
   ];
 }

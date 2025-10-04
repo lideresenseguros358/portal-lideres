@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { FaPalette, FaClock, FaBell, FaShieldAlt, FaPercent, FaSave, FaImage } from 'react-icons/fa';
 import { toast } from 'sonner';
+import { uppercaseInputClass } from '@/lib/utils/uppercase';
 
 interface GeneralTabProps {
   userId: string;
@@ -129,8 +130,8 @@ export default function GeneralTab({ userId }: GeneralTabProps) {
         <div className="flex items-center gap-3 mb-6 pb-4 border-b">
           <FaPalette className="text-[#8AAA19] text-2xl" />
           <div>
-            <h2 className="text-xl font-bold text-[#010139]">Branding</h2>
-            <p className="text-sm text-gray-600">Logotipos, favicon y colores corporativos</p>
+            <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-[#010139]">BRANDING</h2>
+            <p className="text-xs sm:text-sm text-gray-600">LOGOTIPOS, FAVICON Y COLORES CORPORATIVOS</p>
           </div>
         </div>
 
@@ -250,8 +251,8 @@ export default function GeneralTab({ userId }: GeneralTabProps) {
         <div className="flex items-center gap-3 mb-6 pb-4 border-b">
           <FaClock className="text-[#8AAA19] text-2xl" />
           <div>
-            <h2 className="text-xl font-bold text-[#010139]">Zona Horaria y Correos</h2>
-            <p className="text-sm text-gray-600">Configuración de tiempo y envíos automáticos</p>
+            <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-[#010139]">ZONA HORARIA Y CORREOS</h2>
+            <p className="text-xs sm:text-sm text-gray-600">CONFIGURACIÓN DE TIEMPO Y ENVÍOS AUTOMÁTICOS</p>
           </div>
         </div>
 
@@ -275,16 +276,16 @@ export default function GeneralTab({ userId }: GeneralTabProps) {
         <div className="flex items-center gap-3 mb-6 pb-4 border-b">
           <FaBell className="text-[#8AAA19] text-2xl" />
           <div>
-            <h2 className="text-xl font-bold text-[#010139]">Notificaciones</h2>
-            <p className="text-sm text-gray-600">Configuración global de notificaciones</p>
+            <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-[#010139]">NOTIFICACIONES</h2>
+            <p className="text-xs sm:text-sm text-gray-600">CONFIGURACIÓN GLOBAL DE NOTIFICACIONES</p>
           </div>
         </div>
 
         <div className="space-y-4">
-          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
-            <div>
-              <p className="font-semibold text-gray-800">Comisiones al Cerrar Quincena</p>
-              <p className="text-sm text-gray-600">Notificar brokers cuando se cierre una quincena</p>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+            <div className="flex-1">
+              <p className="font-semibold text-gray-800">COMISIONES AL CERRAR QUINCENA</p>
+              <p className="text-xs sm:text-sm text-gray-600">NOTIFICAR BROKERS CUANDO SE CIERRE UNA QUINCENA</p>
             </div>
             <button
               onClick={() => setNotifications({ ...notifications, commissions_close: !notifications.commissions_close })}
@@ -300,10 +301,10 @@ export default function GeneralTab({ userId }: GeneralTabProps) {
             </button>
           </div>
 
-          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg opacity-75">
-            <div>
-              <p className="font-semibold text-gray-800">Trámites (Siempre Activo)</p>
-              <p className="text-sm text-gray-600">Las notificaciones de trámites no se pueden desactivar</p>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+            <div className="flex-1">
+              <p className="font-semibold text-gray-800">CASOS SIEMPRE NOTIFICADOS</p>
+              <p className="text-xs sm:text-sm text-gray-600">NOTIFICAR TODOS LOS CAMBIOS DE ESTADO EN CASOS</p>
             </div>
             <div className="relative inline-flex h-8 w-14 items-center rounded-full bg-[#8AAA19] opacity-50 cursor-not-allowed">
               <span className="inline-block h-6 w-6 transform rounded-full bg-white translate-x-7" />
@@ -317,8 +318,8 @@ export default function GeneralTab({ userId }: GeneralTabProps) {
         <div className="flex items-center gap-3 mb-6 pb-4 border-b">
           <FaShieldAlt className="text-[#8AAA19] text-2xl" />
           <div>
-            <h2 className="text-xl font-bold text-[#010139]">Roles y Permisos</h2>
-            <p className="text-sm text-gray-600">Matriz de permisos (solo referencia visual)</p>
+            <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-[#010139]">ROLES Y PERMISOS</h2>
+            <p className="text-xs sm:text-sm text-gray-600">MATRIZ DE PERMISOS (SOLO REFERENCIA VISUAL)</p>
           </div>
         </div>
 
@@ -355,8 +356,8 @@ export default function GeneralTab({ userId }: GeneralTabProps) {
         <div className="flex items-center gap-3 mb-6 pb-4 border-b">
           <FaPercent className="text-[#8AAA19] text-2xl" />
           <div>
-            <h2 className="text-xl font-bold text-[#010139]">Porcentajes de Comisión Permitidos</h2>
-            <p className="text-sm text-gray-600">Lista global de porcentajes disponibles</p>
+            <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-[#010139]">PORCENTAJES DE COMISIÓN PERMITIDOS</h2>
+            <p className="text-xs sm:text-sm text-gray-600">LISTA GLOBAL DE PORCENTAJES DISPONIBLES</p>
           </div>
         </div>
 

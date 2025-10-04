@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react';
 import { FaTimes, FaCheckCircle, FaUser, FaFileAlt, FaUserTie } from 'react-icons/fa';
 import { supabaseClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
+import { toUppercasePayload, createUppercaseHandler, uppercaseInputClass } from '@/lib/utils/uppercase';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface WizardProps {
   onClose: () => void;
@@ -129,7 +131,7 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
       // Resolver insurer_name
       const insurer = insurers.find(i => i.id === formData.insurer_id);
       
-      const payload = {
+      const rawPayload = {
         client_name: formData.client_name,
         national_id: formData.national_id || null,
         email: formData.email || null,
@@ -145,6 +147,9 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
         percent_override: formData.percent_override ? parseFloat(formData.percent_override) : null,
         source: 'manual',
       };
+      
+      // Convertir a mayúsculas
+      const payload = toUppercasePayload(rawPayload);
 
       const { error } = await supabaseClient()
         .from('temp_client_imports')
@@ -163,8 +168,8 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-start sm:items-center justify-center overflow-y-auto">
-      <div className="bg-white rounded-xl max-w-2xl w-full mx-2 sm:mx-4 my-4 sm:my-8 shadow-2xl flex flex-col min-h-0 max-h-[calc(100vh-2rem)] sm:max-h-[90vh]">
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-start sm:items-center justify-center p-4 overflow-y-auto">
+      <div className="bg-white rounded-xl max-w-2xl w-full my-8 shadow-2xl flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="bg-gradient-to-r from-[#010139] to-[#020270] text-white px-4 py-3 sm:p-6 flex items-center justify-between rounded-t-xl flex-shrink-0">
           <h2 className="text-base sm:text-2xl font-bold">Nuevo Cliente y Póliza</h2>
@@ -198,7 +203,7 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
         </div>
 
         {/* Form Content */}
-        <div className="p-3 sm:p-6 overflow-y-auto flex-1 min-h-0">
+        <div className="p-4 sm:p-6 overflow-y-auto flex-1 min-h-0 space-y-4">
           {/* Step 1: Cliente */}
           {step === 1 && (
             <div className="space-y-3 sm:space-y-4 animate-fadeIn">
@@ -221,8 +226,8 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                 <input
                   type="text"
                   value={formData.client_name}
-                  onChange={(e) => setFormData({ ...formData, client_name: e.target.value })}
-                  className="w-full px-3 py-2 sm:px-4 text-sm sm:text-base border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition"
+                  onChange={createUppercaseHandler((e) => setFormData({ ...formData, client_name: e.target.value }))}
+                  className={`w-full px-3 py-2 sm:px-4 text-sm sm:text-base border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition ${uppercaseInputClass}`}
                   placeholder="Juan Pérez"
                 />
               </div>
@@ -234,8 +239,8 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                 <input
                   type="text"
                   value={formData.national_id}
-                  onChange={(e) => setFormData({ ...formData, national_id: e.target.value })}
-                  className="w-full px-3 py-2 sm:px-4 text-sm sm:text-base border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition"
+                  onChange={createUppercaseHandler((e) => setFormData({ ...formData, national_id: e.target.value }))}
+                  className={`w-full px-3 py-2 sm:px-4 text-sm sm:text-base border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition ${uppercaseInputClass}`}
                   placeholder="8-123-4567"
                 />
                 <p className="text-[10px] sm:text-xs text-gray-500 mt-1">
@@ -271,8 +276,8 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                 <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Dirección</label>
                 <textarea
                   value={formData.address}
-                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                  className="w-full px-3 py-2 sm:px-4 text-sm sm:text-base border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition resize-none"
+                  onChange={createUppercaseHandler((e) => setFormData({ ...formData, address: e.target.value }))}
+                  className={`w-full px-3 py-2 sm:px-4 text-sm sm:text-base border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition resize-none ${uppercaseInputClass}`}
                   rows={2}
                   placeholder="Calle 50, Ciudad de Panamá"
                 />
@@ -292,16 +297,16 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Aseguradora <span className="text-red-500">*</span>
                 </label>
-                <select
-                  value={formData.insurer_id}
-                  onChange={(e) => setFormData({ ...formData, insurer_id: e.target.value })}
-                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition"
-                >
-                  <option value="">Seleccionar aseguradora...</option>
-                  {insurers.map((ins) => (
-                    <option key={ins.id} value={ins.id}>{ins.name}</option>
-                  ))}
-                </select>
+                <Select value={formData.insurer_id} onValueChange={(value) => setFormData({ ...formData, insurer_id: value })}>
+                  <SelectTrigger className="w-full border-2 border-gray-300 focus:border-[#8AAA19]">
+                    <SelectValue placeholder="Seleccionar aseguradora..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {insurers.map((ins) => (
+                      <SelectItem key={ins.id} value={ins.id}>{ins.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div>
@@ -311,8 +316,8 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                 <input
                   type="text"
                   value={formData.policy_number}
-                  onChange={(e) => setFormData({ ...formData, policy_number: e.target.value })}
-                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition"
+                  onChange={createUppercaseHandler((e) => setFormData({ ...formData, policy_number: e.target.value }))}
+                  className={`w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition ${uppercaseInputClass}`}
                   placeholder="POL-2024-001"
                 />
               </div>
@@ -322,8 +327,8 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                 <input
                   type="text"
                   value={formData.ramo}
-                  onChange={(e) => setFormData({ ...formData, ramo: e.target.value })}
-                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition"
+                  onChange={createUppercaseHandler((e) => setFormData({ ...formData, ramo: e.target.value }))}
+                  className={`w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition ${uppercaseInputClass}`}
                   placeholder="Autos, Vida, Incendio..."
                 />
               </div>
@@ -352,15 +357,16 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Estado</label>
-                <select
-                  value={formData.status}
-                  onChange={(e) => setFormData({ ...formData, status: e.target.value })}
-                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition"
-                >
-                  <option value="active">Activa</option>
-                  <option value="inactive">Inactiva</option>
-                  <option value="cancelled">Cancelada</option>
-                </select>
+                <Select value={formData.status} onValueChange={(value) => setFormData({ ...formData, status: value })}>
+                  <SelectTrigger className="w-full border-2 border-gray-300 focus:border-[#8AAA19]">
+                    <SelectValue placeholder="Seleccionar estado" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Activa</SelectItem>
+                    <SelectItem value="inactive">Inactiva</SelectItem>
+                    <SelectItem value="cancelled">Cancelada</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           )}
@@ -379,25 +385,28 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Corredor <span className="text-red-500">*</span>
                     </label>
-                    <select
-                      value={formData.broker_email}
-                      onChange={(e) => {
-                        const selected = brokers.find((b: any) => b.profile?.email === e.target.value);
+                    <Select 
+                      value={formData.broker_email} 
+                      onValueChange={(value) => {
+                        const selected = brokers.find((b: any) => b.profile?.email === value);
                         setFormData({ 
                           ...formData, 
-                          broker_email: e.target.value,
+                          broker_email: value,
                           percent_override: (selected as any)?.percent_default?.toString() || ''
                         });
                       }}
-                      className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition"
                     >
-                      <option value="">Seleccionar corredor...</option>
-                      {brokers.map((broker: any) => (
-                        <option key={broker.id} value={broker.profile?.email}>
-                          {broker.name || broker.profile?.full_name} ({broker.profile?.email})
-                        </option>
-                      ))}
-                    </select>
+                      <SelectTrigger className="w-full border-2 border-gray-300 focus:border-[#8AAA19]">
+                        <SelectValue placeholder="Seleccionar corredor..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {brokers.map((broker: any) => (
+                          <SelectItem key={broker.id} value={broker.profile?.email}>
+                            {broker.name || broker.profile?.full_name} ({broker.profile?.email})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   <div>

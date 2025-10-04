@@ -6,11 +6,12 @@ import { FaTimes, FaSave, FaDollarSign, FaFileInvoice } from 'react-icons/fa';
 interface MonthInputModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (bruto: number, numPolizas: number) => Promise<void>;
+  onSave: (bruto: number, numPolizas: number, canceladas: number) => Promise<void>;
   brokerName: string;
   monthName: string;
   initialBruto?: number;
   initialNumPolizas?: number;
+  initialCanceladas?: number;
 }
 
 export default function MonthInputModal({
@@ -21,25 +22,38 @@ export default function MonthInputModal({
   monthName,
   initialBruto = 0,
   initialNumPolizas = 0,
+  initialCanceladas = 0,
 }: MonthInputModalProps) {
   const [bruto, setBruto] = useState(initialBruto);
   const [numPolizas, setNumPolizas] = useState(initialNumPolizas);
+  const [canceladas, setCanceladas] = useState(initialCanceladas);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     if (isOpen) {
       setBruto(initialBruto);
       setNumPolizas(initialNumPolizas);
+      setCanceladas(initialCanceladas);
+      setError('');
     }
-  }, [isOpen, initialBruto, initialNumPolizas]);
+  }, [isOpen, initialBruto, initialNumPolizas, initialCanceladas]);
 
   const handleSave = async () => {
+    // Validar que canceladas no sea mayor que bruto
+    if (canceladas > bruto) {
+      setError('Las canceladas no pueden ser mayores que la cifra bruta');
+      return;
+    }
+    
+    setError('');
     setSaving(true);
     try {
-      await onSave(bruto, numPolizas);
+      await onSave(bruto, numPolizas, canceladas);
       onClose();
     } catch (error) {
       console.error('Error saving:', error);
+      setError('Error al guardar. Intenta nuevamente.');
     } finally {
       setSaving(false);
     }
@@ -125,23 +139,72 @@ export default function MonthInputModal({
             </p>
           </div>
 
-          {/* Resumen */}
-          {(bruto > 0 || numPolizas > 0) && (
-            <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200 rounded-lg p-4">
-              <p className="text-sm font-semibold text-green-800 mb-2">
-                📊 Resumen:
+          {/* Campo: Canceladas */}
+          <div>
+            <label className="block text-sm font-semibold text-[#010139] mb-2">
+              <FaDollarSign className="inline mr-2 text-red-600" />
+              Canceladas del Mes (USD)
+            </label>
+            <input
+              type="number"
+              value={canceladas}
+              onChange={(e) => {
+                const value = parseFloat(e.target.value) || 0;
+                setCanceladas(value);
+                if (value > bruto) {
+                  setError('Las canceladas no pueden ser mayores que la cifra bruta');
+                } else {
+                  setError('');
+                }
+              }}
+              min="0"
+              step="0.01"
+              max={bruto}
+              className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none font-mono text-lg ${
+                error ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
+              }`}
+              placeholder="0.00"
+              disabled={saving}
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Monto de pólizas canceladas en este mes
+            </p>
+            {error && (
+              <p className="text-xs text-red-600 mt-1 font-semibold">
+                ⚠️ {error}
               </p>
-              <div className="space-y-1 text-sm text-green-700">
-                <p>
-                  • Cifra Bruta: <span className="font-mono font-bold">${bruto.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
-                </p>
-                <p>
-                  • Pólizas: <span className="font-mono font-bold">{numPolizas}</span>
-                </p>
+            )}
+          </div>
+
+          {/* Resumen */}
+          {(bruto > 0 || numPolizas > 0 || canceladas > 0) && (
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg p-4">
+              <p className="text-sm font-semibold text-blue-800 mb-3">
+                📊 Resumen del Mes:
+              </p>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-700">Cifra Bruta:</span>
+                  <span className="font-mono font-bold text-gray-900">${bruto.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-red-700">Canceladas:</span>
+                  <span className="font-mono font-bold text-red-600">-${canceladas.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                </div>
+                <div className="h-px bg-gray-300 my-2"></div>
+                <div className="flex justify-between items-center">
+                  <span className="text-[#8AAA19] font-semibold">Neto:</span>
+                  <span className="font-mono font-bold text-[#8AAA19] text-lg">${(bruto - canceladas).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                </div>
+                <div className="flex justify-between items-center mt-3">
+                  <span className="text-gray-700">Pólizas:</span>
+                  <span className="font-mono font-bold text-gray-900">{numPolizas}</span>
+                </div>
                 {numPolizas > 0 && (
-                  <p>
-                    • Promedio por póliza: <span className="font-mono font-bold">${(bruto / numPolizas).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
-                  </p>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600 text-xs">Promedio/póliza:</span>
+                    <span className="font-mono text-gray-700 text-xs">${(bruto / numPolizas).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                  </div>
                 )}
               </div>
             </div>

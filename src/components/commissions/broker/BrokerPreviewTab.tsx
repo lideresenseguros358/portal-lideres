@@ -217,16 +217,25 @@ export default function BrokerPreviewTab({ brokerId }: Props) {
 
   return (
     <div className="space-y-6">
-      <Card className="shadow-lg">
-        <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-2">
-              <FaHistory className="text-lg text-[#010139]" />
-              <h3 className="text-lg font-bold text-[#010139]">Historial de Quincenas Cerradas</h3>
+      <Card className="shadow-lg border-2 border-gray-100">
+        <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100 pb-4">
+          {/* Title centered */}
+          <div className="text-center mb-4">
+            <div className="flex items-center justify-center gap-3 mb-2">
+              <FaHistory className="text-[#010139] text-xl" />
+              <h2 className="text-2xl sm:text-3xl font-bold text-[#010139]">HISTORIAL DE QUINCENAS</h2>
             </div>
-            <div className="flex items-center gap-2 ml-auto">
+            <p className="text-sm text-gray-600">
+              Consulta y descarga reportes de quincenas cerradas
+            </p>
+          </div>
+          
+          {/* Filters Row - Responsive */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 pt-4 border-t border-gray-200">
+            <div className="flex items-center gap-2">
+              <label className="text-xs font-semibold text-gray-600 whitespace-nowrap">AÑO:</label>
               <Select value={String(year)} onValueChange={value => setYear(Number(value))}>
-                <SelectTrigger className="w-20 sm:w-28 border-[#010139]/20">
+                <SelectTrigger className="w-full sm:w-28 border-[#010139]/20 bg-white">
                   <SelectValue placeholder="Año" />
                 </SelectTrigger>
                 <SelectContent>
@@ -237,49 +246,64 @@ export default function BrokerPreviewTab({ brokerId }: Props) {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
 
+            <div className="flex items-center gap-2">
+              <label className="text-xs font-semibold text-gray-600 whitespace-nowrap">MES:</label>
               <Select value={String(month)} onValueChange={value => setMonth(Number(value))}>
-                <SelectTrigger className="w-28 sm:w-36 border-[#010139]/20">
+                <SelectTrigger className="w-full sm:w-36 border-[#010139]/20 bg-white">
                   <SelectValue placeholder="Mes" />
                 </SelectTrigger>
                 <SelectContent>
                   {monthOptions.map(option => (
                     <SelectItem key={option.value} value={String(option.value)}>
-                      {option.label}
+                      {option.label.toUpperCase()}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+            </div>
 
+            <div className="flex items-center gap-2">
+              <label className="text-xs font-semibold text-gray-600 whitespace-nowrap">QUINCENA:</label>
               <Select
                 value={selectedFortnight}
                 onValueChange={value => setSelectedFortnight(value as 'all' | '1' | '2')}
               >
-                <SelectTrigger className="w-28 sm:w-36 border-[#010139]/20">
+                <SelectTrigger className="w-full sm:w-36 border-[#010139]/20 bg-white">
                   <SelectValue placeholder="Quincena" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Ambas</SelectItem>
-                  <SelectItem value="1">Primera (Q1)</SelectItem>
-                  <SelectItem value="2">Segunda (Q2)</SelectItem>
+                  <SelectItem value="all">AMBAS</SelectItem>
+                  <SelectItem value="1">PRIMERA (Q1)</SelectItem>
+                  <SelectItem value="2">SEGUNDA (Q2)</SelectItem>
                 </SelectContent>
               </Select>
-
-              {isLoading && (
-                <div className="flex items-center gap-2">
-                  <div className="h-4 w-4 animate-spin rounded-full border-b-2 border-[#010139]"></div>
-                  <span className="text-sm text-gray-600">Cargando...</span>
-                </div>
-              )}
             </div>
+
+            {isLoading && (
+              <div className="flex items-center justify-center gap-2 text-sm text-gray-600 sm:ml-4">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#010139]"></div>
+                <span className="hidden sm:inline">Cargando...</span>
+              </div>
+            )}
           </div>
         </CardHeader>
       </Card>
 
       {noData && (
-        <Card className="shadow-inner p-8 text-center">
-          <FaHistory className="mx-auto mb-4 text-5xl text-gray-300" />
-          <p className="text-gray-500">No hay quincenas cerradas en este período</p>
+        <Card className="shadow-lg border-2 border-dashed border-gray-300">
+          <CardContent className="text-center py-12 sm:py-20">
+            <div className="mb-4">
+              <FaHistory className="text-5xl sm:text-6xl text-gray-300 mx-auto" />
+            </div>
+            <h3 className="text-lg sm:text-xl font-semibold text-gray-600 mb-2">
+              No hay quincenas cerradas para el período seleccionado
+            </h3>
+            <p className="text-sm text-gray-500">
+              Seleccione otro mes o año para ver el historial de quincenas pagadas
+            </p>
+          </CardContent>
         </Card>
       )}
 

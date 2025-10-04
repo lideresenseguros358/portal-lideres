@@ -6,10 +6,12 @@ import { FaChevronRight, FaChevronLeft, FaEdit, FaBullseye } from 'react-icons/f
 import Link from 'next/link';
 import MonthInputModal from './MonthInputModal';
 import MetaPersonalModal from './MetaPersonalModal';
+import { createUppercaseHandler, uppercaseInputClass } from '@/lib/utils/uppercase';
 
 interface MonthData {
   bruto: number;
   num_polizas: number;
+  canceladas: number;
 }
 
 interface BrokerProduction {
@@ -67,6 +69,10 @@ export default function ProductionMatrixMaster({ year }: ProductionMatrixMasterP
   const [semester, setSemester] = useState<1 | 2>(1); // 1 = Ene-Jun, 2 = Jul-Dic
   const [searchTerm, setSearchTerm] = useState(''); // Buscador
   
+  // Paginación
+  const [currentPage, setCurrentPage] = useState(1);
+  const brokersPerPage = 10;
+  
   // Modal states
   const [monthModal, setMonthModal] = useState<{
     isOpen: boolean;
@@ -119,8 +125,14 @@ export default function ProductionMatrixMaster({ year }: ProductionMatrixMasterP
     });
   };
 
-  const handleMonthSave = async (bruto: number, numPolizas: number) => {
+  const handleMonthSave = async (bruto: number, numPolizas: number, canceladas: number) => {
     if (!monthModal.broker || !monthModal.monthKey) return;
+
+    // Validar que canceladas no sea mayor que bruto
+    if (canceladas > bruto) {
+      toast.error('Las canceladas no pueden ser mayores que la cifra bruta');
+      return;
+    }
 
     try {
       const response = await fetch('/api/production', {
@@ -132,6 +144,7 @@ export default function ProductionMatrixMaster({ year }: ProductionMatrixMasterP
           month: monthModal.monthKey,
           bruto,
           num_polizas: numPolizas,
+          canceladas,
         }),
       });
 
@@ -143,13 +156,14 @@ export default function ProductionMatrixMaster({ year }: ProductionMatrixMasterP
               ...b,
               months: {
                 ...b.months,
-                [monthModal.monthKey!]: { bruto, num_polizas: numPolizas }
+                [monthModal.monthKey!]: { bruto, num_polizas: numPolizas, canceladas }
               }
             };
           }
           return b;
         }));
-        toast.success('Cifras guardadas');
+        toast.success('Cifras guardadas exitosamente');
+        loadProduction(); // Recargar para actualizar YTD
       } else {
         const error = await response.json();
         toast.error(error.error || 'Error al guardar');
@@ -229,6 +243,17 @@ export default function ProductionMatrixMaster({ year }: ProductionMatrixMasterP
     broker.assa_code?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  // Paginación
+  const totalPages = Math.ceil(filteredProduction.length / brokersPerPage);
+  const startIndex = (currentPage - 1) * brokersPerPage;
+  const endIndex = startIndex + brokersPerPage;
+  const paginatedProduction = filteredProduction.slice(startIndex, endIndex);
+
+  // Resetear página al buscar
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -243,10 +268,10 @@ export default function ProductionMatrixMaster({ year }: ProductionMatrixMasterP
       <div className="bg-white rounded-xl shadow-lg p-4 mb-4">
         <input
           type="text"
-          placeholder="🔍 Buscar corredor por nombre o código ASSA..."
+          placeholder="🔍 BUSCAR CORREDOR POR NOMBRE O CÓDIGO ASSA..."
           value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none text-base"
+          onChange={createUppercaseHandler((e) => setSearchTerm(e.target.value))}
+          className={`w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none text-base ${uppercaseInputClass}`}
         />
       </div>
 
@@ -290,6 +315,9 @@ export default function ProductionMatrixMaster({ year }: ProductionMatrixMasterP
                 <th className="sticky left-0 z-20 bg-gradient-to-r from-gray-50 to-gray-100 px-2 py-3 text-left text-xs font-semibold text-[#010139] border-b-2 border-gray-200 w-[140px]">
                   Corredor
                 </th>
+                <th className="px-2 py-3 text-center text-xs font-semibold text-[#010139] border-b-2 border-gray-200 w-[90px]">
+                  Código ASSA
+                </th>
                 {currentMonths.map(month => (
                   <th key={month.key} className="px-2 py-3 text-center text-xs font-semibold text-[#010139] border-b-2 border-gray-200 w-[100px]">
                     {month.label}
@@ -316,9 +344,9 @@ export default function ProductionMatrixMaster({ year }: ProductionMatrixMasterP
 
             {/* Body */}
             <tbody className="divide-y divide-gray-200">
-              {filteredProduction.length === 0 ? (
+              {paginatedProduction.length === 0 ? (
                 <tr>
-                  <td colSpan={currentMonths.length + 5} className="px-6 py-12 text-center">
+                  <td colSpan={currentMonths.length + 6} className="px-6 py-12 text-center">
                     <div className="flex flex-col items-center gap-3">
                       <div className="text-6xl text-gray-300">{searchTerm ? '🔍' : '📊'}</div>
                       <p className="text-lg font-semibold text-gray-600">
@@ -328,7 +356,7 @@ export default function ProductionMatrixMaster({ year }: ProductionMatrixMasterP
                   </td>
                 </tr>
               ) : (
-                filteredProduction.map((broker) => {
+                paginatedProduction.map((broker) => {
                   const { brutoYTD, netoYTD, numPolizasYTD } = calculateYTD(broker.months, broker.canceladas_ytd);
                   const percentage = calculatePercentage(netoYTD, broker.meta_personal);
 
@@ -342,9 +370,13 @@ export default function ProductionMatrixMaster({ year }: ProductionMatrixMasterP
                         >
                           {broker.broker_name}
                         </Link>
-                        {broker.assa_code && (
-                          <span className="text-[10px] text-gray-500 font-mono">{broker.assa_code}</span>
-                        )}
+                      </td>
+
+                      {/* Código ASSA */}
+                      <td className="px-1 py-2 text-center border-b border-gray-200">
+                        <div className="text-xs font-mono text-gray-700">
+                          {broker.assa_code || '-'}
+                        </div>
                       </td>
 
                       {/* Meses del semestre actual */}
@@ -416,6 +448,44 @@ export default function ProductionMatrixMaster({ year }: ProductionMatrixMasterP
             </tbody>
           </table>
         </div>
+
+        {/* Paginación */}
+        {totalPages > 1 && (
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50">
+            <button
+              onClick={() => {
+                setCurrentPage(prev => Math.max(1, prev - 1));
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              disabled={currentPage === 1}
+              className="w-full sm:w-auto px-6 py-3 bg-[#010139] text-white rounded-lg font-semibold hover:bg-[#020270] transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              <FaChevronLeft />
+              Anterior
+            </button>
+            
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-600">
+                Página <span className="font-bold text-[#010139]">{currentPage}</span> de <span className="font-bold">{totalPages}</span>
+              </span>
+              <span className="text-xs text-gray-500">
+                ({filteredProduction.length} corredor{filteredProduction.length !== 1 ? 'es' : ''})
+              </span>
+            </div>
+            
+            <button
+              onClick={() => {
+                setCurrentPage(prev => Math.min(totalPages, prev + 1));
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+              disabled={currentPage === totalPages}
+              className="w-full sm:w-auto px-6 py-3 bg-[#010139] text-white rounded-lg font-semibold hover:bg-[#020270] transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              Siguiente
+              <FaChevronRight />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Leyenda */}
@@ -435,6 +505,7 @@ export default function ProductionMatrixMaster({ year }: ProductionMatrixMasterP
         monthName={monthModal.monthName || ''}
         initialBruto={monthModal.broker && monthModal.monthKey ? monthModal.broker.months[monthModal.monthKey as keyof typeof monthModal.broker.months].bruto : 0}
         initialNumPolizas={monthModal.broker && monthModal.monthKey ? monthModal.broker.months[monthModal.monthKey as keyof typeof monthModal.broker.months].num_polizas : 0}
+        initialCanceladas={monthModal.broker && monthModal.monthKey ? monthModal.broker.months[monthModal.monthKey as keyof typeof monthModal.broker.months].canceladas : 0}
       />
 
       <MetaPersonalModal

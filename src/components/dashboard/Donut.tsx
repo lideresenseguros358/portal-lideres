@@ -15,6 +15,9 @@ interface DonutProps {
   quotaType?: 'single' | 'double'; // Tipo de cupo ganado
   targetDouble?: number; // Meta doble (si existe)
   enableDoubleGoal?: boolean; // Si el doble está habilitado
+  periodLabel?: string;
+  remaining?: number;
+  doubleRemaining?: number;
 }
 
 const clampPercent = (value: number) => {
@@ -37,6 +40,9 @@ const Donut = ({
   quotaType,
   targetDouble,
   enableDoubleGoal,
+  periodLabel,
+  remaining,
+  doubleRemaining,
 }: DonutProps) => {
   const safePercent = clampPercent(percent);
   const progress = Math.min(safePercent, 100);
@@ -153,7 +159,10 @@ const Donut = ({
   // CASO: Concurso activo (normal)
   const color = safePercent >= 100 ? successColor : baseColor;
   const gradient = `conic-gradient(${color} ${progress}%, rgba(1,1,57,0.08) ${progress}% ${progress + remainder}%)`;
-  const remaining = Math.max(0, target - current);
+  const singleRemaining = typeof remaining === 'number' ? Math.max(0, remaining) : Math.max(0, target - current);
+  const effectiveDoubleRemaining = typeof doubleRemaining === 'number'
+    ? Math.max(0, doubleRemaining)
+    : (targetDouble ? Math.max(0, targetDouble - current) : undefined);
 
   return (
     <Element
@@ -176,21 +185,28 @@ const Donut = ({
         </div>
       </div>
 
-      <div className="flex flex-col gap-1">
-        <p className="text-sm font-semibold text-gray-600">Meta Sencillo:</p>
-        <p className="text-lg font-bold text-[#010139]">{formatCurrency(target)}</p>
-        {remaining > 0 && (
-          <p className="text-xs text-red-600">Faltan: {formatCurrency(remaining)}</p>
+      <div className="flex flex-col gap-1 w-full">
+        {periodLabel && (
+          <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">{periodLabel}</p>
         )}
-        
-        {/* Mostrar meta doble si existe y está habilitada */}
+
+        <div className="flex items-baseline justify-between">
+          <p className="text-sm font-semibold text-gray-600">Meta Sencillo</p>
+          <p className="text-lg font-bold text-[#010139]">{formatCurrency(target)}</p>
+        </div>
+        {singleRemaining > 0 && (
+          <p className="text-xs text-red-600 text-right">Faltan: {formatCurrency(singleRemaining)}</p>
+        )}
+
         {enableDoubleGoal && targetDouble && (
           <>
             <div className="border-t border-gray-200 my-1 w-full"></div>
-            <p className="text-sm font-semibold text-gray-600">Meta Doble:</p>
-            <p className="text-lg font-bold text-[#8AAA19]">{formatCurrency(targetDouble)}</p>
-            {current < targetDouble && (
-              <p className="text-xs text-orange-600">Faltan: {formatCurrency(targetDouble - current)}</p>
+            <div className="flex items-baseline justify-between">
+              <p className="text-sm font-semibold text-gray-600">Meta Doble</p>
+              <p className="text-lg font-bold text-[#8AAA19]">{formatCurrency(targetDouble)}</p>
+            </div>
+            {typeof effectiveDoubleRemaining === 'number' && effectiveDoubleRemaining > 0 && (
+              <p className="text-xs text-orange-600 text-right">Faltan: {formatCurrency(effectiveDoubleRemaining)}</p>
             )}
           </>
         )}

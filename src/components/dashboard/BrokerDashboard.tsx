@@ -151,7 +151,7 @@ const BrokerDashboard = async ({ userId }: BrokerDashboardProps) => {
         <h2 className="section-title">Concursos y Agenda</h2>
         <div className="contests-grid">
           {contests.map((contest) => (
-            <Link href="/production" className="block h-[280px]" key={contest.label}>
+            <Link href="/production" className="block h-[320px]" key={contest.label}>
               <Donut
                 label={contest.label}
                 percent={contest.percent}
@@ -163,6 +163,9 @@ const BrokerDashboard = async ({ userId }: BrokerDashboardProps) => {
                 quotaType={contest.quotaType}
                 targetDouble={contest.targetDouble}
                 enableDoubleGoal={contest.enableDoubleGoal}
+                periodLabel={contest.periodLabel}
+                remaining={contest.target - contest.value}
+                doubleRemaining={contest.targetDouble ? contest.targetDouble - contest.value : undefined}
               />
             </Link>
           ))}

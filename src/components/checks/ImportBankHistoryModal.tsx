@@ -4,17 +4,48 @@ import { useState } from 'react';
 import { FaTimes, FaFileExcel, FaCheckCircle, FaExclamationTriangle } from 'react-icons/fa';
 import { toast } from 'sonner';
 import { parseBankHistoryFile, validateBankFile } from '@/lib/checks/bankParser';
-import { actionImportBankHistoryXLSX } from '@/app/(app)/checks/actions';
+import type { BankTransferRow } from '@/lib/checks/bankParser';
+import { actionImportBankHistoryXLSX, actionValidateReferences } from '@/app/(app)/checks/actions';
 
 interface ImportBankHistoryModalNewProps {
   onClose: () => void;
   onSuccess: () => void;
 }
 
+type PreviewRow = BankTransferRow & {
+  cleanedDescription: string;
+  errors: string[];
+  existsInDb: boolean;
+};
+
+const DESCRIPTION_PREFIXES = [
+  'BANCA MOVIL TRANSFERENCIA DE ',
+  'ACH - ',
+  'BANCA EN LINEA TRANSFERENCIA A ',
+  'ACH EXPRESS - '
+];
+
+const cleanDescription = (raw: string): string => {
+  if (!raw) return '';
+  const normalized = raw.replace(/\s+/g, ' ').trim();
+  const upper = normalized.toUpperCase();
+  for (const prefix of DESCRIPTION_PREFIXES) {
+    if (upper.startsWith(prefix)) {
+      return normalized.substring(prefix.length).trim();
+    }
+  }
+  return normalized;
+};
+
 export default function ImportBankHistoryModalNew({ onClose, onSuccess }: ImportBankHistoryModalNewProps) {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
-  const [preview, setPreview] = useState<any[]>([]);
+  const [preview, setPreview] = useState<PreviewRow[]>([]);
+  const [hasBlockingIssues, setHasBlockingIssues] = useState(false);
+  const [summary, setSummary] = useState<{ duplicatesInFile: number; duplicatesInDb: number }>({
+    duplicatesInFile: 0,
+    duplicatesInDb: 0,
+  });
   const [showPreview, setShowPreview] = useState(false);
   const [result, setResult] = useState<any>(null);
 
@@ -37,49 +68,114 @@ export default function ImportBankHistoryModalNew({ onClose, onSuccess }: Import
       const transfers = await parseBankHistoryFile(selectedFile);
       console.log('[IMPORT] Transferencias parseadas:', transfers.length);
       console.log('[IMPORT] Primera transferencia:', transfers[0]);
-      
+
       if (transfers.length === 0) {
         toast.warning('No se encontraron transferencias en el archivo');
         setFile(null);
+        setPreview([]);
+        setShowPreview(false);
+        setHasBlockingIssues(false);
+        setSummary({ duplicatesInFile: 0, duplicatesInDb: 0 });
         setLoading(false);
         return;
       }
-      
-      setPreview(transfers.slice(0, 10)); // Show first 10
+
+      const analyzed = await analyzeTransfers(transfers);
+      setPreview(analyzed);
       setShowPreview(true);
       console.log('[IMPORT] Preview seteado, showPreview:', true);
       toast.success(`${transfers.length} transferencias encontradas`);
     } catch (error: any) {
       console.error('[IMPORT] Error al parsear:', error);
       toast.error('Error al procesar archivo', { description: error.message });
+      setPreview([]);
+      setShowPreview(false);
+      setHasBlockingIssues(false);
+      setSummary({ duplicatesInFile: 0, duplicatesInDb: 0 });
       setFile(null);
     } finally {
       setLoading(false);
     }
   };
 
+  const analyzeTransfers = async (transfers: BankTransferRow[]): Promise<PreviewRow[]> => {
+    const counts = transfers.reduce<Record<string, number>>((acc, item) => {
+      const key = item.reference_number.trim();
+      if (!acc[key]) acc[key] = 0;
+      acc[key] += 1;
+      return acc;
+    }, {});
+
+    const duplicatesInFile = Object.entries(counts)
+      .filter(([ref, count]) => ref && count > 1)
+      .map(([ref]) => ref);
+
+    let existingRefs = new Set<string>();
+    try {
+      const validation = await actionValidateReferences(
+        transfers.map((t) => t.reference_number).filter((ref) => !!ref)
+      );
+      if (validation.ok && Array.isArray(validation.data)) {
+        existingRefs = new Set(
+          validation.data
+            .filter((item: any) => item.exists)
+            .map((item: any) => item.reference_number)
+        );
+      }
+    } catch (error) {
+      console.error('Error validando referencias con histórico:', error);
+      toast.error('No se pudo validar referencias contra el histórico');
+    }
+
+    const rows: PreviewRow[] = transfers.map((transfer) => {
+      const cleanedDescription = cleanDescription(transfer.description);
+      const errors: string[] = [];
+
+      const amount = Number(transfer.amount);
+      const reference = transfer.reference_number.trim();
+      const parsedDate = new Date(transfer.date);
+
+      if (!reference) errors.push('Referencia vacía');
+      if (!transfer.date || Number.isNaN(parsedDate.getTime())) errors.push('Fecha inválida');
+      if (!Number.isFinite(amount) || amount <= 0) errors.push('Monto inválido');
+      if (duplicatesInFile.includes(reference)) errors.push('Referencia duplicada en archivo');
+      if (existingRefs.has(reference)) errors.push('Referencia ya existe en histórico');
+
+      return {
+        ...transfer,
+        amount,
+        reference_number: reference,
+        cleanedDescription,
+        existsInDb: existingRefs.has(reference),
+        errors,
+      };
+    });
+
+    setSummary({ duplicatesInFile: duplicatesInFile.length, duplicatesInDb: existingRefs.size });
+    setHasBlockingIssues(rows.some((row) => row.errors.length > 0));
+
+    return rows;
+  };
+
   const handleImport = async () => {
     if (!file) return;
+    if (hasBlockingIssues || preview.length === 0) {
+      toast.error('Corrige los errores antes de confirmar la importación');
+      return;
+    }
 
     setLoading(true);
     try {
-      console.log('Parseando archivo...');
-      const transfers = await parseBankHistoryFile(file);
-      console.log('Transferencias parseadas:', transfers.length);
-      
-      if (transfers.length === 0) {
-        toast.error('No se encontraron transferencias válidas en el archivo');
-        setLoading(false);
-        return;
-      }
-      
+      const sanitized = preview.map((row) => ({
+        date: new Date(row.date),
+        reference_number: row.reference_number,
+        transaction_code: row.transaction_code,
+        description: row.cleanedDescription,
+        amount: row.amount,
+      }));
+
       console.log('Llamando a action importar...');
-      const importResult = await actionImportBankHistoryXLSX(
-        transfers.map((t) => ({
-          ...t,
-          date: new Date(t.date),
-        }))
-      );
+      const importResult = await actionImportBankHistoryXLSX(sanitized);
       console.log('Resultado:', importResult);
 
       if (importResult.ok && importResult.data) {
@@ -155,7 +251,18 @@ export default function ImportBankHistoryModalNew({ onClose, onSuccess }: Import
             <>
               {/* Preview */}
               <div className="mb-6">
-                <h3 className="text-lg font-bold text-[#010139] mb-4">Vista Previa - Primeras 10 transferencias</h3>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                  <h3 className="text-lg font-bold text-[#010139]">Vista Previa - Primeras 10 transferencias</h3>
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 text-sm text-gray-600">
+                    <span>Duplicados en archivo: <strong>{summary.duplicatesInFile}</strong></span>
+                    <span>Duplicados en histórico: <strong>{summary.duplicatesInDb}</strong></span>
+                  </div>
+                </div>
+                {hasBlockingIssues && (
+                  <div className="mb-4 p-3 rounded-lg border border-red-200 bg-red-50 text-sm text-red-700">
+                    Se encontraron errores. Corrige el archivo o elimina filas inválidas antes de confirmar la importación.
+                  </div>
+                )}
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead className="bg-gray-100">
@@ -164,42 +271,54 @@ export default function ImportBankHistoryModalNew({ onClose, onSuccess }: Import
                         <th className="px-4 py-2 text-left">Referencia</th>
                         <th className="px-4 py-2 text-left">Descripción</th>
                         <th className="px-4 py-2 text-right">Monto</th>
+                        <th className="px-4 py-2 text-left">Observaciones</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {preview.map((t, idx) => (
-                        <tr key={idx} className="border-t hover:bg-gray-50">
-                          <td className="px-4 py-2">{new Date(t.date).toLocaleDateString('es-PA')}</td>
-                          <td className="px-4 py-2 font-mono">{t.reference_number}</td>
-                          <td className="px-4 py-2 text-xs">{t.description}</td>
+                      {preview.slice(0, 10).map((row, idx) => (
+                        <tr
+                          key={idx}
+                          className={`border-t ${row.errors.length > 0 ? 'bg-red-50 border-red-200' : 'hover:bg-gray-50'}`}
+                        >
+                          <td className="px-4 py-2">{new Date(row.date).toLocaleDateString('es-PA')}</td>
+                          <td className="px-4 py-2 font-mono">{row.reference_number}</td>
+                          <td className="px-4 py-2 text-xs">
+                            <div className="font-medium text-gray-800">{row.cleanedDescription || row.description}</div>
+                            {row.cleanedDescription !== row.description && row.description && (
+                              <div className="text-[11px] text-gray-500">Original: {row.description}</div>
+                            )}
+                          </td>
                           <td className="px-4 py-2 text-right font-bold text-[#8AAA19]">
-                            ${t.amount.toFixed(2)}
+                            ${row.amount.toFixed(2)}
+                          </td>
+                          <td className="px-4 py-2 text-xs">
+                            {row.errors.length === 0 ? (
+                              <span className="inline-flex items-center gap-1 text-[#8AAA19]">
+                                <FaCheckCircle /> Sin observaciones
+                              </span>
+                            ) : (
+                              <ul className="list-disc list-inside space-y-1 text-red-600">
+                                {row.errors.map((error, i) => (
+                                  <li key={i}>{error}</li>
+                                ))}
+                              </ul>
+                            )}
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
-              </div>
-
-              {/* Actions */}
-              <div className="flex gap-4">
-                <button
-                  onClick={() => {
-                    setShowPreview(false);
-                    setFile(null);
-                    setPreview([]);
-                  }}
-                  className="flex-1 px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-medium"
-                >
-                  Cancelar
-                </button>
                 <button
                   onClick={handleImport}
-                  disabled={loading}
+                  disabled={loading || hasBlockingIssues || preview.length === 0}
                   className="flex-1 px-6 py-3 bg-[#8AAA19] text-white rounded-lg hover:bg-[#010139] transition font-medium disabled:opacity-50"
                 >
-                  {loading ? 'Importando...' : 'Confirmar Importación'}
+                  {hasBlockingIssues
+                    ? 'Existen errores'
+                    : loading
+                      ? 'Importando...'
+                      : 'Confirmar Importación'}
                 </button>
               </div>
             </>

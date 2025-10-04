@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { FaBullseye, FaArrowUp, FaTrophy, FaChartLine, FaUsers } from 'react-icons/fa';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area, AreaChart } from 'recharts';
 import ProductionBrokerView from './ProductionBrokerView';
+import { uppercaseInputClass } from '@/lib/utils/uppercase';
 
 interface ProductionAnalyticsViewProps {
   year: number;
@@ -77,12 +78,12 @@ export default function ProductionAnalyticsView({ year, brokers }: ProductionAna
             <select
               value={selectedBroker}
               onChange={(e) => setSelectedBroker(e.target.value)}
-              className="px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none font-semibold"
+              className={`px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none font-semibold ${uppercaseInputClass}`}
             >
-              <option value="all">📊 Todos los Brokers (Agregado)</option>
+              <option value="all">📊 TODOS LOS BROKERS (AGREGADO)</option>
               {brokers.map(broker => (
                 <option key={broker.id} value={broker.id}>
-                  👤 {broker.name}
+                  👤 {broker.name?.toUpperCase()}
                 </option>
               ))}
             </select>

@@ -85,18 +85,18 @@ export default function InsurersTab({ userId }: InsurersTabProps) {
       {/* Header with Add Button */}
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold text-[#010139]">Aseguradoras</h2>
-          <p className="text-sm text-gray-600">Gestión de aseguradoras y sus configuraciones</p>
+          <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-[#010139]">ASEGURADORAS</h2>
+          <p className="text-xs sm:text-sm text-gray-600">GESTIÓN DE ASEGURADORAS Y SUS CONFIGURACIONES</p>
         </div>
         <button
           onClick={() => {
             setSelectedInsurer(null);
             setShowWizard(true);
           }}
-          className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-xl font-semibold hover:shadow-lg transition-all"
+          className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-xl font-semibold hover:shadow-lg transition-all whitespace-nowrap text-sm sm:text-base"
         >
           <FaPlus />
-          <span>Nueva Aseguradora</span>
+          <span>NUEVA ASEGURADORA</span>
         </button>
       </div>
 

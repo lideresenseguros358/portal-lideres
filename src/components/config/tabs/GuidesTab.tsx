@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { FaBook, FaPlus, FaStar, FaBell, FaEdit, FaTrash, FaExternalLinkAlt } from 'react-icons/fa';
 import { toast } from 'sonner';
 import Link from 'next/link';
+import { createUppercaseHandler, uppercaseInputClass } from '@/lib/utils/uppercase';
 
 interface GuidesTabProps {
   userId: string;
@@ -112,23 +113,23 @@ export default function GuidesTab({ userId }: GuidesTabProps) {
         <div className="flex items-center gap-3 mb-6 pb-4 border-b">
           <FaBook className="text-[#8AAA19] text-2xl" />
           <div className="flex-1">
-            <h2 className="text-xl font-bold text-[#010139]">Gestión de Guías</h2>
-            <p className="text-sm text-gray-600">{sections.length} secciones activas</p>
+            <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-[#010139]">GESTIÓN DE GUÍAS</h2>
+            <p className="text-xs sm:text-sm text-gray-600">{sections.length} SECCIONES ACTIVAS</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
             <Link
               href="/guides"
-              className="flex items-center gap-2 px-4 py-2 bg-[#010139] text-white rounded-lg font-semibold hover:bg-[#020250] transition-all"
+              className="flex items-center justify-center gap-2 px-4 py-2 bg-[#010139] text-white rounded-lg font-semibold hover:bg-[#020250] transition-all text-sm whitespace-nowrap"
             >
               <FaExternalLinkAlt />
-              <span className="text-sm">Ver Guías</span>
+              <span>VER GUÍAS</span>
             </Link>
             <button
               onClick={() => setShowCreateModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg font-semibold hover:shadow-lg transition-all"
+              className="flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg font-semibold hover:shadow-lg transition-all text-sm whitespace-nowrap"
             >
               <FaPlus />
-              <span className="text-sm">Nueva Sección</span>
+              <span>NUEVA SECCIÓN</span>
             </button>
           </div>
         </div>

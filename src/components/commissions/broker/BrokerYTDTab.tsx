@@ -71,20 +71,30 @@ export default function BrokerYTDTab({ brokerId }: Props) {
 
   return (
     <div className="space-y-6">
-      {/* Year Selector and Title */}
-      <div className="flex justify-between items-center">
-        <h2 className="text-xl font-bold text-[#010139]">Mi Acumulado Anual</h2>
-        <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
-          <SelectTrigger className="w-20 sm:w-28">
-            <SelectValue placeholder="Año" />
-          </SelectTrigger>
-          <SelectContent>
-            {[2024, 2023, 2022].map(y => (
-              <SelectItem key={y} value={String(y)}>{y}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      {/* Header Card */}
+      <Card className="shadow-lg border-2 border-gray-100">
+        <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-3 mb-2">
+                <FaChartLine className="text-[#010139] text-xl" />
+                <h2 className="text-xl sm:text-2xl font-bold text-[#010139]">ACUMULADO ANUAL</h2>
+              </div>
+              <p className="text-sm text-gray-600">Análisis de comisiones por aseguradora y tendencias mensuales</p>
+            </div>
+            <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
+              <SelectTrigger className="w-full sm:w-28 border-[#010139]/20 bg-white">
+                <SelectValue placeholder="Año" />
+              </SelectTrigger>
+              <SelectContent>
+                {[2024, 2023, 2022].map(y => (
+                  <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </CardHeader>
+      </Card>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -147,22 +157,22 @@ export default function BrokerYTDTab({ brokerId }: Props) {
       </div>
 
       {/* Monthly Comparison Chart */}
-      <Card className="shadow-lg">
-        <CardHeader>
-          <CardTitle className="text-lg text-[#010139]">Comparación Mensual (Bruto)</CardTitle>
+      <Card className="shadow-lg border-2 border-gray-100">
+        <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100">
+          <CardTitle className="text-lg font-bold text-[#010139]">Comparación Mensual (Bruto)</CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-4 sm:p-6">
           {/* Desktop */}
           <div className="hidden md:block">
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={monthlyData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" />
-                <YAxis tickFormatter={(value) => `$${value / 1000}k`} />
-                <Tooltip formatter={(value: any) => formatCurrency(value)} />
-                <Legend />
-                <Bar dataKey="previous" fill="#9CA3AF" name={`${year - 1}`} />
-                <Bar dataKey="current" fill="#010139" name={`${year}`} />
+              <BarChart data={monthlyData} margin={{ top: 20, right: 20, left: 0, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                <YAxis tickFormatter={(value) => `$${value / 1000}k`} tick={{ fontSize: 12 }} width={60} />
+                <Tooltip formatter={(value: any) => formatCurrency(value)} contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }} />
+                <Legend wrapperStyle={{ paddingTop: '10px' }} />
+                <Bar dataKey="previous" fill="#9CA3AF" name={`${year - 1}`} radius={[4, 4, 0, 0]} />
+                <Bar dataKey="current" fill="#010139" name={`${year}`} radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -170,14 +180,14 @@ export default function BrokerYTDTab({ brokerId }: Props) {
           <div className="md:hidden overflow-x-auto">
             <div style={{ minWidth: '600px', width: '100%' }}>
               <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={monthlyData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="month" />
-                  <YAxis tickFormatter={(value) => `$${value / 1000}k`} />
-                  <Tooltip formatter={(value: any) => formatCurrency(value)} />
-                  <Legend />
-                  <Bar dataKey="previous" fill="#9CA3AF" name={`${year - 1}`} />
-                  <Bar dataKey="current" fill="#010139" name={`${year}`} />
+                <BarChart data={monthlyData} margin={{ top: 20, right: 20, left: 0, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                  <YAxis tickFormatter={(value) => `$${value / 1000}k`} tick={{ fontSize: 12 }} width={60} />
+                  <Tooltip formatter={(value: any) => formatCurrency(value)} contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }} />
+                  <Legend wrapperStyle={{ paddingTop: '10px' }} />
+                  <Bar dataKey="previous" fill="#9CA3AF" name={`${year - 1}`} radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="current" fill="#010139" name={`${year}`} radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -188,53 +198,59 @@ export default function BrokerYTDTab({ brokerId }: Props) {
       {/* Insurers Distribution */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Pie Chart */}
-        <Card className="shadow-lg">
-          <CardHeader>
-            <CardTitle className="text-lg text-[#010139]">Distribución por Aseguradora</CardTitle>
+        <Card className="shadow-lg border-2 border-gray-100">
+          <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100">
+            <CardTitle className="text-lg font-bold text-[#010139]">Distribución por Aseguradora</CardTitle>
           </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={pieData}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={(entry: any) => `${entry.name}: ${(Number(entry.value) / totalCurrent * 100).toFixed(1)}%`}
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="value"
-                >
-                  {pieData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(value: any) => formatCurrency(value)} />
-              </PieChart>
-            </ResponsiveContainer>
+          <CardContent className="p-4 sm:p-6">
+            <div className="overflow-hidden">
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+                  <Pie
+                    data={pieData}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={(entry: any) => {
+                      const percentage = (Number(entry.value) / totalCurrent * 100).toFixed(1);
+                      const name = entry.name.length > 12 ? entry.name.substring(0, 12) + '...' : entry.name;
+                      return `${name}: ${percentage}%`;
+                    }}
+                    outerRadius={80}
+                    fill="#8884d8"
+                    dataKey="value"
+                  >
+                    {pieData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(value: any) => formatCurrency(value)} contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
           </CardContent>
         </Card>
 
         {/* Growth by Insurer */}
-        <Card className="shadow-lg">
-          <CardHeader>
-            <CardTitle className="text-lg text-[#010139]">Crecimiento por Aseguradora</CardTitle>
+        <Card className="shadow-lg border-2 border-gray-100">
+          <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100">
+            <CardTitle className="text-lg font-bold text-[#010139]">Crecimiento por Aseguradora</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-4 sm:p-6">
             <div className="space-y-3">
               {insurerData.map((insurer, index) => (
-                <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <div className="flex-1">
-                    <p className="font-medium text-gray-700">{insurer.name}</p>
+                <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-gray-700 truncate">{insurer.name}</p>
                     <p className="text-sm font-mono text-gray-600">{formatCurrency(insurer.value)}</p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 ml-4">
                     {insurer.growth > 0 ? (
-                      <FaArrowUp className="text-green-500 text-xs" />
+                      <FaArrowUp className="text-[#8AAA19] text-xs" />
                     ) : (
                       <FaArrowDown className="text-red-500 text-xs" />
                     )}
-                    <span className={`font-bold ${insurer.growth > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    <span className={`font-bold ${insurer.growth > 0 ? 'text-[#8AAA19]' : 'text-red-600'}`}>
                       {Math.abs(insurer.growth)}%
                     </span>
                   </div>
@@ -246,34 +262,42 @@ export default function BrokerYTDTab({ brokerId }: Props) {
       </div>
 
       {/* Growth Trend Chart */}
-      <Card className="shadow-lg">
-        <CardHeader>
-          <CardTitle className="text-lg text-[#010139]">Tendencia de Crecimiento</CardTitle>
+      <Card className="shadow-lg border-2 border-gray-100">
+        <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100">
+          <CardTitle className="text-lg font-bold text-[#010139]">Tendencia de Crecimiento</CardTitle>
         </CardHeader>
-        <CardContent>
-          <ResponsiveContainer width="100%" height={250}>
-            <LineChart data={monthlyData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="month" />
-              <YAxis tickFormatter={(value) => `$${value / 1000}k`} />
-              <Tooltip formatter={(value: any) => formatCurrency(value)} />
-              <Legend />
-              <Line 
-                type="monotone" 
-                dataKey="previous" 
-                stroke="#9CA3AF" 
-                name={`${year - 1}`}
-                strokeWidth={2}
-              />
-              <Line 
-                type="monotone" 
-                dataKey="current" 
-                stroke="#010139" 
-                name={`${year}`}
-                strokeWidth={2}
-              />
-            </LineChart>
-          </ResponsiveContainer>
+        <CardContent className="p-4 sm:p-6">
+          <div className="overflow-x-auto md:overflow-visible">
+            <div style={{ minWidth: '300px' }}>
+              <ResponsiveContainer width="100%" height={250}>
+                <LineChart data={monthlyData} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                  <YAxis tickFormatter={(value) => `$${value / 1000}k`} tick={{ fontSize: 12 }} width={60} />
+                  <Tooltip formatter={(value: any) => formatCurrency(value)} contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }} />
+                  <Legend wrapperStyle={{ paddingTop: '10px' }} />
+                  <Line 
+                    type="monotone" 
+                    dataKey="previous" 
+                    stroke="#9CA3AF" 
+                    name={`${year - 1}`}
+                    strokeWidth={2}
+                    dot={{ r: 4 }}
+                    activeDot={{ r: 6 }}
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="current" 
+                    stroke="#010139" 
+                    name={`${year}`}
+                    strokeWidth={2}
+                    dot={{ r: 4 }}
+                    activeDot={{ r: 6 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
         </CardContent>
       </Card>
     </div>

@@ -15,8 +15,8 @@ export default function DelinquencyTab({ userId }: DelinquencyTabProps) {
         <div className="flex items-center gap-3 mb-6 pb-4 border-b">
           <FaExclamationTriangle className="text-[#8AAA19] text-2xl" />
           <div>
-            <h2 className="text-xl font-bold text-[#010139]">Política de Morosidad</h2>
-            <p className="text-sm text-gray-600">Configuración de reemplazo y actualización</p>
+            <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-[#010139]">POLÍTICA DE MOROSIDAD</h2>
+            <p className="text-xs sm:text-sm text-gray-600">CONFIGURACIÓN DE REEMPLAZO Y ACTUALIZACIÓN</p>
           </div>
         </div>
 
@@ -35,8 +35,8 @@ export default function DelinquencyTab({ userId }: DelinquencyTabProps) {
         <div className="flex items-center gap-3 mb-6 pb-4 border-b">
           <FaClock className="text-[#8AAA19] text-2xl" />
           <div>
-            <h2 className="text-xl font-bold text-[#010139]">Relojes de Inactividad</h2>
-            <p className="text-sm text-gray-600">Automatización por falta de actualización</p>
+            <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-[#010139]">RELOJES DE INACTIVIDAD</h2>
+            <p className="text-xs sm:text-sm text-gray-600">AUTOMATIZACIÓN POR FALTA DE ACTUALIZACIÓN</p>
           </div>
         </div>
 
@@ -81,8 +81,8 @@ export default function DelinquencyTab({ userId }: DelinquencyTabProps) {
         <div className="flex items-center gap-3 mb-6 pb-4 border-b">
           <FaExclamationTriangle className="text-[#8AAA19] text-2xl" />
           <div>
-            <h2 className="text-xl font-bold text-[#010139]">Etiquetas Visuales</h2>
-            <p className="text-sm text-gray-600">Chips y badges para categorías</p>
+            <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-[#010139]">ETIQUETAS VISUALES</h2>
+            <p className="text-xs sm:text-sm text-gray-600">CHIPS Y BADGES PARA CATEGORÍAS</p>
           </div>
         </div>
 

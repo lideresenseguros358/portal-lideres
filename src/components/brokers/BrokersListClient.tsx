@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import Link from 'next/link';
 import { actionGetBrokers, actionExportBrokers } from '@/app/(app)/brokers/actions';
 import { OFICINA_EMAIL } from '@/lib/constants/brokers';
+import { createUppercaseHandler, uppercaseInputClass } from '@/lib/utils/uppercase';
 
 export default function BrokersListClient() {
   const [loading, setLoading] = useState(true);
@@ -120,9 +121,9 @@ export default function BrokersListClient() {
             <input
               type="text"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar por nombre, email o cédula..."
-              className="w-full pl-10 pr-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+              onChange={createUppercaseHandler((e) => setSearch(e.target.value))}
+              placeholder="BUSCAR POR NOMBRE, EMAIL, CÉDULA O CÓDIGO..."
+              className={`w-full pl-10 pr-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none ${uppercaseInputClass}`}
             />
           </div>
           <button

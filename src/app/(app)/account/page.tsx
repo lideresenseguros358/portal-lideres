@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { supabaseClient } from "@/lib/supabase/client";
-import { FaCamera, FaUserCircle } from "react-icons/fa";
+import { FaCamera, FaUserCircle, FaTrash } from "react-icons/fa";
+import { useUppercaseInput } from "@/lib/hooks/useUppercaseInput";
 import type { Database } from "@/lib/database.types";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
@@ -13,6 +14,7 @@ type BrokerRow = Database["public"]["Tables"]["brokers"]["Row"];
 export default function AccountPage() {
   const router = useRouter();
   const supabase = supabaseClient();
+  const handleUppercase = useUppercaseInput();
   
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -197,6 +199,31 @@ export default function AccountPage() {
     }
   };
 
+  const handleRemoveAvatar = async () => {
+    if (!confirm("¿Eliminar foto de perfil?")) return;
+
+    setSaving(true);
+    setError(null);
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("No user");
+
+      // Update profile
+      await supabase
+        .from("profiles")
+        .update({ avatar_url: null })
+        .eq("id", user.id);
+
+      setAvatarUrl(null);
+      setSuccess("Foto eliminada");
+    } catch (err: any) {
+      setError(err.message || "Error al eliminar la foto");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="page-loading">
@@ -214,12 +241,20 @@ export default function AccountPage() {
         <div className="photo-section">
           <div className="avatar-container">
             {avatarUrl ? (
-              <Image src={avatarUrl} alt="Avatar" className="avatar-img" width={120} height={120} />
+              <div className="avatar-wrapper">
+                <Image src={avatarUrl} alt="Avatar" className="avatar-img" width={150} height={150} />
+                <button onClick={handleRemoveAvatar} className="avatar-remove-btn" title="Eliminar foto">
+                  <FaTrash />
+                </button>
+              </div>
             ) : (
-              <FaUserCircle className="avatar-placeholder" />
+              <div className="avatar-placeholder-large">
+                <FaUserCircle className="avatar-icon-large" />
+              </div>
             )}
             <label htmlFor="avatar-upload" className="avatar-upload-btn">
               <FaCamera />
+              <span className="upload-text">Cambiar foto</span>
               <input
                 type="file"
                 id="avatar-upload"
@@ -236,12 +271,13 @@ export default function AccountPage() {
           <h2 className="section-title">Información Personal</h2>
           
           <div className="form-group">
-            <label htmlFor="fullName">Nombre Completo</label>
+            <label htmlFor="fullName">NOMBRE COMPLETO</label>
             <input
               type="text"
               id="fullName"
               value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
+              onChange={handleUppercase((e) => setFullName(e.target.value))}
+              className="uppercase"
               required
             />
           </div>
@@ -258,7 +294,7 @@ export default function AccountPage() {
           </div>
 
           <div className="form-group">
-            <label htmlFor="phone">Teléfono</label>
+            <label htmlFor="phone">TELÉFONO</label>
             <input
               type="tel"
               id="phone"
@@ -363,9 +399,16 @@ export default function AccountPage() {
         }
 
         .avatar-container {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 16px;
+        }
+
+        .avatar-wrapper {
           position: relative;
-          width: 120px;
-          height: 120px;
+          width: 150px;
+          height: 150px;
         }
 
         .avatar-img {
@@ -373,32 +416,76 @@ export default function AccountPage() {
           height: 100%;
           border-radius: 50%;
           object-fit: cover;
+          border: 4px solid #e5e7eb;
         }
 
-        .avatar-placeholder {
-          width: 100%;
-          height: 100%;
-          color: #cccccc;
+        .avatar-placeholder-large {
+          width: 150px;
+          height: 150px;
+          border-radius: 50%;
+          background: linear-gradient(135deg, #8aaa19 0%, #6d8814 100%);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border: 4px solid #e5e7eb;
         }
 
-        .avatar-upload-btn {
+        .avatar-icon-large {
+          width: 80px;
+          height: 80px;
+          color: white;
+        }
+
+        .avatar-remove-btn {
           position: absolute;
-          bottom: 0;
-          right: 0;
-          background: #8aaa19;
+          top: -8px;
+          right: -8px;
+          background: #ef4444;
           color: white;
           width: 36px;
           height: 36px;
           border-radius: 50%;
+          border: 3px solid white;
           display: flex;
           align-items: center;
           justify-content: center;
           cursor: pointer;
-          transition: background 0.2s;
+          transition: all 0.2s;
+        }
+
+        .avatar-remove-btn:hover {
+          background: #dc2626;
+          transform: scale(1.1);
+        }
+
+        .avatar-upload-btn {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 10px 20px;
+          background: #8aaa19;
+          color: white;
+          border-radius: 8px;
+          cursor: pointer;
+          transition: all 0.2s;
+          font-size: 14px;
+          font-weight: 600;
         }
 
         .avatar-upload-btn:hover {
           background: #6f8815;
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(138, 170, 25, 0.3);
+        }
+
+        .upload-text {
+          display: none;
+        }
+
+        @media (min-width: 640px) {
+          .upload-text {
+            display: inline;
+          }
         }
 
         .account-form, .password-form, .banking-section {

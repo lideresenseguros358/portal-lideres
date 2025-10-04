@@ -23,6 +23,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
+import { FaMoneyBillWave, FaUser, FaDollarSign, FaFileAlt } from 'react-icons/fa';
 
 const AddAdvanceSchema = z.object({
   broker_id: z.string().min(1, 'Debe seleccionar un corredor'),
@@ -63,63 +64,129 @@ export function AddAdvanceModal({ isOpen, onClose, onSuccess, brokers }: Props) 
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[425px]">
-        <DialogHeader>
-          <DialogTitle>Agregar Nuevo Adelanto</DialogTitle>
-          <DialogDescription>Crea un nuevo adelanto para un corredor.</DialogDescription>
+      <DialogContent className="sm:max-w-[500px] p-0 gap-0 overflow-hidden">
+        {/* Header con gradiente corporativo */}
+        <DialogHeader className="bg-gradient-to-r from-[#010139] to-[#020270] text-white p-6 pb-8">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="p-3 bg-white/10 rounded-lg">
+              <FaMoneyBillWave className="text-2xl" />
+            </div>
+            <div>
+              <DialogTitle className="text-2xl font-bold text-white">Nuevo Adelanto</DialogTitle>
+              <DialogDescription className="text-gray-200 mt-1">
+                Registra un adelanto de comisión para un corredor
+              </DialogDescription>
+            </div>
+          </div>
         </DialogHeader>
+
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="p-6 space-y-6">
+            {/* Corredor */}
             <FormField
               control={form.control}
               name="broker_id"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Corredor</FormLabel>
+                  <FormLabel className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                    <FaUser className="text-[#010139]" />
+                    Corredor
+                  </FormLabel>
                   <FormControl>
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <SelectTrigger><SelectValue placeholder="Seleccione un corredor" /></SelectTrigger>
+                      <SelectTrigger className="border-2 border-gray-300 focus:border-[#8AAA19] h-11">
+                        <SelectValue placeholder="Seleccione un corredor" />
+                      </SelectTrigger>
                       <SelectContent>
                         {brokers.map(broker => (
-                          <SelectItem key={broker.id} value={broker.id}>{broker.name}</SelectItem>
+                          <SelectItem key={broker.id} value={broker.id}>
+                            {broker.name}
+                          </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </FormControl>
-                  <FormMessage />
+                  <FormMessage className="text-xs" />
                 </FormItem>
               )}
             />
+
+            {/* Monto */}
             <FormField
               control={form.control}
               name="amount"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Monto</FormLabel>
+                  <FormLabel className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                    <FaDollarSign className="text-[#8AAA19]" />
+                    Monto
+                  </FormLabel>
                   <FormControl>
-                    <Input type="number" placeholder="0.00" step="0.01" {...field} />
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 font-semibold">$</span>
+                      <Input 
+                        type="number" 
+                        placeholder="0.00" 
+                        step="0.01" 
+                        className="pl-8 border-2 border-gray-300 focus:border-[#8AAA19] h-11 font-mono text-lg"
+                        {...field} 
+                      />
+                    </div>
                   </FormControl>
-                  <FormMessage />
+                  <FormMessage className="text-xs" />
                 </FormItem>
               )}
             />
+
+            {/* Razón */}
             <FormField
               control={form.control}
               name="reason"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Razón o Motivo</FormLabel>
+                  <FormLabel className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                    <FaFileAlt className="text-[#010139]" />
+                    Razón o Motivo
+                  </FormLabel>
                   <FormControl>
-                    <Input placeholder="Ej: Adelanto de comisiones" {...field} />
+                    <Input 
+                      placeholder="Ej: Adelanto de comisiones" 
+                      className="border-2 border-gray-300 focus:border-[#8AAA19] h-11"
+                      {...field} 
+                    />
                   </FormControl>
-                  <FormMessage />
+                  <FormMessage className="text-xs" />
                 </FormItem>
               )}
             />
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={onClose} disabled={form.formState.isSubmitting}>Cancelar</Button>
-              <Button type="submit" disabled={form.formState.isSubmitting}>
-                {form.formState.isSubmitting ? 'Agregando...' : 'Agregar Adelanto'}
+
+            {/* Footer con botones */}
+            <DialogFooter className="gap-3 sm:gap-2 pt-4 border-t border-gray-200">
+              <Button 
+                type="button" 
+                variant="outline" 
+                onClick={onClose} 
+                disabled={form.formState.isSubmitting}
+                className="border-2 border-gray-300 hover:bg-gray-100 transition-colors"
+              >
+                Cancelar
+              </Button>
+              <Button 
+                type="submit" 
+                disabled={form.formState.isSubmitting}
+                className="bg-gradient-to-r from-[#8AAA19] to-[#6d8814] hover:from-[#6d8814] hover:to-[#8AAA19] text-white shadow-lg transition-all duration-200"
+              >
+                {form.formState.isSubmitting ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Agregando...
+                  </>
+                ) : (
+                  <>
+                    <FaMoneyBillWave className="mr-2" />
+                    Agregar Adelanto
+                  </>
+                )}
               </Button>
             </DialogFooter>
           </form>

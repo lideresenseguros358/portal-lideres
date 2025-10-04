@@ -15,15 +15,15 @@ export default function DownloadsTab({ userId }: DownloadsTabProps) {
         <div className="flex items-center gap-3 mb-6 pb-4 border-b">
           <FaDownload className="text-[#8AAA19] text-2xl" />
           <div className="flex-1">
-            <h2 className="text-xl font-bold text-[#010139]">Gestión de Descargas</h2>
-            <p className="text-sm text-gray-600">Repositorio por Ramo, Tipo y Aseguradora</p>
+            <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-[#010139]">GESTIÓN DE DESCARGAS</h2>
+            <p className="text-xs sm:text-sm text-gray-600">REPOSITORIO POR RAMO, TIPO Y ASEGURADORA</p>
           </div>
           <Link
             href="/downloads"
             className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg font-semibold hover:shadow-lg transition-all"
           >
-            <FaExternalLinkAlt />
-            <span className="text-sm">Ver Descargas</span>
+            <FaExternalLinkAlt className="text-white" />
+            <span className="text-sm text-white">VER DESCARGAS</span>
           </Link>
         </div>
 

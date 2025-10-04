@@ -63,6 +63,9 @@ export interface ContestProgress {
   quotaType?: 'single' | 'double';
   targetDouble?: number; // Meta doble
   enableDoubleGoal?: boolean; // Si el doble está habilitado
+  periodLabel?: string;
+  startMonth?: number;
+  endMonth?: number;
 }
 
 export interface CalendarEvent {

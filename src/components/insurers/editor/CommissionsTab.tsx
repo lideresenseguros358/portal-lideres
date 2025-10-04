@@ -3,6 +3,7 @@
 import { useState, useTransition, useEffect } from 'react';
 import { FaPlus, FaTrash, FaSave } from 'react-icons/fa';
 import { actionUpsertMappingRule, actionDeleteMappingRule } from '@/app/(app)/insurers/actions';
+import { createUppercaseHandler, uppercaseInputClass } from '@/lib/utils/uppercase';
 
 interface CommissionsTabProps {
   rules: any[]; // Replace with actual type
@@ -89,7 +90,8 @@ export default function CommissionsTab({ rules, insurerId }: CommissionsTabProps
           type="text" 
           placeholder='Ej: Nro Poliza, nombre asegurado, monto honorarios' 
           value={newRule.aliases} 
-          onChange={e => setNewRule({...newRule, aliases: e.target.value})} 
+          onChange={createUppercaseHandler(e => setNewRule({...newRule, aliases: e.target.value}))}
+          className={uppercaseInputClass}
         />
         <button onClick={handleAdd} className="btn-add" disabled={isPending}>
           <FaPlus /> {isPending ? 'Guardando...' : 'Agregar'}
@@ -167,8 +169,27 @@ export default function CommissionsTab({ rules, insurerId }: CommissionsTabProps
       </div>
 
       <style>{`
-        .add-rule-form { display: grid; grid-template-columns: 1fr 2fr auto; gap: 16px; margin-bottom: 16px; }
-        .add-rule-form select, .add-rule-form input { padding: 10px; border: 1px solid #ddd; border-radius: 8px; }
+        .add-rule-form { 
+          display: grid; 
+          grid-template-columns: 1fr; 
+          gap: 12px; 
+          margin-bottom: 16px; 
+          max-width: 100%;
+        }
+        .add-rule-form select, .add-rule-form input { 
+          padding: 10px; 
+          border: 1px solid #ddd; 
+          border-radius: 8px; 
+          min-width: 0;
+          width: 100%;
+        }
+        
+        @media (min-width: 640px) {
+          .add-rule-form {
+            grid-template-columns: 1fr 2fr auto;
+            gap: 16px;
+          }
+        }
         .btn-add { display: flex; align-items: center; justify-content: center; gap: 8px; background: #8aaa19; color: white; border: none; border-radius: 8px; cursor: pointer; padding: 10px 20px; }
         .btn-add:disabled { background: #ccc; cursor: not-allowed; }
         .help-text { background: #e3f2fd; padding: 16px; border-radius: 8px; margin-bottom: 24px; border-left: 4px solid #2196f3; }

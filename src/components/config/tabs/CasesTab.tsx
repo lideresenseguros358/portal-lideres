@@ -104,8 +104,8 @@ export default function CasesTab({ userId }: CasesTabProps) {
         <div className="flex items-center gap-3 mb-6 pb-4 border-b">
           <FaClock className="text-[#8AAA19] text-2xl" />
           <div>
-            <h2 className="text-xl font-bold text-[#010139]">SLA por Tipo</h2>
-            <p className="text-sm text-gray-600">Tiempos de respuesta por defecto (editables)</p>
+            <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-[#010139]">SLA POR TIPO</h2>
+            <p className="text-xs sm:text-sm text-gray-600">TIEMPOS DE RESPUESTA POR DEFECTO (EDITABLES)</p>
           </div>
         </div>
 
@@ -161,15 +161,15 @@ export default function CasesTab({ userId }: CasesTabProps) {
         <div className="flex items-center gap-3 mb-6 pb-4 border-b">
           <FaTable className="text-[#8AAA19] text-2xl" />
           <div className="flex-1">
-            <h2 className="text-xl font-bold text-[#010139]">Tabla Maestra de Requisitos</h2>
-            <p className="text-sm text-gray-600">Gestión por tipo de trámite</p>
+            <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-[#010139]">TABLA MAESTRA DE REQUISITOS</h2>
+            <p className="text-xs sm:text-sm text-gray-600">GESTIÓN POR TIPO DE TRÁMITE</p>
           </div>
           <button
             onClick={() => toast.info('Agregar requisito - En desarrollo')}
-            className="flex items-center gap-2 px-4 py-2 bg-[#8AAA19] text-white rounded-lg hover:bg-[#6d8814] transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-[#8AAA19] text-white rounded-lg hover:bg-[#6d8814] transition-colors text-sm whitespace-nowrap"
           >
             <FaPlus />
-            <span className="text-sm">Nuevo Requisito</span>
+            <span>NUEVO REQUISITO</span>
           </button>
         </div>
 
@@ -307,8 +307,8 @@ export default function CasesTab({ userId }: CasesTabProps) {
         <div className="flex items-center gap-3 mb-6 pb-4 border-b">
           <FaFileAlt className="text-[#8AAA19] text-2xl" />
           <div>
-            <h2 className="text-xl font-bold text-[#010139]">Emisión → Base de Datos</h2>
-            <p className="text-sm text-gray-600">Registro preliminar automático</p>
+            <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-[#010139]">EMISIÓN → BASE DE DATOS</h2>
+            <p className="text-xs sm:text-sm text-gray-600">REGISTRO PRELIMINAR AUTOMÁTICO</p>
           </div>
         </div>
 
@@ -327,8 +327,8 @@ export default function CasesTab({ userId }: CasesTabProps) {
         <div className="flex items-center gap-3 mb-6 pb-4 border-b">
           <FaBell className="text-[#8AAA19] text-2xl" />
           <div>
-            <h2 className="text-xl font-bold text-[#010139]">Aplazados</h2>
-            <p className="text-sm text-gray-600">Configuración de recordatorios (editable)</p>
+            <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-[#010139]">APLAZADOS</h2>
+            <p className="text-xs sm:text-sm text-gray-600">CONFIGURACIÓN DE RECORDATORIOS (EDITABLE)</p>
           </div>
         </div>
 
@@ -359,8 +359,8 @@ export default function CasesTab({ userId }: CasesTabProps) {
         <div className="flex items-center gap-3 mb-6 pb-4 border-b">
           <FaThLarge className="text-[#8AAA19] text-2xl" />
           <div>
-            <h2 className="text-xl font-bold text-[#010139]">Vista Kanban</h2>
-            <p className="text-sm text-gray-600">Habilitar vista de tablero</p>
+            <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-[#010139]">VISTA KANBAN</h2>
+            <p className="text-xs sm:text-sm text-gray-600">HABILITAR VISTA DE TABLERO</p>
           </div>
         </div>
 

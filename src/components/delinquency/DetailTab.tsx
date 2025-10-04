@@ -5,6 +5,7 @@ import { FaSearch, FaFilter, FaChevronDown, FaChevronUp, FaExternalLinkAlt } fro
 import { actionGetDelinquencyRecords, actionGetActiveInsurers, actionGetBrokers } from '@/app/(app)/delinquency/actions';
 import { toast } from 'sonner';
 import Link from 'next/link';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface DetailTabProps {
   userRole: 'master' | 'broker';
@@ -181,18 +182,19 @@ export default function DetailTab({ userRole, brokerId }: DetailTabProps) {
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Aseguradora
             </label>
-            <select
-              value={selectedInsurer}
-              onChange={(e) => setSelectedInsurer(e.target.value)}
-              className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition-colors"
-            >
-              <option value="">Todas</option>
-              {insurers.map((ins) => (
-                <option key={ins.id} value={ins.id}>
-                  {ins.name}
-                </option>
-              ))}
-            </select>
+            <Select value={selectedInsurer} onValueChange={setSelectedInsurer}>
+              <SelectTrigger className="w-full border-2 border-gray-300 focus:border-[#8AAA19]">
+                <SelectValue placeholder="Todas las aseguradoras" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">Todas</SelectItem>
+                {insurers.map((ins) => (
+                  <SelectItem key={ins.id} value={ins.id}>
+                    {ins.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {userRole === 'master' && (
@@ -200,18 +202,19 @@ export default function DetailTab({ userRole, brokerId }: DetailTabProps) {
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Corredor
               </label>
-              <select
-                value={selectedBroker}
-                onChange={(e) => setSelectedBroker(e.target.value)}
-                className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition-colors"
-              >
-                <option value="">Todos</option>
-                {brokers.map((broker) => (
-                  <option key={broker.id} value={broker.id}>
-                    {broker.name}
-                  </option>
-                ))}
-              </select>
+              <Select value={selectedBroker} onValueChange={setSelectedBroker}>
+                <SelectTrigger className="w-full border-2 border-gray-300 focus:border-[#8AAA19]">
+                  <SelectValue placeholder="Todos los corredores" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Todos</SelectItem>
+                  {brokers.map((broker) => (
+                    <SelectItem key={broker.id} value={broker.id}>
+                      {broker.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           )}
         </div>

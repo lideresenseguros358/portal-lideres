@@ -3,7 +3,13 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { FaEdit, FaTrash, FaPlus, FaFileAlt, FaDownload, FaExclamationTriangle, FaCheckCircle, FaUser, FaBuilding } from 'react-icons/fa';
+import { FaEdit, FaTrash, FaPlus, FaFileAlt, FaDownload, FaExclamationTriangle, FaCheckCircle, FaUser, FaBuilding, FaEllipsisV } from 'react-icons/fa';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import type { Tables } from '@/lib/supabase/server';
 import Modal from '@/components/Modal';
 import ClientForm from './ClientForm';
@@ -78,12 +84,37 @@ const ClientsListView = ({ clients }: { clients: ClientWithPolicies[] }) => {
                 </div>
               </div>
               <div className="client-actions">
-                <Link href={`/db?tab=clients&modal=edit-client&editClient=${client.id}`} scroll={false} className="btn-icon" title="Editar cliente">
-                  <FaEdit />
-                </Link>
-                <Link href={`/db?tab=clients&modal=delete-client&deleteClient=${client.id}`} scroll={false} className="btn-icon danger" title="Eliminar cliente">
-                  <FaTrash />
-                </Link>
+                {/* Desktop actions */}
+                <div className="hidden sm:flex gap-2">
+                  <Link href={`/db?tab=clients&modal=edit-client&editClient=${client.id}`} scroll={false} className="btn-icon" title="Editar cliente">
+                    <FaEdit />
+                  </Link>
+                  <Link href={`/db?tab=clients&modal=delete-client&deleteClient=${client.id}`} scroll={false} className="btn-icon danger" title="Eliminar cliente">
+                    <FaTrash />
+                  </Link>
+                </div>
+                {/* Mobile kebab menu */}
+                <div className="sm:hidden">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="btn-icon" title="Más opciones">
+                        <FaEllipsisV />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="bg-white border-2 border-gray-200 shadow-lg">
+                      <DropdownMenuItem asChild>
+                        <Link href={`/db?tab=clients&modal=edit-client&editClient=${client.id}`} scroll={false} className="flex items-center gap-2 cursor-pointer">
+                          <FaEdit /> Editar
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild>
+                        <Link href={`/db?tab=clients&modal=delete-client&deleteClient=${client.id}`} scroll={false} className="flex items-center gap-2 cursor-pointer text-red-600">
+                          <FaTrash /> Eliminar
+                        </Link>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
               </div>
             </div>
 
@@ -99,8 +130,10 @@ const ClientsListView = ({ clients }: { clients: ClientWithPolicies[] }) => {
                 {client.policies?.length === 0 ? (
                   <p className="no-policies">Sin pólizas registradas</p>
                 ) : (
-                  <div className="policies-table">
-                    <table>
+                  <>
+                    {/* Desktop table */}
+                    <div className="policies-table hidden sm:block">
+                      <table>
                       <thead>
                         <tr>
                           <th>Nº Póliza</th>
@@ -144,6 +177,50 @@ const ClientsListView = ({ clients }: { clients: ClientWithPolicies[] }) => {
                       </tbody>
                     </table>
                   </div>
+                  {/* Mobile cards */}
+                  <div className="sm:hidden space-y-3">
+                    {client.policies?.map((policy) => {
+                      const renewalStatus = getRenewalStatus(policy.renewal_date);
+                      return (
+                        <div key={policy.id} className="policy-card-mobile">
+                          <div className="policy-card-header">
+                            <span className="policy-number-mobile">{policy.policy_number}</span>
+                            {renewalStatus && (
+                              <span className={`status-chip ${renewalStatus.color}`}>
+                                {renewalStatus.text}
+                              </span>
+                            )}
+                          </div>
+                          <div className="policy-card-body">
+                            <div className="policy-field">
+                              <span className="field-label">Ramo:</span>
+                              <span className="field-value">{policy.ramo || '-'}</span>
+                            </div>
+                            <div className="policy-field">
+                              <span className="field-label">Aseguradora:</span>
+                              <span className="field-value">{policy.insurers?.name || '-'}</span>
+                            </div>
+                            <div className="policy-field">
+                              <span className="field-label">Renovación:</span>
+                              <span className="field-value">
+                                {policy.renewal_date ? 
+                                  new Date(policy.renewal_date).toLocaleDateString('es-PA') : 
+                                  '-'
+                                }
+                              </span>
+                            </div>
+                          </div>
+                          <div className="policy-card-actions">
+                            <button className="btn-icon-sm" title="Editar"><FaEdit /></button>
+                            <button className="btn-icon-sm danger" title="Eliminar"><FaTrash /></button>
+                            <button className="btn-icon-sm" title="Trámite"><FaFileAlt /></button>
+                            <button className="btn-icon-sm" title="Descargas"><FaDownload /></button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  </>
                 )}
               </div>
             )}
@@ -207,14 +284,14 @@ export default function DatabaseTabs({
               className={`view-toggle-chip ${activeTab === 'clients' && view === 'clients' ? 'active' : ''}`}
             >
               <FaUser className="icon" />
-              <span>Clientes</span>
+              <span>CLIENTES</span>
             </Link>
             <Link 
               href="/db?tab=clients&view=insurers" 
               className={`view-toggle-chip ${view === 'insurers' ? 'active' : ''}`}
             >
               <FaBuilding className="icon" />
-              <span>Aseguradoras</span>
+              <span>ASEGURADORAS</span>
             </Link>
           </div>
         </div>
@@ -275,10 +352,11 @@ export default function DatabaseTabs({
           transform: scale(1.15);
         }
         .view-toggle-chip.active {
-          background: linear-gradient(135deg, #010139 0%, #020270 100%);
-          color: white;
-          border-color: #010139;
-          box-shadow: 0 4px 12px rgba(1, 1, 57, 0.25);
+          background: white;
+          color: #010139;
+          border-color: #8AAA19;
+          border-width: 2px;
+          box-shadow: 0 2px 8px rgba(138, 170, 25, 0.15);
         }
         .view-toggle-chip.active .icon {
           animation: pulseIcon 2s ease-in-out infinite;
@@ -331,22 +409,30 @@ export default function DatabaseTabs({
         .btn-icon { width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border: none; background: #f6f6ff; color: #010139; border-radius: 8px; cursor: pointer; transition: all 0.2s; }
         .btn-icon:hover { background: #010139; color: white; transform: translateY(-1px); }
         .btn-icon.danger:hover { background: #d32f2f; }
-        .client-policies { padding: 20px; background: #f9f9f9; border-top: 1px solid #e0e0e0; }
-        .policies-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-        .policies-header h4 { font-size: 16px; font-weight: 600; color: #010139; }
-        .btn-add-policy { display: flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 13px; background: #8aaa19; color: white; border: none; border-radius: 8px; font-weight: 500; cursor: pointer; transition: all 0.2s; }
+        .client-policies { padding: 16px; background: #f9f9f9; border-top: 1px solid #e0e0e0; max-w-full; overflow-x: auto; }
+        .policies-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 8px; }
+        .policies-header h4 { font-size: 14px; font-weight: 600; color: #010139; }
+        .btn-add-policy { display: flex; align-items: center; gap: 6px; padding: 6px 12px; font-size: 12px; background: #8aaa19; color: white; border: none; border-radius: 8px; font-weight: 500; cursor: pointer; transition: all 0.2s; white-space: nowrap; }
         .btn-add-policy:hover { background: #6f8815; transform: translateY(-1px); }
-        .policies-table { overflow-x: auto; }
-        .policies-table table { width: 100%; border-collapse: collapse; }
-        .policies-table th, .policies-table td { padding: 10px; font-size: 13px; white-space: nowrap; }
-        .policies-table th { text-align: left; background: white; font-weight: 600; color: #666; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .policies-table { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        .policies-table table { width: 100%; border-collapse: collapse; min-width: 600px; }
+        .policies-table th, .policies-table td { padding: 8px 10px; font-size: 13px; white-space: nowrap; }
+        .policies-table th { text-align: left; background: white; font-weight: 600; color: #666; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; position: sticky; top: 0; z-index: 1; }
         .policies-table td { border-top: 1px solid #e0e0e0; }
         .policy-number { font-weight: 600; color: #010139; }
-        .status-chip { padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 500; }
+        .policy-card-mobile { background: white; border: 1px solid #e0e0e0; border-radius: 8px; padding: 12px; }
+        .policy-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        .policy-number-mobile { font-weight: 600; color: #010139; font-size: 14px; }
+        .policy-card-body { space-y: 8px; margin-bottom: 12px; }
+        .policy-field { display: flex; justify-content: space-between; padding: 4px 0; font-size: 13px; }
+        .field-label { color: #666; font-weight: 500; }
+        .field-value { color: #010139; font-weight: 400; text-align: right; }
+        .policy-card-actions { display: flex; gap: 6px; justify-content: flex-end; padding-top: 12px; border-top: 1px solid #f0f0f0; }
+        .status-chip { padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 500; white-space: nowrap; }
         .status-chip.red { background: #ffebee; color: #d32f2f; }
         .status-chip.blue { background: #e3f2fd; color: #1976d2; }
         .policy-actions { display: flex; gap: 4px; }
-        .btn-icon-sm { width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border: none; background: transparent; color: #666; border-radius: 4px; cursor: pointer; transition: all 0.2s; }
+        .btn-icon-sm { width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; border: none; background: transparent; color: #666; border-radius: 4px; cursor: pointer; transition: all 0.2s; font-size: 12px; }
         .btn-icon-sm:hover { background: #010139; color: white; }
         .btn-icon-sm.danger:hover { background: #d32f2f; }
         .insurers-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 20px; }

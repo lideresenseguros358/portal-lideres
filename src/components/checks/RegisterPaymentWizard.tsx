@@ -4,14 +4,31 @@ import { useState, useEffect } from 'react';
 import { FaTimes, FaCheckCircle, FaExclamationTriangle, FaPlus, FaTrash } from 'react-icons/fa';
 import { toast } from 'sonner';
 import { actionCreatePendingPayment, actionValidateReferences, actionGetInsurers } from '@/app/(app)/checks/actions';
+import { toUppercasePayload, createUppercaseHandler, uppercaseInputClass } from '@/lib/utils/uppercase';
+
+interface AdvancePrefill {
+  id: string;
+  amount: number;
+  status?: string | null;
+  broker_id: string;
+  broker_name: string;
+}
 
 interface WizardProps {
   onClose: () => void;
   onSuccess: () => void;
   advanceId?: string | null;
+  advancePrefill?: AdvancePrefill | null;
+  advanceLoading?: boolean;
 }
 
-export default function RegisterPaymentWizardNew({ onClose, onSuccess, advanceId }: WizardProps) {
+export default function RegisterPaymentWizardNew({
+  onClose,
+  onSuccess,
+  advanceId,
+  advancePrefill = null,
+  advanceLoading = false,
+}: WizardProps) {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [insurers, setInsurers] = useState<any[]>([]);
@@ -55,6 +72,30 @@ export default function RegisterPaymentWizardNew({ onClose, onSuccess, advanceId
     loadInsurers();
     loadBrokers();
   }, []);
+
+  // Prefill when advance data arrives
+  useEffect(() => {
+    if (advancePrefill) {
+      setFormData(prev => ({
+        ...prev,
+        client_name: advancePrefill.broker_name,
+        purpose: 'devolucion',
+        devolucion_tipo: 'corredor',
+        broker_id: advancePrefill.broker_id,
+        amount_to_pay: advancePrefill.amount.toString(),
+      }));
+
+      // Reset references list to one empty entry
+      setReferences([{
+        reference_number: '',
+        date: new Date().toISOString().split('T')[0],
+        amount: advancePrefill.amount.toFixed(2),
+        amount_to_use: advancePrefill.amount.toFixed(2),
+        exists_in_bank: false,
+        validating: false
+      }]);
+    }
+  }, [advancePrefill]);
 
   const loadInsurers = async () => {
     const result = await actionGetInsurers();
@@ -177,7 +218,8 @@ export default function RegisterPaymentWizardNew({ onClose, onSuccess, advanceId
       const payload = {
         ...formData,
         amount_to_pay: parseFloat(formData.amount_to_pay),
-        references: validReferences
+        references: validReferences,
+        advance_id: advancePrefill?.id ?? advanceId ?? undefined
       };
 
       console.log('Payload:', payload);
@@ -258,8 +300,8 @@ export default function RegisterPaymentWizardNew({ onClose, onSuccess, advanceId
                 <input
                   type="text"
                   value={formData.client_name}
-                  onChange={(e) => setFormData({ ...formData, client_name: e.target.value })}
-                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+                  onChange={createUppercaseHandler((e) => setFormData({ ...formData, client_name: e.target.value }))}
+                  className={`w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none ${uppercaseInputClass}`}
                   placeholder="Nombre del cliente"
                 />
               </div>
@@ -319,8 +361,8 @@ export default function RegisterPaymentWizardNew({ onClose, onSuccess, advanceId
                       <input
                         type="text"
                         value={formData.cuenta_banco}
-                        onChange={(e) => setFormData({ ...formData, cuenta_banco: e.target.value })}
-                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#010139] focus:outline-none"
+                        onChange={createUppercaseHandler((e) => setFormData({ ...formData, cuenta_banco: e.target.value }))}
+                        className={`w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#010139] focus:outline-none ${uppercaseInputClass}`}
                         placeholder="Número de cuenta del cliente"
                       />
                       <p className="text-xs text-gray-500 mt-1">
@@ -370,8 +412,8 @@ export default function RegisterPaymentWizardNew({ onClose, onSuccess, advanceId
                     <input
                       type="text"
                       value={formData.policy_number}
-                      onChange={(e) => setFormData({ ...formData, policy_number: e.target.value })}
-                      className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+                      onChange={createUppercaseHandler((e) => setFormData({ ...formData, policy_number: e.target.value }))}
+                      className={`w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none ${uppercaseInputClass}`}
                       placeholder="POL-2024-001"
                     />
                   </div>
@@ -412,8 +454,8 @@ export default function RegisterPaymentWizardNew({ onClose, onSuccess, advanceId
                 <label className="block text-sm font-medium text-gray-700 mb-1">Notas</label>
                 <textarea
                   value={formData.notes}
-                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+                  onChange={createUppercaseHandler((e) => setFormData({ ...formData, notes: e.target.value }))}
+                  className={`w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none ${uppercaseInputClass}`}
                   rows={2}
                   placeholder="Información adicional (opcional)"
                 />
@@ -460,15 +502,15 @@ export default function RegisterPaymentWizardNew({ onClose, onSuccess, advanceId
                         <input
                           type="text"
                           value={ref.reference_number}
-                          onChange={(e) => {
+                          onChange={createUppercaseHandler((e) => {
                             const newRefs = [...references];
                             if (newRefs[index]) {
                               newRefs[index]!.reference_number = e.target.value;
                             }
                             setReferences(newRefs);
-                          }}
+                          })}
                           onBlur={() => validateReference(index)}
-                          className="flex-1 px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+                          className={`flex-1 px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none ${uppercaseInputClass}`}
                           placeholder="1132498389"
                         />
                         {ref.validating && (

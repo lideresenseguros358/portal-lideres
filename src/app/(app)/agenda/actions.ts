@@ -402,3 +402,99 @@ export async function actionGetBrokers() {
     return { ok: false, error: error.message };
   }
 }
+
+// ========================================
+// LINK LISSA RECURRENTE
+// ========================================
+
+export interface LissaConfig {
+  lissa_recurring_link: string;
+  lissa_meeting_code: string;
+}
+
+// Get LINK LISSA configuration
+export async function actionGetLissaConfig() {
+  try {
+    const supabase = await getSupabaseServer();
+    
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return { ok: false, error: 'No autenticado' };
+    }
+
+    // Try to get existing config
+    const { data, error } = await supabase
+      .from('config_agenda')
+      .select('lissa_recurring_link, lissa_meeting_code')
+      .eq('user_id', user.id)
+      .single();
+
+    if (error && error.code !== 'PGRST116') { // PGRST116 = no rows
+      return { ok: false, error: error.message };
+    }
+
+    // Return empty strings if no config exists
+    return { 
+      ok: true, 
+      data: data || { 
+        lissa_recurring_link: '', 
+        lissa_meeting_code: '' 
+      } 
+    };
+  } catch (error: any) {
+    return { ok: false, error: error.message };
+  }
+}
+
+// Save LINK LISSA configuration
+export async function actionSaveLissaConfig(config: LissaConfig) {
+  try {
+    const supabase = await getSupabaseServer();
+    
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return { ok: false, error: 'No autenticado' };
+    }
+
+    // Check if config exists
+    const { data: existing } = await supabase
+      .from('config_agenda')
+      .select('id')
+      .eq('user_id', user.id)
+      .single();
+
+    if (existing) {
+      // Update existing
+      const { error } = await supabase
+        .from('config_agenda')
+        .update({
+          lissa_recurring_link: config.lissa_recurring_link,
+          lissa_meeting_code: config.lissa_meeting_code,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('user_id', user.id);
+
+      if (error) {
+        return { ok: false, error: error.message };
+      }
+    } else {
+      // Insert new
+      const { error } = await supabase
+        .from('config_agenda')
+        .insert({
+          user_id: user.id,
+          lissa_recurring_link: config.lissa_recurring_link,
+          lissa_meeting_code: config.lissa_meeting_code,
+        });
+
+      if (error) {
+        return { ok: false, error: error.message };
+      }
+    }
+
+    revalidatePath('/config');
+    return { ok: true, message: 'Configuración guardada correctamente' };
+  } catch (error: any) {
+    return { ok: false, error: error.message };
+  }
+}

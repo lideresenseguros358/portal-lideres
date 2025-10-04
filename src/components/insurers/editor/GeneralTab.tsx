@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react';
 import { FaSave, FaToggleOn, FaToggleOff } from 'react-icons/fa';
 import { actionUpdateInsurer, actionToggleInsurerActive } from '@/app/(app)/insurers/actions';
+import { toUppercasePayload, createUppercaseHandler, uppercaseInputClass } from '@/lib/utils/uppercase';
 
 interface GeneralTabProps {
   insurer: {
@@ -20,9 +21,12 @@ export default function GeneralTab({ insurer }: GeneralTabProps) {
 
   const handleSave = () => {
     startSaving(async () => {
-      const result = await actionUpdateInsurer(insurer.id, { name });
+      const upperName = name.toUpperCase();
+      const result = await actionUpdateInsurer(insurer.id, { name: upperName });
       if (!result.ok) {
         alert(`Error: ${result.error}`);
+      } else {
+        setName(upperName);
       }
     });
   };
@@ -47,8 +51,8 @@ export default function GeneralTab({ insurer }: GeneralTabProps) {
           id="insurerName"
           type="text"
           value={name}
-          onChange={(e) => setName(e.target.value)}
-          className="form-input"
+          onChange={createUppercaseHandler((e) => setName(e.target.value))}
+          className={`form-input ${uppercaseInputClass}`}
         />
       </div>
       <div className="form-group">

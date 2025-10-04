@@ -44,7 +44,13 @@ export default function AccountMenu({ displayName, role, avatarUrl }: AccountMen
         aria-expanded={open}
         onClick={handleToggle}
       >
-        {avatarUrl ? <img src={avatarUrl} alt={displayName} /> : <FaUserCircle />}
+        {avatarUrl ? (
+          <img src={avatarUrl} alt={displayName} className="avatar-image" />
+        ) : (
+          <div className="avatar-placeholder">
+            <FaUserCircle className="avatar-icon" />
+          </div>
+        )}
       </button>
 
       <div className={`dropdown-menu${open ? ' open' : ''}`} role="menu">
@@ -72,6 +78,45 @@ export default function AccountMenu({ displayName, role, avatarUrl }: AccountMen
           position: relative;
         }
 
+        .account-menu .user-avatar {
+          width: 40px;
+          height: 40px;
+          border-radius: 50%;
+          overflow: hidden;
+          border: 2px solid #e5e7eb;
+          transition: all 0.2s ease;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: #f3f4f6;
+        }
+
+        .account-menu .user-avatar:hover {
+          border-color: #8aaa19;
+          transform: scale(1.05);
+        }
+
+        .account-menu :global(.avatar-image) {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+
+        .account-menu .avatar-placeholder {
+          width: 100%;
+          height: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: linear-gradient(135deg, #8aaa19 0%, #6d8814 100%);
+        }
+
+        .account-menu :global(.avatar-icon) {
+          width: 24px;
+          height: 24px;
+          color: white;
+        }
+
         .account-menu .dropdown-menu {
           padding: 8px 0;
         }
@@ -97,9 +142,6 @@ export default function AccountMenu({ displayName, role, avatarUrl }: AccountMen
           color: #8aaa19;
           letter-spacing: 0.04em;
         }
-
-
-
       `}</style>
     </div>
   );

@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { actionCreateCase } from '@/app/(app)/cases/actions';
 import { CASE_SECTIONS, CASE_STATUSES, MANAGEMENT_TYPES, DEFAULT_CHECKLIST } from '@/lib/constants/cases';
+import { toUppercasePayload, createUppercaseHandler, uppercaseInputClass } from '@/lib/utils/uppercase';
 
 interface NewCaseWizardProps {
   brokers: any[];
@@ -27,7 +28,6 @@ export default function NewCaseWizard({ brokers, clients, insurers }: NewCaseWiz
     broker_id: '',
     insurer_id: '',
     policy_number: '',
-    ticket_ref: '',
     ctype: 'REGULAR', // Type of case
     canal: 'ASEGURADORA',
     
@@ -49,11 +49,11 @@ export default function NewCaseWizard({ brokers, clients, insurers }: NewCaseWiz
   });
 
   const steps = [
-    { num: 1, label: 'Datos básicos', icon: FaUser },
-    { num: 2, label: 'Clasificación', icon: FaFileAlt },
-    { num: 3, label: 'Checklist', icon: FaListUl },
-    { num: 4, label: 'Archivos', icon: FaDollarSign },
-    { num: 5, label: 'Revisión', icon: FaEye },
+    { num: 1, label: 'Datos básicos', shortLabel: 'Datos', icon: FaUser },
+    { num: 2, label: 'Clasificación', shortLabel: 'Clasif.', icon: FaFileAlt },
+    { num: 3, label: 'Checklist', shortLabel: 'Check', icon: FaListUl },
+    { num: 4, label: 'Archivos', shortLabel: 'Docs', icon: FaDollarSign },
+    { num: 5, label: 'Revisión', shortLabel: 'Review', icon: FaEye },
   ];
 
   const handleNext = () => {
@@ -152,42 +152,45 @@ export default function NewCaseWizard({ brokers, clients, insurers }: NewCaseWiz
       </div>
 
       {/* Progress Steps */}
-      <div className="bg-white rounded-xl shadow-lg border-2 border-gray-100 p-4 sm:p-6 mb-6">
-        <div className="flex justify-between items-center">
-          {steps.map((step, index) => {
-            const Icon = step.icon;
-            const isActive = currentStep === step.num;
-            const isCompleted = currentStep > step.num;
+      <div className="bg-white rounded-xl shadow-lg border-2 border-gray-100 p-4 sm:p-6 mb-6 overflow-hidden">
+        <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+          <div className="flex items-center min-w-max sm:min-w-0 sm:justify-between">
+            {steps.map((step, index) => {
+              const Icon = step.icon;
+              const isActive = currentStep === step.num;
+              const isCompleted = currentStep > step.num;
 
-            return (
-              <div key={step.num} className="flex items-center flex-1">
-                <div className="flex flex-col items-center flex-1">
-                  <div
-                    className={`
-                      w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-all
-                      ${isCompleted ? 'bg-[#8AAA19] text-white' : ''}
-                      ${isActive ? 'bg-[#010139] text-white ring-4 ring-[#010139] ring-opacity-20' : ''}
-                      ${!isActive && !isCompleted ? 'bg-gray-200 text-gray-500' : ''}
-                    `}
-                  >
-                    {isCompleted ? <FaCheck /> : <Icon />}
+              return (
+                <div key={step.num} className="flex items-center flex-shrink-0">
+                  <div className="flex flex-col items-center">
+                    <div
+                      className={`
+                        w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-all
+                        ${isCompleted ? 'bg-[#8AAA19] text-white' : ''}
+                        ${isActive ? 'bg-[#010139] text-white ring-4 ring-[#010139] ring-opacity-20' : ''}
+                        ${!isActive && !isCompleted ? 'bg-gray-200 text-gray-500' : ''}
+                      `}
+                    >
+                      {isCompleted ? <FaCheck size={14} /> : <Icon size={14} />}
+                    </div>
+                    <p className={`
+                      text-[10px] sm:text-sm mt-2 text-center font-semibold whitespace-nowrap px-1
+                      ${isActive ? 'text-[#010139]' : 'text-gray-500'}
+                    `}>
+                      <span className="sm:hidden">{step.shortLabel}</span>
+                      <span className="hidden sm:inline">{step.label}</span>
+                    </p>
                   </div>
-                  <p className={`
-                    text-xs sm:text-sm mt-2 text-center font-semibold
-                    ${isActive ? 'text-[#010139]' : 'text-gray-500'}
-                  `}>
-                    {step.label}
-                  </p>
+                  {index < steps.length - 1 && (
+                    <div className={`
+                      h-1 w-8 sm:w-16 md:w-24 mx-2 transition-all flex-shrink-0
+                      ${currentStep > step.num ? 'bg-[#8AAA19]' : 'bg-gray-200'}
+                    `} />
+                  )}
                 </div>
-                {index < steps.length - 1 && (
-                  <div className={`
-                    h-1 flex-1 mx-2 transition-all
-                    ${currentStep > step.num ? 'bg-[#8AAA19]' : 'bg-gray-200'}
-                  `} />
-                )}
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
       </div>
 
@@ -219,50 +222,18 @@ export default function NewCaseWizard({ brokers, clients, insurers }: NewCaseWiz
               </select>
             </div>
 
-            {/* Client Selection */}
+            {/* Client Name */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Cliente existente (opcional)
-              </label>
-              <select
-                value={formData.client_id}
-                onChange={(e) => {
-                  const clientId = e.target.value;
-                  const client = clients.find(c => c.id === clientId);
-                  setFormData({ 
-                    ...formData, 
-                    client_id: clientId,
-                    client_name: client?.name || ''
-                  });
-                }}
-                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none"
-              >
-                <option value="">Selecciona un cliente o ingresa nuevo abajo</option>
-                {clients.map((client) => (
-                  <option key={client.id} value={client.id}>
-                    {client.name} {client.national_id ? `(${client.national_id})` : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Client Name (if new) */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
+              <label className="block text-xs sm:text-sm font-semibold text-gray-600 mb-2 uppercase">
                 Nombre del cliente *
               </label>
               <input
                 type="text"
                 value={formData.client_name}
-                onChange={(e) => setFormData({ ...formData, client_name: e.target.value, client_id: '' })}
-                placeholder="Ingresa el nombre del cliente"
-                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+                onChange={createUppercaseHandler((e) => setFormData({ ...formData, client_name: e.target.value }))}
+                placeholder="INGRESA EL NOMBRE DEL CLIENTE"
+                className={`w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none ${uppercaseInputClass}`}
               />
-              {formData.client_id && (
-                <p className="text-xs text-gray-500 mt-1">
-                  Cliente seleccionado: {getClientName(formData.client_id)}
-                </p>
-              )}
             </div>
 
             {/* Insurer */}
@@ -286,29 +257,15 @@ export default function NewCaseWizard({ brokers, clients, insurers }: NewCaseWiz
 
             {/* Policy Number */}
             <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
+              <label className="block text-xs sm:text-sm font-semibold text-gray-600 mb-2 uppercase">
                 Número de póliza
               </label>
               <input
                 type="text"
                 value={formData.policy_number}
-                onChange={(e) => setFormData({ ...formData, policy_number: e.target.value })}
-                placeholder="Ej: POL-12345"
-                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none"
-              />
-            </div>
-
-            {/* Ticket Reference */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Ticket de referencia
-              </label>
-              <input
-                type="text"
-                value={formData.ticket_ref}
-                onChange={(e) => setFormData({ ...formData, ticket_ref: e.target.value })}
-                placeholder="Ej: TKT-001"
-                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+                onChange={createUppercaseHandler((e) => setFormData({ ...formData, policy_number: e.target.value }))}
+                placeholder="POL-12345"
+                className={`w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none ${uppercaseInputClass}`}
               />
             </div>
 
@@ -515,9 +472,6 @@ export default function NewCaseWizard({ brokers, clients, insurers }: NewCaseWiz
                   )}
                   {formData.policy_number && (
                     <p><span className="font-semibold">Póliza:</span> {formData.policy_number}</p>
-                  )}
-                  {formData.ticket_ref && (
-                    <p><span className="font-semibold">Ticket:</span> {formData.ticket_ref}</p>
                   )}
                   <p><span className="font-semibold">Canal:</span> {formData.canal}</p>
                 </div>

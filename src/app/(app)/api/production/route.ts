@@ -85,18 +85,18 @@ export async function GET(request: NextRequest) {
           assa_code: broker.assa_code || '',
           meta_personal: parseFloat(broker.meta_personal as any) || 0,
           months: {
-            jan: { bruto: 0, num_polizas: 0 },
-            feb: { bruto: 0, num_polizas: 0 },
-            mar: { bruto: 0, num_polizas: 0 },
-            apr: { bruto: 0, num_polizas: 0 },
-            may: { bruto: 0, num_polizas: 0 },
-            jun: { bruto: 0, num_polizas: 0 },
-            jul: { bruto: 0, num_polizas: 0 },
-            aug: { bruto: 0, num_polizas: 0 },
-            sep: { bruto: 0, num_polizas: 0 },
-            oct: { bruto: 0, num_polizas: 0 },
-            nov: { bruto: 0, num_polizas: 0 },
-            dec: { bruto: 0, num_polizas: 0 },
+            jan: { bruto: 0, num_polizas: 0, canceladas: 0 },
+            feb: { bruto: 0, num_polizas: 0, canceladas: 0 },
+            mar: { bruto: 0, num_polizas: 0, canceladas: 0 },
+            apr: { bruto: 0, num_polizas: 0, canceladas: 0 },
+            may: { bruto: 0, num_polizas: 0, canceladas: 0 },
+            jun: { bruto: 0, num_polizas: 0, canceladas: 0 },
+            jul: { bruto: 0, num_polizas: 0, canceladas: 0 },
+            aug: { bruto: 0, num_polizas: 0, canceladas: 0 },
+            sep: { bruto: 0, num_polizas: 0, canceladas: 0 },
+            oct: { bruto: 0, num_polizas: 0, canceladas: 0 },
+            nov: { bruto: 0, num_polizas: 0, canceladas: 0 },
+            dec: { bruto: 0, num_polizas: 0, canceladas: 0 },
           },
           canceladas_ytd: 0,
           previous_year: { bruto_ytd: 0, neto_ytd: 0, num_polizas_ytd: 0 }
@@ -107,27 +107,68 @@ export async function GET(request: NextRequest) {
       console.log('👤 Not Master or filtered by broker:', { role: profile.role, brokerId });
     }
 
+    // Si no es master o se filtró por broker, obtener meta_personal del broker específico
+    if ((profile.role !== 'master' || brokerId) && productionData && productionData.length > 0) {
+      const brokerIds = [...new Set(productionData.map((r: any) => r.broker_id))].filter((id): id is string => typeof id === 'string');
+      const { data: brokersWithMeta } = await supabase
+        .from('brokers')
+        .select('id, meta_personal')
+        .in('id', brokerIds);
+      
+      const metaMap = new Map(brokersWithMeta?.map(b => [b.id, parseFloat(b.meta_personal as any) || 0]) || []);
+      
+      // Inicializar brokers con sus metas personales
+      brokerIds.forEach(bId => {
+        if (!brokerMap.has(bId)) {
+          const record = productionData.find((r: any) => r.broker_id === bId);
+          brokerMap.set(bId, {
+            broker_id: bId,
+            broker_name: record?.brokers?.name || 'Sin nombre',
+            assa_code: record?.brokers?.assa_code || '',
+            meta_personal: metaMap.get(bId as string) || 0,
+            months: {
+              jan: { bruto: 0, num_polizas: 0, canceladas: 0 },
+              feb: { bruto: 0, num_polizas: 0, canceladas: 0 },
+              mar: { bruto: 0, num_polizas: 0, canceladas: 0 },
+              apr: { bruto: 0, num_polizas: 0, canceladas: 0 },
+              may: { bruto: 0, num_polizas: 0, canceladas: 0 },
+              jun: { bruto: 0, num_polizas: 0, canceladas: 0 },
+              jul: { bruto: 0, num_polizas: 0, canceladas: 0 },
+              aug: { bruto: 0, num_polizas: 0, canceladas: 0 },
+              sep: { bruto: 0, num_polizas: 0, canceladas: 0 },
+              oct: { bruto: 0, num_polizas: 0, canceladas: 0 },
+              nov: { bruto: 0, num_polizas: 0, canceladas: 0 },
+              dec: { bruto: 0, num_polizas: 0, canceladas: 0 },
+            },
+            canceladas_ytd: 0,
+            previous_year: { bruto_ytd: 0, neto_ytd: 0, num_polizas_ytd: 0 }
+          });
+        }
+      });
+    }
+
     // Poblar con datos reales del año actual
     productionData?.forEach((record: any) => {
       if (!brokerMap.has(record.broker_id)) {
+        // Este caso no debería ocurrir ahora, pero lo dejamos por seguridad
         brokerMap.set(record.broker_id, {
           broker_id: record.broker_id,
           broker_name: record.brokers?.name || 'Sin nombre',
           assa_code: record.brokers?.assa_code || '',
-          meta_personal: 0, // Se obtendrá del broker si existe
+          meta_personal: 0,
           months: {
-            jan: { bruto: 0, num_polizas: 0 },
-            feb: { bruto: 0, num_polizas: 0 },
-            mar: { bruto: 0, num_polizas: 0 },
-            apr: { bruto: 0, num_polizas: 0 },
-            may: { bruto: 0, num_polizas: 0 },
-            jun: { bruto: 0, num_polizas: 0 },
-            jul: { bruto: 0, num_polizas: 0 },
-            aug: { bruto: 0, num_polizas: 0 },
-            sep: { bruto: 0, num_polizas: 0 },
-            oct: { bruto: 0, num_polizas: 0 },
-            nov: { bruto: 0, num_polizas: 0 },
-            dec: { bruto: 0, num_polizas: 0 },
+            jan: { bruto: 0, num_polizas: 0, canceladas: 0 },
+            feb: { bruto: 0, num_polizas: 0, canceladas: 0 },
+            mar: { bruto: 0, num_polizas: 0, canceladas: 0 },
+            apr: { bruto: 0, num_polizas: 0, canceladas: 0 },
+            may: { bruto: 0, num_polizas: 0, canceladas: 0 },
+            jun: { bruto: 0, num_polizas: 0, canceladas: 0 },
+            jul: { bruto: 0, num_polizas: 0, canceladas: 0 },
+            aug: { bruto: 0, num_polizas: 0, canceladas: 0 },
+            sep: { bruto: 0, num_polizas: 0, canceladas: 0 },
+            oct: { bruto: 0, num_polizas: 0, canceladas: 0 },
+            nov: { bruto: 0, num_polizas: 0, canceladas: 0 },
+            dec: { bruto: 0, num_polizas: 0, canceladas: 0 },
           },
           canceladas_ytd: 0,
           previous_year: { bruto_ytd: 0, neto_ytd: 0, num_polizas_ytd: 0 }
@@ -142,7 +183,10 @@ export async function GET(request: NextRequest) {
         broker.months[monthKey] = {
           bruto: parseFloat(record.bruto) || 0,
           num_polizas: parseInt(record.num_polizas) || 0,
+          canceladas: parseFloat(record.canceladas) || 0,
         };
+        // Acumular canceladas YTD
+        broker.canceladas_ytd += parseFloat(record.canceladas) || 0;
       }
     });
 
@@ -205,7 +249,8 @@ export async function PUT(request: NextRequest) {
       month: monthKey, 
       bruto,           // Cifra bruta del mes
       num_polizas,     // Número de pólizas vendidas
-      canceladas_ytd,  // Canceladas anuales
+      canceladas,      // Canceladas del mes
+      canceladas_ytd,  // Canceladas anuales (legacy)
       meta_personal    // Meta personal del broker
     } = body;
 
@@ -265,6 +310,16 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Número de pólizas debe ser un número positivo' }, { status: 400 });
     }
 
+    // Validar canceladas si se proporciona
+    const canceladasValue = canceladas !== undefined ? parseFloat(canceladas) : 0;
+    if (canceladasValue < 0) {
+      return NextResponse.json({ error: 'Canceladas debe ser un número positivo' }, { status: 400 });
+    }
+    
+    if (canceladasValue > bruto) {
+      return NextResponse.json({ error: 'Canceladas no puede ser mayor que bruto' }, { status: 400 });
+    }
+
     // Convertir month key ('jan', 'feb'...) a número (1-12)
     const monthKeys = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
     const monthIndex = monthKeys.indexOf(monthKey);
@@ -282,6 +337,7 @@ export async function PUT(request: NextRequest) {
         month,
         bruto,
         num_polizas,
+        canceladas: canceladasValue,
         updated_at: new Date().toISOString(),
       }, {
         onConflict: 'broker_id,year,month',

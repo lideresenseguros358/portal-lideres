@@ -259,17 +259,26 @@ export function PreviewTab({ role, brokerId }: Props) {
 
   return (
     <div className="space-y-6">
-      {/* Filters Section */}
-      <Card className="shadow-lg">
-        <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100">
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="flex items-center gap-2">
-              <FaHistory className="text-[#010139] text-lg" />
-              <h3 className="text-lg font-bold text-[#010139]">Historial de Quincenas Cerradas</h3>
+      {/* Header & Filters Section */}
+      <Card className="shadow-lg border-2 border-gray-100">
+        <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100 pb-4">
+          {/* Title centered */}
+          <div className="text-center mb-4">
+            <div className="flex items-center justify-center gap-3 mb-2">
+              <FaHistory className="text-[#010139] text-xl" />
+              <h2 className="text-2xl sm:text-3xl font-bold text-[#010139]">HISTORIAL DE QUINCENAS</h2>
             </div>
-            <div className="flex items-center gap-2 ml-auto">
+            <p className="text-sm text-gray-600">
+              Consulta y descarga reportes de quincenas cerradas
+            </p>
+          </div>
+          
+          {/* Filters Row - Responsive */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 pt-4 border-t border-gray-200">
+            <div className="flex items-center gap-2">
+              <label className="text-xs font-semibold text-gray-600 whitespace-nowrap">AÑO:</label>
               <Select value={String(selectedYear)} onValueChange={(v) => setSelectedYear(Number(v))}>
-                <SelectTrigger className="w-20 sm:w-28 border-[#010139]/20">
+                <SelectTrigger className="w-full sm:w-28 border-[#010139]/20 bg-white">
                   <SelectValue placeholder="Año" />
                 </SelectTrigger>
                 <SelectContent>
@@ -278,38 +287,47 @@ export function PreviewTab({ role, brokerId }: Props) {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <label className="text-xs font-semibold text-gray-600 whitespace-nowrap">MES:</label>
               <Select value={String(selectedMonth)} onValueChange={(v) => setSelectedMonth(Number(v))}>
-                <SelectTrigger className="w-28 sm:w-36 border-[#010139]/20">
+                <SelectTrigger className="w-full sm:w-36 border-[#010139]/20 bg-white">
                   <SelectValue placeholder="Mes" />
                 </SelectTrigger>
                 <SelectContent>
                   {months.map(month => (
                     <SelectItem key={month.value} value={String(month.value)}>
-                      {month.label}
+                      {month.label.toUpperCase()}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <label className="text-xs font-semibold text-gray-600 whitespace-nowrap">QUINCENA:</label>
               <Select
                 value={selectedFortnight}
                 onValueChange={(value) => setSelectedFortnight(value as 'all' | '1' | '2')}
               >
-                <SelectTrigger className="w-28 sm:w-36 border-[#010139]/20">
+                <SelectTrigger className="w-full sm:w-36 border-[#010139]/20 bg-white">
                   <SelectValue placeholder="Quincena" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Ambas</SelectItem>
-                  <SelectItem value="1">Primera (Q1)</SelectItem>
-                  <SelectItem value="2">Segunda (Q2)</SelectItem>
+                  <SelectItem value="all">AMBAS</SelectItem>
+                  <SelectItem value="1">PRIMERA (Q1)</SelectItem>
+                  <SelectItem value="2">SEGUNDA (Q2)</SelectItem>
                 </SelectContent>
               </Select>
-              {isPending && (
-                <div className="flex items-center gap-2">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#010139]"></div>
-                  <span className="text-sm text-gray-600">Cargando...</span>
-                </div>
-              )}
             </div>
+            
+            {isPending && (
+              <div className="flex items-center justify-center gap-2 text-sm text-gray-600 sm:ml-4">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#010139]"></div>
+                <span className="hidden sm:inline">Cargando...</span>
+              </div>
+            )}
           </div>
         </CardHeader>
       </Card>
@@ -400,7 +418,7 @@ export function PreviewTab({ role, brokerId }: Props) {
                     <h3 className="text-lg font-bold text-[#010139]">Total Oficina por Aseguradora</h3>
                   </div>
                   <Card className="shadow-inner border-gray-200">
-                    <CardContent className="p-4">
+                    <CardContent className="p-4 overflow-x-auto">
                       <Table>
                         <TableHeader>
                           <TableRow className="bg-gray-50">
@@ -436,9 +454,11 @@ export function PreviewTab({ role, brokerId }: Props) {
                                 </Badge>
                               </TableCell>
                               <TableCell className="text-center">
-                                <Badge variant={report.isLifeInsurance ? 'outline-blue' : 'outline-olive'}>
-                                  {report.isLifeInsurance ? 'Vida' : 'Ramos Gen.'}
-                                </Badge>
+                                {report.isLifeInsurance ? (
+                                  <Badge variant="outline-blue">Vida</Badge>
+                                ) : (
+                                  <Badge variant="secondary">Ramos Gen.</Badge>
+                                )}
                               </TableCell>
                             </TableRow>
                           ))}
@@ -501,7 +521,7 @@ export function PreviewTab({ role, brokerId }: Props) {
                     <h4 className="font-bold text-gray-800">Totales por Aseguradora</h4>
                   </div>
                   <Card className="shadow-inner border-gray-200">
-                    <CardContent className="p-3">
+                    <CardContent className="p-3 overflow-x-auto">
                       <Table>
                         <TableHeader>
                           <TableRow className="border-b border-gray-200">
@@ -540,7 +560,7 @@ export function PreviewTab({ role, brokerId }: Props) {
                     </span>
                   </div>
                   <Card className="shadow-inner border-gray-200">
-                    <CardContent className="p-3">
+                    <CardContent className="p-3 overflow-x-auto">
                       <Table>
                         <TableHeader>
                           <TableRow className="border-b-2 border-gray-200 bg-gray-50">

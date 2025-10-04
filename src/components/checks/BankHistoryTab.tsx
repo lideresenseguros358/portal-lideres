@@ -83,21 +83,21 @@ export default function BankHistoryTab() {
       <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 border-2 border-gray-100">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <div className="w-full">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Estado</label>
+            <label className="block text-xs sm:text-sm font-semibold text-gray-600 mb-2 uppercase">Estado</label>
             <select
               value={filters.status}
               onChange={(e) => setFilters({ ...filters, status: e.target.value })}
               className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition-colors text-sm sm:text-base"
             >
-              <option value="all">Todos</option>
-              <option value="available">Disponible</option>
-              <option value="partial">Parcial</option>
-              <option value="exhausted">Agotado</option>
+              <option value="all">TODOS</option>
+              <option value="available">DISPONIBLE</option>
+              <option value="partial">PARCIAL</option>
+              <option value="exhausted">AGOTADO</option>
             </select>
           </div>
           
           <div className="w-full">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Desde</label>
+            <label className="block text-xs sm:text-sm font-semibold text-gray-600 mb-2 uppercase">Desde</label>
             <input
               type="date"
               value={filters.startDate}
@@ -107,7 +107,7 @@ export default function BankHistoryTab() {
           </div>
           
           <div className="w-full">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Hasta</label>
+            <label className="block text-xs sm:text-sm font-semibold text-gray-600 mb-2 uppercase">Hasta</label>
             <input
               type="date"
               value={filters.endDate}

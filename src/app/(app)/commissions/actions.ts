@@ -1429,6 +1429,25 @@ export async function actionRecalculateFortnight(fortnight_id: string) {
 /**
  * Pay/Close fortnight
  */
+const toIsoDate = (value?: string | null) => {
+  if (!value) return new Date().toISOString().split('T')[0];
+  if (value.includes('T')) return value.split('T')[0];
+  return value;
+};
+
+const formatFortnightLabel = (start?: string | null, end?: string | null) => {
+  try {
+    if (!start || !end) return '';
+    const startDate = new Date(start);
+    const endDate = new Date(end);
+    const month = endDate.toLocaleDateString('es-PA', { month: 'long' });
+    const year = endDate.getFullYear();
+    return `del ${startDate.getUTCDate()} al ${endDate.getUTCDate()} de ${month} ${year}`;
+  } catch (_err) {
+    return '';
+  }
+};
+
 export async function actionPayFortnight(fortnight_id: string) {
   try {
     const supabase = getSupabaseAdmin();
@@ -1437,7 +1456,7 @@ export async function actionPayFortnight(fortnight_id: string) {
     // 1. Verificar que existe el draft
     const { data: fortnight, error: fnError } = await supabase
       .from('fortnights')
-      .select('id, status, notify_brokers')
+      .select('id, status, notify_brokers, period_start, period_end')
       .eq('id', fortnight_id)
       .single<FortnightRow>();
     
@@ -1492,37 +1511,94 @@ export async function actionPayFortnight(fortnight_id: string) {
     // 6. Marcar adelantos como aplicados (crear logs)
     for (const bt of brokerTotals) {
       const discounts = bt.discounts_json as any;
-      if (discounts?.adelantos && Array.isArray(discounts.adelantos)) {
-        for (const adv of discounts.adelantos) {
-          // Crear log
-          await supabase.from('advance_logs').insert([{
-            advance_id: adv.advance_id,
-            amount: adv.amount,
-            payment_type: 'fortnight',
-            fortnight_id: fortnight_id,
-            applied_by: userId,
-          } satisfies AdvanceLogIns]);
-          
-          // Reducir saldo del adelanto
-          const { data: advance } = await supabase
+      if (!discounts?.adelantos || !Array.isArray(discounts.adelantos) || discounts.adelantos.length === 0) {
+        continue;
+      }
+
+      let totalDiscount = 0;
+
+      for (const adv of discounts.adelantos) {
+        await supabase.from('advance_logs').insert([{
+          advance_id: adv.advance_id,
+          amount: adv.amount,
+          payment_type: 'fortnight',
+          fortnight_id,
+          applied_by: userId,
+        } satisfies AdvanceLogIns]);
+
+        const { data: advance } = await supabase
+          .from('advances')
+          .select('amount, status')
+          .eq('id', adv.advance_id)
+          .single();
+
+        if (advance) {
+          const newAmount = (advance as any).amount - adv.amount;
+          const newStatus = newAmount <= 0 ? 'PAID' : 'PARTIAL';
+
+          await supabase
             .from('advances')
-            .select('amount, status')
-            .eq('id', adv.advance_id)
-            .single();
-          
-          if (advance) {
-            const newAmount = (advance as any).amount - adv.amount;
-            const newStatus = newAmount <= 0 ? 'PAID' : 'PARTIAL';
-            
-            await supabase
-              .from('advances')
-              .update({
-                amount: Math.max(0, newAmount),
-                status: newStatus,
-              } satisfies TablesUpdate<'advances'>)
-              .eq('id', adv.advance_id);
-          }
+            .update({
+              amount: Math.max(0, newAmount),
+              status: newStatus,
+            } satisfies TablesUpdate<'advances'>)
+            .eq('id', adv.advance_id);
         }
+
+        totalDiscount += Number(adv.amount) || 0;
+      }
+
+      if (totalDiscount <= 0) {
+        continue;
+      }
+
+      const periodLabel = formatFortnightLabel(fortnight.period_start ?? null, fortnight.period_end ?? null);
+      const referenceNumber = `DESCUENTO-COMISIONES-${fortnight_id}-${bt.broker_id}`.toUpperCase();
+      const periodDate = toIsoDate(fortnight.period_end ?? null);
+      const nowIso = new Date().toISOString();
+
+      const { error: bankTransferError } = await supabase
+        .from('bank_transfers')
+        .insert([
+          {
+            date: periodDate as string,
+            reference_number: referenceNumber,
+            transaction_code: 'DESCUENTO_COMISIONES',
+            description: `Broker: ${bt.brokers?.name ?? 'N/D'} — Quincena: ${periodLabel || fortnight_id}`,
+            amount: totalDiscount,
+            imported_at: nowIso,
+            used_amount: totalDiscount,
+          } satisfies TablesInsert<'bank_transfers'>,
+        ]);
+
+      if (bankTransferError) {
+        throw bankTransferError;
+      }
+
+      const pendingPayload = {
+        client_name: bt.brokers?.name ?? 'Broker',
+        insurer_name: null,
+        policy_number: null,
+        purpose: 'devolucion',
+        amount_to_pay: totalDiscount,
+        total_received: totalDiscount,
+        can_be_paid: true,
+        status: 'pending',
+        notes: JSON.stringify({
+          source: 'fortnight_discount',
+          fortnight_id,
+          broker_id: bt.broker_id,
+        }),
+        created_at: nowIso,
+        created_by: userId,
+      } satisfies TablesInsert<'pending_payments'>;
+
+      const { error: pendingError } = await supabase
+        .from('pending_payments')
+        .insert([pendingPayload]);
+
+      if (pendingError) {
+        throw pendingError;
       }
     }
     

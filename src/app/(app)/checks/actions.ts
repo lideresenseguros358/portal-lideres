@@ -3,6 +3,7 @@
 import { getSupabaseServer } from '@/lib/supabase/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import type { DB, Tables, TablesInsert, TablesUpdate } from '@/lib/supabase/client';
+import { actionApplyAdvancePayment } from '@/app/(app)/commissions/actions';
 
 // Types
 export type CheckStatus = 'green' | 'gray' | 'yellow' | 'red' | 'blue';
@@ -40,423 +41,48 @@ export interface PendingPayment {
   is_refund: boolean;
   created_at: string;
   reference?: string;
+  metadata?: {
+    advance_id?: string | null;
+    source?: string | null;
+  } | null;
 }
 
-// Get check history with filters (only bank transfers, not pending payments)
-export async function actionGetCheckHistory(
-  year?: number,
-  page: number = 1,
-  pageSize: number = 20
-) {
+// Fetch advance details for prefilling payments
+export async function actionGetAdvanceDetails(advanceId: string) {
   try {
     const supabase = await getSupabaseServer();
-    
-    const currentYear = year || new Date().getFullYear();
-    const startDate = `${currentYear}-01-01`;
-    const endDate = `${currentYear}-12-31`;
-
-    // Get ALL items for the year, we'll filter by type in bank_json
-    let query = supabase
-      .from('check_items')
-      .select('*', { count: 'exact' })
-      .gte('created_at', startDate)
-      .lte('created_at', endDate)
-      .order('created_at', { ascending: false })
-      .range((page - 1) * pageSize, page * pageSize - 1);
-
-    const { data, error, count } = await query.returns<any[]>();
-
-    if (error) throw error;
-
-    // Filter only bank imports (not pending payments)
-    const bankImports = (data || []).filter((item: any) => {
-      const bankJson = item.bank_json as any;
-      return bankJson?.type === 'bank_import';
-    });
-
-    // Transform to CheckHistoryItem format
-    const history = bankImports.map((item: any) => {
-      const daysSinceCreated = Math.floor(
-        (Date.now() - new Date(item.created_at).getTime()) / (1000 * 60 * 60 * 24)
-      );
-      
-      let status: CheckStatus = 'gray';
-      
-      // Determine status based on item.status and days
-      if (item.status === 'applied') {
-        status = 'green';
-      } else if (item.status === 'deferred') {
-        status = 'blue';
-      } else if (daysSinceCreated > 30) {
-        status = 'red';
-      } else if (daysSinceCreated > 15) {
-        status = 'yellow';
-      } else {
-        status = 'gray';
-      }
-
-      return {
-        id: item.id,
-        reference: item.reference || '',
-        date: item.created_at,
-        description: `${item.client_name || ''} - ${item.policy_number || ''}`,
-        amount: Number(item.amount),
-        status,
-        is_internal: false,
-        created_at: item.created_at
-      };
-    });
-
-    return { ok: true, data: history };
-  } catch (error: any) {
-    console.error('Error fetching check history:', error);
-    return { ok: false, error: error.message };
-  }
-}
-
-// Get pending payments
-export async function actionGetPendingPayments(filters?: {
-  broker_id?: string;
-  type?: string;
-  search?: string;
-}) {
-  try {
-    const supabase = await getSupabaseServer();
-    
-    let query = supabase
-      .from('check_items')
+    const { data, error } = await supabase
+      .from('advances')
       .select(`
-        *,
-        brokers (
-          id,
-          name
-        )
+        id,
+        amount,
+        status,
+        broker_id,
+        brokers ( name )
       `)
-      .order('created_at', { ascending: false });
-
-    if (filters?.broker_id) {
-      query = query.eq('broker_id', filters.broker_id);
-    }
-    if (filters?.search) {
-      query = query.or(`
-        client_name.ilike.%${filters.search}%,
-        policy_number.ilike.%${filters.search}%
-      `);
-    }
-
-    const { data, error } = await query.returns<any[]>();
+      .eq('id', advanceId)
+      .single();
 
     if (error) throw error;
-
-    // Filter only pending payments (not bank imports)
-    const pendingItems = (data || []).filter((item: any) => {
-      const bankJson = item.bank_json as any;
-      return bankJson?.type === 'pending_payment';
-    });
-
-    // Transform to PendingPayment format
-    const payments = pendingItems.map((item: any) => ({
-      id: item.id,
-      type: (item.is_refund ? 'refund' : 'insurer') as 'insurer' | 'refund' | 'client' | 'advance',
-      description: `${item.client_name || ''} - ${item.policy_number || ''}`,
-      amount: Number(item.amount),
-      broker_id: item.broker_id,
-      broker_name: item.brokers?.name,
-      policy_number: item.policy_number,
-      client_name: item.client_name,
-      notes: '',
-      is_refund: item.is_refund,
-      bank_json: item.bank_json,
-      created_at: item.created_at,
-      reference: item.reference
-    }));
-
-    return { ok: true, data: payments };
-  } catch (error: any) {
-    console.error('Error fetching pending payments:', error);
-    return { ok: false, error: error.message };
-  }
-}
-
-// Register a new pending payment (not a bank transfer)
-export async function actionRegisterPendingPayment(data: {
-  date: string;
-  reference: string;
-  amount: number;
-  description: string;
-  is_internal?: boolean;
-  advance_id?: string; // If coming from advances
-  insurer_id?: string;
-  insurer_name?: string;
-  policy_number?: string;
-  client_name?: string;
-  payment_type?: string;
-}) {
-  try {
-    console.log('[SERVER] actionRegisterPendingPayment called with:', data);
-    const supabase = await getSupabaseServer();
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    if (!user) {
-      console.error('[SERVER] User not authenticated');
-      return { ok: false, error: 'Usuario no autenticado' };
+    if (!data) {
+      return { ok: false, error: 'Adelanto no encontrado' };
     }
-    
-    console.log('[SERVER] User authenticated:', user.id);
-    
-    // Create the pending payment batch
-    const { data: batch, error: batchError } = await supabase
-      .from('check_batches')
-      .insert([
-        {
-          title: `Pago Pendiente - ${data.description}`,
-          created_by: user.id
-        } satisfies TablesInsert<'check_batches'>
-      ])
-      .select()
-      .single<Tables<'check_batches'>>();
 
-    if (batchError || !batch) {
-      console.error('[SERVER] Batch creation failed:', batchError);
-      throw batchError || new Error('Failed to create batch');
-    }
-    console.log('[SERVER] Batch created:', batch.id);
-
-    // Get a default broker_id or use the one provided
-    const brokerResult = await supabase
-      .from('brokers')
-      .select('id')
-      .limit(1)
-      .single();
-
-    const brokerData = brokerResult.data as { id: string } | null;
-
-    if (!brokerData) {
-      console.error('[SERVER] No brokers found');
-      throw new Error('No brokers found in the system');
-    }
-    console.log('[SERVER] Using broker:', brokerData.id);
-
-    // Store additional payment info in bank_json
-    const paymentInfo = {
-      payment_type: data.payment_type || 'policy',
-      insurer_id: data.insurer_id,
-      insurer_name: data.insurer_name,
-      registered_date: new Date().toISOString(),
-      registered_by: user.id
+    const advance = {
+      id: data.id as string,
+      amount: Number((data as any).amount) || 0,
+      status: (data as any).status as string | null,
+      broker_id: (data as any).broker_id as string,
+      broker_name: ((data as any).brokers?.name as string) || 'Corredor',
     };
 
-    const insertData = {
-      batch_id: batch.id,
-      broker_id: brokerData.id,
-      reference: data.reference,
-      client_name: data.client_name || '',
-      policy_number: data.policy_number || '',
-      amount: data.amount,
-      is_refund: data.payment_type === 'refund' || false,
-      bank_json: {
-        ...paymentInfo,
-        type: 'pending_payment',
-        registered_date: new Date().toISOString()
-      },
-      created_at: data.date
-    };
-    console.log('[SERVER] Inserting check_item:', insertData);
-
-    const { data: checkItem, error: itemError } = await supabase
-      .from('check_items')
-      .insert([insertData satisfies TablesInsert<'check_items'>])
-      .select()
-      .single();
-
-    if (itemError) {
-      console.error('[SERVER] Check item insertion failed:', itemError);
-      throw itemError;
-    }
-
-    console.log('[SERVER] Check item created successfully:', checkItem);
-    return { ok: true, data: checkItem };
+    return { ok: true, data: advance };
   } catch (error: any) {
-    console.error('Error registering transfer:', error);
+    console.error('Error fetching advance details:', error);
     return { ok: false, error: error.message };
   }
 }
 
-// Apply transfer to payments
-export async function actionApplyTransferToPayments(
-  referenceId: string,
-  applications: Array<{
-    payment_id: string;
-    amount: number;
-    notes?: string;
-  }>
-) {
-  try {
-    const supabase = await getSupabaseAdmin();
-    
-    // Get the reference details
-    const { data: reference, error: refError } = await supabase
-      .from('check_items')
-      .select('*')
-      .eq('id', referenceId)
-      .single<Tables<'check_items'>>();
-
-    if (refError) throw refError;
-    if (!reference) {
-      return { ok: false, error: 'Referencia no encontrada' };
-    }
-
-    // Calculate total to apply
-    const totalToApply = applications.reduce((sum, app) => sum + app.amount, 0);
-    const currentAmount = Number(reference.amount);
-
-    if (totalToApply > currentAmount) {
-      return { ok: false, error: 'El monto a aplicar excede el monto disponible' };
-    }
-
-    // Update each payment
-    for (const app of applications) {
-      const { error: paymentError } = await supabase
-        .from('check_items')
-        .update({
-          status: 'applied'
-        } satisfies TablesUpdate<'check_items'>)
-        .eq('id', app.payment_id);
-
-      if (paymentError) throw paymentError;
-    }
-
-    // Update the reference status
-    const { error: updateError } = await supabase
-      .from('check_items')
-      .update({
-        status: totalToApply >= currentAmount ? 'applied' : 'partial'
-      } satisfies TablesUpdate<'check_items'>)
-      .eq('id', referenceId);
-
-    if (updateError) throw updateError;
-
-    return { ok: true, data: { applied: applications, remaining: currentAmount - totalToApply } };
-  } catch (error: any) {
-    console.error('Error applying transfer to payments:', error);
-    return { ok: false, error: error.message };
-  }
-}
-
-// Import bank history
-export async function actionImportBankHistory(
-  records: Array<{
-    date: string;
-    reference: string;
-    description: string;
-    amount: number;
-    is_internal?: boolean;
-  }>
-) {
-  try {
-    const supabase = await getSupabaseServer();
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    if (!user) {
-      return { ok: false, error: 'Usuario no autenticado' };
-    }
-    
-    // Check for duplicate references within the import
-    const references = records.map(r => r.reference);
-    const duplicates = references.filter((ref, index) => references.indexOf(ref) !== index);
-    
-    if (duplicates.length > 0) {
-      return { 
-        ok: false, 
-        error: `Referencias duplicadas en el archivo: ${duplicates.join(', ')}` 
-      };
-    }
-
-    // Check for existing references in database
-    const { data: existing } = await supabase
-      .from('check_items')
-      .select('reference')
-      .in('reference', references);
-
-    const existingRefs = existing?.map(e => e.reference) || [];
-    const newRecords = records.filter(r => !existingRefs.includes(r.reference));
-
-    if (newRecords.length === 0) {
-      return { 
-        ok: true, 
-        data: { 
-          imported: 0, 
-          skipped: records.length,
-          message: 'Todas las referencias ya existen en el histórico' 
-        } 
-      };
-    }
-
-    // Create batch
-    const { data: batch, error: batchError } = await supabase
-      .from('check_batches')
-      .insert([
-        {
-          title: `Importación ${new Date().toLocaleDateString('es-PA')}`,
-          created_by: user.id
-        } satisfies TablesInsert<'check_batches'>
-      ])
-      .select()
-      .single<Tables<'check_batches'>>();
-
-    if (batchError || !batch) throw batchError || new Error('Failed to create batch');
-
-    // Get a default broker_id
-    const brokerResult = await supabase
-      .from('brokers')
-      .select('id')
-      .limit(1)
-      .single();
-
-    const brokerData = brokerResult.data as { id: string } | null;
-
-    if (!brokerData) {
-      throw new Error('No brokers found in the system');
-    }
-
-    // Insert new records as bank transfers
-    const itemsToInsert = newRecords.map(record => ({
-      batch_id: batch.id,
-      broker_id: brokerData.id,
-      reference: record.reference,
-      client_name: '',
-      policy_number: '',
-      amount: record.amount,
-      is_refund: false,
-      bank_json: { 
-        description: record.description, 
-        is_internal: record.is_internal,
-        type: 'bank_import',
-        import_date: new Date().toISOString()
-      },
-      created_at: record.date
-    } satisfies TablesInsert<'check_items'>));
-
-    const { data: items, error: itemsError } = await supabase
-      .from('check_items')
-      .insert(itemsToInsert)
-      .select();
-
-    if (itemsError) throw itemsError;
-
-    return {
-      ok: true, 
-      data: { 
-        imported: items?.length || 0,
-        skipped: records.length - newRecords.length,
-        message: `${items?.length || 0} registros importados, ${records.length - newRecords.length} duplicados omitidos`
-      } 
-    };
-  } catch (error: any) {
-    console.error('Error importing bank history:', error);
-    return { ok: false, error: error.message };
-  }
-}
 
 // Defer a reference - simplified for now
 export async function actionDeferReference(referenceId: string, days: number = 30) {
@@ -623,6 +249,13 @@ export async function actionImportBankHistoryXLSX(transfers: Array<{
   amount: number;
 }>) {
   try {
+    const supabaseServer = await getSupabaseServer();
+    const { data: userData } = await supabaseServer.auth.getUser();
+
+    if (!userData || !userData.user) {
+      return { ok: false, error: 'Usuario no autenticado' };
+    }
+
     const supabase = await getSupabaseAdmin();
     
     // Check for existing references
@@ -657,8 +290,6 @@ export async function actionImportBankHistoryXLSX(transfers: Array<{
         description: t.description || '',
         amount: t.amount,
         imported_at: nowIso,
-        status: 'unclassified',
-        remaining_amount: t.amount,
         used_amount: 0,
       } satisfies TablesInsert<'bank_transfers'>));
 
@@ -759,14 +390,18 @@ export async function actionCreatePendingPayment(payment: {
     insurer_name?: string;
     amount: number;
   }>;
+  advance_id?: string;
 }) {
   try {
-    const supabase = await getSupabaseAdmin();
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    if (!user) {
+    const supabaseServer = await getSupabaseServer();
+    const { data: userSession } = await supabaseServer.auth.getUser();
+
+    if (!userSession || !userSession.user) {
       return { ok: false, error: 'Usuario no autenticado' };
     }
+
+    const user = userSession.user;
+    const supabase = await getSupabaseAdmin();
     
     // Calculate total received
     const total_received = payment.references.reduce((sum, ref) => sum + ref.amount, 0);
@@ -832,7 +467,13 @@ export async function actionCreatePendingPayment(payment: {
         amount_to_pay: payment.amount_to_pay,
         total_received,
         can_be_paid,
-        notes: payment.notes,
+        notes: payment.advance_id
+          ? JSON.stringify({
+              source: 'advance_external',
+              advance_id: payment.advance_id,
+              notes: payment.notes || null,
+            })
+          : payment.notes,
         created_by: user.id
       }])
       .select()
@@ -841,16 +482,18 @@ export async function actionCreatePendingPayment(payment: {
     if (paymentError) throw paymentError;
     
     // Insert payment references
+    const referencesToInsert = payment.references.map((ref) => ({
+      payment_id: pendingPayment.id,
+      reference_number: ref.reference_number,
+      date: ref.date,
+      amount: ref.amount,
+      amount_to_use: ref.amount_to_use,
+      exists_in_bank: bankRefMap.has(ref.reference_number)
+    })) satisfies TablesInsert<'payment_references'>[];
+
     const { error: refsError } = await supabase
       .from('payment_references')
-      .insert(payment.references.map(ref => ({
-        payment_id: pendingPayment.id,
-        reference_number: ref.reference_number,
-        date: ref.date,
-        amount: ref.amount,
-        amount_to_use: ref.amount_to_use,
-        exists_in_bank: bankRefMap.has(ref.reference_number)
-      })));
+      .insert(referencesToInsert);
 
     if (refsError) throw refsError;
 
@@ -867,7 +510,6 @@ export async function actionCreatePendingPayment(payment: {
         .update({
           used_amount: newUsed,
           remaining_amount: newRemaining,
-          status: newRemaining <= 0 ? 'reserved_full' : 'reserved',
         } satisfies TablesUpdate<'bank_transfers'>)
         .eq('id', transfer.id);
 
@@ -877,7 +519,7 @@ export async function actionCreatePendingPayment(payment: {
         ...transfer,
         used_amount: newUsed,
         remaining_amount: newRemaining,
-        status: newRemaining <= 0 ? 'reserved_full' : 'reserved',
+        status: transfer.status,
       });
     }
 
@@ -936,10 +578,17 @@ export async function actionGetPendingPaymentsNew(filters?: {
 export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
   try {
     console.log('Marcando como pagados:', paymentIds);
+    const supabaseServer = await getSupabaseServer();
+    const { data: userData } = await supabaseServer.auth.getUser();
+
+    if (!userData || !userData.user) {
+      return { ok: false, error: 'Usuario no autenticado' };
+    }
+
     const supabase = await getSupabaseAdmin();
     
     // Get payment details
-    const { data: payments, error: fetchError } = await supabase
+    const { data: rawPayments, error: fetchError } = await supabase
       .from('pending_payments')
       .select(`
         *,
@@ -948,7 +597,38 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
       .in('id', paymentIds);
     
     if (fetchError) throw fetchError;
-    console.log('Pagos obtenidos:', payments?.length);
+    console.log('Pagos obtenidos:', rawPayments?.length);
+
+    const payments = (rawPayments || []).map((payment: any) => {
+      let metadata: { advance_id?: string | null; source?: string | null; notes?: string | null } | null = null;
+      let notesValue: string | null = payment.notes ?? null;
+
+      if (typeof notesValue === 'string') {
+        try {
+          const parsed = JSON.parse(notesValue) as {
+            advance_id?: string | null;
+            source?: string | null;
+            notes?: string | null;
+          };
+          if (parsed && (parsed.advance_id || parsed.source)) {
+            metadata = {
+              advance_id: parsed.advance_id ?? null,
+              source: parsed.source ?? null,
+              notes: parsed.notes ?? null,
+            };
+            notesValue = parsed.notes ?? null;
+          }
+        } catch (_) {
+          // keep raw notes
+        }
+      }
+
+      return {
+        ...payment,
+        notes: notesValue,
+        metadata,
+      };
+    });
     
     // For each payment, update bank transfers and create payment details
     for (const payment of payments || []) {
@@ -977,17 +657,7 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
           ? Number(transfer.remaining_amount)
           : Math.max(Number(transfer.amount) - Number(transfer.used_amount || 0), 0);
 
-        const status = remainingAmount <= 0 ? 'fully_applied' : 'reserved';
-
-        const { error: updateError } = await supabase
-          .from('bank_transfers')
-          .update({
-            status,
-          } satisfies TablesUpdate<'bank_transfers'>)
-          .eq('id', transfer.id);
-
-        if (updateError) throw updateError;
-        console.log('Transfer actualizado ✓');
+        console.log('Transfer verificado ✓');
 
         const { error: detailError } = await supabase
           .from('payment_details')
@@ -1015,6 +685,21 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
         .eq('id', payment.id);
       
       if (paymentUpdateError) throw paymentUpdateError;
+
+      if (payment.metadata?.source === 'advance_external' && payment.metadata?.advance_id) {
+        const amount = Number(payment.amount_to_pay) || 0;
+        if (amount > 0) {
+          const advanceResult = await actionApplyAdvancePayment({
+            advance_id: payment.metadata.advance_id,
+            amount,
+            payment_type: 'external_transfer',
+          });
+
+          if (!advanceResult.ok) {
+            throw new Error(advanceResult.error || 'No se pudo marcar el adelanto como pagado');
+          }
+        }
+      }
     }
     
     console.log('✅ Todos los pagos procesados correctamente');

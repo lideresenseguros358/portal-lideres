@@ -88,8 +88,8 @@ export default function CommissionsTab({ userId }: CommissionsTabProps) {
         <div className="flex items-center gap-3 mb-6 pb-4 border-b">
           <FaFileCsv className="text-[#8AAA19] text-2xl" />
           <div>
-            <h2 className="text-xl font-bold text-[#010139]">Editor de CSV Banco</h2>
-            <p className="text-sm text-gray-600">Configura las columnas del archivo CSV para el banco</p>
+            <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-[#010139]">EDITOR DE CSV BANCO</h2>
+            <p className="text-xs sm:text-sm text-gray-600">CONFIGURA LAS COLUMNAS DEL ARCHIVO CSV PARA EL BANCO</p>
           </div>
         </div>
 
@@ -146,15 +146,15 @@ export default function CommissionsTab({ userId }: CommissionsTabProps) {
         <div className="flex items-center gap-3 mb-6 pb-4 border-b">
           <FaBell className="text-[#8AAA19] text-2xl" />
           <div>
-            <h2 className="text-xl font-bold text-[#010139]">Cierre de Quincena</h2>
-            <p className="text-sm text-gray-600">Configuración de notificaciones</p>
+            <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-[#010139]">CIERRE DE QUINCENA</h2>
+            <p className="text-xs sm:text-sm text-gray-600">CONFIGURACIÓN DE NOTIFICACIONES</p>
           </div>
         </div>
 
-        <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-          <div>
-            <p className="font-semibold text-gray-800">Enviar Notificaciones al Cerrar</p>
-            <p className="text-sm text-gray-600">Notificar a brokers cuando se cierre la quincena</p>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 bg-gray-50 rounded-lg">
+          <div className="flex-1">
+            <p className="font-semibold text-gray-800">ENVIAR NOTIFICACIONES AL CERRAR</p>
+            <p className="text-xs sm:text-sm text-gray-600">NOTIFICAR A BROKERS CUANDO SE CIERRE LA QUINCENA</p>
           </div>
           <button
             onClick={() => {
@@ -185,8 +185,8 @@ export default function CommissionsTab({ userId }: CommissionsTabProps) {
         <div className="flex items-center gap-3 mb-6 pb-4 border-b">
           <FaClock className="text-[#8AAA19] text-2xl" />
           <div>
-            <h2 className="text-xl font-bold text-[#010139]">Pendientes Sin Identificar</h2>
-            <p className="text-sm text-gray-600">Parámetros de agrupación y caducidad</p>
+            <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-[#010139]">PENDIENTES SIN IDENTIFICAR</h2>
+            <p className="text-xs sm:text-sm text-gray-600">PARÁMETROS DE AGRUPACIÓN Y CADUCIDAD</p>
           </div>
         </div>
 

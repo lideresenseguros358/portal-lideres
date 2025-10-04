@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { actionGetBroker, actionUpdateBroker, actionToggleBrokerActive, actionDeleteBroker, actionApplyDefaultPercentToAll } from '@/app/(app)/brokers/actions';
 import { PERCENT_OPTIONS, OFICINA_EMAIL } from '@/lib/constants/brokers';
+import { createUppercaseHandler, uppercaseInputClass, toUppercasePayload } from '@/lib/utils/uppercase';
 
 interface BrokerDetailClientProps {
   brokerId: string;
@@ -51,7 +52,8 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
 
   const handleSave = async () => {
     setSaving(true);
-    const result = await actionUpdateBroker(brokerId, formData);
+    const normalizedData = toUppercasePayload(formData);
+    const result = await actionUpdateBroker(brokerId, normalizedData);
 
     if (result.ok) {
       toast.success('Corredor actualizado correctamente');
@@ -196,9 +198,9 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
                 <input
                   type="text"
                   value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  onChange={createUppercaseHandler((e) => setFormData({ ...formData, name: e.target.value }))}
                   disabled={!isEditing}
-                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none disabled:bg-gray-50 disabled:text-gray-600"
+                  className={`w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none disabled:bg-gray-50 disabled:text-gray-600 ${!isEditing ? '' : uppercaseInputClass}`}
                 />
               </div>
 
@@ -211,9 +213,9 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
                 <input
                   type="text"
                   value={formData.phone}
-                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  onChange={createUppercaseHandler((e) => setFormData({ ...formData, phone: e.target.value }))}
                   disabled={!isEditing}
-                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none disabled:bg-gray-50 disabled:text-gray-600"
+                  className={`w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none disabled:bg-gray-50 disabled:text-gray-600 ${!isEditing ? '' : uppercaseInputClass}`}
                 />
               </div>
 
@@ -226,9 +228,9 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
                 <input
                   type="text"
                   value={formData.national_id}
-                  onChange={(e) => setFormData({ ...formData, national_id: e.target.value })}
+                  onChange={createUppercaseHandler((e) => setFormData({ ...formData, national_id: e.target.value }))}
                   disabled={!isEditing}
-                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none disabled:bg-gray-50 disabled:text-gray-600"
+                  className={`w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none disabled:bg-gray-50 disabled:text-gray-600 ${!isEditing ? '' : uppercaseInputClass}`}
                 />
               </div>
 
@@ -255,9 +257,9 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
                 <input
                   type="text"
                   value={formData.assa_code}
-                  onChange={(e) => setFormData({ ...formData, assa_code: e.target.value })}
+                  onChange={createUppercaseHandler((e) => setFormData({ ...formData, assa_code: e.target.value }))}
                   disabled={!isEditing}
-                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none disabled:bg-gray-50 disabled:text-gray-600"
+                  className={`w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none disabled:bg-gray-50 disabled:text-gray-600 ${!isEditing ? '' : uppercaseInputClass}`}
                 />
               </div>
 
@@ -269,9 +271,9 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
                 <input
                   type="text"
                   value={formData.license_no}
-                  onChange={(e) => setFormData({ ...formData, license_no: e.target.value })}
+                  onChange={createUppercaseHandler((e) => setFormData({ ...formData, license_no: e.target.value }))}
                   disabled={!isEditing}
-                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none disabled:bg-gray-50 disabled:text-gray-600"
+                  className={`w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none disabled:bg-gray-50 disabled:text-gray-600 ${!isEditing ? '' : uppercaseInputClass}`}
                 />
               </div>
             </div>
@@ -333,9 +335,9 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
                 <input
                   type="text"
                   value={formData.bank_account_no}
-                  onChange={(e) => setFormData({ ...formData, bank_account_no: e.target.value })}
+                  onChange={createUppercaseHandler((e) => setFormData({ ...formData, bank_account_no: e.target.value }))}
                   disabled={!isEditing}
-                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none disabled:bg-gray-50 disabled:text-gray-600"
+                  className={`w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none disabled:bg-gray-50 disabled:text-gray-600 ${!isEditing ? '' : uppercaseInputClass}`}
                 />
               </div>
 
@@ -347,9 +349,9 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
                 <input
                   type="text"
                   value={formData.beneficiary_name}
-                  onChange={(e) => setFormData({ ...formData, beneficiary_name: e.target.value })}
+                  onChange={createUppercaseHandler((e) => setFormData({ ...formData, beneficiary_name: e.target.value }))}
                   disabled={!isEditing}
-                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none disabled:bg-gray-50 disabled:text-gray-600"
+                  className={`w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none disabled:bg-gray-50 disabled:text-gray-600 ${!isEditing ? '' : uppercaseInputClass}`}
                 />
               </div>
 
@@ -361,9 +363,9 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
                 <input
                   type="text"
                   value={formData.beneficiary_id}
-                  onChange={(e) => setFormData({ ...formData, beneficiary_id: e.target.value })}
+                  onChange={createUppercaseHandler((e) => setFormData({ ...formData, beneficiary_id: e.target.value }))}
                   disabled={!isEditing}
-                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none disabled:bg-gray-50 disabled:text-gray-600"
+                  className={`w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none disabled:bg-gray-50 disabled:text-gray-600 ${!isEditing ? '' : uppercaseInputClass}`}
                 />
               </div>
             </div>

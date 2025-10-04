@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { FaCheckCircle, FaTimes } from 'react-icons/fa';
 import { toast } from 'sonner';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface ApproveModalProps {
   request: any;
@@ -111,15 +112,15 @@ export default function ApproveModal({ request, onClose, onSuccess }: ApproveMod
               <label className="block text-sm font-semibold text-[#010139] mb-2">
                 Rol *
               </label>
-              <select
-                value={role}
-                onChange={(e) => setRole(e.target.value)}
-                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none font-semibold"
-                required
-              >
-                <option value="broker">Broker</option>
-                <option value="master">Master</option>
-              </select>
+              <Select value={role} onValueChange={setRole}>
+                <SelectTrigger className="w-full border-2 border-gray-300 focus:border-[#8AAA19] h-12">
+                  <SelectValue placeholder="Seleccione un rol" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="broker">Broker</SelectItem>
+                  <SelectItem value="master">Master</SelectItem>
+                </SelectContent>
+              </Select>
               <p className="text-xs text-gray-500 mt-1">
                 Se guardará en minúsculas: master | broker
               </p>
@@ -130,18 +131,18 @@ export default function ApproveModal({ request, onClose, onSuccess }: ApproveMod
               <label className="block text-sm font-semibold text-[#010139] mb-2">
                 % Comisión Default *
               </label>
-              <select
-                value={commissionPercent}
-                onChange={(e) => setCommissionPercent(e.target.value)}
-                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none font-semibold"
-                required
-              >
-                {ALLOWED_PERCENTS.map(percent => (
-                  <option key={percent} value={percent}>
-                    {(percent * 100).toFixed(0)}% ({percent.toFixed(2)})
-                  </option>
-                ))}
-              </select>
+              <Select value={commissionPercent} onValueChange={setCommissionPercent}>
+                <SelectTrigger className="w-full border-2 border-gray-300 focus:border-[#8AAA19] h-12">
+                  <SelectValue placeholder="Seleccione porcentaje" />
+                </SelectTrigger>
+                <SelectContent>
+                  {ALLOWED_PERCENTS.map(percent => (
+                    <SelectItem key={percent} value={percent.toString()}>
+                      {(percent * 100).toFixed(0)}% ({percent.toFixed(2)})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <p className="text-xs text-gray-500 mt-1">
                 Opciones globales definidas en Configuración
               </p>

@@ -3,6 +3,7 @@
 import { AgendaEvent } from '@/app/(app)/agenda/actions';
 import { useMemo } from 'react';
 import * as Tooltip from '@radix-ui/react-tooltip';
+import { useSwipeable } from 'react-swipeable';
 
 interface CalendarGridProps {
   year: number;
@@ -12,6 +13,8 @@ interface CalendarGridProps {
   onDayClick: (day: number) => void;
   onEventClick: (event: AgendaEvent) => void;
   loading: boolean;
+  onSwipeLeft?: () => void;  // Mes siguiente
+  onSwipeRight?: () => void; // Mes anterior
 }
 
 export default function CalendarGrid({ 
@@ -20,8 +23,19 @@ export default function CalendarGrid({
   events, 
   selectedDay, 
   onDayClick, 
-  loading 
+  loading,
+  onSwipeLeft,
+  onSwipeRight
 }: CalendarGridProps) {
+  // Swipe handlers
+  const swipeHandlers = useSwipeable({
+    onSwipedLeft: () => onSwipeLeft?.(),
+    onSwipedRight: () => onSwipeRight?.(),
+    preventScrollOnSwipe: false,
+    trackMouse: false, // Solo touch, no mouse drag
+    trackTouch: true,
+    delta: 50, // Mínimo 50px para considerar un swipe
+  });
   const DAYS = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 
   // Get events for a specific day
@@ -115,7 +129,10 @@ export default function CalendarGrid({
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-lg p-4 md:p-6 border-2 border-gray-100">
+    <div 
+      {...swipeHandlers}
+      className="bg-white rounded-xl shadow-lg p-4 md:p-6 border-2 border-gray-100 touch-pan-y"
+    >
       {/* Day labels */}
       <div className="grid grid-cols-7 gap-1 md:gap-2 mb-3">
         {DAYS.map(day => (

@@ -6,20 +6,31 @@ import { FaHistory, FaClock } from 'react-icons/fa';
 import BankHistoryTab from './BankHistoryTab';
 import PendingPaymentsTab from './PendingPaymentsTab';
 import RegisterPaymentWizard from './RegisterPaymentWizard';
+import { actionGetAdvanceDetails } from '@/app/(app)/checks/actions';
 
 export default function ChecksMainClient() {
   const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<'history' | 'pending'>('history');
   const [showWizard, setShowWizard] = useState(false);
   const [advanceId, setAdvanceId] = useState<string | null>(null);
+  const [advancePrefill, setAdvancePrefill] = useState<any>(null);
+  const [loadingAdvance, setLoadingAdvance] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     const advance_id = searchParams.get('advance_id');
     if (advance_id) {
-      setAdvanceId(advance_id);
       setActiveTab('pending');
       setShowWizard(true);
+      setAdvanceId(advance_id);
+      setLoadingAdvance(true);
+      actionGetAdvanceDetails(advance_id)
+        .then(result => {
+          if (result.ok) {
+            setAdvancePrefill(result.data);
+          }
+        })
+        .finally(() => setLoadingAdvance(false));
     }
   }, [searchParams]);
 
@@ -27,11 +38,13 @@ export default function ChecksMainClient() {
     // Forzar refresh de pending payments
     setRefreshKey(prev => prev + 1);
     setAdvanceId(null);
+    setAdvancePrefill(null);
   };
 
   const handleCloseWizard = () => {
     setShowWizard(false);
     setAdvanceId(null);
+    setAdvancePrefill(null);
   };
 
   return (
@@ -86,6 +99,8 @@ export default function ChecksMainClient() {
             onClose={handleCloseWizard}
             onSuccess={handleWizardSuccess}
             advanceId={advanceId}
+            advancePrefill={advancePrefill}
+            advanceLoading={loadingAdvance}
           />
         )}
       </div>

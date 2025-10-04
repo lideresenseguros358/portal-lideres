@@ -23,7 +23,8 @@ export async function actionGetBrokers(search?: string) {
       brokersQuery = brokersQuery.or(`
         name.ilike.%${search}%,
         email.ilike.%${search}%,
-        national_id.ilike.%${search}%
+        national_id.ilike.%${search}%,
+        assa_code.ilike.%${search}%
       `);
     }
 

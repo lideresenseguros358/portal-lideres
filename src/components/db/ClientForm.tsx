@@ -4,6 +4,7 @@ import { useState } from "react";
 import { FaTimes, FaPlus, FaEdit, FaTrash } from "react-icons/fa";
 import { actionCreateClientWithPolicy } from '@/app/(app)/db/actions';
 import type { Tables } from "@/lib/supabase/client";
+import { toUppercasePayload, createUppercaseHandler, uppercaseInputClass } from '@/lib/utils/uppercase';
 
 import { ClientWithPolicies } from '@/types/db';
 
@@ -43,14 +44,15 @@ export default function ClientForm({ client, onClose }: ClientFormProps) {
         // Update logic remains the same for now
         console.log('Update logic not implemented yet');
       } else {
-        const clientData = {
+        const rawClientData = {
           name: formData.name,
           national_id: formData.national_id,
           email: formData.email,
           phone: formData.phone,
           active: formData.active,
         };
-        const policyData = { policy_number: formData.policy_number };
+        const clientData = toUppercasePayload(rawClientData);
+        const policyData = { policy_number: formData.policy_number.toUpperCase() };
         const result = await actionCreateClientWithPolicy(clientData, policyData);
         if (!result.ok) {
           throw new Error(result.error);
@@ -113,8 +115,8 @@ export default function ClientForm({ client, onClose }: ClientFormProps) {
                 type="text"
                 required
                 value={formData.name}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                onChange={createUppercaseHandler((e) => setFormData({ ...formData, name: e.target.value }))}
+                className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${uppercaseInputClass}`}
               />
             </div>
 
@@ -125,8 +127,8 @@ export default function ClientForm({ client, onClose }: ClientFormProps) {
               <input
                 type="text"
                 value={formData.national_id}
-                onChange={(e) => setFormData({ ...formData, national_id: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                onChange={createUppercaseHandler((e) => setFormData({ ...formData, national_id: e.target.value }))}
+                className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${uppercaseInputClass}`}
               />
             </div>
 
@@ -179,8 +181,8 @@ export default function ClientForm({ client, onClose }: ClientFormProps) {
                   type="text"
                   required
                   value={formData.policy_number}
-                  onChange={(e) => setFormData({ ...formData, policy_number: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  onChange={createUppercaseHandler((e) => setFormData({ ...formData, policy_number: e.target.value }))}
+                  className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${uppercaseInputClass}`}
                 />
               </div>
             </div>

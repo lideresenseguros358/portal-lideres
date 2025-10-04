@@ -1,7 +1,10 @@
 'use client';
 
-import { useState } from 'react';
-import { FaCalendarAlt, FaBell, FaSync, FaUsers, FaCalendarPlus } from 'react-icons/fa';
+import { useState, useEffect } from 'react';
+import { FaCalendarAlt, FaBell, FaSync, FaUsers, FaCalendarPlus, FaVideo, FaSave } from 'react-icons/fa';
+import { createUppercaseHandler, uppercaseInputClass } from '@/lib/utils/uppercase';
+import { actionGetLissaConfig, actionSaveLissaConfig } from '@/app/(app)/agenda/actions';
+import { toast } from 'sonner';
 
 interface AgendaTabProps {
   userId: string;
@@ -20,6 +23,39 @@ export default function AgendaTab({ userId }: AgendaTabProps) {
   const [reminder1h, setReminder1h] = useState(true);
   const [icsEnabled, setIcsEnabled] = useState(true);
   const [multiDateEnabled, setMultiDateEnabled] = useState(true);
+  
+  // LINK LISSA Recurrente
+  const [lissaLink, setLissaLink] = useState('');
+  const [lissaCode, setLissaCode] = useState('');
+  const [savingLissa, setSavingLissa] = useState(false);
+
+  // Cargar configuración al montar
+  useEffect(() => {
+    loadLissaConfig();
+  }, []);
+
+  const loadLissaConfig = async () => {
+    const result = await actionGetLissaConfig();
+    if (result.ok && result.data) {
+      setLissaLink(result.data.lissa_recurring_link || '');
+      setLissaCode(result.data.lissa_meeting_code || '');
+    }
+  };
+
+  const handleSaveLissaConfig = async () => {
+    setSavingLissa(true);
+    const result = await actionSaveLissaConfig({ 
+      lissa_recurring_link: lissaLink, 
+      lissa_meeting_code: lissaCode 
+    });
+    
+    if (result.ok) {
+      toast.success(result.message || 'Configuración LISSA guardada');
+    } else {
+      toast.error(result.error || 'Error al guardar');
+    }
+    setSavingLissa(false);
+  };
 
   return (
     <div className="space-y-6">
@@ -189,6 +225,75 @@ export default function AgendaTab({ userId }: AgendaTabProps) {
         <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
           <p className="text-sm text-yellow-800">
             <strong>Ejemplo:</strong> Crear "Curso Novatos" para los días 10, 12, 14, 17, 19, 21 de febrero genera 6 eventos independientes
+          </p>
+        </div>
+      </div>
+
+      {/* LINK LISSA Recurrente */}
+      <div className="bg-white rounded-2xl shadow-lg p-6">
+        <div className="flex items-center gap-3 mb-6 pb-4 border-b">
+          <FaVideo className="text-[#8AAA19] text-2xl" />
+          <div className="flex-1">
+            <h2 className="text-xl font-bold text-[#010139]">LINK LISSA Recurrente</h2>
+            <p className="text-sm text-gray-600">Configuración de sala virtual predeterminada</p>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="block text-xs sm:text-sm font-semibold text-gray-600 mb-2 uppercase">
+              Link de Reunión LISSA
+            </label>
+            <input
+              type="url"
+              value={lissaLink}
+              onChange={(e) => setLissaLink(e.target.value)}
+              placeholder="https://meet.lissa.pa/sala-lideres"
+              className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition-colors"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Este link se autocompletará al seleccionar "LINK LISSA" en eventos virtuales
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-xs sm:text-sm font-semibold text-gray-600 mb-2 uppercase">
+              Código de Reunión
+            </label>
+            <input
+              type="text"
+              value={lissaCode}
+              onChange={createUppercaseHandler((e) => setLissaCode(e.target.value))}
+              placeholder="SALA-LIDERES-123"
+              className={`w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition-colors ${uppercaseInputClass}`}
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Código de acceso opcional para la sala virtual
+            </p>
+          </div>
+
+          <button
+            onClick={handleSaveLissaConfig}
+            disabled={savingLissa}
+            className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg font-semibold hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+          >
+            {savingLissa ? (
+              <>
+                <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full"></div>
+                <span>Guardando...</span>
+              </>
+            ) : (
+              <>
+                <FaSave />
+                <span>Guardar Configuración LISSA</span>
+              </>
+            )}
+          </button>
+        </div>
+
+        <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <p className="text-sm text-blue-800">
+            <strong>Ventaja:</strong> Evita copiar/pegar el link en cada evento. Solo marca "LINK LISSA" y se completa automáticamente.
           </p>
         </div>
       </div>

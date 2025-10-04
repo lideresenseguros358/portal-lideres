@@ -2,8 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import { FaTimes, FaCheck } from 'react-icons/fa';
-import { actionCreateEvent, actionUpdateEvent, actionGetBrokers } from '@/app/(app)/agenda/actions';
+import { actionCreateEvent, actionUpdateEvent, actionGetBrokers, actionGetLissaConfig } from '@/app/(app)/agenda/actions';
 import { toast } from 'sonner';
+import { createUppercaseHandler, uppercaseInputClass } from '@/lib/utils/uppercase';
+import { toZonedTime, fromZonedTime, format as formatTZ } from 'date-fns-tz';
+import { parseISO, format } from 'date-fns';
 
 interface EventFormModalProps {
   userId: string;
@@ -29,6 +32,7 @@ export default function EventFormModal({
   const [modality, setModality] = useState<'virtual' | 'presencial' | 'hibrida'>('virtual');
   const [zoomUrl, setZoomUrl] = useState('');
   const [zoomCode, setZoomCode] = useState('');
+  const [useLissaLink, setUseLissaLink] = useState(false);
   const [locationName, setLocationName] = useState('');
   const [mapsUrl, setMapsUrl] = useState('');
   const [allowRsvp, setAllowRsvp] = useState(true);
@@ -36,6 +40,7 @@ export default function EventFormModal({
   const [selectedBrokers, setSelectedBrokers] = useState<string[]>([]);
   const [multipleDates, setMultipleDates] = useState<string[]>([]);
   const [showMultipleDates, setShowMultipleDates] = useState(false);
+  const [newDate, setNewDate] = useState('');
   
   const [brokers, setBrokers] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -80,13 +85,18 @@ export default function EventFormModal({
     setTitle(eventToEdit.title || '');
     setDetails(eventToEdit.details || '');
     
-    const startDate = new Date(eventToEdit.start_at);
-    const endDate = new Date(eventToEdit.end_at);
+    // Convertir de UTC a timezone local
+    const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Panama';
+    const startDateUTC = parseISO(eventToEdit.start_at);
+    const endDateUTC = parseISO(eventToEdit.end_at);
     
-    setStartDate(startDate.toISOString().split('T')[0] || '');
-    setStartTime(startDate.toTimeString().slice(0, 5));
-    setEndDate(endDate.toISOString().split('T')[0] || '');
-    setEndTime(endDate.toTimeString().slice(0, 5));
+    const startLocal = toZonedTime(startDateUTC, userTimezone);
+    const endLocal = toZonedTime(endDateUTC, userTimezone);
+    
+    setStartDate(format(startLocal, 'yyyy-MM-dd'));
+    setStartTime(format(startLocal, 'HH:mm'));
+    setEndDate(format(endLocal, 'yyyy-MM-dd'));
+    setEndTime(format(endLocal, 'HH:mm'));
     setIsAllDay(eventToEdit.is_all_day || false);
     setModality(eventToEdit.modality || 'virtual');
     setZoomUrl(eventToEdit.zoom_url || '');
@@ -111,20 +121,27 @@ export default function EventFormModal({
       return;
     }
 
-    // Build datetime strings
-    const start_at = isAllDay 
-      ? `${startDate}T00:00:00` 
-      : `${startDate}T${startTime}:00`;
+    // Build datetime strings con timezone handling
+    const userTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'America/Panama';
     
-    const end_at = isAllDay
-      ? `${endDate}T23:59:59`
-      : `${endDate}T${endTime}:00`;
+    // Crear fechas en timezone local
+    const startLocal = isAllDay 
+      ? parseISO(`${startDate}T00:00:00`) 
+      : parseISO(`${startDate}T${startTime}:00`);
+    
+    const endLocal = isAllDay
+      ? parseISO(`${endDate}T23:59:59`)
+      : parseISO(`${endDate}T${endTime}:00`);
 
-    // Validate dates
-    if (new Date(end_at) <= new Date(start_at)) {
+    // Validar que fin > inicio
+    if (endLocal <= startLocal) {
       toast.error('La fecha de fin debe ser posterior a la fecha de inicio');
       return;
     }
+
+    // Convertir a UTC para guardar en BD
+    const start_at = fromZonedTime(startLocal, userTimezone).toISOString();
+    const end_at = fromZonedTime(endLocal, userTimezone).toISOString();
 
     // Validate Zoom URL for virtual/hibrida
     if ((modality === 'virtual' || modality === 'hibrida') && !zoomUrl.trim()) {
@@ -253,23 +270,23 @@ export default function EventFormModal({
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
           {/* Title */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-xs sm:text-sm font-semibold text-gray-600 mb-2 uppercase">
               Título del Evento <span className="text-red-500">*</span>
             </label>
             <input
               type="text"
               value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition-colors"
-              placeholder="Ej: Junta de Agencia Mensual"
+              onChange={createUppercaseHandler((e) => setTitle(e.target.value))}
+              className={`w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition-colors ${uppercaseInputClass}`}
+              placeholder="JUNTA DE AGENCIA MENSUAL"
               required
             />
           </div>
 
           {/* Dates */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="min-w-0">
+              <label className="block text-xs sm:text-sm font-semibold text-gray-600 mb-2 uppercase">
                 Fecha de Inicio <span className="text-red-500">*</span>
               </label>
               <input
@@ -280,8 +297,8 @@ export default function EventFormModal({
                 required
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+            <div className="min-w-0">
+              <label className="block text-xs sm:text-sm font-semibold text-gray-600 mb-2 uppercase">
                 Hora de Inicio
               </label>
               <input
@@ -294,9 +311,9 @@ export default function EventFormModal({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="min-w-0">
+              <label className="block text-xs sm:text-sm font-semibold text-gray-600 mb-2 uppercase">
                 Fecha de Fin <span className="text-red-500">*</span>
               </label>
               <input
@@ -307,8 +324,8 @@ export default function EventFormModal({
                 required
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+            <div className="min-w-0">
+              <label className="block text-xs sm:text-sm font-semibold text-gray-600 mb-2 uppercase">
                 Hora de Fin
               </label>
               <input
@@ -357,25 +374,68 @@ export default function EventFormModal({
               {showMultipleDates && (
                 <div className="space-y-3">
                   <p className="text-xs text-purple-700">
-                    Ingresa las fechas (una por línea) en las que quieres crear este evento.
+                    Agrega las fechas en las que quieres crear este evento.
                   </p>
-                  <div>
-                    <textarea
-                      value={multipleDates.join('\n')}
-                      onChange={(e) => {
-                        const dates = e.target.value.split('\n').filter(d => d.trim());
-                        setMultipleDates(dates);
-                      }}
-                      placeholder="2025-01-15&#10;2025-01-22&#10;2025-01-29"
-                      rows={4}
-                      className="w-full px-4 py-3 border-2 border-purple-300 rounded-lg focus:border-purple-500 focus:outline-none transition-colors resize-none font-mono text-sm"
+                  
+                  {/* Input + Botón Agregar */}
+                  <div className="flex gap-2">
+                    <input
+                      type="date"
+                      value={newDate}
+                      onChange={(e) => setNewDate(e.target.value)}
+                      className="flex-1 px-4 py-3 border-2 border-purple-300 rounded-lg focus:border-purple-500 focus:outline-none transition-colors"
                     />
-                    {multipleDates.length > 0 && (
-                      <p className="text-sm text-purple-700 mt-2 font-semibold">
-                        ✅ Se crearán {multipleDates.length} eventos independientes
-                      </p>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (newDate && !multipleDates.includes(newDate)) {
+                          const updatedDates = [...multipleDates, newDate].sort();
+                          setMultipleDates(updatedDates);
+                          setNewDate('');
+                        } else if (multipleDates.includes(newDate)) {
+                          toast.error('Esta fecha ya fue agregada');
+                        }
+                      }}
+                      disabled={!newDate}
+                      className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                    >
+                      + Agregar
+                    </button>
                   </div>
+
+                  {/* Lista de fechas agregadas */}
+                  {multipleDates.length > 0 && (
+                    <div className="space-y-2">
+                      <p className="text-sm text-purple-700 font-semibold">
+                        ✅ Se crearán {multipleDates.length} eventos independientes:
+                      </p>
+                      <div className="max-h-40 overflow-y-auto space-y-1 bg-white p-3 rounded-lg border-2 border-purple-200">
+                        {multipleDates.map((date) => (
+                          <div
+                            key={date}
+                            className="flex items-center justify-between p-2 bg-purple-50 rounded hover:bg-purple-100 transition-colors"
+                          >
+                            <span className="text-sm font-medium text-purple-900">
+                              {new Date(date + 'T00:00:00').toLocaleDateString('es-PA', { 
+                                weekday: 'short', 
+                                year: 'numeric', 
+                                month: 'short', 
+                                day: 'numeric' 
+                              })}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setMultipleDates(multipleDates.filter(d => d !== date))}
+                              className="text-red-600 hover:text-red-800 hover:bg-red-100 rounded p-1 transition-colors"
+                              title="Eliminar fecha"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -383,15 +443,15 @@ export default function EventFormModal({
 
           {/* Description */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-xs sm:text-sm font-semibold text-gray-600 mb-2 uppercase">
               Descripción
             </label>
             <textarea
               value={details}
-              onChange={(e) => setDetails(e.target.value)}
+              onChange={createUppercaseHandler((e) => setDetails(e.target.value))}
               rows={4}
-              className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition-colors resize-none"
-              placeholder="Detalles adicionales del evento..."
+              className={`w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition-colors resize-none ${uppercaseInputClass}`}
+              placeholder="DETALLES ADICIONALES DEL EVENTO..."
             />
           </div>
 
@@ -423,32 +483,74 @@ export default function EventFormModal({
           {/* Zoom Fields (Virtual/Híbrida) */}
           {(modality === 'virtual' || modality === 'hibrida') && (
             <div className="bg-blue-50 border-2 border-blue-300 p-4 rounded-lg space-y-4">
-              <h4 className="font-semibold text-blue-900">📹 Información de Zoom</h4>
+              <h4 className="font-semibold text-blue-900">📹 Información de Reunión Virtual</h4>
               
-              <div>
-                <label className="block text-sm font-medium text-blue-900 mb-2">
-                  Link de Zoom <span className="text-red-500">*</span>
-                </label>
+              {/* Checkbox LINK LISSA */}
+              <div className="flex items-center gap-3 p-3 bg-white rounded-lg border-2 border-blue-200">
                 <input
-                  type="url"
-                  value={zoomUrl}
-                  onChange={(e) => setZoomUrl(e.target.value)}
-                  className="w-full px-4 py-3 border-2 border-blue-300 rounded-lg focus:border-blue-500 focus:outline-none transition-colors"
-                  placeholder="https://zoom.us/j/123456789"
-                  required={modality === 'virtual' || modality === 'hibrida'}
+                  type="checkbox"
+                  id="useLissaLink"
+                  checked={useLissaLink}
+                  onChange={async (e) => {
+                    const checked = e.target.checked;
+                    setUseLissaLink(checked);
+                    if (checked) {
+                      // Cargar desde configuración guardada
+                      const result = await actionGetLissaConfig();
+                      if (result.ok && result.data) {
+                        setZoomUrl(result.data.lissa_recurring_link || '');
+                        setZoomCode(result.data.lissa_meeting_code || '');
+                        if (!result.data.lissa_recurring_link) {
+                          toast.info('No hay configuración LISSA guardada. Confígurala en Configuración > Agenda');
+                        }
+                      }
+                    } else {
+                      setZoomUrl('');
+                      setZoomCode('');
+                    }
+                  }}
+                  className="w-5 h-5 text-[#8AAA19] border-gray-300 rounded focus:ring-[#8AAA19]"
                 />
+                <label htmlFor="useLissaLink" className="text-sm font-semibold text-blue-900 cursor-pointer">
+                  🎯 Usar LINK LISSA Recurrente
+                </label>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-blue-900 mb-2">
-                  Código de Zoom (opcional)
+                  Link de Reunión Virtual <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="url"
+                  value={zoomUrl}
+                  onChange={(e) => {
+                    setZoomUrl(e.target.value);
+                    if (useLissaLink) setUseLissaLink(false); // Desmarcar si edita manualmente
+                  }}
+                  className="w-full px-4 py-3 border-2 border-blue-300 rounded-lg focus:border-blue-500 focus:outline-none transition-colors"
+                  placeholder="https://zoom.us/j/123456789 o https://meet.lissa.pa/..."
+                  required={modality === 'virtual' || modality === 'hibrida'}
+                />
+                {useLissaLink && (
+                  <p className="text-xs text-blue-600 mt-1 flex items-center gap-1">
+                    ✅ Link LISSA autocompletado desde configuración
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-blue-900 mb-2">
+                  Código de Reunión (opcional)
                 </label>
                 <input
                   type="text"
                   value={zoomCode}
-                  onChange={(e) => setZoomCode(e.target.value)}
-                  className="w-full px-4 py-3 border-2 border-blue-300 rounded-lg focus:border-blue-500 focus:outline-none transition-colors"
-                  placeholder="123 456 789"
+                  onChange={createUppercaseHandler((e) => {
+                    setZoomCode(e.target.value);
+                    if (useLissaLink) setUseLissaLink(false); // Desmarcar si edita manualmente
+                  })}
+                  className={`w-full px-4 py-3 border-2 border-blue-300 rounded-lg focus:border-blue-500 focus:outline-none transition-colors ${uppercaseInputClass}`}
+                  placeholder="SALA-123 o 123 456 789"
                 />
               </div>
             </div>
@@ -466,9 +568,9 @@ export default function EventFormModal({
                 <input
                   type="text"
                   value={locationName}
-                  onChange={(e) => setLocationName(e.target.value)}
-                  className="w-full px-4 py-3 border-2 border-red-300 rounded-lg focus:border-red-500 focus:outline-none transition-colors"
-                  placeholder="Oficina Principal, Sala de Conferencias"
+                  onChange={createUppercaseHandler((e) => setLocationName(e.target.value))}
+                  className={`w-full px-4 py-3 border-2 border-red-300 rounded-lg focus:border-red-500 focus:outline-none transition-colors ${uppercaseInputClass}`}
+                  placeholder="OFICINA PRINCIPAL, SALA DE CONFERENCIAS"
                 />
               </div>
 

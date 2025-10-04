@@ -238,7 +238,7 @@ export async function actionGetActiveInsurers() {
     const { data, error } = await supabase
       .from('insurers')
       .select('id, name')
-      .eq('is_active', true)
+      .eq('active', true)
       .order('name');
     
     if (error) {

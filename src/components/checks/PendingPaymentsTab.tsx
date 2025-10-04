@@ -35,6 +35,15 @@ export default function PendingPaymentsTab({ onOpenWizard }: PendingPaymentsTabP
   }, []);
 
   const toggleSelect = (id: string) => {
+    const payment = payments.find((p) => p.id === id);
+    if (payment) {
+      const state = getPaymentState(payment);
+      if (state.blocked) {
+        toast.error('Este pago está bloqueado hasta conciliar la referencia bancaria.');
+        return;
+      }
+    }
+
     const newSelected = new Set(selectedIds);
     if (newSelected.has(id)) {
       newSelected.delete(id);
@@ -45,10 +54,11 @@ export default function PendingPaymentsTab({ onOpenWizard }: PendingPaymentsTabP
   };
 
   const selectAll = () => {
-    if (selectedIds.size === payments.length) {
+    const selectable = payments.filter((p) => !getPaymentState(p).blocked).map((p) => p.id);
+    if (selectedIds.size === selectable.length) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(payments.map(p => p.id)));
+      setSelectedIds(new Set(selectable));
     }
   };
 
@@ -59,11 +69,14 @@ export default function PendingPaymentsTab({ onOpenWizard }: PendingPaymentsTabP
     }
 
     const selectedPayments = payments.filter(p => selectedIds.has(p.id));
-    const invalidPayments = selectedPayments.filter(p => !p.can_be_paid);
+    const invalidPayments = selectedPayments.filter((p) => {
+      const state = getPaymentState(p);
+      return state.blocked;
+    });
 
     if (invalidPayments.length > 0) {
-      toast.error('Algunos pagos tienen referencias inválidas', {
-        description: 'Actualiza el historial de banco primero'
+      toast.error('Algunos pagos están bloqueados', {
+        description: 'Verifica las referencias o reprograma el pago antes de continuar.'
       });
       return;
     }
@@ -222,36 +235,39 @@ export default function PendingPaymentsTab({ onOpenWizard }: PendingPaymentsTabP
                 {/* Referencias */}
                 <div className="space-y-2 mb-4">
                   <h4 className="text-sm font-semibold text-gray-700">Referencias:</h4>
-                  {payment.payment_references?.map((ref: any) => (
-                    <div
-                      key={ref.id}
-                      className={`flex items-center justify-between p-2 rounded-lg ${
-                        ref.exists_in_bank ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        {ref.exists_in_bank ? (
-                          <FaCheckCircle className="text-green-600" />
-                        ) : (
-                          <FaExclamationTriangle className="text-red-600" />
-                        )}
-                        <span className="text-sm font-mono font-semibold">{ref.reference_number}</span>
+                  {payment.payment_references?.map((ref: any) => {
+                    const refClass = ref.exists_in_bank
+                      ? 'bg-green-50 border border-green-200'
+                      : 'bg-red-50 border border-red-200';
+
+                    return (
+                      <div
+                        key={ref.id}
+                        className={`flex items-center justify-between p-2 rounded-lg ${refClass}`}
+                      >
+                        <div className="flex items-center gap-2">
+                          {ref.exists_in_bank ? (
+                            <FaCheckCircle className="text-green-600" />
+                          ) : (
+                            <FaExclamationTriangle className="text-red-600" />
+                          )}
+                          <span className="text-sm font-mono font-semibold">{ref.reference_number}</span>
+                        </div>
+                        <span className="text-sm font-semibold">
+                          ${Number(ref.amount).toFixed(2)}
+                        </span>
                       </div>
-                      <span className="text-sm font-semibold">${parseFloat(ref.amount).toFixed(2)}</span>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 {/* Status badge */}
                 <div className="flex items-center justify-between">
                   <div>
-                    {payment.can_be_paid ? (
-                      <span className="px-3 py-1 bg-green-100 text-green-800 rounded-full text-xs font-semibold border-2 border-green-300">
-                        Listo para pagar
-                      </span>
-                    ) : (
-                      <span className="px-3 py-1 bg-red-100 text-red-800 rounded-full text-xs font-semibold border-2 border-red-300">
-                        Referencias inválidas
+                    <StatusBadge payment={payment} />
+                    {payment.metadata?.advance_id && (
+                      <span className="ml-2 px-2 py-0.5 bg-[#8AAA19]/10 text-[#8AAA19] border border-[#8AAA19]/40 rounded-full text-xs font-semibold">
+                        Adelanto externo
                       </span>
                     )}
                   </div>
@@ -284,4 +300,75 @@ export default function PendingPaymentsTab({ onOpenWizard }: PendingPaymentsTabP
       )}
     </div>
   );
+}
+
+function StatusBadge({ payment }: { payment: any }) {
+  const state = getPaymentState(payment);
+  return (
+    <span className={`px-3 py-1 rounded-full text-xs font-semibold border-2 ${state.badgeClass}`}>
+      {state.label}
+    </span>
+  );
+}
+
+function getPaymentState(payment: any) {
+  const now = new Date();
+  const created = new Date(payment.created_at);
+  const daysDiff = Math.floor((now.getTime() - created.getTime()) / (1000 * 60 * 60 * 24));
+  const total = Number(payment.amount_to_pay ?? payment.amount ?? 0);
+  const applied = Number(payment.total_received ?? 0);
+  const remaining = Math.max(total - applied, 0);
+
+  const hasErrors = payment.payment_references?.some((ref: any) => !ref.exists_in_bank);
+  if (hasErrors || !payment.can_be_paid) {
+    return {
+      key: 'blocked',
+      label: 'Referencia no conciliada',
+      badgeClass: 'bg-red-100 text-red-800 border-red-300',
+      blocked: true,
+    } as const;
+  }
+
+  if (payment.defer_until && new Date(payment.defer_until) > now) {
+    return {
+      key: 'deferred',
+      label: 'Aplazado',
+      badgeClass: 'bg-blue-100 text-blue-800 border-blue-300',
+      blocked: true,
+    } as const;
+  }
+
+  if (remaining <= 0) {
+    return {
+      key: 'conciled',
+      label: 'Conciliado',
+      badgeClass: 'bg-green-100 text-green-800 border-green-300',
+      blocked: false,
+    } as const;
+  }
+
+  if (daysDiff > 30) {
+    return {
+      key: 'overdue',
+      label: 'Vencido (+30d)',
+      badgeClass: 'bg-red-100 text-red-800 border-red-300',
+      blocked: true,
+    } as const;
+  }
+
+  if (daysDiff > 15) {
+    return {
+      key: 'aged',
+      label: 'Sin clasificar 15-30d',
+      badgeClass: 'bg-yellow-100 text-yellow-800 border-yellow-300',
+      blocked: false,
+    } as const;
+  }
+
+  return {
+    key: 'pending',
+    label: 'Pendiente por conciliar',
+    badgeClass: 'bg-gray-100 text-gray-800 border-gray-300',
+    blocked: false,
+  } as const;
 }

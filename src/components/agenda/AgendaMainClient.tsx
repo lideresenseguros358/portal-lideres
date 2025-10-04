@@ -248,6 +248,8 @@ export default function AgendaMainClient() {
           onDayClick={handleDayClick}
           onEventClick={handleEventClick}
           loading={loading}
+          onSwipeLeft={goToNextMonth}
+          onSwipeRight={goToPreviousMonth}
         />
       </div>
 
