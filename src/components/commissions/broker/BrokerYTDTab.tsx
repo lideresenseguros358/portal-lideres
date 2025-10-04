@@ -152,17 +152,36 @@ export default function BrokerYTDTab({ brokerId }: Props) {
           <CardTitle className="text-lg text-[#010139]">Comparación Mensual (Bruto)</CardTitle>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={monthlyData}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="month" />
-              <YAxis tickFormatter={(value) => `$${value / 1000}k`} />
-              <Tooltip formatter={(value: any) => formatCurrency(value)} />
-              <Legend />
-              <Bar dataKey="previous" fill="#9CA3AF" name={`${year - 1}`} />
-              <Bar dataKey="current" fill="#010139" name={`${year}`} />
-            </BarChart>
-          </ResponsiveContainer>
+          {/* Desktop */}
+          <div className="hidden md:block">
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={monthlyData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="month" />
+                <YAxis tickFormatter={(value) => `$${value / 1000}k`} />
+                <Tooltip formatter={(value: any) => formatCurrency(value)} />
+                <Legend />
+                <Bar dataKey="previous" fill="#9CA3AF" name={`${year - 1}`} />
+                <Bar dataKey="current" fill="#010139" name={`${year}`} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          {/* Mobile */}
+          <div className="md:hidden overflow-x-auto">
+            <div style={{ minWidth: '600px', width: '100%' }}>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={monthlyData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="month" />
+                  <YAxis tickFormatter={(value) => `$${value / 1000}k`} />
+                  <Tooltip formatter={(value: any) => formatCurrency(value)} />
+                  <Legend />
+                  <Bar dataKey="previous" fill="#9CA3AF" name={`${year - 1}`} />
+                  <Bar dataKey="current" fill="#010139" name={`${year}`} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
         </CardContent>
       </Card>
 

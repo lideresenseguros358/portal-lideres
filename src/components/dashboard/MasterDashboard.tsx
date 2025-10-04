@@ -10,6 +10,7 @@ import {
   getYtdComparison,
   getProductionData,
   getBrokerRanking,
+  getBrokerOfTheMonth,
   getOperationsData,
   getFinanceData,
 } from "@/lib/dashboard/queries";
@@ -54,6 +55,7 @@ const MasterDashboard = async ({ userId }: MasterDashboardProps) => {
     ytdComparison,
     productionData,
     brokerRanking,
+    brokerOfTheMonth,
     operationsData,
     financeData
   ] = await Promise.all([
@@ -65,6 +67,7 @@ const MasterDashboard = async ({ userId }: MasterDashboardProps) => {
     getYtdComparison(userId, ROLE),
     getProductionData(),
     getBrokerRanking(),
+    getBrokerOfTheMonth(),
     getOperationsData(),
     getFinanceData(),
   ]);
@@ -100,7 +103,7 @@ const MasterDashboard = async ({ userId }: MasterDashboardProps) => {
         
         {/* Gráfica de barras mensual */}
         <div className="mt-6">
-          <Link href="/produccion" className="block">
+          <Link href="/production" className="block">
             <BarYtd current={ytdComparison.current} last={ytdComparison.previous} />
           </Link>
         </div>
@@ -109,15 +112,39 @@ const MasterDashboard = async ({ userId }: MasterDashboardProps) => {
         <div className="ranking-section mt-6">
           <h3 className="subsection-title">Top 5 Corredores (YTD)</h3>
           <div className="ranking-list">
-            {brokerRanking.map((broker, index) => (
-              <div key={broker.brokerId} className="ranking-item">
-                <span className="ranking-position">{index + 1}</span>
-                <span className="ranking-name">{broker.brokerName}</span>
-                <span className="ranking-trend">▲</span>
-              </div>
-            ))}
+            {brokerRanking.map((broker, index) => {
+              const getMedalEmoji = (position: number) => {
+                if (position === 1) return '🥇';
+                if (position === 2) return '🥈';
+                if (position === 3) return '🥉';
+                return null;
+              };
+              const medal = getMedalEmoji(index + 1);
+              
+              return (
+                <Link href="/production" key={broker.brokerId} className="ranking-item-link">
+                  <div className="ranking-item">
+                    <div className="ranking-medal-container">
+                      {medal ? (
+                        <span className="ranking-medal">{medal}</span>
+                      ) : (
+                        <span className="ranking-position">{index + 1}</span>
+                      )}
+                    </div>
+                    <span className="ranking-name">{broker.brokerName}</span>
+                  </div>
+                </Link>
+              );
+            })}
           </div>
-          <Link href="/produccion" className="view-more">Ver ranking completo →</Link>
+          {brokerOfTheMonth && (
+            <div className="broker-of-month">
+              <p className="broker-of-month-text">
+                🏆 <strong>Corredor del mes de {brokerOfTheMonth.monthName}:</strong> {brokerOfTheMonth.brokerName}
+              </p>
+            </div>
+          )}
+          <Link href="/production" className="view-more">Ver ranking completo →</Link>
         </div>
       </div>
 
@@ -305,13 +332,43 @@ const MasterDashboard = async ({ userId }: MasterDashboardProps) => {
           gap: 12px;
         }
         
+        .ranking-item-link {
+          text-decoration: none;
+          color: inherit;
+          display: block;
+          transition: transform 0.2s;
+        }
+        
+        .ranking-item-link:hover {
+          transform: translateX(4px);
+        }
+        
         .ranking-item {
           display: flex;
           align-items: center;
           gap: 12px;
-          padding: 12px;
+          padding: 12px 16px;
           background: white;
           border-radius: 8px;
+          border: 2px solid transparent;
+          transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        
+        .ranking-item-link:hover .ranking-item {
+          border-color: #8aaa19;
+          box-shadow: 0 2px 8px rgba(138, 170, 25, 0.15);
+        }
+        
+        .ranking-medal-container {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 40px;
+        }
+        
+        .ranking-medal {
+          font-size: 28px;
+          line-height: 1;
         }
         
         .ranking-position {
@@ -319,16 +376,29 @@ const MasterDashboard = async ({ userId }: MasterDashboardProps) => {
           font-weight: bold;
           color: #010139;
           width: 30px;
+          text-align: center;
         }
         
         .ranking-name {
           flex: 1;
-          font-weight: 500;
+          font-weight: 600;
+          color: #010139;
+          text-align: center;
         }
         
-        .ranking-trend {
-          color: #8aaa19;
-          font-size: 12px;
+        .broker-of-month {
+          margin-top: 16px;
+          padding: 12px 16px;
+          background: linear-gradient(135deg, #fff9e6 0%, #fff4d6 100%);
+          border-radius: 8px;
+          border: 2px solid #ffd700;
+        }
+        
+        .broker-of-month-text {
+          text-align: center;
+          color: #010139;
+          font-size: 14px;
+          margin: 0;
         }
         
         .view-more {

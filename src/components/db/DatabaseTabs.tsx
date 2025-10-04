@@ -198,23 +198,23 @@ export default function DatabaseTabs({
       )}
       {modal === 'search' && <SearchModal />}
 
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4 sm:mb-6">
         <div className="filter-section">
-          <span className="filter-label">Filtrar por:</span>
+          <span className="filter-label">Vista:</span>
           <div className="view-toggle-container">
             <Link 
               href="/db?tab=clients&view=clients" 
-              className={`view-toggle-btn ${activeTab === 'clients' && view === 'clients' ? 'active' : ''}`}
+              className={`view-toggle-chip ${activeTab === 'clients' && view === 'clients' ? 'active' : ''}`}
             >
               <FaUser className="icon" />
-              <span>Por Cliente</span>
+              <span>Clientes</span>
             </Link>
             <Link 
               href="/db?tab=clients&view=insurers" 
-              className={`view-toggle-btn ${view === 'insurers' ? 'active' : ''}`}
+              className={`view-toggle-chip ${view === 'insurers' ? 'active' : ''}`}
             >
               <FaBuilding className="icon" />
-              <span>Por Aseguradora</span>
+              <span>Aseguradoras</span>
             </Link>
           </div>
         </div>
@@ -228,62 +228,73 @@ export default function DatabaseTabs({
         .filter-section {
           display: flex;
           align-items: center;
-          gap: 16px;
+          gap: 12px;
+          flex-wrap: wrap;
         }
         .filter-label {
-          font-size: 16px;
+          font-size: 14px;
           font-weight: 600;
-          color: #010139;
+          color: #666;
           white-space: nowrap;
         }
         .view-toggle-container {
           display: flex;
-          gap: 12px;
-          background: white;
-          padding: 6px;
-          border-radius: 16px;
-          box-shadow: 0 4px 12px rgba(1, 1, 57, 0.1);
+          gap: 8px;
+          flex-wrap: wrap;
         }
-        .view-toggle-btn {
+        .view-toggle-chip {
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          gap: 8px;
-          padding: 10px 20px;
-          border-radius: 12px;
+          gap: 6px;
+          padding: 8px 16px;
+          border-radius: 20px;
           font-weight: 600;
-          font-size: 14px;
+          font-size: 13px;
           color: #666;
+          background: white;
+          border: 2px solid #e0e0e0;
           text-decoration: none;
-          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-          position: relative;
-          overflow: hidden;
+          transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
           white-space: nowrap;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
         }
-        .view-toggle-btn .icon {
-          font-size: 16px;
-          transition: all 0.3s ease;
+        .view-toggle-chip .icon {
+          font-size: 14px;
+          transition: all 0.25s ease;
           flex-shrink: 0;
         }
-        .view-toggle-btn:hover {
+        .view-toggle-chip:hover {
           color: #010139;
-          background: linear-gradient(135deg, #f6f6ff 0%, #e8e8ff 100%);
-          transform: translateY(-2px);
+          border-color: #010139;
+          background: #f6f6ff;
+          transform: translateY(-1px);
+          box-shadow: 0 4px 8px rgba(1, 1, 57, 0.12);
         }
-        .view-toggle-btn:hover .icon {
-          transform: scale(1.2) rotate(5deg);
+        .view-toggle-chip:hover .icon {
+          transform: scale(1.15);
         }
-        .view-toggle-btn.active {
+        .view-toggle-chip.active {
           background: linear-gradient(135deg, #010139 0%, #020270 100%);
           color: white;
-          box-shadow: 0 4px 12px rgba(1, 1, 57, 0.3);
+          border-color: #010139;
+          box-shadow: 0 4px 12px rgba(1, 1, 57, 0.25);
         }
-        .view-toggle-btn.active .icon {
-          animation: pulse 2s ease-in-out infinite;
+        .view-toggle-chip.active .icon {
+          animation: pulseIcon 2s ease-in-out infinite;
         }
-        @keyframes pulse {
+        @keyframes pulseIcon {
           0%, 100% { transform: scale(1); }
-          50% { transform: scale(1.1); }
+          50% { transform: scale(1.08); }
+        }
+        @media (max-width: 640px) {
+          .view-toggle-chip {
+            font-size: 12px;
+            padding: 6px 12px;
+          }
+          .view-toggle-chip .icon {
+            font-size: 13px;
+          }
         }
         .tab-content {
           background: white;

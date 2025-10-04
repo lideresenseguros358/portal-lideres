@@ -192,7 +192,7 @@ export async function getAnnualNet(userId: string, role: DashboardRole): Promise
 
   let query = supabase
     .from("production")
-    .select("pma_neto")
+    .select("bruto, canceladas")
     .eq("year", CURRENT_YEAR)
     .limit(FETCH_LIMIT);
 
@@ -200,12 +200,16 @@ export async function getAnnualNet(userId: string, role: DashboardRole): Promise
     query = query.eq("broker_id", brokerId);
   }
 
-  const { data, error } = await query.returns<{ pma_neto: number | string | null }[]>();
+  const { data, error } = await query.returns<{ bruto: number | string | null; canceladas: number | string | null }[]>();
   if (error || !data) {
     return { value: 0 };
   }
 
-  const value = data.reduce((acc: number, item) => acc + toNumber(item.pma_neto), 0);
+  const value = data.reduce((acc: number, item) => {
+    const bruto = toNumber(item.bruto);
+    const canceladas = toNumber(item.canceladas);
+    return acc + (bruto - canceladas);
+  }, 0);
   
   // Si no hay datos reales, usar mock
   if (MOCK_DATA_ENABLED && value === 0) {
@@ -223,20 +227,28 @@ export async function getProductionData() {
   // Get total PMA for current year
   const { data: currentYearData } = await supabase
     .from("production")
-    .select("pma_neto")
+    .select("bruto, canceladas")
     .eq("year", currentYear)
-    .returns<{ pma_neto: number | string | null }[]>();
+    .returns<{ bruto: number | string | null; canceladas: number | string | null }[]>();
     
-  const totalPMA = (currentYearData ?? []).reduce((acc, item) => acc + toNumber(item.pma_neto), 0);
+  const totalPMA = (currentYearData ?? []).reduce((acc, item) => {
+    const bruto = toNumber(item.bruto);
+    const canceladas = toNumber(item.canceladas);
+    return acc + (bruto - canceladas);
+  }, 0);
   
   // Get previous year total for comparison
   const { data: previousYearData } = await supabase
     .from("production")
-    .select("pma_neto")
+    .select("bruto, canceladas")
     .eq("year", currentYear - 1)
-    .returns<{ pma_neto: number | string | null }[]>();
+    .returns<{ bruto: number | string | null; canceladas: number | string | null }[]>();
     
-  const previousTotal = (previousYearData ?? []).reduce((acc, item) => acc + toNumber(item.pma_neto), 0);
+  const previousTotal = (previousYearData ?? []).reduce((acc, item) => {
+    const bruto = toNumber(item.bruto);
+    const canceladas = toNumber(item.canceladas);
+    return acc + (bruto - canceladas);
+  }, 0);
   
   const deltaPercent = previousTotal > 0 ? ((totalPMA - previousTotal) / previousTotal) * 100 : 0;
   
@@ -252,40 +264,126 @@ export async function getProductionData() {
 export async function getBrokerRanking() {
   const supabase = await getSupabaseServer();
   
-  const { data } = await supabase
+  // Obtener datos de production del año actual
+  const { data } = await (supabase as any)
     .from("production")
-    .select("broker_id, pma_neto")
-    .eq("year", CURRENT_YEAR)
-    .returns<{ broker_id: string | null; pma_neto: number | string | null }[]>();
+    .select(`
+      broker_id,
+      bruto,
+      canceladas,
+      brokers!production_broker_id_fkey (
+        id,
+        name
+      )
+    `)
+    .eq("year", CURRENT_YEAR);
   
-  const totalsMap = new Map<string, number>();
-  (data ?? []).forEach((item) => {
-    if (!item.broker_id) return;
-    totalsMap.set(item.broker_id, (totalsMap.get(item.broker_id) ?? 0) + toNumber(item.pma_neto));
+  if (!data || data.length === 0) return [];
+  
+  // Calcular PMA Neto (YTD) por broker
+  const totalsMap = new Map<string, { name: string; total: number }>();
+  
+  data.forEach((item: any) => {
+    const brokerId = item.broker_id;
+    const brokerName = item.brokers?.name || 'Sin nombre';
+    const bruto = parseFloat(item.bruto) || 0;
+    const canceladas = parseFloat(item.canceladas) || 0;
+    const neto = bruto - canceladas;
+    
+    if (!totalsMap.has(brokerId)) {
+      totalsMap.set(brokerId, { name: brokerName, total: 0 });
+    }
+    
+    const broker = totalsMap.get(brokerId)!;
+    broker.total += neto;
   });
   
-  const rows = Array.from(totalsMap.entries()).map(([id, total]) => ({ broker_id: id, total }));
-  const brokerIds = rows.map((item) => item.broker_id);
+  // Convertir a array y ordenar
+  const rows = Array.from(totalsMap.entries()).map(([id, data]) => ({
+    brokerId: id,
+    brokerName: data.name,
+    total: data.total,
+  }));
   
-  const { data: brokerInfo } = await supabase
-    .from("brokers")
-    .select("id, name")
-    .in("id", brokerIds.length > 0 ? brokerIds : ["00000000-0000-0000-0000-000000000000"])
-    .returns<{ id: string | null; name: string | null }[]>();
-  
-  const nameMap = new Map<string, string>();
-  (brokerInfo ?? []).forEach((item) => {
-    if (item.id) nameMap.set(item.id, item.name ?? "");
+  // Ordenar: descendente por total, en empate alfabético
+  rows.sort((a, b) => {
+    if (b.total !== a.total) {
+      return b.total - a.total;
+    }
+    return a.brokerName.localeCompare(b.brokerName);
   });
   
-  return rows
-    .map((item) => ({
-      brokerId: item.broker_id,
-      brokerName: nameMap.get(item.broker_id) ?? "",
-      total: toNumber(item.total),
-    }))
-    .sort((a, b) => b.total - a.total)
-    .slice(0, 5);
+  return rows.slice(0, 5);
+}
+
+// Get broker of the month (previous closed month)
+export async function getBrokerOfTheMonth(): Promise<{ brokerName: string; month: string; monthName: string } | null> {
+  const supabase = await getSupabaseServer();
+  const now = new Date();
+  const currentDay = now.getDate();
+  const currentMonth = now.getMonth() + 1; // 1-12
+  const currentYear = now.getFullYear();
+  
+  // Regla "mes cerrado": día 1 verificar si hay datos del mes actual, sino mes anterior
+  let targetMonth = currentMonth === 1 ? 12 : currentMonth - 1;
+  let targetYear = currentMonth === 1 ? currentYear - 1 : currentYear;
+  
+  if (currentDay === 1) {
+    // Verificar si hay datos del mes actual
+    const { data: checkCurrent } = await (supabase as any)
+      .from("production")
+      .select("id")
+      .eq("year", currentYear)
+      .eq("month", currentMonth) // month es INTEGER
+      .limit(1);
+    
+    if (checkCurrent && checkCurrent.length > 0) {
+      targetMonth = currentMonth;
+      targetYear = currentYear;
+    }
+  }
+  
+  const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+  
+  const { data } = await (supabase as any)
+    .from("production")
+    .select(`
+      broker_id,
+      bruto,
+      canceladas,
+      brokers!production_broker_id_fkey (
+        id,
+        name
+      )
+    `)
+    .eq("year", targetYear)
+    .eq("month", targetMonth); // month es INTEGER 1-12
+  
+  if (!data || data.length === 0) return null;
+  
+  // Calcular PMA Neto del mes por broker
+  const brokers = data.map((item: any) => ({
+    broker_id: item.broker_id,
+    broker_name: item.brokers?.name || 'Sin nombre',
+    pma_neto: (parseFloat(item.bruto) || 0) - (parseFloat(item.canceladas) || 0)
+  }));
+  
+  // Ordenar: descendente por PMA Neto, en empate alfabético
+  brokers.sort((a: any, b: any) => {
+    if (b.pma_neto !== a.pma_neto) {
+      return b.pma_neto - a.pma_neto;
+    }
+    return a.broker_name.localeCompare(b.broker_name);
+  });
+  
+  const winner = brokers[0];
+  if (!winner) return null;
+  
+  return {
+    brokerName: winner.broker_name,
+    month: targetMonth.toString(),
+    monthName: monthNames[targetMonth - 1] ?? "",
+  };
 }
 
 // Get operations data (cases, renewals, delinquency)
@@ -443,15 +541,17 @@ export async function getPendingCases(): Promise<PendingCases> {
 }
 
 const aggregateMonthlyTotals = (
-  rows?: { month: number | null; total?: number | string | null; pma_neto?: number | string | null }[] | null,
+  rows?: { month: number | null; bruto?: number | string | null; canceladas?: number | string | null }[] | null,
 ): MonthlyTotal[] => {
   if (!rows) return [];
   const totals = new Map<number, number>();
   rows.forEach((row) => {
     const month = row.month ?? 0;
     if (!month) return;
-    const value = toNumber(row.total ?? row.pma_neto);
-    totals.set(month, (totals.get(month) ?? 0) + value);
+    const bruto = toNumber(row.bruto);
+    const canceladas = toNumber(row.canceladas);
+    const neto = bruto - canceladas;
+    totals.set(month, (totals.get(month) ?? 0) + neto);
   });
 
   return Array.from(totals.entries())
@@ -469,7 +569,7 @@ export async function getYtdComparison(userId: string, role: DashboardRole): Pro
   const buildQuery = (year: number) => {
     let query = supabase
       .from("production")
-      .select("month, total:pma_neto")
+      .select("month, bruto, canceladas")
       .eq("year", year)
       .order("month", { ascending: true })
       .limit(FETCH_LIMIT);
@@ -482,8 +582,8 @@ export async function getYtdComparison(userId: string, role: DashboardRole): Pro
   };
 
   const [{ data: currentData }, { data: previousData }] = await Promise.all([
-    buildQuery(currentYear).returns<{ month: number | null; total: number | string | null }[]>(),
-    buildQuery(previousYear).returns<{ month: number | null; total: number | string | null }[]>(),
+    buildQuery(currentYear).returns<{ month: number | null; bruto: number | string | null; canceladas: number | string | null }[]>(),
+    buildQuery(previousYear).returns<{ month: number | null; bruto: number | string | null; canceladas: number | string | null }[]>(),
   ]);
 
   const currentTotals = aggregateMonthlyTotals(currentData);
@@ -530,10 +630,10 @@ export async function getRankingTop5(userId: string): Promise<RankingResult> {
 
   const { data, error } = await supabase
     .from("production")
-    .select("broker_id, pma_neto")
+    .select("broker_id, bruto, canceladas")
     .eq("year", CURRENT_YEAR)
     .limit(FETCH_LIMIT)
-    .returns<{ broker_id: string | null; pma_neto: number | string | null }[]>();
+    .returns<{ broker_id: string | null; bruto: number | string | null; canceladas: number | string | null }[]>();
 
   if (error || !data || data.length === 0) {
     // Si no hay datos reales, usar mock
@@ -549,9 +649,12 @@ export async function getRankingTop5(userId: string): Promise<RankingResult> {
   }
 
   const totalsMap = new Map<string, number>();
-  data.forEach((item: { broker_id: string | null; pma_neto: number | string | null }) => {
+  data.forEach((item: { broker_id: string | null; bruto: number | string | null; canceladas: number | string | null }) => {
     if (!item.broker_id) return;
-    totalsMap.set(item.broker_id, (totalsMap.get(item.broker_id) ?? 0) + toNumber(item.pma_neto));
+    const bruto = toNumber(item.bruto);
+    const canceladas = toNumber(item.canceladas);
+    const neto = bruto - canceladas;
+    totalsMap.set(item.broker_id, (totalsMap.get(item.broker_id) ?? 0) + neto);
   });
 
   const rows = Array.from(totalsMap.entries()).map(([id, total]) => ({ broker_id: id, total }));
@@ -579,11 +682,12 @@ export async function getRankingTop5(userId: string): Promise<RankingResult> {
     }))
     .sort((a, b) => b.total - a.total);
 
+  // Mostrar top 5 completo para todos (sin ocultar totales)
   const entries: RankingEntry[] = ranking.slice(0, 5).map((item, index) => ({
     brokerId: item.brokerId,
     brokerName: item.brokerName,
     position: index + 1,
-    total: brokerId && item.brokerId === brokerId ? item.total : undefined,
+    total: item.total, // Siempre mostrar total
   }));
 
   let currentPosition: number | undefined;
@@ -660,15 +764,48 @@ export async function getContestProgress(userId: string): Promise<ContestProgres
   const role = profile?.role ?? "broker";
 
   const now = new Date();
-  const year = now.getFullYear();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1; // 1-12
 
-  const convivioMonths = Array.from({ length: 8 }, (_, idx) => idx + 1);
-  const assaMonths = Array.from({ length: 12 }, (_, idx) => idx + 1);
+  // Obtener configuración de contests
+  const { data: assaConfigData } = await supabase
+    .from('app_settings')
+    .select('value')
+    .eq('key', 'production.contests.assa')
+    .single();
 
-  const buildQuery = (months: number[]) => {
+  const { data: convivioConfigData } = await supabase
+    .from('app_settings')
+    .select('value')
+    .eq('key', 'production.contests.convivio')
+    .single();
+
+  const assaConfig = (typeof assaConfigData?.value === 'object' && assaConfigData?.value !== null)
+    ? assaConfigData.value as any
+    : { start_month: 1, end_month: 12, goal: 250000, goal_double: 400000, enable_double_goal: false, year: currentYear };
+
+  const convivioConfig = (typeof convivioConfigData?.value === 'object' && convivioConfigData?.value !== null)
+    ? convivioConfigData.value as any
+    : { start_month: 1, end_month: 6, goal: 150000, goal_double: 250000, year: currentYear };
+
+  // Determinar año de concurso (puede ser diferente al año actual si se reseteó)
+  const assaYear = assaConfig.year ?? currentYear;
+  const convivioYear = convivioConfig.year ?? currentYear;
+
+  // Generar arrays de meses para cada concurso
+  const convivioMonths = Array.from(
+    { length: convivioConfig.end_month - convivioConfig.start_month + 1 },
+    (_, idx) => convivioConfig.start_month + idx
+  );
+  const assaMonths = Array.from(
+    { length: assaConfig.end_month - assaConfig.start_month + 1 },
+    (_, idx) => assaConfig.start_month + idx
+  );
+
+  const buildQuery = (months: number[], year: number) => {
     let query = supabase
       .from("production")
-      .select("pma_neto, month")
+      .select("bruto, canceladas, month")
       .eq("year", year)
       .in("month", months)
       .limit(FETCH_LIMIT);
@@ -681,40 +818,101 @@ export async function getContestProgress(userId: string): Promise<ContestProgres
   };
 
   const [{ data: convivioData }, { data: assaData }] = await Promise.all([
-    buildQuery(convivioMonths).returns<{ pma_neto: number | string | null; month: number | null }[]>(),
-    buildQuery(assaMonths).returns<{ pma_neto: number | string | null; month: number | null }[]>(),
+    buildQuery(convivioMonths, convivioYear).returns<{ bruto: number | string | null; canceladas: number | string | null; month: number | null }[]>(),
+    buildQuery(assaMonths, assaYear).returns<{ bruto: number | string | null; canceladas: number | string | null; month: number | null }[]>(),
   ]);
 
-  let convivioValue = (convivioData ?? []).reduce((acc: number, item) => acc + toNumber(item.pma_neto), 0);
-  let assaValue = (assaData ?? []).reduce((acc: number, item) => acc + toNumber(item.pma_neto), 0);
-  
-  // Si no hay datos reales, usar mock
-  if (MOCK_DATA_ENABLED && convivioValue === 0 && assaValue === 0) {
-    return generateMockContests();
+  let convivioValue = (convivioData ?? []).reduce((acc: number, item) => {
+    const bruto = toNumber(item.bruto);
+    const canceladas = toNumber(item.canceladas);
+    return acc + (bruto - canceladas);
+  }, 0);
+  let assaValue = (assaData ?? []).reduce((acc: number, item) => {
+    const bruto = toNumber(item.bruto);
+    const canceladas = toNumber(item.canceladas);
+    return acc + (bruto - canceladas);
+  }, 0);
+
+  // Determinar estado de ASSA
+  let assaStatus: 'active' | 'closed' | 'won' | 'lost' = 'active';
+  let assaQuotaType: 'single' | 'double' | undefined = undefined;
+
+  // Verificar si estamos en el rango de fechas del concurso
+  const isAssaActive = currentYear === assaYear && currentMonth >= assaConfig.start_month && currentMonth <= assaConfig.end_month;
+  const assaPassed = currentYear > assaYear || (currentYear === assaYear && currentMonth > assaConfig.end_month);
+  const assaFuture = currentYear < assaYear || (currentYear === assaYear && currentMonth < assaConfig.start_month);
+
+  if (assaPassed) {
+    // Concurso terminó: verificar si cumplió meta
+    if (assaConfig.enable_double_goal && assaConfig.goal_double && assaValue >= assaConfig.goal_double) {
+      assaStatus = 'won';
+      assaQuotaType = 'double';
+    } else if (assaValue >= assaConfig.goal) {
+      assaStatus = 'won';
+      assaQuotaType = 'single';
+    } else {
+      assaStatus = 'lost';
+    }
+  } else if (assaFuture) {
+    // Concurso aún no inicia
+    assaStatus = 'closed';
+  } else if (isAssaActive) {
+    // Concurso está activo
+    assaStatus = 'active';
   }
 
-  const [convivioTarget, assaTarget] = await Promise.all([
-    fetchContestTarget(SETTINGS_KEYS.convivio),
-    fetchContestTarget(SETTINGS_KEYS.assa),
-  ]);
+  // Determinar estado de Convivio
+  let convivioStatus: 'active' | 'closed' | 'won' | 'lost' = 'active';
+  let convivioQuotaType: 'single' | 'double' | undefined = undefined;
 
-  const convivioPercent = computePercent(convivioValue, convivioTarget);
-  const assaPercent = computePercent(assaValue, assaTarget);
+  const isConvivioActive = currentYear === convivioYear && currentMonth >= convivioConfig.start_month && currentMonth <= convivioConfig.end_month;
+  const convivioPassed = currentYear > convivioYear || (currentYear === convivioYear && currentMonth > convivioConfig.end_month);
+  const convivioFuture = currentYear < convivioYear || (currentYear === convivioYear && currentMonth < convivioConfig.start_month);
+
+  if (convivioPassed) {
+    // Concurso terminó: verificar si cumplió meta
+    if (convivioConfig.goal_double && convivioValue >= convivioConfig.goal_double) {
+      convivioStatus = 'won';
+      convivioQuotaType = 'double';
+    } else if (convivioValue >= convivioConfig.goal) {
+      convivioStatus = 'won';
+      convivioQuotaType = 'single';
+    } else {
+      convivioStatus = 'lost';
+    }
+  } else if (convivioFuture) {
+    // Concurso aún no inicia
+    convivioStatus = 'closed';
+  } else if (isConvivioActive) {
+    // Concurso está activo
+    convivioStatus = 'active';
+  }
+
+  const convivioPercent = computePercent(convivioValue, convivioConfig.goal);
+  const assaPercent = computePercent(assaValue, assaConfig.goal);
 
   return [
     {
-      label: "Convivio LISSA",
-      value: convivioValue,
-      target: convivioTarget,
-      percent: convivioPercent.percent,
-      tooltip: convivioPercent.tooltip,
-    },
-    {
       label: "Concurso ASSA",
       value: assaValue,
-      target: assaTarget,
+      target: assaConfig.goal,
       percent: assaPercent.percent,
       tooltip: assaPercent.tooltip,
+      contestStatus: assaStatus,
+      quotaType: assaQuotaType,
+      targetDouble: assaConfig.goal_double,
+      enableDoubleGoal: assaConfig.enable_double_goal,
+    },
+    {
+      label: "Convivio LISSA",
+      value: convivioValue,
+      target: convivioConfig.goal,
+      percent: convivioPercent.percent,
+      tooltip: convivioPercent.tooltip,
+      contestStatus: convivioStatus,
+      quotaType: convivioQuotaType,
+      targetDouble: convivioConfig.goal_double,
+      enableDoubleGoal: true, // Convivio siempre tiene doble
     },
   ];
 }

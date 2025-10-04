@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import KpiCard from "./KpiCard";
 import Donut from "./Donut";
-import MiniCalendar from "./MiniCalendar";
+import AgendaWidget from "./AgendaWidget";
 import BarYtd from "./BarYtd";
 import {
   getFortnightStatus,
@@ -10,11 +10,11 @@ import {
   getAnnualNet,
   getRankingTop5,
   getContestProgress,
-  getMiniCalendar,
   getYtdComparison,
+  getBrokerOfTheMonth,
 } from "@/lib/dashboard/queries";
 import { getSupabaseServer, type Tables } from "@/lib/supabase/server";
-import type { CalendarEvent, ContestProgress, RankingEntry, RankingResult } from "@/lib/dashboard/types";
+import type { ContestProgress, RankingEntry, RankingResult } from "@/lib/dashboard/types";
 
 const ROLE = "broker" as const;
 
@@ -32,11 +32,11 @@ const BrokerDashboard = async ({ userId }: BrokerDashboardProps) => {
   const supabase = await getSupabaseServer();
   const profilePromise = supabase
     .from("profiles")
-    .select("full_name")
+    .select("full_name, broker_id")
     .eq("id", userId)
-    .maybeSingle<Pick<Tables<"profiles">, "full_name">>();
+    .maybeSingle<Pick<Tables<"profiles">, "full_name" | "broker_id">>();
 
-  const [profileResult, fortnightStatus, netCommissions, annualNet, rankingData, contestData, calendarData, ytdComparison] =
+  const [profileResult, fortnightStatus, netCommissions, annualNet, rankingData, contestData, ytdComparison, brokerOfTheMonth] =
     await Promise.all([
       profilePromise,
       getFortnightStatus(userId, ROLE),
@@ -44,14 +44,14 @@ const BrokerDashboard = async ({ userId }: BrokerDashboardProps) => {
       getAnnualNet(userId, ROLE),
       getRankingTop5(userId),
       getContestProgress(userId),
-      getMiniCalendar(userId),
       getYtdComparison(userId, ROLE),
+      getBrokerOfTheMonth(),
     ]);
 
   const profileName = profileResult.data?.full_name ?? "Corredor";
+  const brokerId = profileResult.data?.broker_id ?? null;
   const ranking: RankingResult = rankingData;
   const contests: ContestProgress[] = contestData;
-  const calendarEvents: CalendarEvent[] = calendarData;
 
   const paidRange = fortnightStatus.paid?.fortnight
     ? `${new Intl.DateTimeFormat("es-PA", { day: "2-digit", month: "short" }).format(
@@ -83,7 +83,7 @@ const BrokerDashboard = async ({ userId }: BrokerDashboardProps) => {
             />
           </Link>
 
-          <Link href="/produccion" className="block">
+          <Link href="/production" className="block">
             <KpiCard
               title="Acumulado anual neto"
               value={formatCurrency(annualNet.value)}
@@ -91,7 +91,7 @@ const BrokerDashboard = async ({ userId }: BrokerDashboardProps) => {
             />
           </Link>
 
-          <Link href="/produccion" className="block">
+          <Link href="/production" className="block">
             <KpiCard
               title="Posición ranking"
               value={ranking.currentPosition ?? "-"}
@@ -102,26 +102,47 @@ const BrokerDashboard = async ({ userId }: BrokerDashboardProps) => {
       </div>
 
       <div className="dashboard-section">
-        <h2 className="section-title">Top 5 corredores</h2>
+        <h2 className="section-title">Top 5 Corredores (YTD)</h2>
         <div className="ranking-list">
           {rankingEntries.length === 0 ? (
             <p className="empty-state">Aún no hay datos disponibles.</p>
           ) : (
-            rankingEntries.map((entry) => (
-              <div key={entry.brokerId} className="ranking-item">
-                <span className="ranking-name">
-                  {entry.position}. {entry.brokerName || "Sin nombre"}
-                </span>
-                <span className="ranking-value">
-                  {entry.total !== undefined ? formatCurrency(entry.total) : "—"}
-                </span>
-              </div>
-            ))
+            rankingEntries.map((entry) => {
+              const getMedalEmoji = (position: number) => {
+                if (position === 1) return '🥇';
+                if (position === 2) return '🥈';
+                if (position === 3) return '🥉';
+                return null;
+              };
+              const medal = getMedalEmoji(entry.position);
+              
+              return (
+                <Link href="/production" key={entry.brokerId} className="ranking-item-link">
+                  <div className="ranking-item">
+                    <div className="ranking-medal-container">
+                      {medal ? (
+                        <span className="ranking-medal">{medal}</span>
+                      ) : (
+                        <span className="ranking-position">{entry.position}</span>
+                      )}
+                    </div>
+                    <span className="ranking-name">{entry.brokerName || "Sin nombre"}</span>
+                  </div>
+                </Link>
+              );
+            })
           )}
         </div>
+        {brokerOfTheMonth && (
+          <div className="broker-of-month">
+            <p className="broker-of-month-text">
+              🏆 <strong>Corredor del mes de {brokerOfTheMonth.monthName}:</strong> {brokerOfTheMonth.brokerName}
+            </p>
+          </div>
+        )}
         <div className="view-more">
-          <Link href="/produccion" className="link-primary">
-            Ver producción completa →
+          <Link href="/production" className="link-primary">
+            Ver ranking completo →
           </Link>
         </div>
       </div>
@@ -130,25 +151,30 @@ const BrokerDashboard = async ({ userId }: BrokerDashboardProps) => {
         <h2 className="section-title">Concursos y Agenda</h2>
         <div className="contests-grid">
           {contests.map((contest) => (
-            <Link href="/produccion" className="block" key={contest.label}>
+            <Link href="/production" className="block h-[280px]" key={contest.label}>
               <Donut
                 label={contest.label}
                 percent={contest.percent}
-                value={`Meta ${formatCurrency(contest.target)}`}
+                target={contest.target}
+                current={contest.value}
                 baseColor={contest.label.includes("ASSA") ? "#010139" : "#8aaa19"}
                 tooltip={contest.tooltip}
+                contestStatus={contest.contestStatus}
+                quotaType={contest.quotaType}
+                targetDouble={contest.targetDouble}
+                enableDoubleGoal={contest.enableDoubleGoal}
               />
             </Link>
           ))}
-          <Link href="/agenda" className="block">
-            <MiniCalendar events={calendarEvents} />
-          </Link>
+          <div>
+            <AgendaWidget userId={userId} brokerId={brokerId} />
+          </div>
         </div>
       </div>
 
       <div className="dashboard-section">
         <h2 className="section-title">Producción YTD</h2>
-        <Link href="/produccion" className="block">
+        <Link href="/production" className="block">
           <BarYtd current={ytdComparison.current} last={ytdComparison.previous} />
         </Link>
       </div>
@@ -205,22 +231,79 @@ const BrokerDashboard = async ({ userId }: BrokerDashboardProps) => {
           gap: 12px;
         }
         
-        .ranking-item {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 12px 16px;
+        .ranking-item-link {
+          text-decoration: none;
+          color: inherit;
+          display: block;
+          transition: transform 0.2s;
+        }
+        
+        .ranking-item-link:hover {
+          transform: translateX(4px);
+        }
+        
+        .ranking-list {
           background: #f6f6ff;
           border-radius: 12px;
+          padding: 20px;
+        }
+        
+        .ranking-item {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 12px 16px;
+          background: white;
+          border-radius: 8px;
+          border: 2px solid transparent;
+          transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        
+        .ranking-item-link:hover .ranking-item {
+          border-color: #8aaa19;
+          box-shadow: 0 2px 8px rgba(138, 170, 25, 0.15);
+        }
+        
+        .ranking-medal-container {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          width: 40px;
+        }
+        
+        .ranking-medal {
+          font-size: 28px;
+          line-height: 1;
+        }
+        
+        .ranking-position {
+          font-size: 20px;
+          font-weight: bold;
+          color: #010139;
+          width: 30px;
+          text-align: center;
         }
         
         .ranking-name {
+          flex: 1;
           font-weight: 600;
           color: #010139;
+          text-align: center;
         }
         
-        .ranking-value {
-          color: #8a8a8a;
+        .broker-of-month {
+          margin-top: 16px;
+          padding: 12px 16px;
+          background: linear-gradient(135deg, #fff9e6 0%, #fff4d6 100%);
+          border-radius: 8px;
+          border: 2px solid #ffd700;
+        }
+        
+        .broker-of-month-text {
+          text-align: center;
+          color: #010139;
+          font-size: 14px;
+          margin: 0;
         }
         
         .empty-state {

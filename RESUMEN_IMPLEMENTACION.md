@@ -1,9 +1,9 @@
-# RESUMEN DE IMPLEMENTACIÓN - Sesión 2025-10-03 (FINAL 15:23 PM)
-**Tiempo invertido:** ~8.5 horas  
-**Estado:** ✅ Build exitoso | ✅ TypeCheck exitoso | ✅ Database completa  
-**Última validación:** npm run build PASS (15:23)
-**Sesiones completadas:** 1-16 de 17 (94% del plan maestro)
-**Migraciones SQL:** ✅ 7 tablas + 7 funciones ejecutadas
+# RESUMEN DE IMPLEMENTACIÓN - Sesión 2025-10-03 (FINAL 15:50 PM)
+**Tiempo invertido:** ~11.5 horas  
+**Estado:** ✅ Database completa | ⚠️ Sistema Pendientes base creado (requiere migración SQL)  
+**Última validación:** Migraciones completadas (15:23) + Sistema Cases base (15:50)
+**Sesiones completadas:** 1-16 de 17 (94% del plan maestro) + Cases (40%)
+**Migraciones SQL ejecutadas:** ✅ 7 tablas + 7 funciones | **Pendientes:** ⚠️ 1 migración Cases (266 líneas)
 
 ## 🎯 PROMPT MAESTRO APLICADO
 Este documento rastrea la implementación del **Prompt Maestro Completo** que incluye:
@@ -244,6 +244,67 @@ Este documento rastrea la implementación del **Prompt Maestro Completo** que in
 **Validaciones:**
 - `npm run typecheck`: PASS
 - `npm run build`: PASS
+
+## 🆕 COMPLETADO HOY
+
+### ✅ Sesión 15:23 PM - Migraciones SQL anteriores
+
+## 🆕 COMPLETADO HOY (Sesión 15:30-15:50 PM) - SISTEMA PENDIENTES
+
+### ✅ 1. Migración SQL Cases (`migrations/enhance_cases_table.sql`)
+**266 líneas SQL** que agregan:
+- 12 columnas nuevas a tabla `cases` (sla_date, management_type, is_deleted, etc.)
+- Tabla `case_comments` (comentarios aseguradora/oficina)
+- Tabla `case_history` (timeline/audit log)
+- 3 funciones: purge_deleted_cases(), auto_trash_expired_cases(), get_sla_days_remaining()
+- Triggers automáticos: updated_at, status change logging
+- RLS policies completas
+
+### ✅ 2. Constantes Cases (`src/lib/constants/cases.ts`)
+**210 líneas** con:
+- Keywords deterministas para clasificación (sin IA)
+- Arrays de aseguradoras, secciones, tipos de gestión
+- SLA defaults por sección (7-20 días)
+- Colores y funciones helpers (getSLAColor, getSLALabel)
+
+### ✅ 3. Server Actions
+**18 funciones** en 2 archivos (~910 líneas):
+- `actions.ts`: CRUD, filtros, búsqueda, stats, claim "mío"
+- `actions-details.ts`: Checklist, archivos, comentarios, historial, postpone
+
+### ✅ 4. Componentes React (4 archivos, ~640 líneas)
+**Página lista (`/cases`):**
+- `page.tsx`: Server component con auth y fetch inicial
+- `CasesMainClient.tsx`: Orquestador con tabs, filtros, acciones
+- `CasesList.tsx`: Lista con **barra de progreso** y detalles colapsables
+- `SearchModal.tsx`: Modal de búsqueda
+
+**Features implementados:**
+- ✅ Tabs por sección (Generales, Vida ASSA, Otros, Sin clasificar)
+- ✅ **Barra de progreso** visual (10%-100% según estado)
+- ✅ **Detalles ocultos por defecto** (click para expandir)
+- ✅ SLA semáforo (verde/naranja/rojo)
+- ✅ Badges "Nuevo" para casos sin ver
+- ✅ Filtros Master (estado, broker, aseguradora)
+- ✅ Selección múltiple (PDF/Email)
+- ✅ 100% responsive mobile-first
+- ✅ Colores corporativos aplicados
+
+### ⚠️ PENDIENTE (CRÍTICO)
+**Antes de poder usar:**
+1. Ejecutar `migrations/enhance_cases_table.sql` en Supabase
+2. Ejecutar `npm run types`
+3. Verificar `npm run typecheck && npm run build`
+
+**Para funcionalidad completa:**
+4. Implementar página detalle (`/cases/[id]`)
+5. Implementar wizard creación (`/cases/new`)
+6. Implementar webhook Zoho (`/api/zoho/webhook`)
+7. Implementar export PDF y envío emails
+
+Ver `INSTRUCCIONES_CASES.md` y `RESUMEN_CASES.md` para detalles completos.
+
+---
 
 ## 🆕 COMPLETADO HOY (Sesión anterior: 12:00-12:24 PM)
 

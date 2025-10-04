@@ -119,23 +119,32 @@ export default function NewUserWizard() {
       credentials,
       personalData,
       bankData,
-      submittedAt: new Date().toISOString(),
     };
 
-    console.log("[new-user-wizard] Payload:", payload);
+    try {
+      const response = await fetch('/api/requests', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
 
-    // TODO: Llamar a action para guardar en BD
-    // const result = await actionCreateUserRequest(payload);
+      const data = await response.json();
 
-    setTimeout(() => {
+      if (data.success) {
+        setMessage("✅ " + data.message);
+        
+        // Reset después de 3 segundos
+        setTimeout(() => {
+          window.location.href = "/login";
+        }, 3000);
+      } else {
+        setError(data.error || 'Error al enviar solicitud');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Error al enviar solicitud');
+    } finally {
       setLoading(false);
-      setMessage("Solicitud enviada exitosamente. Espera la aprobación del Master.");
-      
-      // Reset después de 3 segundos
-      setTimeout(() => {
-        window.location.href = "/login";
-      }, 3000);
-    }, 1000);
+    }
   };
 
   return (

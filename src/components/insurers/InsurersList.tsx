@@ -121,9 +121,9 @@ export default function InsurersList({ initialInsurers }: InsurersListProps) {
         </div>
         <Link 
           href="/insurers/new" 
-          className="flex items-center justify-center gap-2 px-6 py-2 bg-[#010139] text-white rounded-lg hover:bg-[#8AAA19] transition-colors font-semibold shadow-lg"
+          className="flex items-center justify-center gap-2 px-6 py-2 bg-[#010139] text-white rounded-lg hover:bg-[#8AAA19] transition-colors font-semibold shadow-lg [&>svg]:text-white"
         >
-          <FaPlus /> Nueva Aseguradora
+          <FaPlus className="text-white" /> <span className="text-white">Nueva Aseguradora</span>
         </Link>
       </div>
 

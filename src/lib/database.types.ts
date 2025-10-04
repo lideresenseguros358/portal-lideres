@@ -268,6 +268,7 @@ export type Database = {
           email: string | null
           id: string
           license_no: string | null
+          meta_personal: number
           name: string | null
           national_id: string | null
           nombre_completo: string | null
@@ -290,6 +291,7 @@ export type Database = {
           email?: string | null
           id: string
           license_no?: string | null
+          meta_personal?: number
           name?: string | null
           national_id?: string | null
           nombre_completo?: string | null
@@ -312,6 +314,7 @@ export type Database = {
           email?: string | null
           id?: string
           license_no?: string | null
+          meta_personal?: number
           name?: string | null
           national_id?: string | null
           nombre_completo?: string | null
@@ -394,6 +397,41 @@ export type Database = {
           },
         ]
       }
+      case_comments: {
+        Row: {
+          case_id: string
+          channel: string
+          content: string
+          created_at: string
+          created_by: string | null
+          id: string
+        }
+        Insert: {
+          case_id: string
+          channel: string
+          content: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+        }
+        Update: {
+          case_id?: string
+          channel?: string
+          content?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "case_comments_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       case_files: {
         Row: {
           case_id: string
@@ -442,55 +480,135 @@ export type Database = {
           },
         ]
       }
+      case_history: {
+        Row: {
+          action: string
+          case_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          metadata: Json | null
+        }
+        Insert: {
+          action: string
+          case_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          metadata?: Json | null
+        }
+        Update: {
+          action?: string
+          case_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          metadata?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "case_history_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cases: {
         Row: {
           broker_id: string | null
           canal: string
+          claimed_by_broker_id: string | null
           client_id: string | null
+          client_name: string | null
           created_at: string
           created_by: string | null
           ctype: Database["public"]["Enums"]["case_type_enum"]
+          deleted_at: string | null
+          direct_payment: boolean | null
+          discount_to_broker: boolean | null
           id: string
           insurer_id: string | null
+          is_deleted: boolean | null
+          is_verified: boolean | null
+          management_type: string | null
+          message_id: string | null
           notes: string | null
+          payment_method: string | null
           policy_number: string | null
+          postponed_until: string | null
+          premium: number | null
           section: Database["public"]["Enums"]["case_section_enum"]
           seen_by_broker: boolean
+          sla_date: string | null
+          sla_days: number | null
           status: Database["public"]["Enums"]["case_status_enum"]
+          thread_id: string | null
           ticket_ref: string | null
           updated_at: string
         }
         Insert: {
           broker_id?: string | null
           canal?: string
+          claimed_by_broker_id?: string | null
           client_id?: string | null
+          client_name?: string | null
           created_at?: string
           created_by?: string | null
           ctype?: Database["public"]["Enums"]["case_type_enum"]
+          deleted_at?: string | null
+          direct_payment?: boolean | null
+          discount_to_broker?: boolean | null
           id?: string
           insurer_id?: string | null
+          is_deleted?: boolean | null
+          is_verified?: boolean | null
+          management_type?: string | null
+          message_id?: string | null
           notes?: string | null
+          payment_method?: string | null
           policy_number?: string | null
+          postponed_until?: string | null
+          premium?: number | null
           section?: Database["public"]["Enums"]["case_section_enum"]
           seen_by_broker?: boolean
+          sla_date?: string | null
+          sla_days?: number | null
           status?: Database["public"]["Enums"]["case_status_enum"]
+          thread_id?: string | null
           ticket_ref?: string | null
           updated_at?: string
         }
         Update: {
           broker_id?: string | null
           canal?: string
+          claimed_by_broker_id?: string | null
           client_id?: string | null
+          client_name?: string | null
           created_at?: string
           created_by?: string | null
           ctype?: Database["public"]["Enums"]["case_type_enum"]
+          deleted_at?: string | null
+          direct_payment?: boolean | null
+          discount_to_broker?: boolean | null
           id?: string
           insurer_id?: string | null
+          is_deleted?: boolean | null
+          is_verified?: boolean | null
+          management_type?: string | null
+          message_id?: string | null
           notes?: string | null
+          payment_method?: string | null
           policy_number?: string | null
+          postponed_until?: string | null
+          premium?: number | null
           section?: Database["public"]["Enums"]["case_section_enum"]
           seen_by_broker?: boolean
+          sla_date?: string | null
+          sla_days?: number | null
           status?: Database["public"]["Enums"]["case_status_enum"]
+          thread_id?: string | null
           ticket_ref?: string | null
           updated_at?: string
         }
@@ -498,6 +616,13 @@ export type Database = {
           {
             foreignKeyName: "cases_broker_id_fkey"
             columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cases_claimed_by_broker_id_fkey"
+            columns: ["claimed_by_broker_id"]
             isOneToOne: false
             referencedRelation: "brokers"
             referencedColumns: ["id"]
@@ -855,6 +980,75 @@ export type Database = {
           },
         ]
       }
+      delinquency: {
+        Row: {
+          broker_id: string | null
+          bucket_1_30: number
+          bucket_31_60: number
+          bucket_61_90: number
+          bucket_90_plus: number
+          client_name: string
+          created_at: string
+          current: number
+          cutoff_date: string
+          due_soon: number
+          id: string
+          insurer_id: string
+          last_updated: string
+          policy_number: string
+          total_debt: number
+        }
+        Insert: {
+          broker_id?: string | null
+          bucket_1_30?: number
+          bucket_31_60?: number
+          bucket_61_90?: number
+          bucket_90_plus?: number
+          client_name: string
+          created_at?: string
+          current?: number
+          cutoff_date: string
+          due_soon?: number
+          id?: string
+          insurer_id: string
+          last_updated?: string
+          policy_number: string
+          total_debt?: number
+        }
+        Update: {
+          broker_id?: string | null
+          bucket_1_30?: number
+          bucket_31_60?: number
+          bucket_61_90?: number
+          bucket_90_plus?: number
+          client_name?: string
+          created_at?: string
+          current?: number
+          cutoff_date?: string
+          due_soon?: number
+          id?: string
+          insurer_id?: string
+          last_updated?: string
+          policy_number?: string
+          total_debt?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "delinquency_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "delinquency_insurer_id_fkey"
+            columns: ["insurer_id"]
+            isOneToOne: false
+            referencedRelation: "insurers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       doc_tags: {
         Row: {
           id: string
@@ -948,24 +1142,154 @@ export type Database = {
           },
         ]
       }
+      download_file_links: {
+        Row: {
+          created_at: string
+          id: string
+          linked_file_id: string
+          source_file_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          linked_file_id: string
+          source_file_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          linked_file_id?: string
+          source_file_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "download_file_links_linked_file_id_fkey"
+            columns: ["linked_file_id"]
+            isOneToOne: false
+            referencedRelation: "download_files"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "download_file_links_source_file_id_fkey"
+            columns: ["source_file_id"]
+            isOneToOne: false
+            referencedRelation: "download_files"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      download_files: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          display_order: number
+          file_url: string
+          id: string
+          is_new: boolean | null
+          marked_new_until: string | null
+          name: string
+          section_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          display_order?: number
+          file_url: string
+          id?: string
+          is_new?: boolean | null
+          marked_new_until?: string | null
+          name: string
+          section_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          display_order?: number
+          file_url?: string
+          id?: string
+          is_new?: boolean | null
+          marked_new_until?: string | null
+          name?: string
+          section_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "download_files_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "download_sections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      download_sections: {
+        Row: {
+          created_at: string
+          display_order: number
+          id: string
+          insurer_id: string | null
+          name: string
+          policy_type: string
+          scope: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          display_order?: number
+          id?: string
+          insurer_id?: string | null
+          name: string
+          policy_type: string
+          scope: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          display_order?: number
+          id?: string
+          insurer_id?: string | null
+          name?: string
+          policy_type?: string
+          scope?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "download_sections_insurer_id_fkey"
+            columns: ["insurer_id"]
+            isOneToOne: false
+            referencedRelation: "insurers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_attendees: {
         Row: {
           broker_id: string
           event_id: string
           id: string
           rsvp: string | null
+          status: string | null
+          updated_at: string
         }
         Insert: {
           broker_id: string
           event_id: string
           id?: string
           rsvp?: string | null
+          status?: string | null
+          updated_at?: string
         }
         Update: {
           broker_id?: string
           event_id?: string
           id?: string
           rsvp?: string | null
+          status?: string | null
+          updated_at?: string
         }
         Relationships: [
           {
@@ -984,39 +1308,96 @@ export type Database = {
           },
         ]
       }
+      event_audience: {
+        Row: {
+          broker_id: string
+          event_id: string
+        }
+        Insert: {
+          broker_id: string
+          event_id: string
+        }
+        Update: {
+          broker_id?: string
+          event_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_audience_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_audience_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       events: {
         Row: {
+          allow_rsvp: boolean
           audience: string
+          canceled_at: string | null
           created_at: string
           created_by: string | null
           details: string | null
           end_at: string
           id: string
+          is_all_day: boolean
           location: string | null
+          location_name: string | null
+          maps_url: string | null
+          modality: string | null
           start_at: string
           title: string
+          updated_at: string
+          zoom_code: string | null
+          zoom_url: string | null
         }
         Insert: {
+          allow_rsvp?: boolean
           audience?: string
+          canceled_at?: string | null
           created_at?: string
           created_by?: string | null
           details?: string | null
           end_at: string
           id?: string
+          is_all_day?: boolean
           location?: string | null
+          location_name?: string | null
+          maps_url?: string | null
+          modality?: string | null
           start_at: string
           title: string
+          updated_at?: string
+          zoom_code?: string | null
+          zoom_url?: string | null
         }
         Update: {
+          allow_rsvp?: boolean
           audience?: string
+          canceled_at?: string | null
           created_at?: string
           created_by?: string | null
           details?: string | null
           end_at?: string
           id?: string
+          is_all_day?: boolean
           location?: string | null
+          location_name?: string | null
+          maps_url?: string | null
+          modality?: string | null
           start_at?: string
           title?: string
+          updated_at?: string
+          zoom_code?: string | null
+          zoom_url?: string | null
         }
         Relationships: [
           {
@@ -1113,6 +1494,113 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      guide_file_links: {
+        Row: {
+          created_at: string
+          id: string
+          linked_file_id: string
+          source_file_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          linked_file_id: string
+          source_file_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          linked_file_id?: string
+          source_file_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "guide_file_links_linked_file_id_fkey"
+            columns: ["linked_file_id"]
+            isOneToOne: false
+            referencedRelation: "guide_files"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "guide_file_links_source_file_id_fkey"
+            columns: ["source_file_id"]
+            isOneToOne: false
+            referencedRelation: "guide_files"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      guide_files: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          display_order: number
+          file_url: string
+          id: string
+          is_new: boolean | null
+          marked_new_until: string | null
+          name: string
+          section_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          display_order?: number
+          file_url: string
+          id?: string
+          is_new?: boolean | null
+          marked_new_until?: string | null
+          name: string
+          section_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          display_order?: number
+          file_url?: string
+          id?: string
+          is_new?: boolean | null
+          marked_new_until?: string | null
+          name?: string
+          section_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "guide_files_section_id_fkey"
+            columns: ["section_id"]
+            isOneToOne: false
+            referencedRelation: "guide_sections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      guide_sections: {
+        Row: {
+          created_at: string
+          display_order: number
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          display_order?: number
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          display_order?: number
+          id?: string
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       insurer_assa_codes: {
         Row: {
@@ -1701,30 +2189,39 @@ export type Database = {
           broker_id: string
           bruto: number
           cancelaciones: number
+          canceladas: number | null
           created_at: string
           id: string
           month: number
+          num_polizas: number
           pma_neto: number
+          updated_at: string | null
           year: number
         }
         Insert: {
           broker_id: string
           bruto?: number
           cancelaciones?: number
+          canceladas?: number | null
           created_at?: string
           id?: string
           month: number
+          num_polizas?: number
           pma_neto?: number
+          updated_at?: string | null
           year: number
         }
         Update: {
           broker_id?: string
           bruto?: number
           cancelaciones?: number
+          canceladas?: number | null
           created_at?: string
           id?: string
           month?: number
+          num_polizas?: number
           pma_neto?: number
+          updated_at?: string | null
           year?: number
         }
         Relationships: [
@@ -1850,6 +2347,80 @@ export type Database = {
         }
         Relationships: []
       }
+      user_requests: {
+        Row: {
+          additional_fields: Json | null
+          assigned_commission_percent: number | null
+          assigned_role: string | null
+          cedula: string
+          created_at: string
+          email: string
+          encrypted_password: string
+          fecha_nacimiento: string
+          id: string
+          licencia: string | null
+          nombre_completo: string
+          numero_cedula_bancaria: string
+          numero_cuenta: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          telefono: string
+          tipo_cuenta: string
+          updated_at: string
+        }
+        Insert: {
+          additional_fields?: Json | null
+          assigned_commission_percent?: number | null
+          assigned_role?: string | null
+          cedula: string
+          created_at?: string
+          email: string
+          encrypted_password: string
+          fecha_nacimiento: string
+          id?: string
+          licencia?: string | null
+          nombre_completo: string
+          numero_cedula_bancaria: string
+          numero_cuenta: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          telefono: string
+          tipo_cuenta?: string
+          updated_at?: string
+        }
+        Update: {
+          additional_fields?: Json | null
+          assigned_commission_percent?: number | null
+          assigned_role?: string | null
+          cedula?: string
+          created_at?: string
+          email?: string
+          encrypted_password?: string
+          fecha_nacimiento?: string
+          id?: string
+          licencia?: string | null
+          nombre_completo?: string
+          numero_cedula_bancaria?: string
+          numero_cuenta?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          telefono?: string
+          tipo_cuenta?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_requests_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -1864,6 +2435,10 @@ export type Database = {
         Returns: string
       }
       assign_pending_to_office_after_3m: {
+        Args: Record<PropertyKey, never>
+        Returns: number
+      }
+      auto_trash_expired_cases: {
         Args: Record<PropertyKey, never>
         Returns: number
       }
@@ -1907,6 +2482,10 @@ export type Database = {
           total_items: number
         }[]
       }
+      get_sla_days_remaining: {
+        Args: { p_case_id: string }
+        Returns: number
+      }
       is_master: {
         Args: Record<PropertyKey, never>
         Returns: boolean
@@ -1926,6 +2505,10 @@ export type Database = {
       profile_sync_from_auth: {
         Args: { p_user_id: string }
         Returns: undefined
+      }
+      purge_deleted_cases: {
+        Args: Record<PropertyKey, never>
+        Returns: number
       }
       set_user_role: {
         Args:
@@ -1969,7 +2552,6 @@ export type Database = {
         | "EMISION_VIDA_ASSA_WEB"
         | "EMISION_VIDA_ASSA_NO_WEB"
         | "OTRO"
-      event_audience: "ALL" | "SELECTED"
       fortnight_status_enum: "DRAFT" | "READY" | "PAID"
       map_kind: "COMMISSIONS" | "DELINQUENCY"
       policy_status_enum: "ACTIVA" | "CANCELADA" | "VENCIDA"
@@ -2139,7 +2721,6 @@ export const Constants = {
         "EMISION_VIDA_ASSA_NO_WEB",
         "OTRO",
       ],
-      event_audience: ["ALL", "SELECTED"],
       fortnight_status_enum: ["DRAFT", "READY", "PAID"],
       map_kind: ["COMMISSIONS", "DELINQUENCY"],
       policy_status_enum: ["ACTIVA", "CANCELADA", "VENCIDA"],

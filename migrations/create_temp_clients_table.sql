@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS public.temp_client_imports (
   ramo TEXT,
   start_date DATE,
   renewal_date DATE,
-  status TEXT DEFAULT 'active',
+  status TEXT, -- Valores válidos: ACTIVA, CANCELADA, VENCIDA (NULL permitido)
   
   -- Broker y porcentaje
   broker_email TEXT NOT NULL, -- Email del broker (se resuelve a broker_id)
@@ -84,22 +84,27 @@ DECLARE
   v_insurer_id UUID;
   v_broker_default_percent NUMERIC(5,2);
 BEGIN
-  -- Solo procesar si tiene national_id (requisito para oficial)
-  IF NEW.national_id IS NULL OR NEW.import_status = 'processed' THEN
+  -- Si no tiene national_id, dejarlo como preliminar (retornar NEW para insertar/actualizar)
+  IF NEW.national_id IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  -- Si ya fue procesado anteriormente, no hacer nada
+  IF NEW.import_status = 'processed' THEN
     RETURN NEW;
   END IF;
 
   -- Resolver broker_id desde email
-  SELECT b.id, b.default_percent INTO v_broker_id, v_broker_default_percent
+  SELECT b.id, b.percent_default INTO v_broker_id, v_broker_default_percent
   FROM public.brokers b
-  INNER JOIN public.profiles p ON p.id = b.id
+  INNER JOIN public.profiles p ON p.id = b.p_id
   WHERE p.email = NEW.broker_email;
 
   IF v_broker_id IS NULL THEN
     NEW.import_status = 'error';
     NEW.error_message = 'Broker no encontrado con email: ' || NEW.broker_email;
     NEW.processed_at = NOW();
-    RETURN NEW;
+    RETURN NEW; -- Mantener en temp con error
   END IF;
 
   -- Resolver insurer_id desde nombre
@@ -112,7 +117,7 @@ BEGIN
     NEW.import_status = 'error';
     NEW.error_message = 'Aseguradora no encontrada o inactiva: ' || NEW.insurer_name;
     NEW.processed_at = NOW();
-    RETURN NEW;
+    RETURN NEW; -- Mantener en temp con error
   END IF;
 
   -- Validar que policy_number no exista ya
@@ -124,7 +129,7 @@ BEGIN
     NEW.import_status = 'error';
     NEW.error_message = 'Número de póliza ya existe: ' || NEW.policy_number;
     NEW.processed_at = NOW();
-    RETURN NEW;
+    RETURN NEW; -- Mantener en temp con error
   END IF;
 
   -- PASO 1: Buscar o crear cliente
@@ -173,18 +178,24 @@ BEGIN
     NEW.ramo,
     NEW.start_date,
     NEW.renewal_date,
-    COALESCE(NEW.status, 'active')::policy_status_enum,
+    COALESCE(NEW.status, 'ACTIVA')::policy_status_enum,
     NEW.percent_override -- NULL usa el default del broker
   ) RETURNING id INTO v_policy_id;
 
-  -- Marcar como procesado exitosamente
-  NEW.import_status = 'processed';
-  NEW.error_message = NULL;
-  NEW.processed_at = NOW();
-
-  RETURN NEW;
+  -- ✅ ÉXITO: Cliente y póliza creados
+  
+  -- Si es un UPDATE (registro ya existía), eliminarlo manualmente
+  IF TG_OP = 'UPDATE' THEN
+    DELETE FROM public.temp_client_imports WHERE id = NEW.id;
+    RETURN NULL;
+  END IF;
+  
+  -- Si es un INSERT, retornar NULL para cancelar la inserción
+  -- (ya se creó el cliente y póliza, no necesitamos el registro temporal)
+  RETURN NULL;
 
 EXCEPTION WHEN OTHERS THEN
+  -- Si hay cualquier error, mantener en temp con estado error
   NEW.import_status = 'error';
   NEW.error_message = SQLERRM;
   NEW.processed_at = NOW();

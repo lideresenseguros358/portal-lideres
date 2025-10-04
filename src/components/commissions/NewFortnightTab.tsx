@@ -12,7 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
-import { FaPlusCircle, FaCalculator, FaChevronDown, FaChevronRight, FaMoneyBillWave, FaDollarSign, FaExclamationCircle, FaExclamationTriangle, FaFileDownload, FaTrash, FaChartPie, FaCheckCircle, FaFileImport, FaUsers } from 'react-icons/fa';
+import { FaPlusCircle, FaCalculator, FaChevronDown, FaChevronRight, FaMoneyBillWave, FaDollarSign, FaExclamationCircle, FaExclamationTriangle, FaFileDownload, FaTrash, FaChartPie, FaCheckCircle, FaFileImport, FaUsers, FaCircle, FaCheck, FaMoneyCheckAlt } from 'react-icons/fa';
 import { toast } from 'sonner';
 
 const months = [
@@ -194,7 +194,7 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
         setDraftFortnight(prev => (prev ? { ...prev, notify_brokers: nextValue } : prev));
         toast.success(nextValue ? 'Notificaciones para corredores activadas.' : 'Notificaciones para corredores desactivadas.');
       } else {
-        toast.error('No se pudo actualizar la preferencia de notificación.', { description: result.error });
+        toast.error('No se pudo actualizar la preferencia de notificación.', { description: (result as any).error || 'Error desconocido' });
       }
     } catch (error) {
       toast.error('Error inesperado al actualizar notificaciones.');
@@ -235,17 +235,17 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
       console.log('Descartando borrador:', draftFortnight.id);
       
       const result = await actionDeleteDraft(draftFortnight.id);
-      
-      if (result.ok) {
-        toast.success('Borrador descartado exitosamente');
-        setDraftFortnight(null);
-        onFortnightCreated(null as any);
-      } else {
-        toast.error(result.error || 'Error al descartar el borrador');
+      if (!result.ok) {
+        toast.error('Error al descartar el borrador', { description: (result as any).error });
+        return;
       }
-    } catch (err) {
-      console.error('Error discarding draft:', err);
-      toast.error('Error al descartar el borrador');
+      
+      toast.success('Borrador eliminado exitosamente');
+      setDraftFortnight(null);
+      onFortnightCreated(null as any); // Reload
+    } catch (error) {
+      console.error('Error discarding draft:', error);
+      toast.error('Error inesperado al descartar');
     } finally {
       setIsDiscarding(false);
       setShowDiscardConfirm(false);
@@ -289,20 +289,25 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
       
       if (result.ok) {
         // Download CSV automatically
-        if (result.data?.csvContent) {
-          const blob = new Blob([result.data.csvContent], { type: 'text/csv;charset=utf-8;' });
-          const link = document.createElement('a');
-          link.href = URL.createObjectURL(blob);
-          link.download = `quincena_${draftFortnight.id}.csv`;
-          link.click();
+        if (result.data?.csv) {
+          const blob = new Blob([result.data.csv], { type: 'text/csv' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `pagos_banco_${draftFortnight.id.slice(0, 8)}.csv`;
+          a.style.display = 'none';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(url);
         }
         
-        toast.success('Quincena cerrada y marcada como pagada');
+        toast.success('Quincena cerrada exitosamente');
         setDraftFortnight(null);
         onFortnightCreated(null as any);
         console.log('✓ Quincena cerrada');
       } else {
-        toast.error(result.error || 'Error al cerrar quincena');
+        toast.error((result as any).error || 'Error al cerrar quincena');
       }
     } catch (err) {
       console.error('Error closing fortnight:', err);
@@ -326,72 +331,95 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
 
   return (
     <div className="space-y-6">
-      {/* Draft Actions Bar */}
-      <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div className="flex items-center gap-2">
-          <FaExclamationCircle className="text-yellow-600" />
-          <span className="text-sm font-medium text-yellow-800">
-            Borrador de quincena {formatFortnightPeriod(draftFortnight.period_start, draftFortnight.period_end)}
-          </span>
-        </div>
-        <div className="flex flex-col gap-2 md:items-end">
-          <div className="flex items-center gap-3">
-            <Button
-              variant={notifyBrokers ? 'default' : 'outline'}
-              size="sm"
-              disabled={isTogglingNotify}
-              onClick={handleToggleNotify}
-              className={notifyBrokers ? 'bg-[#010139] hover:bg-[#010139]/90 text-white' : ''}
-            >
-              {isTogglingNotify ? 'Guardando…' : notifyBrokers ? 'Notificar corredores: ON' : 'Notificar corredores: OFF'}
-            </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => setShowDiscardConfirm(true)}
-              className="bg-red-500 hover:bg-red-600 text-white"
-            >
-              <FaTrash className="mr-2" size={12} />
-              Descartar Borrador
-            </Button>
+      {/* Header con acciones principales */}
+      <div className="bg-gradient-to-r from-yellow-50 to-orange-50 border-2 border-yellow-300 rounded-2xl p-4 sm:p-6 shadow-lg">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+          <div className="flex-1">
+            <div className="flex items-center gap-3 flex-wrap mb-2">
+              <span className="inline-flex items-center gap-2 px-3 py-1 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-full text-xs font-bold shadow-md">
+                <FaCircle size={6} className="animate-pulse" />
+                LIVE
+              </span>
+            </div>
+            <p className="text-gray-700 font-medium">
+              {formatFortnightPeriod(draftFortnight.period_start, draftFortnight.period_end)}
+            </p>
+            <div className="flex items-center gap-2 mt-3">
+              <button
+                onClick={handleToggleNotify}
+                disabled={isTogglingNotify}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                  notifyBrokers 
+                    ? 'bg-[#8AAA19] text-white shadow-md' 
+                    : 'bg-white border-2 border-gray-300 text-gray-700 hover:bg-gray-50'
+                }`}
+              >
+                {notifyBrokers ? <FaCheck size={12} /> : null}
+                {isTogglingNotify ? 'Guardando...' : notifyBrokers ? 'Notificaciones ON' : 'Notificaciones OFF'}
+              </button>
+              <p className="text-xs text-gray-600">
+                {notifyBrokers ? 'Se enviarán correos al cerrar' : 'No se enviarán notificaciones'}
+              </p>
+            </div>
           </div>
-          <p className="text-xs text-gray-500 md:text-right">
-            * Al activar notificaciones, se enviarán correos electrónicos a los corredores cuando se cierre la quincena.
-          </p>
+          
+          <div className="flex flex-col sm:flex-row gap-2">
+            <button
+              onClick={() => setShowDiscardConfirm(true)}
+              disabled={isDiscarding}
+              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-white border-2 border-red-300 text-red-600 rounded-xl hover:bg-red-50 font-medium transition-all text-sm"
+            >
+              <FaTrash />
+              {isDiscarding ? 'Eliminando...' : 'Descartar'}
+            </button>
+            <button
+              onClick={() => setShowCloseConfirm(true)}
+              disabled={isClosingFortnight || importedReports.length === 0}
+              className="flex items-center justify-center gap-2 px-6 py-2.5 bg-gradient-to-r from-[#010139] to-[#020270] text-white rounded-xl hover:shadow-lg font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base"
+            >
+              <FaMoneyCheckAlt />
+              {isClosingFortnight ? 'Cerrando...' : 'Cerrar y Pagar'}
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Section 1: Import Reports */}
-      <Card className="shadow-lg">
-        <CardHeader>
-          <CardTitle className="text-[#010139]">1. Importar Reportes</CardTitle>
-        </CardHeader>
-        <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <ImportForm 
-            insurers={insurers}
-            draftFortnightId={draftFortnight.id}
-            onImport={() => {
-              loadImportedReports();
-              forceRecalculate();
-            }}
-          />
-          <ImportedReportsList 
-            reports={importedReports} 
-            onDelete={handleDeleteImport} 
-          />
-        </CardContent>
-      </Card>
+      <div className="bg-white rounded-xl shadow-lg border-2 border-gray-100 overflow-hidden">
+        <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-4 border-b-2 border-gray-200">
+          <h3 className="text-lg font-bold text-[#010139] flex items-center gap-2">
+            <FaFileImport />
+            1. Importar Reportes
+          </h3>
+        </div>
+        <div className="p-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <ImportForm 
+              insurers={insurers}
+              draftFortnightId={draftFortnight.id}
+              onImport={() => {
+                loadImportedReports();
+                forceRecalculate();
+              }}
+            />
+            <ImportedReportsList 
+              reports={importedReports} 
+              onDelete={handleDeleteImport} 
+            />
+          </div>
+        </div>
+      </div>
 
       {/* Section 2: Office Total Visualization */}
-      <Card className="shadow-lg">
-        <CardHeader>
-          <CardTitle className="text-[#010139] flex items-center gap-2">
+      <div className="bg-white rounded-xl shadow-lg border-2 border-gray-100 overflow-hidden">
+        <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-4 border-b-2 border-gray-200">
+          <h3 className="text-lg font-bold text-[#010139] flex items-center gap-2">
             <FaChartPie />
             2. Total Oficina
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          </h3>
+        </div>
+        <div className="p-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div>
               <h4 className="text-sm font-semibold text-gray-600 mb-3">Distribución de Comisiones</h4>
               <div className="h-64">
@@ -440,8 +468,8 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
               </div>
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Section 3: Totales por Tipo */}
       <Card className="shadow-lg">
@@ -494,21 +522,23 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
             <p className="text-sm text-gray-600">
               Descarga el archivo CSV para cargar las transferencias en Banco General.
             </p>
-            <div className="flex gap-3">
+            <div className="flex flex-wrap gap-2 sm:gap-3">
               <Button
                 onClick={handleExportCsv}
                 disabled={isGeneratingCSV}
-                className="bg-[#8AAA19] hover:bg-[#6d8814] text-white"
+                className="bg-[#8AAA19] hover:bg-[#6d8814] text-white flex-1 sm:flex-initial"
               >
                 <FaFileDownload className="mr-2" />
-                {isGeneratingCSV ? 'Generando...' : 'Descargar CSV Banco General'}
+                <span className="hidden sm:inline">{isGeneratingCSV ? 'Generando...' : 'Descargar CSV Banco General'}</span>
+                <span className="sm:hidden">{isGeneratingCSV ? 'Generando...' : 'CSV Banco'}</span>
               </Button>
               <Button
                 onClick={() => setShowCloseConfirm(true)}
-                className="bg-green-600 hover:bg-green-700 text-white"
+                className="bg-green-600 hover:bg-green-700 text-white flex-1 sm:flex-initial"
               >
                 <FaCheckCircle className="mr-2" />
-                Marcar como Pagado
+                <span className="hidden sm:inline">Marcar como Pagado</span>
+                <span className="sm:hidden">Pagado</span>
               </Button>
             </div>
             <p className="text-xs text-gray-500">
@@ -575,25 +605,24 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
           <DialogHeader>
             <DialogTitle className="text-red-600">¿Descartar Borrador?</DialogTitle>
             <DialogDescription>
-              Esta acción eliminará permanentemente el borrador de quincena actual y todos los reportes importados.
-              <br /><br />
-              <strong className="text-red-600">Esta acción no se puede deshacer.</strong>
+              Esta acción eliminará todo el progreso de esta quincena. No podrás recuperar los datos importados.
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter>
-            <Button 
-              variant="outline" 
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
               onClick={() => setShowDiscardConfirm(false)}
               disabled={isDiscarding}
             >
               Cancelar
             </Button>
-            <Button 
+            <Button
               variant="destructive"
               onClick={handleDiscardDraft}
+              className="bg-red-500 hover:bg-red-600"
               disabled={isDiscarding}
             >
-              {isDiscarding ? 'Descartando...' : 'Descartar Borrador'}
+              {isDiscarding ? 'Eliminando...' : 'Sí, Descartar'}
             </Button>
           </DialogFooter>
         </DialogContent>

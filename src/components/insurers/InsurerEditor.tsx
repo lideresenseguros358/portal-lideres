@@ -83,43 +83,97 @@ export default function InsurerEditor({ initialData, insurerId, insurer }: Insur
       <style>{`
         .editor-container {
           display: flex;
-          gap: 24px;
+          flex-direction: column;
+          gap: 16px;
           background: white;
           border-radius: 16px;
-          padding: 24px;
+          padding: 16px;
           box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+          max-width: 100%;
+          overflow: hidden;
         }
+        
         .tabs-sidebar {
           display: flex;
-          flex-direction: column;
+          flex-direction: row;
           gap: 8px;
-          width: 240px;
-          flex-shrink: 0;
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
+          scrollbar-width: thin;
+          scrollbar-color: #010139 #f0f0f0;
+          padding-bottom: 8px;
         }
+        
+        .tabs-sidebar::-webkit-scrollbar {
+          height: 6px;
+        }
+        
+        .tabs-sidebar::-webkit-scrollbar-track {
+          background: #f0f0f0;
+          border-radius: 10px;
+        }
+        
+        .tabs-sidebar::-webkit-scrollbar-thumb {
+          background: #010139;
+          border-radius: 10px;
+        }
+        
         .tab-button {
           display: flex;
           align-items: center;
-          gap: 12px;
-          padding: 12px 16px;
+          gap: 8px;
+          padding: 10px 14px;
           border: none;
           background: transparent;
           border-radius: 8px;
           text-align: left;
           font-weight: 500;
+          font-size: 14px;
           color: #333;
           cursor: pointer;
           transition: all 0.2s;
+          white-space: nowrap;
+          flex-shrink: 0;
         }
+        
         .tab-button:hover {
           background: #f6f6ff;
           color: #010139;
         }
+        
         .tab-button.active {
           background: #010139;
           color: white;
         }
+        
         .tab-content {
           flex-grow: 1;
+          overflow-x: hidden;
+          width: 100%;
+        }
+        
+        /* Desktop: sidebar vertical */
+        @media (min-width: 768px) {
+          .editor-container {
+            flex-direction: row;
+            gap: 24px;
+            padding: 24px;
+          }
+          
+          .tabs-sidebar {
+            flex-direction: column;
+            width: 240px;
+            flex-shrink: 0;
+            overflow-x: visible;
+            overflow-y: auto;
+            max-height: 70vh;
+          }
+          
+          .tab-button {
+            padding: 12px 16px;
+            font-size: 15px;
+            gap: 12px;
+          }
         }
       `}</style>
     </div>

@@ -69,11 +69,32 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
   };
 
   const loadBrokers = async () => {
-    const { data } = await supabaseClient()
+    // Get brokers
+    const { data: brokersData } = await supabaseClient()
       .from('brokers')
-      .select('id, name, default_percent, profiles!inner(email)')
+      .select('*')
+      .eq('active', true)
       .order('name');
-    setBrokers(data || []);
+
+    if (!brokersData) {
+      setBrokers([]);
+      return;
+    }
+
+    // Get profiles for brokers
+    const brokerIds = brokersData.map(b => b.p_id);
+    const { data: profilesData } = await supabaseClient()
+      .from('profiles')
+      .select('id, full_name, email')
+      .in('id', brokerIds);
+
+    // Merge brokers with profiles
+    const merged = brokersData.map(broker => ({
+      ...broker,
+      profile: profilesData?.find(p => p.id === broker.p_id)
+    }));
+
+    setBrokers(merged || []);
   };
 
   const validateStep = () => {
@@ -142,33 +163,33 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4 overflow-y-auto">
-      <div className="bg-white rounded-xl max-w-2xl w-full my-4 sm:my-8 shadow-2xl flex flex-col max-h-[95vh]">
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-start sm:items-center justify-center overflow-y-auto">
+      <div className="bg-white rounded-xl max-w-2xl w-full mx-2 sm:mx-4 my-4 sm:my-8 shadow-2xl flex flex-col min-h-0 max-h-[calc(100vh-2rem)] sm:max-h-[90vh]">
         {/* Header */}
-        <div className="bg-gradient-to-r from-[#010139] to-[#020270] text-white p-4 sm:p-6 flex items-center justify-between rounded-t-xl flex-shrink-0">
-          <h2 className="text-lg sm:text-2xl font-bold">Nuevo Cliente y Póliza</h2>
-          <button onClick={onClose} className="text-white hover:text-gray-200 transition">
-            <FaTimes size={24} />
+        <div className="bg-gradient-to-r from-[#010139] to-[#020270] text-white px-4 py-3 sm:p-6 flex items-center justify-between rounded-t-xl flex-shrink-0">
+          <h2 className="text-base sm:text-2xl font-bold">Nuevo Cliente y Póliza</h2>
+          <button onClick={onClose} className="text-white hover:text-gray-200 transition p-1">
+            <FaTimes size={20} className="sm:w-6 sm:h-6" />
           </button>
         </div>
 
         {/* Progress Steps */}
-        <div className="px-3 sm:px-6 py-3 sm:py-4 bg-gray-50 border-b flex-shrink-0">
+        <div className="px-3 sm:px-6 py-2 sm:py-4 bg-gray-50 border-b flex-shrink-0">
           <div className="flex items-center justify-between">
             {[1, 2, 3, 4].map((s) => (
               <div key={s} className="flex items-center flex-1">
-                <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-sm sm:text-base font-bold transition-all ${
+                <div className={`w-7 h-7 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-xs sm:text-base font-bold transition-all ${
                   step >= s ? 'bg-[#010139] text-white' : 'bg-gray-300 text-gray-600'
                 }`}>
-                  {step > s ? <FaCheckCircle className="text-xs sm:text-base" /> : s}
+                  {step > s ? <FaCheckCircle className="text-[10px] sm:text-base" /> : s}
                 </div>
                 {s < 4 && (
-                  <div className={`h-1 flex-1 mx-1 sm:mx-2 ${step > s ? 'bg-[#010139]' : 'bg-gray-300'}`} />
+                  <div className={`h-0.5 sm:h-1 flex-1 mx-1 sm:mx-2 ${step > s ? 'bg-[#010139]' : 'bg-gray-300'}`} />
                 )}
               </div>
             ))}
           </div>
-          <div className="flex justify-between mt-2 text-xs sm:text-sm text-gray-600 px-1">
+          <div className="hidden sm:flex justify-between mt-2 text-xs sm:text-sm text-gray-600 px-1">
             <span className="text-center">Cliente</span>
             <span className="text-center">Póliza</span>
             <span className="text-center">Asignación</span>
@@ -177,81 +198,81 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
         </div>
 
         {/* Form Content */}
-        <div className="p-4 sm:p-6 overflow-y-auto flex-1">
+        <div className="p-3 sm:p-6 overflow-y-auto flex-1 min-h-0">
           {/* Step 1: Cliente */}
           {step === 1 && (
-            <div className="space-y-4 animate-fadeIn">
-              <div className="flex items-center gap-2 text-[#010139] mb-4">
-                <FaUser size={24} />
-                <h3 className="text-xl font-bold">Datos del Cliente</h3>
+            <div className="space-y-3 sm:space-y-4 animate-fadeIn">
+              <div className="flex items-center gap-2 text-[#010139] mb-2 sm:mb-4">
+                <FaUser size={20} className="sm:w-6 sm:h-6" />
+                <h3 className="text-lg sm:text-xl font-bold">Datos del Cliente</h3>
               </div>
               
-              <div className="bg-blue-50 border-l-4 border-blue-500 p-3 rounded mb-4">
-                <p className="text-sm text-blue-800">
+              <div className="bg-blue-50 border-l-4 border-blue-500 p-2 sm:p-3 rounded mb-2 sm:mb-4">
+                <p className="text-xs sm:text-sm text-blue-800">
                   <span className="text-red-500 font-bold">*</span> Campos obligatorios. 
-                  Los demás campos son opcionales.
+                  Los demás son opcionales.
                 </p>
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                   Nombre Completo <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={formData.client_name}
                   onChange={(e) => setFormData({ ...formData, client_name: e.target.value })}
-                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition"
+                  className="w-full px-3 py-2 sm:px-4 text-sm sm:text-base border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition"
                   placeholder="Juan Pérez"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                   Cédula / Pasaporte / RUC
                 </label>
                 <input
                   type="text"
                   value={formData.national_id}
                   onChange={(e) => setFormData({ ...formData, national_id: e.target.value })}
-                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition"
+                  className="w-full px-3 py-2 sm:px-4 text-sm sm:text-base border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition"
                   placeholder="8-123-4567"
                 />
-                <p className="text-xs text-gray-500 mt-1">
+                <p className="text-[10px] sm:text-xs text-gray-500 mt-1">
                   ⚠️ Sin este campo, el cliente quedará como PRELIMINAR
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Email</label>
                   <input
                     type="email"
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition"
+                    className="w-full px-3 py-2 sm:px-4 text-sm sm:text-base border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition"
                     placeholder="cliente@email.com"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
+                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Teléfono</label>
                   <input
                     type="tel"
                     value={formData.phone}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition"
+                    className="w-full px-3 py-2 sm:px-4 text-sm sm:text-base border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition"
                     placeholder="6000-0000"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Dirección</label>
+                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Dirección</label>
                 <textarea
                   value={formData.address}
                   onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition"
+                  className="w-full px-3 py-2 sm:px-4 text-sm sm:text-base border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition resize-none"
                   rows={2}
                   placeholder="Calle 50, Ciudad de Panamá"
                 />
@@ -261,10 +282,10 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
 
           {/* Step 2: Póliza */}
           {step === 2 && (
-            <div className="space-y-4 animate-fadeIn">
-              <div className="flex items-center gap-2 text-[#010139] mb-4">
-                <FaFileAlt size={24} />
-                <h3 className="text-xl font-bold">Datos de la Póliza</h3>
+            <div className="space-y-3 sm:space-y-4 animate-fadeIn">
+              <div className="flex items-center gap-2 text-[#010139] mb-2 sm:mb-4">
+                <FaFileAlt size={20} className="sm:w-6 sm:h-6" />
+                <h3 className="text-lg sm:text-xl font-bold">Datos de la Póliza</h3>
               </div>
 
               <div>
@@ -361,19 +382,19 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                     <select
                       value={formData.broker_email}
                       onChange={(e) => {
-                        const selected = brokers.find(b => (b.profiles as any).email === e.target.value);
+                        const selected = brokers.find((b: any) => b.profile?.email === e.target.value);
                         setFormData({ 
                           ...formData, 
                           broker_email: e.target.value,
-                          percent_override: selected?.default_percent?.toString() || ''
+                          percent_override: (selected as any)?.percent_default?.toString() || ''
                         });
                       }}
                       className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition"
                     >
                       <option value="">Seleccionar corredor...</option>
-                      {brokers.map((broker) => (
-                        <option key={broker.id} value={(broker.profiles as any).email}>
-                          {broker.name} ({(broker.profiles as any).email})
+                      {brokers.map((broker: any) => (
+                        <option key={broker.id} value={broker.profile?.email}>
+                          {broker.name || broker.profile?.full_name} ({broker.profile?.email})
                         </option>
                       ))}
                     </select>

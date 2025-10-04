@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { actionGetAdvances } from '@/app/(app)/commissions/actions';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -13,11 +13,13 @@ import { AddAdvanceModal } from './AddAdvanceModal';
 import { AdvanceHistoryModal } from './AdvanceHistoryModal';
 
 // Types
+type AdvanceStatus = 'pending' | 'paid';
+
 interface Advance {
   id: string;
   amount: number;
   reason: string | null;
-  status: 'pending' | 'paid';
+  status: AdvanceStatus;
   created_at: string;
   brokers: { id: string; name: string | null } | null;
 }
@@ -46,13 +48,36 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
 
   const loadAdvances = useCallback(async () => {
     setLoading(true);
-    const result = await actionGetAdvances(role === 'broker' ? brokerId || undefined : undefined, year);
-    if (result.ok) {
-      setAllAdvances((result.data || []) as unknown as Advance[]);
-    } else {
-      toast.error('Error al cargar adelantos', { description: result.error });
+    try {
+      const result = await actionGetAdvances(role === 'broker' ? brokerId || undefined : undefined, year);
+      console.log('[AdvancesTab] Result from actionGetAdvances:', result);
+      if (result.ok) {
+        console.log('[AdvancesTab] Setting advances, count:', result.data?.length || 0);
+        const normalized = (result.data || []).map((item) => {
+          const status = typeof item.status === 'string' ? item.status.toLowerCase() : 'pending';
+          const normalizedStatus: AdvanceStatus = status === 'paid' ? 'paid' : 'pending';
+          const advance: Advance = {
+            id: item.id,
+            amount: Number(item.amount) || 0,
+            reason: item.reason ?? null,
+            status: normalizedStatus,
+            created_at: item.created_at,
+            brokers: (item as any).brokers ?? null,
+          };
+          console.log('[AdvancesTab] Normalized advance:', advance.id, advance.status, advance.amount);
+          return advance;
+        });
+        setAllAdvances(normalized);
+      } else {
+        console.error('[AdvancesTab] Error loading advances:', result.error);
+        toast.error('Error al cargar adelantos', { description: result.error });
+      }
+    } catch (error) {
+      console.error('[AdvancesTab] Exception loading advances:', error);
+      toast.error('Error inesperado al cargar adelantos');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   }, [role, brokerId, year]);
 
   useEffect(() => {
@@ -60,7 +85,8 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
   }, [loadAdvances]);
 
   const groupedData = useMemo(() => {
-    return allAdvances.reduce<GroupedAdvances>((acc, advance) => {
+    console.log('[AdvancesTab] Grouping advances, total count:', allAdvances.length);
+    const grouped = allAdvances.reduce<GroupedAdvances>((acc, advance) => {
       const bId = advance.brokers?.id || 'unknown';
       if (!acc[bId]) {
         acc[bId] = {
@@ -70,11 +96,14 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
         };
       }
       if (advance.status === 'pending') {
-        acc[bId]!.total_pending += advance.amount;
+        acc[bId].total_pending += advance.amount;
       }
-      acc[bId]!.advances.push(advance);
+      acc[bId].advances.push(advance);
+      console.log('[AdvancesTab] Group accumulate:', bId, advance.status, acc[bId].advances.length);
       return acc;
     }, {});
+    console.log('[AdvancesTab] Grouped data:', Object.keys(grouped).length, 'brokers');
+    return grouped;
   }, [allAdvances]);
 
   const toggleBroker = (id: string) => {
@@ -127,7 +156,7 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
           if (advancesToShow.length === 0) return null;
 
           return (
-            <>
+            <React.Fragment key={`broker-${bId}`}>
               {role === 'master' && (
                 <TableRow 
                   key={bId} 
@@ -190,9 +219,9 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
                   </TableCell>
                 </TableRow>
               ))}
-            </>
+            </React.Fragment>
           );
-          })}
+        })}
         </TableBody>
       </Table>
     );
@@ -267,29 +296,32 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
 
       {/* Main Table */}
       <Card className="shadow-lg">
-        <CardHeader className="flex-row items-center justify-between bg-gradient-to-r from-gray-50 to-gray-100">
-          <div className="flex items-center gap-2">
-            <FaHistory className="text-[#010139] text-lg" />
-            <CardTitle className="text-[#010139]">Gestión de Adelantos</CardTitle>
-          </div>
-          <div className="flex items-center gap-4">
-            <Select value={String(year)} onValueChange={(value) => setYear(Number(value))}>
-              <SelectTrigger className="w-20 sm:w-28 border-[#010139]/20">
-                <SelectValue placeholder="Año" />
-              </SelectTrigger>
-              <SelectContent>
-                {years.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            {role === 'master' && (
-              <Button 
-                onClick={() => setIsAddModalOpen(true)}
-                className="bg-[#010139] hover:bg-[#8AAA19] text-white transition-colors"
-              >
-                <FaPlus className="mr-2 h-3 w-3" />
-                Nuevo Adelanto
-              </Button>
-            )}
+        <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2">
+              <FaHistory className="text-[#010139] text-lg" />
+              <CardTitle className="text-[#010139]">Gestión de Adelantos</CardTitle>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 sm:gap-4">
+              <Select value={String(year)} onValueChange={(value) => setYear(Number(value))}>
+                <SelectTrigger className="w-24 border-[#010139]/20">
+                  <SelectValue placeholder="Año" />
+                </SelectTrigger>
+                <SelectContent>
+                  {years.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
+                </SelectContent>
+              </Select>
+              {role === 'master' && (
+                <Button 
+                  onClick={() => setIsAddModalOpen(true)}
+                  className="bg-[#010139] hover:bg-[#8AAA19] text-white transition-colors"
+                >
+                  <FaPlus className="mr-2 h-3 w-3" />
+                  <span className="hidden sm:inline">Nuevo Adelanto</span>
+                  <span className="sm:hidden">Nuevo</span>
+                </Button>
+              )}
+            </div>
           </div>
         </CardHeader>
         <CardContent className="p-0">

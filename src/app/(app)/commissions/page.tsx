@@ -42,14 +42,8 @@ export default async function CommissionsPage() {
   const initialData = await getInitialData();
 
   return (
-    <div>
-      <div className="max-w-7xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-[#010139] mb-2">💰 Comisiones</h1>
-          <p className="text-gray-600 text-lg">Gestión de comisiones, importaciones y pagos</p>
-        </div>
-        
+    <div className="px-2 sm:px-4">
+      <div className="max-w-7xl mx-auto space-y-4 sm:space-y-6">
         {/* Main Content */}
         <CommissionsTabs initialData={initialData} />
       </div>

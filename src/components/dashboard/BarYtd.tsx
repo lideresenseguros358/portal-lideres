@@ -74,16 +74,16 @@ const BarYtd = ({ current, last, onClick }: BarYtdProps) => {
         onClick ? "cursor-pointer focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#8aaa19]" : undefined,
       )}
     >
-      <div className="flex items-center justify-between">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#8a8a8a]">Comparativo YTD</p>
-          <p className="text-lg font-semibold text-[#010139]">Año actual vs año pasado</p>
-        </div>
+      <div className="flex flex-col items-center justify-center text-center gap-1">
+        <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#8a8a8a]">PRODUCCIÓN ANUAL</p>
+        <p className="text-base font-semibold text-[#010139]">Comparativo PMA</p>
+        <p className="text-sm text-gray-600">Año actual VS Año pasado</p>
       </div>
 
-      <div className="h-72 w-full">
+      {/* Desktop: margen izquierdo aumentado para montos */}
+      <div className="hidden md:block h-72 w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={data} margin={{ top: 8, right: 16, left: -16, bottom: 8 }}>
+          <BarChart data={data} margin={{ top: 8, right: 16, left: 20, bottom: 8 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#edf0f2" />
             <XAxis dataKey="month" stroke="#8a8a8a" tickLine={false} axisLine={{ stroke: "#edf0f2" }} />
             <YAxis stroke="#8a8a8a" tickLine={false} axisLine={{ stroke: "#edf0f2" }} tickFormatter={(val) => val.toLocaleString("es-PA")} />
@@ -96,6 +96,26 @@ const BarYtd = ({ current, last, onClick }: BarYtdProps) => {
             <Bar dataKey="previous" name="Año pasado" fill="#b5b5b5" radius={[6, 6, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
+      </div>
+
+      {/* Mobile: scroll horizontal para preservar legibilidad */}
+      <div className="md:hidden overflow-x-auto">
+        <div className="h-72" style={{ minWidth: '600px', width: '100%' }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data} margin={{ top: 8, right: 16, left: 20, bottom: 8 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#edf0f2" />
+              <XAxis dataKey="month" stroke="#8a8a8a" tickLine={false} axisLine={{ stroke: "#edf0f2" }} />
+              <YAxis stroke="#8a8a8a" tickLine={false} axisLine={{ stroke: "#edf0f2" }} tickFormatter={(val) => val.toLocaleString("es-PA")} />
+              <Tooltip
+                cursor={{ fill: "rgba(1,1,57,0.04)" }}
+                formatter={(value: number) => value.toLocaleString("es-PA", { minimumFractionDigits: 2 })}
+              />
+              <Legend wrapperStyle={{ paddingTop: 12 }} iconType="circle" />
+              <Bar dataKey="actual" name="Año actual" fill="#010139" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="previous" name="Año pasado" fill="#b5b5b5" radius={[6, 6, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
       </div>
     </Element>
   );

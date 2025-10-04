@@ -20,7 +20,7 @@ export default function PaymentActions({ draftFortnightId, initialNotifyState, o
     if (result.ok) {
       setNotifyBrokers(newValue);
     } else {
-      alert(`Error: ${result.error}`);
+      alert(`Error: ${(result as any).error || 'Error desconocido'}`);
     }
   };
 
@@ -32,21 +32,20 @@ export default function PaymentActions({ draftFortnightId, initialNotifyState, o
     setPaying(true);
     const result = await actionPayFortnight(draftFortnightId);
     
-    if (result.ok && result.data?.csvContent) {
-      const blob = new Blob([result.data.csvContent], { type: 'text/csv' });
+    if (result.ok && result.data?.csv) {
+      const blob = new Blob([result.data.csv], { type: 'text/csv' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `pagos_${draftFortnightId.slice(0, 8)}.csv`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       
-      alert(`Quincena cerrada. ${result.data.notified ? 'Notificaciones enviadas.' : ''}`)
+      alert(`Quincena cerrada exitosamente. ${result.data.brokers_paid} brokers pagados por $${result.data.total_paid.toFixed(2)}`)
       window.location.reload();
     } else {
-      alert(`Error: ${result.error}`);
+      alert(`Error: ${result.ok ? 'No se pudo generar CSV' : (result as any).error}`);
     }
     setPaying(false);
   };

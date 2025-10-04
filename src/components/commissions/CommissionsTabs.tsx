@@ -1,16 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { FaMoneyBillWave, FaCalendarAlt, FaCog, FaChartBar, FaEye } from 'react-icons/fa';
+import { FaEye, FaPlus, FaDollarSign, FaExclamationTriangle, FaChartLine, FaCircle } from 'react-icons/fa';
 import { PreviewTab } from './PreviewTab';
 import AdjustmentsTab from './AdjustmentsTab';
 import { YTDTab } from './YTDTab';
 import { AdvancesTab } from './AdvancesTab';
 import BrokerView from './BrokerView';
 import NewFortnightTab from './NewFortnightTab';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Badge } from '@/components/ui/badge';
-import { Card } from '@/components/ui/card';
 
 interface InitialData {
   draftFortnight: any;
@@ -30,13 +27,13 @@ export default function CommissionsTabs({ initialData }: { initialData: InitialD
   const validBrokers = brokers.filter(b => b.name) as { id: string; name: string }[];
   const validInsurers = insurers.filter(i => i.name) as { id: string; name: string }[];
 
-  // MASTER tiene 5 tabs según el esquema actualizado
+  // MASTER tiene 5 tabs
   const MASTER_TABS = [
-    { id: 'preview', label: 'Previsualización', icon: FaEye, description: 'Histórico de quincenas cerradas' },
-    { id: 'new-fortnight', label: 'Nueva Quincena', icon: FaCalendarAlt, description: 'Gestión de la quincena actual', highlight: !!draftFortnight },
-    { id: 'advances', label: 'Adelantos', icon: FaMoneyBillWave, description: 'Gestión de adelantos' },
-    { id: 'adjustments', label: 'Ajustes', icon: FaCog, description: 'Pendientes sin identificar', badge: pendingCount },
-    { id: 'ytd', label: 'Acumulado Anual', icon: FaChartBar, description: 'Resumen anual por corredor' },
+    { id: 'preview', label: 'Historial', badge: 0, icon: FaEye },
+    { id: 'new-fortnight', label: 'Nueva Quincena', badge: 0, priority: !!draftFortnight, icon: FaPlus },
+    { id: 'advances', label: 'Adelantos', badge: 0, icon: FaDollarSign },
+    { id: 'adjustments', label: 'Ajustes', badge: pendingCount, icon: FaExclamationTriangle },
+    { id: 'ytd', label: 'Acumulado', badge: 0, icon: FaChartLine },
   ];
 
   const TABS = role === 'master' ? MASTER_TABS : [];
@@ -56,93 +53,115 @@ export default function CommissionsTabs({ initialData }: { initialData: InitialD
     setPendingCount(count);
   };
 
-  const renderTabContent = (tab: { id: string }) => (
-    <TabsContent key={tab.id} value={tab.id} className="mt-6 space-y-6">
-      {tab.id === 'preview' && (
-        <PreviewTab role={role} brokerId={brokerId || undefined} />
-      )}
-      {tab.id === 'new-fortnight' && (
-        <NewFortnightTab 
-          key={`fortnight-${refreshKey}`}
-          role={role} 
-          brokerId={brokerId} 
-          draftFortnight={draftFortnight} 
-          insurers={validInsurers} 
-          brokers={validBrokers} 
-          onFortnightCreated={handleFortnightCreated} 
-        />
-      )}
-      {tab.id === 'advances' && (
-        <AdvancesTab 
-          role={role} 
-          brokerId={brokerId} 
-          brokers={validBrokers}
-        />
-      )}
-      {tab.id === 'adjustments' && (
-        <AdjustmentsTab 
-          role={role} 
-          brokerId={brokerId} 
-          brokers={validBrokers}
-          onPendingCountChange={handlePendingCountChange}
-        />
-      )}
-      {tab.id === 'ytd' && (
-        <YTDTab role={role} brokerId={brokerId} />
-      )}
-    </TabsContent>
-  );
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab);
+  };
 
   // BROKER view - Una sola vista con todo integrado
   if (role === 'broker') {
     if (!brokerId) {
       return (
-        <Card className="shadow-lg p-8 text-center">
+        <div className="bg-white rounded-xl shadow-lg border-2 border-gray-100 p-8 text-center">
           <p className="text-red-600 font-semibold">Error: No se pudo identificar al corredor.</p>
-        </Card>
+        </div>
       );
     }
     return <BrokerView brokerId={brokerId} />;
   }
 
-  // MASTER view - 4 tabs exactamente según el esquema
+  // MASTER view con patrón de Cheques
   return (
-    <Card className="shadow-lg p-0">
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-5 bg-gray-50 p-1 rounded-t-lg rounded-b-none">
-          {TABS.map(tab => (
-            <TabsTrigger 
-              key={tab.id} 
-              value={tab.id}
-              className={`relative data-[state=active]:bg-white data-[state=active]:text-[#010139] data-[state=active]:shadow-sm ${
-                tab.highlight ? 'ring-2 ring-[#8AAA19] ring-opacity-50' : ''
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <tab.icon className="text-sm" />
-                <span className="font-medium">{tab.label}</span>
-                {tab.badge && tab.badge > 0 && (
-                  <Badge 
-                    className="ml-2 bg-[#8AAA19] text-white px-2 py-0 text-xs"
-                  >
+    <div className="max-w-7xl mx-auto">
+      {/* Header */}
+      <div className="mb-6 sm:mb-8">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-6">
+          <div>
+            <h1 className="text-3xl sm:text-4xl font-bold text-[#010139] mb-2 flex items-center gap-3 flex-wrap">
+              💰 Comisiones
+              {draftFortnight && (
+                <span className="inline-flex items-center gap-2 px-3 py-1.5 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-full text-xs sm:text-sm font-bold shadow-lg animate-pulse">
+                  <FaCircle size={8} className="animate-pulse" />
+                  LIVE
+                </span>
+              )}
+            </h1>
+            <p className="text-gray-600 text-base sm:text-lg">
+              Sistema completo de gestión de comisiones y pagos
+              {pendingCount > 0 && (
+                <span className="ml-2 text-orange-600 font-semibold">
+                  • {pendingCount} ajustes pendientes
+                </span>
+              )}
+            </p>
+          </div>
+        </div>
+
+        {/* Tab Navigation */}
+        <div className="bg-white rounded-2xl shadow-lg p-2 flex gap-2 overflow-x-auto">
+          {TABS.map(tab => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                onClick={() => handleTabChange(tab.id)}
+                className={`flex-1 min-w-[140px] flex items-center justify-center gap-2 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl font-semibold transition-all whitespace-nowrap text-sm sm:text-base ${
+                  activeTab === tab.id
+                    ? 'bg-gradient-to-r from-[#010139] to-[#020270] text-white shadow-lg'
+                    : 'text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                <Icon size={14} className="sm:hidden" />
+                <Icon size={16} className="hidden sm:block" />
+                <span className="hidden sm:inline">{tab.label}</span>
+                <span className="sm:hidden">{tab.label.split(' ')[0]}</span>
+                {tab.badge > 0 && (
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                    activeTab === tab.id ? 'bg-[#8AAA19]' : 'bg-orange-500 text-white'
+                  }`}>
                     {tab.badge}
-                  </Badge>
-                )}
-                {tab.highlight && (
-                  <span className="absolute top-0 right-0 -mt-1 -mr-1 flex h-3 w-3">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#8AAA19] opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-3 w-3 bg-[#8AAA19]"></span>
                   </span>
                 )}
-              </div>
-            </TabsTrigger>
-          ))}
-        </TabsList>
-        
-        <div className="p-6">
-          {TABS.map(renderTabContent)}
+              </button>
+            );
+          })}
         </div>
-      </Tabs>
-    </Card>
+      </div>
+
+      {/* Tab Content */}
+      <div className="transition-all duration-300">
+        {activeTab === 'preview' && (
+          <PreviewTab role={role} brokerId={brokerId || undefined} />
+        )}
+        {activeTab === 'new-fortnight' && (
+          <NewFortnightTab 
+            key={`fortnight-${refreshKey}`}
+            role={role} 
+            brokerId={brokerId} 
+            draftFortnight={draftFortnight} 
+            insurers={validInsurers} 
+            brokers={validBrokers} 
+            onFortnightCreated={handleFortnightCreated} 
+          />
+        )}
+        {activeTab === 'advances' && (
+          <AdvancesTab 
+            role={role} 
+            brokerId={brokerId} 
+            brokers={validBrokers}
+          />
+        )}
+        {activeTab === 'adjustments' && (
+          <AdjustmentsTab 
+            role={role} 
+            brokerId={brokerId} 
+            brokers={validBrokers}
+            onPendingCountChange={handlePendingCountChange}
+          />
+        )}
+        {activeTab === 'ytd' && (
+          <YTDTab role={role} brokerId={brokerId} />
+        )}
+      </div>
+    </div>
   );
 }

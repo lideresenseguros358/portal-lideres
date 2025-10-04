@@ -347,7 +347,67 @@ export async function actionCreateDraftFortnight(payload: unknown) {
       .select()
       .single<FortnightRow>();
 
-    if (error) throw new Error(error.message);
+    if (error || !data) throw new Error(error?.message || 'No se pudo crear fortnight');
+
+    // Inyectar pending_items "approved_next" en el nuevo draft
+    const { data: pendingNext } = await supabase
+      .from('pending_items')
+      .select('*')
+      .eq('status', 'approved_next')
+      .not('assigned_broker_id', 'is', null)
+      .returns<PendingItemRow[]>();
+    
+    const firstItem = pendingNext?.[0];
+    if (pendingNext && pendingNext.length > 0 && firstItem?.insurer_id) {
+      console.log(`[actionCreateDraftFortnight] Inyectando ${pendingNext.length} items de próxima quincena`);
+      
+      // Crear import virtual para estos items
+      const { data: virtualImport } = await supabase
+        .from('comm_imports')
+        .insert([{
+          insurer_id: firstItem.insurer_id,
+          period_label: data.id,
+          uploaded_by: userId,
+          total_amount: pendingNext.reduce((s, p) => s + p.commission_raw, 0),
+          is_life_insurance: false,
+        } satisfies CommImportIns])
+        .select()
+        .single<CommImportRow>();
+      
+      if (virtualImport) {
+        // Migrar cada item
+        for (const item of pendingNext) {
+          const { data: broker } = await supabase
+            .from('brokers')
+            .select('percent_default')
+            .eq('id', item.assigned_broker_id!)
+            .single();
+          
+          const percent = (broker as any)?.percent_default || 100;
+          const grossAmount = item.commission_raw * (percent / 100);
+          
+          await supabase
+            .from('comm_items')
+            .insert([{
+              import_id: virtualImport.id,
+              insurer_id: item.insurer_id!,
+              policy_number: item.policy_number,
+              broker_id: item.assigned_broker_id,
+              gross_amount: grossAmount,
+              insured_name: item.insured_name,
+              raw_row: null,
+            } satisfies CommItemIns]);
+          
+          // Marcar como procesado
+          await supabase
+            .from('pending_items')
+            .update({ status: 'injected_to_fortnight' } satisfies PendingItemUpd)
+            .eq('id', item.id);
+        }
+        
+        console.log(`[actionCreateDraftFortnight] ✓ ${pendingNext.length} items inyectados exitosamente`);
+      }
+    }
 
     revalidatePath('/(app)/commissions');
     return { ok: true as const, data };
@@ -651,19 +711,27 @@ export async function actionResolvePendingGroups(payload: unknown) {
     if (targetIds.length === 0) {
       return { ok: false as const, error: 'No hay pendientes abiertos para asignar.' };
     }
-
     const { data, error } = await supabase
       .from('pending_items')
       .update({
         assigned_broker_id: parsed.broker_id,
-        status: 'claimed',
-        assigned_at: new Date().toISOString(),
-      } satisfies PendingItemUpd)
+      })
       .in('id', targetIds)
       .eq('status', 'open')
       .select('id');
 
     if (error) throw error;
+
+    if (data && data.length > 0) {
+      // Migrar automáticamente a comm_items
+      const migrateResult = await actionMigratePendingToCommItems(
+        data.map(item => item.id)
+      );
+      
+      if (!migrateResult.ok) {
+        console.error('Error al migrar:', migrateResult.error);
+      }
+    }
 
     revalidatePath('/(app)/commissions');
     return { ok: true as const, data: { updated: data?.length || 0 } };
@@ -771,140 +839,6 @@ export async function actionGetAdvanceHistory(advanceId: string) {
   }
 }
 
-// Recalculate fortnight totals
-export async function actionRecalculateFortnight(fortnightId: string) {
-  try {
-    const supabase = getSupabaseAdmin();
-    
-    // Get fortnight details
-    const { data: fortnight, error: fError } = await supabase
-      .from('fortnights')
-      .select('*')
-      .eq('id', fortnightId)
-      .single<FortnightRow>();
-
-    if (fError || !fortnight) throw new Error('Quincena no encontrada');
-
-    // Get all comm_items in the period with broker and insurer info
-    const { data: items, error: itemsError } = await supabase
-      .from('comm_items')
-      .select('broker_id, gross_amount, insurer_id, insured_name, policy_number')
-      .not('broker_id', 'is', null)
-      .gte('created_at', fortnight.period_start!)
-      .lte('created_at', fortnight.period_end!);
-
-    if (itemsError) throw new Error(itemsError.message);
-
-    // Get broker commission percentages (YA EXISTE en DB)
-    // NOTA: Regenerar tipos con: npx supabase gen types typescript --project-id xxx > src/lib/supabase/database.types.ts
-    const { data: brokers } = await supabase
-      .from('brokers')
-      .select('id') as any;
-
-    const brokerPercentages = new Map<string, number>();
-    for (const broker of brokers || []) {
-      // TODO: Usar commission_percentage cuando se regeneren los tipos
-      brokerPercentages.set(broker.id, broker.commission_percentage || 100);
-    }
-
-    // Get broker-insurer overrides (si existen)
-    const overrideMap = new Map<string, number>();
-    // TODO: Habilitar cuando se regeneren los tipos
-    // const { data: overrides } = await supabase
-    //   .from('broker_insurer_overrides')
-    //   .select('broker_id, insurer_id, commission_percentage') as any;
-    // for (const override of overrides || []) {
-    //   const key = `${override.broker_id}-${override.insurer_id}`;
-    //   overrideMap.set(key, override.commission_percentage);
-    // }
-
-    // Group by broker and calculate commission with percentage
-    // Agrupación por nombre de cliente (no solo póliza)
-    const brokerTotals = new Map<string, number>();
-    const brokerClientGroups = new Map<string, Map<string, number>>();
-    
-    for (const item of items || []) {
-      const brokerId = item.broker_id!;
-      const insurerId = item.insurer_id;
-      const clientName = item.insured_name || 'DESCONOCIDO';
-      const reportCommission = Number(item.gross_amount) || 0;
-      
-      // Get percentage (check override first, then default)
-      const overrideKey = `${brokerId}-${insurerId}`;
-      const percentage = overrideMap.get(overrideKey) || brokerPercentages.get(brokerId) || 100;
-      
-      // Calculate broker's gross commission
-      const brokerGrossCommission = (reportCommission * percentage) / 100;
-      
-      // Group by client name
-      if (!brokerClientGroups.has(brokerId)) {
-        brokerClientGroups.set(brokerId, new Map());
-      }
-      const clientMap = brokerClientGroups.get(brokerId)!;
-      const currentClientTotal = clientMap.get(clientName) || 0;
-      clientMap.set(clientName, currentClientTotal + brokerGrossCommission);
-      
-      // Total by broker
-      const current = brokerTotals.get(brokerId) || 0;
-      brokerTotals.set(brokerId, current + brokerGrossCommission);
-    }
-
-    // Get advances for each broker
-    const { data: advances } = await supabase
-      .from('advances')
-      .select('broker_id, amount, reason')
-      .eq('status', 'PENDING');
-
-    // Group advances by broker
-    const brokerAdvances = new Map<string, Array<{ amount: unknown; reason: string }>>();
-    for (const advance of advances || []) {
-      const current = brokerAdvances.get(advance.broker_id!) || [];
-      current.push({ amount: advance.amount, reason: advance.reason || '' });
-      brokerAdvances.set(advance.broker_id!, current);
-    }
-
-    // Calculate and upsert totals for each broker
-    const upserts: FortnightBrokerTotalIns[] = [];
-    
-    for (const [brokerId, grossAmount] of brokerTotals) {
-      const advances = brokerAdvances.get(brokerId) || [];
-      const totalAdvances = advances.reduce((sum, a) => sum + (Number(a.amount) || 0), 0);
-      const discounts = { advances: totalAdvances };
-      const netAmount = grossAmount - totalAdvances;
-
-      upserts.push({
-        fortnight_id: fortnightId,
-        broker_id: brokerId,
-        gross_amount: grossAmount,
-        discounts_json: discounts,
-        net_amount: netAmount,
-        bank_snapshot: {
-          account_no: 'PENDING',
-          name: 'PENDING',
-          amount: netAmount,
-        },
-      });
-    }
-
-    // Upsert all totals
-    if (upserts.length > 0) {
-      const { error: upsertError } = await supabase
-        .from('fortnight_broker_totals')
-        .upsert(upserts, { onConflict: 'fortnight_id,broker_id' });
-
-      if (upsertError) throw new Error(upsertError.message);
-    }
-
-    revalidatePath('/(app)/commissions');
-    return { ok: true as const, data: { recalculated: upserts.length } };
-  } catch (error) {
-    return {
-      ok: false as const,
-      error: error instanceof Error ? error.message : 'Error desconocido',
-    };
-  }
-}
-
 // Toggle notification setting for a fortnight
 export async function actionToggleNotify(fortnightId: string, on: boolean) {
   try {
@@ -924,61 +858,6 @@ export async function actionToggleNotify(fortnightId: string, on: boolean) {
   } catch (error) {
     return {
       ok: false as const,
-      error: error instanceof Error ? error.message : 'Error desconocido',
-    };
-  }
-}
-
-// Pay fortnight
-export async function actionPayFortnight(fortnightId: string) {
-  try {
-    const supabase = getSupabaseAdmin();
-
-    // First recalculate to ensure latest totals
-    await actionRecalculateFortnight(fortnightId);
-
-    // Get fortnight with totals
-    const { data: fortnight, error: fError } = await supabase
-      .from('fortnights')
-      .select(`
-        *,
-        fortnight_broker_totals (
-          *,
-          brokers (*)
-        )
-      `)
-      .eq('id', fortnightId)
-      .single();
-
-    if (fError || !fortnight) throw new Error('Quincena no encontrada');
-
-    // Generate bank CSV with fortnight label
-    const fortnightLabel = `${fortnight.period_start} al ${fortnight.period_end}`;
-    const csvContent = await buildBankCsv(
-      (fortnight as any).fortnight_broker_totals || [],
-      fortnightLabel
-    );
-
-    // Update fortnight status to closed
-    const { error: updateError } = await supabase
-      .from('fortnights')
-      .update({ status: 'PAID' } satisfies FortnightUpd)
-      .eq('id', fortnightId);
-
-    if (updateError) throw new Error(updateError.message);
-
-    revalidatePath('/(app)/commissions');
-    return {
-      ok: true as const,
-      data: {
-        csvContent,
-        notified: (fortnight as any).notify_brokers
-      }
-    };
-  } catch (error) {
-    return {
-      ok: false as const,
-      error: error instanceof Error ? error.message : 'Error desconocido',
     };
   }
 }
@@ -1355,6 +1234,13 @@ export async function actionDeleteDraft(fortnightId: string) {
       .delete()
       .eq('fortnight_id', fortnightId);
 
+    // Delete advance_logs that reference this fortnight (CRITICAL: must be before fortnight deletion)
+    console.log('[actionDeleteDraft] Eliminando advance_logs...');
+    await supabase
+      .from('advance_logs')
+      .delete()
+      .eq('fortnight_id', fortnightId);
+
     // Finally, delete the fortnight itself
     console.log('[actionDeleteDraft] Eliminando fortnight...');
     const { error: deleteError } = await supabase
@@ -1420,6 +1306,428 @@ export async function actionExportBankCsv(fortnightId: string) {
     return {
       ok: false as const,
       error: error instanceof Error ? error.message : 'Error desconocido',
+    };
+  }
+}
+
+/**
+ * Recalculate fortnight broker totals
+ */
+export async function actionRecalculateFortnight(fortnight_id: string) {
+  try {
+    const supabase = getSupabaseAdmin();
+    const { userId } = await getAuthContext();
+    
+    // 1. Obtener todos los imports del draft
+    const { data: imports, error: importsError } = await supabase
+      .from('comm_imports')
+      .select('id')
+      .eq('period_label', fortnight_id);
+    
+    if (importsError) throw importsError;
+    if (!imports || imports.length === 0) {
+      return { ok: true as const, data: { message: 'No hay imports en este draft' } };
+    }
+    
+    const importIds = imports.map(i => i.id);
+    
+    // 2. Obtener todos los comm_items del draft
+    const { data: items, error: itemsError } = await supabase
+      .from('comm_items')
+      .select('broker_id, gross_amount')
+      .in('import_id', importIds)
+      .not('broker_id', 'is', null);
+    
+    if (itemsError) throw itemsError;
+    
+    // 3. Agrupar por broker
+    const brokerTotals = (items || []).reduce((acc, item) => {
+      const brokerId = item.broker_id!;
+      if (!acc[brokerId]) {
+        acc[brokerId] = { gross: 0, items_count: 0 };
+      }
+      acc[brokerId].gross += Number(item.gross_amount) || 0;
+      acc[brokerId].items_count += 1;
+      return acc;
+    }, {} as Record<string, { gross: number; items_count: number }>);
+    
+    // 4. Obtener adelantos seleccionados (de comm_metadata)
+    const { data: advanceSelections } = await supabase
+      .from('comm_metadata')
+      .select('value')
+      .eq('fortnight_id', fortnight_id)
+      .eq('key', 'selected_advance');
+    
+    // 5. Agrupar adelantos por broker
+    const brokerAdvances: Record<string, { advance_id: string; amount: number }[]> = {};
+    (advanceSelections || []).forEach(meta => {
+      try {
+        const { broker_id, advance_id, amount } = JSON.parse(meta.value || '{}');
+        if (!brokerAdvances[broker_id]) {
+          brokerAdvances[broker_id] = [];
+        }
+        brokerAdvances[broker_id].push({ advance_id, amount: Number(amount) });
+      } catch (e) {
+        console.error('Error parsing advance selection:', e);
+      }
+    });
+    
+    // 6. Calcular totales y crear/actualizar fortnight_broker_totals
+    const upsertPromises = Object.entries(brokerTotals).map(async ([brokerId, totals]) => {
+      const advances = brokerAdvances[brokerId] || [];
+      const totalDiscounts = advances.reduce((sum, adv) => sum + adv.amount, 0);
+      const netAmount = totals.gross - totalDiscounts;
+      
+      const { data: existing } = await supabase
+        .from('fortnight_broker_totals')
+        .select('id')
+        .eq('fortnight_id', fortnight_id)
+        .eq('broker_id', brokerId)
+        .single();
+      
+      const payload: any = {
+        fortnight_id,
+        broker_id: brokerId,
+        gross_amount: totals.gross,
+        net_amount: netAmount,
+        discounts_json: {
+          adelantos: advances,
+          total: totalDiscounts,
+        },
+      };
+      
+      if (existing) {
+        return supabase
+          .from('fortnight_broker_totals')
+          .update(payload)
+          .eq('id', existing.id);
+      } else {
+        return supabase
+          .from('fortnight_broker_totals')
+          .insert([payload]);
+      }
+    });
+    
+    await Promise.all(upsertPromises);
+    
+    revalidatePath('/(app)/commissions');
+    return { 
+      ok: true as const, 
+      data: { 
+        brokers_count: Object.keys(brokerTotals).length,
+        total_gross: Object.values(brokerTotals).reduce((s, t) => s + t.gross, 0),
+      } 
+    };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : 'Error al recalcular',
+    };
+  }
+}
+
+/**
+ * Pay/Close fortnight
+ */
+export async function actionPayFortnight(fortnight_id: string) {
+  try {
+    const supabase = getSupabaseAdmin();
+    const { userId } = await getAuthContext();
+    
+    // 1. Verificar que existe el draft
+    const { data: fortnight, error: fnError } = await supabase
+      .from('fortnights')
+      .select('id, status, notify_brokers')
+      .eq('id', fortnight_id)
+      .single<FortnightRow>();
+    
+    if (fnError) throw fnError;
+    if (!fortnight) throw new Error('Quincena no encontrada');
+    if (fortnight.status === 'PAID') {
+      return { ok: false as const, error: 'Esta quincena ya fue pagada' };
+    }
+    
+    // 2. Recalcular automáticamente (seguridad)
+    const recalcResult = await actionRecalculateFortnight(fortnight_id);
+    if (!recalcResult.ok) {
+      return { ok: false as const, error: 'Error al recalcular: ' + recalcResult.error };
+    }
+    
+    // 3. Obtener totales por broker
+    const { data: brokerTotals, error: totalsError } = await supabase
+      .from('fortnight_broker_totals')
+      .select(`
+        *,
+        brokers (
+          id,
+          name,
+          bank_account_no,
+          beneficiary_id,
+          beneficiary_name
+        )
+      `)
+      .eq('fortnight_id', fortnight_id);
+    
+    if (totalsError) throw totalsError;
+    if (!brokerTotals || brokerTotals.length === 0) {
+      return { ok: false as const, error: 'No hay totales calculados' };
+    }
+    
+    // 4. Generar CSV Banco (solo brokers con neto > 0)
+    const filteredTotals = brokerTotals.filter(bt => bt.net_amount > 0).map(bt => ({
+      ...bt,
+      broker: bt.brokers as any
+    }));
+    
+    const csvContent = await buildBankCsv(filteredTotals, fortnight_id);
+    
+    // 5. Cambiar status a PAID
+    const { error: updateError } = await supabase
+      .from('fortnights')
+      .update({ status: 'PAID' } satisfies FortnightUpd)
+      .eq('id', fortnight_id);
+    
+    if (updateError) throw updateError;
+    
+    // 6. Marcar adelantos como aplicados (crear logs)
+    for (const bt of brokerTotals) {
+      const discounts = bt.discounts_json as any;
+      if (discounts?.adelantos && Array.isArray(discounts.adelantos)) {
+        for (const adv of discounts.adelantos) {
+          // Crear log
+          await supabase.from('advance_logs').insert([{
+            advance_id: adv.advance_id,
+            amount: adv.amount,
+            payment_type: 'fortnight',
+            fortnight_id: fortnight_id,
+            applied_by: userId,
+          } satisfies AdvanceLogIns]);
+          
+          // Reducir saldo del adelanto
+          const { data: advance } = await supabase
+            .from('advances')
+            .select('amount, status')
+            .eq('id', adv.advance_id)
+            .single();
+          
+          if (advance) {
+            const newAmount = (advance as any).amount - adv.amount;
+            const newStatus = newAmount <= 0 ? 'PAID' : 'PARTIAL';
+            
+            await supabase
+              .from('advances')
+              .update({
+                amount: Math.max(0, newAmount),
+                status: newStatus,
+              } satisfies TablesUpdate<'advances'>)
+              .eq('id', adv.advance_id);
+          }
+        }
+      }
+    }
+    
+    revalidatePath('/(app)/commissions');
+    return { 
+      ok: true as const, 
+      data: { 
+        csv: csvContent,
+        brokers_paid: filteredTotals.length,
+        total_paid: filteredTotals.reduce((s, r) => s + r.net_amount, 0),
+      } 
+    };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : 'Error al pagar quincena',
+    };
+  }
+}
+
+/**
+ * Migrate assigned pending items to comm_items
+ */
+export async function actionMigratePendingToCommItems(pending_item_ids: string[]) {
+  try {
+    const supabase = getSupabaseAdmin();
+    
+    const { data: pendingItems, error: fetchError } = await supabase
+      .from('pending_items')
+      .select('*')
+      .in('id', pending_item_ids)
+      .not('assigned_broker_id', 'is', null)
+      .returns<PendingItemRow[]>();
+    
+    if (fetchError) throw fetchError;
+    if (!pendingItems || pendingItems.length === 0) {
+      return { ok: false as const, error: 'No hay items para migrar' };
+    }
+    
+    for (const item of pendingItems) {
+      const { data: broker } = await supabase
+        .from('brokers')
+        .select('percent_default')
+        .eq('id', item.assigned_broker_id!)
+        .single();
+      
+      if (!broker) continue;
+      
+      const percent = (broker as any).percent_default || 100;
+      const grossAmount = item.commission_raw * (percent / 100);
+      
+      const { error: insertError } = await supabase
+        .from('comm_items')
+        .insert([{
+          import_id: item.import_id!,
+          insurer_id: item.insurer_id!,
+          policy_number: item.policy_number,
+          broker_id: item.assigned_broker_id,
+          gross_amount: grossAmount,
+          insured_name: item.insured_name,
+          raw_row: null,
+        } satisfies CommItemIns]);
+      
+      if (insertError) {
+        console.error('Error inserting comm_item:', insertError);
+        continue;
+      }
+      
+      await supabase
+        .from('pending_items')
+        .update({ status: 'migrated' } satisfies PendingItemUpd)
+        .eq('id', item.id);
+    }
+    
+    revalidatePath('/(app)/commissions');
+    return { ok: true as const, data: { migrated: pendingItems.length } };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : 'Error al migrar items',
+    };
+  }
+}
+
+/**
+ * Generate CSV for Pay Now adjustments
+ */
+export async function actionGeneratePayNowCSV(item_ids: string[]) {
+  try {
+    const supabase = getSupabaseAdmin();
+    
+    const { data: items, error: fetchError } = await supabase
+      .from('pending_items')
+      .select(`
+        *,
+        brokers (
+          id,
+          name,
+          bank_account_no,
+          beneficiary_id,
+          beneficiary_name,
+          percent_default
+        )
+      `)
+      .in('id', item_ids)
+      .eq('status', 'approved_pay_now')
+      .returns<(PendingItemRow & { brokers: any })[]>();
+    
+    if (fetchError) throw fetchError;
+    if (!items || items.length === 0) {
+      return { ok: false as const, error: 'No hay items para pagar' };
+    }
+    
+    // Crear fortnight_broker_totals falsos para el CSV
+    const totalsByBroker = items.reduce((acc, item) => {
+      const brokerId = item.assigned_broker_id!;
+      const percent = item.brokers?.percent_default || 100;
+      const grossAmount = item.commission_raw * (percent / 100);
+      
+      if (!acc[brokerId]) {
+        acc[brokerId] = {
+          broker_id: brokerId,
+          fortnight_id: 'pay_now',
+          gross_amount: 0,
+          net_amount: 0,
+          discounts_json: {},
+          created_at: new Date().toISOString(),
+          id: brokerId,
+          bank_snapshot: null,
+          broker: item.brokers
+        };
+      }
+      acc[brokerId].net_amount += grossAmount;
+      acc[brokerId].gross_amount += grossAmount;
+      return acc;
+    }, {} as Record<string, any>);
+    
+    const csvContent = await buildBankCsv(Object.values(totalsByBroker), 'Ajustes-PagoInmediato');
+    
+    return { 
+      ok: true as const, 
+      data: { 
+        csv: csvContent,
+        items_count: items.length,
+        total_amount: Object.values(totalsByBroker).reduce((s, r) => s + r.net_amount, 0),
+      } 
+    };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : 'Error al generar CSV',
+    };
+  }
+}
+
+/**
+ * Confirm Pay Now items as paid
+ */
+export async function actionConfirmPayNowPaid(item_ids: string[]) {
+  try {
+    const supabase = getSupabaseAdmin();
+    const { userId } = await getAuthContext();
+    
+    const { data: items } = await supabase
+      .from('pending_items')
+      .select('*, brokers(percent_default)')
+      .in('id', item_ids)
+      .eq('status', 'approved_pay_now')
+      .returns<(PendingItemRow & { brokers: any })[]>();
+    
+    if (!items || items.length === 0) {
+      return { ok: false as const, error: 'No hay items para confirmar' };
+    }
+    
+    for (const item of items) {
+      const percent = item.brokers?.percent_default || 100;
+      const grossAmount = item.commission_raw * (percent / 100);
+      
+      await supabase
+        .from('comm_metadata')
+        .insert([{
+          key: 'paid_adjustment',
+          value: JSON.stringify({
+            pending_item_id: item.id,
+            broker_id: item.assigned_broker_id,
+            policy_number: item.policy_number,
+            commission_raw: item.commission_raw,
+            gross_amount: grossAmount,
+            paid_at: new Date().toISOString(),
+            paid_by: userId,
+          }),
+        }]);
+      
+      await supabase
+        .from('pending_items')
+        .update({ status: 'paid_now' } satisfies PendingItemUpd)
+        .eq('id', item.id);
+    }
+    
+    revalidatePath('/(app)/commissions');
+    return { ok: true as const, data: { paid_count: items.length } };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : 'Error al confirmar pago',
     };
   }
 }

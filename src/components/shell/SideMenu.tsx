@@ -23,6 +23,7 @@ import {
   FaFileInvoiceDollar,
   FaBookOpen,
   FaChartBar,
+  FaExclamationTriangle,
 } from "react-icons/fa";
 
 type MenuRole = "MASTER" | "BROKER";
@@ -40,6 +41,7 @@ const menuItems: Record<MenuRole, MenuItem[]> = {
     { label: "Aseguradoras", href: "/insurers", icon: <FaBuilding /> },
     { label: "Comisiones", href: "/commissions", icon: <FaMoneyCheckAlt /> },
     { label: "Cheques", href: "/checks", icon: <FaFileInvoiceDollar /> },
+    { label: "Morosidad", href: "/delinquency", icon: <FaExclamationTriangle /> },
     { label: "Pendientes", href: "/cases", icon: <FaClock /> },
     { label: "Descargas", href: "/downloads", icon: <FaDownload /> },
     { label: "Guías", href: "/guides", icon: <FaBookOpen /> },
@@ -54,6 +56,7 @@ const menuItems: Record<MenuRole, MenuItem[]> = {
     { label: "Base de datos", href: "/db", icon: <FaDatabase /> },
     { label: "Comisiones", href: "/commissions", icon: <FaMoneyCheckAlt /> },
     { label: "Pendientes", href: "/cases", icon: <FaClock /> },
+    { label: "Morosidad", href: "/delinquency", icon: <FaExclamationTriangle /> },
     { label: "Descargas", href: "/downloads", icon: <FaDownload /> },
     { label: "Guías", href: "/guides", icon: <FaBookOpen /> },
     { label: "Agenda", href: "/agenda", icon: <FaCalendarAlt /> },

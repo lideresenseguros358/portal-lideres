@@ -59,6 +59,10 @@ export interface ContestProgress {
   target: number;
   percent: number;
   tooltip?: string;
+  contestStatus?: 'active' | 'closed' | 'won' | 'lost';
+  quotaType?: 'single' | 'double';
+  targetDouble?: number; // Meta doble
+  enableDoubleGoal?: boolean; // Si el doble está habilitado
 }
 
 export interface CalendarEvent {

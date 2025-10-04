@@ -12,7 +12,7 @@ import { FaChevronDown, FaChevronRight, FaCalendarAlt, FaExclamationTriangle, Fa
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AssignBrokerDropdown } from './AssignBrokerDropdown';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+// Tabs removed - using button pattern instead
 import {
   Table,
   TableBody,
@@ -144,40 +144,61 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
     toast.success(`${oldItems.length} grupos asignados a Oficina automáticamente`);
     
     // Remove old items from pending
-    setPendingGroups(prev => prev.filter(g => !oldItems.some(old => old.policy_number === g.policy_number)));
     onActionSuccess && onActionSuccess();
     setShowOldItemsWarning(false);
   };
 
   return (
-    <div className="space-y-4">
-      {/* 90-day rule warning */}
-      {oldItems.length > 0 && (
-        <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+    <div className="space-y-6">
+      {/* Header Section */}
+      <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-start sm:items-center justify-between">
+        <div className="flex-1">
+          <h2 className="text-xl sm:text-2xl font-bold text-[#010139]">Ajustes Pendientes</h2>
+          <p className="text-sm sm:text-base text-gray-600">
+            Gestiona comisiones sin identificar y solicitudes de brokers
+          </p>
+        </div>
+        
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={() => loadPendingItems()}
+            disabled={loading}
+            className="flex items-center gap-2 px-4 py-2 bg-white border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 font-medium transition-all text-sm disabled:opacity-50"
+          >
+            <FaHistory size={14} />
+            {loading ? 'Cargando...' : 'Refrescar'}
+          </button>
+          <button
+            className="flex items-center gap-2 px-4 py-2 bg-white border-2 border-gray-300 text-gray-700 rounded-xl hover:bg-gray-50 font-medium transition-all text-sm"
+          >
+            <FaFileDownload size={14} />
+            Exportar CSV
+          </button>
+        </div>
+      </div>
+
+      {/* Mostrar alerta si hay items > 90 días */}
+      {showOldItemsWarning && (
+        <div className="bg-gradient-to-r from-orange-50 to-red-50 border-2 border-orange-300 rounded-2xl p-4 sm:p-6 shadow-lg">
           <div className="flex items-start gap-3">
-            <FaExclamationTriangle className="text-amber-600 mt-1 flex-shrink-0" />
+            <div className="flex-shrink-0">
+              <div className="p-2 bg-orange-500 rounded-lg">
+                <FaExclamationTriangle className="text-white" size={20} />
+              </div>
+            </div>
             <div className="flex-1">
-              <p className="text-sm font-semibold text-amber-800 mb-1">
-                Regla de 90 días
+              <p className="font-bold text-[#010139] text-lg">Pendientes Antiguos Detectados</p>
+              <p className="text-gray-700 mt-1">
+                Hay <span className="font-semibold text-orange-600">{oldItems.length} grupos</span> con items mayores a 90 días.
+                Considera reasignarlos a la oficina o procesarlos pronto.
               </p>
-              <p className="text-sm text-amber-700">
-                Hay {oldItems.length} grupos de pólizas con más de 90 días sin identificar.
-                Estos deben ser asignados automáticamente a Oficina.
-              </p>
-              <Button
-                onClick={handleAssignToOffice}
-                className="mt-3 bg-amber-600 hover:bg-amber-700 text-white"
-                size="sm"
-              >
-                <FaCalendarAlt className="mr-2" />
-                Aplicar Regla 90 Días (Enviar a Oficina)
-              </Button>
             </div>
           </div>
         </div>
       )}
-      
-      <div className="border rounded-lg overflow-hidden">
+
+      {/* Tabla de Ajustes */}
+      <div className="bg-white rounded-xl shadow-lg border-2 border-gray-100 overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow>
@@ -258,7 +279,7 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
                       <TableCell className="text-center">
                         {role === 'master' ? (
                           <div className="flex flex-col gap-2 justify-center">
-                            <div className="flex items-center gap-2 justify-center">
+                            <div className="flex flex-wrap items-center gap-2 justify-center">
                               <AssignBrokerDropdown
                                 itemGroup={{
                                   policy_number: group.policy_number,
@@ -381,8 +402,6 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
     </div>
   );
 };
-
-// Solicitudes "mío" View
 const RequestsView = ({ role, onActionSuccess }: { role: string; onActionSuccess?: () => void }) => {
   const [requests, setRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -743,10 +762,19 @@ const PaidAdjustmentsView = () => {
   );
 };
 
-export default function AdjustmentsTab({ role, brokerId, brokers, isShortcut, onActionSuccess, onPendingCountChange }: Props) {
+// Main Component
+export default function AdjustmentsTab({ role, brokerId, brokers, onActionSuccess, onPendingCountChange, isShortcut }: Props) {
+  const [activeTab, setActiveTab] = useState<'pending' | 'requests' | 'paid'>('pending');
+
   const handleSuccess = () => {
     onActionSuccess?.();
   };
+
+  const tabs = [
+    { key: 'pending' as const, label: 'Sin identificar' },
+    { key: 'requests' as const, label: 'Identificados' },
+    { key: 'paid' as const, label: 'Pagados' },
+  ];
 
   return (
     <Card className="shadow-lg">
@@ -757,31 +785,46 @@ export default function AdjustmentsTab({ role, brokerId, brokers, isShortcut, on
         </CardTitle>
       </CardHeader>
       <CardContent className="p-0">
-        <Tabs defaultValue="pending" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 rounded-t-lg rounded-b-none bg-gray-100">
-            <TabsTrigger value="pending">Pendientes sin Identificar</TabsTrigger>
-            <TabsTrigger value="requests">Solicitudes 'mío'</TabsTrigger>
-            <TabsTrigger value="paid">Pagados</TabsTrigger>
-          </TabsList>
-          <div className="p-6 space-y-6">
-            <TabsContent value="pending">
-              <PendingItemsView
-                role={role}
-                brokerId={brokerId}
-                brokers={brokers}
-                onActionSuccess={handleSuccess}
-                onPendingCountChange={onPendingCountChange}
-                isShortcut={isShortcut}
-              />
-            </TabsContent>
-            <TabsContent value="requests">
-              <RequestsView role={role} onActionSuccess={handleSuccess} />
-            </TabsContent>
-            <TabsContent value="paid">
-              <PaidAdjustmentsView />
-            </TabsContent>
+        {/* Tabs con patrón de Pendientes */}
+        <div className="border-b-2 border-gray-200 px-4 sm:px-6">
+          <div className="flex gap-2 sm:gap-4 overflow-x-auto pb-2 scrollbar-hide">
+            {tabs.map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={`
+                  px-4 py-2 rounded-t-lg font-semibold whitespace-nowrap transition-all
+                  ${activeTab === tab.key 
+                    ? 'bg-[#010139] text-white border-b-4 border-[#8AAA19]' 
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }
+                `}
+              >
+                {tab.label}
+              </button>
+            ))}
           </div>
-        </Tabs>
+        </div>
+
+        {/* Tab Content */}
+        <div className="p-4 sm:p-6 space-y-6">
+          {activeTab === 'pending' && (
+            <PendingItemsView
+              role={role}
+              brokerId={brokerId}
+              brokers={brokers}
+              onActionSuccess={handleSuccess}
+              onPendingCountChange={onPendingCountChange}
+              isShortcut={isShortcut}
+            />
+          )}
+          {activeTab === 'requests' && (
+            <RequestsView role={role} onActionSuccess={handleSuccess} />
+          )}
+          {activeTab === 'paid' && (
+            <PaidAdjustmentsView />
+          )}
+        </div>
       </CardContent>
     </Card>
   );
