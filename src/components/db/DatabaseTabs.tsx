@@ -83,17 +83,6 @@ const ClientsListView = ({ clients, onView, onEdit, onDelete }: ClientsListViewP
     });
   };
 
-  if (clients.length === 0) {
-    return (
-      <div className="empty-state">
-        <p>No se encontraron clientes</p>
-        <Link href="/db?modal=new-client" className="btn-primary">
-          Crear primer cliente
-        </Link>
-      </div>
-    );
-  }
-
   const items = useMemo<ClientRowData[]>(
     () =>
       clients.map((client) => ({
@@ -107,6 +96,17 @@ const ClientsListView = ({ clients, onView, onEdit, onDelete }: ClientsListViewP
       })),
     [clients]
   );
+
+  if (clients.length === 0) {
+    return (
+      <div className="empty-state">
+        <p>No se encontraron clientes</p>
+        <Link href="/db?modal=new-client" className="btn-primary">
+          Crear primer cliente
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div className="clients-wrapper">

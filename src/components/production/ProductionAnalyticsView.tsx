@@ -23,6 +23,7 @@ export default function ProductionAnalyticsView({ year, brokers }: ProductionAna
 
   useEffect(() => {
     loadAllData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [year]);
 
   const loadAllData = async () => {

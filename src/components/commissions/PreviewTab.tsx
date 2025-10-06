@@ -108,6 +108,7 @@ export function PreviewTab({ role, brokerId }: Props) {
     startTransition(() => {
       loadData();
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedYear, selectedMonth, selectedFortnight, initialFiltersApplied]);
 
   useEffect(() => {

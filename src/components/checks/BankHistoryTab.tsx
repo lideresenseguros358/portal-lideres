@@ -57,6 +57,7 @@ export default function BankHistoryTab({ onImportSuccess }: BankHistoryTabProps)
 
   useEffect(() => {
     loadTransfers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters]);
 
   const toggleRow = (id: string) => {

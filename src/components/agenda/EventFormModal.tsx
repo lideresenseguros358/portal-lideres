@@ -54,6 +54,7 @@ export default function EventFormModal({
     } else {
       setDefaultDates();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventToEdit]);
 
   const loadBrokers = async () => {

@@ -96,7 +96,7 @@ export default function BrokerPreviewTab({ brokerId }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [year, month, selectedFortnight, initialFiltersApplied]);
+  }, [year, month, selectedFortnight, initialFiltersApplied, brokerId]);
 
   useEffect(() => {
     loadFortnights();

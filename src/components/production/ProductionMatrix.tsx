@@ -70,6 +70,7 @@ export default function ProductionMatrix({ year, role, brokerId, brokers }: Prod
 
   useEffect(() => {
     loadProduction();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [year, brokerId]);
 
   const loadProduction = async () => {

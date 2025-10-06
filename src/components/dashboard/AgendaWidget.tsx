@@ -15,6 +15,7 @@ export default function AgendaWidget({ userId, brokerId }: AgendaWidgetProps) {
 
   useEffect(() => {
     loadEvents();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, brokerId]);
 
   const loadEvents = async () => {

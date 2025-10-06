@@ -144,6 +144,7 @@ export default function GeneralTab({ userId }: GeneralTabProps) {
             </label>
             <div className="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center">
               {branding.logo_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
                 <img src={branding.logo_url} alt="Logo" className="h-16 mx-auto mb-2" />
               ) : (
                 <div className="h-16 flex items-center justify-center text-gray-400">
@@ -174,6 +175,7 @@ export default function GeneralTab({ userId }: GeneralTabProps) {
             </label>
             <div className="border-2 border-dashed border-gray-300 rounded-xl p-4 text-center">
               {branding.logo_alt_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
                 <img src={branding.logo_alt_url} alt="Logo alterno" className="h-16 mx-auto mb-2" />
               ) : (
                 <div className="h-16 flex items-center justify-center text-gray-400">

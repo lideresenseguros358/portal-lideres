@@ -71,6 +71,7 @@ export default function EventDetailPanel({
     if (event && userRole === 'master') {
       loadAttendees();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [event, userRole]);
 
   const loadAttendees = async () => {

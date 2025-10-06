@@ -88,6 +88,7 @@ export default function ProductionMatrixMaster({ year }: ProductionMatrixMasterP
 
   useEffect(() => {
     loadProduction();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [year]);
 
   const loadProduction = async () => {

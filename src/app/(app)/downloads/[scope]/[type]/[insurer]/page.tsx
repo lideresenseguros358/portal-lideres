@@ -21,6 +21,7 @@ export default function DownloadsInsurerPage() {
 
   useEffect(() => {
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [scope, policyType, insurerId]);
 
   const loadData = async () => {

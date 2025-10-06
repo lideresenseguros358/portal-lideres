@@ -110,6 +110,7 @@ export default function InsurersTab({ userId }: InsurersTabProps) {
             {/* Logo */}
             <div className="h-20 flex items-center justify-center mb-4 bg-gray-50 rounded-lg">
               {insurer.logo_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={insurer.logo_url}
                   alt={insurer.name}

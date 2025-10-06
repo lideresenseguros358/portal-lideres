@@ -45,6 +45,7 @@ export default function AccountMenu({ displayName, role, avatarUrl }: AccountMen
         onClick={handleToggle}
       >
         {avatarUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
           <img src={avatarUrl} alt={displayName} className="avatar-image" />
         ) : (
           <div className="avatar-placeholder">

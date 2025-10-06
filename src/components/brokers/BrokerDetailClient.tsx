@@ -23,6 +23,7 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
 
   useEffect(() => {
     loadBroker();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadBroker = async () => {

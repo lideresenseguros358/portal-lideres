@@ -30,6 +30,7 @@ export default function YearToDateTab({ role, brokerId }: Props) {
 
   useEffect(() => {
     loadYearlyData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedYear, brokerId]);
 
   const loadYearlyData = async () => {

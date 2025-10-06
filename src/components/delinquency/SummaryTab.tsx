@@ -32,6 +32,7 @@ export default function SummaryTab({ userRole, brokerId }: SummaryTabProps) {
 
   useEffect(() => {
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -42,6 +43,7 @@ export default function SummaryTab({ userRole, brokerId }: SummaryTabProps) {
 
   useEffect(() => {
     loadSummary();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedInsurer, selectedBroker]);
 
   const loadData = async () => {

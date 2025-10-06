@@ -78,6 +78,7 @@ export default function AgendaMainClient() {
   useEffect(() => {
     if (!userId || !userRole) return;
     loadEvents();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentYear, currentMonth, userId, userRole]);
 
   // Keyboard navigation
@@ -92,6 +93,7 @@ export default function AgendaMainClient() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentYear, currentMonth]);
 
   const loadEvents = async () => {
