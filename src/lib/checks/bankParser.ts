@@ -78,7 +78,10 @@ function parseBankHistoryXLSX(file: File): Promise<BankTransferRow[]> {
 
         const headerMap: HeaderMap = {
           dateIdx: headers.findIndex((h: string) => h.includes('fecha')),
-          refIdx: headers.findIndex((h: string) => h.includes('referencia')),
+          refIdx: headers.findIndex((h: string) => {
+            const normalized = h.replace(/\s+/g, ' ').trim();
+            return normalized === 'referencia 1' || normalized.endsWith('referencia 1') || normalized.startsWith('referencia 1');
+          }),
           transIdx: headers.findIndex((h: string) => h.includes('transac') || h.includes('transacci')),
           descIdx: headers.findIndex((h: string) => h.includes('descri')),
           creditIdx: headers.findIndex((h: string) => h.includes('crédito') || h.includes('credito')),
@@ -134,7 +137,10 @@ function parseBankHistoryCSV(file: File): Promise<BankTransferRow[]> {
             const keys = Object.keys(row);
             const headerMap: HeaderMap = {
               dateIdx: keys.findIndex((k) => k.includes('fecha')),
-              refIdx: keys.findIndex((k) => k.includes('referencia')),
+              refIdx: keys.findIndex((k) => {
+                const normalized = k.replace(/\s+/g, ' ').trim();
+                return normalized === 'referencia 1' || normalized.endsWith('referencia 1') || normalized.startsWith('referencia 1');
+              }),
               transIdx: keys.findIndex((k) => k.includes('transac') || k.includes('transacci')),
               descIdx: keys.findIndex((k) => k.includes('descri')),
               creditIdx: keys.findIndex((k) => k.includes('crédito') || k.includes('credito') || k.includes('monto')), // fallback

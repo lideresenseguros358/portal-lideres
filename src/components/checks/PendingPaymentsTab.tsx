@@ -1,22 +1,22 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FaPlus, FaCheckCircle, FaExclamationTriangle, FaFileDownload } from 'react-icons/fa';
-import { actionGetPendingPaymentsNew, actionMarkPaymentsAsPaidNew } from '@/app/(app)/checks/actions';
+import { FaPlus, FaCheckCircle, FaExclamationTriangle, FaFileDownload, FaEdit, FaTrash } from 'react-icons/fa';
+import { actionGetPendingPaymentsNew, actionMarkPaymentsAsPaidNew, actionDeletePendingPayment } from '@/app/(app)/checks/actions';
 import { toast } from 'sonner';
 
 interface PendingPaymentsTabProps {
   onOpenWizard: () => void;
+  onPaymentPaid?: () => void;
 }
 
-export default function PendingPaymentsTab({ onOpenWizard }: PendingPaymentsTabProps) {
+export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid }: PendingPaymentsTabProps) {
   const [payments, setPayments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const loadPayments = async () => {
     setLoading(true);
     try {
-      // Solo cargar pagos pendientes, los pagados se ven en historial banco
       const result = await actionGetPendingPaymentsNew({ status: 'pending' });
       if (result.ok) {
         setPayments(result.data || []);
@@ -85,21 +85,20 @@ export default function PendingPaymentsTab({ onOpenWizard }: PendingPaymentsTabP
 
     setLoading(true);
     try {
-      console.log('Marcando pagos como pagados...');
       const result = await actionMarkPaymentsAsPaidNew(Array.from(selectedIds));
-      console.log('Resultado:', result);
       
       if (result.ok) {
-        toast.success(result.message + ' - Actualizando historial...');
+        toast.success(result.message);
         setSelectedIds(new Set());
-        // Reload payments para ver la lista actualizada
         await loadPayments();
-        // Nota: El historial de banco se actualiza automáticamente por el key en ChecksMainClient
+        // Notificar al padre para refrescar historial de banco
+        if (onPaymentPaid) {
+          onPaymentPaid();
+        }
       } else {
         toast.error('Error al marcar pagos', { description: result.error });
       }
     } catch (error: any) {
-      console.error('Error en handleMarkAsPaid:', error);
       toast.error('Error inesperado', { description: error.message });
     } finally {
       setLoading(false);
@@ -112,8 +111,181 @@ export default function PendingPaymentsTab({ onOpenWizard }: PendingPaymentsTabP
       return;
     }
 
-    toast.info('Generación de PDF en desarrollo');
-    // TODO: Implementar generación de PDF
+    const selectedPayments = payments.filter(p => selectedIds.has(p.id));
+    
+    // Crear HTML para imprimir
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast.error('Permite ventanas emergentes para descargar el PDF');
+      return;
+    }
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Pagos Pendientes - ${new Date().toLocaleDateString('es-PA')}</title>
+        <style>
+          body {
+            font-family: Arial, sans-serif;
+            margin: 40px;
+            color: #333;
+          }
+          .header {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 3px solid #010139;
+            padding-bottom: 20px;
+          }
+          .header h1 {
+            color: #010139;
+            margin: 0;
+          }
+          .header p {
+            color: #666;
+            margin: 5px 0;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+          }
+          th {
+            background: #010139;
+            color: white;
+            padding: 12px;
+            text-align: left;
+            font-size: 12px;
+          }
+          td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #ddd;
+            font-size: 11px;
+          }
+          tr:nth-child(even) {
+            background: #f9f9f9;
+          }
+          .amount {
+            font-weight: bold;
+            color: #8AAA19;
+            text-align: right;
+          }
+          .total {
+            margin-top: 20px;
+            text-align: right;
+            font-size: 14px;
+          }
+          .total strong {
+            color: #010139;
+          }
+          .footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #ddd;
+            text-align: center;
+            color: #999;
+            font-size: 10px;
+          }
+          @media print {
+            body { margin: 20px; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="header">
+          <h1>PAGOS PENDIENTES</h1>
+          <p>Portal Líderes en Seguros</p>
+          <p>Fecha: ${new Date().toLocaleDateString('es-PA', { 
+            year: 'numeric', 
+            month: 'long', 
+            day: 'numeric' 
+          })}</p>
+        </div>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Cliente</th>
+              <th>Póliza</th>
+              <th>Aseguradora</th>
+              <th>Propósito</th>
+              <th>Referencias</th>
+              <th style="text-align: right">Monto</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${selectedPayments.map(payment => `
+              <tr>
+                <td>${payment.client_name}</td>
+                <td>${payment.policy_number || '—'}</td>
+                <td>${payment.insurer_name || '—'}</td>
+                <td>${payment.purpose}</td>
+                <td>
+                  ${payment.payment_references?.map((ref: any) => 
+                    ref.reference_number
+                  ).join(', ') || '—'}
+                </td>
+                <td class="amount">$${parseFloat(payment.amount_to_pay).toFixed(2)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+
+        <div class="total">
+          <strong>TOTAL: $${selectedPayments.reduce((sum, p) => 
+            sum + parseFloat(p.amount_to_pay), 0
+          ).toFixed(2)}</strong>
+        </div>
+
+        <div class="footer">
+          <p>Generado el ${new Date().toLocaleString('es-PA')}</p>
+          <p>Portal Líderes en Seguros - Gestión de Pagos</p>
+        </div>
+
+        <script>
+          window.onload = function() {
+            window.print();
+          };
+        </script>
+      </body>
+      </html>
+    `;
+
+    printWindow.document.write(html);
+    printWindow.document.close();
+    
+    toast.success('Documento preparado para imprimir/guardar como PDF');
+  };
+
+  const handleEdit = (paymentId: string) => {
+    toast.info('Edición de pago pendiente en desarrollo');
+    // TODO: Abrir modal con formulario prellenado
+  };
+
+  const handleDelete = async (paymentId: string) => {
+    const payment = payments.find(p => p.id === paymentId);
+    if (!payment) return;
+
+    if (!confirm(`¿Eliminar el pago pendiente de "${payment.client_name}"?\n\nEsta acción no se puede deshacer.`)) {
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const result = await actionDeletePendingPayment(paymentId);
+      
+      if (result.ok) {
+        toast.success(result.message);
+        await loadPayments();
+      } else {
+        toast.error('Error al eliminar pago', { description: result.error });
+      }
+    } catch (error: any) {
+      toast.error('Error al eliminar pago', { description: error.message });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -134,12 +306,34 @@ export default function PendingPaymentsTab({ onOpenWizard }: PendingPaymentsTabP
         </button>
       </div>
 
+      {/* Resumen */}
+      {!loading && payments.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-amber-500">
+            <h3 className="text-sm font-semibold text-gray-600 uppercase mb-2">Pagos Pendientes</h3>
+            <p className="text-3xl font-bold text-[#010139]">{payments.length}</p>
+          </div>
+          <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-[#8AAA19]">
+            <h3 className="text-sm font-semibold text-gray-600 uppercase mb-2">Total a Pagar</h3>
+            <p className="text-3xl font-bold text-[#8AAA19] font-mono">
+              ${payments.reduce((sum, p) => sum + Number(p.amount_to_pay || 0), 0).toFixed(2)}
+            </p>
+          </div>
+          <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-blue-500">
+            <h3 className="text-sm font-semibold text-gray-600 uppercase mb-2">Total Recibido</h3>
+            <p className="text-3xl font-bold text-blue-600 font-mono">
+              ${payments.reduce((sum, p) => sum + Number(p.total_received || 0), 0).toFixed(2)}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Acciones */}
       <div className="bg-white rounded-xl shadow-lg p-6 border-2 border-gray-100">
         <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
           <div>
             <h3 className="text-lg font-semibold text-[#010139]">
-              Pagos Pendientes ({payments.length})
+              Listado de Pagos ({payments.length})
             </h3>
             <p className="text-sm text-gray-600">
               Los pagos procesados se ven en el historial del banco
@@ -172,12 +366,22 @@ export default function PendingPaymentsTab({ onOpenWizard }: PendingPaymentsTabP
       {loading ? (
         <div className="p-12 text-center text-gray-500 bg-white rounded-xl shadow-lg">
           <div className="animate-spin w-8 h-8 border-4 border-[#010139] border-t-transparent rounded-full mx-auto mb-4"></div>
-          Cargando pagos...
+          <p className="font-medium">Cargando pagos...</p>
         </div>
       ) : payments.length === 0 ? (
         <div className="p-12 text-center text-gray-500 bg-white rounded-xl shadow-lg">
-          <p className="text-lg mb-2">No hay pagos pendientes</p>
-          <p className="text-sm">Crea un nuevo pago para comenzar</p>
+          <div className="mb-4">
+            <FaCheckCircle className="w-16 h-16 mx-auto text-gray-300" />
+          </div>
+          <p className="text-lg font-semibold mb-2">No hay pagos pendientes</p>
+          <p className="text-sm mb-4">Todos los pagos han sido procesados</p>
+          <button
+            onClick={onOpenWizard}
+            className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-xl hover:shadow-lg transition-all transform hover:scale-105 font-medium"
+          >
+            <FaPlus />
+            Crear Nuevo Pago
+          </button>
         </div>
       ) : (
         <div className="space-y-4">
@@ -194,7 +398,9 @@ export default function PendingPaymentsTab({ onOpenWizard }: PendingPaymentsTabP
           )}
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {payments.map((payment) => (
+            {payments.map((payment) => {
+            const paymentState = getPaymentState(payment);
+            return (
               <div
                 key={payment.id}
                 className={`bg-white rounded-xl shadow-lg p-6 border-2 transition-all ${
@@ -203,7 +409,7 @@ export default function PendingPaymentsTab({ onOpenWizard }: PendingPaymentsTabP
                     : 'border-gray-100 hover:border-gray-300'
                 }`}
               >
-                {/* Header con checkbox */}
+                {/* Header con checkbox y acciones */}
                 <div className="flex items-start gap-4 mb-4">
                   <input
                     type="checkbox"
@@ -213,7 +419,7 @@ export default function PendingPaymentsTab({ onOpenWizard }: PendingPaymentsTabP
                   />
                   <div className="flex-1">
                     <div className="flex items-start justify-between">
-                      <div>
+                      <div className="flex-1">
                         <h3 className="font-bold text-lg text-[#010139]">{payment.client_name}</h3>
                         {payment.policy_number && (
                           <p className="text-sm text-gray-600">Póliza: {payment.policy_number}</p>
@@ -222,11 +428,35 @@ export default function PendingPaymentsTab({ onOpenWizard }: PendingPaymentsTabP
                           <p className="text-sm text-gray-600">{payment.insurer_name}</p>
                         )}
                       </div>
-                      <div className="text-right">
-                        <div className="text-2xl font-bold text-[#8AAA19]">
-                          ${parseFloat(payment.amount_to_pay).toFixed(2)}
+                      <div className="flex items-start gap-3">
+                        <div className="text-right">
+                          <div className="text-2xl font-bold text-[#8AAA19]">
+                            ${parseFloat(payment.amount_to_pay).toFixed(2)}
+                          </div>
+                          <div className="text-xs text-gray-500">A pagar</div>
                         </div>
-                        <div className="text-xs text-gray-500">A pagar</div>
+                        <div className="flex gap-1">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEdit(payment.id);
+                            }}
+                            className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            title="Editar pago"
+                          >
+                            <FaEdit size={16} />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDelete(payment.id);
+                            }}
+                            className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Eliminar pago"
+                          >
+                            <FaTrash size={16} />
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -294,7 +524,8 @@ export default function PendingPaymentsTab({ onOpenWizard }: PendingPaymentsTabP
                   </div>
                 )}
               </div>
-            ))}
+            );
+            })}
           </div>
         </div>
       )}

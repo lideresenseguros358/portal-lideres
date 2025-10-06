@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react';
 import { FaCalendarAlt, FaFilter } from 'react-icons/fa';
-import { actionGetDelinquencySummary, actionGetActiveInsurers, actionGetBrokers } from '@/app/(app)/delinquency/actions';
 import { toast } from 'sonner';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
@@ -11,13 +10,25 @@ interface SummaryTabProps {
   brokerId: string | null;
 }
 
+type SummaryResponse = {
+  due_soon: number;
+  current: number;
+  bucket_1_30: number;
+  bucket_31_60: number;
+  bucket_61_90: number;
+  bucket_90_plus: number;
+  total: number;
+  count: number;
+  last_import_date: string | null;
+};
+
 export default function SummaryTab({ userRole, brokerId }: SummaryTabProps) {
   const [loading, setLoading] = useState(true);
-  const [summary, setSummary] = useState<any>(null);
-  const [insurers, setInsurers] = useState<any[]>([]);
-  const [brokers, setBrokers] = useState<any[]>([]);
-  const [selectedInsurer, setSelectedInsurer] = useState<string>('');
-  const [selectedBroker, setSelectedBroker] = useState<string>('');
+  const [summary, setSummary] = useState<SummaryResponse | null>(null);
+  const [insurers, setInsurers] = useState<{ id: string; name: string }[]>([]);
+  const [brokers, setBrokers] = useState<{ id: string; name: string }[]>([]);
+  const [selectedInsurer, setSelectedInsurer] = useState<string>('all');
+  const [selectedBroker, setSelectedBroker] = useState<string>('all');
 
   useEffect(() => {
     loadData();
@@ -36,12 +47,19 @@ export default function SummaryTab({ userRole, brokerId }: SummaryTabProps) {
   const loadData = async () => {
     try {
       const [insurersRes, brokersRes] = await Promise.all([
-        actionGetActiveInsurers(),
-        userRole === 'master' ? actionGetBrokers() : Promise.resolve({ ok: true, data: [] }),
+        fetch('/api/insurers', { cache: 'no-store' }),
+        userRole === 'master' ? fetch('/api/brokers', { cache: 'no-store' }) : Promise.resolve(null),
       ]);
 
-      if (insurersRes.ok) setInsurers(insurersRes.data || []);
-      if (brokersRes.ok) setBrokers(brokersRes.data || []);
+      if (insurersRes?.ok) {
+        const data = await insurersRes.json();
+        setInsurers(data || []);
+      }
+
+      if (brokersRes && brokersRes.ok) {
+        const data = await brokersRes.json();
+        setBrokers(data || []);
+      }
     } catch (error) {
       toast.error('Error al cargar filtros');
     }
@@ -50,17 +68,22 @@ export default function SummaryTab({ userRole, brokerId }: SummaryTabProps) {
   const loadSummary = async () => {
     setLoading(true);
     try {
-      const filters: any = {};
-      if (selectedInsurer) filters.insurerId = selectedInsurer;
-      if (selectedBroker) filters.brokerId = selectedBroker;
-      else if (userRole === 'broker' && brokerId) filters.brokerId = brokerId;
+      const params = new URLSearchParams();
+      if (selectedInsurer !== 'all') params.append('insurerId', selectedInsurer);
+      const targetBroker = selectedBroker !== 'all' ? selectedBroker : (userRole === 'broker' && brokerId ? brokerId : '');
+      if (targetBroker) params.append('brokerId', targetBroker);
 
-      const result = await actionGetDelinquencySummary(filters);
-      if (result.ok) {
-        setSummary(result.data);
-      } else {
-        toast.error('Error al cargar resumen');
+      const response = await fetch(`/api/delinquency/summary${params.toString() ? `?${params.toString()}` : ''}`, {
+        cache: 'no-store',
+      });
+
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => null);
+        throw new Error(errorBody?.error || 'Error al cargar resumen');
       }
+
+      const { data } = await response.json();
+      setSummary(data ?? null);
     } catch (error) {
       toast.error('Error inesperado');
     } finally {
@@ -112,10 +135,10 @@ export default function SummaryTab({ userRole, brokerId }: SummaryTabProps) {
             </label>
             <Select value={selectedInsurer} onValueChange={setSelectedInsurer}>
               <SelectTrigger className="w-full border-2 border-gray-300 focus:border-[#8AAA19]">
-                <SelectValue placeholder="Todas las aseguradoras" />
+                <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Todas</SelectItem>
+                <SelectItem value="all">Todas</SelectItem>
                 {insurers.map((ins) => (
                   <SelectItem key={ins.id} value={ins.id}>
                     {ins.name}
@@ -132,10 +155,10 @@ export default function SummaryTab({ userRole, brokerId }: SummaryTabProps) {
               </label>
               <Select value={selectedBroker} onValueChange={setSelectedBroker}>
                 <SelectTrigger className="w-full border-2 border-gray-300 focus:border-[#8AAA19]">
-                  <SelectValue placeholder="Todos los corredores" />
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todos</SelectItem>
+                  <SelectItem value="all">Todos</SelectItem>
                   {brokers.map((broker) => (
                     <SelectItem key={broker.id} value={broker.id}>
                       {broker.name}
@@ -167,21 +190,31 @@ export default function SummaryTab({ userRole, brokerId }: SummaryTabProps) {
         </div>
       ) : summary ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {buckets.map((bucket) => (
-            <div
-              key={bucket.key}
-              className={`rounded-xl shadow-lg p-6 border-2 ${getColorClasses(bucket.color)} transition-transform hover:scale-105`}
-            >
-              <div className="text-center">
-                <p className="text-sm font-semibold uppercase tracking-wide mb-2">
-                  {bucket.label}
-                </p>
-                <p className="text-3xl font-bold font-mono">
-                  {formatCurrency(summary[bucket.key] || 0)}
-                </p>
+          {buckets.map((bucket) => {
+            const value =
+              bucket.key === 'due_soon' ? summary.due_soon :
+              bucket.key === 'current' ? summary.current :
+              bucket.key === 'bucket_1_30' ? summary.bucket_1_30 :
+              bucket.key === 'bucket_31_60' ? summary.bucket_31_60 :
+              bucket.key === 'bucket_61_90' ? summary.bucket_61_90 :
+              bucket.key === 'bucket_90_plus' ? summary.bucket_90_plus : 0;
+
+            return (
+              <div
+                key={bucket.key}
+                className={`rounded-xl shadow-lg p-6 border-2 ${getColorClasses(bucket.color)} transition-transform hover:scale-105`}
+              >
+                <div className="text-center">
+                  <p className="text-sm font-semibold uppercase tracking-wide mb-2">
+                    {bucket.label}
+                  </p>
+                  <p className="text-3xl font-bold font-mono">
+                    {formatCurrency(value)}
+                  </p>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
 
           {/* Total Card */}
           <div className="col-span-1 sm:col-span-2 lg:col-span-3 rounded-xl shadow-lg p-6 bg-gradient-to-r from-[#010139] to-[#020270] text-white border-2 border-[#010139]">

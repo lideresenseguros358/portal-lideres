@@ -174,9 +174,7 @@ export default function ImportBankHistoryModalNew({ onClose, onSuccess }: Import
         amount: row.amount,
       }));
 
-      console.log('Llamando a action importar...');
       const importResult = await actionImportBankHistoryXLSX(sanitized);
-      console.log('Resultado:', importResult);
 
       if (importResult.ok && importResult.data) {
         setResult(importResult.data);

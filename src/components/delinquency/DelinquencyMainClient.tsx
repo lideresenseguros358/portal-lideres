@@ -6,7 +6,6 @@ import { FaChartPie, FaFileImport, FaList } from 'react-icons/fa';
 import SummaryTab from './SummaryTab';
 import ImportTab from './ImportTab';
 import DetailTab from './DetailTab';
-import { getSupabaseServer } from '@/lib/supabase/server';
 import { supabaseClient } from '@/lib/supabase/client';
 
 export default function DelinquencyMainClient() {

@@ -84,118 +84,13 @@ export async function actionGetAdvanceDetails(advanceId: string) {
 }
 
 
-// Defer a reference - simplified for now
-export async function actionDeferReference(referenceId: string, days: number = 30) {
-  try {
-    const supabase = await getSupabaseServer();
-    
-    const deferredUntil = new Date();
-    deferredUntil.setDate(deferredUntil.getDate() + days);
-
-    // Return mock data for now - needs proper database setup
-    return { ok: true, data: { deferred_until: deferredUntil } };
-  } catch (error: any) {
-    console.error('Error deferring reference:', error);
-    return { ok: false, error: error.message };
-  }
-}
-
-// Get reference details with linked payments - simplified for now
-export async function actionGetReferenceDetails(referenceId: string) {
-  try {
-    const supabase = await getSupabaseServer();
-    // Return mock data for now - needs proper database setup
-    return { ok: true, data: null };
-  } catch (error: any) {
-    console.error('Error fetching reference details:', error);
-    return { ok: false, error: error.message };
-  }
-}
-
-// Search for payments - simplified for now
-export async function actionSearchPayments(query: string) {
-  try {
-    const supabase = await getSupabaseServer();
-    // Return empty data for now - needs proper database setup
-    return { ok: true, data: [] };
-  } catch (error: any) {
-    console.error('Error searching payments:', error);
-    return { ok: false, error: error.message };
-  }
-}
-
-// Mark payments as paid
-export async function actionMarkPaymentsAsPaid(paymentIds: string[], references: string[]) {
-  try {
-    const supabase = await getSupabaseServer();
-    
-    // First, get the pending payment details
-    const { data: payments, error: fetchError } = await supabase
-      .from('check_items')
-      .select('*')
-      .in('id', paymentIds)
-      .returns<Tables<'check_items'>[]>();
-    
-    if (fetchError) throw fetchError;
-    
-    // Update check_items status to 'completed' and add payment details
-    for (const payment of payments || []) {
-      // Skip if no reference
-      if (!payment.reference) continue;
-      
-      // Find the corresponding bank history item by reference
-      const { data: historyItem, error: historyError } = await supabase
-        .from('check_items')
-        .select('*')
-        .eq('reference', payment.reference)
-        .neq('id', payment.id) // Make sure we don't get the same payment
-        .single<Tables<'check_items'>>();
-      
-      if (historyError || !historyItem) continue;
-      
-      // Update the bank history item with payment details in bank_json
-      const existingData = (historyItem.bank_json as any) || {};
-      const paymentDetails = {
-        ...existingData,
-        payments_applied: [
-          ...(existingData.payments_applied || []),
-          {
-            date: new Date().toISOString(),
-            description: payment.client_name || '',
-            policy_number: payment.policy_number,
-            amount: Number(payment.amount),
-            is_refund: payment.is_refund,
-            applied_to: 'payment',
-            payment_id: payment.id
-          }
-        ]
-      };
-      
-      const { error: updateError } = await supabase
-        .from('check_items')
-        .update({ 
-          status: 'completed',
-          bank_json: paymentDetails
-        } satisfies TablesUpdate<'check_items'>)
-        .eq('id', historyItem.id);
-      
-      if (updateError) throw updateError;
-    }
-    
-    // Update the pending payments to completed
-    const { error } = await supabase
-      .from('check_items')
-      .update({ status: 'completed' })
-      .in('id', paymentIds);
-    
-    if (error) throw error;
-    
-    return { ok: true, message: `${paymentIds.length} pagos marcados como realizados` };
-  } catch (error: any) {
-    console.error('Error marking payments as paid:', error);
-    return { ok: false, error: error.message };
-  }
-}
+// ============================================
+// FUNCIONES OBSOLETAS ELIMINADAS:
+// - actionDeferReference (mock data)
+// - actionGetReferenceDetails (mock data)
+// - actionSearchPayments (mock data)
+// - actionMarkPaymentsAsPaid (usaba check_items - reemplazada por actionMarkPaymentsAsPaidNew)
+// ============================================
 
 // Get insurers list
 export async function actionGetInsurers() {
@@ -217,24 +112,6 @@ export async function actionGetInsurers() {
   }
 }
 
-// Delete history item
-export async function actionDeleteHistoryItem(itemId: string) {
-  try {
-    const supabase = await getSupabaseServer();
-    
-    const { error} = await supabase
-      .from('check_items')
-      .delete()
-      .eq('id', itemId);
-    
-    if (error) throw error;
-    
-    return { ok: true, message: 'Registro eliminado exitosamente' };
-  } catch (error: any) {
-    console.error('Error deleting history item:', error);
-    return { ok: false, error: error.message };
-  }
-}
 
 // ========================================
 // NEW CHECKS FLOW - Bank Transfers & Pending Payments
@@ -300,6 +177,38 @@ export async function actionImportBankHistoryXLSX(transfers: Array<{
     
     if (error) throw error;
     
+    // Update payment_references to mark as existing in bank
+    const newRefs = newTransfers.map(t => t.reference_number);
+    await supabase
+      .from('payment_references')
+      .update({ exists_in_bank: true })
+      .in('reference_number', newRefs)
+      .eq('exists_in_bank', false);
+    
+    // Update pending_payments.can_be_paid where all references now exist
+    const { data: pendingWithRefs } = await supabase
+      .from('pending_payments')
+      .select(`
+        id,
+        payment_references (id, reference_number, exists_in_bank)
+      `)
+      .eq('can_be_paid', false);
+    
+    const toUpdate: string[] = [];
+    (pendingWithRefs || []).forEach((p: any) => {
+      const allExist = p.payment_references?.every((ref: any) => ref.exists_in_bank);
+      if (allExist && p.payment_references?.length > 0) {
+        toUpdate.push(p.id);
+      }
+    });
+    
+    if (toUpdate.length > 0) {
+      await supabase
+        .from('pending_payments')
+        .update({ can_be_paid: true })
+        .in('id', toUpdate);
+    }
+    
     return {
       ok: true,
       data: {
@@ -322,23 +231,12 @@ export async function actionGetBankTransfers(filters?: {
   status?: string;
 }) {
   try {
-    const supabase = await getSupabaseServer();
+    const supabaseAdmin = await getSupabaseAdmin();
     
-    let query = supabase
+    // PASO 1: Obtener todas las transferencias bancarias
+    let query = supabaseAdmin
       .from('bank_transfers')
-      .select(`
-        *,
-        payment_details (
-          id,
-          payment_id,
-          policy_number,
-          insurer_name,
-          client_name,
-          purpose,
-          amount_used,
-          paid_at
-        )
-      `)
+      .select('*')
       .order('date', { ascending: false });
     
     if (filters?.startDate) {
@@ -347,16 +245,36 @@ export async function actionGetBankTransfers(filters?: {
     if (filters?.endDate) {
       query = query.lte('date', filters.endDate);
     }
-    if (filters?.status && filters.status !== 'all') {
-      // Status is a generated column, can't filter directly
-      // Will filter in JS
-    }
     
-    const { data, error } = await query;
+    const { data: transfers, error: transfersError } = await query;
     
-    if (error) throw error;
+    if (transfersError) throw transfersError;
     
-    let results = data || [];
+    let results = transfers || [];
+    
+    // PASO 2: Obtener TODOS los payment_details
+    const { data: allDetails, error: detailsError } = await supabaseAdmin
+      .from('payment_details')
+      .select('*');
+    
+    if (detailsError) throw detailsError;
+    
+    // PASO 3: Agrupar payment_details por bank_transfer_id
+    const detailsByTransfer = new Map<string, any[]>();
+    (allDetails || []).forEach((detail: any) => {
+      if (detail.bank_transfer_id) {
+        if (!detailsByTransfer.has(detail.bank_transfer_id)) {
+          detailsByTransfer.set(detail.bank_transfer_id, []);
+        }
+        detailsByTransfer.get(detail.bank_transfer_id)!.push(detail);
+      }
+    });
+    
+    // PASO 4: Unir manualmente
+    results = results.map((transfer: any) => ({
+      ...transfer,
+      payment_details: detailsByTransfer.get(transfer.id) || []
+    }));
     
     // Filter by status if needed
     if (filters?.status && filters.status !== 'all') {
@@ -537,7 +455,64 @@ export async function actionGetPendingPaymentsNew(filters?: {
 }) {
   try {
     const supabase = await getSupabaseServer();
+    const supabaseAdmin = await getSupabaseAdmin();
     
+    // PRIMERO: Sincronizar referencias con banco
+    // Obtener todas las referencias que están marcadas como no existentes
+    const { data: pendingRefs } = await supabaseAdmin
+      .from('payment_references')
+      .select('id, reference_number')
+      .eq('exists_in_bank', false);
+    
+    if (pendingRefs && pendingRefs.length > 0) {
+      const refNumbers = pendingRefs.map(r => r.reference_number);
+      
+      // Verificar cuáles existen en bank_transfers
+      const { data: existingInBank } = await supabaseAdmin
+        .from('bank_transfers')
+        .select('reference_number')
+        .in('reference_number', refNumbers);
+      
+      const existingRefs = new Set((existingInBank || []).map(b => b.reference_number));
+      
+      // Actualizar las que ahora existen
+      const toUpdate = pendingRefs
+        .filter(r => existingRefs.has(r.reference_number))
+        .map(r => r.id);
+      
+      if (toUpdate.length > 0) {
+        await supabaseAdmin
+          .from('payment_references')
+          .update({ exists_in_bank: true })
+          .in('id', toUpdate);
+        
+        // Actualizar pending_payments.can_be_paid
+        const { data: pendingWithRefs } = await supabaseAdmin
+          .from('pending_payments')
+          .select(`
+            id,
+            payment_references (id, exists_in_bank)
+          `)
+          .eq('can_be_paid', false);
+        
+        const paymentsToUpdate: string[] = [];
+        (pendingWithRefs || []).forEach((p: any) => {
+          const allExist = p.payment_references?.every((ref: any) => ref.exists_in_bank);
+          if (allExist && p.payment_references?.length > 0) {
+            paymentsToUpdate.push(p.id);
+          }
+        });
+        
+        if (paymentsToUpdate.length > 0) {
+          await supabaseAdmin
+            .from('pending_payments')
+            .update({ can_be_paid: true })
+            .in('id', paymentsToUpdate);
+        }
+      }
+    }
+    
+    // SEGUNDO: Obtener los pagos actualizados
     let query = supabase
       .from('pending_payments')
       .select(`
@@ -577,7 +552,6 @@ export async function actionGetPendingPaymentsNew(filters?: {
 // Mark payments as paid - new flow
 export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
   try {
-    console.log('Marcando como pagados:', paymentIds);
     const supabaseServer = await getSupabaseServer();
     const { data: userData } = await supabaseServer.auth.getUser();
 
@@ -597,7 +571,6 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
       .in('id', paymentIds);
     
     if (fetchError) throw fetchError;
-    console.log('Pagos obtenidos:', rawPayments?.length);
 
     const payments = (rawPayments || []).map((payment: any) => {
       let metadata: { advance_id?: string | null; source?: string | null; notes?: string | null } | null = null;
@@ -657,8 +630,6 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
           ? Number(transfer.remaining_amount)
           : Math.max(Number(transfer.amount) - Number(transfer.used_amount || 0), 0);
 
-        console.log('Transfer verificado ✓');
-
         const { error: detailError } = await supabase
           .from('payment_details')
           .insert([{
@@ -673,6 +644,27 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
           }]);
 
         if (detailError) throw detailError;
+
+        // Update bank_transfer amounts and status
+        const newUsedAmount = Number(transfer.used_amount || 0) + Number(ref.amount_to_use || 0);
+        const newRemainingAmount = Number(transfer.amount) - newUsedAmount;
+        
+        let newStatus = 'available';
+        if (newRemainingAmount <= 0) {
+          newStatus = 'exhausted';
+        } else if (newUsedAmount > 0) {
+          newStatus = 'partial';
+        }
+
+        const { error: transferUpdateError} = await supabase
+          .from('bank_transfers')
+          .update({
+            used_amount: newUsedAmount,
+            status: newStatus
+          })
+          .eq('id', transfer.id);
+
+        if (transferUpdateError) throw transferUpdateError;
       }
       
       // Mark payment as paid
@@ -702,13 +694,12 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
       }
     }
     
-    console.log('✅ Todos los pagos procesados correctamente');
     return {
       ok: true,
       message: `${paymentIds.length} pago(s) marcado(s) como pagado(s)`
     };
   } catch (error: any) {
-    console.error('❌ Error marking payments as paid:', error);
+    console.error('Error marking payments as paid:', error);
     return { ok: false, error: error.message };
   }
 }
@@ -725,19 +716,51 @@ export async function actionValidateReferences(references: string[]) {
     
     if (error) throw error;
     
-    const results = references.map(ref => {
-      const transfer = (data || []).find((t: any) => t.reference_number === ref);
-      return {
-        reference_number: ref,
-        exists: !!transfer,
-        available_amount: transfer?.remaining_amount || 0,
-        total_amount: transfer?.amount || 0
-      };
-    });
+    const found = new Set(data?.map((r: any) => r.reference_number) || []);
+    const result = references.map((ref) => ({
+      reference: ref,
+      exists: found.has(ref),
+      details: data?.find((r: any) => r.reference_number === ref) || null,
+    }));
     
-    return { ok: true, data: results };
+    return { ok: true, data: result };
   } catch (error: any) {
     console.error('Error validating references:', error);
+    return { ok: false, error: error.message };
+  }
+}
+
+// Delete pending payment
+export async function actionDeletePendingPayment(paymentId: string) {
+  try {
+    const supabaseServer = await getSupabaseServer();
+    const { data: userData } = await supabaseServer.auth.getUser();
+
+    if (!userData || !userData.user) {
+      return { ok: false, error: 'Usuario no autenticado' };
+    }
+
+    const supabase = await getSupabaseAdmin();
+    
+    // Delete payment references first (cascade)
+    const { error: refsError } = await supabase
+      .from('payment_references')
+      .delete()
+      .eq('payment_id', paymentId);
+    
+    if (refsError) throw refsError;
+    
+    // Delete pending payment
+    const { error: paymentError } = await supabase
+      .from('pending_payments')
+      .delete()
+      .eq('id', paymentId);
+    
+    if (paymentError) throw paymentError;
+    
+    return { ok: true, message: 'Pago pendiente eliminado correctamente' };
+  } catch (error: any) {
+    console.error('Error deleting pending payment:', error);
     return { ok: false, error: error.message };
   }
 }

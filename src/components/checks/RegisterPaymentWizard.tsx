@@ -164,8 +164,10 @@ export default function RegisterPaymentWizardNew({
       const validation = result.data[0];
       if (validation && newRefs[index]) {
         newRefs[index]!.exists_in_bank = validation.exists;
-        newRefs[index]!.amount = validation.total_amount.toString();
-        newRefs[index]!.amount_to_use = validation.available_amount.toString();
+        if (validation.details) {
+          newRefs[index]!.amount = validation.details.amount?.toString() || '';
+          newRefs[index]!.amount_to_use = validation.details.remaining_amount?.toString() || '';
+        }
       }
       if (newRefs[index]) {
         newRefs[index]!.validating = false;

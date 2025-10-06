@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { FaTimes, FaPlus, FaEdit, FaTrash } from "react-icons/fa";
 import { actionCreateClientWithPolicy } from '@/app/(app)/db/actions';
 import type { Tables } from "@/lib/supabase/client";
@@ -19,6 +20,7 @@ interface ClientFormProps {
 }
 
 export default function ClientForm({ client, onClose }: ClientFormProps) {
+  const router = useRouter();
   const [formData, setFormData] = useState({
     name: client?.name || "",
     national_id: client?.national_id || "",
@@ -41,8 +43,24 @@ export default function ClientForm({ client, onClose }: ClientFormProps) {
 
     try {
       if (client) {
-        // Update logic remains the same for now
-        console.log('Update logic not implemented yet');
+        const payload = toUppercasePayload({
+          name: formData.name,
+          national_id: formData.national_id || null,
+          email: formData.email || null,
+          phone: formData.phone || null,
+          active: formData.active,
+        });
+
+        const response = await fetch(`/api/db/clients/${client.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+
+        if (!response.ok) {
+          const errorJson = await response.json().catch(() => null);
+          throw new Error(errorJson?.error || "Error actualizando cliente");
+        }
       } else {
         const rawClientData = {
           name: formData.name,
@@ -58,6 +76,7 @@ export default function ClientForm({ client, onClose }: ClientFormProps) {
           throw new Error(result.error);
         }
       }
+      router.refresh();
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error desconocido");
@@ -296,36 +315,102 @@ interface PolicyFormProps {
   onSave: (policy: PolicyRow) => void;
 }
 
+type PolicyFormState = {
+  policy_number: string;
+  ramo: string;
+  insurer_id: string;
+  start_date: string;
+  renewal_date: string;
+  status: "ACTIVA" | "CANCELADA" | "VENCIDA";
+  percent_override: string;
+};
+
 function PolicyForm({ clientId, policy, onClose, onSave }: PolicyFormProps) {
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<PolicyFormState>({
     policy_number: policy?.policy_number || "",
     ramo: policy?.ramo || "",
-    insurer_id: policy?.insurer_id || "",
+    insurer_id: policy?.insurer_id || "all",
     start_date: policy?.start_date || "",
     renewal_date: policy?.renewal_date || "",
-    status: policy?.status || "ACTIVA",
-    percent_override: policy?.percent_override || null,
+    status: (policy?.status as PolicyFormState['status']) || "ACTIVA",
+    percent_override: policy?.percent_override !== null && policy?.percent_override !== undefined
+      ? String(policy.percent_override)
+      : "",
   });
   const [loading, setLoading] = useState(false);
+  const [insurers, setInsurers] = useState<{ id: string; name: string }[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const response = await fetch('/api/insurers', { cache: 'no-store' });
+        if (!response.ok) throw new Error('Error cargando aseguradoras');
+        const data = await response.json();
+        if (mounted) {
+          setInsurers(data || []);
+        }
+      } catch (err) {
+        if (mounted) {
+          setError(err instanceof Error ? err.message : 'Error cargando aseguradoras');
+        }
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError(null);
 
     try {
+      if (formData.insurer_id === 'all') {
+        setError('Selecciona una aseguradora.');
+        setLoading(false);
+        return;
+      }
+
+      if (!formData.ramo.trim()) {
+        setError('Ingresa el ramo de la póliza.');
+        setLoading(false);
+        return;
+      }
+
       const url = policy 
         ? `/api/db/policies/${policy.id}`
         : "/api/db/policies";
       
       const method = policy ? "PUT" : "POST";
 
+      const payload = {
+        client_id: clientId,
+        insurer_id: formData.insurer_id,
+        policy_number: formData.policy_number.trim().toUpperCase(),
+        ramo: formData.ramo.trim().toUpperCase(),
+        start_date: formData.start_date || null,
+        renewal_date: formData.renewal_date || null,
+        status: formData.status,
+        percent_override:
+          formData.percent_override === ""
+            ? null
+            : Number(formData.percent_override),
+      };
+
+      if (payload.percent_override !== null && Number.isNaN(payload.percent_override)) {
+        setError('El porcentaje debe ser un número válido.');
+        setLoading(false);
+        return;
+      }
+
       const response = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...formData,
-          client_id: clientId,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) throw new Error("Error guardando póliza");
@@ -333,7 +418,7 @@ function PolicyForm({ clientId, policy, onClose, onSave }: PolicyFormProps) {
       const savedPolicy = await response.json();
       onSave(savedPolicy);
     } catch {
-      alert("Error al guardar la póliza");
+      setError("Error al guardar la póliza");
     } finally {
       setLoading(false);
     }
@@ -352,6 +437,11 @@ function PolicyForm({ clientId, policy, onClose, onSave }: PolicyFormProps) {
 
       <form onSubmit={handleSubmit} className="p-6">
         <div className="space-y-4">
+          {error && (
+            <div className="p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+              {error}
+            </div>
+          )}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Número de Póliza *
@@ -361,6 +451,93 @@ function PolicyForm({ clientId, policy, onClose, onSave }: PolicyFormProps) {
               required
               value={formData.policy_number}
               onChange={(e) => setFormData({ ...formData, policy_number: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Aseguradora *
+            </label>
+            <select
+              required
+              value={formData.insurer_id}
+              onChange={(e) => setFormData({ ...formData, insurer_id: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="all" disabled>
+                Selecciona aseguradora
+              </option>
+              {insurers.map((insurer) => (
+                <option key={insurer.id} value={insurer.id}>
+                  {insurer.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Ramo *
+            </label>
+            <input
+              type="text"
+              required
+              value={formData.ramo}
+              onChange={(e) => setFormData({ ...formData, ramo: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Estado
+            </label>
+            <select
+              value={formData.status}
+              onChange={(e) => setFormData({ ...formData, status: e.target.value as PolicyFormState['status'] })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="ACTIVA">ACTIVA</option>
+              <option value="VENCIDA">VENCIDA</option>
+              <option value="CANCELADA">CANCELADA</option>
+            </select>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Fecha inicio
+              </label>
+              <input
+                type="date"
+                value={formData.start_date}
+                onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Fecha renovación
+              </label>
+              <input
+                type="date"
+                value={formData.renewal_date}
+                onChange={(e) => setFormData({ ...formData, renewal_date: e.target.value })}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              % override (opcional)
+            </label>
+            <input
+              type="number"
+              step="0.01"
+              value={formData.percent_override}
+              onChange={(e) => setFormData({ ...formData, percent_override: e.target.value })}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>

@@ -6,7 +6,11 @@ import { actionGetBankTransfers } from '@/app/(app)/checks/actions';
 import ImportBankHistoryModal from './ImportBankHistoryModal';
 import { toast } from 'sonner';
 
-export default function BankHistoryTab() {
+interface BankHistoryTabProps {
+  onImportSuccess?: () => void;
+}
+
+export default function BankHistoryTab({ onImportSuccess }: BankHistoryTabProps) {
   const [transfers, setTransfers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showImportModal, setShowImportModal] = useState(false);
@@ -14,13 +18,18 @@ export default function BankHistoryTab() {
   const [filters, setFilters] = useState({
     status: 'all',
     startDate: '',
-    endDate: ''
+    endDate: '',
+    search: ''
   });
 
   const loadTransfers = async () => {
     setLoading(true);
     try {
-      const result = await actionGetBankTransfers(filters);
+      const result = await actionGetBankTransfers({
+        status: filters.status,
+        startDate: filters.startDate,
+        endDate: filters.endDate
+      });
       if (result.ok) {
         setTransfers(result.data || []);
       } else {
@@ -32,6 +41,19 @@ export default function BankHistoryTab() {
       setLoading(false);
     }
   };
+
+  // Filtrar transfers por búsqueda
+  const filteredTransfers = transfers.filter(transfer => {
+    if (!filters.search) return true;
+    const searchLower = filters.search.toLowerCase();
+    return (
+      transfer.reference_number?.toLowerCase().includes(searchLower) ||
+      transfer.description?.toLowerCase().includes(searchLower) ||
+      transfer.payment_details?.some((detail: any) => 
+        detail.client_name?.toLowerCase().includes(searchLower)
+      )
+    );
+  });
 
   useEffect(() => {
     loadTransfers();
@@ -81,13 +103,24 @@ export default function BankHistoryTab() {
 
       {/* Filtros */}
       <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 border-2 border-gray-100">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <div className="w-full">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="w-full max-w-full overflow-hidden">
+            <label className="block text-xs sm:text-sm font-semibold text-gray-600 mb-2 uppercase">Buscar</label>
+            <input
+              type="text"
+              placeholder="Nombre o referencia..."
+              value={filters.search}
+              onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+              className="w-full max-w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition-colors text-sm sm:text-base"
+            />
+          </div>
+
+          <div className="w-full max-w-full overflow-hidden">
             <label className="block text-xs sm:text-sm font-semibold text-gray-600 mb-2 uppercase">Estado</label>
             <select
               value={filters.status}
               onChange={(e) => setFilters({ ...filters, status: e.target.value })}
-              className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition-colors text-sm sm:text-base"
+              className="w-full max-w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition-colors text-sm sm:text-base"
             >
               <option value="all">TODOS</option>
               <option value="available">DISPONIBLE</option>
@@ -96,27 +129,53 @@ export default function BankHistoryTab() {
             </select>
           </div>
           
-          <div className="w-full">
+          <div className="w-full max-w-full overflow-hidden">
             <label className="block text-xs sm:text-sm font-semibold text-gray-600 mb-2 uppercase">Desde</label>
             <input
               type="date"
+              style={{ WebkitAppearance: 'none' }}
               value={filters.startDate}
               onChange={(e) => setFilters({ ...filters, startDate: e.target.value })}
-              className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition-colors text-sm sm:text-base"
+              className="w-full max-w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition-colors text-sm sm:text-base"
             />
           </div>
           
-          <div className="w-full">
+          <div className="w-full max-w-full overflow-hidden">
             <label className="block text-xs sm:text-sm font-semibold text-gray-600 mb-2 uppercase">Hasta</label>
             <input
               type="date"
+              style={{ WebkitAppearance: 'none' }}
               value={filters.endDate}
               onChange={(e) => setFilters({ ...filters, endDate: e.target.value })}
-              className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition-colors text-sm sm:text-base"
+              className="w-full max-w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition-colors text-sm sm:text-base"
             />
           </div>
         </div>
       </div>
+
+      {/* Resumen */}
+      {!loading && filteredTransfers.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-red-500">
+            <h3 className="text-sm font-semibold text-gray-600 uppercase mb-2">Total Usado</h3>
+            <p className="text-3xl font-bold text-red-600 font-mono">
+              ${filteredTransfers.reduce((sum, t) => sum + parseFloat(t.used_amount || 0), 0).toFixed(2)}
+            </p>
+          </div>
+          <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-[#8AAA19]">
+            <h3 className="text-sm font-semibold text-gray-600 uppercase mb-2">Total Recibido</h3>
+            <p className="text-3xl font-bold text-[#8AAA19] font-mono">
+              ${filteredTransfers.reduce((sum, t) => sum + parseFloat(t.amount || 0), 0).toFixed(2)}
+            </p>
+          </div>
+          <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-[#010139]">
+            <h3 className="text-sm font-semibold text-gray-600 uppercase mb-2">Total Disponible</h3>
+            <p className="text-3xl font-bold text-[#010139] font-mono">
+              ${filteredTransfers.reduce((sum, t) => sum + parseFloat(t.remaining_amount || 0), 0).toFixed(2)}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Tabla de Transferencias */}
       <div className="bg-white rounded-xl shadow-lg overflow-hidden border-2 border-gray-100">
@@ -146,9 +205,10 @@ export default function BankHistoryTab() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {transfers.map((transfer) => {
+                {filteredTransfers.map((transfer: any) => {
                   const isExpanded = expandedRows.has(transfer.id);
-                  const hasDetails = transfer.payment_details && transfer.payment_details.length > 0;
+                  const paymentDetails = Array.isArray(transfer.payment_details) ? transfer.payment_details : [];
+                  const hasDetails = paymentDetails.length > 0;
                   
                   return (
                     <>
@@ -199,7 +259,7 @@ export default function BankHistoryTab() {
                           <td colSpan={8} className="px-6 py-4 bg-blue-50">
                             <div className="space-y-2">
                               <h4 className="font-semibold text-sm text-[#010139] mb-3">💳 Pagos Aplicados:</h4>
-                              {transfer.payment_details.map((detail: any) => (
+                              {paymentDetails.map((detail: any) => (
                                 <div key={detail.id} className="bg-white rounded-lg p-3 border-l-4 border-[#8AAA19] flex items-center justify-between">
                                   <div className="flex-1">
                                     <div className="flex items-center gap-3">
@@ -350,6 +410,9 @@ export default function BankHistoryTab() {
           onSuccess={() => {
             loadTransfers();
             setShowImportModal(false);
+            if (onImportSuccess) {
+              onImportSuccess();
+            }
           }}
         />
       )}

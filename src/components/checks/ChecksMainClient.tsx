@@ -47,6 +47,29 @@ export default function ChecksMainClient() {
     setAdvancePrefill(null);
   };
 
+  const handleHistoryImported = () => {
+    // Refresh ambas pestañas cuando se importa historial
+    setRefreshKey(prev => prev + 1);
+    // Recargar historial de banco usando función global
+    setTimeout(() => {
+      if ((window as any).__reloadBankHistory) {
+        (window as any).__reloadBankHistory();
+      }
+    }, 100);
+  };
+
+  const handleTabChange = (tab: 'history' | 'pending') => {
+    setActiveTab(tab);
+    // Cuando cambias a historial, recargar automáticamente
+    if (tab === 'history') {
+      setTimeout(() => {
+        if ((window as any).__reloadBankHistory) {
+          (window as any).__reloadBankHistory();
+        }
+      }, 100);
+    }
+  };
+
   return (
     <div>
       <div className="max-w-7xl mx-auto">
@@ -59,7 +82,7 @@ export default function ChecksMainClient() {
         {/* Tab Navigation */}
         <div className="bg-white rounded-2xl shadow-lg p-2 mb-6 flex gap-2">
           <button
-            onClick={() => setActiveTab('history')}
+            onClick={() => handleTabChange('history')}
             className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-semibold transition-all ${
               activeTab === 'history'
                 ? 'bg-gradient-to-r from-[#010139] to-[#020270] text-white shadow-lg'
@@ -70,7 +93,7 @@ export default function ChecksMainClient() {
             <span className="text-sm">Historial de Banco</span>
           </button>
           <button
-            onClick={() => setActiveTab('pending')}
+            onClick={() => handleTabChange('pending')}
             className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-semibold transition-all ${
               activeTab === 'pending'
                 ? 'bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white shadow-lg'
@@ -84,11 +107,16 @@ export default function ChecksMainClient() {
 
         {/* Tab Content */}
         <div className="transition-all duration-300">
-          {activeTab === 'history' && <BankHistoryTab key={`history-${refreshKey}`} />}
+          {activeTab === 'history' && (
+            <BankHistoryTab 
+              onImportSuccess={handleHistoryImported}
+            />
+          )}
           {activeTab === 'pending' && (
             <PendingPaymentsTab 
               key={`pending-${refreshKey}`}
-              onOpenWizard={() => setShowWizard(true)} 
+              onOpenWizard={() => setShowWizard(true)}
+              onPaymentPaid={handleHistoryImported}
             />
           )}
         </div>

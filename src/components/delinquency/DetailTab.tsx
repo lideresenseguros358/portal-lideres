@@ -1,8 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { FaSearch, FaFilter, FaChevronDown, FaChevronUp, FaExternalLinkAlt } from 'react-icons/fa';
-import { actionGetDelinquencyRecords, actionGetActiveInsurers, actionGetBrokers } from '@/app/(app)/delinquency/actions';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -14,17 +13,21 @@ interface DetailTabProps {
 
 export default function DetailTab({ userRole, brokerId }: DetailTabProps) {
   const [loading, setLoading] = useState(true);
-  const [records, setRecords] = useState<any[]>([]);
-  const [insurers, setInsurers] = useState<any[]>([]);
-  const [brokers, setBrokers] = useState<any[]>([]);
-  const [selectedInsurer, setSelectedInsurer] = useState('');
-  const [selectedBroker, setSelectedBroker] = useState('');
+  const [rawRecords, setRawRecords] = useState<any[]>([]);
+  const [insurers, setInsurers] = useState<{ id: string; name: string }[]>([]);
+  const [brokers, setBrokers] = useState<{ id: string; name: string }[]>([]);
+  const [selectedInsurer, setSelectedInsurer] = useState('all');
+  const [selectedBroker, setSelectedBroker] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    loadFilters();
+    (async () => {
+      await loadFilters();
+      await loadRecords();
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -35,17 +38,25 @@ export default function DetailTab({ userRole, brokerId }: DetailTabProps) {
 
   useEffect(() => {
     loadRecords();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedInsurer, selectedBroker, searchTerm]);
 
   const loadFilters = async () => {
     try {
       const [insurersRes, brokersRes] = await Promise.all([
-        actionGetActiveInsurers(),
-        userRole === 'master' ? actionGetBrokers() : Promise.resolve({ ok: true, data: [] }),
+        fetch('/api/insurers', { cache: 'no-store' }),
+        userRole === 'master' ? fetch('/api/brokers', { cache: 'no-store' }) : Promise.resolve(null),
       ]);
 
-      if (insurersRes.ok) setInsurers(insurersRes.data || []);
-      if (brokersRes.ok) setBrokers(brokersRes.data || []);
+      if (insurersRes?.ok) {
+        const data = await insurersRes.json();
+        setInsurers(data || []);
+      }
+
+      if (brokersRes && brokersRes.ok) {
+        const data = await brokersRes.json();
+        setBrokers(data || []);
+      }
     } catch (error) {
       toast.error('Error al cargar filtros');
     }
@@ -54,43 +65,40 @@ export default function DetailTab({ userRole, brokerId }: DetailTabProps) {
   const loadRecords = async () => {
     setLoading(true);
     try {
-      const filters: any = {};
-      if (selectedInsurer) filters.insurerId = selectedInsurer;
-      if (selectedBroker) filters.brokerId = selectedBroker;
-      else if (userRole === 'broker' && brokerId) filters.brokerId = brokerId;
-      if (searchTerm) filters.search = searchTerm;
+      const params = new URLSearchParams();
+      if (selectedInsurer !== 'all') params.append('insurerId', selectedInsurer);
+      const targetBroker = selectedBroker !== 'all' ? selectedBroker : (userRole === 'broker' && brokerId ? brokerId : '');
+      if (targetBroker) params.append('brokerId', targetBroker);
+      if (searchTerm) params.append('search', searchTerm);
 
-      const result = await actionGetDelinquencyRecords(filters);
-      if (result.ok) {
-        // Get insurer and broker names separately
-        const recordsData = result.data || [];
-        const insurerIds = [...new Set(recordsData.map((r: any) => r.insurer_id))].filter(Boolean);
-        const brokerIds = [...new Set(recordsData.map((r: any) => r.broker_id))].filter(Boolean);
+      const response = await fetch(`/api/delinquency/records${params.toString() ? `?${params.toString()}` : ''}`, {
+        cache: 'no-store',
+      });
 
-        const [insurersRes, brokersRes] = await Promise.all([
-          insurerIds.length > 0 ? actionGetActiveInsurers() : Promise.resolve({ ok: true, data: [] }),
-          brokerIds.length > 0 ? actionGetBrokers() : Promise.resolve({ ok: true, data: [] }),
-        ]);
-
-        const insurerMap = new Map((insurersRes.data || []).map(i => [i.id, i.name]));
-        const brokerMap = new Map((brokersRes.data || []).map(b => [b.id, b.name]));
-
-        const enrichedRecords = recordsData.map((record: any) => ({
-          ...record,
-          insurers: { name: insurerMap.get(record.insurer_id) || '-' },
-          brokers: { name: brokerMap.get(record.broker_id) || 'Sin asignar' },
-        }));
-
-        setRecords(enrichedRecords);
-      } else {
-        toast.error('Error al cargar registros');
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => null);
+        throw new Error(errorBody?.error || 'Error al cargar registros');
       }
+
+      const { data } = await response.json();
+      setRawRecords(data || []);
     } catch (error) {
       toast.error('Error inesperado');
     } finally {
       setLoading(false);
     }
   };
+
+  const insurersMap = useMemo(() => new Map(insurers.map((ins) => [ins.id, ins.name])), [insurers]);
+  const brokersMap = useMemo(() => new Map(brokers.map((br) => [br.id, br.name])), [brokers]);
+
+  const records = useMemo(() => {
+    return rawRecords.map((record: any) => ({
+      ...record,
+      insurers: { name: insurersMap.get(record.insurer_id) || '-' },
+      brokers: { name: brokersMap.get(record.broker_id) || 'Sin asignar' },
+    }));
+  }, [rawRecords, insurersMap, brokersMap]);
 
   const toggleRow = (id: string) => {
     const newExpanded = new Set(expandedRows);
@@ -184,10 +192,10 @@ export default function DetailTab({ userRole, brokerId }: DetailTabProps) {
             </label>
             <Select value={selectedInsurer} onValueChange={setSelectedInsurer}>
               <SelectTrigger className="w-full border-2 border-gray-300 focus:border-[#8AAA19]">
-                <SelectValue placeholder="Todas las aseguradoras" />
+                <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Todas</SelectItem>
+                <SelectItem value="all">Todas</SelectItem>
                 {insurers.map((ins) => (
                   <SelectItem key={ins.id} value={ins.id}>
                     {ins.name}
@@ -204,10 +212,10 @@ export default function DetailTab({ userRole, brokerId }: DetailTabProps) {
               </label>
               <Select value={selectedBroker} onValueChange={setSelectedBroker}>
                 <SelectTrigger className="w-full border-2 border-gray-300 focus:border-[#8AAA19]">
-                  <SelectValue placeholder="Todos los corredores" />
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todos</SelectItem>
+                  <SelectItem value="all">Todos</SelectItem>
                   {brokers.map((broker) => (
                     <SelectItem key={broker.id} value={broker.id}>
                       {broker.name}
