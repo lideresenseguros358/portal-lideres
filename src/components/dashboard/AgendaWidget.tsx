@@ -72,7 +72,7 @@ export default function AgendaWidget({ userId, brokerId }: AgendaWidgetProps) {
 
   if (loading) {
     return (
-      <div className="flex w-full h-[280px] items-center justify-center rounded-2xl bg-white p-5 shadow-[0_18px_40px_rgba(1,1,57,0.12)]">
+      <div className="flex w-full h-full items-center justify-center rounded-2xl bg-white p-5 shadow-[0_18px_40px_rgba(1,1,57,0.12)]">
         <div className="animate-spin w-8 h-8 border-4 border-[#010139] border-t-transparent rounded-full"></div>
       </div>
     );

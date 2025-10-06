@@ -277,10 +277,12 @@ export async function getProductionData() {
 
 // Get broker ranking for Master dashboard
 export async function getBrokerRanking() {
-  const supabase = await getSupabaseServer();
+  // Usar admin para obtener todos los datos sin restricciones de RLS
+  const { getSupabaseAdmin } = await import('@/lib/supabase/admin');
+  const supabase = await getSupabaseAdmin();
   
   // Obtener datos de production del año actual
-  const { data } = await (supabase as any)
+  const { data, error } = await (supabase as any)
     .from("production")
     .select(`
       broker_id,
@@ -292,6 +294,8 @@ export async function getBrokerRanking() {
       )
     `)
     .eq("year", CURRENT_YEAR);
+  
+  console.log('[MASTER RANKING DEBUG]', { dataLength: data?.length, error });
   
   if (!data || data.length === 0) return [];
   
@@ -328,7 +332,10 @@ export async function getBrokerRanking() {
     return a.brokerName.localeCompare(b.brokerName);
   });
   
-  return rows.slice(0, 5);
+  const top5 = rows.slice(0, 5);
+  console.log('[MASTER RANKING RESULT]', { totalBrokers: rows.length, top5Count: top5.length });
+  
+  return top5;
 }
 
 // Get broker of the month (previous closed month)
@@ -514,18 +521,56 @@ export async function getFinanceData() {
     annualAccumulated = (annualTotals ?? []).reduce((acc, item) => acc + toNumber(item.net_amount), 0);
   }
   
-  // Get checks data (simplified for now)
-  const checksData = {
-    received: 0,
-    applied: 0,
-    pending: 0,
-    returned: 0
-  };
+  // Get checks data from pending_payments
+  const { getSupabaseAdmin } = await import('@/lib/supabase/admin');
+  const adminClient = await getSupabaseAdmin();
+  
+  // Get all pending payments from current year
+  const { data: paymentsData, error: paymentsError } = await adminClient
+    .from('pending_payments')
+    .select('amount_to_pay, can_be_paid, purpose, created_at')
+    .gte('created_at', `${currentYear}-01-01`)
+    .lte('created_at', `${currentYear}-12-31`);
+  
+  console.log('[CHECKS DEBUG]', {
+    currentYear,
+    paymentsCount: paymentsData?.length,
+    paymentsError,
+    sample: paymentsData?.[0]
+  });
+  
+  // Calculate totals
+  let received = 0;  // Total de pagos registrados
+  let applied = 0;   // Total de pagos que pueden ser pagados (can_be_paid true)
+  let pending = 0;   // Total de pagos pendientes (can_be_paid false)
+  let returned = 0;  // Total de devoluciones (purpose contiene "devol")
+  
+  (paymentsData ?? []).forEach((payment: any) => {
+    const amount = toNumber(payment.amount_to_pay);
+    received += amount; // Todos cuentan como recibidos
+    
+    const isRefund = payment.purpose?.toLowerCase().includes('devol');
+    
+    if (isRefund) {
+      returned += amount;
+    } else if (payment.can_be_paid) {
+      applied += amount;
+    } else {
+      pending += amount;
+    }
+  });
+  
+  console.log('[CHECKS TOTALS]', { received, applied, pending, returned });
   
   return {
     lastPaidAmount,
     annualAccumulated,
-    checks: checksData
+    checks: {
+      received,
+      applied,
+      pending,
+      returned
+    }
   };
 }
 
@@ -639,9 +684,13 @@ export async function getYtdComparison(userId: string, role: DashboardRole): Pro
 }
 
 export async function getRankingTop5(userId: string): Promise<RankingResult> {
-  const supabase = await getSupabaseServer();
+  const supabaseServer = await getSupabaseServer();
   const profile = await getProfile(userId);
   const brokerId = profile?.brokerId ?? null;
+
+  // Usar admin para obtener todos los datos sin restricciones de RLS
+  const { getSupabaseAdmin } = await import('@/lib/supabase/admin');
+  const supabase = await getSupabaseAdmin();
 
   const { data, error } = await supabase
     .from("production")
@@ -649,6 +698,8 @@ export async function getRankingTop5(userId: string): Promise<RankingResult> {
     .eq("year", CURRENT_YEAR)
     .limit(FETCH_LIMIT)
     .returns<{ broker_id: string | null; bruto: number | string | null; canceladas: number | string | null }[]>();
+  
+  console.log('[RANKING DEBUG]', { dataLength: data?.length, error });
 
   if (error || !data || data.length === 0) {
     // Si no hay datos reales, usar mock
@@ -720,6 +771,7 @@ export async function getRankingTop5(userId: string): Promise<RankingResult> {
     brokerId: item.brokerId,
     brokerName: item.brokerName,
     position: index + 1,
+    // No incluir total - solo nombres públicos
   }));
 
   let currentPosition: number | undefined;
@@ -799,17 +851,24 @@ export async function getContestProgress(userId: string): Promise<ContestProgres
   const currentMonth = now.getMonth() + 1; // 1-12
 
   // Obtener configuración de contests
-  const { data: assaConfigData } = await supabase
+  const { data: assaConfigData, error: assaError } = await supabase
     .from('app_settings')
     .select('value')
     .eq('key', 'production.contests.assa')
     .single();
 
-  const { data: convivioConfigData } = await supabase
+  const { data: convivioConfigData, error: convivioError } = await supabase
     .from('app_settings')
     .select('value')
     .eq('key', 'production.contests.convivio')
     .single();
+
+  console.log('[CONTESTS RAW DATA]', {
+    assaConfigData,
+    assaError,
+    convivioConfigData,
+    convivioError,
+  });
 
   const assaConfig = (typeof assaConfigData?.value === 'object' && assaConfigData?.value !== null)
     ? assaConfigData.value as any
@@ -817,7 +876,12 @@ export async function getContestProgress(userId: string): Promise<ContestProgres
 
   const convivioConfig = (typeof convivioConfigData?.value === 'object' && convivioConfigData?.value !== null)
     ? convivioConfigData.value as any
-    : { start_month: 1, end_month: 6, goal: 150000, goal_double: 250000, year: currentYear };
+    : { start_month: 1, end_month: 12, goal: 150000, goal_double: 250000, enable_double_goal: true, year: currentYear };
+
+  // Debug: Log configuraciones
+  console.log('[CONTESTS DEBUG] Current Date:', { currentYear, currentMonth });
+  console.log('[CONTESTS DEBUG] ASSA Config:', assaConfig);
+  console.log('[CONTESTS DEBUG] Convivio Config:', convivioConfig);
 
   // Determinar año de concurso (puede ser diferente al año actual si se reseteó)
   const assaYear = assaConfig.year ?? currentYear;
@@ -877,6 +941,8 @@ export async function getContestProgress(userId: string): Promise<ContestProgres
   const assaPassed = currentYear > assaYear || (currentYear === assaYear && currentMonth > assaConfig.end_month);
   const assaFuture = currentYear < assaYear || (currentYear === assaYear && currentMonth < assaConfig.start_month);
 
+  console.log('[ASSA STATUS]', { isAssaActive, assaPassed, assaFuture, assaValue });
+
   if (assaPassed) {
     // Concurso terminó: verificar si cumplió meta
     if (assaConfig.enable_double_goal && assaConfig.goal_double && assaValue >= assaConfig.goal_double) {
@@ -896,6 +962,8 @@ export async function getContestProgress(userId: string): Promise<ContestProgres
     assaStatus = 'active';
   }
 
+  console.log('[ASSA FINAL]', { assaStatus, assaQuotaType });
+
   // Determinar estado de Convivio
   let convivioStatus: 'active' | 'closed' | 'won' | 'lost' = 'active';
   let convivioQuotaType: 'single' | 'double' | undefined = undefined;
@@ -903,6 +971,8 @@ export async function getContestProgress(userId: string): Promise<ContestProgres
   const isConvivioActive = currentYear === convivioYear && currentMonth >= convivioConfig.start_month && currentMonth <= convivioConfig.end_month;
   const convivioPassed = currentYear > convivioYear || (currentYear === convivioYear && currentMonth > convivioConfig.end_month);
   const convivioFuture = currentYear < convivioYear || (currentYear === convivioYear && currentMonth < convivioConfig.start_month);
+
+  console.log('[CONVIVIO STATUS]', { isConvivioActive, convivioPassed, convivioFuture, convivioValue });
 
   if (convivioPassed) {
     // Concurso terminó: verificar si cumplió meta
@@ -923,10 +993,12 @@ export async function getContestProgress(userId: string): Promise<ContestProgres
     convivioStatus = 'active';
   }
 
+  console.log('[CONVIVIO FINAL]', { convivioStatus, convivioQuotaType });
+
   const convivioPercent = computePercent(convivioValue, convivioConfig.goal);
   const assaPercent = computePercent(assaValue, assaConfig.goal);
 
-  return [
+  const result = [
     {
       label: "Concurso ASSA",
       value: assaValue,
@@ -937,7 +1009,7 @@ export async function getContestProgress(userId: string): Promise<ContestProgres
       quotaType: assaQuotaType,
       targetDouble: assaConfig.goal_double,
       enableDoubleGoal: assaConfig.enable_double_goal,
-      periodLabel: `${MONTH_NAMES[(assaConfig.start_month - 1 + 12) % 12] ?? ""} - ${MONTH_NAMES[(assaConfig.end_month - 1 + 12) % 12] ?? ""}`,
+      periodLabel: `${MONTH_NAMES[assaConfig.start_month - 1] ?? ""} - ${MONTH_NAMES[assaConfig.end_month - 1] ?? ""}`,
       startMonth: assaConfig.start_month,
       endMonth: assaConfig.end_month,
     },
@@ -950,12 +1022,16 @@ export async function getContestProgress(userId: string): Promise<ContestProgres
       contestStatus: convivioStatus,
       quotaType: convivioQuotaType,
       targetDouble: convivioConfig.goal_double,
-      enableDoubleGoal: true, // Convivio siempre tiene doble
-      periodLabel: `${MONTH_NAMES[(convivioConfig.start_month - 1 + 12) % 12] ?? ""} - ${MONTH_NAMES[(convivioConfig.end_month - 1 + 12) % 12] ?? ""}`,
+      enableDoubleGoal: convivioConfig.enable_double_goal ?? true,
+      periodLabel: `${MONTH_NAMES[convivioConfig.start_month - 1] ?? ""} - ${MONTH_NAMES[convivioConfig.end_month - 1] ?? ""}`,
       startMonth: convivioConfig.start_month,
       endMonth: convivioConfig.end_month,
     },
   ];
+
+  console.log('[CONTESTS RETURN]', result);
+  
+  return result;
 }
 
 function uniqueEvents(events: CalendarEvent[]): CalendarEvent[] {

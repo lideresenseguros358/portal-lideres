@@ -8,10 +8,11 @@ import {
   actionMarkPendingAsNextFortnight,
 } from '@/app/(app)/commissions/actions';
 import { toast } from 'sonner';
-import { FaChevronDown, FaChevronRight, FaCalendarAlt, FaExclamationTriangle, FaFileDownload, FaHistory } from 'react-icons/fa';
+import { FaChevronDown, FaChevronRight, FaCalendarAlt, FaExclamationTriangle, FaFileDownload, FaHistory, FaHandHoldingUsd } from 'react-icons/fa';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AssignBrokerDropdown } from './AssignBrokerDropdown';
+import { RetainedTab } from './RetainedTab';
 // Tabs removed - using button pattern instead
 import {
   Table,
@@ -764,17 +765,27 @@ const PaidAdjustmentsView = () => {
 
 // Main Component
 export default function AdjustmentsTab({ role, brokerId, brokers, onActionSuccess, onPendingCountChange, isShortcut }: Props) {
-  const [activeTab, setActiveTab] = useState<'pending' | 'requests' | 'paid'>('pending');
+  const [activeTab, setActiveTab] = useState<'pending' | 'requests' | 'paid' | 'retained'>('pending');
 
   const handleSuccess = () => {
     onActionSuccess?.();
   };
 
-  const tabs = [
-    { key: 'pending' as const, label: 'Sin identificar' },
-    { key: 'requests' as const, label: 'Identificados' },
-    { key: 'paid' as const, label: 'Pagados' },
+  // Configuración de tabs por rol
+  const masterTabs = [
+    { key: 'pending' as const, label: 'Sin identificar', icon: FaExclamationTriangle },
+    { key: 'requests' as const, label: 'Identificados', icon: FaCalendarAlt },
+    { key: 'retained' as const, label: 'Retenidos', icon: FaHandHoldingUsd },
+    { key: 'paid' as const, label: 'Pagados', icon: FaHistory },
   ];
+
+  const brokerTabs = [
+    { key: 'pending' as const, label: 'Sin identificar', icon: FaExclamationTriangle },
+    { key: 'requests' as const, label: 'Ajustes Reportados', icon: FaCalendarAlt },
+    { key: 'paid' as const, label: 'Pagados', icon: FaHistory },
+  ];
+
+  const tabs = role === 'master' ? masterTabs : brokerTabs;
 
   return (
     <Card className="shadow-lg">
@@ -788,21 +799,25 @@ export default function AdjustmentsTab({ role, brokerId, brokers, onActionSucces
         {/* Tabs con patrón de Pendientes */}
         <div className="border-b-2 border-gray-200 px-4 sm:px-6">
           <div className="flex gap-2 sm:gap-4 overflow-x-auto pb-2 scrollbar-hide">
-            {tabs.map(tab => (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
-                className={`
-                  px-4 py-2 rounded-t-lg font-semibold whitespace-nowrap transition-all
-                  ${activeTab === tab.key 
-                    ? 'bg-[#010139] text-white border-b-4 border-[#8AAA19]' 
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                  }
-                `}
-              >
-                {tab.label}
-              </button>
-            ))}
+            {tabs.map(tab => {
+              const Icon = tab.icon;
+              return (
+                <button
+                  key={tab.key}
+                  onClick={() => setActiveTab(tab.key)}
+                  className={`
+                    px-4 py-2 rounded-t-lg font-semibold whitespace-nowrap transition-all flex items-center gap-2
+                    ${activeTab === tab.key 
+                      ? 'bg-[#010139] text-white border-b-4 border-[#8AAA19]' 
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }
+                  `}
+                >
+                  <Icon className="text-sm" />
+                  {tab.label}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -820,6 +835,9 @@ export default function AdjustmentsTab({ role, brokerId, brokers, onActionSucces
           )}
           {activeTab === 'requests' && (
             <RequestsView role={role} onActionSuccess={handleSuccess} />
+          )}
+          {activeTab === 'retained' && role === 'master' && (
+            <RetainedTab />
           )}
           {activeTab === 'paid' && (
             <PaidAdjustmentsView />

@@ -38,6 +38,9 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
   const [loading, setLoading] = useState(false);
   const [insurers, setInsurers] = useState<any[]>([]);
   const [brokers, setBrokers] = useState<any[]>([]);
+  const [existingClients, setExistingClients] = useState<any[]>([]);
+  const [selectedExistingClient, setSelectedExistingClient] = useState<any>(null);
+  const [showClientSuggestions, setShowClientSuggestions] = useState(false);
   const [formData, setFormData] = useState<FormData>({
     client_name: '',
     national_id: '',
@@ -99,7 +102,49 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
     setBrokers(merged || []);
   };
 
-  const validateStep = () => {
+  const searchClients = async (searchTerm: string) => {
+    if (searchTerm.length < 3) {
+      setExistingClients([]);
+      setShowClientSuggestions(false);
+      return;
+    }
+
+    const { data } = await supabaseClient()
+      .from('clients')
+      .select('id, name, national_id, email, phone, address')
+      .ilike('name', `%${searchTerm}%`)
+      .limit(5);
+
+    setExistingClients(data || []);
+    setShowClientSuggestions(true);
+  };
+
+  const selectExistingClient = (client: any) => {
+    setSelectedExistingClient(client);
+    setFormData({
+      ...formData,
+      client_name: client.name,
+      national_id: client.national_id || '',
+      email: client.email || '',
+      phone: client.phone || '',
+      address: client.address || '',
+    });
+    setShowClientSuggestions(false);
+  };
+
+  const validatePolicyNumber = async (policyNumber: string): Promise<boolean> => {
+    if (!policyNumber) return true;
+
+    const { data } = await supabaseClient()
+      .from('policies')
+      .select('id')
+      .eq('policy_number', policyNumber)
+      .single();
+
+    return !data; // true si no existe, false si ya existe
+  };
+
+  const validateStep = async () => {
     if (step === 1) {
       if (!formData.client_name) {
         toast.error('El nombre del cliente es obligatorio');
@@ -108,6 +153,12 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
     } else if (step === 2) {
       if (!formData.policy_number || !formData.insurer_id) {
         toast.error('Número de póliza y aseguradora son obligatorios');
+        return false;
+      }
+      // Validar que el número de póliza no exista
+      const isValid = await validatePolicyNumber(formData.policy_number);
+      if (!isValid) {
+        toast.error('Esta póliza ya existe en el sistema');
         return false;
       }
     } else if (step === 3 && role === 'master') {
@@ -119,8 +170,8 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
     return true;
   };
 
-  const handleNext = () => {
-    if (validateStep()) {
+  const handleNext = async () => {
+    if (await validateStep()) {
       setStep(step + 1);
     }
   };
@@ -157,7 +208,7 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
 
       if (error) throw error;
 
-      toast.success(formData.national_id ? 'Cliente creado exitosamente' : 'Cliente preliminar creado');
+      toast.success(selectedExistingClient ? 'Nueva póliza agregada al cliente existente' : 'Cliente y póliza creados exitosamente');
       onSuccess();
       onClose();
     } catch (error: any) {
@@ -219,17 +270,48 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                 </p>
               </div>
               
-              <div>
+              <div className="relative">
                 <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                   Nombre Completo <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   value={formData.client_name}
-                  onChange={createUppercaseHandler((e) => setFormData({ ...formData, client_name: e.target.value }))}
+                  onChange={createUppercaseHandler((e) => {
+                    const value = e.target.value;
+                    setFormData({ ...formData, client_name: value });
+                    searchClients(value);
+                  })}
+                  onBlur={() => setTimeout(() => setShowClientSuggestions(false), 200)}
                   className={`w-full px-3 py-2 sm:px-4 text-sm sm:text-base border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition ${uppercaseInputClass}`}
                   placeholder="Juan Pérez"
                 />
+                {showClientSuggestions && existingClients.length > 0 && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border-2 border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                    <div className="p-2 bg-blue-50 text-xs text-blue-700 border-b">
+                      📋 Clientes existentes - Click para usar datos existentes
+                    </div>
+                    {existingClients.map((client) => (
+                      <button
+                        key={client.id}
+                        type="button"
+                        onClick={() => selectExistingClient(client)}
+                        className="w-full text-left px-3 py-2 hover:bg-gray-100 border-b last:border-b-0 transition"
+                      >
+                        <div className="font-semibold text-sm">{client.name}</div>
+                        <div className="text-xs text-gray-600">
+                          {client.national_id && `Cédula: ${client.national_id}`}
+                          {client.email && ` • ${client.email}`}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {selectedExistingClient && (
+                  <div className="mt-1 text-xs text-green-600 flex items-center gap-1">
+                    <FaCheckCircle /> Cliente existente seleccionado - Solo se creará la nueva póliza
+                  </div>
+                )}
               </div>
 
               <div>
@@ -244,7 +326,7 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                   placeholder="8-123-4567"
                 />
                 <p className="text-[10px] sm:text-xs text-gray-500 mt-1">
-                  ⚠️ Sin este campo, el cliente quedará como PRELIMINAR
+                  ℹ️ Campo opcional - puede dejarse vacío si no se dispone del dato
                 </p>
               </div>
 

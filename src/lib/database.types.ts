@@ -59,6 +59,50 @@ export type Database = {
           },
         ]
       }
+      advance_recurrences: {
+        Row: {
+          amount: number
+          broker_id: string
+          created_at: string | null
+          created_by: string | null
+          id: string
+          is_active: boolean | null
+          reason: string
+          start_date: string
+          updated_at: string | null
+        }
+        Insert: {
+          amount: number
+          broker_id: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          is_active?: boolean | null
+          reason: string
+          start_date?: string
+          updated_at?: string | null
+        }
+        Update: {
+          amount?: number
+          broker_id?: string
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          is_active?: boolean | null
+          reason?: string
+          start_date?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "advance_recurrences_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       advances: {
         Row: {
           amount: number
@@ -156,59 +200,6 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      bank_history: {
-        Row: {
-          balance: number | null
-          created_at: string
-          credit: number | null
-          debit: number | null
-          description: string | null
-          id: string
-          imported_at: string
-          matched_check_item_id: string | null
-          raw_data: Json | null
-          reference: string | null
-          transaction_date: string
-          updated_at: string
-        }
-        Insert: {
-          balance?: number | null
-          created_at?: string
-          credit?: number | null
-          debit?: number | null
-          description?: string | null
-          id?: string
-          imported_at?: string
-          matched_check_item_id?: string | null
-          raw_data?: Json | null
-          reference?: string | null
-          transaction_date: string
-          updated_at?: string
-        }
-        Update: {
-          balance?: number | null
-          created_at?: string
-          credit?: number | null
-          debit?: number | null
-          description?: string | null
-          id?: string
-          imported_at?: string
-          matched_check_item_id?: string | null
-          raw_data?: Json | null
-          reference?: string | null
-          transaction_date?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "bank_history_matched_check_item_id_fkey"
-            columns: ["matched_check_item_id"]
-            isOneToOne: false
-            referencedRelation: "check_items"
             referencedColumns: ["id"]
           },
         ]
@@ -646,105 +637,6 @@ export type Database = {
             columns: ["insurer_id"]
             isOneToOne: false
             referencedRelation: "insurers"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      check_batches: {
-        Row: {
-          created_at: string
-          created_by: string | null
-          id: string
-          title: string
-        }
-        Insert: {
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          title: string
-        }
-        Update: {
-          created_at?: string
-          created_by?: string | null
-          id?: string
-          title?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "check_batches_created_by_fkey"
-            columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      check_items: {
-        Row: {
-          amount: number
-          bank_history_id: string | null
-          bank_json: Json | null
-          bank_matched_at: string | null
-          batch_id: string
-          broker_id: string
-          client_name: string | null
-          created_at: string
-          id: string
-          is_refund: boolean
-          policy_number: string | null
-          reference: string | null
-          status: string
-        }
-        Insert: {
-          amount: number
-          bank_history_id?: string | null
-          bank_json?: Json | null
-          bank_matched_at?: string | null
-          batch_id: string
-          broker_id: string
-          client_name?: string | null
-          created_at?: string
-          id?: string
-          is_refund?: boolean
-          policy_number?: string | null
-          reference?: string | null
-          status?: string
-        }
-        Update: {
-          amount?: number
-          bank_history_id?: string | null
-          bank_json?: Json | null
-          bank_matched_at?: string | null
-          batch_id?: string
-          broker_id?: string
-          client_name?: string | null
-          created_at?: string
-          id?: string
-          is_refund?: boolean
-          policy_number?: string | null
-          reference?: string | null
-          status?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "check_items_bank_history_id_fkey"
-            columns: ["bank_history_id"]
-            isOneToOne: false
-            referencedRelation: "bank_history"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "check_items_batch_id_fkey"
-            columns: ["batch_id"]
-            isOneToOne: false
-            referencedRelation: "check_batches"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "check_items_broker_id_fkey"
-            columns: ["broker_id"]
-            isOneToOne: false
-            referencedRelation: "brokers"
             referencedColumns: ["id"]
           },
         ]
@@ -1445,6 +1337,7 @@ export type Database = {
           fortnight_id: string
           gross_amount: number
           id: string
+          is_retained: boolean | null
           net_amount: number
         }
         Insert: {
@@ -1455,6 +1348,7 @@ export type Database = {
           fortnight_id: string
           gross_amount?: number
           id?: string
+          is_retained?: boolean | null
           net_amount?: number
         }
         Update: {
@@ -1465,6 +1359,7 @@ export type Database = {
           fortnight_id?: string
           gross_amount?: number
           id?: string
+          is_retained?: boolean | null
           net_amount?: number
         }
         Relationships: [
@@ -2301,6 +2196,86 @@ export type Database = {
             columns: ["broker_id"]
             isOneToOne: false
             referencedRelation: "brokers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      retained_commissions: {
+        Row: {
+          applied_advance_id: string | null
+          applied_fortnight_id: string | null
+          broker_id: string
+          created_at: string | null
+          created_by: string | null
+          discount_amount: number | null
+          fortnight_id: string
+          gross_amount: number
+          id: string
+          insurers_detail: Json | null
+          net_amount: number
+          paid_at: string | null
+          status: string
+          updated_at: string | null
+        }
+        Insert: {
+          applied_advance_id?: string | null
+          applied_fortnight_id?: string | null
+          broker_id: string
+          created_at?: string | null
+          created_by?: string | null
+          discount_amount?: number | null
+          fortnight_id: string
+          gross_amount: number
+          id?: string
+          insurers_detail?: Json | null
+          net_amount: number
+          paid_at?: string | null
+          status?: string
+          updated_at?: string | null
+        }
+        Update: {
+          applied_advance_id?: string | null
+          applied_fortnight_id?: string | null
+          broker_id?: string
+          created_at?: string | null
+          created_by?: string | null
+          discount_amount?: number | null
+          fortnight_id?: string
+          gross_amount?: number
+          id?: string
+          insurers_detail?: Json | null
+          net_amount?: number
+          paid_at?: string | null
+          status?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "retained_commissions_applied_advance_id_fkey"
+            columns: ["applied_advance_id"]
+            isOneToOne: false
+            referencedRelation: "advances"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "retained_commissions_applied_fortnight_id_fkey"
+            columns: ["applied_fortnight_id"]
+            isOneToOne: false
+            referencedRelation: "fortnights"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "retained_commissions_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "retained_commissions_fortnight_id_fkey"
+            columns: ["fortnight_id"]
+            isOneToOne: false
+            referencedRelation: "fortnights"
             referencedColumns: ["id"]
           },
         ]

@@ -6,7 +6,6 @@ import { PreviewTab } from './PreviewTab';
 import AdjustmentsTab from './AdjustmentsTab';
 import { YTDTab } from './YTDTab';
 import { AdvancesTab } from './AdvancesTab';
-import BrokerView from './BrokerView';
 import NewFortnightTab from './NewFortnightTab';
 
 interface InitialData {
@@ -19,7 +18,7 @@ interface InitialData {
 
 export default function CommissionsTabs({ initialData }: { initialData: InitialData }) {
   const { role, brokerId, brokers, insurers } = initialData;
-  const [activeTab, setActiveTab] = useState(role === 'broker' ? 'broker-view' : 'preview');
+  const [activeTab, setActiveTab] = useState('preview');
   const [draftFortnight, setDraftFortnight] = useState(initialData.draftFortnight);
   const [pendingCount, setPendingCount] = useState(0);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -27,7 +26,7 @@ export default function CommissionsTabs({ initialData }: { initialData: InitialD
   const validBrokers = brokers.filter(b => b.name) as { id: string; name: string }[];
   const validInsurers = insurers.filter(i => i.name) as { id: string; name: string }[];
 
-  // MASTER tiene 5 tabs
+  // Tabs configuration
   const MASTER_TABS = [
     { id: 'preview', label: 'Historial', badge: 0, icon: FaEye },
     { id: 'new-fortnight', label: 'Nueva Quincena', badge: 0, priority: !!draftFortnight, icon: FaPlus },
@@ -36,7 +35,14 @@ export default function CommissionsTabs({ initialData }: { initialData: InitialD
     { id: 'ytd', label: 'Acumulado', badge: 0, icon: FaChartLine },
   ];
 
-  const TABS = role === 'master' ? MASTER_TABS : [];
+  const BROKER_TABS = [
+    { id: 'preview', label: 'Historial', badge: 0, icon: FaEye },
+    { id: 'advances', label: 'Adelantos', badge: 0, icon: FaDollarSign },
+    { id: 'adjustments', label: 'Ajustes', badge: pendingCount, icon: FaExclamationTriangle },
+    { id: 'ytd', label: 'Acumulado', badge: 0, icon: FaChartLine },
+  ];
+
+  const TABS = role === 'master' ? MASTER_TABS : BROKER_TABS;
 
   const handleFortnightCreated = (newFortnight: any) => {
     console.log('Quincena creada/actualizada:', newFortnight);
@@ -56,18 +62,6 @@ export default function CommissionsTabs({ initialData }: { initialData: InitialD
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
   };
-
-  // BROKER view - Una sola vista con todo integrado
-  if (role === 'broker') {
-    if (!brokerId) {
-      return (
-        <div className="bg-white rounded-xl shadow-lg border-2 border-gray-100 p-8 text-center">
-          <p className="text-red-600 font-semibold">Error: No se pudo identificar al corredor.</p>
-        </div>
-      );
-    }
-    return <BrokerView brokerId={brokerId} />;
-  }
 
   // MASTER view con patrón de Cheques
   return (

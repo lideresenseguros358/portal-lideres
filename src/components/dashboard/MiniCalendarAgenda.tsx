@@ -124,7 +124,7 @@ export default function MiniCalendarAgenda({ events }: MiniCalendarAgendaProps) 
       onTouchStart={onTouchStart}
       onTouchMove={onTouchMove}
       onTouchEnd={onTouchEnd}
-      className="flex w-full flex-col rounded-2xl bg-white shadow-[0_18px_40px_rgba(1,1,57,0.12)] h-[280px] overflow-hidden"
+      className="flex w-full flex-col rounded-2xl bg-white shadow-[0_18px_40px_rgba(1,1,57,0.12)] h-full overflow-hidden"
     >
       {/* Header */}
       <div className="flex items-center justify-between px-5 pt-5 pb-3">
@@ -153,7 +153,7 @@ export default function MiniCalendarAgenda({ events }: MiniCalendarAgendaProps) 
       </div>
 
       {/* Calendar Grid */}
-      <div className="grid grid-cols-7 gap-1 px-5 flex-shrink-0" style={{ maxHeight: '160px' }}>
+      <div className="grid grid-cols-7 gap-1 px-5 flex-1 overflow-hidden">
         {DAYS_LABELS.map((label) => (
           <span key={label} className="text-center text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-[#8a8a8a] pb-1">
             {label}
@@ -194,27 +194,27 @@ export default function MiniCalendarAgenda({ events }: MiniCalendarAgendaProps) 
       </div>
 
       {/* Next Event + View More */}
-      <div className="px-5 pb-4 pt-2 mt-auto border-t border-gray-100">
+      <div className="px-5 pb-4 pt-3 mt-auto border-t border-gray-100 flex-shrink-0">
         {nextEvent ? (
-          <div className="mb-2">
-            <p className="text-xs text-gray-500 mb-1">Próximo evento:</p>
-            <div className="flex items-start gap-2">
+          <div className="mb-3">
+            <p className="text-xs text-gray-500 mb-1.5 font-semibold">Próximo evento:</p>
+            <div className="flex items-start gap-2 bg-gradient-to-r from-[#f6f6ff] to-white p-2.5 rounded-lg">
               <span className="text-lg">📅</span>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-[#010139] truncate">{nextEvent.title}</p>
-                <p className="text-xs text-gray-600">
+                <p className="text-sm font-semibold text-[#010139] line-clamp-2">{nextEvent.title}</p>
+                <p className="text-xs text-gray-600 mt-0.5">
                   {format(new Date(nextEvent.date), "d 'de' MMMM, yyyy", { locale: es })}
                 </p>
               </div>
             </div>
           </div>
         ) : (
-          <p className="text-xs text-gray-500 italic mb-2">No hay eventos próximos</p>
+          <p className="text-xs text-gray-500 italic mb-3">No hay eventos próximos</p>
         )}
         <button
           type="button"
           onClick={handleViewMore}
-          className="w-full flex items-center justify-center gap-2 text-xs font-semibold text-[#8AAA19] hover:text-[#6d8814] transition-colors py-1.5 rounded-lg hover:bg-[#f6f6ff] touch-manipulation"
+          className="w-full flex items-center justify-center gap-2 text-xs font-semibold text-[#8AAA19] hover:text-[#6d8814] transition-colors py-2 rounded-lg hover:bg-[#f6f6ff] touch-manipulation"
         >
           <span>Ver más</span>
           <FaExternalLinkAlt className="text-[9px]" />

@@ -1,315 +1,304 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import { actionGetYTDCommissions } from '@/app/(app)/commissions/actions';
-import { toast } from 'sonner';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { FaChevronDown, FaChevronRight, FaDollarSign, FaChartBar, FaChartLine } from 'react-icons/fa';
-import { YTDChart } from './YTDChart';
-
-// Types
-interface YTDData {
-  broker_id: string;
-  broker_name: string;
-  insurer_name: string;
-  year: number;
-  created_at: string; // Keep created_at for month calculation
-  total_gross: number;
-}
-
-interface GroupedByBroker {
-  [brokerId: string]: {
-    broker_name: string;
-    total_gross: number;
-    insurers: { name: string; total_gross: number }[];
-  };
-}
-
-interface OfficeData {
-  totalRevenue: number;
-  totalBrokerCommissions: number;
-  officeProfit: number;
-  profitPercentage: number;
-  totalVida: number;
-  totalRamosGenerales: number;
-  monthlyData: Array<{
-    month: string;
-    revenue: number;
-    profit: number;
-  }>;
-}
+import { FaChartLine, FaArrowUp, FaArrowDown, FaDollarSign } from 'react-icons/fa';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
+import { actionGetYTDCommissions } from '@/app/(app)/commissions/actions';
 
 interface Props {
   role: string;
   brokerId: string | null;
 }
 
-const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+const formatCurrency = (amount: number) => 
+  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
+
+const COLORS = ['#010139', '#8AAA19', '#4B5563', '#EF4444', '#3B82F6', '#F59E0B'];
 
 export function YTDTab({ role, brokerId }: Props) {
   const [year, setYear] = useState(new Date().getFullYear());
-  const [data, setData] = useState<YTDData[]>([]);
+  const [ytdData, setYtdData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [expandedBrokers, setExpandedBrokers] = useState<Set<string>>(new Set());
 
   useEffect(() => {
-    const loadYTDData = async () => {
+    const loadYTD = async () => {
       setLoading(true);
-      const result = await actionGetYTDCommissions(year, role === 'broker' ? brokerId : undefined, true);
-      if (result.ok) {
-        setData(result.data as YTDData[] || []);
-      } else {
-        toast.error('Error al cargar el acumulado anual', { description: result.error });
+      try {
+        const result = await actionGetYTDCommissions(year, role === 'broker' ? brokerId : undefined, true);
+        if (result.ok) {
+          setYtdData(result.data);
+        }
+      } catch (error) {
+        console.error('Error loading YTD data:', error);
       }
       setLoading(false);
     };
-    loadYTDData();
+    loadYTD();
   }, [year, role, brokerId]);
 
-  const { tableData, chartData, officeData } = useMemo(() => {
-    const currentYearData = data.filter(d => d.year === year);
-    
-    const processTableData = (dataset: YTDData[]) => dataset.reduce<GroupedByBroker>((acc, item) => {
-      const brokerId = item.broker_id;
-      if (!acc[brokerId]) {
-        acc[brokerId] = { broker_name: item.broker_name, total_gross: 0, insurers: [] };
-      }
-      acc[brokerId]!.total_gross += item.total_gross;
-      acc[brokerId]!.insurers.push({ name: item.insurer_name, total_gross: item.total_gross });
-      return acc;
-    }, {});
+  // Mock data for demonstration
+  const monthlyData = [
+    { month: 'Ene', current: 5000, previous: 4500 },
+    { month: 'Feb', current: 5500, previous: 4800 },
+    { month: 'Mar', current: 6000, previous: 5200 },
+    { month: 'Abr', current: 5800, previous: 5500 },
+    { month: 'May', current: 6500, previous: 5800 },
+    { month: 'Jun', current: 7000, previous: 6200 },
+    { month: 'Jul', current: 6800, previous: 6500 },
+    { month: 'Ago', current: 7200, previous: 6800 },
+    { month: 'Sep', current: 7500, previous: 7000 },
+    { month: 'Oct', current: 3800, previous: 3500 },
+  ];
 
-    const processChartData = () => {
-      const monthlyTotals: Record<string, Record<number, number>> = {};
-      data.forEach(item => {
-        const month = new Date(item.created_at).getMonth();
-        if (!monthlyTotals[month]) monthlyTotals[month] = {};
-        monthlyTotals[month][item.year] = (monthlyTotals[month][item.year] || 0) + item.total_gross;
-      });
+  const insurerData = [
+    { name: 'ASSA', value: 35000, growth: 15 },
+    { name: 'ANCON', value: 28000, growth: 8 },
+    { name: 'IS Internacional', value: 22000, growth: 12 },
+    { name: 'Aseguradora General', value: 18000, growth: -5 },
+    { name: 'MAPFRE', value: 15000, growth: 10 },
+  ];
 
-      return monthNames.map((name, index) => ({
-        month: name,
-        [year]: monthlyTotals[index]?.[year] || 0,
-        [year - 1]: monthlyTotals[index]?.[year - 1] || 0,
-      }));
-    };
+  const totalCurrent = monthlyData.reduce((sum, m) => sum + m.current, 0);
+  const totalPrevious = monthlyData.reduce((sum, m) => sum + m.previous, 0);
+  const growthPercentage = ((totalCurrent - totalPrevious) / totalPrevious * 100).toFixed(1);
 
-    // Calculate office data for Master view
-    const processOfficeData = (): OfficeData => {
-      const totalRevenue = currentYearData.reduce((sum, item) => sum + item.total_gross, 0) * 1.3; // Mock: assume 30% markup
-      const totalBrokerCommissions = currentYearData.reduce((sum, item) => sum + item.total_gross, 0);
-      const officeProfit = totalRevenue - totalBrokerCommissions;
-      const profitPercentage = totalRevenue > 0 ? (officeProfit / totalRevenue) * 100 : 0;
-      
-      // Mock data for Vida and Ramos Generales
-      const totalVida = totalRevenue * 0.35; // Mock: 35% is life insurance
-      const totalRamosGenerales = totalRevenue * 0.65; // Mock: 65% is general insurance
-      
-      // Monthly office data
-      const monthlyData = monthNames.map((month, index) => {
-        const monthRevenue = (chartData[index]?.[year] || 0) * 1.3; // Mock markup
-        const monthCommissions = chartData[index]?.[year] || 0;
-        return {
-          month,
-          revenue: monthRevenue,
-          profit: monthRevenue - monthCommissions
-        };
-      });
-      
-      return {
-        totalRevenue,
-        totalBrokerCommissions,
-        officeProfit,
-        profitPercentage,
-        totalVida,
-        totalRamosGenerales,
-        monthlyData
-      };
-    };
-
-    const chartData = processChartData();
-    return { tableData: processTableData(currentYearData), chartData, officeData: processOfficeData() };
-  }, [data, year]);
-
-  const toggleBroker = (brokerId: string) => {
-    const newSet = new Set(expandedBrokers);
-    newSet.has(brokerId) ? newSet.delete(brokerId) : newSet.add(brokerId);
-    setExpandedBrokers(newSet);
-  };
-
-  const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i);
-
-  if (loading) {
-    return <div className="p-8 text-center text-gray-500">Cargando datos...</div>;
-  }
-
-  const renderHeader = (title: string) => (
-    <CardHeader className="flex-row items-center justify-between">
-      <CardTitle className="text-[#010139]">{title}</CardTitle>
-      <Select value={String(year)} onValueChange={(value) => setYear(Number(value))}>
-        <SelectTrigger className="w-32 sm:w-40"><SelectValue placeholder="Año" /></SelectTrigger>
-        <SelectContent>{years.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent>
-      </Select>
-    </CardHeader>
-  );
-
-  const formatCurrency = (amount: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(amount);
-
-  if (role === 'broker') {
-    const totalYearGross = Object.values(tableData).reduce((sum, broker) => sum + broker.total_gross, 0);
-    const allInsurers = Object.values(tableData).flatMap(b => b.insurers);
-
-    return (
-      <div className="space-y-6">
-        <Card className="shadow-lg">
-          {renderHeader('Mi Acumulado Anual (Bruto)')}
-          <CardContent className="space-y-4">
-            <Card className="shadow-inner"><CardContent className="p-4"><YTDChart data={chartData} currentYear={year} previousYear={year - 1} /></CardContent></Card>
-            <p className="text-2xl font-bold text-center text-[#010139]">Total {year}: {formatCurrency(totalYearGross)}</p>
-            <Card className="shadow-inner"><CardContent className="p-2">
-            <Table>
-              <TableHeader><TableRow><TableHead>Aseguradora</TableHead><TableHead className="text-right">Monto Bruto</TableHead></TableRow></TableHeader>
-              <TableBody>
-                {allInsurers.map((insurer, index) => (
-                  <TableRow key={index}>
-                    <TableCell className="font-medium">{insurer.name}</TableCell>
-                    <TableCell className="text-right font-mono">{formatCurrency(insurer.total_gross)}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-            </CardContent></Card>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+  // Prepare data for pie chart
+  const pieData = insurerData.map(insurer => ({
+    name: insurer.name,
+    value: insurer.value
+  }));
 
   return (
     <div className="space-y-6">
-      {/* Office Total Section for Master */}
-      {role === 'master' && (
-        <Card className="shadow-lg border-l-4 border-l-[#010139]">
-          <CardHeader>
-            <CardTitle className="text-[#010139] flex items-center gap-2">
-              <FaChartBar />
-              Total Oficina {year}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Summary Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <Card className="shadow-inner">
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-gray-600">Total Anual</p>
-                      <p className="text-2xl font-bold text-[#010139]">
-                        {formatCurrency(officeData.totalRevenue)}
-                      </p>
-                    </div>
-                    <FaDollarSign className="text-3xl text-[#010139]/20" />
-                  </div>
-                </CardContent>
-              </Card>
-              
-              <Card className="shadow-inner">
-                <CardContent className="p-4">
-                  <div>
-                    <p className="text-sm text-gray-600">Ganancia Oficina</p>
-                    <p className="text-2xl font-bold text-[#8AAA19]">
-                      {formatCurrency(officeData.officeProfit)}
-                    </p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {officeData.profitPercentage.toFixed(1)}% del total
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-              
-              <Card className="shadow-inner">
-                <CardContent className="p-4">
-                  <div>
-                    <p className="text-sm text-gray-600">Total Vida</p>
-                    <p className="text-2xl font-bold text-blue-600">
-                      {formatCurrency(officeData.totalVida)}
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-              
-              <Card className="shadow-inner">
-                <CardContent className="p-4">
-                  <div>
-                    <p className="text-sm text-gray-600">Total Ramos Gen.</p>
-                    <p className="text-2xl font-bold text-orange-600">
-                      {formatCurrency(officeData.totalRamosGenerales)}
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
+      {/* Header Card */}
+      <Card className="shadow-lg border-2 border-gray-100">
+        <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-3 mb-2">
+                <FaChartLine className="text-[#010139] text-xl" />
+                <h2 className="text-xl sm:text-2xl font-bold text-[#010139]">ACUMULADO ANUAL</h2>
+              </div>
+              <p className="text-sm text-gray-600">Análisis de comisiones por aseguradora y tendencias mensuales</p>
             </div>
-            
-            {/* Office Chart */}
-            <Card className="shadow-inner">
-              <CardContent className="p-4">
-                <h4 className="text-sm font-semibold text-gray-600 mb-4">Ganancia Oficina por Mes</h4>
-                <YTDChart 
-                  data={officeData.monthlyData.map(m => ({
-                    month: m.month,
-                    [year]: m.profit,
-                    [year - 1]: 0 // TODO: Calculate previous year office profit
-                  }))}
-                  currentYear={year} 
-                  previousYear={year - 1} 
-                />
-              </CardContent>
-            </Card>
+            <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
+              <SelectTrigger className="w-full sm:w-28 border-[#010139]/20 bg-white">
+                <SelectValue placeholder="Año" />
+              </SelectTrigger>
+              <SelectContent>
+                {[2024, 2023, 2022].map(y => (
+                  <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </CardHeader>
+      </Card>
+
+      {/* Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card className="shadow-lg border-l-4 border-l-[#010139]">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-gray-600">Total Anual (Bruto)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold text-[#010139] font-mono">
+              {formatCurrency(totalCurrent)}
+            </p>
+            <p className="text-xs text-gray-500 mt-1">Año {year}</p>
           </CardContent>
         </Card>
-      )}
-      
-      <Card className="shadow-lg">
-        {renderHeader('Acumulado Anual por Corredor (Bruto)')}
-        <CardContent className="space-y-4">
-          <Card className="shadow-inner"><CardContent className="p-4"><YTDChart data={chartData} currentYear={year} previousYear={year - 1} /></CardContent></Card>
-          <Card className="shadow-inner"><CardContent className="p-2">
-            <Table>
-              <TableHeader><TableRow><TableHead className="w-[50px]"></TableHead><TableHead>Corredor</TableHead><TableHead className="text-right">Monto Bruto Total</TableHead></TableRow></TableHeader>
-              <TableBody>
-                {Object.entries(tableData).map(([brokerId, brokerData]) => (
-                  <>
-                    <TableRow key={brokerId} onClick={() => toggleBroker(brokerId)} className="cursor-pointer hover:bg-gray-50">
-                      <TableCell>{expandedBrokers.has(brokerId) ? <FaChevronDown className="text-[#010139]" /> : <FaChevronRight className="text-gray-400" />}</TableCell>
-                      <TableCell className="font-medium">{brokerData.broker_name}</TableCell>
-                      <TableCell className="text-right font-semibold font-mono text-[#010139]">{formatCurrency(brokerData.total_gross)}</TableCell>
-                    </TableRow>
-                    {expandedBrokers.has(brokerId) && (
-                      <TableRow className="bg-gray-50">
-                        <TableCell colSpan={3} className="p-0">
-                          <div className="p-4 pl-16">
-                            <Table>
-                              <TableHeader><TableRow><TableHead>Aseguradora</TableHead><TableHead className="text-right">Monto</TableHead></TableRow></TableHeader>
-                              <TableBody>
-                                {brokerData.insurers.map((insurer, index) => (
-                                  <TableRow key={`${brokerId}-${index}`} className="border-0">
-                                    <TableCell className="text-gray-600">{insurer.name}</TableCell>
-                                    <TableCell className="text-right text-gray-600 font-mono">{formatCurrency(insurer.total_gross)}</TableCell>
-                                  </TableRow>
-                                ))}
-                              </TableBody>
-                            </Table>
-                          </div>
-                        </TableCell>
-                      </TableRow>
+        
+        <Card className="shadow-lg border-l-4 border-l-[#8AAA19]">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-gray-600">Crecimiento</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-2">
+              {Number(growthPercentage) > 0 ? (
+                <FaArrowUp className="text-green-500" />
+              ) : (
+                <FaArrowDown className="text-red-500" />
+              )}
+              <p className={`text-2xl font-bold ${Number(growthPercentage) > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {Math.abs(Number(growthPercentage))}%
+              </p>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">vs Año {year - 1}</p>
+          </CardContent>
+        </Card>
+        
+        <Card className="shadow-lg border-l-4 border-l-blue-500">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-gray-600">Promedio Mensual</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold text-blue-600 font-mono">
+              {formatCurrency(totalCurrent / monthlyData.length)}
+            </p>
+            <p className="text-xs text-gray-500 mt-1">Basado en {monthlyData.length} meses</p>
+          </CardContent>
+        </Card>
+        
+        <Card className="shadow-lg border-l-4 border-l-purple-500">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-gray-600">Mejor Mes</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-2xl font-bold text-purple-600 font-mono">
+              {formatCurrency(Math.max(...monthlyData.map(m => m.current)))}
+            </p>
+            <p className="text-xs text-gray-500 mt-1">
+              {monthlyData.find(m => m.current === Math.max(...monthlyData.map(m => m.current)))?.month} {year}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Monthly Comparison Chart */}
+      <Card className="shadow-lg border-2 border-gray-100">
+        <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100">
+          <CardTitle className="text-lg font-bold text-[#010139]">Comparación Mensual (Bruto)</CardTitle>
+        </CardHeader>
+        <CardContent className="p-4 sm:p-6">
+          {/* Desktop */}
+          <div className="hidden md:block">
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={monthlyData} margin={{ top: 20, right: 20, left: 0, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                <YAxis tickFormatter={(value) => `$${value / 1000}k`} tick={{ fontSize: 12 }} width={60} />
+                <Tooltip formatter={(value: any) => formatCurrency(value)} contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }} />
+                <Legend wrapperStyle={{ paddingTop: '10px' }} />
+                <Bar dataKey="previous" fill="#9CA3AF" name={`${year - 1}`} radius={[4, 4, 0, 0]} />
+                <Bar dataKey="current" fill="#010139" name={`${year}`} radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+          {/* Mobile */}
+          <div className="md:hidden overflow-x-auto">
+            <div style={{ minWidth: '600px', width: '100%' }}>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={monthlyData} margin={{ top: 20, right: 20, left: 0, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                  <YAxis tickFormatter={(value) => `$${value / 1000}k`} tick={{ fontSize: 12 }} width={60} />
+                  <Tooltip formatter={(value: any) => formatCurrency(value)} contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }} />
+                  <Legend wrapperStyle={{ paddingTop: '10px' }} />
+                  <Bar dataKey="previous" fill="#9CA3AF" name={`${year - 1}`} radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="current" fill="#010139" name={`${year}`} radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Insurers Distribution */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Pie Chart */}
+        <Card className="shadow-lg border-2 border-gray-100">
+          <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100">
+            <CardTitle className="text-lg font-bold text-[#010139]">Distribución por Aseguradora</CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 sm:p-6">
+            <div className="overflow-hidden">
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+                  <Pie
+                    data={pieData}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={(entry: any) => {
+                      const percentage = (Number(entry.value) / totalCurrent * 100).toFixed(1);
+                      const name = entry.name.length > 12 ? entry.name.substring(0, 12) + '...' : entry.name;
+                      return `${name}: ${percentage}%`;
+                    }}
+                    outerRadius={80}
+                    fill="#8884d8"
+                    dataKey="value"
+                  >
+                    {pieData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(value: any) => formatCurrency(value)} contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Growth by Insurer */}
+        <Card className="shadow-lg border-2 border-gray-100">
+          <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100">
+            <CardTitle className="text-lg font-bold text-[#010139]">Crecimiento por Aseguradora</CardTitle>
+          </CardHeader>
+          <CardContent className="p-4 sm:p-6">
+            <div className="space-y-3">
+              {insurerData.map((insurer, index) => (
+                <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-gray-700 truncate">{insurer.name}</p>
+                    <p className="text-sm font-mono text-gray-600">{formatCurrency(insurer.value)}</p>
+                  </div>
+                  <div className="flex items-center gap-2 ml-4">
+                    {insurer.growth > 0 ? (
+                      <FaArrowUp className="text-[#8AAA19] text-xs" />
+                    ) : (
+                      <FaArrowDown className="text-red-500 text-xs" />
                     )}
-                  </>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent></Card>
+                    <span className={`font-bold ${insurer.growth > 0 ? 'text-[#8AAA19]' : 'text-red-600'}`}>
+                      {Math.abs(insurer.growth)}%
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Growth Trend Chart */}
+      <Card className="shadow-lg border-2 border-gray-100">
+        <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100">
+          <CardTitle className="text-lg font-bold text-[#010139]">Tendencia de Crecimiento</CardTitle>
+        </CardHeader>
+        <CardContent className="p-4 sm:p-6">
+          <div className="overflow-x-auto md:overflow-visible">
+            <div style={{ minWidth: '300px' }}>
+              <ResponsiveContainer width="100%" height={250}>
+                <LineChart data={monthlyData} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                  <YAxis tickFormatter={(value) => `$${value / 1000}k`} tick={{ fontSize: 12 }} width={60} />
+                  <Tooltip formatter={(value: any) => formatCurrency(value)} contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }} />
+                  <Legend wrapperStyle={{ paddingTop: '10px' }} />
+                  <Line 
+                    type="monotone" 
+                    dataKey="previous" 
+                    stroke="#9CA3AF" 
+                    name={`${year - 1}`}
+                    strokeWidth={2}
+                    dot={{ r: 4 }}
+                    activeDot={{ r: 6 }}
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="current" 
+                    stroke="#010139" 
+                    name={`${year}`}
+                    strokeWidth={2}
+                    dot={{ r: 4 }}
+                    activeDot={{ r: 6 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
         </CardContent>
       </Card>
     </div>

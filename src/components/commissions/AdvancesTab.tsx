@@ -11,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FaChevronDown, FaChevronRight, FaMoneyBillWave, FaPlus, FaHistory, FaDollarSign } from 'react-icons/fa';
 import { AddAdvanceModal } from './AddAdvanceModal';
 import { AdvanceHistoryModal } from './AdvanceHistoryModal';
+import { PayAdvanceModal } from './PayAdvanceModal';
 
 // Types
 type AdvanceStatus = 'pending' | 'paid';
@@ -45,6 +46,17 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedAdvanceId, setSelectedAdvanceId] = useState<string | null>(null);
   const [expandedBrokers, setExpandedBrokers] = useState<Set<string>>(new Set());
+  const [paymentModal, setPaymentModal] = useState<{
+    isOpen: boolean;
+    brokerId: string | null;
+    brokerName: string;
+    pendingAdvances: { id: string; amount: number; reason: string | null }[];
+  }>({
+    isOpen: false,
+    brokerId: null,
+    brokerName: '',
+    pendingAdvances: [],
+  });
 
   const loadAdvances = useCallback(async () => {
     setLoading(true);
@@ -140,17 +152,18 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
     }
 
     return (
-      <Table>
-        <TableHeader>
-          <TableRow className="border-b-2 border-gray-200 bg-gray-50">
-            {role === 'master' && <TableHead className="w-10"></TableHead>}
-            <TableHead className="text-gray-700 font-semibold">Corredor / Motivo</TableHead>
-            <TableHead className="text-right text-gray-700 font-semibold">Monto</TableHead>
-            <TableHead className="text-center text-gray-700 font-semibold">Fecha</TableHead>
-            <TableHead className="text-center text-gray-700 font-semibold">Acciones</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
+      <div className="advances-table-wrapper">
+        <Table>
+          <TableHeader>
+            <TableRow className="border-b-2 border-gray-200 bg-gray-50">
+              {role === 'master' && <TableHead className="w-10 advances-th-expand"></TableHead>}
+              <TableHead className="text-gray-700 font-semibold advances-th-broker">Corredor / Motivo</TableHead>
+              <TableHead className="text-right text-gray-700 font-semibold advances-th-amount">Monto</TableHead>
+              <TableHead className="text-center text-gray-700 font-semibold advances-th-date">Fecha</TableHead>
+              <TableHead className="text-center text-gray-700 font-semibold advances-th-actions">Acciones</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
         {Object.entries(groupedData).map(([bId, brokerData]) => {
           const advancesToShow = brokerData.advances.filter(a => a.status === status);
           if (advancesToShow.length === 0) return null;
@@ -184,7 +197,15 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
                       className="hover:bg-[#010139] hover:text-white"
                       onClick={(e) => {
                         e.stopPropagation();
-                        // Add payment modal here
+                        const pendingAdv = brokerData.advances
+                          .filter(a => a.status === 'pending')
+                          .map(a => ({ id: a.id, amount: a.amount, reason: a.reason }));
+                        setPaymentModal({
+                          isOpen: true,
+                          brokerId: bId,
+                          brokerName: brokerData.broker_name,
+                          pendingAdvances: pendingAdv,
+                        });
                       }}
                     >
                       Pago Externo
@@ -223,7 +244,43 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
           );
         })}
         </TableBody>
-      </Table>
+        </Table>
+        <style jsx global>{`
+          .advances-table-wrapper {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+          }
+          
+          /* Responsive para tabla de adelantos */
+          @media (max-width: 768px) {
+            .advances-th-date,
+            .advances-table-wrapper tbody td:nth-child(4) {
+              display: none;
+            }
+          }
+          
+          @media (max-width: 640px) {
+            .advances-th-amount,
+            .advances-table-wrapper tbody td:nth-child(3) {
+              font-size: 0.875rem;
+            }
+            .advances-th-actions,
+            .advances-table-wrapper tbody td:nth-child(5) {
+              min-width: 120px;
+            }
+          }
+          
+          @media (max-width: 480px) {
+            .advances-table-wrapper {
+              font-size: 0.875rem;
+            }
+            .advances-table-wrapper button {
+              font-size: 0.75rem;
+              padding: 0.375rem 0.75rem;
+            }
+          }
+        `}</style>
+      </div>
     );
   };
 
@@ -242,6 +299,14 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
     <div className="space-y-6">
       <AddAdvanceModal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} onSuccess={loadAdvances} brokers={brokers} />
       <AdvanceHistoryModal isOpen={!!selectedAdvanceId} onClose={() => setSelectedAdvanceId(null)} advanceId={selectedAdvanceId} />
+      <PayAdvanceModal 
+        isOpen={paymentModal.isOpen} 
+        onClose={() => setPaymentModal({ isOpen: false, brokerId: null, brokerName: '', pendingAdvances: [] })} 
+        onSuccess={loadAdvances}
+        brokerId={paymentModal.brokerId}
+        brokerName={paymentModal.brokerName}
+        pendingAdvances={paymentModal.pendingAdvances}
+      />
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

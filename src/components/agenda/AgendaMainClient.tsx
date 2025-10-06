@@ -346,31 +346,21 @@ export default function AgendaMainClient() {
       {/* Event Detail Modal (All screens) */}
       {(selectedDay || selectedEvent) && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto shadow-2xl">
-            <div className="sticky top-0 bg-white p-4 sm:p-6 border-b border-gray-200 rounded-t-2xl">
-              <button
-                onClick={handleCloseDetail}
-                className="absolute top-4 right-4 p-2 hover:bg-gray-100 rounded-lg transition-colors"
-              >
-                <FaTimes className="text-gray-600" />
-              </button>
-            </div>
-            <div className="p-4 sm:p-6">
-              <EventDetailPanel
-                event={selectedEvent}
-                day={selectedDay}
-                month={currentMonth}
-                year={currentYear}
-                events={events}
-                userRole={userRole}
-                userId={userId}
-                onClose={handleCloseDetail}
-                onEventUpdated={handleEventUpdated}
-                onEventClick={handleEventClick}
-                onEditEvent={handleEditEvent}
-                onDuplicateEvent={handleDuplicateEvent}
-              />
-            </div>
+          <div className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <EventDetailPanel
+              event={selectedEvent}
+              day={selectedDay}
+              month={currentMonth}
+              year={currentYear}
+              events={events}
+              userRole={userRole}
+              userId={userId}
+              onClose={handleCloseDetail}
+              onEventUpdated={handleEventUpdated}
+              onEventClick={handleEventClick}
+              onEditEvent={handleEditEvent}
+              onDuplicateEvent={handleDuplicateEvent}
+            />
           </div>
         </div>
       )}

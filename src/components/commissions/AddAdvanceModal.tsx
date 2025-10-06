@@ -1,12 +1,14 @@
 'use client';
 
+import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { actionAddAdvance } from '@/app/(app)/commissions/actions';
+import { actionAddAdvance, actionCreateAdvanceRecurrence } from '@/app/(app)/commissions/actions';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import {
   Select,
@@ -23,7 +25,8 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import { FaMoneyBillWave, FaUser, FaDollarSign, FaFileAlt } from 'react-icons/fa';
+import { FaMoneyBillWave, FaUser, FaDollarSign, FaFileAlt, FaCalendarAlt, FaCog } from 'react-icons/fa';
+import { RecurrencesManagerModal } from './RecurrencesManagerModal';
 
 const AddAdvanceSchema = z.object({
   broker_id: z.string().min(1, 'Debe seleccionar un corredor'),
@@ -41,6 +44,9 @@ interface Props {
 }
 
 export function AddAdvanceModal({ isOpen, onClose, onSuccess, brokers }: Props) {
+  const [isRecurrent, setIsRecurrent] = useState(false);
+  const [showRecurrencesManager, setShowRecurrencesManager] = useState(false);
+  
   const form = useForm<AddAdvanceForm>({
     resolver: zodResolver(AddAdvanceSchema),
     defaultValues: {
@@ -51,14 +57,33 @@ export function AddAdvanceModal({ isOpen, onClose, onSuccess, brokers }: Props) 
   });
 
   const onSubmit = async (values: AddAdvanceForm) => {
-    const result = await actionAddAdvance(values.broker_id, values);
-    if (result.ok) {
-      toast.success('Adelanto agregado exitosamente.');
-      onSuccess();
-      form.reset();
-      onClose();
+    if (isRecurrent) {
+      // Crear recurrencia
+      const result = await actionCreateAdvanceRecurrence({
+        broker_id: values.broker_id,
+        amount: values.amount,
+        reason: values.reason,
+      });
+      if (result.ok) {
+        toast.success('Adelanto recurrente creado. Se generará automáticamente cada mes.');
+        onSuccess();
+        form.reset();
+        setIsRecurrent(false);
+        onClose();
+      } else {
+        toast.error('Error al crear recurrencia.', { description: result.error });
+      }
     } else {
-      toast.error('Error al agregar el adelanto.', { description: result.error });
+      // Crear adelanto único
+      const result = await actionAddAdvance(values.broker_id, values);
+      if (result.ok) {
+        toast.success('Adelanto agregado exitosamente.');
+        onSuccess();
+        form.reset();
+        onClose();
+      } else {
+        toast.error('Error al agregar el adelanto.', { description: result.error });
+      }
     }
   };
 
@@ -160,6 +185,35 @@ export function AddAdvanceModal({ isOpen, onClose, onSuccess, brokers }: Props) 
               )}
             />
 
+            {/* Adelanto Recurrente */}
+            <div className="border-t border-gray-200 pt-4">
+              <div className="flex items-center justify-between p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border-2 border-blue-200">
+                <div className="flex items-center gap-3">
+                  <FaCalendarAlt className="text-blue-600 text-xl" />
+                  <div>
+                    <p className="font-semibold text-sm text-gray-900">Adelanto Recurrente</p>
+                    <p className="text-xs text-gray-600">Se creará automáticamente cada mes</p>
+                  </div>
+                </div>
+                <Checkbox
+                  checked={isRecurrent}
+                  onCheckedChange={(checked) => setIsRecurrent(checked as boolean)}
+                  className="data-[state=checked]:bg-[#8AAA19] data-[state=checked]:border-[#8AAA19]"
+                />
+              </div>
+
+              {/* Botón para gestionar recurrencias */}
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowRecurrencesManager(true)}
+                className="w-full mt-3 border-2 border-gray-300 hover:border-[#010139] hover:bg-gray-50"
+              >
+                <FaCog className="mr-2" />
+                Gestionar Adelantos Recurrentes
+              </Button>
+            </div>
+
             {/* Footer con botones */}
             <DialogFooter className="gap-3 sm:gap-2 pt-4 border-t border-gray-200">
               <Button 
@@ -179,12 +233,12 @@ export function AddAdvanceModal({ isOpen, onClose, onSuccess, brokers }: Props) 
                 {form.formState.isSubmitting ? (
                   <>
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                    Agregando...
+                    {isRecurrent ? 'Creando recurrencia...' : 'Agregando...'}
                   </>
                 ) : (
                   <>
-                    <FaMoneyBillWave className="mr-2" />
-                    Agregar Adelanto
+                    {isRecurrent ? <FaCalendarAlt className="mr-2" /> : <FaMoneyBillWave className="mr-2" />}
+                    {isRecurrent ? 'Crear Recurrencia' : 'Agregar Adelanto'}
                   </>
                 )}
               </Button>
@@ -192,6 +246,13 @@ export function AddAdvanceModal({ isOpen, onClose, onSuccess, brokers }: Props) 
           </form>
         </Form>
       </DialogContent>
+
+      {/* Modal de gestión de recurrencias */}
+      <RecurrencesManagerModal
+        isOpen={showRecurrencesManager}
+        onClose={() => setShowRecurrencesManager(false)}
+        onSuccess={onSuccess}
+      />
     </Dialog>
   );
 }

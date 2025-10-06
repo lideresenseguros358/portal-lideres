@@ -5,6 +5,7 @@ import { FaTimes, FaCheckCircle, FaExclamationTriangle, FaPlus, FaTrash } from '
 import { toast } from 'sonner';
 import { actionCreatePendingPayment, actionValidateReferences, actionGetInsurers } from '@/app/(app)/checks/actions';
 import { toUppercasePayload, createUppercaseHandler, uppercaseInputClass } from '@/lib/utils/uppercase';
+import { supabaseClient } from '@/lib/supabase/client';
 
 interface AdvancePrefill {
   id: string;
@@ -56,7 +57,9 @@ export default function RegisterPaymentWizardNew({
     amount: '',
     amount_to_use: '',
     exists_in_bank: false,
-    validating: false
+    validating: false,
+    status: null as string | null,
+    remaining_amount: 0
   }]);
 
   // Step 3: División (opcional)
@@ -92,7 +95,9 @@ export default function RegisterPaymentWizardNew({
         amount: advancePrefill.amount.toFixed(2),
         amount_to_use: advancePrefill.amount.toFixed(2),
         exists_in_bank: false,
-        validating: false
+        validating: false,
+        status: null,
+        remaining_amount: 0
       }]);
     }
   }, [advancePrefill]);
@@ -105,15 +110,26 @@ export default function RegisterPaymentWizardNew({
   };
 
   const loadBrokers = async () => {
-    // Cargar brokers desde Supabase
-    const { supabaseClient } = await import('@/lib/supabase/client');
-    const { data } = await supabaseClient()
-      .from('brokers')
-      .select('id, name, bank_account_number')
-      .eq('active', true)
-      .order('name');
-    if (data) {
-      setBrokers(data);
+    try {
+      const { data, error } = await supabaseClient()
+        .from('brokers')
+        .select('id, name, bank_account_number')
+        .eq('active', true)
+        .order('name');
+      
+      if (error) {
+        console.error('Error loading brokers:', error);
+        toast.error('Error al cargar corredores');
+        return;
+      }
+      
+      if (data) {
+        console.log('Brokers loaded:', data.length);
+        setBrokers(data);
+      }
+    } catch (error) {
+      console.error('Error in loadBrokers:', error);
+      toast.error('Error al cargar corredores');
     }
   };
 
@@ -128,16 +144,44 @@ export default function RegisterPaymentWizardNew({
         return false;
       }
     } else if (step === 2) {
-      const totalRefs = references.reduce((sum, ref) => sum + (parseFloat(ref.amount) || 0), 0);
       const amountToPay = parseFloat(formData.amount_to_pay);
       
-      if (references.some(r => !r.reference_number || !r.amount)) {
+      // Verificar que todas las referencias tengan número
+      if (references.some(r => !r.reference_number)) {
         toast.error('Complete todas las referencias');
         return false;
       }
       
-      if (totalRefs < amountToPay) {
-        toast.error('El total de referencias debe ser mayor o igual al monto a pagar');
+      // Verificar que ninguna referencia esté agotada
+      const exhaustedRef = references.find(r => r.status === 'exhausted');
+      if (exhaustedRef) {
+        toast.error('❌ Referencia agotada detectada', {
+          description: `La referencia ${exhaustedRef.reference_number} no tiene saldo disponible. Elimínela o use otra.`
+        });
+        return false;
+      }
+      
+      // Verificar que el monto a usar no exceda el saldo disponible
+      const overLimitRef = references.find(r => {
+        if (!r.exists_in_bank) return false;
+        const amountToUse = parseFloat(r.amount_to_use) || 0;
+        return amountToUse > r.remaining_amount + 0.01; // tolerance for float precision
+      });
+      
+      if (overLimitRef) {
+        toast.error('Monto excede saldo disponible', {
+          description: `La referencia ${overLimitRef.reference_number} solo tiene $${overLimitRef.remaining_amount.toFixed(2)} disponibles.`
+        });
+        return false;
+      }
+      
+      // Calcular total usando amount_to_use
+      const totalToUse = references.reduce((sum, ref) => sum + (parseFloat(ref.amount_to_use) || 0), 0);
+      
+      if (totalToUse < amountToPay - 0.01) { // tolerance for float precision
+        toast.error('Referencias insuficientes', {
+          description: `Total disponible: $${totalToUse.toFixed(2)} - Necesario: $${amountToPay.toFixed(2)}`
+        });
         return false;
       }
     }
@@ -165,8 +209,15 @@ export default function RegisterPaymentWizardNew({
       if (validation && newRefs[index]) {
         newRefs[index]!.exists_in_bank = validation.exists;
         if (validation.details) {
+          const remaining = Number(validation.details.remaining_amount) || 0;
+          const status = validation.details.status || 'available';
+          
           newRefs[index]!.amount = validation.details.amount?.toString() || '';
-          newRefs[index]!.amount_to_use = validation.details.remaining_amount?.toString() || '';
+          newRefs[index]!.remaining_amount = remaining;
+          newRefs[index]!.status = status;
+          
+          // Set amount_to_use to remaining (max available)
+          newRefs[index]!.amount_to_use = remaining.toFixed(2);
         }
       }
       if (newRefs[index]) {
@@ -174,12 +225,23 @@ export default function RegisterPaymentWizardNew({
       }
       setReferences(newRefs);
 
-      if (validation && !validation.exists) {
-        toast.warning('Referencia no encontrada en banco', {
-          description: 'Se guardará como preliminar'
-        });
-      } else {
-        toast.success('Referencia válida');
+      if (validation) {
+        if (!validation.exists) {
+          toast.warning('Referencia no encontrada en banco', {
+            description: 'Se guardará como preliminar'
+          });
+        } else if (validation.details?.status === 'exhausted') {
+          toast.error('❌ Referencia agotada', {
+            description: 'Esta referencia ya fue usada completamente y no tiene saldo disponible'
+          });
+        } else if (validation.details?.status === 'partial') {
+          const remaining = Number(validation.details.remaining_amount) || 0;
+          toast.success('⚠️ Referencia parcialmente usada', {
+            description: `Saldo disponible: $${remaining.toFixed(2)}`
+          });
+        } else {
+          toast.success('✅ Referencia válida');
+        }
       }
     } else {
       if (newRefs[index]) {
@@ -196,7 +258,9 @@ export default function RegisterPaymentWizardNew({
       amount: '',
       amount_to_use: '',
       exists_in_bank: false,
-      validating: false
+      validating: false,
+      status: null,
+      remaining_amount: 0
     }]);
   };
 
@@ -248,7 +312,7 @@ export default function RegisterPaymentWizardNew({
     }
   };
 
-  const totalReferences = references.reduce((sum, ref) => sum + (parseFloat(ref.amount) || 0), 0);
+  const totalReferences = references.reduce((sum, ref) => sum + (parseFloat(ref.amount_to_use) || 0), 0);
   const amountToPay = parseFloat(formData.amount_to_pay) || 0;
   const remainder = totalReferences - amountToPay;
 
@@ -495,8 +559,9 @@ export default function RegisterPaymentWizardNew({
                     )}
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="col-span-2">
+                  <div className="space-y-3">
+                    {/* Número de Referencia - Full width */}
+                    <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         Número de Referencia
                       </label>
@@ -516,54 +581,111 @@ export default function RegisterPaymentWizardNew({
                           placeholder="1132498389"
                         />
                         {ref.validating && (
-                          <div className="w-10 h-10 flex items-center justify-center">
+                          <div className="w-10 h-10 flex items-center justify-center flex-shrink-0">
                             <div className="animate-spin w-5 h-5 border-2 border-[#8AAA19] border-t-transparent rounded-full"></div>
                           </div>
                         )}
                         {!ref.validating && ref.reference_number && (
                           ref.exists_in_bank ? (
-                            <FaCheckCircle className="text-green-600 text-2xl" />
+                            <FaCheckCircle className="text-green-600 text-2xl flex-shrink-0" />
                           ) : (
-                            <FaExclamationTriangle className="text-red-600 text-2xl" />
+                            <FaExclamationTriangle className="text-red-600 text-2xl flex-shrink-0" />
                           )
                         )}
                       </div>
                     </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Fecha</label>
-                      <input
-                        type="date"
-                        value={ref.date}
-                        onChange={(e) => {
-                          const newRefs = [...references];
-                          if (newRefs[index]) {
-                            newRefs[index]!.date = e.target.value;
-                          }
-                          setReferences(newRefs);
-                        }}
-                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none"
-                      />
-                    </div>
+                    {/* Status display */}
+                    {ref.exists_in_bank && ref.status && (
+                      <div>
+                        {ref.status === 'exhausted' && (
+                          <div className="bg-red-50 border-2 border-red-300 rounded-lg p-3">
+                            <p className="text-red-800 font-semibold text-sm">
+                              ❌ Referencia agotada - No se puede usar
+                            </p>
+                            <p className="text-red-600 text-xs mt-1">
+                              Esta referencia ya fue utilizada completamente (Saldo: $0.00)
+                            </p>
+                          </div>
+                        )}
+                        {ref.status === 'partial' && (
+                          <div className="bg-amber-50 border-2 border-amber-300 rounded-lg p-3">
+                            <p className="text-amber-800 font-semibold text-sm">
+                              ⚠️ Referencia parcialmente usada
+                            </p>
+                            <p className="text-amber-600 text-xs mt-1">
+                              Monto total: ${parseFloat(ref.amount || '0').toFixed(2)} | Saldo disponible: ${ref.remaining_amount.toFixed(2)}
+                            </p>
+                          </div>
+                        )}
+                        {ref.status === 'available' && (
+                          <div className="bg-green-50 border-2 border-green-300 rounded-lg p-3">
+                            <p className="text-green-800 font-semibold text-sm">
+                              ✅ Referencia disponible
+                            </p>
+                            <p className="text-green-600 text-xs mt-1">
+                              Saldo completo disponible: ${ref.remaining_amount.toFixed(2)}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    )}
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Monto</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        value={ref.amount}
-                        onChange={(e) => {
-                          const newRefs = [...references];
-                          if (newRefs[index]) {
-                            newRefs[index]!.amount = e.target.value;
-                            newRefs[index]!.amount_to_use = e.target.value;
-                          }
-                          setReferences(newRefs);
-                        }}
-                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none"
-                        placeholder="0.00"
-                        disabled={ref.exists_in_bank}
-                      />
+                    {/* Fecha y Monto - Responsive Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Fecha</label>
+                        <input
+                          type="date"
+                          value={ref.date}
+                          onChange={(e) => {
+                            const newRefs = [...references];
+                            if (newRefs[index]) {
+                              newRefs[index]!.date = e.target.value;
+                            }
+                            setReferences(newRefs);
+                          }}
+                          className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Monto a Usar
+                          {ref.exists_in_bank && ref.remaining_amount > 0 && (
+                            <span className="text-xs text-gray-500 ml-2">
+                              (máx: ${ref.remaining_amount.toFixed(2)})
+                            </span>
+                          )}
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={ref.amount_to_use}
+                          max={ref.exists_in_bank ? ref.remaining_amount : undefined}
+                          onChange={(e) => {
+                            const newRefs = [...references];
+                            if (newRefs[index]) {
+                              const inputValue = parseFloat(e.target.value) || 0;
+                              // Limit to remaining amount if exists in bank
+                              if (ref.exists_in_bank && inputValue > ref.remaining_amount) {
+                                newRefs[index]!.amount_to_use = ref.remaining_amount.toFixed(2);
+                                toast.warning('Monto limitado al saldo disponible');
+                              } else {
+                                newRefs[index]!.amount_to_use = e.target.value;
+                              }
+                              // Also update amount if not in bank
+                              if (!ref.exists_in_bank) {
+                                newRefs[index]!.amount = e.target.value;
+                              }
+                            }
+                            setReferences(newRefs);
+                          }}
+                          className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+                          placeholder="0.00"
+                          disabled={ref.status === 'exhausted'}
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -781,16 +903,23 @@ export default function RegisterPaymentWizardNew({
                 <div className="border-t pt-4">
                   <h4 className="font-semibold text-sm text-gray-600 mb-2">Referencias ({references.length})</h4>
                   {references.map((ref, idx) => (
-                    <div key={idx} className="flex items-center justify-between py-2">
-                      <div className="flex items-center gap-2">
-                        {ref.exists_in_bank ? (
-                          <FaCheckCircle className="text-green-600" />
-                        ) : (
-                          <FaExclamationTriangle className="text-red-600" />
-                        )}
-                        <span className="font-mono text-sm">{ref.reference_number}</span>
+                    <div key={idx} className="py-2 border-b last:border-0">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          {ref.exists_in_bank ? (
+                            <FaCheckCircle className="text-green-600" />
+                          ) : (
+                            <FaExclamationTriangle className="text-red-600" />
+                          )}
+                          <span className="font-mono text-sm">{ref.reference_number}</span>
+                        </div>
+                        <span className="font-semibold">${parseFloat(ref.amount_to_use || '0').toFixed(2)}</span>
                       </div>
-                      <span className="font-semibold">${parseFloat(ref.amount || '0').toFixed(2)}</span>
+                      {ref.status === 'partial' && (
+                        <p className="text-xs text-amber-600 ml-6 mt-1">
+                          Parcial: ${parseFloat(ref.amount_to_use || '0').toFixed(2)} de ${parseFloat(ref.amount || '0').toFixed(2)}
+                        </p>
+                      )}
                     </div>
                   ))}
                 </div>

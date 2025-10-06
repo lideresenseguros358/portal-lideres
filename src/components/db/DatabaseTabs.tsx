@@ -357,6 +357,8 @@ export default function DatabaseTabs({
         
         :global(.clients-wrapper) {
           width: 100%;
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
         }
 
         :global(.clients-table) {
@@ -497,6 +499,7 @@ export default function DatabaseTabs({
           padding: 12px;
           border: 1px solid #e5e7eb;
           border-radius: 6px;
+          gap: 12px;
         }
         :global(.pol-row:hover) {
           background: #f9fafb;
@@ -504,17 +507,20 @@ export default function DatabaseTabs({
 
         :global(.pol-main) {
           flex: 1;
+          min-width: 0; /* Permite que el flex item se encoja */
         }
         :global(.pol-number) {
           font-weight: 600;
           color: #111827;
           font-size: 0.875rem;
           margin-bottom: 4px;
+          word-break: break-word;
         }
         :global(.pol-meta) {
           display: flex;
           align-items: center;
-          gap: 8px;
+          flex-wrap: wrap;
+          gap: 6px;
           font-size: 0.75rem;
           color: #6b7280;
         }
@@ -522,6 +528,7 @@ export default function DatabaseTabs({
         :global(.pol-actions) {
           display: flex;
           gap: 4px;
+          flex-shrink: 0; /* No permite que se encoja */
         }
 
         :global(.no-policies) {
@@ -542,6 +549,19 @@ export default function DatabaseTabs({
           :global(.ct-th:nth-child(1)) { width: 35%; }
           :global(.ct-th:nth-child(2)) { width: 25%; }
           :global(.ct-th:nth-child(5)) { width: 40%; }
+          
+          /* Pólizas en tablet */
+          :global(.pol-row) {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 12px;
+          }
+          :global(.pol-actions) {
+            width: 100%;
+            justify-content: flex-end;
+            padding-top: 8px;
+            border-top: 1px solid #e5e7eb;
+          }
         }
         @media (max-width: 480px) {
           :global(.ct-th:nth-child(2)),
@@ -550,6 +570,39 @@ export default function DatabaseTabs({
           }
           :global(.ct-th:nth-child(1)) { width: 60%; }
           :global(.ct-th:nth-child(5)) { width: 40%; }
+          
+          /* Pólizas en móvil */
+          :global(.pol-panel) {
+            padding: 12px;
+          }
+          :global(.pol-row) {
+            padding: 10px;
+          }
+          :global(.pol-number) {
+            font-size: 0.8125rem;
+          }
+          :global(.pol-meta) {
+            font-size: 0.6875rem;
+            gap: 4px;
+          }
+          :global(.pol-meta span) {
+            white-space: nowrap;
+          }
+          :global(.icon-btn) {
+            width: 36px;
+            height: 36px;
+          }
+        }
+        
+        /* Mobile First - Pantallas muy pequeñas */
+        @media (max-width: 360px) {
+          :global(.ct-actions) {
+            flex-direction: column;
+            gap: 2px;
+          }
+          :global(.pol-actions) {
+            gap: 2px;
+          }
         }
 
         /* Empty State */

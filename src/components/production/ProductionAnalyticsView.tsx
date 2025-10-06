@@ -71,20 +71,20 @@ export default function ProductionAnalyticsView({ year, brokers }: ProductionAna
     return (
       <div className="space-y-6">
         {/* Header con selector */}
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-bold text-[#010139]">
+        <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+            <h2 className="text-lg sm:text-2xl font-bold text-[#010139]">
               Analíticas de Producción
             </h2>
             <select
               value={selectedBroker}
               onChange={(e) => setSelectedBroker(e.target.value)}
-              className={`px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none font-semibold ${uppercaseInputClass}`}
+              className="w-full sm:w-auto px-3 sm:px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none font-semibold text-sm sm:text-base"
             >
-              <option value="all">📊 TODOS LOS BROKERS (AGREGADO)</option>
+              <option value="all">📊 Todos los Brokers</option>
               {brokers.map(broker => (
                 <option key={broker.id} value={broker.id}>
-                  👤 {broker.name?.toUpperCase()}
+                  👤 {broker.name}
                 </option>
               ))}
             </select>
@@ -183,23 +183,23 @@ export default function ProductionAnalyticsView({ year, brokers }: ProductionAna
   return (
     <div className="space-y-6">
       {/* Header con selector */}
-      <div className="bg-white rounded-xl shadow-lg p-6">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h2 className="text-2xl font-bold text-[#010139] flex items-center gap-2">
-              <FaUsers className="text-[#8AAA19]" />
-              Vista Agregada - Todos los Brokers
+      <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+          <div className="flex-1 min-w-0">
+            <h2 className="text-lg sm:text-2xl font-bold text-[#010139] flex items-center gap-2">
+              <FaUsers className="text-[#8AAA19] flex-shrink-0" />
+              <span className="truncate">Vista Agregada - Todos los Brokers</span>
             </h2>
-            <p className="text-sm text-gray-600 mt-1">
+            <p className="text-xs sm:text-sm text-gray-600 mt-1">
               {allBrokersData.length} brokers activos
             </p>
           </div>
           <select
             value={selectedBroker}
             onChange={(e) => setSelectedBroker(e.target.value)}
-            className="px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none font-semibold"
+            className="w-full sm:w-auto px-3 sm:px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none font-semibold text-sm sm:text-base flex-shrink-0"
           >
-            <option value="all">📊 Todos los Brokers (Agregado)</option>
+            <option value="all">📊 Todos los Brokers</option>
             {brokers.map(broker => (
               <option key={broker.id} value={broker.id}>
                 👤 {broker.name}

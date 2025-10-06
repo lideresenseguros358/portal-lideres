@@ -151,7 +151,7 @@ const BrokerDashboard = async ({ userId }: BrokerDashboardProps) => {
         <h2 className="section-title">Concursos y Agenda</h2>
         <div className="contests-grid">
           {contests.map((contest) => (
-            <Link href="/production" className="block h-[320px]" key={contest.label}>
+            <Link href="/production" className="block h-full" key={contest.label}>
               <Donut
                 label={contest.label}
                 percent={contest.percent}
@@ -169,7 +169,7 @@ const BrokerDashboard = async ({ userId }: BrokerDashboardProps) => {
               />
             </Link>
           ))}
-          <div>
+          <div className="h-full">
             <AgendaWidget userId={userId} brokerId={brokerId} />
           </div>
         </div>
@@ -335,10 +335,13 @@ const BrokerDashboard = async ({ userId }: BrokerDashboardProps) => {
           display: grid;
           grid-template-columns: repeat(3, 1fr);
           gap: 20px;
+          grid-auto-rows: 1fr;
         }
         
         .contests-grid > * {
-          min-height: 280px;
+          min-height: 380px;
+          display: flex;
+          flex-direction: column;
         }
         
         @media (max-width: 1024px) {

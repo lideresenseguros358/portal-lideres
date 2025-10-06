@@ -94,6 +94,8 @@ export default function NewCaseWizard({ brokers, clients, insurers }: NewCaseWiz
     const caseData = {
       section: formData.section,
       ctype: formData.ctype,
+      canal: formData.canal,
+      status: formData.status,
       management_type: formData.management_type,
       insurer_id: formData.insurer_id || '',
       broker_id: formData.broker_id,
@@ -152,8 +154,8 @@ export default function NewCaseWizard({ brokers, clients, insurers }: NewCaseWiz
       </div>
 
       {/* Progress Steps */}
-      <div className="bg-white rounded-xl shadow-lg border-2 border-gray-100 p-4 sm:p-6 mb-6 overflow-hidden">
-        <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
+      <div className="bg-white rounded-xl shadow-lg border-2 border-gray-100 p-4 sm:p-6 mb-6">
+        <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0 py-2">
           <div className="flex items-center min-w-max sm:min-w-0 sm:justify-between">
             {steps.map((step, index) => {
               const Icon = step.icon;
@@ -167,7 +169,7 @@ export default function NewCaseWizard({ brokers, clients, insurers }: NewCaseWiz
                       className={`
                         w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-all
                         ${isCompleted ? 'bg-[#8AAA19] text-white' : ''}
-                        ${isActive ? 'bg-[#010139] text-white ring-4 ring-[#010139] ring-opacity-20' : ''}
+                        ${isActive ? 'bg-[#010139] text-white shadow-lg' : ''}
                         ${!isActive && !isCompleted ? 'bg-gray-200 text-gray-500' : ''}
                       `}
                     >

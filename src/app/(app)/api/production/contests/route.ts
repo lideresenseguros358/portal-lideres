@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseServer } from '@/lib/supabase/server';
+import { getSupabaseAdmin } from '@/lib/supabase/admin';
 
 export async function GET() {
   try {
@@ -52,15 +53,15 @@ export async function GET() {
 
 export async function PUT(request: NextRequest) {
   try {
-    const supabase = await getSupabaseServer();
+    const supabaseServer = await getSupabaseServer();
     
     // Verificar autenticación y rol Master
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user } } = await supabaseServer.auth.getUser();
     if (!user) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
     }
 
-    const { data: profile } = await supabase
+    const { data: profile } = await supabaseServer
       .from('profiles')
       .select('role')
       .eq('id', user.id)
@@ -69,6 +70,9 @@ export async function PUT(request: NextRequest) {
     if (profile?.role !== 'master') {
       return NextResponse.json({ error: 'Acceso denegado' }, { status: 403 });
     }
+
+    // Usar admin para el upsert
+    const supabase = await getSupabaseAdmin();
 
     const body = await request.json();
     const { assa, convivio } = body;
@@ -110,23 +114,29 @@ export async function PUT(request: NextRequest) {
         ? currentAssa.value as any
         : {};
 
-      const { error: assaError } = await supabase
+      const valueToSave = {
+        start_month: assa.start_month,
+        end_month: assa.end_month,
+        goal: assa.goal,
+        goal_double: assa.goal_double ?? currentAssaConfig.goal_double ?? 400000,
+        enable_double_goal: assa.enable_double_goal ?? currentAssaConfig.enable_double_goal ?? false,
+        year: assa.year ?? currentAssaConfig.year ?? new Date().getFullYear(),
+        last_reset_date: assa.last_reset_date ?? currentAssaConfig.last_reset_date ?? null
+      };
+      
+      console.log('[ASSA UPSERT ATTEMPT]', { key: 'production.contests.assa', value: valueToSave });
+      
+      const { data: assaResult, error: assaError } = await supabase
         .from('app_settings')
         .upsert({
           key: 'production.contests.assa',
-          value: {
-            start_month: assa.start_month,
-            end_month: assa.end_month,
-            goal: assa.goal,
-            goal_double: assa.goal_double ?? currentAssaConfig.goal_double ?? 400000,
-            enable_double_goal: assa.enable_double_goal ?? currentAssaConfig.enable_double_goal ?? false,
-            year: assa.year ?? currentAssaConfig.year ?? new Date().getFullYear(),
-            last_reset_date: assa.last_reset_date ?? currentAssaConfig.last_reset_date ?? null
-          },
-          updated_at: new Date().toISOString()
+          value: valueToSave
         }, {
           onConflict: 'key'
-        });
+        })
+        .select();
+      
+      console.log('[ASSA SAVE RESULT]', { assaError, assaResult });
 
       if (assaError) {
         console.error('Error saving ASSA:', assaError);
@@ -147,22 +157,28 @@ export async function PUT(request: NextRequest) {
         ? currentConvivio.value as any
         : {};
 
-      const { error: convivioError } = await supabase
+      const valueToSave = {
+        start_month: convivio.start_month,
+        end_month: convivio.end_month,
+        goal: convivio.goal,
+        goal_double: convivio.goal_double ?? currentConvivioConfig.goal_double ?? 250000,
+        year: convivio.year ?? currentConvivioConfig.year ?? new Date().getFullYear(),
+        last_reset_date: convivio.last_reset_date ?? currentConvivioConfig.last_reset_date ?? null
+      };
+      
+      console.log('[CONVIVIO UPSERT ATTEMPT]', { key: 'production.contests.convivio', value: valueToSave });
+      
+      const { data: convivioResult, error: convivioError } = await supabase
         .from('app_settings')
         .upsert({
           key: 'production.contests.convivio',
-          value: {
-            start_month: convivio.start_month,
-            end_month: convivio.end_month,
-            goal: convivio.goal,
-            goal_double: convivio.goal_double ?? currentConvivioConfig.goal_double ?? 250000,
-            year: convivio.year ?? currentConvivioConfig.year ?? new Date().getFullYear(),
-            last_reset_date: convivio.last_reset_date ?? currentConvivioConfig.last_reset_date ?? null
-          },
-          updated_at: new Date().toISOString()
+          value: valueToSave
         }, {
           onConflict: 'key'
-        });
+        })
+        .select();
+      
+      console.log('[CONVIVIO SAVE RESULT]', { convivioError, convivioResult });
 
       if (convivioError) {
         console.error('Error saving Convivio:', convivioError);
@@ -183,15 +199,15 @@ export async function PUT(request: NextRequest) {
 // POST: Resetear concursos (marca nueva fecha de inicio, NO borra datos de producción)
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await getSupabaseServer();
+    const supabaseServer = await getSupabaseServer();
     
     // Verificar autenticación y rol Master
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user } } = await supabaseServer.auth.getUser();
     if (!user) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
     }
 
-    const { data: profile } = await supabase
+    const { data: profile } = await supabaseServer
       .from('profiles')
       .select('role')
       .eq('id', user.id)
@@ -200,6 +216,9 @@ export async function POST(request: NextRequest) {
     if (profile?.role !== 'master') {
       return NextResponse.json({ error: 'Acceso denegado' }, { status: 403 });
     }
+
+    // Usar admin para el upsert
+    const supabase = await getSupabaseAdmin();
 
     const body = await request.json();
     const { contest } = body; // 'assa' | 'convivio' | 'both'
@@ -228,8 +247,7 @@ export async function POST(request: NextRequest) {
             ...currentAssaConfig,
             year: currentYear,
             last_reset_date: resetDate
-          },
-          updated_at: resetDate
+          }
         }, {
           onConflict: 'key'
         });
@@ -256,8 +274,7 @@ export async function POST(request: NextRequest) {
             ...currentConvivioConfig,
             year: currentYear,
             last_reset_date: resetDate
-          },
-          updated_at: resetDate
+          }
         }, {
           onConflict: 'key'
         });

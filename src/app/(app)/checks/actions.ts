@@ -711,17 +711,35 @@ export async function actionValidateReferences(references: string[]) {
     
     const { data, error } = await supabase
       .from('bank_transfers')
-      .select('reference_number, amount, remaining_amount')
+      .select('reference_number, amount, used_amount, remaining_amount, status')
       .in('reference_number', references);
     
     if (error) throw error;
     
     const found = new Set(data?.map((r: any) => r.reference_number) || []);
-    const result = references.map((ref) => ({
-      reference: ref,
-      exists: found.has(ref),
-      details: data?.find((r: any) => r.reference_number === ref) || null,
-    }));
+    const result = references.map((ref) => {
+      const transfer = data?.find((r: any) => r.reference_number === ref);
+      let remaining = 0;
+      
+      if (transfer) {
+        // Calculate remaining amount
+        if (transfer.remaining_amount !== null && transfer.remaining_amount !== undefined) {
+          remaining = Number(transfer.remaining_amount);
+        } else {
+          remaining = Math.max(Number(transfer.amount || 0) - Number(transfer.used_amount || 0), 0);
+        }
+      }
+      
+      return {
+        reference: ref,
+        exists: found.has(ref),
+        details: transfer ? {
+          ...transfer,
+          remaining_amount: remaining,
+          status: transfer.status || 'available'
+        } : null,
+      };
+    });
     
     return { ok: true, data: result };
   } catch (error: any) {

@@ -540,9 +540,17 @@ export async function actionGetAdvances(brokerId?: string, year?: number) {
   }
 }
 
-export async function actionApplyAdvancePayment(payload: { advance_id: string; amount: number; payment_type: string; fortnight_id?: string; broker_id?: string }) {
+export async function actionApplyAdvancePayment(payload: { 
+  advance_id: string; 
+  amount: number; 
+  payment_type: string; 
+  fortnight_id?: string; 
+  broker_id?: string;
+  reference_number?: string;
+  payment_date?: string;
+}) {
   try {
-    const { advance_id, amount, payment_type, fortnight_id, broker_id } = payload;
+    const { advance_id, amount, payment_type, fortnight_id, broker_id, reference_number, payment_date } = payload;
     const { userId: applied_by } = await getAuthContext();
     const supabase = getSupabaseAdmin();
 
@@ -585,6 +593,34 @@ export async function actionApplyAdvancePayment(payload: { advance_id: string; a
       }
     }
 
+    // Si es transferencia externa, crear pending_payment y esperar a que la referencia esté disponible
+    if (payment_type === 'external_transfer' && reference_number) {
+      // Crear pending_payment para el adelanto
+      const { error: pendingError } = await supabase.from('pending_payments').insert({
+        client_name: `ADELANTO - ${(advance as any).broker_id}`,
+        policy_number: `ADV-${advance_id.substring(0, 8)}`,
+        insurer_name: 'ADELANTO',
+        purpose: `Pago adelanto por transferencia - Ref: ${reference_number}`,
+        amount_to_pay: amount,
+        total_received: amount,
+        can_be_paid: false, // Se activará cuando la referencia esté en banco
+        notes: JSON.stringify({
+          source: 'advance_external',
+          advance_id,
+          reference_number,
+          payment_date: payment_date || new Date().toISOString().split('T')[0],
+        }),
+        created_by: applied_by,
+      } satisfies TablesInsert<'pending_payments'>);
+
+      if (pendingError) throw pendingError;
+
+      revalidatePath('/(app)/commissions');
+      revalidatePath('/(app)/checks');
+      return { ok: true as const, message: 'Transferencia registrada. Se aplicará cuando la referencia esté disponible en banco.' };
+    }
+
+    // Para efectivo u otros pagos, aplicar directamente
     const { error: logError } = await supabase.from('advance_logs').insert({
       advance_id,
       amount,
@@ -622,6 +658,7 @@ export async function actionApplyAdvanceDiscount(payload: any) {
     amount: payload.amount,
     payment_type: payload.payment_type || 'fortnight',
     fortnight_id: payload.fortnight_id,
+    broker_id: payload.broker_id,
   });
 }
 
@@ -799,6 +836,114 @@ export async function actionRejectAdvance(advanceId: string) {
   }
 }
 
+// ============================================
+// ADVANCE RECURRENCES
+// ============================================
+
+export async function actionGetAdvanceRecurrences(brokerId?: string) {
+  try {
+    const supabase = getSupabaseAdmin();
+    
+    let query = (supabase as any)
+      .from('advance_recurrences')
+      .select('*, brokers(id, name)')
+      .order('created_at', { ascending: false });
+    
+    if (brokerId) {
+      query = query.eq('broker_id', brokerId);
+    }
+    
+    const { data, error } = await query;
+    
+    if (error) throw error;
+    return { ok: true as const, data: data || [] };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : 'Error desconocido',
+    };
+  }
+}
+
+export async function actionCreateAdvanceRecurrence(payload: {
+  broker_id: string;
+  amount: number;
+  reason: string;
+}) {
+  try {
+    const { userId } = await getAuthContext();
+    const supabase = getSupabaseAdmin();
+    
+    const { data, error } = await (supabase as any)
+      .from('advance_recurrences')
+      .insert({
+        broker_id: payload.broker_id,
+        amount: payload.amount,
+        reason: payload.reason,
+        is_active: true,
+        start_date: new Date().toISOString().split('T')[0],
+        created_by: userId,
+      })
+      .select()
+      .single();
+    
+    if (error) throw error;
+    
+    revalidatePath('/(app)/commissions');
+    return { ok: true as const, data };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : 'Error desconocido',
+    };
+  }
+}
+
+export async function actionUpdateAdvanceRecurrence(
+  id: string,
+  payload: { amount?: number; reason?: string; is_active?: boolean }
+) {
+  try {
+    const supabase = getSupabaseAdmin();
+    
+    const { error } = await (supabase as any)
+      .from('advance_recurrences')
+      .update(payload)
+      .eq('id', id);
+    
+    if (error) throw error;
+    
+    revalidatePath('/(app)/commissions');
+    return { ok: true as const };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : 'Error desconocido',
+    };
+  }
+}
+
+export async function actionDeleteAdvanceRecurrence(id: string) {
+  try {
+    const supabase = getSupabaseAdmin();
+    
+    const { error } = await (supabase as any)
+      .from('advance_recurrences')
+      .delete()
+      .eq('id', id);
+    
+    if (error) throw error;
+    
+    revalidatePath('/(app)/commissions');
+    return { ok: true as const };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : 'Error desconocido',
+    };
+  }
+}
+
 export async function actionReassignAdvance(advanceId: string, broker_id: string) {
   try {
     const supabase = getSupabaseAdmin();
@@ -808,6 +953,172 @@ export async function actionReassignAdvance(advanceId: string, broker_id: string
       .eq('id', advanceId);
 
     if (error) throw error;
+    revalidatePath('/(app)/commissions');
+    return { ok: true as const };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : 'Error desconocido',
+    };
+  }
+}
+
+// ============================================
+// RETAINED COMMISSIONS
+// ============================================
+
+export async function actionRetainBrokerPayment(payload: {
+  fortnight_id: string;
+  broker_id: string;
+}) {
+  try {
+    const supabase = getSupabaseAdmin();
+    
+    // Marcar como retenido en fortnight_broker_totals
+    const { error } = await supabase
+      .from('fortnight_broker_totals')
+      .update({ is_retained: true } satisfies TablesUpdate<'fortnight_broker_totals'>)
+      .eq('fortnight_id', payload.fortnight_id)
+      .eq('broker_id', payload.broker_id);
+    
+    if (error) throw error;
+    
+    revalidatePath('/(app)/commissions');
+    return { ok: true as const };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : 'Error desconocido',
+    };
+  }
+}
+
+export async function actionUnretainBrokerPayment(payload: {
+  fortnight_id: string;
+  broker_id: string;
+}) {
+  try {
+    const supabase = getSupabaseAdmin();
+    
+    // Quitar retención
+    const { error } = await supabase
+      .from('fortnight_broker_totals')
+      .update({ is_retained: false } satisfies TablesUpdate<'fortnight_broker_totals'>)
+      .eq('fortnight_id', payload.fortnight_id)
+      .eq('broker_id', payload.broker_id);
+    
+    if (error) throw error;
+    
+    revalidatePath('/(app)/commissions');
+    return { ok: true as const };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : 'Error desconocido',
+    };
+  }
+}
+
+export async function actionGetRetainedCommissions() {
+  try {
+    const supabase = getSupabaseAdmin();
+    
+    // Obtener todas las comisiones retenidas (cerradas)
+    const { data, error } = await (supabase as any)
+      .from('retained_commissions')
+      .select('*, brokers(id, name), fortnights(period_start, period_end)')
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false });
+    
+    if (error) throw error;
+    return { ok: true as const, data: data || [] };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : 'Error desconocido',
+    };
+  }
+}
+
+export async function actionPayRetainedCommission(payload: {
+  retained_id: string;
+  pay_option: 'immediate' | 'next_fortnight';
+}) {
+  try {
+    const { userId } = await getAuthContext();
+    const supabase = getSupabaseAdmin();
+    
+    if (payload.pay_option === 'immediate') {
+      // Marcar como pagado inmediatamente
+      const { error } = await (supabase as any)
+        .from('retained_commissions')
+        .update({
+          status: 'paid_immediate',
+          paid_at: new Date().toISOString(),
+        })
+        .eq('id', payload.retained_id);
+      
+      if (error) throw error;
+    } else {
+      // Marcar como aplicado a siguiente quincena
+      const { error } = await (supabase as any)
+        .from('retained_commissions')
+        .update({
+          status: 'paid_in_fortnight',
+        })
+        .eq('id', payload.retained_id);
+      
+      if (error) throw error;
+    }
+    
+    revalidatePath('/(app)/commissions');
+    return { ok: true as const };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : 'Error desconocido',
+    };
+  }
+}
+
+export async function actionApplyRetainedToAdvance(payload: {
+  retained_id: string;
+  advance_id: string;
+  amount: number;
+}) {
+  try {
+    const supabase = getSupabaseAdmin();
+    
+    // Obtener info de la retención
+    const { data: retained, error: retainedError } = await (supabase as any)
+      .from('retained_commissions')
+      .select('*, fortnights(period_start, period_end)')
+      .eq('id', payload.retained_id)
+      .single();
+    
+    if (retainedError) throw retainedError;
+    
+    // Aplicar el pago al adelanto
+    const result = await actionApplyAdvancePayment({
+      advance_id: payload.advance_id,
+      amount: payload.amount,
+      payment_type: 'retained_commission',
+      reference_number: `Retenido Q${retained.fortnights.period_start}`,
+    });
+    
+    if (!result.ok) throw new Error(result.error);
+    
+    // Marcar la retención como aplicada
+    const { error } = await (supabase as any)
+      .from('retained_commissions')
+      .update({
+        status: 'applied_to_advance',
+        applied_advance_id: payload.advance_id,
+      })
+      .eq('id', payload.retained_id);
+    
+    if (error) throw error;
+    
     revalidatePath('/(app)/commissions');
     return { ok: true as const };
   } catch (error) {
@@ -1492,15 +1803,73 @@ export async function actionPayFortnight(fortnight_id: string) {
       return { ok: false as const, error: 'No hay totales calculados' };
     }
     
-    // 4. Generar CSV Banco (solo brokers con neto > 0)
-    const filteredTotals = brokerTotals.filter(bt => bt.net_amount > 0).map(bt => ({
-      ...bt,
-      broker: bt.brokers as any
-    }));
+    // 4. Crear registros de retained_commissions para pagos retenidos
+    for (const bt of brokerTotals) {
+      if (bt.is_retained) {
+        // Obtener detalle de comisiones por aseguradora para este broker
+        const { data: commItems, error: itemsError } = await supabase
+          .from('comm_items')
+          .select('*, comm_imports(insurer_id, insurers(name))')
+          .eq('fortnight_id', fortnight_id)
+          .eq('broker_id', bt.broker_id);
+        
+        if (itemsError) throw itemsError;
+        
+        // Agrupar por aseguradora
+        const insurersDetail: any = {};
+        if (commItems) {
+          for (const item of commItems) {
+            const itemAny = item as any;
+            const insurerName = itemAny.comm_imports?.insurers?.name || 'Sin aseguradora';
+            if (!insurersDetail[insurerName]) {
+              insurersDetail[insurerName] = {
+                insurer: insurerName,
+                clients: [],
+                total: 0,
+              };
+            }
+            insurersDetail[insurerName].clients.push({
+              client_name: itemAny.insured_name || 'Sin nombre',
+              policy_number: item.policy_number,
+              amount: itemAny.gross_amount || 0,
+            });
+            insurersDetail[insurerName].total += itemAny.gross_amount || 0;
+          }
+        }
+        
+        // Calcular discount_amount del broker
+        const btAny = bt as any;
+        const discountAmount = btAny.discount_amount || (bt.gross_amount - bt.net_amount);
+        
+        // Crear retained_commission
+        const { error: retainedError } = await (supabase as any)
+          .from('retained_commissions')
+          .insert({
+            broker_id: bt.broker_id,
+            fortnight_id: fortnight_id,
+            gross_amount: bt.gross_amount,
+            discount_amount: discountAmount,
+            net_amount: bt.net_amount,
+            status: 'pending',
+            insurers_detail: insurersDetail,
+            created_by: userId,
+          });
+        
+        if (retainedError) throw retainedError;
+      }
+    }
+    
+    // 5. Generar CSV Banco (solo brokers con neto > 0 Y NO retenidos)
+    const filteredTotals = brokerTotals
+      .filter(bt => bt.net_amount > 0 && !bt.is_retained)
+      .map(bt => ({
+        ...bt,
+        broker: bt.brokers as any
+      }));
     
     const csvContent = await buildBankCsv(filteredTotals, fortnight_id);
     
-    // 5. Cambiar status a PAID
+    // 6. Cambiar status a PAID
     const { error: updateError } = await supabase
       .from('fortnights')
       .update({ status: 'PAID' } satisfies FortnightUpd)
