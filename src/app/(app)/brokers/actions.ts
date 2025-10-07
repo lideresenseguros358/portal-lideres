@@ -1,6 +1,7 @@
 'use server';
 
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { getSupabaseServer } from '@/lib/supabase/server';
 import { Tables, TablesUpdate } from '@/lib/database.types';
 import { revalidatePath } from 'next/cache';
 import { OFICINA_EMAIL } from '@/lib/constants/brokers';
@@ -139,23 +140,49 @@ export async function actionGetBroker(brokerId: string) {
 
 export async function actionUpdateBroker(brokerId: string, updates: Partial<TablesUpdate<'brokers'>>) {
   try {
-    const supabase = await getSupabaseAdmin();
-    const { data: { user } } = await supabase.auth.getUser();
+    console.log('[actionUpdateBroker] Starting update for brokerId:', brokerId);
+    console.log('[actionUpdateBroker] Updates payload (raw):', updates);
+    
+    const supabaseServer = await getSupabaseServer();
+    const { data: { user } } = await supabaseServer.auth.getUser();
     
     if (!user) {
+      console.log('[actionUpdateBroker] No user authenticated');
       return { ok: false as const, error: 'No autenticado' };
     }
 
+    console.log('[actionUpdateBroker] User ID:', user.id);
+
     // Check if user is master
-    const { data: profile } = await supabase
+    const { data: profile } = await supabaseServer
       .from('profiles')
       .select('role')
       .eq('id', user.id)
       .single();
 
+    console.log('[actionUpdateBroker] User role:', profile?.role);
+
     if (profile?.role !== 'master') {
       return { ok: false as const, error: 'Solo Master puede editar brokers' };
     }
+
+    // Clean up empty strings - convert to null for optional fields
+    const nullableFields = ['birth_date', 'phone', 'national_id', 'assa_code', 'license_no', 'bank_account_no', 'beneficiary_name', 'beneficiary_id', 'email'];
+    
+    const cleanedUpdates = Object.entries(updates).reduce((acc, [key, value]) => {
+      // Convert empty strings to null for nullable fields
+      if (nullableFields.includes(key) && value === '') {
+        acc[key] = null;
+      } else if (value !== undefined) {
+        acc[key] = value;
+      }
+      return acc;
+    }, {} as any);
+
+    console.log('[actionUpdateBroker] Cleaned updates:', cleanedUpdates);
+
+    const supabase = await getSupabaseAdmin();
+    console.log('[actionUpdateBroker] Using admin client for update');
 
     // Check if it's Oficina and trying to change percent_default
     const { data: broker } = await supabase
@@ -165,25 +192,30 @@ export async function actionUpdateBroker(brokerId: string, updates: Partial<Tabl
       .single();
 
     const brokerEmail = (broker?.profiles as any)?.email || broker?.email;
-    if (brokerEmail === OFICINA_EMAIL && updates.percent_default && updates.percent_default !== 1.00) {
+    if (brokerEmail === OFICINA_EMAIL && cleanedUpdates.percent_default && cleanedUpdates.percent_default !== 1.00) {
       return { ok: false as const, error: 'No se puede cambiar el % de Oficina (siempre 100%)' };
     }
 
+    console.log('[actionUpdateBroker] Executing UPDATE query...');
     const { data, error } = await supabase
       .from('brokers')
-      .update(updates)
+      .update(cleanedUpdates)
       .eq('id', brokerId)
       .select()
       .single();
 
     if (error) {
-      console.error('Error updating broker:', error);
+      console.error('[actionUpdateBroker] Error updating broker:', error);
       return { ok: false as const, error: error.message };
     }
 
+    console.log('[actionUpdateBroker] Update successful, data:', data);
+    console.log('[actionUpdateBroker] Revalidating paths...');
+    
     revalidatePath('/brokers');
     revalidatePath(`/brokers/${brokerId}`);
 
+    console.log('[actionUpdateBroker] Complete!');
     return { ok: true as const, data };
   } catch (error: any) {
     console.error('Error in actionUpdateBroker:', error);
@@ -197,15 +229,15 @@ export async function actionUpdateBroker(brokerId: string, updates: Partial<Tabl
 
 export async function actionToggleBrokerActive(brokerId: string, active: boolean) {
   try {
-    const supabase = await getSupabaseAdmin();
-    const { data: { user } } = await supabase.auth.getUser();
+    const supabaseServer = await getSupabaseServer();
+    const { data: { user } } = await supabaseServer.auth.getUser();
     
     if (!user) {
       return { ok: false as const, error: 'No autenticado' };
     }
 
     // Check if user is master
-    const { data: profile } = await supabase
+    const { data: profile } = await supabaseServer
       .from('profiles')
       .select('role')
       .eq('id', user.id)
@@ -214,6 +246,8 @@ export async function actionToggleBrokerActive(brokerId: string, active: boolean
     if (profile?.role !== 'master') {
       return { ok: false as const, error: 'Solo Master puede cambiar estados' };
     }
+
+    const supabase = await getSupabaseAdmin();
 
     // Cannot deactivate Oficina
     const { data: broker } = await supabase
@@ -255,15 +289,15 @@ export async function actionToggleBrokerActive(brokerId: string, active: boolean
 
 export async function actionDeleteBroker(brokerId: string) {
   try {
-    const supabase = await getSupabaseAdmin();
-    const { data: { user } } = await supabase.auth.getUser();
+    const supabaseServer = await getSupabaseServer();
+    const { data: { user } } = await supabaseServer.auth.getUser();
     
     if (!user) {
       return { ok: false as const, error: 'No autenticado' };
     }
 
     // Check if user is master
-    const { data: profile } = await supabase
+    const { data: profile } = await supabaseServer
       .from('profiles')
       .select('role')
       .eq('id', user.id)
@@ -272,6 +306,8 @@ export async function actionDeleteBroker(brokerId: string) {
     if (profile?.role !== 'master') {
       return { ok: false as const, error: 'Solo Master puede eliminar brokers' };
     }
+
+    const supabase = await getSupabaseAdmin();
 
     // Cannot delete Oficina
     const { data: broker } = await supabase
@@ -338,15 +374,15 @@ export async function actionDeleteBroker(brokerId: string) {
 
 export async function actionApplyDefaultPercentToAll(brokerId: string) {
   try {
-    const supabase = await getSupabaseAdmin();
-    const { data: { user } } = await supabase.auth.getUser();
+    const supabaseServer = await getSupabaseServer();
+    const { data: { user } } = await supabaseServer.auth.getUser();
     
     if (!user) {
       return { ok: false as const, error: 'No autenticado' };
     }
 
     // Check if user is master
-    const { data: profile } = await supabase
+    const { data: profile } = await supabaseServer
       .from('profiles')
       .select('role')
       .eq('id', user.id)
@@ -355,6 +391,8 @@ export async function actionApplyDefaultPercentToAll(brokerId: string) {
     if (profile?.role !== 'master') {
       return { ok: false as const, error: 'Solo Master puede aplicar % default' };
     }
+
+    const supabase = await getSupabaseAdmin();
 
     // Get broker's default percent
     const { data: broker } = await supabase

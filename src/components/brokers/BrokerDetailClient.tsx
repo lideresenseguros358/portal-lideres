@@ -52,9 +52,16 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
   };
 
   const handleSave = async () => {
+    console.log('[BrokerDetailClient] handleSave called');
+    console.log('[BrokerDetailClient] Form data:', formData);
+    
     setSaving(true);
     const normalizedData = toUppercasePayload(formData);
+    console.log('[BrokerDetailClient] Normalized data:', normalizedData);
+    console.log('[BrokerDetailClient] Calling actionUpdateBroker with ID:', brokerId);
+    
     const result = await actionUpdateBroker(brokerId, normalizedData);
+    console.log('[BrokerDetailClient] Result:', result);
 
     if (result.ok) {
       toast.success('Corredor actualizado correctamente');

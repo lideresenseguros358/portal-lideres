@@ -60,7 +60,7 @@ export default function AccountPage() {
         const { data: brokerData } = await supabase
           .from("brokers")
           .select("*")
-          .eq("id", user.id)
+          .eq("p_id", user.id)
           .single() as { data: any };
 
         if (brokerData) {
@@ -107,7 +107,7 @@ export default function AccountPage() {
         const { error: brokerError } = await supabase
           .from("brokers")
           .update({ phone })
-          .eq("id", user.id);
+          .eq("p_id", user.id);
 
         if (brokerError) throw brokerError;
       }
