@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AssignBrokerDropdown } from './AssignBrokerDropdown';
 import { RetainedTab } from './RetainedTab';
+import { MasterClaimsView } from './MasterClaimsView';
 // Tabs removed - using button pattern instead
 import {
   Table,
@@ -834,7 +835,7 @@ export default function AdjustmentsTab({ role, brokerId, brokers, onActionSucces
             />
           )}
           {activeTab === 'requests' && (
-            <RequestsView role={role} onActionSuccess={handleSuccess} />
+            <MasterClaimsView />
           )}
           {activeTab === 'retained' && role === 'master' && (
             <RetainedTab />

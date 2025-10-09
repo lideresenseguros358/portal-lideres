@@ -8,9 +8,10 @@ import { toast } from 'sonner';
 
 interface BankHistoryTabProps {
   onImportSuccess?: () => void;
+  refreshTrigger?: number;
 }
 
-export default function BankHistoryTab({ onImportSuccess }: BankHistoryTabProps) {
+export default function BankHistoryTab({ onImportSuccess, refreshTrigger }: BankHistoryTabProps) {
   const [transfers, setTransfers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showImportModal, setShowImportModal] = useState(false);
@@ -58,7 +59,7 @@ export default function BankHistoryTab({ onImportSuccess }: BankHistoryTabProps)
   useEffect(() => {
     loadTransfers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters]);
+  }, [filters, refreshTrigger]);
 
   const toggleRow = (id: string) => {
     const newExpanded = new Set(expandedRows);
@@ -190,6 +191,11 @@ export default function BankHistoryTab({ onImportSuccess }: BankHistoryTabProps)
             <p className="text-lg mb-2">No hay transferencias registradas</p>
             <p className="text-sm">Importa el historial del banco para comenzar</p>
           </div>
+        ) : filteredTransfers.length === 0 ? (
+          <div className="p-12 text-center text-gray-500">
+            <p className="text-lg mb-2">No se encontraron resultados</p>
+            <p className="text-sm">Intenta con otro término de búsqueda</p>
+          </div>
         ) : (
           <div className="hidden md:block overflow-x-auto">
             <table className="w-full min-w-[800px]">
@@ -296,9 +302,9 @@ export default function BankHistoryTab({ onImportSuccess }: BankHistoryTabProps)
         )}
         
         {/* Vista móvil - Cards */}
-        {!loading && transfers.length > 0 && (
+        {!loading && filteredTransfers.length > 0 && (
           <div className="md:hidden divide-y divide-gray-200">
-            {transfers.map((transfer) => {
+            {filteredTransfers.map((transfer) => {
               const isExpanded = expandedRows.has(transfer.id);
               const hasDetails = transfer.payment_details && transfer.payment_details.length > 0;
               

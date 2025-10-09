@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { FaArrowLeft, FaDownload, FaUpload, FaCheckCircle, FaExclamationTriangle, FaFileAlt } from "react-icons/fa";
 import Link from "next/link";
 import Papa from "papaparse";
-import { actionImportClientsCSV } from "../actions";
+// import { actionImportClientsCSV } from "../actions"; // DEPRECADO - Usar ImportModal.tsx
 import { toast } from "sonner";
 
 interface ParsedRow {
@@ -122,25 +122,22 @@ export default function ImportPage() {
   const handleImport = async () => {
     if (validRows.length === 0) return;
     
-    setLoading(true);
-    try {
-      const result = await actionImportClientsCSV(validRows);
-      
-      if (result.ok) {
-        setImportResult(result.data);
-        toast.success(`${result.data.processed} registros importados exitosamente`);
-        
-        if (result.data.errors.length > 0) {
-          toast.warning(`${result.data.errors.length} registros con errores`);
-        }
-      } else {
-        toast.error('Error al importar', { description: result.error });
-      }
-    } catch (error) {
-      toast.error('Error inesperado al importar');
-    } finally {
-      setLoading(false);
-    }
+    toast.error('Función de importación deprecada', {
+      description: 'Por favor use el botón "Importar CSV" desde la página de Base de Datos'
+    });
+    
+    // DEPRECADO: Esta función usaba actionImportClientsCSV que ya no existe
+    // El nuevo sistema de importación está en:
+    // - src/components/db/ImportModal.tsx
+    // - Accesible desde: /db -> click botón "Importar CSV"
+    
+    // setLoading(true);
+    // try {
+    //   const result = await actionImportClientsCSV(validRows);
+    //   ...
+    // } finally {
+    //   setLoading(false);
+    // }
   };
 
   return (

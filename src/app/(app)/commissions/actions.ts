@@ -409,6 +409,105 @@ export async function actionCreateDraftFortnight(payload: unknown) {
       }
     }
 
+    // Inyectar ajustes aprobados para siguiente quincena
+    const { data: queuedAdjustments } = await supabase
+      .from('comm_item_claims')
+      .select(`
+        id,
+        comm_item_id,
+        broker_id,
+        comm_items!inner (
+          id,
+          policy_number,
+          insured_name,
+          gross_amount,
+          insurer_id
+        ),
+        brokers!inner (
+          id,
+          name,
+          percent_default
+        )
+      `)
+      .eq('status', 'approved')
+      .eq('payment_type', 'next_fortnight');
+
+    if (queuedAdjustments && queuedAdjustments.length > 0) {
+      console.log(`[actionCreateDraftFortnight] Inyectando ${queuedAdjustments.length} ajustes en cola`);
+
+      // Agrupar por broker para crear import virtual por broker
+      const adjustmentsByBroker = new Map<string, any[]>();
+      queuedAdjustments.forEach((adj: any) => {
+        const brokerId = adj.broker_id;
+        if (!adjustmentsByBroker.has(brokerId)) {
+          adjustmentsByBroker.set(brokerId, []);
+        }
+        adjustmentsByBroker.get(brokerId)!.push(adj);
+      });
+
+      // Crear comm_items para cada ajuste
+      for (const [brokerId, adjustments] of adjustmentsByBroker.entries()) {
+        const firstAdj = adjustments[0];
+        const commItem = firstAdj.comm_items;
+        const broker = firstAdj.brokers;
+
+        // Crear import virtual para estos ajustes
+        const { data: adjustmentImport } = await supabase
+          .from('comm_imports')
+          .insert([{
+            insurer_id: commItem.insurer_id,
+            period_label: data.id,
+            uploaded_by: userId,
+            total_amount: 0, // Se calculará después
+            is_life_insurance: false,
+          } satisfies CommImportIns])
+          .select()
+          .single<CommImportRow>();
+
+        if (adjustmentImport) {
+          let totalAmount = 0;
+
+          // Crear comm_item para cada ajuste
+          for (const adj of adjustments) {
+            const item = adj.comm_items;
+            const rawAmount = Math.abs(item.gross_amount);
+            const percent = broker.percent_default || 0;
+            const brokerAmount = rawAmount * (percent / 100);
+
+            await supabase
+              .from('comm_items')
+              .insert([{
+                import_id: adjustmentImport.id,
+                insurer_id: item.insurer_id,
+                policy_number: item.policy_number,
+                broker_id: brokerId,
+                gross_amount: brokerAmount,
+                insured_name: item.insured_name || `Ajuste - ${item.policy_number}`,
+                raw_row: null,
+              } satisfies CommItemIns]);
+
+            totalAmount += brokerAmount;
+
+            // Actualizar claim con fortnight_id
+            await supabase
+              .from('comm_item_claims')
+              .update({
+                fortnight_id: data.id,
+              } satisfies TablesUpdate<'comm_item_claims'>)
+              .eq('id', adj.id);
+          }
+
+          // Actualizar total del import
+          await supabase
+            .from('comm_imports')
+            .update({ total_amount: totalAmount } satisfies TablesUpdate<'comm_imports'>)
+            .eq('id', adjustmentImport.id);
+        }
+      }
+
+      console.log(`[actionCreateDraftFortnight] ✓ ${queuedAdjustments.length} ajustes inyectados exitosamente`);
+    }
+
     revalidatePath('/(app)/commissions');
     return { ok: true as const, data };
   } catch (error) {
@@ -1507,7 +1606,7 @@ export async function actionDeleteDraft(fortnightId: string) {
     // Delete temp imports if any (no dependencies)
     console.log('[actionDeleteDraft] Eliminando temp imports...');
     await supabase
-      .from('temp_client_imports')
+      .from('temp_client_import')
       .delete()
       .eq('fortnight_id', fortnightId);
 
@@ -2173,6 +2272,402 @@ export async function actionConfirmPayNowPaid(item_ids: string[]) {
     return {
       ok: false as const,
       error: error instanceof Error ? error.message : 'Error al confirmar pago',
+    };
+  }
+}
+
+// =====================================================
+// SISTEMA DE AJUSTES CON SELECCIÓN MÚLTIPLE
+// =====================================================
+
+/**
+ * Enviar reporte de ajustes del broker
+ * Agrupa múltiples items marcados como "mío"
+ */
+export async function actionSubmitClaimsReport(itemIds: string[]) {
+  try {
+    const { userId, brokerId } = await getAuthContext();
+    if (!brokerId) {
+      return { ok: false as const, error: 'Usuario no es un broker' };
+    }
+
+    const supabase = getSupabaseAdmin();
+
+    // Verificar que los items no estén ya reclamados
+    const { data: existingClaims } = await supabase
+      .from('comm_item_claims')
+      .select('comm_item_id')
+      .in('comm_item_id', itemIds);
+
+    const alreadyClaimed = existingClaims?.map(c => c.comm_item_id) || [];
+    const newItems = itemIds.filter(id => !alreadyClaimed.includes(id));
+
+    if (newItems.length === 0) {
+      return { ok: false as const, error: 'Todos los items ya fueron reclamados' };
+    }
+
+    // Crear claims para cada item
+    const claimsToInsert = newItems.map(itemId => ({
+      comm_item_id: itemId,
+      broker_id: brokerId,
+      status: 'pending',
+    }));
+
+    const { error } = await supabase
+      .from('comm_item_claims')
+      .insert(claimsToInsert);
+
+    if (error) throw error;
+
+    revalidatePath('/(app)/commissions');
+    return { 
+      ok: true as const, 
+      message: `Reporte enviado: ${newItems.length} ajuste(s)`,
+      count: newItems.length
+    };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : 'Error al enviar reporte',
+    };
+  }
+}
+
+/**
+ * Obtener reportes de ajustes agrupados por broker
+ * Para vista de Master
+ */
+export async function actionGetClaimsReports(status?: string) {
+  try {
+    const supabase = getSupabaseAdmin();
+
+    let query = supabase
+      .from('comm_item_claims')
+      .select(`
+        *,
+        comm_items!inner (
+          id,
+          policy_number,
+          insured_name,
+          gross_amount,
+          insurer_id,
+          insurers (name)
+        ),
+        brokers!inner (
+          id,
+          name,
+          percent_default,
+          tipo_cuenta,
+          national_id,
+          nombre_completo,
+          bank_account_no,
+          profiles!p_id (
+            full_name,
+            email
+          )
+        )
+      `)
+      .order('created_at', { ascending: false });
+
+    if (status) {
+      query = query.eq('status', status);
+    } else {
+      query = query.in('status', ['pending', 'approved']);
+    }
+
+    const { data, error } = await query;
+
+    if (error) throw error;
+
+    return { ok: true as const, data: data || [] };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : 'Error al obtener reportes',
+    };
+  }
+}
+
+/**
+ * Aprobar reportes de ajustes
+ * Crea registros en temp_client_import
+ */
+export async function actionApproveClaimsReports(
+  claimIds: string[],
+  paymentType: 'now' | 'next_fortnight'
+) {
+  try {
+    const { userId } = await getAuthContext();
+    const supabase = getSupabaseAdmin();
+
+    // Usar función SQL que hace todo el proceso
+    const { data, error } = await supabase.rpc('approve_claims_and_create_preliminary', {
+      p_claim_ids: claimIds,
+      p_payment_type: paymentType,
+      p_approved_by: userId,
+    });
+
+    if (error) throw error;
+
+    const result = data?.[0];
+    if (!result?.success) {
+      return { ok: false as const, error: result?.message || 'Error desconocido' };
+    }
+
+    revalidatePath('/(app)/commissions');
+    revalidatePath('/(app)/db');
+
+    return { 
+      ok: true as const,
+      message: `${claimIds.length} ajuste(s) aprobado(s)`,
+      preliminaryCount: result.preliminary_count,
+      paymentType
+    };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : 'Error al aprobar reportes',
+    };
+  }
+}
+
+/**
+ * Rechazar reportes de ajustes
+ */
+export async function actionRejectClaimsReports(
+  claimIds: string[],
+  rejectionReason?: string
+) {
+  try {
+    const { userId } = await getAuthContext();
+    const supabase = getSupabaseAdmin();
+
+    const { error } = await supabase.rpc('reject_claims', {
+      p_claim_ids: claimIds,
+      p_rejection_reason: rejectionReason || 'Rechazado por Master',
+      p_rejected_by: userId,
+    });
+
+    if (error) throw error;
+
+    revalidatePath('/(app)/commissions');
+
+    return { 
+      ok: true as const,
+      message: `${claimIds.length} ajuste(s) rechazado(s)`
+    };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : 'Error al rechazar reportes',
+    };
+  }
+}
+
+/**
+ * Generar datos para CSV bancario de ajustes
+ */
+export async function actionGetAdjustmentsCSVData(claimIds: string[]) {
+  try {
+    const supabase = getSupabaseAdmin();
+
+    const { data, error } = await supabase
+      .from('comm_item_claims')
+      .select(`
+        *,
+        comm_items (
+          gross_amount
+        ),
+        brokers (
+          name,
+          percent_default,
+          tipo_cuenta,
+          national_id,
+          nombre_completo,
+          bank_account_no,
+          profiles!p_id (
+            full_name,
+            email
+          )
+        )
+      `)
+      .in('id', claimIds)
+      .eq('status', 'approved')
+      .eq('payment_type', 'now');
+
+    if (error) throw error;
+
+    if (!data || data.length === 0) {
+      return { ok: false as const, error: 'No hay ajustes aprobados para pagar' };
+    }
+
+    // Agrupar por broker y calcular totales
+    const brokerTotals = new Map();
+
+    data.forEach((claim: any) => {
+      const broker = claim.brokers;
+      const item = claim.comm_items;
+      
+      if (!broker || !item) return;
+
+      const brokerId = broker.id;
+      const percent = broker.percent_default ?? 0;
+      const brokerAmount = Math.abs(item.gross_amount) * (percent / 100);
+
+      if (!brokerTotals.has(brokerId)) {
+        brokerTotals.set(brokerId, {
+          broker,
+          totalAmount: 0,
+        });
+      }
+
+      const entry = brokerTotals.get(brokerId);
+      entry.totalAmount += brokerAmount;
+    });
+
+    // Generar filas CSV
+    const csvRows: any[] = [];
+
+    brokerTotals.forEach(({ broker, totalAmount }) => {
+      if (totalAmount <= 0) return;
+
+      csvRows.push({
+        nombre: broker.profiles?.full_name || broker.name,
+        tipo: broker.account_type?.toUpperCase() || 'NATURAL',
+        cedula: broker.national_id || '',
+        banco: broker.bank_name || 'BANCO GENERAL',
+        cuenta: broker.account_number || '',
+        monto: totalAmount.toFixed(2),
+        correo: broker.profiles?.email || '',
+        descripcion: 'AJUSTE COMISION',
+      });
+    });
+
+    return { ok: true as const, data: csvRows };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : 'Error al generar CSV',
+    };
+  }
+}
+
+/**
+ * Confirmar pago de ajustes
+ * Marca como pagados
+ */
+export async function actionConfirmAdjustmentsPaid(claimIds: string[]) {
+  try {
+    const supabase = getSupabaseAdmin();
+
+    const { error } = await supabase.rpc('confirm_claims_paid', {
+      p_claim_ids: claimIds,
+    });
+
+    if (error) throw error;
+
+    revalidatePath('/(app)/commissions');
+
+    return { 
+      ok: true as const,
+      message: `${claimIds.length} ajuste(s) confirmado(s) como pagado(s)`
+    };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : 'Error al confirmar pago',
+    };
+  }
+}
+
+/**
+ * Obtener ajustes en cola para siguiente quincena
+ * Para integración con nueva quincena
+ */
+export async function actionGetQueuedAdjustments() {
+  try {
+    const supabase = getSupabaseAdmin();
+
+    const { data, error } = await supabase.rpc('get_queued_claims_for_fortnight');
+
+    if (error) throw error;
+
+    return { ok: true as const, data: data || [] };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : 'Error al obtener ajustes en cola',
+    };
+  }
+}
+
+/**
+ * Marcar ajustes en cola como incluidos en quincena
+ * Se llama al finalizar creación de quincena
+ */
+export async function actionMarkAdjustmentsInFortnight(
+  claimIds: string[],
+  fortnightId: string
+) {
+  try {
+    const supabase = getSupabaseAdmin();
+
+    const { error } = await supabase
+      .from('comm_item_claims')
+      .update({
+        status: 'paid',
+        paid_date: new Date().toISOString(),
+        fortnight_id: fortnightId,
+      })
+      .in('id', claimIds);
+
+    if (error) throw error;
+
+    revalidatePath('/(app)/commissions');
+
+    return { ok: true as const };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : 'Error al marcar ajustes en quincena',
+    };
+  }
+}
+
+/**
+ * Obtener datos del broker actual
+ * Incluye porcentaje de comisión
+ */
+export async function actionGetCurrentBroker() {
+  try {
+    const { brokerId } = await getAuthContext();
+    if (!brokerId) {
+      return { ok: false as const, error: 'Usuario no es un broker' };
+    }
+
+    const supabase = await getSupabaseServer();
+
+    const { data, error } = await supabase
+      .from('brokers')
+      .select(`
+        id,
+        name,
+        percent_default,
+        profiles!p_id (
+          full_name,
+          email
+        )
+      `)
+      .eq('id', brokerId)
+      .single();
+
+    if (error) throw error;
+
+    return { ok: true as const, data };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : 'Error al obtener broker',
     };
   }
 }

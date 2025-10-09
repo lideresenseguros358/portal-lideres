@@ -296,18 +296,20 @@ export default function RegisterPaymentWizardNew({
       console.log('Resultado:', result);
 
       if (result.ok) {
-        toast.success('Pago pendiente creado exitosamente');
-        // Refresh automático
-        onSuccess?.();
+        toast.success('✅ Pago pendiente creado exitosamente');
+        setLoading(false);
+        // Cerrar wizard inmediatamente
         onClose();
+        // Notificar éxito para actualizar la lista
+        onSuccess();
       } else {
         console.error('Error al crear:', result.error);
         toast.error('Error al crear pago', { description: result.error });
+        setLoading(false);
       }
     } catch (error: any) {
       console.error('Error inesperado:', error);
       toast.error('Error inesperado', { description: error.message });
-    } finally {
       setLoading(false);
     }
   };

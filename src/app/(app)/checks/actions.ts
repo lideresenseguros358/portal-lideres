@@ -321,6 +321,10 @@ export async function actionCreatePendingPayment(payment: {
     amount: number;
   }>;
   advance_id?: string;
+  devolucion_tipo?: 'cliente' | 'corredor';
+  cuenta_banco?: string;
+  broker_id?: string;
+  broker_cuenta?: string;
 }) {
   try {
     const supabaseServer = await getSupabaseServer();
@@ -386,6 +390,26 @@ export async function actionCreatePendingPayment(payment: {
       };
     }
     
+    // Preparar metadata para notes
+    const metadata: any = {
+      notes: payment.notes || null,
+    };
+    
+    if (payment.advance_id) {
+      metadata.source = 'advance_external';
+      metadata.advance_id = payment.advance_id;
+    }
+    
+    if (payment.devolucion_tipo) {
+      metadata.devolucion_tipo = payment.devolucion_tipo;
+      if (payment.devolucion_tipo === 'cliente' && payment.cuenta_banco) {
+        metadata.cuenta_banco = payment.cuenta_banco;
+      } else if (payment.devolucion_tipo === 'corredor') {
+        metadata.broker_id = payment.broker_id || null;
+        metadata.broker_cuenta = payment.broker_cuenta || null;
+      }
+    }
+    
     // Insert pending payment
     const { data: pendingPayment, error: paymentError } = await supabase
       .from('pending_payments')
@@ -398,13 +422,7 @@ export async function actionCreatePendingPayment(payment: {
         total_received,
         can_be_paid,
         status: 'pending',
-        notes: payment.advance_id
-          ? JSON.stringify({
-              source: 'advance_external',
-              advance_id: payment.advance_id,
-              notes: payment.notes || null,
-            })
-          : payment.notes,
+        notes: JSON.stringify(metadata),
         created_by: user.id
       }])
       .select()

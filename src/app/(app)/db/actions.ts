@@ -18,6 +18,13 @@ export async function actionCreateClientWithPolicy(clientData: unknown, policyDa
   }
 }
 
+// =====================================================
+// FUNCIONES DEPRECADAS - USAR preliminary-actions.ts
+// =====================================================
+// Las siguientes funciones usan campos antiguos que no existen
+// El sistema de preliminares está en preliminary-actions.ts
+
+/*
 // Crear cliente vía tabla temporal
 export async function actionCreateTempClient(data: any) {
   try {
@@ -32,7 +39,7 @@ export async function actionCreateTempClient(data: any) {
     const userRole = user.user_metadata?.role;
     const broker_email = userRole === 'broker' ? user.email : data.broker_email;
     
-    const payload: TablesInsert<'temp_client_imports'> = {
+    const payload: TablesInsert<'temp_client_import'> = {
       client_name: data.client_name,
       national_id: data.national_id || null,
       email: data.email || null,
@@ -51,7 +58,7 @@ export async function actionCreateTempClient(data: any) {
     };
     
     const { data: temp, error } = await supabase
-      .from('temp_client_imports')
+      .from('temp_client_import')
       .insert([payload])
       .select()
       .single();
@@ -65,7 +72,7 @@ export async function actionCreateTempClient(data: any) {
     
     // Verificar resultado
     const { data: processed } = await supabase
-      .from('temp_client_imports')
+      .from('temp_client_import')
       .select('*')
       .eq('id', temp.id)
       .single();
@@ -117,7 +124,7 @@ export async function actionImportClientsCSV(rows: any[]) {
     }));
     
     const { data, error } = await supabase
-      .from('temp_client_imports')
+      .from('temp_client_import')
       .insert(tempRows)
       .select();
     
@@ -131,7 +138,7 @@ export async function actionImportClientsCSV(rows: any[]) {
     // Verificar resultados
     const ids = (data || []).map(d => d.id);
     const { data: results } = await supabase
-      .from('temp_client_imports')
+      .from('temp_client_import')
       .select('*')
       .in('id', ids);
     
@@ -166,7 +173,7 @@ export async function actionCompletePreliminary(tempId: string, national_id: str
     
     // Update nacional_id -> trigger procesa automáticamente
     const { error } = await supabase
-      .from('temp_client_imports')
+      .from('temp_client_import')
       .update({ national_id })
       .eq('id', tempId);
     
@@ -190,7 +197,7 @@ export async function actionGetPreliminaryClients() {
     const supabase = await getSupabaseServer();
     
     const { data, error } = await supabase
-      .from('temp_client_imports')
+      .from('temp_client_import')
       .select('*')
       .is('national_id', null)
       .eq('import_status', 'pending')
@@ -208,3 +215,4 @@ export async function actionGetPreliminaryClients() {
     };
   }
 }
+*/

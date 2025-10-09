@@ -21,7 +21,7 @@ export const PolicyInsertSchema = z.object({
   insurer_id: z.string().uuid('Aseguradora requerida'),
   ramo: z.string().optional(),
   start_date: z.string().optional(),
-  renewal_date: z.string().optional(),
+  renewal_date: z.string().min(1, 'Fecha de renovación requerida'),
   status: z.enum(['ACTIVA', 'VENCIDA', 'CANCELADA']).default('ACTIVA'),
 });
 

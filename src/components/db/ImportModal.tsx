@@ -28,7 +28,8 @@ export default function ImportModal({ onClose }: ImportModalProps) {
   const downloadTemplate = () => {
     const template = `name,national_id,email,phone,policy_number,ramo,insurer_id,start_date,renewal_date,status
 "Juan Pérez","8-111-2222","juan@example.com","+507 6000-0000","POL-001","AUTO","1","2024-01-01","2025-01-01","ACTIVA"
-"María González","","maria@example.com","","","","","","",""`;
+"María González","","maria@example.com","","POL-002","VIDA","1","2024-02-01","2025-02-01","ACTIVA"
+"Pedro Martínez","","","","POL-003","","1","","2025-03-15","ACTIVA"`;
     
     const blob = new Blob([template], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
@@ -116,10 +117,11 @@ export default function ImportModal({ onClose }: ImportModalProps) {
                 <h3 className="font-semibold text-blue-900 mb-2">Instrucciones</h3>
                 <ul className="text-sm text-blue-800 space-y-1">
                   <li>• El archivo debe estar en formato CSV</li>
-                  <li>• Columnas requeridas: name (nombre del cliente)</li>
-                  <li>• Columnas opcionales: national_id, email, phone</li>
-                  <li>• Para pólizas: policy_number, ramo, insurer_id, start_date, renewal_date, status</li>
-                  <li>• Use campos vacíos (no la palabra &quot;NULL&quot;) para valores nulos</li>
+                  <li>• <strong>Columnas OBLIGATORIAS:</strong> name (nombre), policy_number (número de póliza), insurer_id (ID aseguradora), renewal_date (fecha renovación)</li>
+                  <li>• <strong>Columnas OPCIONALES:</strong> national_id (cédula), email, phone, ramo, start_date, status</li>
+                  <li>• La cédula (national_id) NO es obligatoria - puede dejarse vacía</li>
+                  <li>• La fecha de renovación (renewal_date) SÍ es obligatoria para todas las pólizas</li>
+                  <li>• Use campos vacíos (no la palabra &quot;NULL&quot;) para valores opcionales</li>
                   <li>• Los números de póliza deben ser únicos</li>
                 </ul>
               </div>

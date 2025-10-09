@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { FaSearch, FaFilter, FaChevronDown, FaChevronUp, FaExternalLinkAlt } from 'react-icons/fa';
+import { FaSearch, FaFilter, FaChevronDown, FaChevronUp, FaExternalLinkAlt, FaSync } from 'react-icons/fa';
 import { toast } from 'sonner';
 import Link from 'next/link';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { actionSyncDelinquencyWithPolicies } from '@/app/(app)/delinquency/actions';
 
 interface DetailTabProps {
   userRole: 'master' | 'broker';
@@ -21,6 +22,24 @@ export default function DetailTab({ userRole, brokerId }: DetailTabProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [syncing, setSyncing] = useState(false);
+
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      const result = await actionSyncDelinquencyWithPolicies();
+      if (result.ok) {
+        toast.success(result.message || 'Sincronización completada');
+        await loadRecords();
+      } else {
+        toast.error(result.error || 'Error en la sincronización');
+      }
+    } catch (error) {
+      toast.error('Error al sincronizar');
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   useEffect(() => {
     (async () => {
@@ -127,13 +146,25 @@ export default function DetailTab({ userRole, brokerId }: DetailTabProps) {
             <h3 className="text-lg font-bold text-[#010139]">Filtros y Búsqueda</h3>
           </div>
           
-          <button
-            onClick={() => setShowSearch(!showSearch)}
-            className="flex items-center gap-2 px-4 py-2 bg-[#010139] text-white rounded-lg hover:bg-[#020270] transition-all"
-          >
-            <FaSearch />
-            <span className="text-sm">Buscar</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleSync}
+              disabled={syncing}
+              className="flex items-center gap-2 px-4 py-2 bg-[#8AAA19] text-white rounded-lg hover:bg-[#6d8814] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Sincronizar con base de datos de pólizas"
+            >
+              <FaSync className={syncing ? 'animate-spin' : ''} />
+              <span className="text-sm">{syncing ? 'Sincronizando...' : 'Sincronizar'}</span>
+            </button>
+            
+            <button
+              onClick={() => setShowSearch(!showSearch)}
+              className="flex items-center gap-2 px-4 py-2 bg-[#010139] text-white rounded-lg hover:bg-[#020270] transition-all"
+            >
+              <FaSearch />
+              <span className="text-sm">Buscar</span>
+            </button>
+          </div>
         </div>
 
         {/* Search Modal */}

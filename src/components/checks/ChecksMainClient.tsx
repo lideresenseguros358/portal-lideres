@@ -48,26 +48,12 @@ export default function ChecksMainClient() {
   };
 
   const handleHistoryImported = () => {
-    // Refresh ambas pestañas cuando se importa historial
+    // Refresh ambas pestañas cuando se importa historial o se marcan pagos
     setRefreshKey(prev => prev + 1);
-    // Recargar historial de banco usando función global
-    setTimeout(() => {
-      if ((window as any).__reloadBankHistory) {
-        (window as any).__reloadBankHistory();
-      }
-    }, 100);
   };
 
   const handleTabChange = (tab: 'history' | 'pending') => {
     setActiveTab(tab);
-    // Cuando cambias a historial, recargar automáticamente
-    if (tab === 'history') {
-      setTimeout(() => {
-        if ((window as any).__reloadBankHistory) {
-          (window as any).__reloadBankHistory();
-        }
-      }, 100);
-    }
   };
 
   return (
@@ -110,13 +96,14 @@ export default function ChecksMainClient() {
           {activeTab === 'history' && (
             <BankHistoryTab 
               onImportSuccess={handleHistoryImported}
+              refreshTrigger={refreshKey}
             />
           )}
           {activeTab === 'pending' && (
             <PendingPaymentsTab 
-              key={`pending-${refreshKey}`}
               onOpenWizard={() => setShowWizard(true)}
               onPaymentPaid={handleHistoryImported}
+              refreshTrigger={refreshKey}
             />
           )}
         </div>

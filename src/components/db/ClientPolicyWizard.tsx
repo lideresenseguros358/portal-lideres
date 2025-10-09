@@ -152,6 +152,10 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
         toast.error('Número de póliza y aseguradora son obligatorios');
         return false;
       }
+      if (!formData.renewal_date) {
+        toast.error('La fecha de renovación es obligatoria');
+        return false;
+      }
       // Validar que el número de póliza no exista
       const isValid = await validatePolicyNumber(formData.policy_number);
       if (!isValid) {
@@ -450,12 +454,15 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Fecha de Renovación</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Fecha de Renovación <span className="text-red-500">*</span>
+                  </label>
                   <input
                     type="date"
                     value={formData.renewal_date}
                     onChange={(e) => setFormData({ ...formData, renewal_date: e.target.value })}
                     className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition"
+                    required
                   />
                 </div>
               </div>

@@ -255,6 +255,7 @@ export type Database = {
           beneficiary_id: string | null
           beneficiary_name: string | null
           birth_date: string | null
+          carnet_expiry_date: string | null
           created_at: string | null
           email: string | null
           id: string
@@ -278,6 +279,7 @@ export type Database = {
           beneficiary_id?: string | null
           beneficiary_name?: string | null
           birth_date?: string | null
+          carnet_expiry_date?: string | null
           created_at?: string | null
           email?: string | null
           id: string
@@ -301,6 +303,7 @@ export type Database = {
           beneficiary_id?: string | null
           beneficiary_name?: string | null
           birth_date?: string | null
+          carnet_expiry_date?: string | null
           created_at?: string | null
           email?: string | null
           id?: string
@@ -732,7 +735,11 @@ export type Database = {
           broker_id: string
           comm_item_id: string
           created_at: string
+          fortnight_id: string | null
           id: string
+          paid_date: string | null
+          payment_type: string | null
+          rejection_reason: string | null
           resolved_at: string | null
           resolved_by: string | null
           status: string
@@ -741,7 +748,11 @@ export type Database = {
           broker_id: string
           comm_item_id: string
           created_at?: string
+          fortnight_id?: string | null
           id?: string
+          paid_date?: string | null
+          payment_type?: string | null
+          rejection_reason?: string | null
           resolved_at?: string | null
           resolved_by?: string | null
           status?: string
@@ -750,7 +761,11 @@ export type Database = {
           broker_id?: string
           comm_item_id?: string
           created_at?: string
+          fortnight_id?: string | null
           id?: string
+          paid_date?: string | null
+          payment_type?: string | null
+          rejection_reason?: string | null
           resolved_at?: string | null
           resolved_by?: string | null
           status?: string
@@ -768,6 +783,13 @@ export type Database = {
             columns: ["comm_item_id"]
             isOneToOne: true
             referencedRelation: "comm_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comm_item_claims_fortnight_id_fkey"
+            columns: ["fortnight_id"]
+            isOneToOne: false
+            referencedRelation: "fortnights"
             referencedColumns: ["id"]
           },
         ]
@@ -2280,74 +2302,106 @@ export type Database = {
           },
         ]
       }
-      temp_client_imports: {
+      temp_client_import: {
         Row: {
-          address: string | null
-          broker_email: string
-          client_name: string
+          broker_id: string | null
+          client_id: string | null
+          client_name: string | null
           created_at: string | null
-          created_by: string | null
           email: string | null
-          error_message: string | null
           id: string
-          import_status: string | null
-          insurer_name: string
+          insurer_id: string | null
+          migrated: boolean | null
+          migrated_at: string | null
           national_id: string | null
-          percent_override: number | null
+          notes: string | null
           phone: string | null
-          policy_number: string
-          processed_at: string | null
+          policy_id: string | null
+          policy_number: string | null
           ramo: string | null
           renewal_date: string | null
           source: string | null
+          source_id: string | null
           start_date: string | null
           status: string | null
+          updated_at: string | null
         }
         Insert: {
-          address?: string | null
-          broker_email: string
-          client_name: string
+          broker_id?: string | null
+          client_id?: string | null
+          client_name?: string | null
           created_at?: string | null
-          created_by?: string | null
           email?: string | null
-          error_message?: string | null
           id?: string
-          import_status?: string | null
-          insurer_name: string
+          insurer_id?: string | null
+          migrated?: boolean | null
+          migrated_at?: string | null
           national_id?: string | null
-          percent_override?: number | null
+          notes?: string | null
           phone?: string | null
-          policy_number: string
-          processed_at?: string | null
+          policy_id?: string | null
+          policy_number?: string | null
           ramo?: string | null
           renewal_date?: string | null
           source?: string | null
+          source_id?: string | null
           start_date?: string | null
           status?: string | null
+          updated_at?: string | null
         }
         Update: {
-          address?: string | null
-          broker_email?: string
-          client_name?: string
+          broker_id?: string | null
+          client_id?: string | null
+          client_name?: string | null
           created_at?: string | null
-          created_by?: string | null
           email?: string | null
-          error_message?: string | null
           id?: string
-          import_status?: string | null
-          insurer_name?: string
+          insurer_id?: string | null
+          migrated?: boolean | null
+          migrated_at?: string | null
           national_id?: string | null
-          percent_override?: number | null
+          notes?: string | null
           phone?: string | null
-          policy_number?: string
-          processed_at?: string | null
+          policy_id?: string | null
+          policy_number?: string | null
           ramo?: string | null
           renewal_date?: string | null
           source?: string | null
+          source_id?: string | null
           start_date?: string | null
           status?: string | null
+          updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "temp_client_import_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "temp_client_import_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "temp_client_import_insurer_id_fkey"
+            columns: ["insurer_id"]
+            isOneToOne: false
+            referencedRelation: "insurers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "temp_client_import_policy_id_fkey"
+            columns: ["policy_id"]
+            isOneToOne: false
+            referencedRelation: "policies"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       user_requests: {
         Row: {
@@ -2425,7 +2479,74 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      v_claims_full: {
+        Row: {
+          account_type: string | null
+          bank_account_no: string | null
+          broker_amount: number | null
+          broker_email: string | null
+          broker_full_name: string | null
+          broker_id: string | null
+          broker_name: string | null
+          broker_percent: number | null
+          comm_item_id: string | null
+          created_at: string | null
+          fortnight_id: string | null
+          fortnight_label: string | null
+          id: string | null
+          import_id: string | null
+          insured_name: string | null
+          insurer_id: string | null
+          insurer_name: string | null
+          national_id: string | null
+          nombre_completo: string | null
+          paid_date: string | null
+          payment_type: string | null
+          policy_number: string | null
+          raw_amount: number | null
+          rejection_reason: string | null
+          resolved_at: string | null
+          resolved_by: string | null
+          status: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comm_item_claims_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comm_item_claims_comm_item_id_fkey"
+            columns: ["comm_item_id"]
+            isOneToOne: true
+            referencedRelation: "comm_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comm_item_claims_fortnight_id_fkey"
+            columns: ["fortnight_id"]
+            isOneToOne: false
+            referencedRelation: "fortnights"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comm_items_import_id_fkey"
+            columns: ["import_id"]
+            isOneToOne: false
+            referencedRelation: "comm_imports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comm_items_insurer_id_fkey"
+            columns: ["insurer_id"]
+            isOneToOne: false
+            referencedRelation: "insurers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       _rnd_money: {
@@ -2435,6 +2556,18 @@ export type Database = {
       app_broker_id: {
         Args: Record<PropertyKey, never>
         Returns: string
+      }
+      approve_claims_and_create_preliminary: {
+        Args: {
+          p_approved_by: string
+          p_claim_ids: string[]
+          p_payment_type: string
+        }
+        Returns: {
+          message: string
+          preliminary_count: number
+          success: boolean
+        }[]
       }
       assign_pending_to_office_after_3m: {
         Args: Record<PropertyKey, never>
@@ -2464,6 +2597,22 @@ export type Database = {
           total_amount: number
         }[]
       }
+      confirm_claims_paid: {
+        Args: { p_claim_ids: string[] }
+        Returns: boolean
+      }
+      create_temp_client_from_pending: {
+        Args: {
+          p_broker_id: string
+          p_client_name: string
+          p_insurer_id: string
+          p_national_id?: string
+          p_policy_number: string
+          p_ramo?: string
+          p_source_id?: string
+        }
+        Returns: string
+      }
       current_broker_id: {
         Args: Record<PropertyKey, never>
         Returns: string
@@ -2471,6 +2620,23 @@ export type Database = {
       ensure_auth_user_from_broker: {
         Args: { p_broker_id: string }
         Returns: string
+      }
+      get_claims_reports_grouped: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          broker_email: string
+          broker_id: string
+          broker_name: string
+          claims: Json
+          item_count: number
+          status: string
+          total_broker_amount: number
+          total_raw_amount: number
+        }[]
+      }
+      get_missing_fields: {
+        Args: { temp_id: string }
+        Returns: string[]
       }
       get_pending_items_grouped: {
         Args: Record<PropertyKey, never>
@@ -2482,6 +2648,15 @@ export type Database = {
           status: string
           total_commission: number
           total_items: number
+        }[]
+      }
+      get_queued_claims_for_fortnight: {
+        Args: Record<PropertyKey, never>
+        Returns: {
+          broker_amount: number
+          broker_id: string
+          broker_name: string
+          claim_ids: string[]
         }[]
       }
       get_sla_days_remaining: {
@@ -2504,6 +2679,10 @@ export type Database = {
           pending_identify: number
         }[]
       }
+      migrate_temp_client_to_production: {
+        Args: { temp_id: string }
+        Returns: undefined
+      }
       profile_sync_from_auth: {
         Args: { p_user_id: string }
         Returns: undefined
@@ -2511,6 +2690,14 @@ export type Database = {
       purge_deleted_cases: {
         Args: Record<PropertyKey, never>
         Returns: number
+      }
+      reject_claims: {
+        Args: {
+          p_claim_ids: string[]
+          p_rejected_by: string
+          p_rejection_reason: string
+        }
+        Returns: boolean
       }
       set_user_role: {
         Args:

@@ -14,22 +14,11 @@ export async function actionGetBrokers(search?: string) {
   try {
     const supabase = await getSupabaseAdmin();
 
-    // Get brokers
-    let brokersQuery = supabase
+    // Get all brokers with their profiles
+    const { data: brokersData, error: brokersError } = await supabase
       .from('brokers')
-      .select('*')
+      .select('*, profiles!p_id(id, email, full_name, role, avatar_url)')
       .order('name', { ascending: true });
-
-    if (search) {
-      brokersQuery = brokersQuery.or(`
-        name.ilike.%${search}%,
-        email.ilike.%${search}%,
-        national_id.ilike.%${search}%,
-        assa_code.ilike.%${search}%
-      `);
-    }
-
-    const { data: brokersData, error: brokersError } = await brokersQuery;
 
     if (brokersError) {
       console.error('Error fetching brokers:', brokersError);
@@ -40,20 +29,26 @@ export async function actionGetBrokers(search?: string) {
       return { ok: true as const, data: [] };
     }
 
-    // Get profiles for brokers
-    const brokerIds = brokersData.map(b => b.p_id);
-    const { data: profilesData } = await supabase
-      .from('profiles')
-      .select('id, email, full_name, role, avatar_url')
-      .in('id', brokerIds);
+    // Filter by search if provided
+    let filteredBrokers = brokersData;
+    
+    if (search) {
+      const searchLower = search.toLowerCase();
+      filteredBrokers = brokersData.filter(broker => {
+        const profileData = broker.profiles as any;
+        
+        return (
+          broker.name?.toLowerCase().includes(searchLower) ||
+          broker.email?.toLowerCase().includes(searchLower) ||
+          broker.national_id?.toLowerCase().includes(searchLower) ||
+          broker.assa_code?.toLowerCase().includes(searchLower) ||
+          profileData?.email?.toLowerCase().includes(searchLower) ||
+          profileData?.full_name?.toLowerCase().includes(searchLower)
+        );
+      });
+    }
 
-    // Merge brokers with profiles
-    const brokers = brokersData.map(broker => ({
-      ...broker,
-      profiles: profilesData?.find(p => p.id === broker.p_id) || null
-    }));
-
-    return { ok: true as const, data: brokers };
+    return { ok: true as const, data: filteredBrokers };
   } catch (error: any) {
     console.error('Error in actionGetBrokers:', error);
     return { ok: false as const, error: error.message };
@@ -167,7 +162,7 @@ export async function actionUpdateBroker(brokerId: string, updates: Partial<Tabl
     }
 
     // Clean up empty strings - convert to null for optional fields
-    const nullableFields = ['birth_date', 'phone', 'national_id', 'assa_code', 'license_no', 'bank_account_no', 'beneficiary_name', 'beneficiary_id', 'email'];
+    const nullableFields = ['birth_date', 'phone', 'national_id', 'assa_code', 'license_no', 'bank_account_no', 'beneficiary_name', 'beneficiary_id', 'email', 'carnet_expiry_date'];
     
     const cleanedUpdates = Object.entries(updates).reduce((acc, [key, value]) => {
       // Convert empty strings to null for nullable fields
@@ -184,20 +179,24 @@ export async function actionUpdateBroker(brokerId: string, updates: Partial<Tabl
     const supabase = await getSupabaseAdmin();
     console.log('[actionUpdateBroker] Using admin client for update');
 
-    // Check if it's Oficina and trying to change percent_default
+    // Get broker with profile info
     const { data: broker } = await supabase
       .from('brokers')
-      .select('email, profiles!p_id(email)')
+      .select('p_id, email, profiles!p_id(email)')
       .eq('id', brokerId)
       .single();
+
+    if (!broker) {
+      return { ok: false as const, error: 'Corredor no encontrado' };
+    }
 
     const brokerEmail = (broker?.profiles as any)?.email || broker?.email;
     if (brokerEmail === OFICINA_EMAIL && cleanedUpdates.percent_default && cleanedUpdates.percent_default !== 1.00) {
       return { ok: false as const, error: 'No se puede cambiar el % de Oficina (siempre 100%)' };
     }
 
-    console.log('[actionUpdateBroker] Executing UPDATE query...');
-    const { data, error } = await supabase
+    console.log('[actionUpdateBroker] Executing UPDATE query on brokers table...');
+    const { data: updatedBroker, error } = await supabase
       .from('brokers')
       .update(cleanedUpdates)
       .eq('id', brokerId)
@@ -209,14 +208,32 @@ export async function actionUpdateBroker(brokerId: string, updates: Partial<Tabl
       return { ok: false as const, error: error.message };
     }
 
-    console.log('[actionUpdateBroker] Update successful, data:', data);
+    console.log('[actionUpdateBroker] Broker table updated successfully');
+
+    // Sync name to profiles.full_name if name was updated
+    if (cleanedUpdates.name && broker.p_id) {
+      console.log('[actionUpdateBroker] Syncing name to profiles.full_name');
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update({ full_name: cleanedUpdates.name })
+        .eq('id', broker.p_id);
+
+      if (profileError) {
+        console.error('[actionUpdateBroker] Warning: Could not sync to profiles:', profileError);
+        // Don't fail the whole operation, just log the warning
+      } else {
+        console.log('[actionUpdateBroker] Profile full_name synced successfully');
+      }
+    }
+
+    console.log('[actionUpdateBroker] Update successful, data:', updatedBroker);
     console.log('[actionUpdateBroker] Revalidating paths...');
     
     revalidatePath('/brokers');
     revalidatePath(`/brokers/${brokerId}`);
 
     console.log('[actionUpdateBroker] Complete!');
-    return { ok: true as const, data };
+    return { ok: true as const, data: updatedBroker };
   } catch (error: any) {
     console.error('Error in actionUpdateBroker:', error);
     return { ok: false as const, error: error.message };
@@ -422,6 +439,63 @@ export async function actionApplyDefaultPercentToAll(brokerId: string) {
     return { ok: true as const, message: '% default aplicado a todas las pólizas' };
   } catch (error: any) {
     console.error('Error in actionApplyDefaultPercentToAll:', error);
+    return { ok: false as const, error: error.message };
+  }
+}
+
+// =====================================================
+// GET EXPIRING CARNETS (60 days or less)
+// =====================================================
+
+export async function actionGetExpiringCarnets(userRole?: 'master' | 'broker', brokerId?: string) {
+  try {
+    const supabase = await getSupabaseAdmin();
+
+    let query = supabase
+      .from('brokers')
+      .select('id, name, carnet_expiry_date, p_id, profiles!p_id(email, full_name)')
+      .not('carnet_expiry_date', 'is', null)
+      .eq('active', true);
+
+    // If broker role, only show their own carnet
+    if (userRole === 'broker' && brokerId) {
+      query = query.eq('id', brokerId);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('Error fetching expiring carnets:', error);
+      return { ok: false as const, error: error.message };
+    }
+
+    if (!data || data.length === 0) {
+      return { ok: true as const, data: [] };
+    }
+
+    // Calculate days until expiry and filter those within 60 days
+    const today = new Date();
+    const expiringCarnets = data
+      .map((broker: any) => {
+        const expiryDate = new Date(broker.carnet_expiry_date);
+        const diffTime = expiryDate.getTime() - today.getTime();
+        const daysUntilExpiry = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+        return {
+          id: broker.id,
+          name: broker.name || (broker.profiles as any)?.full_name || 'Sin nombre',
+          email: (broker.profiles as any)?.email || '',
+          carnet_expiry_date: broker.carnet_expiry_date,
+          daysUntilExpiry,
+          status: daysUntilExpiry < 0 ? 'expired' : daysUntilExpiry <= 30 ? 'critical' : 'warning'
+        };
+      })
+      .filter(broker => broker.daysUntilExpiry <= 60) // Only within 60 days or already expired
+      .sort((a, b) => a.daysUntilExpiry - b.daysUntilExpiry); // Sort by most urgent first
+
+    return { ok: true as const, data: expiringCarnets };
+  } catch (error: any) {
+    console.error('Error in actionGetExpiringCarnets:', error);
     return { ok: false as const, error: error.message };
   }
 }

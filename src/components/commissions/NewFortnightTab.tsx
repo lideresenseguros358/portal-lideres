@@ -8,6 +8,7 @@ import ImportedReportsList from './ImportedReportsList';
 import BrokerTotals from './BrokerTotals';
 import CreateFortnightManager from './CreateFortnightManager';
 import AdvancesModal from './AdvancesModal';
+import { QueuedAdjustmentsPreview } from './QueuedAdjustmentsPreview';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
@@ -383,6 +384,9 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
           </div>
         </div>
       </div>
+
+      {/* Ajustes en Cola para esta Quincena */}
+      <QueuedAdjustmentsPreview />
 
       {/* Section 1: Import Reports */}
       <div className="bg-white rounded-xl shadow-lg border-2 border-gray-100 overflow-hidden">

@@ -21,8 +21,7 @@ import { toast } from 'sonner';
 import { 
   actionGetPendingItems, 
   actionSubmitClaimsReport,
-  actionGetClaimsReports,
-  actionGetCurrentBroker
+  actionGetClaimsReports 
 } from '@/app/(app)/commissions/actions';
 import { 
   calculateBrokerCommission, 
@@ -51,12 +50,6 @@ export default function BrokerPendingTab({ brokerId }: Props) {
   const loadData = async () => {
     setLoading(true);
     try {
-      // Obtener datos del broker (incluye porcentaje)
-      const brokerResult = await actionGetCurrentBroker();
-      if (brokerResult.ok && brokerResult.data) {
-        setBrokerPercent(brokerResult.data.percent_default || 0);
-      }
-
       // Cargar pendientes sin identificar
       const pendingResult = await actionGetPendingItems();
       if (pendingResult.ok) {
@@ -76,6 +69,9 @@ export default function BrokerPendingTab({ brokerId }: Props) {
         const myPaid = (paidResult.data || []).filter((c: any) => c.broker_id === brokerId);
         setPaidAdjustments(myPaid);
       }
+
+      // TODO: Obtener porcentaje del broker desde algún endpoint o prop
+      setBrokerPercent(25); // Por ahora hardcoded, debería venir del broker actual
     } catch (error) {
       console.error('Error loading data:', error);
       toast.error('Error al cargar datos');

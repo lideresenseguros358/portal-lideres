@@ -97,6 +97,13 @@ export default async function DatabasePage({
   const supabase = await getSupabaseServer();
   const { data: { user } } = await supabase.auth.getUser();
   
+  // Get brokers for preliminary clients tab
+  const { data: brokers } = await supabase
+    .from('brokers')
+    .select('*, profiles!p_id(id, full_name, email)')
+    .eq('active', true)
+    .order('name');
+
   const [clients, insurers] = await Promise.all([
     getClientsWithPolicies(searchQuery),
     getInsurersWithPolicies()
@@ -193,6 +200,7 @@ export default async function DatabasePage({
           activeTab={activeTab}
           clients={clients}
           insurers={insurers}
+          brokers={brokers || []}
           searchQuery={searchQuery}
           role={role}
           userEmail={user?.email || ''}

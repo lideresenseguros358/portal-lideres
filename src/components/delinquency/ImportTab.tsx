@@ -183,13 +183,13 @@ export default function ImportTab() {
   return (
     <div className="space-y-6">
       {/* Import Form */}
-      <div className="bg-white rounded-xl shadow-lg p-4 md:p-6 border-2 border-gray-100">
+      <div className="bg-white rounded-xl shadow-lg p-4 md:p-6 border-2 border-gray-100 overflow-hidden">
         <h3 className="text-xl font-bold text-[#010139] mb-6 flex items-center gap-2">
           <FaUpload />
           Importar Reporte de Morosidad
         </h3>
 
-        <div className="space-y-4">
+        <div className="space-y-4 overflow-hidden">
           {/* Insurer Selection */}
           <div>
             <label className="block text-xs sm:text-sm font-semibold text-gray-600 mb-2 uppercase">
@@ -218,7 +218,8 @@ export default function ImportTab() {
               type="date"
               value={cutoffDate}
               onChange={(e) => setCutoffDate(e.target.value)}
-              className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition-colors text-sm sm:text-base"
+              className="w-full max-w-full px-3 sm:px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition-colors text-sm sm:text-base"
+              style={{ WebkitAppearance: 'none', MozAppearance: 'textfield' }}
             />
           </div>
 

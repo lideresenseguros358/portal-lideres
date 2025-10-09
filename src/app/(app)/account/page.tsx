@@ -160,42 +160,87 @@ export default function AccountPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Validate file size (max 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      setError("El archivo es muy grande. Máximo 2MB");
+      return;
+    }
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setError("Solo se permiten imágenes");
+      return;
+    }
+
     setSaving(true);
     setError(null);
+    setSuccess(null);
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("No user");
+      if (!user) throw new Error("Usuario no autenticado");
 
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${user.id}_${Date.now()}.${fileExt}`;
-      const filePath = `avatars/${fileName}`;
+      const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+      const fileName = `${user.id}.${fileExt}`;
+      const filePath = fileName;
 
-      // Upload to storage
-      const { error: uploadError, data } = await supabase.storage
-        .from('avatars')
-        .upload(filePath, file);
+      console.log('Subiendo avatar:', { fileName, fileSize: file.size, fileType: file.type });
 
-      if (uploadError) throw uploadError;
+      // Primero, intenta eliminar el avatar anterior si existe
+      if (avatarUrl) {
+        const oldPath = avatarUrl.split('/').pop();
+        if (oldPath) {
+          await supabase.storage
+            .from('avatar')
+            .remove([oldPath]);
+        }
+      }
+
+      // Upload to storage con upsert para sobrescribir
+      const { error: uploadError, data: uploadData } = await supabase.storage
+        .from('avatar')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: true
+        });
+
+      if (uploadError) {
+        console.error('Error de upload:', uploadError);
+        throw uploadError;
+      }
+
+      console.log('Upload exitoso:', uploadData);
 
       // Get public URL
       const { data: { publicUrl } } = supabase.storage
-        .from('avatars')
+        .from('avatar')
         .getPublicUrl(filePath);
 
-      setAvatarUrl(publicUrl);
-      
-      // Update profile
-      await supabase
+      console.log('Public URL:', publicUrl);
+
+      // Update profile in database
+      const { error: updateError } = await supabase
         .from("profiles")
         .update({ avatar_url: publicUrl })
         .eq("id", user.id);
 
-      setSuccess("Foto de perfil actualizada");
+      if (updateError) {
+        console.error('Error actualizando perfil:', updateError);
+        throw updateError;
+      }
+
+      setAvatarUrl(publicUrl);
+      setSuccess("✅ Foto de perfil actualizada correctamente");
+      
+      // Reload profile to ensure consistency
+      await loadProfile();
     } catch (err: any) {
+      console.error('Error completo:', err);
       setError(err.message || "Error al subir la foto");
     } finally {
       setSaving(false);
+      // Reset file input
+      e.target.value = '';
     }
   };
 
@@ -204,20 +249,42 @@ export default function AccountPage() {
 
     setSaving(true);
     setError(null);
+    setSuccess(null);
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("No user");
+      if (!user) throw new Error("Usuario no autenticado");
+
+      // Delete from storage if exists
+      if (avatarUrl) {
+        const fileName = avatarUrl.split('/').pop();
+        if (fileName) {
+          const { error: deleteError } = await supabase.storage
+            .from('avatar')
+            .remove([fileName]);
+          
+          if (deleteError) {
+            console.error('Error eliminando archivo:', deleteError);
+            // No throw, continue to update profile
+          }
+        }
+      }
 
       // Update profile
-      await supabase
+      const { error: updateError } = await supabase
         .from("profiles")
         .update({ avatar_url: null })
         .eq("id", user.id);
 
+      if (updateError) throw updateError;
+
       setAvatarUrl(null);
-      setSuccess("Foto eliminada");
+      setSuccess("✅ Foto de perfil eliminada correctamente");
+      
+      // Reload profile
+      await loadProfile();
     } catch (err: any) {
+      console.error('Error al eliminar avatar:', err);
       setError(err.message || "Error al eliminar la foto");
     } finally {
       setSaving(false);

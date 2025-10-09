@@ -9,12 +9,14 @@ import ClientForm from './ClientForm';
 import SearchModal from './SearchModal';
 import ClientsByInsurer from './ClientsByInsurer';
 import ClientPolicyWizard from './ClientPolicyWizard';
+import PreliminaryClientsTab from './PreliminaryClientsTab';
 import { ClientWithPolicies, InsurerWithCount } from '@/types/db';
 
 interface DatabaseTabsProps {
   activeTab: string;
   clients: ClientWithPolicies[];
   insurers: InsurerWithCount[];
+  brokers: any[];
   searchQuery?: string;
   role: string;
   userEmail: string;
@@ -238,6 +240,7 @@ export default function DatabaseTabs({
   activeTab, 
   clients, 
   insurers,
+  brokers,
   role,
   userEmail,
 }: DatabaseTabsProps) {
@@ -256,6 +259,9 @@ export default function DatabaseTabs({
   const renderTabContent = () => {
     if (view === 'insurers') {
       return <ClientsByInsurer clients={clients} insurers={insurers} />;
+    }
+    if (view === 'preliminary') {
+      return <PreliminaryClientsTab insurers={insurers} brokers={brokers} userRole={role} />;
     }
     return <ClientsListView clients={clients} onView={handleView} onEdit={handleEdit} onDelete={handleDelete} />;
   };
@@ -287,6 +293,13 @@ export default function DatabaseTabs({
           onClick={() => router.push('/db?tab=clients&view=clients', { scroll: false })}
         >
           CLIENTES
+        </button>
+        <button
+          className={`gs-btn ${view === 'preliminary' ? 'is-active' : ''}`}
+          data-group="preliminares"
+          onClick={() => router.push('/db?tab=clients&view=preliminary', { scroll: false })}
+        >
+          PRELIMINARES
         </button>
         <button
           className={`gs-btn ${view === 'insurers' ? 'is-active' : ''}`}

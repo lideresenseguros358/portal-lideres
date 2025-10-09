@@ -1,0 +1,454 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { FaExclamationTriangle, FaEdit, FaSave, FaTimes, FaTrash, FaCheckCircle, FaCalendar, FaUser, FaFileAlt, FaBuilding } from 'react-icons/fa';
+import { toast } from 'sonner';
+import { actionGetPreliminaryClients, actionUpdatePreliminaryClient, actionDeletePreliminaryClient, actionTriggerMigration } from '@/app/(app)/db/preliminary-actions';
+import { createUppercaseHandler, uppercaseInputClass } from '@/lib/utils/uppercase';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
+interface PreliminaryClientsTabProps {
+  insurers: any[];
+  brokers: any[];
+  userRole: string;
+}
+
+export default function PreliminaryClientsTab({ insurers, brokers, userRole }: PreliminaryClientsTabProps) {
+  const [loading, setLoading] = useState(true);
+  const [preliminaryClients, setPreliminaryClients] = useState<any[]>([]);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<any>({});
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    loadPreliminaryClients();
+  }, []);
+
+  const loadPreliminaryClients = async () => {
+    setLoading(true);
+    const result = await actionGetPreliminaryClients();
+    
+    if (result.ok) {
+      setPreliminaryClients(result.data);
+    } else {
+      toast.error(result.error);
+    }
+    setLoading(false);
+  };
+
+  const startEdit = (client: any) => {
+    setEditingId(client.id);
+    setEditForm({
+      client_name: client.client_name || '',
+      national_id: client.national_id || '',
+      email: client.email || '',
+      phone: client.phone || '',
+      policy_number: client.policy_number || '',
+      ramo: client.ramo || '',
+      insurer_id: client.insurer_id || '',
+      start_date: client.start_date || '',
+      renewal_date: client.renewal_date || '',
+      status: client.status || 'ACTIVA',
+      broker_id: client.broker_id || '',
+      notes: client.notes || '',
+    });
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setEditForm({});
+  };
+
+  const saveEdit = async () => {
+    if (!editingId) return;
+
+    setSaving(true);
+    const result = await actionUpdatePreliminaryClient(editingId, editForm);
+
+    if (result.ok) {
+      toast.success('Cliente preliminar actualizado');
+      
+      // Check if it was auto-migrated
+      if (result.data?.migrated) {
+        toast.success('✅ Cliente migrado automáticamente a la base de datos', {
+          description: 'Todos los datos obligatorios fueron completados'
+        });
+      }
+      
+      setEditingId(null);
+      setEditForm({});
+      loadPreliminaryClients();
+    } else {
+      toast.error(result.error);
+    }
+    setSaving(false);
+  };
+
+  const handleDelete = async (id: string, clientName: string) => {
+    if (!confirm(`¿Eliminar cliente preliminar "${clientName}"?`)) return;
+
+    const result = await actionDeletePreliminaryClient(id);
+    if (result.ok) {
+      toast.success(result.message);
+      loadPreliminaryClients();
+    } else {
+      toast.error(result.error);
+    }
+  };
+
+  const handleManualMigration = async (id: string) => {
+    if (!confirm('¿Migrar este cliente a la base de datos principal?')) return;
+
+    const result = await actionTriggerMigration(id);
+    if (result.ok) {
+      toast.success(result.message);
+      loadPreliminaryClients();
+    } else {
+      toast.error(result.error);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#010139]"></div>
+      </div>
+    );
+  }
+
+  if (preliminaryClients.length === 0) {
+    return (
+      <div className="text-center py-12">
+        <FaCheckCircle className="mx-auto h-16 w-16 text-green-500 mb-4" />
+        <h3 className="text-xl font-semibold text-gray-800 mb-2">
+          No hay clientes preliminares
+        </h3>
+        <p className="text-gray-600">
+          Todos los clientes han sido completados y migrados a la base de datos
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Warning Banner */}
+      <div className="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-lg">
+        <div className="flex items-start gap-3">
+          <FaExclamationTriangle className="text-amber-600 mt-1 flex-shrink-0" size={20} />
+          <div className="flex-1">
+            <h3 className="font-bold text-amber-900 mb-1">
+              ⚠️ Clientes Preliminares - Datos Incompletos
+            </h3>
+            <p className="text-sm text-amber-800 mb-2">
+              Estos clientes están pendientes de completar información obligatoria.
+            </p>
+            <ul className="text-xs text-amber-700 space-y-1 list-disc list-inside">
+              <li><strong>NO calculan comisiones</strong> hasta que sean migrados</li>
+              <li><strong>NO aparecen en reportes de morosidad</strong></li>
+              <li><strong>NO están incluidos en la base de datos principal</strong></li>
+              <li>Se migrarán automáticamente al completar todos los campos obligatorios</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div className="bg-white rounded-lg shadow-md p-4 border-2 border-amber-200">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm text-gray-600">Total Clientes Preliminares</p>
+            <p className="text-3xl font-bold text-amber-600">{preliminaryClients.length}</p>
+          </div>
+          <FaExclamationTriangle className="text-amber-400" size={40} />
+        </div>
+      </div>
+
+      {/* List */}
+      <div className="space-y-4">
+        {preliminaryClients.map((client) => {
+          const isEditing = editingId === client.id;
+          const insurerName = insurers.find(i => i.id === client.insurer_id)?.name || 'Sin asignar';
+          const brokerName = client.brokers?.name || (client.brokers?.profiles as any)?.full_name || 'Sin asignar';
+
+          return (
+            <div
+              key={client.id}
+              className="bg-white rounded-xl shadow-lg border-2 border-amber-200 p-4 sm:p-6 hover:border-amber-400 transition-all"
+            >
+              {/* Header */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 pb-4 border-b">
+                <div className="flex-1">
+                  <h3 className="text-lg sm:text-xl font-bold text-gray-900">
+                    {client.client_name || '(Sin nombre)'}
+                  </h3>
+                  <p className="text-sm text-gray-600">
+                    Póliza: <span className="font-mono font-semibold">{client.policy_number || '(Sin número)'}</span>
+                  </p>
+                </div>
+
+                {/* Action Buttons */}
+                {!isEditing && (
+                  <div className="flex gap-2">
+                    {client.is_complete && (
+                      <button
+                        onClick={() => handleManualMigration(client.id)}
+                        className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-all font-semibold text-sm flex items-center gap-2"
+                        title="Migrar a base de datos"
+                      >
+                        <FaCheckCircle />
+                        <span className="hidden sm:inline">Migrar</span>
+                      </button>
+                    )}
+                    <button
+                      onClick={() => startEdit(client)}
+                      className="px-4 py-2 bg-[#010139] hover:bg-[#8AAA19] text-white rounded-lg transition-all font-semibold text-sm flex items-center gap-2"
+                    >
+                      <FaEdit />
+                      <span className="hidden sm:inline">Editar</span>
+                    </button>
+                    {userRole === 'master' && (
+                      <button
+                        onClick={() => handleDelete(client.id, client.client_name)}
+                        className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-all font-semibold text-sm"
+                      >
+                        <FaTrash />
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Missing Fields Alert */}
+              {client.missing_fields.length > 0 && (
+                <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+                  <p className="text-sm font-semibold text-red-900 mb-1">
+                    ❌ Campos faltantes para migración:
+                  </p>
+                  <ul className="text-sm text-red-700 list-disc list-inside">
+                    {client.missing_fields.map((field: string, idx: number) => (
+                      <li key={idx}>{field}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
+              {/* Edit Form */}
+              {isEditing ? (
+                <div className="space-y-4">
+                  {/* Client Info */}
+                  <div className="border-t pt-4">
+                    <h4 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                      <FaUser className="text-[#8AAA19]" />
+                      Información del Cliente
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Nombre <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={editForm.client_name}
+                          onChange={createUppercaseHandler((e) => setEditForm({ ...editForm, client_name: e.target.value }))}
+                          className={`w-full px-4 py-2 border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none ${uppercaseInputClass}`}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Cédula / RUC</label>
+                        <input
+                          type="text"
+                          value={editForm.national_id}
+                          onChange={createUppercaseHandler((e) => setEditForm({ ...editForm, national_id: e.target.value }))}
+                          className={`w-full px-4 py-2 border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none ${uppercaseInputClass}`}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                        <input
+                          type="email"
+                          value={editForm.email}
+                          onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                          className="w-full px-4 py-2 border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
+                        <input
+                          type="tel"
+                          value={editForm.phone}
+                          onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                          className="w-full px-4 py-2 border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Policy Info */}
+                  <div className="border-t pt-4">
+                    <h4 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                      <FaFileAlt className="text-[#8AAA19]" />
+                      Información de la Póliza
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Número de Póliza <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={editForm.policy_number}
+                          onChange={createUppercaseHandler((e) => setEditForm({ ...editForm, policy_number: e.target.value }))}
+                          className={`w-full px-4 py-2 border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none ${uppercaseInputClass}`}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Ramo</label>
+                        <input
+                          type="text"
+                          value={editForm.ramo}
+                          onChange={createUppercaseHandler((e) => setEditForm({ ...editForm, ramo: e.target.value }))}
+                          className={`w-full px-4 py-2 border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none ${uppercaseInputClass}`}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Aseguradora <span className="text-red-500">*</span>
+                        </label>
+                        <Select value={editForm.insurer_id} onValueChange={(value) => setEditForm({ ...editForm, insurer_id: value })}>
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Seleccionar..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {insurers.map((ins) => (
+                              <SelectItem key={ins.id} value={ins.id}>{ins.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Corredor <span className="text-red-500">*</span>
+                        </label>
+                        <Select value={editForm.broker_id} onValueChange={(value) => setEditForm({ ...editForm, broker_id: value })}>
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Seleccionar..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {brokers.map((broker: any) => (
+                              <SelectItem key={broker.id} value={broker.id}>
+                                {broker.name || (broker.profiles as any)?.full_name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Fecha Inicio</label>
+                        <input
+                          type="date"
+                          value={editForm.start_date}
+                          onChange={(e) => setEditForm({ ...editForm, start_date: e.target.value })}
+                          className="w-full px-4 py-2 border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Fecha Renovación <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="date"
+                          value={editForm.renewal_date}
+                          onChange={(e) => setEditForm({ ...editForm, renewal_date: e.target.value })}
+                          className="w-full px-4 py-2 border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Notes */}
+                  <div className="border-t pt-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Notas</label>
+                    <textarea
+                      value={editForm.notes}
+                      onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                      rows={2}
+                      className="w-full px-4 py-2 border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+                      placeholder="Notas adicionales..."
+                    />
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex gap-3 pt-4">
+                    <button
+                      onClick={saveEdit}
+                      disabled={saving}
+                      className="flex-1 px-6 py-3 bg-[#8AAA19] hover:bg-[#7a9916] text-white rounded-lg transition-all font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
+                    >
+                      <FaSave />
+                      {saving ? 'Guardando...' : 'Guardar Cambios'}
+                    </button>
+                    <button
+                      onClick={cancelEdit}
+                      disabled={saving}
+                      className="px-6 py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-all font-semibold flex items-center gap-2 disabled:opacity-50"
+                    >
+                      <FaTimes />
+                      Cancelar
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                // View Mode
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <p className="text-gray-600">Cédula/RUC:</p>
+                    <p className="font-semibold">{client.national_id || '-'}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600">Email:</p>
+                    <p className="font-semibold">{client.email || '-'}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600">Teléfono:</p>
+                    <p className="font-semibold">{client.phone || '-'}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600">Ramo:</p>
+                    <p className="font-semibold">{client.ramo || '-'}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600">Aseguradora:</p>
+                    <p className="font-semibold">{insurerName}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600">Corredor:</p>
+                    <p className="font-semibold">{brokerName}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600">Fecha Inicio:</p>
+                    <p className="font-semibold">{client.start_date || '-'}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-600">Fecha Renovación:</p>
+                    <p className="font-semibold">{client.renewal_date || '❌ Faltante'}</p>
+                  </div>
+                  {client.notes && (
+                    <div className="md:col-span-2">
+                      <p className="text-gray-600">Notas:</p>
+                      <p className="font-semibold">{client.notes}</p>
+                    </div>
+                  )}
+                  <div className="md:col-span-2">
+                    <p className="text-gray-600">Creado:</p>
+                    <p className="text-sm">{new Date(client.created_at).toLocaleString('es-PA')}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}

@@ -43,6 +43,7 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
         bank_account_no: result.data.bank_account_no || '',
         beneficiary_name: result.data.beneficiary_name || '',
         beneficiary_id: result.data.beneficiary_id || '',
+        carnet_expiry_date: (result.data as any).carnet_expiry_date || '',
       });
     } else {
       toast.error(result.error);
@@ -283,6 +284,39 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
                   disabled={!isEditing}
                   className={`w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none disabled:bg-gray-50 disabled:text-gray-600 ${!isEditing ? '' : uppercaseInputClass}`}
                 />
+              </div>
+
+              {/* Carnet Expiry Date */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                  <FaCalendar className="text-[#8AAA19]" />
+                  Vencimiento Carnet
+                </label>
+                <input
+                  type="date"
+                  value={formData.carnet_expiry_date}
+                  onChange={(e) => setFormData({ ...formData, carnet_expiry_date: e.target.value })}
+                  disabled={!isEditing}
+                  className="w-full max-w-full px-3 sm:px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none disabled:bg-gray-50 disabled:text-gray-600"
+                  style={{ WebkitAppearance: 'none', MozAppearance: 'textfield' }}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  {formData.carnet_expiry_date && (() => {
+                    const today = new Date();
+                    const expiryDate = new Date(formData.carnet_expiry_date);
+                    const diffTime = expiryDate.getTime() - today.getTime();
+                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    
+                    if (diffDays < 0) {
+                      return <span className="text-red-600 font-semibold">⚠️ Carnet vencido hace {Math.abs(diffDays)} días</span>;
+                    } else if (diffDays <= 60) {
+                      return <span className="text-orange-600 font-semibold">⚠️ Vence en {diffDays} días</span>;
+                    } else {
+                      return <span className="text-green-600">✓ Vence en {diffDays} días</span>;
+                    }
+                  })()}
+                  {!formData.carnet_expiry_date && 'Sin fecha de vencimiento configurada'}
+                </p>
               </div>
             </div>
           </div>

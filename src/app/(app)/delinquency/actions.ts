@@ -270,3 +270,156 @@ export async function actionGetBrokers() {
     return { ok: false, error: error.message };
   }
 }
+
+// Update delinquency record client name
+export async function actionUpdateDelinquencyClientName(payload: {
+  recordId: string;
+  clientName: string;
+}) {
+  try {
+    const supabase = await getSupabaseServer();
+    
+    const { error } = await supabase
+      .from('delinquency')
+      .update({ 
+        client_name: payload.clientName,
+        last_updated: new Date().toISOString()
+      })
+      .eq('id', payload.recordId);
+    
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+    
+    revalidatePath('/delinquency');
+    
+    return { ok: true, message: 'Nombre del cliente actualizado correctamente' };
+  } catch (error: any) {
+    return { ok: false, error: error.message };
+  }
+}
+
+// Update delinquency record policy number
+export async function actionUpdateDelinquencyPolicyNumber(payload: {
+  recordId: string;
+  policyNumber: string;
+}) {
+  try {
+    const supabase = await getSupabaseServer();
+    
+    const { error } = await supabase
+      .from('delinquency')
+      .update({ 
+        policy_number: payload.policyNumber,
+        last_updated: new Date().toISOString()
+      })
+      .eq('id', payload.recordId);
+    
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+    
+    revalidatePath('/delinquency');
+    
+    return { ok: true, message: 'Número de póliza actualizado correctamente' };
+  } catch (error: any) {
+    return { ok: false, error: error.message };
+  }
+}
+
+// Update delinquency record broker
+export async function actionUpdateDelinquencyBroker(payload: {
+  recordId: string;
+  brokerId: string | null;
+}) {
+  try {
+    const supabase = await getSupabaseServer();
+    
+    const { error } = await supabase
+      .from('delinquency')
+      .update({ 
+        broker_id: payload.brokerId,
+        last_updated: new Date().toISOString()
+      })
+      .eq('id', payload.recordId);
+    
+    if (error) {
+      return { ok: false, error: error.message };
+    }
+    
+    revalidatePath('/delinquency');
+    
+    return { ok: true, message: 'Corredor actualizado correctamente' };
+  } catch (error: any) {
+    return { ok: false, error: error.message };
+  }
+}
+
+// Sync delinquency with policies (update broker assignments)
+export async function actionSyncDelinquencyWithPolicies() {
+  try {
+    const supabase = await getSupabaseServer();
+    
+    // Get all delinquency records
+    const { data: delinquencyRecords, error: fetchError } = await supabase
+      .from('delinquency')
+      .select('id, policy_number, broker_id, client_name');
+    
+    if (fetchError) {
+      return { ok: false, error: fetchError.message };
+    }
+    
+    if (!delinquencyRecords || delinquencyRecords.length === 0) {
+      return { ok: true, message: 'No hay registros para sincronizar', updated: 0 };
+    }
+    
+    // Get policy numbers
+    const policyNumbers = delinquencyRecords.map(r => r.policy_number);
+    
+    // Get current broker assignments from policies
+    const { data: policies, error: policiesError } = await supabase
+      .from('policies')
+      .select('policy_number, broker_id')
+      .in('policy_number', policyNumbers);
+    
+    if (policiesError) {
+      return { ok: false, error: policiesError.message };
+    }
+    
+    // Create map for quick lookup
+    const policyBrokerMap = new Map(
+      (policies || []).map((p: any) => [p.policy_number, p.broker_id])
+    );
+    
+    // Update records where broker_id has changed
+    let updated = 0;
+    for (const record of delinquencyRecords) {
+      const currentBroker = policyBrokerMap.get(record.policy_number);
+      
+      // Only update if broker_id has changed
+      if (currentBroker !== undefined && currentBroker !== record.broker_id) {
+        const { error: updateError } = await supabase
+          .from('delinquency')
+          .update({ 
+            broker_id: currentBroker || null,
+            last_updated: new Date().toISOString()
+          })
+          .eq('id', record.id);
+        
+        if (!updateError) {
+          updated++;
+        }
+      }
+    }
+    
+    revalidatePath('/delinquency');
+    
+    return { 
+      ok: true, 
+      message: `Sincronización completada: ${updated} registro(s) actualizado(s)`,
+      updated 
+    };
+  } catch (error: any) {
+    return { ok: false, error: error.message };
+  }
+}
