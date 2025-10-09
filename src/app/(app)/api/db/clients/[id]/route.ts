@@ -4,7 +4,7 @@ import type { TablesUpdate } from '@/lib/supabase/server';
 
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await getSupabaseServer();
@@ -18,7 +18,7 @@ export async function PUT(
     }
 
     const body = await request.json();
-    const { id } = params;
+    const { id } = await params;
 
     // Validar datos
     if (!body.name || body.name.trim() === '') {
@@ -65,7 +65,7 @@ export async function PUT(
 
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const supabase = await getSupabaseServer();
@@ -78,7 +78,7 @@ export async function DELETE(
       );
     }
 
-    const { id } = params;
+    const { id } = await params;
 
     // Verificar si tiene pólizas
     const { data: policies } = await supabase

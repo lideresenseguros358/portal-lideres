@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -44,11 +44,7 @@ export default function BrokerPendingTab({ brokerId }: Props) {
   const [brokerPercent, setBrokerPercent] = useState(0);
 
   // Cargar datos
-  useEffect(() => {
-    loadData();
-  }, [brokerId]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       // Obtener datos del broker (incluye porcentaje)
@@ -81,7 +77,11 @@ export default function BrokerPendingTab({ brokerId }: Props) {
       toast.error('Error al cargar datos');
     }
     setLoading(false);
-  };
+  }, [brokerId]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   // Calcular totales de items seleccionados
   const selectionTotals = useMemo(() => {
