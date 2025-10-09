@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { FaTimes, FaCheckCircle, FaUser, FaFileAlt, FaUserTie } from 'react-icons/fa';
 import { supabaseClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
-import { toUppercasePayload, createUppercaseHandler, uppercaseInputClass } from '@/lib/utils/uppercase';
+import { createUppercaseHandler, uppercaseInputClass } from '@/lib/utils/uppercase';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface WizardProps {
@@ -20,7 +20,6 @@ interface FormData {
   national_id: string;
   email: string;
   phone: string;
-  address: string;
   // Póliza
   policy_number: string;
   insurer_id: string;
@@ -46,7 +45,6 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
     national_id: '',
     email: '',
     phone: '',
-    address: '',
     policy_number: '',
     insurer_id: '',
     ramo: '',
@@ -111,7 +109,7 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
 
     const { data } = await supabaseClient()
       .from('clients')
-      .select('id, name, national_id, email, phone, address')
+      .select('id, name, national_id, email, phone')
       .ilike('name', `%${searchTerm}%`)
       .limit(5);
 
@@ -127,7 +125,6 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
       national_id: client.national_id || '',
       email: client.email || '',
       phone: client.phone || '',
-      address: client.address || '',
     });
     setShowClientSuggestions(false);
   };
@@ -179,40 +176,77 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
   const handleSubmit = async () => {
     setLoading(true);
     try {
-      // Resolver insurer_name
-      const insurer = insurers.find(i => i.id === formData.insurer_id);
+      // Si es un cliente existente, solo crear la póliza
+      if (selectedExistingClient) {
+        // Obtener broker_id del broker seleccionado
+        const broker = role === 'master' 
+          ? brokers.find((b: any) => b.profile?.email === formData.broker_email)
+          : null;
+        
+        const { data: userData } = await supabaseClient().auth.getUser();
+        const broker_id = broker ? broker.p_id : userData.user?.id;
+
+        const policyPayload = {
+          policy_number: formData.policy_number.toUpperCase(),
+          insurer_id: formData.insurer_id,
+          ramo: formData.ramo ? formData.ramo.toUpperCase() : null,
+          start_date: formData.start_date || null,
+          renewal_date: formData.renewal_date || null,
+          status: formData.status.toUpperCase() as 'ACTIVA' | 'VENCIDA' | 'CANCELADA',
+          client_id: selectedExistingClient.id,
+          broker_id: broker_id,
+        };
+
+        const { error } = await supabaseClient()
+          .from('policies')
+          .insert([policyPayload]);
+
+        if (error) throw error;
+        toast.success('Nueva póliza agregada al cliente existente');
+      } else {
+        // Crear nuevo cliente con póliza usando la API
+        // Obtener broker_id del broker seleccionado
+        const broker = role === 'master' 
+          ? brokers.find((b: any) => b.profile?.email === formData.broker_email)
+          : null;
+
+        const clientData = {
+          name: formData.client_name.toUpperCase(),
+          national_id: formData.national_id ? formData.national_id.toUpperCase() : null,
+          email: formData.email || null,
+          phone: formData.phone || null,
+          active: true,
+          broker_id: broker?.p_id || undefined,
+        };
+
+        const policyData = {
+          policy_number: formData.policy_number.toUpperCase(),
+          insurer_id: formData.insurer_id,
+          ramo: formData.ramo ? formData.ramo.toUpperCase() : null,
+          start_date: formData.start_date || null,
+          renewal_date: formData.renewal_date || null,
+          status: formData.status.toUpperCase() as 'ACTIVA' | 'VENCIDA' | 'CANCELADA',
+        };
+
+        const response = await fetch('/api/clients', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ clientData, policyData }),
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error || 'Error al crear cliente');
+        }
+
+        toast.success('Cliente y póliza creados exitosamente');
+      }
       
-      const rawPayload = {
-        client_name: formData.client_name,
-        national_id: formData.national_id || null,
-        email: formData.email || null,
-        phone: formData.phone || null,
-        address: formData.address || null,
-        policy_number: formData.policy_number,
-        insurer_name: insurer?.name,
-        ramo: formData.ramo || null,
-        start_date: formData.start_date || null,
-        renewal_date: formData.renewal_date || null,
-        status: formData.status,
-        broker_email: formData.broker_email,
-        percent_override: formData.percent_override ? parseFloat(formData.percent_override) : null,
-        source: 'manual',
-      };
-      
-      // Convertir a mayúsculas
-      const payload = toUppercasePayload(rawPayload);
-
-      const { error } = await supabaseClient()
-        .from('temp_client_imports')
-        .insert([payload]);
-
-      if (error) throw error;
-
-      toast.success(selectedExistingClient ? 'Nueva póliza agregada al cliente existente' : 'Cliente y póliza creados exitosamente');
       onSuccess();
       onClose();
     } catch (error: any) {
-      toast.error('Error al crear cliente', { description: error.message });
+      toast.error('Error al crear', { description: error.message });
     } finally {
       setLoading(false);
     }
@@ -352,17 +386,6 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                     placeholder="6000-0000"
                   />
                 </div>
-              </div>
-
-              <div>
-                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Dirección</label>
-                <textarea
-                  value={formData.address}
-                  onChange={createUppercaseHandler((e) => setFormData({ ...formData, address: e.target.value }))}
-                  className={`w-full px-3 py-2 sm:px-4 text-sm sm:text-base border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition resize-none ${uppercaseInputClass}`}
-                  rows={2}
-                  placeholder="Calle 50, Ciudad de Panamá"
-                />
               </div>
             </div>
           )}

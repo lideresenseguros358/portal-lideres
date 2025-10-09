@@ -101,7 +101,6 @@ export default function RegisterPaymentWizardNew({
       }]);
     }
   }, [advancePrefill]);
-
   const loadInsurers = async () => {
     const result = await actionGetInsurers();
     if (result.ok) {
@@ -113,19 +112,23 @@ export default function RegisterPaymentWizardNew({
     try {
       const { data, error } = await supabaseClient()
         .from('brokers')
-        .select('id, name, bank_account_number')
+        .select('id, name, bank_account_no, numero_cuenta')
         .eq('active', true)
         .order('name');
-      
+
       if (error) {
         console.error('Error loading brokers:', error);
         toast.error('Error al cargar corredores');
         return;
       }
-      
+
       if (data) {
-        console.log('Brokers loaded:', data.length);
-        setBrokers(data);
+        const normalized = data.map((broker: any) => ({
+          id: broker.id,
+          name: broker.name ?? 'Sin nombre',
+          account_number: broker.bank_account_no ?? broker.numero_cuenta ?? '',
+        }));
+        setBrokers(normalized);
       }
     } catch (error) {
       console.error('Error in loadBrokers:', error);
@@ -295,11 +298,8 @@ export default function RegisterPaymentWizardNew({
       if (result.ok) {
         toast.success('Pago pendiente creado exitosamente');
         // Refresh automático
-        onSuccess();
-        // Cerrar wizard
-        setTimeout(() => {
-          onClose();
-        }, 500);
+        onSuccess?.();
+        onClose();
       } else {
         console.error('Error al crear:', result.error);
         toast.error('Error al crear pago', { description: result.error });
@@ -445,11 +445,11 @@ export default function RegisterPaymentWizardNew({
                       <select
                         value={formData.broker_id}
                         onChange={(e) => {
-                          const selectedBroker = brokers.find(b => b.id === e.target.value);
-                          setFormData({ 
-                            ...formData, 
+                          const selectedBroker = brokers.find((b) => b.id === e.target.value);
+                          setFormData({
+                            ...formData,
                             broker_id: e.target.value,
-                            broker_cuenta: selectedBroker?.bank_account_number || ''
+                            broker_cuenta: selectedBroker?.account_number || ''
                           });
                         }}
                         className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#010139] focus:outline-none"
@@ -645,7 +645,7 @@ export default function RegisterPaymentWizardNew({
                             }
                             setReferences(newRefs);
                           }}
-                          className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+                          className="w-full min-w-0 px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none appearance-none"
                         />
                       </div>
 
