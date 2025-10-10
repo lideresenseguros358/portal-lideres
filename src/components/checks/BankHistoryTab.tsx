@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { FaPlus, FaChevronDown, FaChevronRight, FaFileImport } from 'react-icons/fa';
 import { actionGetBankTransfers } from '@/app/(app)/checks/actions';
 import ImportBankHistoryModal from './ImportBankHistoryModal';
@@ -32,11 +32,12 @@ export default function BankHistoryTab({ onImportSuccess, refreshTrigger }: Bank
         endDate: filters.endDate
       });
       if (result.ok) {
-        setTransfers(result.data || []);
+        setTransfers([...(result.data || [])]);
       } else {
         toast.error('Error al cargar historial');
       }
     } catch (error) {
+      console.error('Error cargando transferencias:', error);
       toast.error('Error inesperado');
     } finally {
       setLoading(false);
@@ -51,7 +52,10 @@ export default function BankHistoryTab({ onImportSuccess, refreshTrigger }: Bank
       transfer.reference_number?.toLowerCase().includes(searchLower) ||
       transfer.description?.toLowerCase().includes(searchLower) ||
       transfer.payment_details?.some((detail: any) => 
-        detail.client_name?.toLowerCase().includes(searchLower)
+        detail.client_name?.toLowerCase().includes(searchLower) ||
+        detail.policy_number?.toLowerCase().includes(searchLower) ||
+        detail.insurer_name?.toLowerCase().includes(searchLower) ||
+        detail.purpose?.toLowerCase().includes(searchLower)
       )
     );
   });
@@ -96,7 +100,7 @@ export default function BankHistoryTab({ onImportSuccess, refreshTrigger }: Bank
         
         <button
           onClick={() => setShowImportModal(true)}
-          className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-[#010139] to-[#020270] text-white rounded-xl hover:shadow-lg transition-all transform hover:scale-105 font-medium text-sm sm:text-base"
+          className="flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-[#010139] to-[#020270] text-white rounded-xl hover:shadow-lg transition-all transform hover:scale-105 font-medium text-sm sm:text-base"
         >
           <FaFileImport />
           Importar Historial
@@ -218,9 +222,8 @@ export default function BankHistoryTab({ onImportSuccess, refreshTrigger }: Bank
                   const hasDetails = paymentDetails.length > 0;
                   
                   return (
-                    <>
+                    <React.Fragment key={transfer.id}>
                       <tr 
-                        key={transfer.id}
                         className="hover:bg-gray-50 transition-colors cursor-pointer"
                         onClick={() => hasDetails && toggleRow(transfer.id)}
                       >
@@ -293,7 +296,7 @@ export default function BankHistoryTab({ onImportSuccess, refreshTrigger }: Bank
                           </td>
                         </tr>
                       )}
-                    </>
+                    </React.Fragment>
                   );
                 })}
               </tbody>

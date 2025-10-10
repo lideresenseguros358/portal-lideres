@@ -16,6 +16,7 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
   const [payments, setPayments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [groupByReference, setGroupByReference] = useState(true);
   const loadPayments = async () => {
     setLoading(true);
     try {
@@ -64,6 +65,49 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
     }
   };
 
+  // Agrupar pagos por referencia para mostrar remanente real
+  const groupPaymentsByReference = () => {
+    const groups: { [refNumber: string]: {
+      reference_number: string;
+      bank_amount: number;
+      total_pending: number;
+      remaining: number;
+      payments: any[];
+    }} = {};
+
+    payments.forEach(payment => {
+      payment.payment_references?.forEach((ref: any) => {
+        const refNum = ref.reference_number;
+        if (!groups[refNum]) {
+          groups[refNum] = {
+            reference_number: refNum,
+            bank_amount: parseFloat(ref.amount || '0'),
+            total_pending: 0,
+            remaining: parseFloat(ref.amount || '0'),
+            payments: []
+          };
+        }
+        
+        // Solo contar el amount_to_use de este pago para esta referencia
+        const amountToUse = parseFloat(ref.amount_to_use || payment.amount_to_pay || '0');
+        groups[refNum].total_pending += amountToUse;
+        groups[refNum].payments.push({ ...payment, ref_amount_to_use: amountToUse });
+      });
+    });
+
+    // Calcular remanente real
+    Object.keys(groups).forEach(refNum => {
+      const group = groups[refNum];
+      if (group) {
+        group.remaining = group.bank_amount - group.total_pending;
+      }
+    });
+
+    return groups;
+  };
+
+  const groupedPayments = groupPaymentsByReference();
+
   const handleMarkAsPaid = async () => {
     if (selectedIds.size === 0) {
       toast.error('Selecciona al menos un pago');
@@ -96,12 +140,13 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
         if (onPaymentPaid) {
           onPaymentPaid();
         }
+        // NO poner loading=false aquí, el refresh manejará el loading state
       } else {
         toast.error('Error al marcar pagos', { description: result.error });
+        setLoading(false);
       }
     } catch (error: any) {
       toast.error('Error inesperado', { description: error.message });
-    } finally {
       setLoading(false);
     }
   };
@@ -175,6 +220,42 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
       return metadata.notes || '';
     };
 
+    // Agrupar pagos por categoría
+    const groupedPayments = {
+      byInsurer: {} as { [key: string]: any[] },
+      devolutions: [] as any[],
+      others: [] as any[]
+    };
+
+    selectedPayments.forEach(payment => {
+      if (payment.purpose === 'devolucion') {
+        groupedPayments.devolutions.push(payment);
+      } else if (payment.purpose === 'otro') {
+        groupedPayments.others.push(payment);
+      } else {
+        // Agrupar por aseguradora
+        const insurer = payment.insurer_name || 'Sin Aseguradora';
+        if (!groupedPayments.byInsurer[insurer]) {
+          groupedPayments.byInsurer[insurer] = [];
+        }
+        groupedPayments.byInsurer[insurer].push(payment);
+      }
+    });
+
+    // Detectar si hay datos en columnas específicas
+    const hasNotes = selectedPayments.some(p => {
+      const meta = getPaymentMetadata(p);
+      return meta.notes || getPaymentNotes(p);
+    });
+
+    const hasReferences = selectedPayments.some(p => p.payment_references?.length > 0);
+    
+    const hasBankInfo = selectedPayments.some(p => {
+      if (p.purpose !== 'devolucion') return false;
+      const meta = getPaymentMetadata(p);
+      return meta.devolucion_tipo;
+    });
+
     const html = `
       <!DOCTYPE html>
       <html>
@@ -186,28 +267,47 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
             font-family: Arial, sans-serif;
             margin: 30px;
             color: #333;
-            font-size: 11px;
+            font-size: 14px;
           }
           .header {
+            position: relative;
             text-align: center;
-            margin-bottom: 25px;
+            margin-bottom: 30px;
             border-bottom: 3px solid #010139;
-            padding-bottom: 15px;
+            padding-bottom: 20px;
+            padding-top: 10px;
+          }
+          .header .logo {
+            position: absolute;
+            top: 10px;
+            left: 0;
+            width: 90px;
+            height: auto;
           }
           .header h1 {
             color: #010139;
             margin: 0;
-            font-size: 24px;
+            font-size: 28px;
           }
           .header p {
             color: #666;
-            margin: 5px 0;
-            font-size: 12px;
+            margin: 8px 0;
+            font-size: 14px;
+          }
+          .group-title {
+            background: #010139;
+            color: white;
+            padding: 12px 15px;
+            margin-top: 25px;
+            margin-bottom: 10px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 5px;
           }
           table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 15px;
+            margin-bottom: 20px;
             page-break-inside: auto;
           }
           tr {
@@ -215,17 +315,17 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
             page-break-after: auto;
           }
           th {
-            background: #010139;
+            background: #8AAA19;
             color: white;
-            padding: 10px 8px;
+            padding: 12px 10px;
             text-align: left;
-            font-size: 10px;
+            font-size: 14px;
             font-weight: bold;
           }
           td {
-            padding: 8px;
+            padding: 12px 10px;
             border-bottom: 1px solid #ddd;
-            font-size: 10px;
+            font-size: 14px;
             vertical-align: top;
           }
           tr:nth-child(even) {
@@ -236,18 +336,18 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
             color: #8AAA19;
             text-align: right;
             white-space: nowrap;
+            font-size: 16px;
           }
           .notes {
-            font-size: 9px;
+            font-size: 12px;
             color: #666;
             font-style: italic;
-            max-width: 150px;
-            word-wrap: break-word;
+            line-height: 1.5;
           }
           .bank-info {
-            font-size: 9px;
+            font-size: 12px;
             color: #010139;
-            line-height: 1.4;
+            line-height: 1.6;
           }
           .bank-info strong {
             color: #8AAA19;
@@ -255,33 +355,34 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
           .total {
             margin-top: 20px;
             text-align: right;
-            font-size: 14px;
+            font-size: 18px;
             font-weight: bold;
           }
           .total strong {
             color: #010139;
           }
           .footer {
-            margin-top: 30px;
-            padding-top: 15px;
-            border-top: 1px solid #ddd;
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 2px solid #ddd;
             text-align: center;
             color: #999;
-            font-size: 9px;
+            font-size: 12px;
           }
           .label {
             color: #8AAA19;
             font-weight: bold;
-            font-size: 9px;
+            font-size: 12px;
           }
           @media print {
             body { margin: 15px; }
-            table { font-size: 9px; }
+            .group-title { page-break-after: avoid; }
           }
         </style>
       </head>
       <body>
         <div class="header">
+          <img src="/logo.png" alt="Logo" class="logo" />
           <h1>PAGOS PENDIENTES</h1>
           <p>Portal Líderes en Seguros</p>
           <p>Fecha de generación: ${new Date().toLocaleDateString('es-PA', { 
@@ -291,94 +392,108 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
           })}</p>
         </div>
 
-        <table>
-          <thead>
-            <tr>
-              <th>Cliente/Corredor</th>
-              <th>Tipo</th>
-              <th>Póliza/Aseg.</th>
-              <th>Referencias</th>
-              <th>Cuenta Bancaria</th>
-              <th>Notas</th>
-              <th style="text-align: right">Monto</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${selectedPayments.map(payment => {
-              const metadata = getPaymentMetadata(payment);
-              const notes = getPaymentNotes(payment);
-              const isDevolucion = payment.purpose === 'devolucion';
-              
-              // Construir información bancaria
-              let bankInfo = '—';
-              if (isDevolucion && metadata.devolucion_tipo) {
-                if (metadata.devolucion_tipo === 'cliente' && metadata.cuenta_banco) {
-                  bankInfo = `
-                    <div class="label">💳 DEVOLUCIÓN A CLIENTE</div>
-                    <div style="margin-top: 3px;">
-                      <strong>Cuenta:</strong> ${metadata.cuenta_banco}<br>
-                      <strong>Titular:</strong> ${payment.client_name}
-                    </div>
-                  `;
+        ${Object.keys(groupedPayments.byInsurer).length > 0 ? Object.keys(groupedPayments.byInsurer).map(insurer => `
+          <div class="group-title">📄 ${insurer}</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Cliente</th>
+                <th>Póliza</th>
+                ${hasReferences ? '<th>Referencias</th>' : ''}
+                ${hasNotes ? '<th>Notas</th>' : ''}
+                <th style="text-align: right">Monto</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${(groupedPayments.byInsurer[insurer] || []).map(payment => {
+                const notes = getPaymentNotes(payment);
+                return `
+                <tr>
+                  <td><strong>${payment.client_name}</strong></td>
+                  <td>${payment.policy_number || '—'}</td>
+                  ${hasReferences ? `<td style="font-family: monospace; font-size: 12px;">${payment.payment_references?.map((ref: any) => ref.reference_number).join('<br>') || '—'}</td>` : ''}
+                  ${hasNotes ? `<td class="notes">${notes || '—'}</td>` : ''}
+                  <td class="amount">$${parseFloat(payment.amount_to_pay).toFixed(2)}</td>
+                </tr>
+              `;
+              }).join('')}
+            </tbody>
+          </table>
+        `).join('') : ''}
+
+        ${groupedPayments.devolutions.length > 0 ? `
+          <div class="group-title">💰 DEVOLUCIONES</div>
+          <table>
+            <thead>
+              <tr>
+                <th>Cliente/Corredor</th>
+                ${hasReferences ? '<th>Referencias</th>' : ''}
+                <th>Datos Bancarios</th>
+                ${hasNotes ? '<th>Notas</th>' : ''}
+                <th style="text-align: right">Monto</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${groupedPayments.devolutions.map(payment => {
+                const metadata = getPaymentMetadata(payment);
+                const notes = getPaymentNotes(payment);
+                let bankInfo = '—';
+                
+                if (metadata.devolucion_tipo === 'cliente') {
+                  const clientName = metadata.client_name || payment.client_name;
+                  const bankName = metadata.cuenta_banco || '-';
+                  const accountType = metadata.account_type || '-';
+                  const accountNumber = metadata.account_number || '-';
+                  bankInfo = `<strong>Cliente:</strong> ${clientName}<br><strong>Banco:</strong> ${bankName}<br><strong>Tipo:</strong> ${accountType}<br><strong>Cuenta:</strong> ${accountNumber}`;
                 } else if (metadata.devolucion_tipo === 'corredor' && metadata.broker_id) {
                   const broker = brokersMap.get(metadata.broker_id);
-                  if (broker) {
-                    bankInfo = `
-                      <div class="label">🏦 DEVOLUCIÓN A CORREDOR</div>
-                      <div style="margin-top: 3px;">
-                        <strong>Corredor:</strong> ${broker.name}<br>
-                        ${broker.account_no ? `<strong>Cuenta:</strong> ${broker.account_no}<br>` : ''}
-                        ${broker.bank_name ? `<strong>Banco:</strong> ${broker.bank_name}<br>` : ''}
-                        ${broker.account_type ? `<strong>Tipo:</strong> ${broker.account_type}` : ''}
-                      </div>
-                    `;
-                  } else {
-                    bankInfo = `
-                      <div class="label">🏦 DEVOLUCIÓN A CORREDOR</div>
-                      <div style="margin-top: 3px; color: #e74c3c;">
-                        ⚠️ Datos del corredor no disponibles
-                      </div>
-                    `;
-                  }
-                } else {
-                  bankInfo = `
-                    <div class="label">💰 DEVOLUCIÓN</div>
-                    <div style="margin-top: 3px; color: #f39c12;">
-                      ⚠️ Datos bancarios pendientes
-                    </div>
-                  `;
+                  const brokerName = broker?.name || '-';
+                  const accountNo = broker?.account_no || '-';
+                  const bankName = broker?.bank_name || '-';
+                  const accountType = broker?.account_type || '-';
+                  bankInfo = `<strong>Corredor:</strong> ${brokerName}<br><strong>Cuenta:</strong> ${accountNo}<br><strong>Banco:</strong> ${bankName}<br><strong>Tipo:</strong> ${accountType}`;
                 }
-              }
-              
-              return `
+                
+                return `
+                <tr>
+                  <td><strong>${payment.client_name}</strong></td>
+                  ${hasReferences ? `<td style="font-family: monospace; font-size: 12px;">${payment.payment_references?.map((ref: any) => ref.reference_number).join('<br>') || '—'}</td>` : ''}
+                  <td class="bank-info">${bankInfo}</td>
+                  ${hasNotes ? `<td class="notes">${notes || '—'}</td>` : ''}
+                  <td class="amount">$${parseFloat(payment.amount_to_pay).toFixed(2)}</td>
+                </tr>
+              `;
+              }).join('')}
+            </tbody>
+          </table>
+        ` : ''}
+
+        ${groupedPayments.others.length > 0 ? `
+          <div class="group-title">📝 OTROS</div>
+          <table>
+            <thead>
               <tr>
-                <td><strong>${payment.client_name}</strong></td>
-                <td>
-                  ${payment.purpose === 'poliza' ? '📄 Póliza' : 
-                    payment.purpose === 'devolucion' ? '💰 Devolución' : 
-                    '📝 Otro'}
-                </td>
-                <td>
-                  ${payment.policy_number ? `<strong>Póliza:</strong> ${payment.policy_number}<br>` : ''}
-                  ${payment.insurer_name ? `<strong>Aseg:</strong> ${payment.insurer_name}` : '—'}
-                </td>
-                <td style="font-family: monospace; font-size: 9px;">
-                  ${payment.payment_references?.map((ref: any) => 
-                    ref.reference_number
-                  ).join('<br>') || '—'}
-                </td>
-                <td class="bank-info">
-                  ${bankInfo}
-                </td>
-                <td class="notes">
-                  ${notes ? notes : '—'}
-                </td>
-                <td class="amount">$${parseFloat(payment.amount_to_pay).toFixed(2)}</td>
+                <th>Cliente</th>
+                ${hasReferences ? '<th>Referencias</th>' : ''}
+                ${hasNotes ? '<th>Notas</th>' : ''}
+                <th style="text-align: right">Monto</th>
               </tr>
-            `;
-            }).join('')}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              ${groupedPayments.others.map(payment => {
+                const notes = getPaymentNotes(payment);
+                return `
+                <tr>
+                  <td><strong>${payment.client_name}</strong></td>
+                  ${hasReferences ? `<td style="font-family: monospace; font-size: 12px;">${payment.payment_references?.map((ref: any) => ref.reference_number).join('<br>') || '—'}</td>` : ''}
+                  ${hasNotes ? `<td class="notes">${notes || '—'}</td>` : ''}
+                  <td class="amount">$${parseFloat(payment.amount_to_pay).toFixed(2)}</td>
+                </tr>
+              `;
+              }).join('')}
+            </tbody>
+          </table>
+        ` : ''}
 
         <div class="total">
           <strong>TOTAL A PAGAR: $${selectedPayments.reduce((sum, p) => 
@@ -432,12 +547,13 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
         if (onPaymentPaid) {
           onPaymentPaid();
         }
+        // NO poner loading=false aquí, el refresh manejará el loading state
       } else {
         toast.error('Error al eliminar pago', { description: result.error });
+        setLoading(false);
       }
     } catch (error: any) {
       toast.error('Error al eliminar pago', { description: error.message });
-    } finally {
       setLoading(false);
     }
   };
@@ -540,19 +656,46 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
       ) : (
         <div className="space-y-4">
           {payments.length > 0 && (
-            <div className="flex items-center gap-2 px-4">
-              <input
-                type="checkbox"
-                checked={selectedIds.size === payments.length && payments.length > 0}
-                onChange={selectAll}
-                className="w-5 h-5 text-[#8AAA19] rounded focus:ring-[#8AAA19]"
-              />
-              <span className="text-sm font-medium text-gray-700">Seleccionar todos</span>
+            <div className="flex items-center justify-between px-4 mb-4">
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={selectedIds.size === payments.length && payments.length > 0}
+                  onChange={selectAll}
+                  className="w-5 h-5 text-[#8AAA19] rounded focus:ring-[#8AAA19]"
+                />
+                <span className="text-sm font-medium text-gray-700">Seleccionar todos</span>
+              </div>
+              <button
+                onClick={() => setGroupByReference(!groupByReference)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition flex items-center gap-2"
+              >
+                {groupByReference ? '📊 Agrupado por Referencia' : '📄 Lista Simple'}
+              </button>
             </div>
           )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {payments.map((payment) => {
+          {groupByReference ? (
+            <div className="space-y-4">
+              {Object.values(groupedPayments).map((group) => (
+                <div key={group.reference_number} className="bg-gray-50 rounded-xl p-4 border-2 border-gray-200">
+                  <div className="flex items-center justify-between mb-3 pb-3 border-b-2 border-gray-300">
+                    <div>
+                      <h3 className="font-bold text-lg text-[#010139]">Ref: {group.reference_number}</h3>
+                      <p className="text-sm text-gray-600">Total en Banco: ${group.bank_amount.toFixed(2)}</p>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm text-gray-600">Pendientes: ${group.total_pending.toFixed(2)}</div>
+                      <div className={`text-lg font-bold ${
+                        group.remaining >= 0 ? 'text-green-600' : 'text-red-600'
+                      }`}>
+                        Remanente: ${group.remaining.toFixed(2)}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    {group.payments.map((payment) => {
             const paymentState = getPaymentState(payment);
             return (
               <div
@@ -680,7 +823,86 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
               </div>
             );
             })}
-          </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {payments.map((payment) => {
+                const paymentState = getPaymentState(payment);
+                return (
+                  <div
+                    key={payment.id}
+                    className={`bg-white rounded-xl shadow-lg p-6 border-2 transition-all ${
+                      selectedIds.has(payment.id)
+                        ? 'border-[#8AAA19] shadow-xl'
+                        : 'border-gray-100 hover:border-gray-300'
+                    }`}
+                  >
+                    {/* Contenido del pago - igual que arriba */}
+                    <div className="flex items-start gap-4 mb-4">
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(payment.id)}
+                        onChange={() => toggleSelect(payment.id)}
+                        className="w-5 h-5 text-[#8AAA19] rounded focus:ring-[#8AAA19] mt-1 flex-shrink-0"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-bold text-lg text-[#010139] truncate">{payment.client_name}</h3>
+                            {payment.policy_number && (
+                              <p className="text-sm text-gray-600 truncate">Póliza: {payment.policy_number}</p>
+                            )}
+                            {payment.insurer_name && (
+                              <p className="text-sm text-gray-600 truncate">{payment.insurer_name}</p>
+                            )}
+                          </div>
+                          <div className="text-2xl font-bold text-[#8AAA19] whitespace-nowrap">
+                            ${parseFloat(payment.amount_to_pay).toFixed(2)}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Referencias */}
+                    <div className="space-y-2 mb-4">
+                      <h4 className="text-sm font-semibold text-gray-700">Referencias:</h4>
+                      {payment.payment_references?.map((ref: any) => (
+                        <div
+                          key={ref.id}
+                          className={`flex items-center justify-between p-2 rounded-lg ${
+                            ref.exists_in_bank ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            {ref.exists_in_bank ? (
+                              <FaCheckCircle className="text-green-600" />
+                            ) : (
+                              <FaExclamationTriangle className="text-red-600" />
+                            )}
+                            <span className="text-sm font-mono font-semibold">{ref.reference_number}</span>
+                          </div>
+                          <span className="text-sm font-semibold">
+                            ${Number(ref.amount).toFixed(2)}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Status badge */}
+                    <div className="flex items-center justify-between">
+                      <StatusBadge payment={payment} />
+                      <div className="text-xs text-gray-500">
+                        {new Date(payment.created_at).toLocaleDateString('es-PA')}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       )}
     </div>

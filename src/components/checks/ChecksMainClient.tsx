@@ -35,13 +35,15 @@ export default function ChecksMainClient() {
   }, [searchParams]);
 
   const handleWizardSuccess = () => {
-    // Forzar refresh de pending payments
+    // Forzar refresh de pending payments Y cerrar wizard
     setRefreshKey(prev => prev + 1);
+    setShowWizard(false);
     setAdvanceId(null);
     setAdvancePrefill(null);
   };
 
   const handleCloseWizard = () => {
+    // Solo cerrar wizard sin refresh (para cuando se cancela)
     setShowWizard(false);
     setAdvanceId(null);
     setAdvancePrefill(null);
@@ -93,19 +95,19 @@ export default function ChecksMainClient() {
 
         {/* Tab Content */}
         <div className="transition-all duration-300">
-          {activeTab === 'history' && (
+          <div className={activeTab === 'history' ? 'block' : 'hidden'}>
             <BankHistoryTab 
               onImportSuccess={handleHistoryImported}
               refreshTrigger={refreshKey}
             />
-          )}
-          {activeTab === 'pending' && (
+          </div>
+          <div className={activeTab === 'pending' ? 'block' : 'hidden'}>
             <PendingPaymentsTab 
               onOpenWizard={() => setShowWizard(true)}
               onPaymentPaid={handleHistoryImported}
               refreshTrigger={refreshKey}
             />
-          )}
+          </div>
         </div>
 
         {/* Wizard Modal */}
