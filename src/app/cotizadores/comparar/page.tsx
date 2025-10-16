@@ -4,7 +4,7 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { quoteByPolicyType } from '@/lib/cotizadores/serviceRouter';
 import { saveQuote } from '@/lib/cotizadores/storage';
@@ -26,11 +26,7 @@ export default function ComparePage() {
   const [quoteId] = useState(() => generateQuoteId());
   const [selectedOption, setSelectedOption] = useState<QuoteOption | null>(null);
 
-  useEffect(() => {
-    loadQuote();
-  }, []);
-
-  const loadQuote = async () => {
+  const loadQuote = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -65,7 +61,11 @@ export default function ComparePage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [quoteId]);
+
+  useEffect(() => {
+    loadQuote();
+  }, [loadQuote]);
 
   const handleSelect = (option: QuoteOption) => {
     setSelectedOption(option);

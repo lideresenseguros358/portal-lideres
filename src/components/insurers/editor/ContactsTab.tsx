@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { FaPlus, FaTrash, FaEdit, FaSave, FaTimes } from 'react-icons/fa';
 import { toast } from 'sonner';
 import { 
@@ -44,13 +44,7 @@ export default function ContactsTab({ contacts: initialContacts, insurerId }: Co
 
   const [editContact, setEditContact] = useState<Contact | null>(null);
 
-  // Cargar contactos al montar
-  useEffect(() => {
-    loadContacts();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [insurerId]);
-
-  const loadContacts = async () => {
+  const loadContacts = useCallback(async () => {
     try {
       const result = await actionGetInsurerContacts(insurerId);
       if (result.ok) {
@@ -59,7 +53,12 @@ export default function ContactsTab({ contacts: initialContacts, insurerId }: Co
     } catch (error) {
       console.error('Error loading contacts:', error);
     }
-  };
+  }, [insurerId]);
+
+  // Cargar contactos al montar
+  useEffect(() => {
+    loadContacts();
+  }, [loadContacts]);
 
   const handleAdd = async () => {
     if (!newContact.name.trim()) {

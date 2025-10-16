@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { FaTimes, FaPlus, FaEdit, FaTrash, FaSave, FaStar, FaRegStar } from 'react-icons/fa';
 import { toast } from 'sonner';
 import { 
@@ -57,13 +57,7 @@ export default function ContactsModal({
 
   const [editContact, setEditContact] = useState<Contact | null>(null);
 
-  useEffect(() => {
-    if (isOpen) {
-      loadContacts();
-    }
-  }, [isOpen, insurerId]);
-
-  const loadContacts = async () => {
+  const loadContacts = useCallback(async () => {
     try {
       const result = await actionGetInsurerContacts(insurerId);
       if (result.ok) {
@@ -72,7 +66,13 @@ export default function ContactsModal({
     } catch (error) {
       console.error('Error loading contacts:', error);
     }
-  };
+  }, [insurerId]);
+
+  useEffect(() => {
+    if (isOpen) {
+      loadContacts();
+    }
+  }, [isOpen, loadContacts]);
 
   const handleAdd = async () => {
     if (!newContact.name.trim()) {
