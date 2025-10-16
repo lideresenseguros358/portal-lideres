@@ -108,7 +108,14 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
 
   const groupedPayments = groupPaymentsByReference();
 
-  const handleMarkAsPaid = async () => {
+  const handleMarkAsPaid = async (e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
+    if (loading) return; // Prevenir doble click
+
     if (selectedIds.size === 0) {
       toast.error('Selecciona al menos un pago');
       return;
@@ -151,7 +158,12 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
     }
   };
 
-  const handleDownloadPDF = async () => {
+  const handleDownloadPDF = async (e?: React.MouseEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+
     if (selectedIds.size === 0) {
       toast.error('Selecciona al menos un pago');
       return;
@@ -195,10 +207,21 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
       }
     }
     
-    // Crear HTML para imprimir
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) {
-      toast.error('Permite ventanas emergentes para descargar el PDF');
+    // Crear HTML para imprimir - compatible con mobile
+    let printWindow: Window | null = null;
+    
+    try {
+      // Intentar abrir ventana nueva
+      printWindow = window.open('', '_blank');
+      
+      if (!printWindow) {
+        // Si falla, usar misma ventana en mobile
+        toast.warning('Abriendo en esta ventana...');
+        printWindow = window;
+      }
+    } catch (error) {
+      console.error('Error opening print window:', error);
+      toast.error('No se pudo abrir la ventana de impresión');
       return;
     }
 
@@ -518,10 +541,28 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
       </html>
     `;
 
-    printWindow.document.write(html);
-    printWindow.document.close();
-    
-    toast.success('Documento preparado para imprimir/guardar como PDF');
+    if (printWindow && printWindow !== window) {
+      // Ventana nueva (PC/Desktop)
+      printWindow.document.write(html);
+      printWindow.document.close();
+      toast.success('Documento preparado para imprimir/guardar como PDF');
+    } else if (printWindow === window) {
+      // Misma ventana (Mobile fallback)
+      const originalContent = document.body.innerHTML;
+      document.body.innerHTML = html;
+      
+      // Esperar que cargue y auto-imprimir
+      setTimeout(() => {
+        window.print();
+        // Restaurar contenido después de imprimir
+        setTimeout(() => {
+          document.body.innerHTML = originalContent;
+          window.location.reload(); // Recargar para restaurar eventos
+        }, 100);
+      }, 500);
+      
+      toast.success('Preparando documento...');
+    }
   };
 
   const handleEdit = (paymentId: string) => {
@@ -611,21 +652,37 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
           </div>
 
           {selectedIds.size > 0 && (
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-2">
               <button
-                onClick={handleDownloadPDF}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition font-medium"
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleDownloadPDF(e);
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition font-medium touch-manipulation"
               >
                 <FaFileDownload />
-                Descargar PDF ({selectedIds.size})
+                <span className="hidden sm:inline">Descargar PDF</span>
+                <span className="sm:hidden">PDF</span>
+                <span>({selectedIds.size})</span>
               </button>
               <button
-                onClick={handleMarkAsPaid}
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (!loading) {
+                    handleMarkAsPaid(e);
+                  }
+                }}
                 disabled={loading}
-                className="flex items-center gap-2 px-4 py-2 bg-[#8AAA19] text-white rounded-lg hover:bg-[#010139] transition font-medium disabled:opacity-50"
+                className="flex items-center gap-2 px-4 py-2 bg-[#8AAA19] text-white rounded-lg hover:bg-[#010139] transition font-medium touch-manipulation disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <FaCheckCircle />
-                Marcar como Pagados ({selectedIds.size})
+                <span className="hidden sm:inline">Marcar como Pagados</span>
+                <span className="sm:hidden">Pagar</span>
+                <span>({selectedIds.size})</span>
               </button>
             </div>
           )}

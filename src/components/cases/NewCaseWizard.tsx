@@ -95,7 +95,6 @@ export default function NewCaseWizard({ brokers, clients, insurers }: NewCaseWiz
       section: formData.section,
       ctype: formData.ctype,
       canal: formData.canal,
-      status: formData.status,
       management_type: formData.management_type,
       insurer_id: formData.insurer_id || '',
       broker_id: formData.broker_id,
@@ -379,6 +378,7 @@ export default function NewCaseWizard({ brokers, clients, insurers }: NewCaseWiz
                 <option value="TRANSFERENCIA">Transferencia</option>
                 <option value="TARJETA">Tarjeta</option>
                 <option value="CHEQUE">Cheque</option>
+                <option value="DESCUENTO_A_CORREDOR">Descuento a Corredor</option>
               </select>
             </div>
 

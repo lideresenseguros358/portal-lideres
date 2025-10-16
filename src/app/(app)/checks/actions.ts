@@ -763,8 +763,10 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
     // For each payment, update bank transfers and create payment details
     for (const payment of payments || []) {
       const refs = payment.payment_references || [];
+      const isDescuentoCorredor = payment.purpose === 'DESCUENTO A CORREDOR';
 
-      if (!payment.can_be_paid) {
+      // Skip can_be_paid check for DESCUENTO A CORREDOR
+      if (!isDescuentoCorredor && !payment.can_be_paid) {
         return {
           ok: false as const,
           error: `El pago "${payment.client_name}" tiene referencias inválidas. Actualice el historial de banco primero.`
@@ -866,6 +868,60 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
         });
 
         existingDetailKeys.add(detailKey);
+      }
+
+      // Special handling for DESCUENTO A CORREDOR
+      if (isDescuentoCorredor) {
+        // Get broker name for description
+        const { data: brokerData } = await supabase
+          .from('brokers')
+          .select('name, nombre_completo')
+          .eq('id', payment.notes?.match(/Adelanto ID: (.+)/)?.[0] || '')
+          .single();
+
+        const brokerName = brokerData?.name || brokerData?.nombre_completo || 'CORREDOR';
+        
+        // Create bank_transfers entry
+        const dateParts = paidAt.split('T');
+        const dateStr = (dateParts[0] || new Date().toISOString().split('T')[0]) as string;
+        const transferPayload: TablesInsert<'bank_transfers'> = {
+          reference_number: `DESC-${payment.id.slice(0, 8)}`,
+          date: dateStr as string,
+          amount: Number(payment.amount_to_pay) || 0,
+          used_amount: Number(payment.amount_to_pay) || 0,
+          description: `DESCUENTO A CORREDOR - ${brokerName}`,
+          transaction_code: payment.notes || 'DESCUENTO',
+        };
+        
+        const { data: newTransfer, error: transferError} = await supabase
+          .from('bank_transfers')
+          .insert([transferPayload])
+          .select()
+          .single();
+
+        if (transferError) {
+          console.error('Error creating bank transfer for descuento:', transferError);
+          throw transferError;
+        }
+
+        // Create payment_details linking to this transfer
+        const { error: detailError } = await supabase
+          .from('payment_details')
+          .insert([{
+            bank_transfer_id: newTransfer.id,
+            payment_id: payment.id,
+            policy_number: payment.policy_number,
+            insurer_name: payment.insurer_name,
+            client_name: payment.client_name,
+            purpose: payment.purpose,
+            amount_used: Number(payment.amount_to_pay) || 0,
+            paid_at: paidAt,
+          }] satisfies TablesInsert<'payment_details'>[]);
+
+        if (detailError) {
+          console.error('Error creating payment detail for descuento:', detailError);
+          throw detailError;
+        }
       }
 
       const { error: paymentUpdateError } = await supabase

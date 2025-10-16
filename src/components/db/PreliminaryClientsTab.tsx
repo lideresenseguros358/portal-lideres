@@ -191,14 +191,62 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
                 {!isEditing && (
                   <div className="flex gap-2">
                     {client.is_complete && (
-                      <button
-                        onClick={() => handleManualMigration(client.id)}
-                        className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-all font-semibold text-sm flex items-center gap-2"
-                        title="Migrar a base de datos"
-                      >
-                        <FaCheckCircle />
-                        <span className="hidden sm:inline">Migrar</span>
-                      </button>
+                      <div className="relative group">
+                        <button
+                          onClick={() => handleManualMigration(client.id)}
+                          className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-all font-semibold text-sm flex items-center gap-2"
+                        >
+                          <FaCheckCircle />
+                          <span className="hidden sm:inline">Migrar a BD</span>
+                        </button>
+                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-4 py-3 bg-gray-900 text-white text-xs rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none w-72 z-50">
+                          <div className="space-y-2">
+                            <p className="font-bold text-sm">✅ Cliente Listo para Migrar</p>
+                            <p>Este cliente tiene todos los campos obligatorios completados.</p>
+                            <div className="border-t border-gray-700 pt-2 mt-2">
+                              <p className="font-semibold">Al migrar a la base de datos:</p>
+                              <ul className="list-disc list-inside text-xs space-y-1 mt-1">
+                                <li>Podrá generar comisiones</li>
+                                <li>Aparecerá en reportes de morosidad</li>
+                                <li>Estará en la base de datos oficial</li>
+                              </ul>
+                            </div>
+                          </div>
+                          <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1">
+                            <div className="border-8 border-transparent border-t-gray-900"></div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    {!client.is_complete && (
+                      <div className="relative group">
+                        <button
+                          className="px-4 py-2 bg-amber-500 text-white rounded-lg font-semibold text-sm flex items-center gap-2 cursor-not-allowed opacity-75"
+                          disabled
+                        >
+                          <FaExclamationTriangle />
+                          <span className="hidden sm:inline">Datos Incompletos</span>
+                        </button>
+                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-4 py-3 bg-red-900 text-white text-xs rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none w-80 z-50">
+                          <div className="space-y-2">
+                            <p className="font-bold text-sm">⚠️ Cliente NO se puede migrar</p>
+                            <p>Faltan campos obligatorios. Si se marca como completo sin llenarlos:</p>
+                            <div className="border-t border-red-700 pt-2 mt-2">
+                              <p className="font-semibold text-red-200">Consecuencias:</p>
+                              <ul className="list-disc list-inside text-xs space-y-1 mt-1">
+                                <li>❌ NO se pasará a la base de datos oficial</li>
+                                <li>❌ NO generará comisiones</li>
+                                <li>❌ NO aparecerá en morosidad</li>
+                                <li>❌ NO se podrá usar para trámites</li>
+                              </ul>
+                              <p className="mt-2 text-xs text-amber-200 font-semibold">👉 Completa los campos antes de migrar</p>
+                            </div>
+                          </div>
+                          <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1">
+                            <div className="border-8 border-transparent border-t-red-900"></div>
+                          </div>
+                        </div>
+                      </div>
                     )}
                     <button
                       onClick={() => startEdit(client)}

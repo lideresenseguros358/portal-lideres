@@ -181,61 +181,107 @@ export default function AccountPage() {
       if (!user) throw new Error("Usuario no autenticado");
 
       const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg';
-      const fileName = `${user.id}.${fileExt}`;
+      const timestamp = Date.now();
+      const fileName = `${user.id}_${timestamp}.${fileExt}`;
       const filePath = fileName;
 
-      console.log('Subiendo avatar:', { fileName, fileSize: file.size, fileType: file.type });
+      console.log('🔄 Subiendo avatar:', { 
+        fileName, 
+        fileSize: file.size, 
+        fileType: file.type,
+        userId: user.id 
+      });
 
       // Primero, intenta eliminar el avatar anterior si existe
       if (avatarUrl) {
-        const oldPath = avatarUrl.split('/').pop();
-        if (oldPath) {
-          await supabase.storage
-            .from('avatar')
-            .remove([oldPath]);
+        try {
+          const oldFileName = avatarUrl.split('/').pop()?.split('?')[0]; // Remove query params
+          if (oldFileName && oldFileName.startsWith(user.id)) {
+            console.log('🗑️ Eliminando avatar anterior:', oldFileName);
+            const { error: removeError } = await supabase.storage
+              .from('avatar')
+              .remove([oldFileName]);
+            
+            if (removeError) {
+              console.warn('⚠️ No se pudo eliminar avatar anterior:', removeError);
+              // No throw, continuar con el upload
+            }
+          }
+        } catch (cleanupErr) {
+          console.warn('⚠️ Error en limpieza de avatar anterior:', cleanupErr);
+          // Continue with upload anyway
         }
       }
 
       // Upload to storage con upsert para sobrescribir
+      console.log('📤 Iniciando upload a bucket "avatar"...');
       const { error: uploadError, data: uploadData } = await supabase.storage
         .from('avatar')
         .upload(filePath, file, {
           cacheControl: '3600',
-          upsert: true
+          upsert: true,
+          contentType: file.type
         });
 
       if (uploadError) {
-        console.error('Error de upload:', uploadError);
-        throw uploadError;
+        console.error('❌ Error de upload:', uploadError);
+        
+        // Proporcionar mensaje más específico según el error
+        if (uploadError.message.includes('Bucket not found')) {
+          throw new Error('El bucket de storage "avatar" no existe. Contacta al administrador.');
+        } else if (uploadError.message.includes('policy')) {
+          throw new Error('No tienes permisos para subir archivos. Contacta al administrador.');
+        } else {
+          throw new Error(`Error al subir: ${uploadError.message}`);
+        }
       }
 
-      console.log('Upload exitoso:', uploadData);
+      console.log('✅ Upload exitoso:', uploadData);
 
-      // Get public URL
+      // Get public URL with timestamp to force cache refresh
       const { data: { publicUrl } } = supabase.storage
         .from('avatar')
-        .getPublicUrl(filePath);
+        .getPublicUrl(filePath, {
+          transform: {
+            width: 300,
+            height: 300,
+            quality: 80
+          }
+        });
 
-      console.log('Public URL:', publicUrl);
+      console.log('🔗 Public URL generada:', publicUrl);
 
       // Update profile in database
       const { error: updateError } = await supabase
         .from("profiles")
-        .update({ avatar_url: publicUrl })
+        .update({ 
+          avatar_url: publicUrl,
+          updated_at: new Date().toISOString()
+        })
         .eq("id", user.id);
 
       if (updateError) {
-        console.error('Error actualizando perfil:', updateError);
-        throw updateError;
+        console.error('❌ Error actualizando perfil en BD:', updateError);
+        
+        // Intentar eliminar el archivo subido si falla la actualización
+        await supabase.storage.from('avatar').remove([filePath]);
+        
+        throw new Error(`Error al actualizar perfil: ${updateError.message}`);
       }
 
+      console.log('✅ Perfil actualizado en BD');
+
+      // Update local state
       setAvatarUrl(publicUrl);
       setSuccess("✅ Foto de perfil actualizada correctamente");
       
       // Reload profile to ensure consistency
+      console.log('🔄 Recargando perfil...');
       await loadProfile();
+      
+      console.log('✅ Proceso completo exitoso');
     } catch (err: any) {
-      console.error('Error completo:', err);
+      console.error('❌ Error completo:', err);
       setError(err.message || "Error al subir la foto");
     } finally {
       setSaving(false);
@@ -255,36 +301,58 @@ export default function AccountPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuario no autenticado");
 
+      console.log('🗑️ Eliminando foto de perfil...');
+
       // Delete from storage if exists
       if (avatarUrl) {
-        const fileName = avatarUrl.split('/').pop();
-        if (fileName) {
-          const { error: deleteError } = await supabase.storage
-            .from('avatar')
-            .remove([fileName]);
-          
-          if (deleteError) {
-            console.error('Error eliminando archivo:', deleteError);
-            // No throw, continue to update profile
+        try {
+          const fileName = avatarUrl.split('/').pop()?.split('?')[0]; // Remove query params
+          if (fileName) {
+            console.log('🗑️ Eliminando archivo del storage:', fileName);
+            const { error: deleteError } = await supabase.storage
+              .from('avatar')
+              .remove([fileName]);
+            
+            if (deleteError) {
+              console.warn('⚠️ Error eliminando archivo del storage:', deleteError);
+              // No throw, continue to update profile
+            } else {
+              console.log('✅ Archivo eliminado del storage');
+            }
           }
+        } catch (storageErr) {
+          console.warn('⚠️ Error en eliminación de storage:', storageErr);
+          // Continue anyway
         }
       }
 
       // Update profile
+      console.log('🔄 Actualizando perfil en BD...');
       const { error: updateError } = await supabase
         .from("profiles")
-        .update({ avatar_url: null })
+        .update({ 
+          avatar_url: null,
+          updated_at: new Date().toISOString()
+        })
         .eq("id", user.id);
 
-      if (updateError) throw updateError;
+      if (updateError) {
+        console.error('❌ Error actualizando perfil:', updateError);
+        throw new Error(`Error al actualizar perfil: ${updateError.message}`);
+      }
+
+      console.log('✅ Perfil actualizado en BD');
 
       setAvatarUrl(null);
       setSuccess("✅ Foto de perfil eliminada correctamente");
       
       // Reload profile
+      console.log('🔄 Recargando perfil...');
       await loadProfile();
+      
+      console.log('✅ Eliminación completa exitosa');
     } catch (err: any) {
-      console.error('Error al eliminar avatar:', err);
+      console.error('❌ Error al eliminar avatar:', err);
       setError(err.message || "Error al eliminar la foto");
     } finally {
       setSaving(false);
@@ -309,8 +377,25 @@ export default function AccountPage() {
           <div className="avatar-container">
             {avatarUrl ? (
               <div className="avatar-wrapper">
-                <Image src={avatarUrl} alt="Avatar" className="avatar-img" width={150} height={150} />
-                <button onClick={handleRemoveAvatar} className="avatar-remove-btn" title="Eliminar foto">
+                <Image 
+                  src={`${avatarUrl}${avatarUrl.includes('?') ? '&' : '?'}t=${Date.now()}`}
+                  alt="Avatar" 
+                  className="avatar-img" 
+                  width={150} 
+                  height={150}
+                  unoptimized
+                  onError={(e) => {
+                    console.error('Error cargando imagen:', e);
+                    // Fallback to placeholder if image fails to load
+                    e.currentTarget.style.display = 'none';
+                  }}
+                />
+                <button 
+                  onClick={handleRemoveAvatar} 
+                  className="avatar-remove-btn" 
+                  title="Eliminar foto"
+                  disabled={saving}
+                >
                   <FaTrash />
                 </button>
               </div>
@@ -319,14 +404,15 @@ export default function AccountPage() {
                 <FaUserCircle className="avatar-icon-large" />
               </div>
             )}
-            <label htmlFor="avatar-upload" className="avatar-upload-btn">
+            <label htmlFor="avatar-upload" className={`avatar-upload-btn ${saving ? 'disabled' : ''}`}>
               <FaCamera />
-              <span className="upload-text">Cambiar foto</span>
+              <span className="upload-text">{saving ? 'Subiendo...' : 'Cambiar foto'}</span>
               <input
                 type="file"
                 id="avatar-upload"
                 accept="image/*"
                 onChange={handleAvatarUpload}
+                disabled={saving}
                 hidden
               />
             </label>
@@ -539,10 +625,16 @@ export default function AccountPage() {
           font-weight: 600;
         }
 
-        .avatar-upload-btn:hover {
+        .avatar-upload-btn:hover:not(.disabled) {
           background: #6f8815;
           transform: translateY(-2px);
           box-shadow: 0 4px 12px rgba(138, 170, 25, 0.3);
+        }
+
+        .avatar-upload-btn.disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+          pointer-events: none;
         }
 
         .upload-text {

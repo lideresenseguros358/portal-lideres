@@ -265,6 +265,20 @@ export function MasterClaimsView() {
 
   return (
     <div className="space-y-6">
+      {/* Instrucciones */}
+      <Card className="bg-gradient-to-r from-blue-50 to-white border-l-4 border-[#010139]">
+        <CardContent className="p-4">
+          <h3 className="font-bold text-[#010139] mb-2">📋 Flujo de Ajustes Reportados</h3>
+          <ol className="text-sm text-gray-700 space-y-1 list-decimal list-inside">
+            <li>Selecciona los reportes de corredores que marcaron como "Mío"</li>
+            <li>Haz clic en "Aceptar Seleccionados" y elige "Pagar Ya"</li>
+            <li>Descarga el CSV bancario con el botón verde que aparecerá</li>
+            <li>Carga el CSV en el banco y realiza las transferencias</li>
+            <li>Regresa y haz clic en "Confirmar Pagado"</li>
+          </ol>
+        </CardContent>
+      </Card>
+
       {/* Panel de Acciones */}
       {selectedBrokers.size > 0 && (
         <Card className="shadow-lg border-2 border-[#010139] bg-gradient-to-r from-blue-50 to-white">

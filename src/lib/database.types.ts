@@ -1591,6 +1591,50 @@ export type Database = {
           },
         ]
       }
+      insurer_contacts: {
+        Row: {
+          created_at: string | null
+          email: string | null
+          id: string
+          insurer_id: string
+          name: string
+          notes: string | null
+          phone: string | null
+          position: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          insurer_id: string
+          name: string
+          notes?: string | null
+          phone?: string | null
+          position?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          insurer_id?: string
+          name?: string
+          notes?: string | null
+          phone?: string | null
+          position?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "insurer_contacts_insurer_id_fkey"
+            columns: ["insurer_id"]
+            isOneToOne: false
+            referencedRelation: "insurers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       insurer_delinquency_rules: {
         Row: {
           aliases: Json | null

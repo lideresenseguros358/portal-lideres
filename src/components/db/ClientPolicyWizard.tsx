@@ -50,7 +50,7 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
     ramo: '',
     start_date: '',
     renewal_date: '',
-    status: 'active',
+    status: 'ACTIVA',
     broker_email: role === 'broker' ? userEmail : '',
     percent_override: '',
   });
@@ -178,6 +178,10 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
   };
 
   const handleSubmit = async () => {
+    console.log('[ClientPolicyWizard] Iniciando handleSubmit...');
+    console.log('[ClientPolicyWizard] FormData:', formData);
+    console.log('[ClientPolicyWizard] Selected existing client:', selectedExistingClient);
+    
     setLoading(true);
     try {
       // Si es un cliente existente, solo crear la póliza
@@ -196,16 +200,23 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
           ramo: formData.ramo ? formData.ramo.toUpperCase() : null,
           start_date: formData.start_date || null,
           renewal_date: formData.renewal_date || null,
-          status: formData.status.toUpperCase() as 'ACTIVA' | 'VENCIDA' | 'CANCELADA',
+          status: formData.status as 'ACTIVA' | 'VENCIDA' | 'CANCELADA',
           client_id: selectedExistingClient.id,
           broker_id: broker_id,
         };
 
+        console.log('[ClientPolicyWizard] Creando póliza para cliente existente:', policyPayload);
+        
         const { error } = await supabaseClient()
           .from('policies')
           .insert([policyPayload]);
 
-        if (error) throw error;
+        if (error) {
+          console.error('[ClientPolicyWizard] Error creando póliza:', error);
+          throw error;
+        }
+        
+        console.log('[ClientPolicyWizard] Póliza creada exitosamente');
         toast.success('Nueva póliza agregada al cliente existente');
       } else {
         // Crear nuevo cliente con póliza usando la API
@@ -229,21 +240,29 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
           ramo: formData.ramo ? formData.ramo.toUpperCase() : null,
           start_date: formData.start_date || null,
           renewal_date: formData.renewal_date || null,
-          status: formData.status.toUpperCase() as 'ACTIVA' | 'VENCIDA' | 'CANCELADA',
+          status: formData.status as 'ACTIVA' | 'VENCIDA' | 'CANCELADA',
         };
 
+        console.log('[ClientPolicyWizard] Creando nuevo cliente y póliza...');
+        console.log('[ClientPolicyWizard] clientData:', clientData);
+        console.log('[ClientPolicyWizard] policyData:', policyData);
+        
         const response = await fetch('/api/clients', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ clientData, policyData }),
         });
 
+        console.log('[ClientPolicyWizard] Response status:', response.status);
         const result = await response.json();
+        console.log('[ClientPolicyWizard] Response data:', result);
 
         if (!response.ok) {
+          console.error('[ClientPolicyWizard] Error en respuesta:', result);
           throw new Error(result.error || 'Error al crear cliente');
         }
 
+        console.log('[ClientPolicyWizard] Cliente creado exitosamente');
         toast.success('Cliente y póliza creados exitosamente');
       }
       
@@ -410,7 +429,7 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                   <SelectTrigger className="w-full border-2 border-gray-300 focus:border-[#8AAA19]">
                     <SelectValue placeholder="Seleccionar aseguradora..." />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="max-h-[200px] overflow-auto">
                     {insurers.map((ins) => (
                       <SelectItem key={ins.id} value={ins.id}>{ins.name}</SelectItem>
                     ))}
@@ -442,14 +461,14 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                 />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Fecha de Inicio</label>
                   <input
                     type="date"
                     value={formData.start_date}
                     onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-                    className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition"
+                    className="w-full px-2 sm:px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition text-sm sm:text-base"
                   />
                 </div>
 
@@ -461,7 +480,7 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                     type="date"
                     value={formData.renewal_date}
                     onChange={(e) => setFormData({ ...formData, renewal_date: e.target.value })}
-                    className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition"
+                    className="w-full px-2 sm:px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition text-sm sm:text-base"
                     required
                   />
                 </div>
@@ -470,13 +489,13 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Estado</label>
                 <Select value={formData.status} onValueChange={(value) => setFormData({ ...formData, status: value })}>
-                  <SelectTrigger className="w-full border-2 border-gray-300 focus:border-[#8AAA19]">
+                  <SelectTrigger className="w-full border-2 border-gray-300 focus:border-[#8AAA19] text-sm sm:text-base">
                     <SelectValue placeholder="Seleccionar estado" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="active">Activa</SelectItem>
-                    <SelectItem value="inactive">Inactiva</SelectItem>
-                    <SelectItem value="cancelled">Cancelada</SelectItem>
+                    <SelectItem value="ACTIVA">Activa</SelectItem>
+                    <SelectItem value="VENCIDA">Vencida</SelectItem>
+                    <SelectItem value="CANCELADA">Cancelada</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -511,7 +530,7 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                       <SelectTrigger className="w-full border-2 border-gray-300 focus:border-[#8AAA19]">
                         <SelectValue placeholder="Seleccionar corredor..." />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="max-h-[200px] overflow-auto">
                         {brokers.map((broker: any) => (
                           <SelectItem key={broker.id} value={broker.profile?.email}>
                             {broker.name || broker.profile?.full_name} ({broker.profile?.email})

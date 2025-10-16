@@ -3,13 +3,25 @@
 import { useState, useTransition, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { FaEdit, FaPlus, FaSearch, FaToggleOn, FaToggleOff, FaClone, FaUndo } from 'react-icons/fa';
+import { FaEdit, FaPlus, FaSearch, FaToggleOn, FaToggleOff, FaClone, FaUndo, FaEye } from 'react-icons/fa';
 import { actionToggleInsurerActive, actionCloneInsurer } from '@/app/(app)/insurers/actions';
+import ContactsModal from './ContactsModal';
+
+interface Contact {
+  id: string;
+  name: string;
+  position: string | null;
+  phone: string | null;
+  email: string | null;
+  notes: string | null;
+  is_primary?: boolean | null;
+}
 
 interface Insurer {
   id: string;
   name: string;
   active: boolean | null;
+  contacts: Contact[];
 }
 
 interface InsurersListProps {
@@ -22,13 +34,23 @@ export default function InsurersList({ initialInsurers }: InsurersListProps) {
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [flippedCards, setFlippedCards] = useState<string[]>([]);
   const [isPending, startTransition] = useTransition();
+  const [modalInsurer, setModalInsurer] = useState<{ id: string; name: string; contacts: Contact[] } | null>(null);
 
   const handleToggle = (insurerId: string) => {
     startTransition(async () => {
       const result = await actionToggleInsurerActive(insurerId);
       if (result.ok && result.data) {
         setInsurers(currentInsurers =>
-          currentInsurers.map(ins => (ins.id === insurerId ? (result.data as Insurer) : ins))
+          currentInsurers.map(ins => 
+            ins.id === insurerId 
+              ? { 
+                  id: result.data.id, 
+                  name: result.data.name, 
+                  active: result.data.active,
+                  contacts: ins.contacts 
+                }
+              : ins
+          )
         );
       } else {
         alert(`Error: ${result.error}`);
@@ -53,13 +75,35 @@ export default function InsurersList({ initialInsurers }: InsurersListProps) {
       if (result.ok && result.data) {
         // For simplicity, we'll just add it to the top of the list.
         // A full refresh might be better in a real app.
-        const newInsurer = result.data as Insurer;
+        const newInsurer = {
+          id: result.data.id,
+          name: result.data.name,
+          active: result.data.active,
+          contacts: []
+        };
         setInsurers(currentInsurers => [newInsurer, ...currentInsurers]);
         alert(`Aseguradora '${newInsurer.name}' creada.`);
       } else {
         alert(`Error al clonar: ${result.error}`);
       }
     });
+  };
+
+  const handleOpenModal = (insurer: Insurer) => {
+    setModalInsurer({
+      id: insurer.id,
+      name: insurer.name,
+      contacts: insurer.contacts
+    });
+  };
+
+  const handleCloseModal = () => {
+    setModalInsurer(null);
+  };
+
+  const handleModalUpdate = () => {
+    // Refresh the page to get updated contacts
+    window.location.reload();
   };
 
   const filteredInsurers = insurers.filter(insurer => {
@@ -197,7 +241,7 @@ export default function InsurersList({ initialInsurers }: InsurersListProps) {
                 </div>
                 {/* Card Back */}
                 <div 
-                  className="absolute inset-0 flex flex-col justify-center p-6"
+                  className="absolute inset-0 flex flex-col p-6"
                   style={{ 
                     backfaceVisibility: 'hidden',
                     transform: 'rotateY(180deg)'
@@ -213,14 +257,44 @@ export default function InsurersList({ initialInsurers }: InsurersListProps) {
                       <FaUndo />
                     </button>
                   </div>
-                  <div className="text-gray-600">
-                    <p>No hay contacto registrado.</p>
-                  </div>
+                  {(() => {
+                    const primaryContact = insurer.contacts.find(c => c.is_primary);
+                    return primaryContact ? (
+                      <div className="text-gray-700 text-sm space-y-2 flex-1">
+                        <p className="font-bold text-[#010139] text-base">{primaryContact.name}</p>
+                        {primaryContact.position && <p className="text-gray-600">📋 {primaryContact.position}</p>}
+                        {primaryContact.phone && <p className="text-gray-600">📞 {primaryContact.phone}</p>}
+                        {primaryContact.email && <p className="text-gray-600">✉️ {primaryContact.email}</p>}
+                      </div>
+                    ) : (
+                      <div className="text-gray-500 text-sm flex-1 flex items-center justify-center">
+                        <p>No hay contacto principal</p>
+                      </div>
+                    );
+                  })()}
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleOpenModal(insurer); }}
+                    className="mt-4 w-full py-2 px-4 bg-[#8AAA19] text-white rounded-lg hover:bg-[#6d8814] transition-all flex items-center justify-center gap-2 font-semibold"
+                  >
+                    <FaEye /> Ver + ({insurer.contacts.length})
+                  </button>
                 </div>
               </div>
             </div>
           ))}
         </div>
+      )}
+
+      {/* Contacts Modal */}
+      {modalInsurer && (
+        <ContactsModal
+          isOpen={true}
+          onClose={handleCloseModal}
+          insurerId={modalInsurer.id}
+          insurerName={modalInsurer.name}
+          initialContacts={modalInsurer.contacts}
+          onUpdate={handleModalUpdate}
+        />
       )}
     </div>
   );

@@ -720,15 +720,27 @@ export async function actionApplyAdvancePayment(payload: {
     }
 
     // Para efectivo u otros pagos, aplicar directamente
-    const { error: logError } = await supabase.from('advance_logs').insert({
+    const logPayload: AdvanceLogIns = {
       advance_id,
       amount,
       payment_type,
-      fortnight_id: fortnight_id || undefined,
-      applied_by,
-    } satisfies AdvanceLogIns);
+      fortnight_id: fortnight_id || null,
+      applied_by: applied_by || null,
+    };
+    
+    console.log('[actionApplyAdvancePayment] Creating advance log:', logPayload);
+    
+    const { data: logData, error: logError } = await supabase
+      .from('advance_logs')
+      .insert([logPayload])
+      .select();
 
-    if (logError) throw logError;
+    if (logError) {
+      console.error('[actionApplyAdvancePayment] Error creating advance log:', logError);
+      throw logError;
+    }
+    
+    console.log('[actionApplyAdvancePayment] Advance log created successfully:', logData);
 
     const newAmount = (Number((advance as any).amount) || 0) - amount;
     const newStatus = newAmount <= 0 ? 'PAID' : 'PARTIAL';
@@ -740,7 +752,32 @@ export async function actionApplyAdvancePayment(payload: {
 
     if (updateError) throw updateError;
 
+    // Si el adelanto está saldado, habilitar pending_payment relacionado para que pueda ser marcado como pagado
+    if (newStatus === 'PAID') {
+      // Buscar pending_payment con este advance_id en notes
+      const { data: pendingPayments } = await supabase
+        .from('pending_payments')
+        .select('id, notes')
+        .eq('purpose', 'DESCUENTO A CORREDOR')
+        .eq('status', 'pending');
+
+      if (pendingPayments && pendingPayments.length > 0) {
+        for (const payment of pendingPayments) {
+          // Check if notes contain this advance_id
+          if (payment.notes?.includes(`Adelanto ID: ${advance_id}`)) {
+            await supabase
+              .from('pending_payments')
+              .update({
+                can_be_paid: true,
+              } satisfies TablesUpdate<'pending_payments'>)
+              .eq('id', payment.id);
+          }
+        }
+      }
+    }
+
     revalidatePath('/(app)/commissions');
+    revalidatePath('/(app)/checks');
     return { ok: true as const };
   } catch (error) {
     return {

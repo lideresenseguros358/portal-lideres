@@ -19,9 +19,9 @@ export const ClientUpdateSchema = ClientInsertSchema.partial()
 export const PolicyInsertSchema = z.object({
   policy_number: z.string().min(1, 'Número de póliza requerido'),
   insurer_id: z.string().uuid('Aseguradora requerida'),
-  ramo: z.string().optional(),
-  start_date: z.string().optional(),
-  renewal_date: z.string().min(1, 'Fecha de renovación requerida'),
+  ramo: z.string().optional().nullable(),
+  start_date: z.string().optional().nullable(),
+  renewal_date: z.string().min(1, 'Fecha de renovación requerida').nullable(),
   status: z.enum(['ACTIVA', 'VENCIDA', 'CANCELADA']).default('ACTIVA'),
 });
 

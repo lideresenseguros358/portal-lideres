@@ -159,3 +159,224 @@ export async function actionUpdateBrokerAssaCode(brokerId: string, assaCode: str
   revalidatePath('/(app)/insurers');
   return { ok: true as const };
 }
+
+// =====================================================
+// INSURER CONTACTS ACTIONS
+// =====================================================
+
+export async function actionGetInsurerContacts(insurerId: string) {
+  try {
+    const { getSupabaseAdmin } = await import('@/lib/supabase/admin');
+    const supabase = await getSupabaseAdmin();
+    
+    const { data, error } = await supabase
+      .from('insurer_contacts')
+      .select('*')
+      .eq('insurer_id', insurerId)
+      .order('name', { ascending: true });
+    
+    if (error) throw error;
+    
+    return { ok: true as const, data: data || [] };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : 'Error al cargar contactos'
+    };
+  }
+}
+
+export async function actionCreateInsurerContact(data: {
+  insurer_id: string;
+  name: string;
+  position?: string;
+  phone?: string;
+  email?: string;
+  notes?: string;
+}) {
+  try {
+    const { getSupabaseServer } = await import('@/lib/supabase/server');
+    const { getSupabaseAdmin } = await import('@/lib/supabase/admin');
+    
+    // Verificar autenticación y rol
+    const supabaseServer = await getSupabaseServer();
+    const { data: { user } } = await supabaseServer.auth.getUser();
+    
+    if (!user) {
+      return { ok: false as const, error: 'No autenticado' };
+    }
+    
+    const { data: profile } = await supabaseServer
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+    
+    if (profile?.role !== 'master') {
+      return { ok: false as const, error: 'Solo Master puede agregar contactos' };
+    }
+    
+    // Crear contacto
+    const supabase = await getSupabaseAdmin();
+    const { data: contact, error } = await supabase
+      .from('insurer_contacts')
+      .insert([{
+        insurer_id: data.insurer_id,
+        name: data.name,
+        position: data.position || null,
+        phone: data.phone || null,
+        email: data.email || null,
+        notes: data.notes || null
+      }])
+      .select()
+      .single();
+    
+    if (error) throw error;
+    
+    revalidatePath(`/(app)/insurers/${data.insurer_id}/edit`);
+    return { ok: true as const, data: contact };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : 'Error al crear contacto'
+    };
+  }
+}
+
+export async function actionUpdateInsurerContact(
+  contactId: string,
+  data: {
+    name?: string;
+    position?: string;
+    phone?: string;
+    email?: string;
+    notes?: string;
+  }
+) {
+  try {
+    const { getSupabaseServer } = await import('@/lib/supabase/server');
+    const { getSupabaseAdmin } = await import('@/lib/supabase/admin');
+    
+    // Verificar autenticación y rol
+    const supabaseServer = await getSupabaseServer();
+    const { data: { user } } = await supabaseServer.auth.getUser();
+    
+    if (!user) {
+      return { ok: false as const, error: 'No autenticado' };
+    }
+    
+    const { data: profile } = await supabaseServer
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+    
+    if (profile?.role !== 'master') {
+      return { ok: false as const, error: 'Solo Master puede editar contactos' };
+    }
+    
+    // Actualizar contacto
+    const supabase = await getSupabaseAdmin();
+    const { data: contact, error } = await supabase
+      .from('insurer_contacts')
+      .update(data)
+      .eq('id', contactId)
+      .select()
+      .single();
+    
+    if (error) throw error;
+    
+    revalidatePath('/(app)/insurers');
+    return { ok: true as const, data: contact };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : 'Error al actualizar contacto'
+    };
+  }
+}
+
+export async function actionDeleteInsurerContact(contactId: string, insurerId: string) {
+  try {
+    const { getSupabaseServer } = await import('@/lib/supabase/server');
+    const { getSupabaseAdmin } = await import('@/lib/supabase/admin');
+    
+    // Verificar autenticación y rol
+    const supabaseServer = await getSupabaseServer();
+    const { data: { user } } = await supabaseServer.auth.getUser();
+    
+    if (!user) {
+      return { ok: false as const, error: 'No autenticado' };
+    }
+    
+    const { data: profile } = await supabaseServer
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+    
+    if (profile?.role !== 'master') {
+      return { ok: false as const, error: 'Solo Master puede eliminar contactos' };
+    }
+    
+    // Eliminar contacto
+    const supabase = await getSupabaseAdmin();
+    const { error } = await supabase
+      .from('insurer_contacts')
+      .delete()
+      .eq('id', contactId);
+    
+    if (error) throw error;
+    
+    revalidatePath(`/(app)/insurers/${insurerId}/edit`);
+    return { ok: true as const };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : 'Error al eliminar contacto'
+    };
+  }
+}
+
+export async function actionSetPrimaryContact(contactId: string, insurerId: string) {
+  try {
+    const { getSupabaseServer } = await import('@/lib/supabase/server');
+    const { getSupabaseAdmin } = await import('@/lib/supabase/admin');
+    
+    // Verificar autenticación y rol
+    const supabaseServer = await getSupabaseServer();
+    const { data: { user } } = await supabaseServer.auth.getUser();
+    
+    if (!user) {
+      return { ok: false as const, error: 'No autenticado' };
+    }
+    
+    const { data: profile } = await supabaseServer
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+    
+    if (profile?.role !== 'master') {
+      return { ok: false as const, error: 'Solo Master puede establecer contacto principal' };
+    }
+    
+    // Establecer como contacto principal (el trigger se encargará de desmarcar los demás)
+    const supabase = await getSupabaseAdmin();
+    const { error } = await supabase
+      .from('insurer_contacts')
+      .update({ is_primary: true } as any)
+      .eq('id', contactId);
+    
+    if (error) throw error;
+    
+    revalidatePath('/(app)/insurers');
+    revalidatePath(`/(app)/insurers/${insurerId}/edit`);
+    return { ok: true as const };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : 'Error al establecer contacto principal'
+    };
+  }
+}

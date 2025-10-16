@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Eye, Edit3, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
@@ -11,6 +11,7 @@ import ClientsByInsurer from './ClientsByInsurer';
 import ClientPolicyWizard from './ClientPolicyWizard';
 import PreliminaryClientsTab from './PreliminaryClientsTab';
 import { ClientWithPolicies, InsurerWithCount } from '@/types/db';
+import { actionGetPreliminaryClients } from '@/app/(app)/db/preliminary-actions';
 
 interface DatabaseTabsProps {
   activeTab: string;
@@ -249,6 +250,18 @@ export default function DatabaseTabs({
   const modal = searchParams.get('modal');
   const clientToEditId = searchParams.get('editClient');
   const view = searchParams.get('view') || 'clients';
+  const [preliminaryCount, setPreliminaryCount] = useState<number>(0);
+
+  // Load preliminary count
+  useEffect(() => {
+    const loadCount = async () => {
+      const result = await actionGetPreliminaryClients();
+      if (result.ok) {
+        setPreliminaryCount(result.data.length);
+      }
+    };
+    loadCount();
+  }, [view]);
 
   const clientToEdit = clientToEditId ? clients.find(c => c.id === clientToEditId) : null;
 
@@ -295,11 +308,16 @@ export default function DatabaseTabs({
           CLIENTES
         </button>
         <button
-          className={`gs-btn ${view === 'preliminary' ? 'is-active' : ''}`}
+          className={`gs-btn ${view === 'preliminary' ? 'is-active' : ''} relative`}
           data-group="preliminares"
           onClick={() => router.push('/db?tab=clients&view=preliminary', { scroll: false })}
         >
           PRELIMINARES
+          {preliminaryCount > 0 && (
+            <span className="absolute -top-2 -right-2 bg-amber-500 text-white text-xs font-bold rounded-full h-6 w-6 flex items-center justify-center shadow-lg border-2 border-white">
+              {preliminaryCount}
+            </span>
+          )}
         </button>
         <button
           className={`gs-btn ${view === 'insurers' ? 'is-active' : ''}`}

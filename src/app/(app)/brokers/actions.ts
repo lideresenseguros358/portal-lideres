@@ -14,10 +14,10 @@ export async function actionGetBrokers(search?: string) {
   try {
     const supabase = await getSupabaseAdmin();
 
-    // Get all brokers with their profiles
+    // Get all brokers
     const { data: brokersData, error: brokersError } = await supabase
       .from('brokers')
-      .select('*, profiles!p_id(id, email, full_name, role, avatar_url)')
+      .select('*')
       .order('name', { ascending: true });
 
     if (brokersError) {
@@ -29,12 +29,35 @@ export async function actionGetBrokers(search?: string) {
       return { ok: true as const, data: [] };
     }
 
+    // Get profiles for all brokers
+    const brokerProfileIds = brokersData.map(b => b.p_id).filter(Boolean);
+    let profilesData: any[] = [];
+    
+    if (brokerProfileIds.length > 0) {
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, email, full_name, role, avatar_url')
+        .in('id', brokerProfileIds);
+      
+      if (profilesError) {
+        console.error('Error fetching profiles:', profilesError);
+      } else {
+        profilesData = profiles || [];
+      }
+    }
+
+    // Merge brokers with profiles
+    const brokersWithProfiles = brokersData.map(broker => ({
+      ...broker,
+      profiles: profilesData.find(p => p.id === broker.p_id) || null
+    }));
+
     // Filter by search if provided
-    let filteredBrokers = brokersData;
+    let filteredBrokers = brokersWithProfiles;
     
     if (search) {
       const searchLower = search.toLowerCase();
-      filteredBrokers = brokersData.filter(broker => {
+      filteredBrokers = brokersWithProfiles.filter(broker => {
         const profileData = broker.profiles as any;
         
         return (
@@ -182,7 +205,7 @@ export async function actionUpdateBroker(brokerId: string, updates: Partial<Tabl
     // Get broker with profile info
     const { data: broker } = await supabase
       .from('brokers')
-      .select('p_id, email, profiles!p_id(email)')
+      .select('p_id, email')
       .eq('id', brokerId)
       .single();
 
@@ -190,7 +213,18 @@ export async function actionUpdateBroker(brokerId: string, updates: Partial<Tabl
       return { ok: false as const, error: 'Corredor no encontrado' };
     }
 
-    const brokerEmail = (broker?.profiles as any)?.email || broker?.email;
+    // Get profile email separately
+    let brokerEmail = broker?.email;
+    if (broker.p_id) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('email')
+        .eq('id', broker.p_id)
+        .single();
+      if (profile?.email) {
+        brokerEmail = profile.email;
+      }
+    }
     if (brokerEmail === OFICINA_EMAIL && cleanedUpdates.percent_default && cleanedUpdates.percent_default !== 1.00) {
       return { ok: false as const, error: 'No se puede cambiar el % de Oficina (siempre 100%)' };
     }
@@ -269,11 +303,19 @@ export async function actionToggleBrokerActive(brokerId: string, active: boolean
     // Cannot deactivate Oficina
     const { data: broker } = await supabase
       .from('brokers')
-      .select('profiles!p_id(email)')
+      .select('p_id')
       .eq('id', brokerId)
       .single();
 
-    const brokerEmail = (broker?.profiles as any)?.email;
+    let brokerEmail = null;
+    if (broker?.p_id) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('email')
+        .eq('id', broker.p_id)
+        .single();
+      brokerEmail = profile?.email;
+    }
     if (brokerEmail === OFICINA_EMAIL && !active) {
       return { ok: false as const, error: 'No se puede desactivar Oficina' };
     }
@@ -329,11 +371,19 @@ export async function actionDeleteBroker(brokerId: string) {
     // Cannot delete Oficina
     const { data: broker } = await supabase
       .from('brokers')
-      .select('profiles!p_id(email)')
+      .select('p_id')
       .eq('id', brokerId)
       .single();
 
-    const brokerEmail = (broker?.profiles as any)?.email;
+    let brokerEmail = null;
+    if (broker?.p_id) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('email')
+        .eq('id', broker.p_id)
+        .single();
+      brokerEmail = profile?.email;
+    }
     if (brokerEmail === OFICINA_EMAIL) {
       return { ok: false as const, error: 'No se puede eliminar Oficina' };
     }
@@ -341,11 +391,19 @@ export async function actionDeleteBroker(brokerId: string) {
     // Get Oficina broker ID
     const { data: oficina } = await supabase
       .from('profiles')
-      .select('id, brokers!p_id(id)')
+      .select('id')
       .eq('email', OFICINA_EMAIL)
       .single();
 
-    const oficinaId = (oficina?.brokers as any)?.id;
+    let oficinaId = null;
+    if (oficina?.id) {
+      const { data: oficinaBroker } = await supabase
+        .from('brokers')
+        .select('id')
+        .eq('p_id', oficina.id)
+        .single();
+      oficinaId = oficinaBroker?.id;
+    }
 
     if (!oficinaId) {
       return { ok: false as const, error: 'No se encontró broker Oficina' };
@@ -453,7 +511,7 @@ export async function actionGetExpiringCarnets(userRole?: 'master' | 'broker', b
 
     let query = supabase
       .from('brokers')
-      .select('id, name, carnet_expiry_date, p_id, profiles!p_id(email, full_name)')
+      .select('id, name, carnet_expiry_date, p_id')
       .not('carnet_expiry_date', 'is', null)
       .eq('active', true);
 
@@ -473,6 +531,18 @@ export async function actionGetExpiringCarnets(userRole?: 'master' | 'broker', b
       return { ok: true as const, data: [] };
     }
 
+    // Get profiles for brokers
+    const brokerProfileIds = data.map(b => b.p_id).filter(Boolean);
+    let profilesData: any[] = [];
+    
+    if (brokerProfileIds.length > 0) {
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, email, full_name')
+        .in('id', brokerProfileIds);
+      profilesData = profiles || [];
+    }
+
     // Calculate days until expiry and filter those within 60 days
     const today = new Date();
     const expiringCarnets = data
@@ -480,11 +550,12 @@ export async function actionGetExpiringCarnets(userRole?: 'master' | 'broker', b
         const expiryDate = new Date(broker.carnet_expiry_date);
         const diffTime = expiryDate.getTime() - today.getTime();
         const daysUntilExpiry = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        const profile = profilesData.find(p => p.id === broker.p_id);
 
         return {
           id: broker.id,
-          name: broker.name || (broker.profiles as any)?.full_name || 'Sin nombre',
-          email: (broker.profiles as any)?.email || '',
+          name: broker.name || profile?.full_name || 'Sin nombre',
+          email: profile?.email || '',
           carnet_expiry_date: broker.carnet_expiry_date,
           daysUntilExpiry,
           status: daysUntilExpiry < 0 ? 'expired' : daysUntilExpiry <= 30 ? 'critical' : 'warning'

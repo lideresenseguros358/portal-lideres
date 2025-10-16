@@ -299,6 +299,8 @@ export default function ClientForm({ client, onClose }: ClientFormProps) {
               }
               setShowPolicyForm(false);
               setEditingPolicy(null);
+              // Refresh the page to update the client list
+              router.refresh();
             }}
           />
         )}
@@ -387,6 +389,10 @@ function PolicyForm({ clientId, policy, onClose, onSave }: PolicyFormProps) {
       
       const method = policy ? "PUT" : "POST";
 
+      console.log('[PolicyForm] Guardando póliza...');
+      console.log('[PolicyForm] Method:', method);
+      console.log('[PolicyForm] URL:', url);
+
       const payload = {
         client_id: clientId,
         insurer_id: formData.insurer_id,
@@ -400,6 +406,8 @@ function PolicyForm({ clientId, policy, onClose, onSave }: PolicyFormProps) {
             ? null
             : Number(formData.percent_override),
       };
+      
+      console.log('[PolicyForm] Payload:', payload);
 
       if (payload.percent_override !== null && Number.isNaN(payload.percent_override)) {
         setError('El porcentaje debe ser un número válido.');
@@ -413,12 +421,20 @@ function PolicyForm({ clientId, policy, onClose, onSave }: PolicyFormProps) {
         body: JSON.stringify(payload),
       });
 
-      if (!response.ok) throw new Error("Error guardando póliza");
+      console.log('[PolicyForm] Response status:', response.status);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('[PolicyForm] Error response:', errorData);
+        throw new Error(errorData.error || "Error guardando póliza");
+      }
       
       const savedPolicy = await response.json();
+      console.log('[PolicyForm] Póliza guardada:', savedPolicy);
       onSave(savedPolicy);
-    } catch {
-      setError("Error al guardar la póliza");
+    } catch (err) {
+      console.error('[PolicyForm] Error:', err);
+      setError(err instanceof Error ? err.message : "Error al guardar la póliza");
     } finally {
       setLoading(false);
     }
@@ -450,8 +466,8 @@ function PolicyForm({ clientId, policy, onClose, onSave }: PolicyFormProps) {
               type="text"
               required
               value={formData.policy_number}
-              onChange={(e) => setFormData({ ...formData, policy_number: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              onChange={createUppercaseHandler((e) => setFormData({ ...formData, policy_number: e.target.value }))}
+              className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${uppercaseInputClass}`}
             />
           </div>
 
@@ -484,8 +500,8 @@ function PolicyForm({ clientId, policy, onClose, onSave }: PolicyFormProps) {
               type="text"
               required
               value={formData.ramo}
-              onChange={(e) => setFormData({ ...formData, ramo: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              onChange={createUppercaseHandler((e) => setFormData({ ...formData, ramo: e.target.value }))}
+              className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${uppercaseInputClass}`}
             />
           </div>
 
@@ -504,7 +520,7 @@ function PolicyForm({ clientId, policy, onClose, onSave }: PolicyFormProps) {
             </select>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Fecha inicio
@@ -513,7 +529,7 @@ function PolicyForm({ clientId, policy, onClose, onSave }: PolicyFormProps) {
                 type="date"
                 value={formData.start_date}
                 onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-2 sm:px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
               />
             </div>
             <div>
@@ -524,7 +540,7 @@ function PolicyForm({ clientId, policy, onClose, onSave }: PolicyFormProps) {
                 type="date"
                 value={formData.renewal_date}
                 onChange={(e) => setFormData({ ...formData, renewal_date: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-2 sm:px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
               />
             </div>
           </div>
