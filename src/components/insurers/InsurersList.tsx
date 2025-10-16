@@ -21,6 +21,7 @@ interface Insurer {
   id: string;
   name: string;
   active: boolean | null;
+  logo_url?: string | null;
   contacts: Contact[];
 }
 
@@ -47,6 +48,7 @@ export default function InsurersList({ initialInsurers }: InsurersListProps) {
                   id: result.data.id, 
                   name: result.data.name, 
                   active: result.data.active,
+                  logo_url: (result.data as any).logo_url || ins.logo_url,
                   contacts: ins.contacts 
                 }
               : ins
@@ -200,9 +202,22 @@ export default function InsurersList({ initialInsurers }: InsurersListProps) {
                   style={{ backfaceVisibility: 'hidden' }}
                 >
                   <div className="flex justify-between items-start mb-4">
-                    <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center text-gray-500 text-xl font-bold">
-                      {insurer.name.charAt(0)}
-                    </div>
+                    {insurer.logo_url ? (
+                      <div className="w-12 h-12 rounded-lg bg-white border border-gray-200 flex items-center justify-center p-1">
+                        <Image 
+                          src={insurer.logo_url} 
+                          alt={insurer.name}
+                          width={48}
+                          height={48}
+                          className="object-contain"
+                          unoptimized
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center text-gray-500 text-xl font-bold">
+                        {insurer.name.charAt(0)}
+                      </div>
+                    )}
                     <span className={`px-3 py-1 rounded-full text-xs font-medium ${
                       insurer.active 
                         ? 'bg-green-100 text-green-700' 

@@ -18,6 +18,7 @@ interface Insurer {
   id: string;
   name: string;
   active: boolean | null;
+  logo_url?: string | null;
   contacts: Contact[];
 }
 
@@ -27,7 +28,7 @@ async function getInsurers(): Promise<Insurer[]> {
   // Fetch insurers
   const { data: insurersData, error: insurersError } = await supabase
     .from('insurers')
-    .select('id, name, active')
+    .select('id, name, active, logo_url')
     .order('name', { ascending: true });
 
   if (insurersError) {

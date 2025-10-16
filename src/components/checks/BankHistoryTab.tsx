@@ -235,7 +235,7 @@ export default function BankHistoryTab({ onImportSuccess, refreshTrigger }: Bank
                             {transfer.reference_number}
                           </span>
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-600 max-w-xs truncate">
+                        <td className="px-6 py-4 text-sm text-gray-600 max-w-xs truncate" title={transfer.description || ''}>
                           {transfer.description}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right">
@@ -332,7 +332,7 @@ export default function BankHistoryTab({ onImportSuccess, refreshTrigger }: Bank
                     
                     {/* Descripción */}
                     {transfer.description && (
-                      <p className="text-sm text-gray-600 line-clamp-2">
+                      <p className="text-sm text-gray-600 line-clamp-2" title={transfer.description}>
                         {transfer.description}
                       </p>
                     )}

@@ -1,12 +1,12 @@
 'use client';
 
-import { useState } from 'react';
-import { FaArrowLeft, FaArrowRight, FaCheck, FaTimes, FaUser, FaFileAlt, FaListUl, FaDollarSign, FaEye } from 'react-icons/fa';
+import { useState, useEffect } from 'react';
+import { FaArrowLeft, FaArrowRight, FaCheck, FaTimes, FaUser, FaFileAlt, FaUpload, FaEye, FaPlus, FaTrash } from 'react-icons/fa';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { actionCreateCase } from '@/app/(app)/cases/actions';
-import { CASE_SECTIONS, CASE_STATUSES, MANAGEMENT_TYPES, DEFAULT_CHECKLIST } from '@/lib/constants/cases';
+import { CASE_SECTIONS, CASE_STATUSES, MANAGEMENT_TYPES, POLICY_TYPES, REQUIRED_DOCUMENTS, type PolicyType } from '@/lib/constants/cases';
 import { toUppercasePayload, createUppercaseHandler, uppercaseInputClass } from '@/lib/utils/uppercase';
 
 interface NewCaseWizardProps {
@@ -35,25 +35,23 @@ export default function NewCaseWizard({ brokers, clients, insurers }: NewCaseWiz
     section: 'SIN_CLASIFICAR',
     status: 'PENDIENTE_REVISION',
     management_type: 'COTIZACION',
+    policy_type: '' as PolicyType | '',
     notes: '',
     premium: 0,
     payment_method: '',
     
-    // Step 3: Checklist
-    checklist: DEFAULT_CHECKLIST.map((item: any) => ({ ...item, completed: false })),
+    // Step 3: Documents and Files (unified)
+    documents: [] as { label: string; required: boolean; standardName: string; category?: string; file?: File; uploaded: boolean; isMultiDocument?: boolean; documentParts?: string[] }[],
+    customDocuments: [] as { label: string; standardName: string; file?: File; uploaded: boolean }[],
     
-    // Step 4: Files (will be handled separately)
-    files: [] as File[],
-    
-    // Step 5: Review (no additional fields)
+    // Step 4: Review (no additional fields)
   });
 
   const steps = [
     { num: 1, label: 'Datos básicos', shortLabel: 'Datos', icon: FaUser },
     { num: 2, label: 'Clasificación', shortLabel: 'Clasif.', icon: FaFileAlt },
-    { num: 3, label: 'Checklist', shortLabel: 'Check', icon: FaListUl },
-    { num: 4, label: 'Archivos', shortLabel: 'Docs', icon: FaDollarSign },
-    { num: 5, label: 'Revisión', shortLabel: 'Review', icon: FaEye },
+    { num: 3, label: 'Documentos', shortLabel: 'Docs', icon: FaUpload },
+    { num: 4, label: 'Revisión', shortLabel: 'Review', icon: FaEye },
   ];
 
   const handleNext = () => {
@@ -74,9 +72,13 @@ export default function NewCaseWizard({ brokers, clients, insurers }: NewCaseWiz
         toast.error('Selecciona una sección');
         return;
       }
+      if (!formData.policy_type) {
+        toast.error('Selecciona un tipo de póliza');
+        return;
+      }
     }
 
-    if (currentStep < 5) {
+    if (currentStep < 4) {
       setCurrentStep(currentStep + 1);
     }
   };
@@ -87,15 +89,70 @@ export default function NewCaseWizard({ brokers, clients, insurers }: NewCaseWiz
     }
   };
 
+  // Load documents when policy type changes
+  useEffect(() => {
+    if (formData.policy_type) {
+      const docs = REQUIRED_DOCUMENTS[formData.policy_type as PolicyType] || [];
+      const documentsWithState = docs.map(doc => ({
+        ...doc,
+        uploaded: false,
+        file: undefined,
+      }));
+      setFormData(prev => ({ ...prev, documents: documentsWithState }));
+    }
+  }, [formData.policy_type]);
+
   const handleSubmit = async () => {
     setSaving(true);
 
+    // Prepare checklist from documents
+    const checklist = formData.documents.map(doc => ({
+      label: doc.label,
+      required: doc.required,
+      completed: doc.uploaded,
+      standardName: doc.standardName,
+    }));
+
+    // Add custom documents to checklist
+    formData.customDocuments.forEach(customDoc => {
+      checklist.push({
+        label: customDoc.label,
+        required: false,
+        completed: customDoc.uploaded,
+        standardName: customDoc.standardName,
+      });
+    });
+
+    // Prepare files for upload
+    const files: any[] = [];
+    formData.documents.forEach(doc => {
+      if (doc.file) {
+        files.push({
+          file: doc.file,
+          standardName: doc.standardName,
+          category: doc.category,
+          isMultiDocument: doc.isMultiDocument,
+          documentParts: doc.documentParts,
+        });
+      }
+    });
+
+    formData.customDocuments.forEach(customDoc => {
+      if (customDoc.file) {
+        files.push({
+          file: customDoc.file,
+          standardName: customDoc.standardName,
+        });
+      }
+    });
+
     // Prepare data for submission
-    const caseData = {
+    const caseData: any = {
       section: formData.section,
       ctype: formData.ctype,
       canal: formData.canal,
       management_type: formData.management_type,
+      policy_type: formData.policy_type || undefined,
       insurer_id: formData.insurer_id || '',
       broker_id: formData.broker_id,
       client_id: formData.client_id || undefined,
@@ -104,13 +161,15 @@ export default function NewCaseWizard({ brokers, clients, insurers }: NewCaseWiz
       premium: formData.premium || undefined,
       payment_method: formData.payment_method || undefined,
       notes: formData.notes || undefined,
+      checklist,
+      files,
     };
 
     const result = await actionCreateCase(caseData);
 
     if (result.ok) {
       toast.success('Caso creado correctamente');
-      router.push(`/cases/${result.data.id}`);
+      router.push(`/cases`);
     } else {
       toast.error(result.error);
       setSaving(false);
@@ -144,10 +203,6 @@ export default function NewCaseWizard({ brokers, clients, insurers }: NewCaseWiz
             <FaArrowLeft className="text-gray-600" />
           </Link>
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-[#010139]">
-              Nuevo Pendiente
-            </h1>
-            <p className="text-gray-600 mt-1">Paso {currentStep} de 5</p>
           </div>
         </div>
       </div>
@@ -348,6 +403,28 @@ export default function NewCaseWizard({ brokers, clients, insurers }: NewCaseWiz
               </select>
             </div>
 
+            {/* Policy Type */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Tipo de póliza *
+              </label>
+              <select
+                value={formData.policy_type}
+                onChange={(e) => setFormData({ ...formData, policy_type: e.target.value as PolicyType })}
+                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+              >
+                <option value="">Selecciona un tipo de póliza</option>
+                {Object.entries(POLICY_TYPES).map(([key, value]) => (
+                  <option key={key} value={key}>
+                    {value}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-gray-500 mt-2">
+                Los documentos requeridos se determinarán según el tipo de póliza seleccionado
+              </p>
+            </div>
+
             {/* Premium */}
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -398,65 +475,240 @@ export default function NewCaseWizard({ brokers, clients, insurers }: NewCaseWiz
           </div>
         )}
 
-        {/* Step 3: Checklist */}
+        {/* Step 3: Documents and Files (Unified) */}
         {currentStep === 3 && (
           <div className="space-y-6">
-            <h2 className="text-xl font-bold text-[#010139] mb-4">
-              Checklist de documentos
-            </h2>
-            <p className="text-gray-600">
-              Selecciona los documentos que ya han sido recibidos
-            </p>
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-xl font-bold text-[#010139] mb-1">
+                  Documentos Requeridos
+                </h2>
+                <p className="text-sm text-gray-600">
+                  {formData.policy_type ? `Tipo de póliza: ${POLICY_TYPES[formData.policy_type as PolicyType]}` : 'Selecciona un tipo de póliza en el paso anterior'}
+                </p>
+              </div>
+            </div>
 
-            <div className="space-y-3">
-              {formData.checklist.map((item: any, index: number) => (
-                <label
-                  key={index}
-                  className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-all cursor-pointer border-2 border-gray-200"
-                >
-                  <input
-                    type="checkbox"
-                    checked={item.completed}
-                    onChange={(e) => {
-                      const newChecklist = [...formData.checklist];
-                      newChecklist[index].completed = e.target.checked;
-                      setFormData({ ...formData, checklist: newChecklist });
-                    }}
-                    className="w-5 h-5 text-[#8AAA19] rounded focus:ring-[#8AAA19]"
-                  />
-                  <div className="flex-1">
-                    <p className="font-semibold text-gray-700">{item.label}</p>
-                    {item.required && (
-                      <p className="text-xs text-red-600">Requerido</p>
-                    )}
+            {formData.documents.length === 0 && (
+              <div className="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-4 text-center">
+                <p className="text-yellow-800 font-semibold">
+                  ⚠️ Debes seleccionar un tipo de póliza en el paso anterior para ver los documentos requeridos
+                </p>
+              </div>
+            )}
+
+            {formData.documents.length > 0 && (
+              <>
+                {/* Required Documents */}
+                <div className="space-y-3">
+                  {formData.documents.map((doc, index) => (
+                    <div
+                      key={index}
+                      className={`p-4 rounded-lg border-2 ${doc.uploaded ? 'bg-green-50 border-green-300' : 'bg-gray-50 border-gray-200'} ${doc.category === 'inspection' ? 'border-l-4 border-l-blue-500' : ''}`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <p className="font-semibold text-gray-700">{doc.label}</p>
+                            {doc.required && (
+                              <span className="text-xs px-2 py-0.5 bg-red-100 text-red-700 rounded-full font-semibold">Requerido</span>
+                            )}
+                            {doc.category === 'inspection' && (
+                              <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full font-semibold">📸 Inspección</span>
+                            )}
+                          </div>
+                          
+                          {doc.file && (
+                            <p className="text-xs text-gray-600 mt-1">
+                              📄 {doc.standardName}.{doc.file.name.split('.').pop()} ({(doc.file.size / 1024).toFixed(2)} KB)
+                            </p>
+                          )}
+
+                          {doc.isMultiDocument && doc.documentParts && (
+                            <div className="mt-2 p-2 bg-purple-50 border border-purple-200 rounded text-xs">
+                              <p className="font-semibold text-purple-800 mb-1">📦 Documento múltiple contiene:</p>
+                              <ul className="list-disc list-inside text-purple-700 space-y-0.5">
+                                {doc.documentParts.map((part, i) => (
+                                  <li key={i}>{part}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex gap-2">
+                          <label className={`cursor-pointer px-4 py-2 rounded-lg text-sm font-semibold transition-all ${doc.uploaded ? 'bg-green-600 hover:bg-green-700' : 'bg-[#010139] hover:bg-[#020270]'} text-white`}>
+                            {doc.uploaded ? '✓ Adjuntado' : '📎 Adjuntar'}
+                            <input
+                              type="file"
+                              accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                              className="hidden"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  const newDocuments = [...formData.documents];
+                                  newDocuments[index] = {
+                                    ...doc,
+                                    file,
+                                    uploaded: true,
+                                  };
+                                  setFormData({ ...formData, documents: newDocuments });
+                                  toast.success(`Archivo adjuntado: ${doc.label}`);
+                                }
+                              }}
+                            />
+                          </label>
+
+                          {doc.uploaded && (
+                            <button
+                              onClick={() => {
+                                const newDocuments = [...formData.documents];
+                                newDocuments[index] = {
+                                  ...doc,
+                                  file: undefined,
+                                  uploaded: false,
+                                  isMultiDocument: false,
+                                  documentParts: undefined,
+                                };
+                                setFormData({ ...formData, documents: newDocuments });
+                                toast.info('Archivo eliminado');
+                              }}
+                              className="px-3 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm"
+                            >
+                              <FaTrash />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Multi-document option */}
+                      {doc.file && !doc.isMultiDocument && (
+                        <div className="mt-3 pt-3 border-t border-gray-200">
+                          <button
+                            onClick={() => {
+                              const parts = prompt('Este PDF contiene múltiples documentos. Ingresa los nombres separados por comas (ej: cédula, formulario, comprobante):');
+                              if (parts) {
+                                const documentParts = parts.split(',').map(p => p.trim()).filter(p => p);
+                                if (documentParts.length > 0) {
+                                  const newDocuments = [...formData.documents];
+                                  newDocuments[index] = {
+                                    ...doc,
+                                    isMultiDocument: true,
+                                    documentParts,
+                                  };
+                                  setFormData({ ...formData, documents: newDocuments });
+                                  toast.success('Documento marcado como múltiple');
+                                }
+                              }
+                            }}
+                            className="text-xs text-purple-600 hover:text-purple-800 font-semibold flex items-center gap-1"
+                          >
+                            📦 Este PDF contiene varios documentos
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Custom Documents */}
+                <div className="mt-8 pt-6 border-t-2 border-gray-200">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-bold text-[#010139]">
+                      Otros Documentos
+                    </h3>
+                    <button
+                      onClick={() => {
+                        const label = prompt('Nombre del documento:');
+                        if (label) {
+                          const standardName = label.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+                          setFormData({
+                            ...formData,
+                            customDocuments: [
+                              ...formData.customDocuments,
+                              { label, standardName, uploaded: false }
+                            ]
+                          });
+                        }
+                      }}
+                      className="px-4 py-2 bg-[#8AAA19] hover:bg-[#7a9916] text-white rounded-lg text-sm font-semibold flex items-center gap-2"
+                    >
+                      <FaPlus /> Agregar Documento
+                    </button>
                   </div>
-                </label>
-              ))}
-            </div>
+
+                  {formData.customDocuments.length > 0 && (
+                    <div className="space-y-3">
+                      {formData.customDocuments.map((customDoc, index) => (
+                        <div
+                          key={index}
+                          className={`p-4 rounded-lg border-2 ${customDoc.uploaded ? 'bg-green-50 border-green-300' : 'bg-gray-50 border-gray-200'}`}
+                        >
+                          <div className="flex items-start gap-3">
+                            <div className="flex-1">
+                              <p className="font-semibold text-gray-700">{customDoc.label}</p>
+                              {customDoc.file && (
+                                <p className="text-xs text-gray-600 mt-1">
+                                  📄 {customDoc.standardName}.{customDoc.file.name.split('.').pop()} ({(customDoc.file.size / 1024).toFixed(2)} KB)
+                                </p>
+                              )}
+                            </div>
+
+                            <div className="flex gap-2">
+                              <label className={`cursor-pointer px-4 py-2 rounded-lg text-sm font-semibold transition-all ${customDoc.uploaded ? 'bg-green-600 hover:bg-green-700' : 'bg-[#010139] hover:bg-[#020270]'} text-white`}>
+                                {customDoc.uploaded ? '✓ Adjuntado' : '📎 Adjuntar'}
+                                <input
+                                  type="file"
+                                  accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                                  className="hidden"
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) {
+                                      const newCustomDocs = [...formData.customDocuments];
+                                      newCustomDocs[index] = {
+                                        ...customDoc,
+                                        file,
+                                        uploaded: true,
+                                      };
+                                      setFormData({ ...formData, customDocuments: newCustomDocs });
+                                      toast.success(`Archivo adjuntado: ${customDoc.label}`);
+                                    }
+                                  }}
+                                />
+                              </label>
+
+                              <button
+                                onClick={() => {
+                                  const newCustomDocs = formData.customDocuments.filter((_, i) => i !== index);
+                                  setFormData({ ...formData, customDocuments: newCustomDocs });
+                                  toast.info('Documento personalizado eliminado');
+                                }}
+                                className="px-3 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-sm"
+                              >
+                                <FaTrash />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Summary */}
+                <div className="mt-6 p-4 bg-blue-50 border-2 border-blue-200 rounded-lg">
+                  <p className="text-sm text-blue-800">
+                    <span className="font-semibold">📊 Resumen:</span> {formData.documents.filter(d => d.uploaded).length} de {formData.documents.length} documentos requeridos adjuntados
+                    {formData.customDocuments.length > 0 && ` + ${formData.customDocuments.filter(d => d.uploaded).length} documentos adicionales`}
+                  </p>
+                </div>
+              </>
+            )}
           </div>
         )}
 
-        {/* Step 4: Files */}
+        {/* Step 4: Review */}
         {currentStep === 4 && (
-          <div className="space-y-6">
-            <h2 className="text-xl font-bold text-[#010139] mb-4">
-              Archivos adjuntos
-            </h2>
-            <p className="text-gray-600 mb-4">
-              Puedes agregar archivos después de crear el caso
-            </p>
-
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-12 text-center">
-              <div className="text-gray-400 text-6xl mb-4">📎</div>
-              <p className="text-gray-600">
-                Los archivos se pueden cargar desde la página de detalle del caso
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* Step 5: Review */}
-        {currentStep === 5 && (
           <div className="space-y-6">
             <h2 className="text-xl font-bold text-[#010139] mb-4">
               Revisión final
@@ -485,7 +737,10 @@ export default function NewCaseWizard({ brokers, clients, insurers }: NewCaseWiz
                 <div className="space-y-2 text-sm">
                   <p><span className="font-semibold">Sección:</span> {CASE_SECTIONS[formData.section as keyof typeof CASE_SECTIONS]}</p>
                   <p><span className="font-semibold">Estado:</span> {CASE_STATUSES[formData.status as keyof typeof CASE_STATUSES]}</p>
-                  <p><span className="font-semibold">Tipo:</span> {MANAGEMENT_TYPES[formData.management_type as keyof typeof MANAGEMENT_TYPES]}</p>
+                  <p><span className="font-semibold">Tipo de gestión:</span> {MANAGEMENT_TYPES[formData.management_type as keyof typeof MANAGEMENT_TYPES]}</p>
+                  {formData.policy_type && (
+                    <p><span className="font-semibold">Tipo de póliza:</span> {POLICY_TYPES[formData.policy_type as PolicyType]}</p>
+                  )}
                   {formData.notes && (
                     <p><span className="font-semibold">Notas:</span> {formData.notes}</p>
                   )}
@@ -507,12 +762,24 @@ export default function NewCaseWizard({ brokers, clients, insurers }: NewCaseWiz
                 </div>
               )}
 
-              {/* Checklist */}
+              {/* Documents */}
               <div className="bg-gradient-to-br from-gray-50 to-gray-100 rounded-lg p-4 border-l-4 border-blue-500">
-                <h3 className="font-bold text-[#010139] mb-3">Checklist</h3>
-                <p className="text-sm text-gray-600">
-                  {formData.checklist.filter((c: any) => c.completed).length} de {formData.checklist.length} documentos recibidos
-                </p>
+                <h3 className="font-bold text-[#010139] mb-3">📄 Documentos</h3>
+                <div className="space-y-2 text-sm">
+                  <p className="text-gray-700">
+                    <span className="font-semibold">Requeridos:</span> {formData.documents.filter(d => d.uploaded).length} de {formData.documents.length} adjuntados
+                  </p>
+                  {formData.customDocuments.length > 0 && (
+                    <p className="text-gray-700">
+                      <span className="font-semibold">Adicionales:</span> {formData.customDocuments.filter(d => d.uploaded).length} de {formData.customDocuments.length} adjuntados
+                    </p>
+                  )}
+                  {formData.documents.some(d => d.category === 'inspection' && d.uploaded) && (
+                    <p className="text-blue-700">
+                      <span className="font-semibold">📸 Inspección:</span> {formData.documents.filter(d => d.category === 'inspection' && d.uploaded).length} fotos adjuntadas
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -531,7 +798,7 @@ export default function NewCaseWizard({ brokers, clients, insurers }: NewCaseWiz
             Anterior
           </button>
 
-          {currentStep < 5 ? (
+          {currentStep < 4 ? (
             <button
               onClick={handleNext}
               className="px-6 py-3 bg-gradient-to-r from-[#010139] to-[#020270] text-white rounded-lg hover:shadow-lg transition-all font-semibold flex items-center gap-2"

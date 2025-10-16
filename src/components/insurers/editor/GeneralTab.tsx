@@ -1,34 +1,147 @@
 'use client';
 
-import { useState, useTransition } from 'react';
-import { FaSave, FaToggleOn, FaToggleOff } from 'react-icons/fa';
+import { useState, useTransition, useRef } from 'react';
+import { FaSave, FaToggleOn, FaToggleOff, FaImage, FaTrash } from 'react-icons/fa';
+import Image from 'next/image';
 import { actionUpdateInsurer, actionToggleInsurerActive } from '@/app/(app)/insurers/actions';
 import { toUppercasePayload, createUppercaseHandler, uppercaseInputClass } from '@/lib/utils/uppercase';
+import { supabaseClient } from '@/lib/supabase/client';
 
 interface GeneralTabProps {
   insurer: {
     id: string;
     name: string;
     active: boolean | null;
+    logo_url?: string | null;
   };
 }
 
 export default function GeneralTab({ insurer }: GeneralTabProps) {
   const [name, setName] = useState(insurer.name);
   const [isActive, setIsActive] = useState(insurer.active);
+  const [logoUrl, setLogoUrl] = useState(insurer.logo_url || null);
+  const [uploading, setUploading] = useState(false);
   const [isSaving, startSaving] = useTransition();
   const [isToggling, startToggling] = useTransition();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleSave = () => {
     startSaving(async () => {
       const upperName = name.toUpperCase();
-      const result = await actionUpdateInsurer(insurer.id, { name: upperName });
+      const result = await actionUpdateInsurer(insurer.id, { 
+        name: upperName,
+        logo_url: logoUrl
+      });
       if (!result.ok) {
         alert(`Error: ${result.error}`);
       } else {
         setName(upperName);
       }
     });
+  };
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validar tipo de archivo
+    if (!file.type.startsWith('image/')) {
+      alert('Por favor selecciona un archivo de imagen');
+      return;
+    }
+
+    // Validar tamaño (max 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      alert('El archivo es muy grande. Máximo 2MB');
+      return;
+    }
+
+    setUploading(true);
+
+    try {
+      // Generar nombre único
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${insurer.id}-${Date.now()}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      const supabase = supabaseClient();
+
+      // Eliminar logo anterior si existe
+      if (logoUrl) {
+        const oldPath = logoUrl.split('/').pop();
+        if (oldPath) {
+          await supabase.storage
+            .from('insurer-logos')
+            .remove([oldPath]);
+        }
+      }
+
+      // Subir nuevo archivo
+      const { data, error } = await supabase.storage
+        .from('insurer-logos')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: true
+        });
+
+      if (error) throw error;
+
+      // Obtener URL pública
+      const { data: { publicUrl } } = supabase.storage
+        .from('insurer-logos')
+        .getPublicUrl(filePath);
+
+      setLogoUrl(publicUrl);
+      
+      // Auto-guardar el logo
+      const result = await actionUpdateInsurer(insurer.id, { logo_url: publicUrl });
+      if (!result.ok) {
+        throw new Error(result.error);
+      }
+
+      alert('Logo actualizado exitosamente');
+    } catch (error: any) {
+      console.error('Error uploading logo:', error);
+      alert(`Error al subir logo: ${error.message}`);
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleDeleteLogo = async () => {
+    if (!logoUrl) return;
+    if (!confirm('¿Estás seguro de eliminar el logo?')) return;
+
+    setUploading(true);
+
+    try {
+      const supabase = supabaseClient();
+      
+      // Eliminar del storage
+      const oldPath = logoUrl.split('/').pop();
+      if (oldPath) {
+        await supabase.storage
+          .from('insurer-logos')
+          .remove([oldPath]);
+      }
+
+      // Actualizar BD
+      const result = await actionUpdateInsurer(insurer.id, { logo_url: null });
+      if (!result.ok) {
+        throw new Error(result.error);
+      }
+
+      setLogoUrl(null);
+      alert('Logo eliminado exitosamente');
+    } catch (error: any) {
+      console.error('Error deleting logo:', error);
+      alert(`Error al eliminar logo: ${error.message}`);
+    } finally {
+      setUploading(false);
+    }
   };
 
   const handleToggle = () => {
@@ -55,6 +168,56 @@ export default function GeneralTab({ insurer }: GeneralTabProps) {
           className={`form-input ${uppercaseInputClass}`}
         />
       </div>
+      
+      {/* Logo Upload */}
+      <div className="form-group">
+        <label>Logo de la Aseguradora</label>
+        <div className="logo-container">
+          {logoUrl ? (
+            <div className="logo-preview">
+              <Image 
+                src={logoUrl} 
+                alt={name} 
+                width={120} 
+                height={120}
+                className="logo-image"
+                unoptimized
+              />
+              <button 
+                type="button"
+                onClick={handleDeleteLogo} 
+                className="delete-logo-btn"
+                disabled={uploading}
+              >
+                <FaTrash /> Eliminar
+              </button>
+            </div>
+          ) : (
+            <div className="logo-placeholder">
+              <FaImage size={32} />
+              <p>Sin logo</p>
+            </div>
+          )}
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            onChange={handleLogoUpload}
+            style={{ display: 'none' }}
+            disabled={uploading}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="upload-logo-btn"
+            disabled={uploading}
+          >
+            <FaImage /> {uploading ? 'Subiendo...' : logoUrl ? 'Cambiar Logo' : 'Subir Logo'}
+          </button>
+          <p className="logo-hint">Tamaño recomendado: 200x200px. Máximo 2MB.</p>
+        </div>
+      </div>
+
       <div className="form-group">
         <label>Estado</label>
         <button onClick={handleToggle} className="status-toggle" disabled={isToggling}>
@@ -151,6 +314,102 @@ export default function GeneralTab({ insurer }: GeneralTabProps) {
         .btn-primary:disabled { 
           opacity: 0.7;
           cursor: not-allowed;
+        }
+        
+        .logo-container {
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+        }
+        
+        .logo-preview {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 12px;
+          background: #f9f9f9;
+          border-radius: 8px;
+          border: 2px solid #e0e0e0;
+        }
+        
+        .logo-image {
+          border-radius: 8px;
+          object-fit: contain;
+          background: white;
+          padding: 8px;
+        }
+        
+        .delete-logo-btn {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          padding: 8px 12px;
+          background: #dc2626;
+          color: white;
+          border: none;
+          border-radius: 6px;
+          font-size: 13px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: background 0.2s;
+        }
+        
+        .delete-logo-btn:hover {
+          background: #b91c1c;
+        }
+        
+        .delete-logo-btn:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+        
+        .logo-placeholder {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          padding: 24px;
+          background: #f9f9f9;
+          border: 2px dashed #d0d0d0;
+          border-radius: 8px;
+          color: #999;
+          gap: 8px;
+        }
+        
+        .logo-placeholder p {
+          margin: 0;
+          font-size: 14px;
+        }
+        
+        .upload-logo-btn {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 10px 16px;
+          background: #8AAA19;
+          color: white;
+          border: none;
+          border-radius: 8px;
+          font-size: 14px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: background 0.2s;
+          align-self: flex-start;
+        }
+        
+        .upload-logo-btn:hover {
+          background: #738914;
+        }
+        
+        .upload-logo-btn:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+        
+        .logo-hint {
+          margin: 0;
+          font-size: 12px;
+          color: #666;
         }
         
         /* Desktop */

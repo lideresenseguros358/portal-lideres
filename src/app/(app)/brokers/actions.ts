@@ -244,19 +244,51 @@ export async function actionUpdateBroker(brokerId: string, updates: Partial<Tabl
 
     console.log('[actionUpdateBroker] Broker table updated successfully');
 
-    // Sync name to profiles.full_name if name was updated
-    if (cleanedUpdates.name && broker.p_id) {
-      console.log('[actionUpdateBroker] Syncing name to profiles.full_name');
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({ full_name: cleanedUpdates.name })
-        .eq('id', broker.p_id);
+    // Sync data to profiles and auth.users
+    if (broker.p_id) {
+      const profileUpdates: any = {};
+      
+      // Sync name to profiles.full_name
+      if (cleanedUpdates.name) {
+        console.log('[actionUpdateBroker] Syncing name to profiles.full_name');
+        profileUpdates.full_name = cleanedUpdates.name;
+      }
+      
+      // Sync email to profiles.email
+      if (cleanedUpdates.email) {
+        console.log('[actionUpdateBroker] Syncing email to profiles.email');
+        profileUpdates.email = cleanedUpdates.email;
+      }
 
-      if (profileError) {
-        console.error('[actionUpdateBroker] Warning: Could not sync to profiles:', profileError);
-        // Don't fail the whole operation, just log the warning
-      } else {
-        console.log('[actionUpdateBroker] Profile full_name synced successfully');
+      // Update profiles if there are changes
+      if (Object.keys(profileUpdates).length > 0) {
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .update(profileUpdates)
+          .eq('id', broker.p_id);
+
+        if (profileError) {
+          console.error('[actionUpdateBroker] Warning: Could not sync to profiles:', profileError);
+          // Don't fail the whole operation, just log the warning
+        } else {
+          console.log('[actionUpdateBroker] Profile synced successfully:', profileUpdates);
+        }
+      }
+
+      // Sync email to auth.users if email was changed
+      if (cleanedUpdates.email) {
+        console.log('[actionUpdateBroker] Syncing email to auth.users');
+        const { error: authError } = await supabase.auth.admin.updateUserById(
+          broker.p_id,
+          { email: cleanedUpdates.email }
+        );
+
+        if (authError) {
+          console.error('[actionUpdateBroker] Warning: Could not sync email to auth.users:', authError);
+          // Don't fail the whole operation, just log the warning
+        } else {
+          console.log('[actionUpdateBroker] Auth email synced successfully');
+        }
       }
     }
 
@@ -265,6 +297,8 @@ export async function actionUpdateBroker(brokerId: string, updates: Partial<Tabl
     
     revalidatePath('/brokers');
     revalidatePath(`/brokers/${brokerId}`);
+    revalidatePath('/account');  // Revalidate account page if broker updates their own profile
+    revalidatePath('/', 'layout'); // Revalidate layout to update navbar
 
     console.log('[actionUpdateBroker] Complete!');
     return { ok: true as const, data: updatedBroker };

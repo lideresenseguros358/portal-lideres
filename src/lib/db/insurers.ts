@@ -22,6 +22,7 @@ type AssaCodeUpd = TablesUpdate<'insurer_assa_codes'>;
 export const InsurerInsertSchema = z.object({
   name: z.string().min(1, 'Nombre requerido'),
   active: z.boolean().default(true),
+  logo_url: z.string().nullable().optional(),
 });
 
 export const InsurerUpdateSchema = InsurerInsertSchema.partial();
@@ -112,6 +113,7 @@ export async function updateInsurer(insurerId: string, data: z.infer<typeof Insu
   const update: InsurerUpd = {};
   if (parsed.name !== undefined) update.name = parsed.name;
   if (parsed.active !== undefined) update.active = parsed.active;
+  if (parsed.logo_url !== undefined) update.logo_url = parsed.logo_url;
   
   const { data: insurer, error } = await supabase
     .from('insurers')

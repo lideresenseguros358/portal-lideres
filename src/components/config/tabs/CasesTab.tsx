@@ -43,13 +43,24 @@ export default function CasesTab({ userId }: CasesTabProps) {
 
   const loadSettings = async () => {
     try {
-      const response = await fetch('/api/config/cases');
-      if (response.ok) {
-        const data = await response.json();
+      // Primero intentar cargar de localStorage
+      const savedConfig = localStorage.getItem('cases_config');
+      if (savedConfig) {
+        const data = JSON.parse(savedConfig);
         if (data.kanban_enabled !== undefined) setKanbanEnabled(data.kanban_enabled);
         if (data.deferred_reminder_days) setDeferredReminderDays(data.deferred_reminder_days);
         if (data.case_types) setCaseTypes(data.case_types);
         if (data.requirements) setRequirements(data.requirements);
+      } else {
+        // Si no hay en localStorage, cargar del servidor
+        const response = await fetch('/api/config/cases');
+        if (response.ok) {
+          const data = await response.json();
+          if (data.kanban_enabled !== undefined) setKanbanEnabled(data.kanban_enabled);
+          if (data.deferred_reminder_days) setDeferredReminderDays(data.deferred_reminder_days);
+          if (data.case_types) setCaseTypes(data.case_types);
+          if (data.requirements) setRequirements(data.requirements);
+        }
       }
     } catch (error) {
       console.error('Error loading cases settings:', error);
@@ -65,15 +76,21 @@ export default function CasesTab({ userId }: CasesTabProps) {
   const handleSave = async () => {
     setSaving(true);
     try {
+      // Guardar en localStorage por ahora
+      const config = {
+        kanban_enabled: kanbanEnabled,
+        deferred_reminder_days: deferredReminderDays,
+        case_types: caseTypes,
+        requirements,
+      };
+      
+      localStorage.setItem('cases_config', JSON.stringify(config));
+
+      // También intentar guardar en el servidor
       const response = await fetch('/api/config/cases', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          kanban_enabled: kanbanEnabled,
-          deferred_reminder_days: deferredReminderDays,
-          case_types: caseTypes,
-          requirements,
-        }),
+        body: JSON.stringify(config),
       });
 
       if (response.ok) {

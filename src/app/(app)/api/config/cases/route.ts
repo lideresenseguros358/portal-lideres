@@ -22,7 +22,7 @@ export async function GET() {
       return NextResponse.json({ error: 'Acceso denegado' }, { status: 403 });
     }
 
-    // Valores por defecto
+    // Por ahora retornar defaults - TODO: implementar tabla de configuración
     const settings = {
       kanban_enabled: false,
       deferred_reminder_days: 5,

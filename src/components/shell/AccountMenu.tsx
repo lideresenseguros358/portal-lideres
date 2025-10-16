@@ -46,7 +46,12 @@ export default function AccountMenu({ displayName, role, avatarUrl }: AccountMen
       >
         {avatarUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={avatarUrl} alt={displayName} className="avatar-image" />
+          <img 
+            src={`${avatarUrl}${avatarUrl.includes('?') ? '&' : '?'}t=${Date.now()}`} 
+            alt={displayName} 
+            className="avatar-image" 
+            key={avatarUrl}
+          />
         ) : (
           <div className="avatar-placeholder">
             <FaUserCircle className="avatar-icon" />

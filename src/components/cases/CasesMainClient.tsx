@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { FaSearch, FaPlus, FaDownload, FaEnvelope, FaFilter } from 'react-icons/fa';
+import { FaSearch, FaPlus, FaDownload, FaEnvelope, FaFilter, FaList, FaThLarge } from 'react-icons/fa';
 import { toast } from 'sonner';
 import { actionGetCases } from '@/app/(app)/cases/actions';
 import { actionGetCaseStats } from '@/app/(app)/cases/actions-details';
@@ -54,6 +54,8 @@ export default function CasesMainClient({ userProfile, brokers, insurers }: Case
   const [activeTab, setActiveTab] = useState<string>('RAMOS_GENERALES');
   const [showSearch, setShowSearch] = useState(false);
   const [selectedCases, setSelectedCases] = useState<string[]>([]);
+  const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
+  const [kanbanEnabled, setKanbanEnabled] = useState(false);
   const [filters, setFilters] = useState<{
     status?: string;
     broker_id?: string;
@@ -87,6 +89,19 @@ export default function CasesMainClient({ userProfile, brokers, insurers }: Case
     loadCases();
     loadStats();
   }, [loadCases, loadStats]);
+
+  useEffect(() => {
+    // Cargar configuración de Kanban desde localStorage
+    try {
+      const savedConfig = localStorage.getItem('cases_config');
+      if (savedConfig) {
+        const config = JSON.parse(savedConfig);
+        setKanbanEnabled(config.kanban_enabled || false);
+      }
+    } catch (error) {
+      console.error('Error loading kanban config:', error);
+    }
+  }, []);
 
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
@@ -173,6 +188,36 @@ export default function CasesMainClient({ userProfile, brokers, insurers }: Case
 
           {/* Actions */}
           <div className="flex flex-wrap items-center gap-2">
+            {/* Toggle Lista/Kanban */}
+            {kanbanEnabled && (
+              <div className="flex items-center bg-gray-100 rounded-lg p-1">
+                <button
+                  onClick={() => setViewMode('list')}
+                  className={`px-3 py-2 rounded-md flex items-center gap-2 transition-all ${
+                    viewMode === 'list' 
+                      ? 'bg-white shadow text-[#010139] font-semibold' 
+                      : 'text-gray-600 hover:text-gray-800'
+                  }`}
+                  title="Vista Lista"
+                >
+                  <FaList />
+                  <span className="hidden sm:inline">Lista</span>
+                </button>
+                <button
+                  onClick={() => setViewMode('kanban')}
+                  className={`px-3 py-2 rounded-md flex items-center gap-2 transition-all ${
+                    viewMode === 'kanban' 
+                      ? 'bg-white shadow text-[#010139] font-semibold' 
+                      : 'text-gray-600 hover:text-gray-800'
+                  }`}
+                  title="Vista Kanban"
+                >
+                  <FaThLarge />
+                  <span className="hidden sm:inline">Kanban</span>
+                </button>
+              </div>
+            )}
+            
             <button
               onClick={() => setShowSearch(true)}
               className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-all flex items-center gap-2"
@@ -300,16 +345,25 @@ export default function CasesMainClient({ userProfile, brokers, insurers }: Case
         )}
       </div>
 
-      {/* Cases List */}
-      <CasesList
-        cases={cases}
-        loading={loading}
-        selectedCases={selectedCases}
-        onSelectCase={handleSelectCase}
-        onSelectAll={handleSelectAll}
-        onRefresh={loadCases}
-        userRole={userProfile.role || 'broker'}
-      />
+      {/* Cases List or Kanban */}
+      {viewMode === 'list' ? (
+        <CasesList
+          cases={cases}
+          loading={loading}
+          selectedCases={selectedCases}
+          onSelectCase={handleSelectCase}
+          onSelectAll={handleSelectAll}
+          onRefresh={loadCases}
+          userRole={userProfile.role || 'broker'}
+        />
+      ) : (
+        <div className="bg-white rounded-xl shadow-lg border-2 border-gray-100 p-12 text-center">
+          <FaThLarge className="mx-auto text-6xl text-gray-300 mb-4" />
+          <h3 className="text-xl font-bold text-gray-600 mb-2">Vista Kanban</h3>
+          <p className="text-gray-500 mb-4">Funcionalidad en desarrollo</p>
+          <p className="text-sm text-gray-400">Los casos se organizarán en columnas por estado</p>
+        </div>
+      )}
 
       {/* Search Modal */}
       {showSearch && (

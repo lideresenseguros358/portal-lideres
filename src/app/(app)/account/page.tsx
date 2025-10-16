@@ -6,6 +6,7 @@ import Image from "next/image";
 import { supabaseClient } from "@/lib/supabase/client";
 import { FaCamera, FaUserCircle, FaTrash } from "react-icons/fa";
 import { useUppercaseInput } from "@/lib/hooks/useUppercaseInput";
+import { actionUpdateProfile } from "./actions";
 import type { Database } from "@/lib/database.types";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
@@ -28,6 +29,7 @@ export default function AccountPage() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [avatarTimestamp, setAvatarTimestamp] = useState(Date.now());
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -87,39 +89,30 @@ export default function AccountPage() {
     setSuccess(null);
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("No user");
+      console.log('🔄 Iniciando actualización de perfil...');
 
-      // Update profile
-      const { error: profileError } = await supabase
-        .from("profiles")
-        .update({
-          full_name: fullName,
-          email: email,
-          avatar_url: avatarUrl || undefined,
-        })
-        .eq("id", user.id);
+      // Use server action for proper synchronization
+      const result = await actionUpdateProfile({
+        fullName,
+        email,
+        phone,
+        avatarUrl
+      });
 
-      if (profileError) throw profileError;
-
-      // Update broker phone if broker exists
-      if (broker) {
-        const { error: brokerError } = await supabase
-          .from("brokers")
-          .update({ phone })
-          .eq("p_id", user.id);
-
-        if (brokerError) throw brokerError;
+      if (!result.ok) {
+        throw new Error(result.error);
       }
 
-      // Update auth email if changed
-      if (email !== user.email) {
-        const { error: emailError } = await supabase.auth.updateUser({ email });
-        if (emailError) throw emailError;
-      }
-
+      console.log('✅ Perfil actualizado correctamente');
       setSuccess("Perfil actualizado correctamente");
+      
+      // Reload profile to reflect changes
+      await loadProfile();
+      
+      // Refresh to update navbar and other components
+      router.refresh();
     } catch (err: any) {
+      console.error('❌ Error en handleUpdateProfile:', err);
       setError(err.message || "Error al actualizar el perfil");
     } finally {
       setSaving(false);
@@ -273,11 +266,16 @@ export default function AccountPage() {
 
       // Update local state
       setAvatarUrl(publicUrl);
+      setAvatarTimestamp(Date.now());
       setSuccess("✅ Foto de perfil actualizada correctamente");
       
       // Reload profile to ensure consistency
       console.log('🔄 Recargando perfil...');
       await loadProfile();
+      
+      // Refresh layout to update navbar avatar
+      console.log('🔄 Refrescando layout...');
+      router.refresh();
       
       console.log('✅ Proceso completo exitoso');
     } catch (err: any) {
@@ -344,11 +342,16 @@ export default function AccountPage() {
       console.log('✅ Perfil actualizado en BD');
 
       setAvatarUrl(null);
+      setAvatarTimestamp(Date.now());
       setSuccess("✅ Foto de perfil eliminada correctamente");
       
       // Reload profile
       console.log('🔄 Recargando perfil...');
       await loadProfile();
+      
+      // Refresh layout to update navbar avatar
+      console.log('🔄 Refrescando layout...');
+      router.refresh();
       
       console.log('✅ Eliminación completa exitosa');
     } catch (err: any) {
@@ -378,7 +381,8 @@ export default function AccountPage() {
             {avatarUrl ? (
               <div className="avatar-wrapper">
                 <Image 
-                  src={`${avatarUrl}${avatarUrl.includes('?') ? '&' : '?'}t=${Date.now()}`}
+                  key={`${avatarUrl}-${avatarTimestamp}`}
+                  src={`${avatarUrl}${avatarUrl.includes('?') ? '&' : '?'}t=${avatarTimestamp}`}
                   alt="Avatar" 
                   className="avatar-img" 
                   width={150} 

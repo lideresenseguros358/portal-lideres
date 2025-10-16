@@ -3,6 +3,8 @@ import { es } from "date-fns/locale";
 
 import type { Database } from "@/lib/database.types";
 
+export type NotificationType = 'renewal' | 'case_digest' | 'commission' | 'delinquency' | 'download' | 'guide' | 'carnet_renewal' | 'other';
+
 export type NotificationRow = Database["public"]["Tables"]["notifications"]["Row"] & {
   read_at: string | null;
 };
@@ -24,6 +26,33 @@ const NotificationsModal = ({
 }: NotificationsModalProps) => {
   if (!open) return null;
 
+  const getTypeIcon = (type?: NotificationType | null) => {
+    switch (type) {
+      case 'renewal': return '🔄';
+      case 'case_digest': return '📋';
+      case 'commission': return '💰';
+      case 'delinquency': return '⚠️';
+      case 'download': return '📥';
+      case 'guide': return '📚';
+      case 'carnet_renewal': return '🎫';
+      default: return '📝';
+    }
+  };
+
+  const getTypeBadge = (type?: NotificationType | null) => {
+    const colors: Record<string, string> = {
+      renewal: '#2196F3',
+      case_digest: '#8AAA19',
+      commission: '#4CAF50',
+      delinquency: '#FF9800',
+      download: '#9C27B0',
+      guide: '#00BCD4',
+      carnet_renewal: '#EF4444',
+      other: '#757575'
+    };
+    return colors[type || 'other'];
+  };
+
   return (
     <div className="notifications-modal" role="dialog" aria-modal="true">
       <div className="notifications-modal__backdrop" onClick={onClose} />
@@ -40,6 +69,7 @@ const NotificationsModal = ({
           <table>
             <thead>
               <tr>
+                <th>Tipo</th>
                 <th>Título</th>
                 <th>Mensaje</th>
                 <th>Fecha</th>
@@ -50,33 +80,54 @@ const NotificationsModal = ({
             <tbody>
               {notifications.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="empty">
+                  <td colSpan={6} className="empty">
                     No hay notificaciones disponibles.
                   </td>
                 </tr>
               ) : (
-                notifications.map((notification) => (
-                  <tr key={notification.id} className={notification.read_at ? "read" : "unread"}>
-                    <td>{notification.title}</td>
-                    <td>{notification.body}</td>
-                    <td>
-                      {format(new Date(notification.created_at), "PPpp", {
-                        locale: es,
-                      })}
-                    </td>
-                    <td>{notification.read_at ? "Leída" : "No leída"}</td>
-                    <td className="actions">
-                      {!notification.read_at ? (
-                        <button type="button" onClick={() => onMarkRead(notification.id)}>
-                          Marcar leído
+                notifications.map((notification) => {
+                  const meta = notification.meta as { cta_url?: string } | null;
+                  const ctaUrl = meta?.cta_url;
+                  
+                  return (
+                    <tr key={notification.id} className={notification.read_at ? "read" : "unread"}>
+                      <td>
+                        <span 
+                          className="type-badge"
+                          style={{ backgroundColor: getTypeBadge(notification.notification_type) }}
+                        >
+                          {getTypeIcon(notification.notification_type)}
+                        </span>
+                      </td>
+                      <td>
+                        {ctaUrl ? (
+                          <a href={ctaUrl} className="notification-link">
+                            {notification.title}
+                          </a>
+                        ) : (
+                          notification.title
+                        )}
+                      </td>
+                      <td>{notification.body}</td>
+                      <td>
+                        {format(new Date(notification.created_at), "PPpp", {
+                          locale: es,
+                        })}
+                      </td>
+                      <td>{notification.read_at ? "Leída" : "No leída"}</td>
+                      <td className="actions">
+                        {!notification.read_at ? (
+                          <button type="button" onClick={() => onMarkRead(notification.id)}>
+                            Marcar leído
+                          </button>
+                        ) : null}
+                        <button type="button" onClick={() => onDelete(notification.id)}>
+                          Borrar
                         </button>
-                      ) : null}
-                      <button type="button" onClick={() => onDelete(notification.id)}>
-                        Borrar
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -189,6 +240,28 @@ const NotificationsModal = ({
         td.actions button:hover {
           background: #8aaa19;
           transform: translateY(-1px);
+        }
+
+        .type-badge {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          font-size: 16px;
+          color: #ffffff;
+        }
+
+        .notification-link {
+          color: #010139;
+          text-decoration: none;
+          font-weight: 600;
+        }
+
+        .notification-link:hover {
+          color: #8aaa19;
+          text-decoration: underline;
         }
 
         @media (max-width: 640px) {

@@ -37,7 +37,9 @@ export async function actionUpdateInsurer(insurerId: string, data: unknown) {
   try {
     const parsed = InsurerUpdateSchema.parse(data);
     const insurer = await updateInsurer(insurerId, parsed);
-    revalidatePath('/(app)/insurers');
+    revalidatePath('/insurers');
+    revalidatePath(`/insurers/${insurerId}/edit`);
+    revalidatePath('/', 'layout'); // Update layout to refresh any insurer references
     return { ok: true as const, data: insurer };
   } catch (error) {
     return { 

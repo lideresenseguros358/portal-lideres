@@ -24,6 +24,9 @@ export default function NewUserWizard() {
     fecha_nacimiento: "",
     telefono: "",
     licencia: "",
+    broker_type: "corredor",
+    assa_code: "",
+    carnet_expiry_date: "",
   });
 
   // Paso 3: Datos Bancarios
@@ -277,18 +280,96 @@ export default function NewUserWizard() {
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Licencia de Corredor (Opcional)
-                </label>
-                <input
-                  type="text"
-                  value={personalData.licencia}
-                  onChange={(e) => setPersonalData({ ...personalData, licencia: e.target.value })}
-                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#010139] focus:outline-none"
-                  placeholder="Número de licencia"
-                />
+              {/* Toggle Tipo de Broker */}
+              <div className="mt-6 p-4 bg-gradient-to-r from-gray-50 to-gray-100 rounded-lg border-2 border-[#8AAA19]">
+              <label className="block text-sm font-medium text-gray-700 mb-3">
+                Tipo de Broker
+              </label>
+              <div className="flex items-center gap-4">
+                <button
+                  type="button"
+                  onClick={() => setPersonalData({ ...personalData, broker_type: 'corredor' })}
+                  className={`
+                    flex-1 px-6 py-3 rounded-lg font-semibold transition-all
+                    ${personalData.broker_type === 'corredor'
+                      ? 'bg-[#010139] text-white shadow-lg scale-105'
+                      : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-[#8AAA19]'
+                    }
+                  `}
+                >
+                  📋 Corredor
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPersonalData({ ...personalData, broker_type: 'agente' })}
+                  className={`
+                    flex-1 px-6 py-3 rounded-lg font-semibold transition-all
+                    ${personalData.broker_type === 'agente'
+                      ? 'bg-[#8AAA19] text-white shadow-lg scale-105'
+                      : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-[#8AAA19]'
+                    }
+                  `}
+                >
+                  🎫 Agente
+                </button>
               </div>
+              <p className="text-xs text-gray-600 mt-2">
+                {personalData.broker_type === 'corredor' 
+                  ? '• Corredor: Requiere licencia'
+                  : '• Agente: Requiere código ASSA y carnet'
+                }
+              </p>
+            </div>
+
+            {/* Campos condicionales */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+              {/* Licencia - Solo para CORREDOR */}
+              {personalData.broker_type === 'corredor' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Licencia de Corredor (Opcional)
+                  </label>
+                  <input
+                    type="text"
+                    value={personalData.licencia}
+                    onChange={(e) => setPersonalData({ ...personalData, licencia: e.target.value })}
+                    className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#010139] focus:outline-none"
+                    placeholder="Número de licencia"
+                  />
+                </div>
+              )}
+
+              {/* Código ASSA - Solo para AGENTE */}
+              {personalData.broker_type === 'agente' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Código ASSA (Opcional)
+                  </label>
+                  <input
+                    type="text"
+                    value={personalData.assa_code}
+                    onChange={(e) => setPersonalData({ ...personalData, assa_code: e.target.value.toUpperCase() })}
+                    className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#010139] focus:outline-none"
+                    placeholder="Código ASSA"
+                  />
+                </div>
+              )}
+
+              {/* Fecha Vencimiento Carnet - Solo para AGENTE */}
+              {personalData.broker_type === 'agente' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Fecha Vencimiento Carnet (Opcional)
+                  </label>
+                  <input
+                    type="date"
+                    value={personalData.carnet_expiry_date}
+                    onChange={(e) => setPersonalData({ ...personalData, carnet_expiry_date: e.target.value })}
+                    className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#010139] focus:outline-none"
+                  />
+                </div>
+              )}
+            </div>
             </div>
           )}
 

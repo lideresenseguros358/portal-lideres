@@ -44,6 +44,7 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
         beneficiary_name: result.data.beneficiary_name || '',
         beneficiary_id: result.data.beneficiary_id || '',
         carnet_expiry_date: (result.data as any).carnet_expiry_date || '',
+        broker_type: (result.data as any).broker_type || 'corredor',
       });
     } else {
       toast.error(result.error);
@@ -195,8 +196,61 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
           <div className="bg-white rounded-xl shadow-lg border-2 border-gray-100 p-6">
             <h2 className="text-xl font-bold text-[#010139] mb-4 flex items-center gap-2">
               <FaUser className="text-[#8AAA19]" />
-              Datos del corredor
+              Datos del {formData.broker_type === 'corredor' ? 'corredor' : 'agente'}
             </h2>
+
+            {/* Tipo de Broker Toggle */}
+            {isEditing && (
+              <div className="mb-6 p-4 bg-gradient-to-r from-gray-50 to-gray-100 rounded-lg border-2 border-[#8AAA19]">
+                <label className="block text-sm font-semibold text-gray-700 mb-3">
+                  Tipo de Broker
+                </label>
+                <div className="flex items-center gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, broker_type: 'corredor' })}
+                    className={`
+                      flex-1 px-6 py-3 rounded-lg font-semibold transition-all
+                      ${formData.broker_type === 'corredor'
+                        ? 'bg-[#010139] text-white shadow-lg scale-105'
+                        : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-[#8AAA19]'
+                      }
+                    `}
+                  >
+                    📋 Corredor
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, broker_type: 'agente' })}
+                    className={`
+                      flex-1 px-6 py-3 rounded-lg font-semibold transition-all
+                      ${formData.broker_type === 'agente'
+                        ? 'bg-[#8AAA19] text-white shadow-lg scale-105'
+                        : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-[#8AAA19]'
+                      }
+                    `}
+                  >
+                    🎫 Agente
+                  </button>
+                </div>
+                <p className="text-xs text-gray-600 mt-2">
+                  {formData.broker_type === 'corredor' 
+                    ? '• Corredor: Muestra licencia, oculta código ASSA y carnet'
+                    : '• Agente: Muestra código ASSA y carnet, oculta licencia'
+                  }
+                </p>
+              </div>
+            )}
+
+            {/* Tipo actual (solo lectura) */}
+            {!isEditing && (
+              <div className="mb-4 inline-flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-lg border-2 border-gray-300">
+                <span className="text-sm font-semibold text-gray-600">Tipo:</span>
+                <span className="px-3 py-1 bg-white rounded-full text-sm font-bold text-[#010139] border-2 border-[#8AAA19]">
+                  {formData.broker_type === 'corredor' ? '📋 CORREDOR' : '🎫 AGENTE'}
+                </span>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* Name */}
@@ -258,45 +312,50 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
                 />
               </div>
 
-              {/* ASSA Code */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Código ASSA
-                </label>
-                <input
-                  type="text"
-                  value={formData.assa_code}
-                  onChange={createUppercaseHandler((e) => setFormData({ ...formData, assa_code: e.target.value }))}
-                  disabled={!isEditing}
-                  className={`w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none disabled:bg-gray-50 disabled:text-gray-600 ${!isEditing ? '' : uppercaseInputClass}`}
-                />
-              </div>
+              {/* ASSA Code - Solo para AGENTE */}
+              {formData.broker_type === 'agente' && (
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Código ASSA
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.assa_code}
+                    onChange={createUppercaseHandler((e) => setFormData({ ...formData, assa_code: e.target.value }))}
+                    disabled={!isEditing}
+                    className={`w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none disabled:bg-gray-50 disabled:text-gray-600 ${!isEditing ? '' : uppercaseInputClass}`}
+                  />
+                </div>
+              )}
 
-              {/* License */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Licencia
-                </label>
-                <input
-                  type="text"
-                  value={formData.license_no}
-                  onChange={createUppercaseHandler((e) => setFormData({ ...formData, license_no: e.target.value }))}
-                  disabled={!isEditing}
-                  className={`w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none disabled:bg-gray-50 disabled:text-gray-600 ${!isEditing ? '' : uppercaseInputClass}`}
-                />
-              </div>
+              {/* License - Solo para CORREDOR */}
+              {formData.broker_type === 'corredor' && (
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Licencia
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.license_no}
+                    onChange={createUppercaseHandler((e) => setFormData({ ...formData, license_no: e.target.value }))}
+                    disabled={!isEditing}
+                    className={`w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none disabled:bg-gray-50 disabled:text-gray-600 ${!isEditing ? '' : uppercaseInputClass}`}
+                  />
+                </div>
+              )}
 
-              {/* Carnet Expiry Date */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
-                  <FaCalendar className="text-[#8AAA19]" />
-                  Vencimiento Carnet
-                </label>
-                <input
-                  type="date"
-                  value={formData.carnet_expiry_date}
-                  onChange={(e) => setFormData({ ...formData, carnet_expiry_date: e.target.value })}
-                  disabled={!isEditing}
+              {/* Carnet Expiry Date - Solo para AGENTE */}
+              {formData.broker_type === 'agente' && (
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                    <FaCalendar className="text-[#8AAA19]" />
+                    Vencimiento Carnet
+                  </label>
+                  <input
+                    type="date"
+                    value={formData.carnet_expiry_date}
+                    onChange={(e) => setFormData({ ...formData, carnet_expiry_date: e.target.value })}
+                    disabled={!isEditing}
                   className="w-full max-w-full px-3 sm:px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none disabled:bg-gray-50 disabled:text-gray-600"
                   style={{ WebkitAppearance: 'none', MozAppearance: 'textfield' }}
                 />
@@ -317,7 +376,8 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
                   })()}
                   {!formData.carnet_expiry_date && 'Sin fecha de vencimiento configurada'}
                 </p>
-              </div>
+                </div>
+              )}
             </div>
           </div>
 

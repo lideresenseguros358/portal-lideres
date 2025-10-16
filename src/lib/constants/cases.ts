@@ -176,7 +176,89 @@ export const HISTORY_ACTION_LABELS = {
   CLAIMED: 'Marcado como "mío"',
 } as const;
 
-// Default checklist items
+// Tipos de póliza
+export const POLICY_TYPES = {
+  AUTO: 'Auto',
+  VIDA: 'Vida',
+  SALUD: 'Salud',
+  INCENDIO: 'Incendio',
+  TODO_RIESGO: 'Todo Riesgo',
+  RESPONSABILIDAD_CIVIL: 'Responsabilidad Civil',
+  ACCIDENTES_PERSONALES: 'Accidentes Personales',
+  OTROS: 'Otros',
+} as const;
+
+export type PolicyType = keyof typeof POLICY_TYPES;
+
+// Documentos requeridos por tipo de póliza
+export const REQUIRED_DOCUMENTS: Record<PolicyType, { label: string; required: boolean; standardName: string; category?: 'inspection' }[]> = {
+  AUTO: [
+    { label: 'Cédula del asegurado', required: true, standardName: 'cedula' },
+    { label: 'Formulario firmado', required: true, standardName: 'formulario' },
+    { label: 'Tarjeta de circulación', required: true, standardName: 'tarjeta_circulacion' },
+    { label: 'Póliza anterior', required: false, standardName: 'poliza_anterior' },
+    { label: 'Comprobante de pago', required: true, standardName: 'comprobante_pago' },
+    { label: 'Foto frontal del vehículo', required: true, standardName: 'inspeccion_frontal', category: 'inspection' },
+    { label: 'Foto trasera del vehículo', required: true, standardName: 'inspeccion_trasera', category: 'inspection' },
+    { label: 'Foto lateral derecha', required: true, standardName: 'inspeccion_lateral_derecha', category: 'inspection' },
+    { label: 'Foto lateral izquierda', required: true, standardName: 'inspeccion_lateral_izquierda', category: 'inspection' },
+    { label: 'Foto tablero/VIN', required: true, standardName: 'inspeccion_vin', category: 'inspection' },
+    { label: 'Foto odómetro', required: true, standardName: 'inspeccion_odometro', category: 'inspection' },
+  ],
+  VIDA: [
+    { label: 'Cédula del asegurado', required: true, standardName: 'cedula' },
+    { label: 'Formulario firmado', required: true, standardName: 'formulario' },
+    { label: 'Certificado médico', required: true, standardName: 'certificado_medico' },
+    { label: 'Exámenes de laboratorio', required: false, standardName: 'examenes_laboratorio' },
+    { label: 'Póliza anterior', required: false, standardName: 'poliza_anterior' },
+    { label: 'Comprobante de pago', required: true, standardName: 'comprobante_pago' },
+  ],
+  SALUD: [
+    { label: 'Cédula del asegurado', required: true, standardName: 'cedula' },
+    { label: 'Formulario firmado', required: true, standardName: 'formulario' },
+    { label: 'Historial médico', required: true, standardName: 'historial_medico' },
+    { label: 'Exámenes de laboratorio', required: false, standardName: 'examenes_laboratorio' },
+    { label: 'Póliza anterior', required: false, standardName: 'poliza_anterior' },
+    { label: 'Comprobante de pago', required: true, standardName: 'comprobante_pago' },
+  ],
+  INCENDIO: [
+    { label: 'Cédula del asegurado', required: true, standardName: 'cedula' },
+    { label: 'Formulario firmado', required: true, standardName: 'formulario' },
+    { label: 'Título de propiedad', required: true, standardName: 'titulo_propiedad' },
+    { label: 'Avalúo del inmueble', required: true, standardName: 'avaluo' },
+    { label: 'Póliza anterior', required: false, standardName: 'poliza_anterior' },
+    { label: 'Comprobante de pago', required: true, standardName: 'comprobante_pago' },
+  ],
+  TODO_RIESGO: [
+    { label: 'Cédula del asegurado', required: true, standardName: 'cedula' },
+    { label: 'Formulario firmado', required: true, standardName: 'formulario' },
+    { label: 'Factura de bienes', required: true, standardName: 'factura_bienes' },
+    { label: 'Fotos de los bienes', required: false, standardName: 'fotos_bienes' },
+    { label: 'Póliza anterior', required: false, standardName: 'poliza_anterior' },
+    { label: 'Comprobante de pago', required: true, standardName: 'comprobante_pago' },
+  ],
+  RESPONSABILIDAD_CIVIL: [
+    { label: 'Cédula del asegurado', required: true, standardName: 'cedula' },
+    { label: 'Formulario firmado', required: true, standardName: 'formulario' },
+    { label: 'Aviso de operación', required: true, standardName: 'aviso_operacion' },
+    { label: 'Póliza anterior', required: false, standardName: 'poliza_anterior' },
+    { label: 'Comprobante de pago', required: true, standardName: 'comprobante_pago' },
+  ],
+  ACCIDENTES_PERSONALES: [
+    { label: 'Cédula del asegurado', required: true, standardName: 'cedula' },
+    { label: 'Formulario firmado', required: true, standardName: 'formulario' },
+    { label: 'Lista de asegurados (colectivo)', required: false, standardName: 'lista_asegurados' },
+    { label: 'Póliza anterior', required: false, standardName: 'poliza_anterior' },
+    { label: 'Comprobante de pago', required: true, standardName: 'comprobante_pago' },
+  ],
+  OTROS: [
+    { label: 'Cédula del asegurado', required: true, standardName: 'cedula' },
+    { label: 'Formulario firmado', required: true, standardName: 'formulario' },
+    { label: 'Comprobante de pago', required: true, standardName: 'comprobante_pago' },
+  ],
+};
+
+// Default checklist items (legacy - se mantiene por compatibilidad)
 export const DEFAULT_CHECKLIST = [
   { label: 'Cédula del asegurado', required: true, completed: false },
   { label: 'Formulario firmado', required: true, completed: false },

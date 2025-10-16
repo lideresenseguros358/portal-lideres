@@ -180,10 +180,13 @@ export async function actionCreateCase(payload: {
   client_id?: string;
   client_name?: string;
   policy_number?: string;
+  policy_type?: string;
   premium?: number;
   payment_method?: string;
   sla_days?: number;
   notes?: string;
+  checklist?: { label: string; required: boolean; completed: boolean; standardName?: string }[];
+  files?: { file: File; standardName: string; category?: string; isMultiDocument?: boolean; documentParts?: string[] }[];
 }) {
   try {
     const supabase = await getSupabaseAdmin();
@@ -219,6 +222,7 @@ export async function actionCreateCase(payload: {
       client_id: payload.client_id || null,
       client_name: payload.client_name || null,
       policy_number: payload.policy_number || null,
+      policy_type: payload.policy_type || null,
       premium: payload.premium || null,
       payment_method: payload.payment_method || null,
       sla_days,
@@ -248,6 +252,67 @@ export async function actionCreateCase(payload: {
       created_by: user.id,
       metadata: { source: 'manual', created_by_master: true },
     }]);
+
+    // Create checklist items if provided
+    if (payload.checklist && payload.checklist.length > 0) {
+      const checklistItems = payload.checklist.map((item) => ({
+        case_id: newCase.id,
+        label: item.label,
+        required: item.required,
+        completed: item.completed,
+        completed_at: item.completed ? new Date().toISOString() : null,
+        completed_by: item.completed ? user.id : null,
+      }));
+
+      await supabase.from('case_checklist').insert(checklistItems);
+    }
+
+    // Upload files if provided
+    if (payload.files && payload.files.length > 0) {
+      for (const fileData of payload.files) {
+        try {
+          // Generate standardized filename with extension
+          const fileExtension = fileData.file.name.split('.').pop() || 'pdf';
+          const standardizedName = `${fileData.standardName}.${fileExtension}`;
+          const storagePath = `${newCase.id}/${standardizedName}`;
+
+          // Upload to storage
+          const { error: uploadError } = await supabase.storage
+            .from('pendientes')
+            .upload(storagePath, fileData.file, {
+              contentType: fileData.file.type,
+              upsert: true,
+            });
+
+          if (uploadError) {
+            console.error('Error uploading file:', uploadError);
+            continue;
+          }
+
+          // Create file record in database
+          const fileRecord: any = {
+            case_id: newCase.id,
+            original_name: standardizedName,
+            mime_type: fileData.file.type,
+            size_bytes: fileData.file.size,
+            storage_path: storagePath,
+            created_by: user.id,
+            document_type: fileData.standardName,
+            category: fileData.category || null,
+          };
+
+          // If it's a multi-document PDF, store that info
+          if (fileData.isMultiDocument && fileData.documentParts) {
+            fileRecord.is_multi_document = true;
+            fileRecord.document_parts = fileData.documentParts;
+          }
+
+          await supabase.from('case_files').insert([fileRecord]);
+        } catch (fileError) {
+          console.error('Error processing file:', fileError);
+        }
+      }
+    }
 
     // Handle payment-related logic
     if (payload.payment_method === 'DESCUENTO_A_CORREDOR' && payload.premium && payload.premium > 0) {

@@ -255,6 +255,7 @@ export type Database = {
           beneficiary_id: string | null
           beneficiary_name: string | null
           birth_date: string | null
+          broker_type: Database["public"]["Enums"]["broker_type_enum"] | null
           carnet_expiry_date: string | null
           created_at: string | null
           email: string | null
@@ -279,6 +280,7 @@ export type Database = {
           beneficiary_id?: string | null
           beneficiary_name?: string | null
           birth_date?: string | null
+          broker_type?: Database["public"]["Enums"]["broker_type_enum"] | null
           carnet_expiry_date?: string | null
           created_at?: string | null
           email?: string | null
@@ -303,6 +305,7 @@ export type Database = {
           beneficiary_id?: string | null
           beneficiary_name?: string | null
           birth_date?: string | null
+          broker_type?: Database["public"]["Enums"]["broker_type_enum"] | null
           carnet_expiry_date?: string | null
           created_at?: string | null
           email?: string | null
@@ -1597,6 +1600,7 @@ export type Database = {
           email: string | null
           id: string
           insurer_id: string
+          is_primary: boolean | null
           name: string
           notes: string | null
           phone: string | null
@@ -1608,6 +1612,7 @@ export type Database = {
           email?: string | null
           id?: string
           insurer_id: string
+          is_primary?: boolean | null
           name: string
           notes?: string | null
           phone?: string | null
@@ -1619,6 +1624,7 @@ export type Database = {
           email?: string | null
           id?: string
           insurer_id?: string
+          is_primary?: boolean | null
           name?: string
           notes?: string | null
           phone?: string | null
@@ -1761,6 +1767,7 @@ export type Database = {
           created_at: string | null
           id: string
           invert_negatives: boolean | null
+          logo_url: string | null
           name: string
           use_multi_commission_columns: boolean | null
         }
@@ -1769,6 +1776,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           invert_negatives?: boolean | null
+          logo_url?: string | null
           name: string
           use_multi_commission_columns?: boolean | null
         }
@@ -1777,6 +1785,7 @@ export type Database = {
           created_at?: string | null
           id?: string
           invert_negatives?: boolean | null
+          logo_url?: string | null
           name?: string
           use_multi_commission_columns?: boolean | null
         }
@@ -1818,12 +1827,35 @@ export type Database = {
           },
         ]
       }
+      notification_uniques: {
+        Row: {
+          created_at: string | null
+          hash: string
+          id: string
+        }
+        Insert: {
+          created_at?: string | null
+          hash: string
+          id?: string
+        }
+        Update: {
+          created_at?: string | null
+          hash?: string
+          id?: string
+        }
+        Relationships: []
+      }
       notifications: {
         Row: {
           body: string | null
           broker_id: string | null
           created_at: string
+          email_sent: boolean | null
           id: string
+          meta: Json | null
+          notification_type:
+            | Database["public"]["Enums"]["notification_type"]
+            | null
           target: string
           title: string
         }
@@ -1831,7 +1863,12 @@ export type Database = {
           body?: string | null
           broker_id?: string | null
           created_at?: string
+          email_sent?: boolean | null
           id?: string
+          meta?: Json | null
+          notification_type?:
+            | Database["public"]["Enums"]["notification_type"]
+            | null
           target: string
           title: string
         }
@@ -1839,7 +1876,12 @@ export type Database = {
           body?: string | null
           broker_id?: string | null
           created_at?: string
+          email_sent?: boolean | null
           id?: string
+          meta?: Json | null
+          notification_type?:
+            | Database["public"]["Enums"]["notification_type"]
+            | null
           target?: string
           title?: string
         }
@@ -2232,6 +2274,7 @@ export type Database = {
           full_name: string | null
           id: string
           must_change_password: boolean | null
+          notify_broker_renewals: boolean | null
           role: Database["public"]["Enums"]["role_enum"] | null
         }
         Insert: {
@@ -2243,6 +2286,7 @@ export type Database = {
           full_name?: string | null
           id: string
           must_change_password?: boolean | null
+          notify_broker_renewals?: boolean | null
           role?: Database["public"]["Enums"]["role_enum"] | null
         }
         Update: {
@@ -2254,6 +2298,7 @@ export type Database = {
           full_name?: string | null
           id?: string
           must_change_password?: boolean | null
+          notify_broker_renewals?: boolean | null
           role?: Database["public"]["Enums"]["role_enum"] | null
         }
         Relationships: [
@@ -2629,6 +2674,10 @@ export type Database = {
           updated_policies: number
         }[]
       }
+      cleanup_old_notification_hashes: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       cleanup_processed_temp_imports: {
         Args: Record<PropertyKey, never>
         Returns: number
@@ -2755,6 +2804,7 @@ export type Database = {
       }
     }
     Enums: {
+      broker_type_enum: "corredor" | "agente"
       case_section:
         | "SIN_CLASIFICAR"
         | "RAMOS_GENERALES"
@@ -2787,6 +2837,15 @@ export type Database = {
         | "OTRO"
       fortnight_status_enum: "DRAFT" | "READY" | "PAID"
       map_kind: "COMMISSIONS" | "DELINQUENCY"
+      notification_type:
+        | "renewal"
+        | "case_digest"
+        | "commission"
+        | "delinquency"
+        | "download"
+        | "guide"
+        | "other"
+        | "carnet_renewal"
       policy_status_enum: "ACTIVA" | "CANCELADA" | "VENCIDA"
       porcents: "1" | "0.94" | "0.82" | "0.8" | "0.7" | "0.6" | "0.5" | "0"
       role_enum: "master" | "broker"
@@ -2919,6 +2978,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      broker_type_enum: ["corredor", "agente"],
       case_section: [
         "SIN_CLASIFICAR",
         "RAMOS_GENERALES",
@@ -2956,6 +3016,16 @@ export const Constants = {
       ],
       fortnight_status_enum: ["DRAFT", "READY", "PAID"],
       map_kind: ["COMMISSIONS", "DELINQUENCY"],
+      notification_type: [
+        "renewal",
+        "case_digest",
+        "commission",
+        "delinquency",
+        "download",
+        "guide",
+        "other",
+        "carnet_renewal",
+      ],
       policy_status_enum: ["ACTIVA", "CANCELADA", "VENCIDA"],
       porcents: ["1", "0.94", "0.82", "0.8", "0.7", "0.6", "0.5", "0"],
       role_enum: ["master", "broker"],

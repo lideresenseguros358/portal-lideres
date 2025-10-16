@@ -1,5 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { FaBell } from "react-icons/fa";
 import { formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
@@ -14,6 +15,7 @@ interface NotificationsBellProps {
 }
 
 const NotificationsBell = ({ profileId }: NotificationsBellProps) => {
+  const router = useRouter();
   const supabase = useMemo(() => supabaseClient(), []);
   const [notifications, setNotifications] = useState<NotificationRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -34,7 +36,7 @@ const NotificationsBell = ({ profileId }: NotificationsBellProps) => {
         await Promise.all([
           supabase
             .from("notifications")
-            .select("id, title, body, created_at, target, broker_id")
+            .select("id, title, body, created_at, target, broker_id, meta, notification_type, email_sent")
             .order("created_at", { ascending: false }),
           supabase
             .from("notification_reads")
@@ -109,6 +111,25 @@ const NotificationsBell = ({ profileId }: NotificationsBellProps) => {
     [loadNotifications, profileId, showErrorToast, supabase]
   );
 
+  const handleNotificationClick = useCallback(
+    async (notification: NotificationRow) => {
+      // Marcar como leída
+      if (!notification.read_at) {
+        await handleMarkRead(notification.id);
+      }
+
+      // Navegar a deep-link si existe
+      if (notification.meta && typeof notification.meta === 'object') {
+        const meta = notification.meta as { cta_url?: string };
+        if (meta.cta_url) {
+          setDropdownOpen(false);
+          router.push(meta.cta_url);
+        }
+      }
+    },
+    [handleMarkRead, router]
+  );
+
   const handleDelete = useCallback(
     async (notificationId: string) => {
       try {
@@ -153,7 +174,12 @@ const NotificationsBell = ({ profileId }: NotificationsBellProps) => {
               <li className="empty">Sin notificaciones recientes</li>
             ) : (
               latestFive.map((notification) => (
-                <li key={notification.id} className={notification.read_at ? "read" : "unread"}>
+                <li 
+                  key={notification.id} 
+                  className={notification.read_at ? "read" : "unread"}
+                  onClick={() => handleNotificationClick(notification)}
+                  style={{ cursor: 'pointer' }}
+                >
                   <div className="info">
                     <span className="title">{notification.title}</span>
                     <span className="body">{notification.body}</span>
@@ -165,7 +191,13 @@ const NotificationsBell = ({ profileId }: NotificationsBellProps) => {
                     })}
                   </span>
                   {!notification.read_at ? (
-                    <button type="button" onClick={() => handleMarkRead(notification.id)}>
+                    <button 
+                      type="button" 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleMarkRead(notification.id);
+                      }}
+                    >
                       Marcar leído
                     </button>
                   ) : null}
