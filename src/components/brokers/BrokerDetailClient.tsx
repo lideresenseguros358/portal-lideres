@@ -8,6 +8,8 @@ import { useRouter } from 'next/navigation';
 import { actionGetBroker, actionUpdateBroker, actionToggleBrokerActive, actionDeleteBroker, actionApplyDefaultPercentToAll } from '@/app/(app)/brokers/actions';
 import { PERCENT_OPTIONS, OFICINA_EMAIL } from '@/lib/constants/brokers';
 import { createUppercaseHandler, uppercaseInputClass, toUppercasePayload } from '@/lib/utils/uppercase';
+import { BankSelect, AccountTypeSelect } from '@/components/ui/BankSelect';
+import { cleanAccountNumber, toUpperNoAccents } from '@/lib/commissions/ach-normalization';
 
 interface BrokerDetailClientProps {
   brokerId: string;
@@ -40,9 +42,10 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
         assa_code: result.data.assa_code || '',
         license_no: result.data.license_no || '',
         percent_default: result.data.percent_default || 0.82,
+        bank_route: result.data.bank_route || '',
         bank_account_no: result.data.bank_account_no || '',
-        beneficiary_name: result.data.beneficiary_name || '',
-        beneficiary_id: result.data.beneficiary_id || '',
+        tipo_cuenta: result.data.tipo_cuenta || '04',
+        nombre_completo: result.data.nombre_completo || '',
         carnet_expiry_date: (result.data as any).carnet_expiry_date || '',
         broker_type: (result.data as any).broker_type || 'corredor',
       });
@@ -421,56 +424,106 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
             </div>
           </div>
 
-          {/* Bank Data */}
+          {/* Bank Data ACH */}
           <div className="bg-white rounded-xl shadow-lg border-2 border-gray-100 p-6">
             <h2 className="text-xl font-bold text-[#010139] mb-4 flex items-center gap-2">
               <FaUniversity className="text-[#8AAA19]" />
-              Datos bancarios
+              Datos bancarios ACH
             </h2>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Bank Route - Dropdown */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Banco
+                </label>
+                {isEditing ? (
+                  <BankSelect
+                    value={formData.bank_route}
+                    onChange={(route) => setFormData({ ...formData, bank_route: route })}
+                    required
+                  />
+                ) : (
+                  <div className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg bg-gray-50 text-gray-600">
+                    {formData.bank_route || 'No especificado'}
+                  </div>
+                )}
+              </div>
+
+              {/* Account Type - Dropdown */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Tipo de cuenta
+                </label>
+                {isEditing ? (
+                  <AccountTypeSelect
+                    value={formData.tipo_cuenta}
+                    onChange={(type) => setFormData({ ...formData, tipo_cuenta: type })}
+                    required
+                  />
+                ) : (
+                  <div className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg bg-gray-50 text-gray-600">
+                    {formData.tipo_cuenta === '03' ? 'Corriente' : formData.tipo_cuenta === '04' ? 'Ahorro' : 'No especificado'}
+                  </div>
+                )}
+              </div>
+
               {/* Account Number */}
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Nº de cuenta
+                  Número de cuenta
                 </label>
                 <input
                   type="text"
                   value={formData.bank_account_no}
-                  onChange={createUppercaseHandler((e) => setFormData({ ...formData, bank_account_no: e.target.value }))}
+                  onChange={(e) => {
+                    const cleaned = cleanAccountNumber(e.target.value);
+                    setFormData({ ...formData, bank_account_no: cleaned });
+                  }}
                   disabled={!isEditing}
-                  className={`w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none disabled:bg-gray-50 disabled:text-gray-600 ${!isEditing ? '' : uppercaseInputClass}`}
+                  maxLength={17}
+                  placeholder="040012345678"
+                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none disabled:bg-gray-50 disabled:text-gray-600"
                 />
+                {isEditing && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Sin espacios ni guiones. Máx 17 caracteres.
+                  </p>
+                )}
               </div>
 
-              {/* Beneficiary Name */}
+              {/* Nombre Completo (Titular ACH) */}
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Titular de la cuenta
                 </label>
                 <input
                   type="text"
-                  value={formData.beneficiary_name}
-                  onChange={createUppercaseHandler((e) => setFormData({ ...formData, beneficiary_name: e.target.value }))}
+                  value={formData.nombre_completo}
+                  onChange={(e) => {
+                    const normalized = toUpperNoAccents(e.target.value);
+                    setFormData({ ...formData, nombre_completo: normalized.substring(0, 22) });
+                  }}
                   disabled={!isEditing}
-                  className={`w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none disabled:bg-gray-50 disabled:text-gray-600 ${!isEditing ? '' : uppercaseInputClass}`}
+                  maxLength={22}
+                  placeholder="JUAN PEREZ"
+                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none disabled:bg-gray-50 disabled:text-gray-600 uppercase"
                 />
-              </div>
-
-              {/* Beneficiary ID */}
-              <div className="md:col-span-2">
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Cédula del titular
-                </label>
-                <input
-                  type="text"
-                  value={formData.beneficiary_id}
-                  onChange={createUppercaseHandler((e) => setFormData({ ...formData, beneficiary_id: e.target.value }))}
-                  disabled={!isEditing}
-                  className={`w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none disabled:bg-gray-50 disabled:text-gray-600 ${!isEditing ? '' : uppercaseInputClass}`}
-                />
+                {isEditing && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    MAYÚSCULAS sin acentos. Máx 22 caracteres.
+                  </p>
+                )}
               </div>
             </div>
+            
+            {!isEditing && (
+              <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-xs text-blue-800">
+                  💡 <strong>Info ACH:</strong> Estos datos se usan para generar el archivo TXT de pagos ACH Banco General.
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Action Buttons */}

@@ -16,14 +16,14 @@ import {
 } from './ach-normalization';
 
 interface ACHRecord {
-  id_beneficiario: string;
-  nombre_beneficiario: string;
-  ruta_destino: string;
-  cuenta_destino: string;
-  producto_destino: string;
-  monto: string;
-  tipo_pago: string;
-  referencia_texto: string;
+  id_beneficiario: string;        // 1-15 chars
+  nombre_beneficiario: string;    // 1-22 chars
+  ruta_destino: string;            // 1-9 numeric (código de ruta del banco desde ach_banks)
+  cuenta_destino: string;          // 1-17 alphanumeric
+  producto_destino: string;        // 2 chars (solo 03=Corriente o 04=Ahorro)
+  monto: string;                   // ###0.00 format
+  tipo_pago: string;               // C=Crédito, D=Débito
+  referencia_texto: string;        // 1-80 chars, debe iniciar con REF*TXT** y finalizar con \
 }
 
 interface ValidationError {

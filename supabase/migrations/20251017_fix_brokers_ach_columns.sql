@@ -16,30 +16,22 @@ COMMENT ON COLUMN public.brokers.bank_route IS 'Código de ruta del banco destin
 -- ====================================================================
 -- 2. MIGRAR DATOS DE COLUMNAS DUPLICADAS ANTES DE ELIMINAR
 -- ====================================================================
+-- NOTA: Estas columnas ya fueron migradas y eliminadas previamente
+-- Esta sección se mantiene solo como documentación del proceso
 
--- Migrar numero_cuenta a bank_account_no si bank_account_no está vacío
-UPDATE public.brokers
-SET bank_account_no = numero_cuenta
-WHERE bank_account_no IS NULL 
-  AND numero_cuenta IS NOT NULL;
+-- NOTA: Si las columnas numero_cuenta y numero_cedula aún existen, ejecutar:
+-- UPDATE public.brokers SET bank_account_no = numero_cuenta WHERE bank_account_no IS NULL AND numero_cuenta IS NOT NULL;
+-- UPDATE public.brokers SET national_id = numero_cedula WHERE national_id IS NULL AND numero_cedula IS NOT NULL;
+-- ALTER TABLE public.brokers DROP COLUMN IF EXISTS numero_cuenta;
+-- ALTER TABLE public.brokers DROP COLUMN IF EXISTS numero_cedula;
 
--- Migrar numero_cedula a national_id si national_id está vacío
-UPDATE public.brokers
-SET national_id = numero_cedula
-WHERE national_id IS NULL 
-  AND numero_cedula IS NOT NULL;
-
--- ====================================================================
--- 3. ELIMINAR COLUMNAS DUPLICADAS INNECESARIAS
--- ====================================================================
-
--- Eliminar numero_cuenta (duplicado de bank_account_no)
-ALTER TABLE public.brokers 
-DROP COLUMN IF EXISTS numero_cuenta;
-
--- Eliminar numero_cedula (duplicado de national_id)
-ALTER TABLE public.brokers 
-DROP COLUMN IF EXISTS numero_cedula;
+-- Verificar si las columnas ya fueron eliminadas:
+DO $$
+BEGIN
+  -- Ya no hacemos nada porque las columnas ya fueron eliminadas
+  -- Este bloque existe solo para evitar errores si la migración se ejecuta múltiples veces
+  NULL;
+END $$;
 
 -- ====================================================================
 -- 4. RENOMBRAR COLUMNAS PARA MAYOR CLARIDAD (OPCIONAL)
@@ -68,17 +60,22 @@ WHERE bank_account_no IS NOT NULL;
 -- 6. AGREGAR VALIDACIONES (CHECK CONSTRAINTS)
 -- ====================================================================
 
+-- Eliminar constraints si ya existen (para que la migración sea idempotente)
+ALTER TABLE public.brokers DROP CONSTRAINT IF EXISTS chk_bank_route_numeric;
+ALTER TABLE public.brokers DROP CONSTRAINT IF EXISTS chk_tipo_cuenta_ach;
+
 -- Validar que bank_route sea numérico cuando está presente
 ALTER TABLE public.brokers
 ADD CONSTRAINT chk_bank_route_numeric 
 CHECK (bank_route IS NULL OR bank_route ~ '^[0-9]+$');
 
 -- Validar que tipo_cuenta sea uno de los valores permitidos para ACH
+-- Solo se permiten 2 tipos: CORRIENTE (03) y AHORRO (04)
 ALTER TABLE public.brokers
 ADD CONSTRAINT chk_tipo_cuenta_ach 
 CHECK (
   tipo_cuenta IS NULL OR 
-  tipo_cuenta IN ('CORRIENTE', 'AHORRO', 'PRESTAMO', 'CREDITO', 'CHEQUE')
+  tipo_cuenta IN ('03', '04', 'CORRIENTE', 'AHORRO')
 );
 
 -- ====================================================================
@@ -86,13 +83,16 @@ CHECK (
 -- ====================================================================
 
 COMMENT ON COLUMN public.brokers.bank_account_no IS 'Número de cuenta bancaria del broker para transferencias ACH. Sin guiones ni espacios (máx 17 caracteres).';
-COMMENT ON COLUMN public.brokers.tipo_cuenta IS 'Tipo de cuenta bancaria: CORRIENTE (03), AHORRO (04), PRESTAMO (07). Se mapea automáticamente al código ACH.';
+COMMENT ON COLUMN public.brokers.tipo_cuenta IS 'Tipo de cuenta bancaria: CORRIENTE (03) o AHORRO (04). Solo 2 opciones permitidas según requerimientos Banco General. Se mapea automáticamente al código ACH.';
 COMMENT ON COLUMN public.brokers.nombre_completo IS 'Nombre completo del beneficiario para archivo ACH. Se normaliza automáticamente (sin tildes, mayúsculas, máx 22 caracteres).';
 COMMENT ON COLUMN public.brokers.national_id IS 'Cédula o RUC del broker. Usado para identificación en reportes.';
 
 -- ====================================================================
 -- 8. CREAR VISTA AUXILIAR PARA VALIDACIÓN DE DATOS ACH
 -- ====================================================================
+
+-- Eliminar vista si ya existe
+DROP VIEW IF EXISTS public.brokers_ach_validation CASCADE;
 
 CREATE OR REPLACE VIEW public.brokers_ach_validation AS
 SELECT 

@@ -9,9 +9,15 @@ interface Bank {
   route_code: string;
 }
 
+interface AccountType {
+  id: string;
+  code: string;
+  name: string;
+}
+
 interface BankSelectProps {
   value: string;
-  onChange: (bankRoute: string, bankName: string) => void;
+  onChange: (bankRoute: string) => void;
   required?: boolean;
   disabled?: boolean;
   className?: string;
@@ -40,7 +46,7 @@ export function BankSelect({
     try {
       setLoading(true);
       const { data, error: fetchError } = await supabaseClient()
-        .from('ach_banks' as any) // Tabla nueva, database.types.ts necesita regenerarse
+        .from('ach_banks')
         .select('id, bank_name, route_code')
         .eq('status', 'ACTIVE')
         .order('bank_name', { ascending: true });
@@ -51,7 +57,7 @@ export function BankSelect({
         return;
       }
 
-      setBanks((data as any) || []);
+      setBanks(data || []);
     } catch (err) {
       console.error('Error loading banks:', err);
       setError('Error al cargar bancos');
@@ -61,9 +67,7 @@ export function BankSelect({
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const selectedRoute = e.target.value;
-    const selectedBank = banks.find(b => b.route_code === selectedRoute);
-    onChange(selectedRoute, selectedBank?.bank_name || '');
+    onChange(e.target.value);
   };
 
   if (loading) {
@@ -108,7 +112,7 @@ export function BankSelect({
 
 /**
  * Dropdown de tipo de cuenta ACH
- * Valores exactos según formato ACH Banco General
+ * Carga desde tabla ach_account_types (solo 03 y 04)
  */
 export function AccountTypeSelect({
   value,
@@ -123,6 +127,60 @@ export function AccountTypeSelect({
   disabled?: boolean;
   className?: string;
 }) {
+  const [accountTypes, setAccountTypes] = useState<AccountType[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    loadAccountTypes();
+  }, []);
+
+  const loadAccountTypes = async () => {
+    try {
+      setLoading(true);
+      const { data, error: fetchError } = await supabaseClient()
+        .from('ach_account_types')
+        .select('id, code, name')
+        .eq('status', 'ACTIVE')
+        .order('code', { ascending: true });
+
+      if (fetchError) {
+        console.error('Error loading account types:', fetchError);
+        setError('Error al cargar tipos de cuenta');
+        return;
+      }
+
+      setAccountTypes(data || []);
+    } catch (err) {
+      console.error('Error loading account types:', err);
+      setError('Error al cargar tipos de cuenta');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <select
+        disabled
+        className={`w-full px-4 py-2 border-2 border-gray-300 rounded-lg bg-gray-50 ${className}`}
+      >
+        <option>Cargando tipos...</option>
+      </select>
+    );
+  }
+
+  if (error) {
+    return (
+      <select
+        disabled
+        className={`w-full px-4 py-2 border-2 border-red-300 rounded-lg bg-red-50 ${className}`}
+      >
+        <option>Error al cargar tipos</option>
+      </select>
+    );
+  }
+
   return (
     <select
       value={value}
@@ -132,9 +190,11 @@ export function AccountTypeSelect({
       className={`w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#010139] focus:outline-none ${className}`}
     >
       <option value="">Seleccionar tipo...</option>
-      <option value="04">Ahorro</option>
-      <option value="03">Corriente</option>
-      <option value="07">Préstamo/Crédito</option>
+      {accountTypes.map((type) => (
+        <option key={type.id} value={type.code}>
+          {type.name}
+        </option>
+      ))}
     </select>
   );
 }

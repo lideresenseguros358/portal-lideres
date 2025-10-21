@@ -33,12 +33,11 @@ export default function NewUserWizard() {
 
   // Paso 3: Datos Bancarios ACH
   const [bankData, setBankData] = useState({
-    bank_route: "", // Código de ruta bancaria (ej: 71)
-    bank_name: "", // Nombre del banco (display only)
-    account_type: "04", // 03=Corriente, 04=Ahorro, 07=Préstamo
-    account_number: "", // Número de cuenta (limpio)
+    bank_route: "", // Código de ruta desde ach_banks (ej: "71")
+    account_type: "04", // Código desde ach_account_types: "03"=Corriente, "04"=Ahorro
+    account_number: "", // Número de cuenta (limpio, sin espacios/guiones)
     numero_cedula: "", // Cédula del titular
-    nombre_completo: "", // Nombre completo (normalizado ACH)
+    nombre_completo: "", // Nombre completo (normalizado ACH, MAYÚSCULAS sin acentos)
   });
 
   // Checkbox para ayuda a llenar
@@ -422,7 +421,7 @@ export default function NewUserWizard() {
                 </label>
                 <BankSelect
                   value={bankData.bank_route}
-                  onChange={(route, name) => setBankData({ ...bankData, bank_route: route, bank_name: name })}
+                  onChange={(route) => setBankData({ ...bankData, bank_route: route })}
                   required
                 />
                 {bankData.bank_route && (

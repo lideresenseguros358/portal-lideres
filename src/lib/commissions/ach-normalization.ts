@@ -132,34 +132,29 @@ export function truncate(text: string, maxLength: number): string {
 }
 
 /**
- * Valida y convierte tipo de cuenta a código ACH de 2 dígitos
+ * Valida código de tipo de cuenta ACH
+ * Solo se permiten 2 códigos según Banco General (cargados desde tabla ach_account_types):
  * - 03 = Cuenta Corriente
  * - 04 = Cuenta de Ahorro (default)
- * - 07 = Préstamo/Crédito
  * 
- * @param accountType - Tipo de cuenta (puede ser texto o código)
- * @returns Código ACH de 2 dígitos
+ * IMPORTANTE: El dropdown ya maneja códigos desde la tabla ach_account_types,
+ * esta función solo valida que el código sea correcto.
+ * 
+ * @param accountType - Código de tipo de cuenta (debe ser '03' o '04')
+ * @returns Código ACH de 2 dígitos (03 o 04)
  */
 export function getAccountTypeCode(accountType: string | null | undefined): string {
   if (!accountType) return '04'; // Default: Ahorro
   
-  const normalized = accountType.toUpperCase().trim();
+  const code = accountType.trim();
   
-  // Si ya es un código válido, retornarlo
-  if (normalized === '03' || normalized === '04' || normalized === '07') {
-    return normalized;
+  // Solo aceptar códigos válidos de la tabla
+  if (code === '03' || code === '04') {
+    return code;
   }
   
-  // Mapeo por texto descriptivo
-  if (normalized.includes('CORRIENTE') || normalized.includes('CHEQUE')) {
-    return '03';
-  }
-  
-  if (normalized.includes('PRESTAMO') || normalized.includes('CREDITO')) {
-    return '07';
-  }
-  
-  // Default: Ahorro
+  // Si viene cualquier otro valor, usar default (esto no debería pasar con el dropdown)
+  console.warn(`Tipo de cuenta inválido: "${accountType}". Usando default (04 - Ahorro)`);
   return '04';
 }
 

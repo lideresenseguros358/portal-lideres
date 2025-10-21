@@ -29,9 +29,9 @@ type FortnightBrokerTotal = Tables<'fortnight_broker_totals'>;
 interface ACHRecord {
   id_beneficiario: string;        // 1-15 chars
   nombre_beneficiario: string;    // 1-22 chars
-  ruta_destino: string;            // 1-9 numeric
+  ruta_destino: string;            // 1-9 numeric (código de ruta del banco desde ach_banks)
   cuenta_destino: string;          // 1-17 alphanumeric
-  producto_destino: string;        // 2 chars (03=Corriente, 04=Ahorro, 07=Préstamo)
+  producto_destino: string;        // 2 chars (solo 03=Corriente o 04=Ahorro)
   monto: string;                   // ###0.00 format
   tipo_pago: string;               // C=Crédito, D=Débito
   referencia_texto: string;        // 1-80 chars, debe iniciar con REF*TXT** y finalizar con \
@@ -98,11 +98,13 @@ export async function buildBankACH(
     }
     
     // Extraer y normalizar datos del broker según formato ACH oficial
+    // NOTA: bank_route está conectado con tabla ach_banks via foreign key,
+    // garantizando que siempre sea un código de ruta válido de un banco activo
     const beneficiaryId = cleanBeneficiaryId(String(sequenceId).padStart(3, '0'));
     const beneficiaryName = toUpperNoAccents(broker.nombre_completo || broker.name || '');
-    const bankRoute = normalizeRoute(broker.bank_route);
+    const bankRoute = normalizeRoute(broker.bank_route); // Código de ruta del banco (ej: 71)
     const accountNumber = cleanAccountNumber(broker.bank_account_no);
-    const accountType = broker.tipo_cuenta || '';
+    const accountType = broker.tipo_cuenta || ''; // Solo '03' (Corriente) o '04' (Ahorro)
     
     // Construir registro ACH con formato exacto del instructivo oficial
     const record: ACHRecord = {
@@ -118,7 +120,7 @@ export async function buildBankACH(
       // Campo 4: Cuenta Destino (alfanum., 1-17, sin espacios/guiones)
       cuenta_destino: truncate(accountNumber, 17),
       
-      // Campo 5: Producto Destino (num., 2 chars: 03/04/07)
+      // Campo 5: Producto Destino (num., 2 chars: 03=Corriente, 04=Ahorro)
       producto_destino: getAccountTypeCode(accountType),
       
       // Campo 6: Monto (num., ###0.00, 2 decimales)

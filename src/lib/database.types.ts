@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      ach_account_types: {
+        Row: {
+          code: string
+          created_at: string | null
+          description: string | null
+          id: string
+          name: string
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          code: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          code?: string
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       ach_banks: {
         Row: {
           bank_name: string
@@ -147,6 +177,20 @@ export type Database = {
             referencedRelation: "brokers_ach_validation"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "advance_recurrences_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_ach_info"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "advance_recurrences_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_bank_info"
+            referencedColumns: ["id"]
+          },
         ]
       }
       advances: {
@@ -190,6 +234,20 @@ export type Database = {
             columns: ["broker_id"]
             isOneToOne: false
             referencedRelation: "brokers_ach_validation"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "advances_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_ach_info"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "advances_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_bank_info"
             referencedColumns: ["id"]
           },
           {
@@ -342,6 +400,20 @@ export type Database = {
             referencedRelation: "brokers_ach_validation"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "broker_assistants_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_ach_info"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "broker_assistants_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_bank_info"
+            referencedColumns: ["id"]
+          },
         ]
       }
       brokers: {
@@ -438,6 +510,34 @@ export type Database = {
             isOneToOne: true
             referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_brokers_bank_route"
+            columns: ["bank_route"]
+            isOneToOne: false
+            referencedRelation: "ach_banks"
+            referencedColumns: ["route_code"]
+          },
+          {
+            foreignKeyName: "fk_brokers_bank_route"
+            columns: ["bank_route"]
+            isOneToOne: false
+            referencedRelation: "ach_banks_active"
+            referencedColumns: ["route_code"]
+          },
+          {
+            foreignKeyName: "fk_brokers_tipo_cuenta"
+            columns: ["tipo_cuenta"]
+            isOneToOne: false
+            referencedRelation: "ach_account_types"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "fk_brokers_tipo_cuenta"
+            columns: ["tipo_cuenta"]
+            isOneToOne: false
+            referencedRelation: "ach_account_types_active"
+            referencedColumns: ["code"]
           },
         ]
       }
@@ -754,6 +854,20 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "cases_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_ach_info"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cases_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_bank_info"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "cases_claimed_by_broker_id_fkey"
             columns: ["claimed_by_broker_id"]
             isOneToOne: false
@@ -765,6 +879,20 @@ export type Database = {
             columns: ["claimed_by_broker_id"]
             isOneToOne: false
             referencedRelation: "brokers_ach_validation"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cases_claimed_by_broker_id_fkey"
+            columns: ["claimed_by_broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_ach_info"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cases_claimed_by_broker_id_fkey"
+            columns: ["claimed_by_broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_bank_info"
             referencedColumns: ["id"]
           },
           {
@@ -848,6 +976,20 @@ export type Database = {
             columns: ["broker_id"]
             isOneToOne: false
             referencedRelation: "brokers_ach_validation"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clients_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_ach_info"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clients_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_bank_info"
             referencedColumns: ["id"]
           },
         ]
@@ -953,6 +1095,20 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "comm_item_claims_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_ach_info"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comm_item_claims_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_bank_info"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "comm_item_claims_comm_item_id_fkey"
             columns: ["comm_item_id"]
             isOneToOne: true
@@ -1015,6 +1171,20 @@ export type Database = {
             columns: ["broker_id"]
             isOneToOne: false
             referencedRelation: "brokers_ach_validation"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comm_items_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_ach_info"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comm_items_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_bank_info"
             referencedColumns: ["id"]
           },
           {
@@ -1167,6 +1337,20 @@ export type Database = {
             columns: ["broker_id"]
             isOneToOne: false
             referencedRelation: "brokers_ach_validation"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "delinquency_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_ach_info"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "delinquency_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_bank_info"
             referencedColumns: ["id"]
           },
           {
@@ -1436,6 +1620,20 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "event_attendees_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_ach_info"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_attendees_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_bank_info"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "event_attendees_event_id_fkey"
             columns: ["event_id"]
             isOneToOne: false
@@ -1470,6 +1668,20 @@ export type Database = {
             columns: ["broker_id"]
             isOneToOne: false
             referencedRelation: "brokers_ach_validation"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_audience_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_ach_info"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_audience_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_bank_info"
             referencedColumns: ["id"]
           },
           {
@@ -1599,6 +1811,20 @@ export type Database = {
             columns: ["broker_id"]
             isOneToOne: false
             referencedRelation: "brokers_ach_validation"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fortnight_broker_totals_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_ach_info"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fortnight_broker_totals_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_bank_info"
             referencedColumns: ["id"]
           },
           {
@@ -1796,6 +2022,20 @@ export type Database = {
             columns: ["broker_id"]
             isOneToOne: false
             referencedRelation: "brokers_ach_validation"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "insurer_assa_codes_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_ach_info"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "insurer_assa_codes_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_bank_info"
             referencedColumns: ["id"]
           },
           {
@@ -2113,6 +2353,20 @@ export type Database = {
             referencedRelation: "brokers_ach_validation"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "notifications_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_ach_info"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_bank_info"
+            referencedColumns: ["id"]
+          },
         ]
       }
       payment_details: {
@@ -2275,6 +2529,20 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "pending_items_assigned_broker_id_fkey"
+            columns: ["assigned_broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_ach_info"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pending_items_assigned_broker_id_fkey"
+            columns: ["assigned_broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_bank_info"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "pending_items_fortnight_id_fkey"
             columns: ["fortnight_id"]
             isOneToOne: false
@@ -2433,6 +2701,20 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "policies_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_ach_info"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "policies_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_bank_info"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "policies_client_id_fkey"
             columns: ["client_id"]
             isOneToOne: false
@@ -2503,6 +2785,20 @@ export type Database = {
             referencedRelation: "brokers_ach_validation"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "production_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_ach_info"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_bank_info"
+            referencedColumns: ["id"]
+          },
         ]
       }
       profiles: {
@@ -2555,6 +2851,20 @@ export type Database = {
             columns: ["broker_id"]
             isOneToOne: false
             referencedRelation: "brokers_ach_validation"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profiles_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_ach_info"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profiles_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_bank_info"
             referencedColumns: ["id"]
           },
         ]
@@ -2635,6 +2945,20 @@ export type Database = {
             columns: ["broker_id"]
             isOneToOne: false
             referencedRelation: "brokers_ach_validation"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "retained_commissions_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_ach_info"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "retained_commissions_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_bank_info"
             referencedColumns: ["id"]
           },
           {
@@ -2729,6 +3053,20 @@ export type Database = {
             columns: ["broker_id"]
             isOneToOne: false
             referencedRelation: "brokers_ach_validation"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "temp_client_import_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_ach_info"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "temp_client_import_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_bank_info"
             referencedColumns: ["id"]
           },
           {
@@ -2830,6 +3168,24 @@ export type Database = {
       }
     }
     Views: {
+      ach_account_types_active: {
+        Row: {
+          code: string | null
+          id: string | null
+          name: string | null
+        }
+        Insert: {
+          code?: string | null
+          id?: string | null
+          name?: string | null
+        }
+        Update: {
+          code?: string | null
+          id?: string | null
+          name?: string | null
+        }
+        Relationships: []
+      }
       ach_banks_active: {
         Row: {
           bank_name: string | null
@@ -2896,6 +3252,150 @@ export type Database = {
             referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "fk_brokers_bank_route"
+            columns: ["bank_route"]
+            isOneToOne: false
+            referencedRelation: "ach_banks"
+            referencedColumns: ["route_code"]
+          },
+          {
+            foreignKeyName: "fk_brokers_bank_route"
+            columns: ["bank_route"]
+            isOneToOne: false
+            referencedRelation: "ach_banks_active"
+            referencedColumns: ["route_code"]
+          },
+          {
+            foreignKeyName: "fk_brokers_tipo_cuenta"
+            columns: ["tipo_cuenta"]
+            isOneToOne: false
+            referencedRelation: "ach_account_types"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "fk_brokers_tipo_cuenta"
+            columns: ["tipo_cuenta"]
+            isOneToOne: false
+            referencedRelation: "ach_account_types_active"
+            referencedColumns: ["code"]
+          },
+        ]
+      }
+      brokers_with_ach_info: {
+        Row: {
+          account_type_code: string | null
+          account_type_is_active: boolean | null
+          account_type_name: string | null
+          active: boolean | null
+          bank_account_no: string | null
+          bank_is_active: boolean | null
+          bank_name: string | null
+          bank_route: string | null
+          bank_route_full: string | null
+          broker_type: Database["public"]["Enums"]["broker_type_enum"] | null
+          email: string | null
+          id: string | null
+          is_ach_ready: boolean | null
+          name: string | null
+          national_id: string | null
+          nombre_completo: string | null
+          percent_default: number | null
+          phone: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brokers_id_fkey_profiles"
+            columns: ["id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_brokers_bank_route"
+            columns: ["bank_route"]
+            isOneToOne: false
+            referencedRelation: "ach_banks"
+            referencedColumns: ["route_code"]
+          },
+          {
+            foreignKeyName: "fk_brokers_bank_route"
+            columns: ["bank_route"]
+            isOneToOne: false
+            referencedRelation: "ach_banks_active"
+            referencedColumns: ["route_code"]
+          },
+          {
+            foreignKeyName: "fk_brokers_tipo_cuenta"
+            columns: ["account_type_code"]
+            isOneToOne: false
+            referencedRelation: "ach_account_types"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "fk_brokers_tipo_cuenta"
+            columns: ["account_type_code"]
+            isOneToOne: false
+            referencedRelation: "ach_account_types_active"
+            referencedColumns: ["code"]
+          },
+        ]
+      }
+      brokers_with_bank_info: {
+        Row: {
+          active: boolean | null
+          bank_account_no: string | null
+          bank_is_active: boolean | null
+          bank_name: string | null
+          bank_route: string | null
+          bank_route_full: string | null
+          broker_type: Database["public"]["Enums"]["broker_type_enum"] | null
+          email: string | null
+          id: string | null
+          is_ach_ready: boolean | null
+          name: string | null
+          national_id: string | null
+          nombre_completo: string | null
+          percent_default: number | null
+          phone: string | null
+          tipo_cuenta: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brokers_id_fkey_profiles"
+            columns: ["id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_brokers_bank_route"
+            columns: ["bank_route"]
+            isOneToOne: false
+            referencedRelation: "ach_banks"
+            referencedColumns: ["route_code"]
+          },
+          {
+            foreignKeyName: "fk_brokers_bank_route"
+            columns: ["bank_route"]
+            isOneToOne: false
+            referencedRelation: "ach_banks_active"
+            referencedColumns: ["route_code"]
+          },
+          {
+            foreignKeyName: "fk_brokers_tipo_cuenta"
+            columns: ["tipo_cuenta"]
+            isOneToOne: false
+            referencedRelation: "ach_account_types"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "fk_brokers_tipo_cuenta"
+            columns: ["tipo_cuenta"]
+            isOneToOne: false
+            referencedRelation: "ach_account_types_active"
+            referencedColumns: ["code"]
+          },
         ]
       }
       v_claims_full: {
@@ -2944,6 +3444,20 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "comm_item_claims_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_ach_info"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comm_item_claims_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_bank_info"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "comm_item_claims_comm_item_id_fkey"
             columns: ["comm_item_id"]
             isOneToOne: true
@@ -2970,6 +3484,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "insurers"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fk_brokers_tipo_cuenta"
+            columns: ["account_type"]
+            isOneToOne: false
+            referencedRelation: "ach_account_types"
+            referencedColumns: ["code"]
+          },
+          {
+            foreignKeyName: "fk_brokers_tipo_cuenta"
+            columns: ["account_type"]
+            isOneToOne: false
+            referencedRelation: "ach_account_types_active"
+            referencedColumns: ["code"]
           },
         ]
       }
@@ -3138,6 +3666,17 @@ export type Database = {
             }
           | { p_broker_id?: string; p_email: string; p_role: string }
         Returns: undefined
+      }
+      validate_broker_for_ach: {
+        Args: { broker_id: string }
+        Returns: {
+          account_number: string
+          account_type_name: string
+          bank_name: string
+          beneficiary_name: string
+          error_message: string
+          is_valid: boolean
+        }[]
       }
     }
     Enums: {

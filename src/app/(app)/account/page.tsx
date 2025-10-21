@@ -465,15 +465,24 @@ export default function AccountPage() {
           </button>
         </form>
 
-        {/* Banking Info - Read Only */}
+        {/* Banking Info ACH - Read Only */}
         {broker && (
           <div className="banking-section">
-            <h2 className="section-title">Información Bancaria</h2>
+            <h2 className="section-title">Información Bancaria ACH</h2>
             <p className="section-note">Solo el administrador puede modificar estos datos</p>
             
             <div className="info-group">
-              <label>ID del Banco</label>
-              <p>{broker.bank_id || "No especificado"}</p>
+              <label>Banco (Código de Ruta)</label>
+              <p>{broker.bank_route || "No especificado"}</p>
+            </div>
+
+            <div className="info-group">
+              <label>Tipo de Cuenta</label>
+              <p>
+                {broker.tipo_cuenta === '03' ? 'Corriente (03)' : 
+                 broker.tipo_cuenta === '04' ? 'Ahorro (04)' : 
+                 broker.tipo_cuenta || "No especificado"}
+              </p>
             </div>
 
             <div className="info-group">
@@ -482,13 +491,20 @@ export default function AccountPage() {
             </div>
 
             <div className="info-group">
-              <label>Beneficiario</label>
-              <p>{broker.beneficiary_name || "No especificado"}</p>
+              <label>Titular de la Cuenta</label>
+              <p>{broker.nombre_completo || "No especificado"}</p>
             </div>
 
-            <div className="info-group">
-              <label>Cédula del Beneficiario</label>
-              <p>{broker.beneficiary_id || "No especificado"}</p>
+            <div style={{ 
+              marginTop: '16px', 
+              padding: '12px', 
+              backgroundColor: '#EFF6FF', 
+              border: '1px solid #BFDBFE', 
+              borderRadius: '8px',
+              fontSize: '13px',
+              color: '#1E40AF'
+            }}>
+              💡 <strong>Info ACH:</strong> Estos datos se utilizan para generar los archivos TXT de pagos ACH en Banco General.
             </div>
           </div>
         )}
