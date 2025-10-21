@@ -96,7 +96,8 @@ export async function POST(request: NextRequest) {
     // Encriptar contraseña (en producción usar bcrypt, aquí simplificado)
     const encryptedPassword = Buffer.from(credentials.password).toString('base64');
 
-    // Crear solicitud con campos ACH
+    // Crear solicitud con campos ACH correctos
+    // Nota: bank_route y nombre_completo_titular se agregarán en migración SQL
     const { data: newRequest, error } = await supabase
       .from('user_requests')
       .insert([{
@@ -106,24 +107,21 @@ export async function POST(request: NextRequest) {
         fecha_nacimiento: personalData.fecha_nacimiento,
         telefono: personalData.telefono,
         licencia: personalData.licencia || null,
-        // Campos ACH nuevos
-        bank_route: bankData.bank_route,
-        bank_name: bankData.bank_name || '',
-        account_type: bankData.account_type, // 03/04/07
-        account_number: bankData.account_number, // Limpio, sin espacios/guiones
-        // Campos legacy (mantener por compatibilidad)
-        tipo_cuenta: bankData.account_type,
-        numero_cuenta: bankData.account_number,
-        numero_cedula_bancaria: bankData.numero_cedula,
-        nombre_completo: bankData.nombre_completo,
+        nombre_completo: bankData.nombre_completo, // Nombre del titular ACH
+        // Campos ACH (usando estructura actual hasta regenerar types)
+        numero_cuenta: bankData.account_number, // Número de cuenta (limpio)
+        tipo_cuenta: bankData.account_type, // Código tipo: "03" o "04"
+        numero_cedula_bancaria: bankData.nombre_completo, // Titular (MAYÚS sin acentos)
         additional_fields: {
           ...additionalFields,
           broker_type: personalData.broker_type || 'corredor',
           assa_code: personalData.assa_code || '',
-          carnet_expiry_date: personalData.carnet_expiry_date || null
+          carnet_expiry_date: personalData.carnet_expiry_date || null,
+          // Guardar bank_route en additional_fields temporalmente
+          bank_route: bankData.bank_route
         },
         status: 'pending'
-      }])
+      } as any]) // Temporal hasta regenerar types
       .select()
       .single();
 

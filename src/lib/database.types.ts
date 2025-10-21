@@ -3097,6 +3097,8 @@ export type Database = {
           additional_fields: Json | null
           assigned_commission_percent: number | null
           assigned_role: string | null
+          bank_account_no: string
+          bank_route: string | null
           cedula: string
           created_at: string
           email: string
@@ -3105,8 +3107,7 @@ export type Database = {
           id: string
           licencia: string | null
           nombre_completo: string
-          numero_cedula_bancaria: string
-          numero_cuenta: string
+          nombre_completo_titular: string
           reviewed_at: string | null
           reviewed_by: string | null
           status: string
@@ -3118,6 +3119,8 @@ export type Database = {
           additional_fields?: Json | null
           assigned_commission_percent?: number | null
           assigned_role?: string | null
+          bank_account_no: string
+          bank_route?: string | null
           cedula: string
           created_at?: string
           email: string
@@ -3126,8 +3129,7 @@ export type Database = {
           id?: string
           licencia?: string | null
           nombre_completo: string
-          numero_cedula_bancaria: string
-          numero_cuenta: string
+          nombre_completo_titular: string
           reviewed_at?: string | null
           reviewed_by?: string | null
           status?: string
@@ -3139,6 +3141,8 @@ export type Database = {
           additional_fields?: Json | null
           assigned_commission_percent?: number | null
           assigned_role?: string | null
+          bank_account_no?: string
+          bank_route?: string | null
           cedula?: string
           created_at?: string
           email?: string
@@ -3147,8 +3151,7 @@ export type Database = {
           id?: string
           licencia?: string | null
           nombre_completo?: string
-          numero_cedula_bancaria?: string
-          numero_cuenta?: string
+          nombre_completo_titular?: string
           reviewed_at?: string | null
           reviewed_by?: string | null
           status?: string
@@ -3157,6 +3160,20 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "fk_user_requests_bank_route"
+            columns: ["bank_route"]
+            isOneToOne: false
+            referencedRelation: "ach_banks"
+            referencedColumns: ["route_code"]
+          },
+          {
+            foreignKeyName: "fk_user_requests_bank_route"
+            columns: ["bank_route"]
+            isOneToOne: false
+            referencedRelation: "ach_banks_active"
+            referencedColumns: ["route_code"]
+          },
           {
             foreignKeyName: "user_requests_reviewed_by_fkey"
             columns: ["reviewed_by"]

@@ -22,6 +22,7 @@ export default function NewUserWizard() {
 
   // Paso 2: Datos Personales
   const [personalData, setPersonalData] = useState({
+    nombre: "", // Nombre completo del solicitante
     cedula: "",
     fecha_nacimiento: "",
     telefono: "",
@@ -63,6 +64,10 @@ export default function NewUserWizard() {
 
   // Validación Paso 2
   const validateStep2 = () => {
+    if (!personalData.nombre) {
+      setError("El nombre completo es obligatorio");
+      return false;
+    }
     if (!personalData.cedula || !personalData.fecha_nacimiento || !personalData.telefono) {
       setError("Cédula, fecha de nacimiento y teléfono son obligatorios");
       return false;
@@ -97,18 +102,22 @@ export default function NewUserWizard() {
     return true;
   };
 
-  // Auto-llenar cédula bancaria
+  // Función helper checkbox - Copia nombre Y cédula del broker
   const handleAutoFillChange = (checked: boolean) => {
     setAutoFillCedula(checked);
     if (checked) {
+      // Normalizar nombre a formato ACH
+      const nombreNormalizado = toUpperNoAccents(personalData.nombre || '').substring(0, 22);
       setBankData(prev => ({
         ...prev,
         numero_cedula: personalData.cedula,
+        nombre_completo: nombreNormalizado
       }));
     } else {
       setBankData(prev => ({
         ...prev,
         numero_cedula: "",
+        nombre_completo: ""
       }));
     }
   };
@@ -253,6 +262,27 @@ export default function NewUserWizard() {
                 <h3 className="text-xl font-bold text-[#010139]">Paso 2: Datos Personales</h3>
               </div>
               
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Nombre Completo <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={personalData.nombre}
+                  onChange={(e) => {
+                    setPersonalData({ ...personalData, nombre: e.target.value });
+                    // Si checkbox está marcado, actualizar también el titular
+                    if (autoFillCedula) {
+                      const nombreNormalizado = toUpperNoAccents(e.target.value).substring(0, 22);
+                      setBankData({ ...bankData, nombre_completo: nombreNormalizado });
+                    }
+                  }}
+                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#010139] focus:outline-none"
+                  placeholder="Juan Pérez Gómez"
+                  required
+                />
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Cédula / Pasaporte <span className="text-red-500">*</span>
@@ -402,16 +432,21 @@ export default function NewUserWizard() {
 
               {/* Checkbox ayuda llenar */}
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <label className="flex items-center gap-2 cursor-pointer">
+                <label className="flex items-center gap-3 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={autoFillCedula}
                     onChange={(e) => handleAutoFillChange(e.target.checked)}
-                    className="w-4 h-4 text-[#010139]"
+                    className="w-4 h-4 text-[#010139] border-gray-300 rounded focus:ring-[#010139]"
                   />
-                  <span className="text-sm text-blue-900 font-medium">
-                    Usar mi cédula para datos bancarios
-                  </span>
+                  <div>
+                    <span className="text-sm text-blue-900 font-semibold block">
+                      Usar mis datos personales (cuenta propia)
+                    </span>
+                    <span className="text-xs text-blue-700">
+                      Auto-llena titular y cédula con tus datos del Paso 2
+                    </span>
+                  </div>
                 </label>
               </div>
               
@@ -489,10 +524,11 @@ export default function NewUserWizard() {
                     const normalized = toUpperNoAccents(e.target.value);
                     setBankData({ ...bankData, nombre_completo: normalized.substring(0, 22) });
                   }}
-                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#010139] focus:outline-none"
+                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#010139] focus:outline-none disabled:bg-gray-100 disabled:text-gray-600"
                   placeholder="JUAN PEREZ"
                   maxLength={22}
                   required
+                  disabled={autoFillCedula}
                 />
                 <p className="text-xs text-gray-500 mt-1">
                   MAYÚSCULAS sin acentos. Máximo 22 caracteres.

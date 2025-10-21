@@ -128,22 +128,25 @@ export async function PATCH(
       ? userRequest.additional_fields as Record<string, any>
       : {};
 
-    // Crear broker con campos ACH
+    // Obtener bank_route desde additional_fields si existe
+    const bankRoute = additionalFields.bank_route || null;
+    
+    // Crear broker con campos ACH correctos
     const { error: brokerError } = await supabase
       .from('brokers')
       .insert([{
         id: authData.user!.id,
         p_id: authData.user!.id,
         // Datos personales
-        nombre_completo: userRequest.nombre_completo,
-        national_id: userRequest.cedula, // Usar national_id en lugar de cedula
+        nombre_completo: userRequest.nombre_completo, // Nombre del titular de cuenta
+        national_id: userRequest.cedula, // Cédula del broker
         phone: userRequest.telefono,
         license_no: userRequest.licencia,
         birth_date: userRequest.fecha_nacimiento,
-        // Datos bancarios ACH
-        bank_route: (userRequest as any).bank_route || null,
-        bank_account_no: (userRequest as any).account_number || userRequest.numero_cuenta || null,
-        tipo_cuenta: (userRequest as any).account_type || userRequest.tipo_cuenta || '04',
+        // Datos bancarios ACH (campos correctos según brokers table)
+        bank_route: bankRoute, // Código de ruta bancaria desde additional_fields
+        bank_account_no: userRequest.numero_cuenta, // Número de cuenta
+        tipo_cuenta: userRequest.tipo_cuenta || '04', // Tipo de cuenta: 03 o 04
         // Comisión
         percent_default: parseFloat(commission_percent),
         // Campos adicionales

@@ -495,6 +495,11 @@ export default function AccountPage() {
               <p>{broker.nombre_completo || "No especificado"}</p>
             </div>
 
+            <div className="info-group">
+              <label>Cédula del Titular</label>
+              <p>{broker.national_id || "No especificado"}</p>
+            </div>
+
             <div style={{ 
               marginTop: '16px', 
               padding: '12px', 

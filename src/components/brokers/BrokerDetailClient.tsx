@@ -22,6 +22,7 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState<any>({});
   const [saving, setSaving] = useState(false);
+  const [useBrokerData, setUseBrokerData] = useState(false);
 
   useEffect(() => {
     loadBroker();
@@ -46,6 +47,7 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
         bank_account_no: result.data.bank_account_no || '',
         tipo_cuenta: result.data.tipo_cuenta || '04',
         nombre_completo: result.data.nombre_completo || '',
+        titular_cedula: result.data.national_id || '', // Cédula del titular de cuenta
         carnet_expiry_date: (result.data as any).carnet_expiry_date || '',
         broker_type: (result.data as any).broker_type || 'corredor',
       });
@@ -504,7 +506,7 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
                     const normalized = toUpperNoAccents(e.target.value);
                     setFormData({ ...formData, nombre_completo: normalized.substring(0, 22) });
                   }}
-                  disabled={!isEditing}
+                  disabled={!isEditing || useBrokerData}
                   maxLength={22}
                   placeholder="JUAN PEREZ"
                   className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none disabled:bg-gray-50 disabled:text-gray-600 uppercase"
@@ -515,7 +517,59 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
                   </p>
                 )}
               </div>
+
+              {/* Cédula del Titular */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Cédula del titular
+                </label>
+                <input
+                  type="text"
+                  value={formData.titular_cedula}
+                  onChange={(e) => setFormData({ ...formData, titular_cedula: e.target.value })}
+                  disabled={!isEditing || useBrokerData}
+                  placeholder="8-123-4567"
+                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none disabled:bg-gray-50 disabled:text-gray-600"
+                />
+                {isEditing && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Cédula del titular de la cuenta bancaria.
+                  </p>
+                )}
+              </div>
             </div>
+
+            {/* Checkbox: Usar datos del broker */}
+            {isEditing && (
+              <div className="mt-4 p-4 bg-gray-50 border-2 border-gray-300 rounded-lg">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={useBrokerData}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setUseBrokerData(checked);
+                      if (checked) {
+                        // Auto-llenar con datos del broker
+                        const brokerName = toUpperNoAccents(formData.name || '').substring(0, 22);
+                        setFormData({
+                          ...formData,
+                          nombre_completo: brokerName,
+                          titular_cedula: formData.national_id
+                        });
+                      }
+                    }}
+                    className="w-4 h-4 text-[#8AAA19] border-gray-300 rounded focus:ring-[#8AAA19]"
+                  />
+                  <span className="text-sm font-semibold text-gray-700">
+                    Usar mis datos personales (cuenta propia)
+                  </span>
+                </label>
+                <p className="text-xs text-gray-500 mt-2 ml-7">
+                  Si la cuenta bancaria está a tu nombre, marca esta casilla para auto-llenar el titular y cédula.
+                </p>
+              </div>
+            )}
             
             {!isEditing && (
               <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
