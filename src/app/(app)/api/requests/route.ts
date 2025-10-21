@@ -62,8 +62,21 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Datos personales incompletos' }, { status: 400 });
     }
 
-    if (!bankData?.numero_cuenta || !bankData?.numero_cedula || !bankData?.nombre_completo) {
-      return NextResponse.json({ error: 'Datos bancarios incompletos' }, { status: 400 });
+    // Validaciones ACH
+    if (!bankData?.bank_route) {
+      return NextResponse.json({ error: 'Debe seleccionar un banco' }, { status: 400 });
+    }
+    if (!bankData?.account_type) {
+      return NextResponse.json({ error: 'Debe seleccionar el tipo de cuenta' }, { status: 400 });
+    }
+    if (!bankData?.account_number) {
+      return NextResponse.json({ error: 'Número de cuenta es requerido' }, { status: 400 });
+    }
+    if (!bankData?.numero_cedula) {
+      return NextResponse.json({ error: 'Cédula del titular es requerida' }, { status: 400 });
+    }
+    if (!bankData?.nombre_completo) {
+      return NextResponse.json({ error: 'Nombre completo del titular es requerido' }, { status: 400 });
     }
 
     // Verificar que el email no esté ya registrado
@@ -83,7 +96,7 @@ export async function POST(request: NextRequest) {
     // Encriptar contraseña (en producción usar bcrypt, aquí simplificado)
     const encryptedPassword = Buffer.from(credentials.password).toString('base64');
 
-    // Crear solicitud
+    // Crear solicitud con campos ACH
     const { data: newRequest, error } = await supabase
       .from('user_requests')
       .insert([{
@@ -93,11 +106,22 @@ export async function POST(request: NextRequest) {
         fecha_nacimiento: personalData.fecha_nacimiento,
         telefono: personalData.telefono,
         licencia: personalData.licencia || null,
-        tipo_cuenta: bankData.tipo_cuenta || 'Ahorro',
-        numero_cuenta: bankData.numero_cuenta,
+        // Campos ACH nuevos
+        bank_route: bankData.bank_route,
+        bank_name: bankData.bank_name || '',
+        account_type: bankData.account_type, // 03/04/07
+        account_number: bankData.account_number, // Limpio, sin espacios/guiones
+        // Campos legacy (mantener por compatibilidad)
+        tipo_cuenta: bankData.account_type,
+        numero_cuenta: bankData.account_number,
         numero_cedula_bancaria: bankData.numero_cedula,
         nombre_completo: bankData.nombre_completo,
-        additional_fields: additionalFields,
+        additional_fields: {
+          ...additionalFields,
+          broker_type: personalData.broker_type || 'corredor',
+          assa_code: personalData.assa_code || '',
+          carnet_expiry_date: personalData.carnet_expiry_date || null
+        },
         status: 'pending'
       }])
       .select()

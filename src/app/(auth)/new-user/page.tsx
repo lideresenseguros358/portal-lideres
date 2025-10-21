@@ -3,6 +3,8 @@
 import { FormEvent, useState } from "react";
 import { FaUser, FaIdCard, FaUniversity, FaArrowRight, FaArrowLeft, FaCheckCircle } from "react-icons/fa";
 import AuthShell from "../_AuthShell";
+import { BankSelect, AccountTypeSelect } from '@/components/ui/BankSelect';
+import { toUpperNoAccents, cleanAccountNumber } from '@/lib/commissions/ach-normalization';
 
 // Wizard de 3 pasos para registro de nuevo usuario
 export default function NewUserWizard() {
@@ -29,12 +31,14 @@ export default function NewUserWizard() {
     carnet_expiry_date: "",
   });
 
-  // Paso 3: Datos Bancarios
+  // Paso 3: Datos Bancarios ACH
   const [bankData, setBankData] = useState({
-    tipo_cuenta: "Ahorro",
-    numero_cuenta: "",
-    numero_cedula: "",
-    nombre_completo: "",
+    bank_route: "", // Código de ruta bancaria (ej: 71)
+    bank_name: "", // Nombre del banco (display only)
+    account_type: "04", // 03=Corriente, 04=Ahorro, 07=Préstamo
+    account_number: "", // Número de cuenta (limpio)
+    numero_cedula: "", // Cédula del titular
+    nombre_completo: "", // Nombre completo (normalizado ACH)
   });
 
   // Checkbox para ayuda a llenar
@@ -70,8 +74,24 @@ export default function NewUserWizard() {
 
   // Validación Paso 3
   const validateStep3 = () => {
-    if (!bankData.numero_cuenta || !bankData.numero_cedula || !bankData.nombre_completo) {
-      setError("Todos los campos bancarios son obligatorios");
+    if (!bankData.bank_route) {
+      setError("Debe seleccionar un banco");
+      return false;
+    }
+    if (!bankData.account_type) {
+      setError("Debe seleccionar el tipo de cuenta");
+      return false;
+    }
+    if (!bankData.account_number) {
+      setError("El número de cuenta es obligatorio");
+      return false;
+    }
+    if (!bankData.numero_cedula) {
+      setError("La cédula del titular es obligatoria");
+      return false;
+    }
+    if (!bankData.nombre_completo) {
+      setError("El nombre completo del titular es obligatorio");
       return false;
     }
     setError(null);
@@ -398,17 +418,29 @@ export default function NewUserWizard() {
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Banco <span className="text-red-500">*</span>
+                </label>
+                <BankSelect
+                  value={bankData.bank_route}
+                  onChange={(route, name) => setBankData({ ...bankData, bank_route: route, bank_name: name })}
+                  required
+                />
+                {bankData.bank_route && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Código de ruta: {bankData.bank_route}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
                   Tipo de Cuenta <span className="text-red-500">*</span>
                 </label>
-                <select
-                  value={bankData.tipo_cuenta}
-                  onChange={(e) => setBankData({ ...bankData, tipo_cuenta: e.target.value })}
-                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#010139] focus:outline-none"
+                <AccountTypeSelect
+                  value={bankData.account_type}
+                  onChange={(type) => setBankData({ ...bankData, account_type: type })}
                   required
-                >
-                  <option value="Ahorro">Ahorro</option>
-                  <option value="Corriente">Corriente</option>
-                </select>
+                />
               </div>
 
               <div>
@@ -417,12 +449,19 @@ export default function NewUserWizard() {
                 </label>
                 <input
                   type="text"
-                  value={bankData.numero_cuenta}
-                  onChange={(e) => setBankData({ ...bankData, numero_cuenta: e.target.value })}
+                  value={bankData.account_number}
+                  onChange={(e) => {
+                    const cleaned = cleanAccountNumber(e.target.value);
+                    setBankData({ ...bankData, account_number: cleaned });
+                  }}
                   className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#010139] focus:outline-none"
                   placeholder="040012345678"
+                  maxLength={17}
                   required
                 />
+                <p className="text-xs text-gray-500 mt-1">
+                  Sin espacios ni guiones. Máximo 17 caracteres.
+                </p>
               </div>
 
               <div>
@@ -447,11 +486,18 @@ export default function NewUserWizard() {
                 <input
                   type="text"
                   value={bankData.nombre_completo}
-                  onChange={(e) => setBankData({ ...bankData, nombre_completo: e.target.value })}
+                  onChange={(e) => {
+                    const normalized = toUpperNoAccents(e.target.value);
+                    setBankData({ ...bankData, nombre_completo: normalized.substring(0, 22) });
+                  }}
                   className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#010139] focus:outline-none"
-                  placeholder="Nombre completo del titular"
+                  placeholder="JUAN PEREZ"
+                  maxLength={22}
                   required
                 />
+                <p className="text-xs text-gray-500 mt-1">
+                  MAYÚSCULAS sin acentos. Máximo 22 caracteres.
+                </p>
               </div>
             </div>
           )}

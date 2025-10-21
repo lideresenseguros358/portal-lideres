@@ -189,14 +189,14 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
       try {
         const { data: brokersData } = await supabaseClient()
           .from('brokers')
-          .select('id, name, bank_account_no, numero_cuenta, bank_name, account_type')
+          .select('id, name, bank_account_no, bank_name, account_type')
           .in('id', Array.from(brokerIds));
         
         if (brokersData) {
           brokersData.forEach((b: any) => {
             brokersMap.set(b.id, {
               name: b.name,
-              account_no: b.bank_account_no || b.numero_cuenta || '',
+              account_no: b.bank_account_no || '',
               bank_name: b.bank_name || '',
               account_type: b.account_type || ''
             });
@@ -774,12 +774,12 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-bold text-lg text-[#010139] truncate">{payment.client_name}</h3>
+                        <h3 className="font-bold text-lg text-[#010139] break-words">{payment.client_name}</h3>
                         {payment.policy_number && (
-                          <p className="text-sm text-gray-600 truncate">Póliza: {payment.policy_number}</p>
+                          <p className="text-sm text-gray-600 break-words">Póliza: {payment.policy_number}</p>
                         )}
                         {payment.insurer_name && (
-                          <p className="text-sm text-gray-600 truncate">{payment.insurer_name}</p>
+                          <p className="text-sm text-gray-600 break-words">{payment.insurer_name}</p>
                         )}
                       </div>
                       <div className="flex items-start gap-4 flex-shrink-0">
@@ -908,12 +908,12 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-4">
                           <div className="flex-1 min-w-0">
-                            <h3 className="font-bold text-lg text-[#010139] truncate">{payment.client_name}</h3>
+                            <h3 className="font-bold text-lg text-[#010139] break-words">{payment.client_name}</h3>
                             {payment.policy_number && (
-                              <p className="text-sm text-gray-600 truncate">Póliza: {payment.policy_number}</p>
+                              <p className="text-sm text-gray-600 break-words">Póliza: {payment.policy_number}</p>
                             )}
                             {payment.insurer_name && (
-                              <p className="text-sm text-gray-600 truncate">{payment.insurer_name}</p>
+                              <p className="text-sm text-gray-600 break-words">{payment.insurer_name}</p>
                             )}
                           </div>
                           <div className="text-2xl font-bold text-[#8AAA19] whitespace-nowrap">

@@ -24,6 +24,19 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
     loadPreliminaryClients();
   }, []);
 
+  useEffect(() => {
+    if (editForm.start_date && editingId) {
+      const startDate = new Date(editForm.start_date);
+      const renewalDate = new Date(startDate);
+      renewalDate.setFullYear(startDate.getFullYear() + 1);
+      const renewalDateStr = renewalDate.toISOString().split('T')[0] || '';
+      
+      if (!editForm.renewal_date) {
+        setEditForm((prev: any) => ({ ...prev, renewal_date: renewalDateStr }));
+      }
+    }
+  }, [editForm.start_date, editingId]);
+
   const loadPreliminaryClients = async () => {
     setLoading(true);
     const result = await actionGetPreliminaryClients();
@@ -37,6 +50,7 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
   };
 
   const startEdit = (client: any) => {
+    const today = new Date().toISOString().split('T')[0];
     setEditingId(client.id);
     setEditForm({
       client_name: client.client_name || '',
@@ -46,7 +60,7 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
       policy_number: client.policy_number || '',
       ramo: client.ramo || '',
       insurer_id: client.insurer_id || '',
-      start_date: client.start_date || '',
+      start_date: client.start_date || today,
       renewal_date: client.renewal_date || '',
       status: client.status || 'ACTIVA',
       broker_id: client.broker_id || '',

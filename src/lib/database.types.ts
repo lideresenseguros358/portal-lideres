@@ -14,6 +14,45 @@ export type Database = {
   }
   public: {
     Tables: {
+      ach_banks: {
+        Row: {
+          bank_name: string
+          created_at: string | null
+          id: string
+          last_verified_at: string | null
+          notes: string | null
+          route_code: string
+          route_code_raw: string
+          source: string | null
+          status: string
+          updated_at: string | null
+        }
+        Insert: {
+          bank_name: string
+          created_at?: string | null
+          id?: string
+          last_verified_at?: string | null
+          notes?: string | null
+          route_code: string
+          route_code_raw: string
+          source?: string | null
+          status?: string
+          updated_at?: string | null
+        }
+        Update: {
+          bank_name?: string
+          created_at?: string | null
+          id?: string
+          last_verified_at?: string | null
+          notes?: string | null
+          route_code?: string
+          route_code_raw?: string
+          source?: string | null
+          status?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       advance_logs: {
         Row: {
           advance_id: string
@@ -101,6 +140,13 @@ export type Database = {
             referencedRelation: "brokers"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "advance_recurrences_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_ach_validation"
+            referencedColumns: ["id"]
+          },
         ]
       }
       advances: {
@@ -137,6 +183,13 @@ export type Database = {
             columns: ["broker_id"]
             isOneToOne: false
             referencedRelation: "brokers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "advances_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_ach_validation"
             referencedColumns: ["id"]
           },
           {
@@ -246,12 +299,58 @@ export type Database = {
         }
         Relationships: []
       }
+      broker_assistants: {
+        Row: {
+          broker_id: string
+          created_at: string | null
+          email: string
+          id: string
+          is_active: boolean | null
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          broker_id: string
+          created_at?: string | null
+          email: string
+          id?: string
+          is_active?: boolean | null
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          broker_id?: string
+          created_at?: string | null
+          email?: string
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "broker_assistants_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "broker_assistants_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_ach_validation"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       brokers: {
         Row: {
           active: boolean | null
           assa_code: string | null
           bank_account_no: string | null
           bank_id: string | null
+          bank_route: string | null
           beneficiary_id: string | null
           beneficiary_name: string | null
           birth_date: string | null
@@ -265,8 +364,6 @@ export type Database = {
           name: string | null
           national_id: string | null
           nombre_completo: string | null
-          numero_cedula: string | null
-          numero_cuenta: string | null
           p_id: string
           percent_default: number | null
           phone: string | null
@@ -277,6 +374,7 @@ export type Database = {
           assa_code?: string | null
           bank_account_no?: string | null
           bank_id?: string | null
+          bank_route?: string | null
           beneficiary_id?: string | null
           beneficiary_name?: string | null
           birth_date?: string | null
@@ -290,8 +388,6 @@ export type Database = {
           name?: string | null
           national_id?: string | null
           nombre_completo?: string | null
-          numero_cedula?: string | null
-          numero_cuenta?: string | null
           p_id: string
           percent_default?: number | null
           phone?: string | null
@@ -302,6 +398,7 @@ export type Database = {
           assa_code?: string | null
           bank_account_no?: string | null
           bank_id?: string | null
+          bank_route?: string | null
           beneficiary_id?: string | null
           beneficiary_name?: string | null
           birth_date?: string | null
@@ -315,8 +412,6 @@ export type Database = {
           name?: string | null
           national_id?: string | null
           nombre_completo?: string | null
-          numero_cedula?: string | null
-          numero_cuenta?: string | null
           p_id?: string
           percent_default?: number | null
           phone?: string | null
@@ -514,15 +609,21 @@ export type Database = {
       }
       cases: {
         Row: {
+          adelanto_id: string | null
+          admin_id: string | null
+          aplazar_reason: string | null
           broker_id: string | null
           canal: string
+          case_number: string | null
           claimed_by_broker_id: string | null
           client_id: string | null
           client_name: string | null
+          content_hash: string | null
           created_at: string
           created_by: string | null
           ctype: Database["public"]["Enums"]["case_type_enum"]
           deleted_at: string | null
+          deleted_reason: string | null
           direct_payment: boolean | null
           discount_to_broker: boolean | null
           id: string
@@ -533,28 +634,37 @@ export type Database = {
           message_id: string | null
           notes: string | null
           payment_method: string | null
+          policy_id: string | null
           policy_number: string | null
           postponed_until: string | null
           premium: number | null
           section: Database["public"]["Enums"]["case_section_enum"]
-          seen_by_broker: boolean
           sla_date: string | null
           sla_days: number | null
           status: Database["public"]["Enums"]["case_status_enum"]
           thread_id: string | null
           ticket_ref: string | null
           updated_at: string
+          visto: boolean
+          visto_at: string | null
+          visto_by: string | null
         }
         Insert: {
+          adelanto_id?: string | null
+          admin_id?: string | null
+          aplazar_reason?: string | null
           broker_id?: string | null
           canal?: string
+          case_number?: string | null
           claimed_by_broker_id?: string | null
           client_id?: string | null
           client_name?: string | null
+          content_hash?: string | null
           created_at?: string
           created_by?: string | null
           ctype?: Database["public"]["Enums"]["case_type_enum"]
           deleted_at?: string | null
+          deleted_reason?: string | null
           direct_payment?: boolean | null
           discount_to_broker?: boolean | null
           id?: string
@@ -565,28 +675,37 @@ export type Database = {
           message_id?: string | null
           notes?: string | null
           payment_method?: string | null
+          policy_id?: string | null
           policy_number?: string | null
           postponed_until?: string | null
           premium?: number | null
           section?: Database["public"]["Enums"]["case_section_enum"]
-          seen_by_broker?: boolean
           sla_date?: string | null
           sla_days?: number | null
           status?: Database["public"]["Enums"]["case_status_enum"]
           thread_id?: string | null
           ticket_ref?: string | null
           updated_at?: string
+          visto?: boolean
+          visto_at?: string | null
+          visto_by?: string | null
         }
         Update: {
+          adelanto_id?: string | null
+          admin_id?: string | null
+          aplazar_reason?: string | null
           broker_id?: string | null
           canal?: string
+          case_number?: string | null
           claimed_by_broker_id?: string | null
           client_id?: string | null
           client_name?: string | null
+          content_hash?: string | null
           created_at?: string
           created_by?: string | null
           ctype?: Database["public"]["Enums"]["case_type_enum"]
           deleted_at?: string | null
+          deleted_reason?: string | null
           direct_payment?: boolean | null
           discount_to_broker?: boolean | null
           id?: string
@@ -597,19 +716,29 @@ export type Database = {
           message_id?: string | null
           notes?: string | null
           payment_method?: string | null
+          policy_id?: string | null
           policy_number?: string | null
           postponed_until?: string | null
           premium?: number | null
           section?: Database["public"]["Enums"]["case_section_enum"]
-          seen_by_broker?: boolean
           sla_date?: string | null
           sla_days?: number | null
           status?: Database["public"]["Enums"]["case_status_enum"]
           thread_id?: string | null
           ticket_ref?: string | null
           updated_at?: string
+          visto?: boolean
+          visto_at?: string | null
+          visto_by?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "cases_admin_id_fkey"
+            columns: ["admin_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "cases_broker_id_fkey"
             columns: ["broker_id"]
@@ -618,10 +747,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "cases_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_ach_validation"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "cases_claimed_by_broker_id_fkey"
             columns: ["claimed_by_broker_id"]
             isOneToOne: false
             referencedRelation: "brokers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cases_claimed_by_broker_id_fkey"
+            columns: ["claimed_by_broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_ach_validation"
             referencedColumns: ["id"]
           },
           {
@@ -643,6 +786,20 @@ export type Database = {
             columns: ["insurer_id"]
             isOneToOne: false
             referencedRelation: "insurers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cases_policy_id_fkey"
+            columns: ["policy_id"]
+            isOneToOne: false
+            referencedRelation: "policies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cases_visto_by_fkey"
+            columns: ["visto_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -684,6 +841,13 @@ export type Database = {
             columns: ["broker_id"]
             isOneToOne: false
             referencedRelation: "brokers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clients_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_ach_validation"
             referencedColumns: ["id"]
           },
         ]
@@ -782,6 +946,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "comm_item_claims_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_ach_validation"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "comm_item_claims_comm_item_id_fkey"
             columns: ["comm_item_id"]
             isOneToOne: true
@@ -837,6 +1008,13 @@ export type Database = {
             columns: ["broker_id"]
             isOneToOne: false
             referencedRelation: "brokers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comm_items_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_ach_validation"
             referencedColumns: ["id"]
           },
           {
@@ -982,6 +1160,13 @@ export type Database = {
             columns: ["broker_id"]
             isOneToOne: false
             referencedRelation: "brokers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "delinquency_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_ach_validation"
             referencedColumns: ["id"]
           },
           {
@@ -1244,6 +1429,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "event_attendees_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_ach_validation"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "event_attendees_event_id_fkey"
             columns: ["event_id"]
             isOneToOne: false
@@ -1271,6 +1463,13 @@ export type Database = {
             columns: ["broker_id"]
             isOneToOne: false
             referencedRelation: "brokers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_audience_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_ach_validation"
             referencedColumns: ["id"]
           },
           {
@@ -1393,6 +1592,13 @@ export type Database = {
             columns: ["broker_id"]
             isOneToOne: false
             referencedRelation: "brokers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fortnight_broker_totals_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_ach_validation"
             referencedColumns: ["id"]
           },
           {
@@ -1583,6 +1789,13 @@ export type Database = {
             columns: ["broker_id"]
             isOneToOne: false
             referencedRelation: "brokers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "insurer_assa_codes_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_ach_validation"
             referencedColumns: ["id"]
           },
           {
@@ -1893,6 +2106,13 @@ export type Database = {
             referencedRelation: "brokers"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "notifications_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_ach_validation"
+            referencedColumns: ["id"]
+          },
         ]
       }
       payment_details: {
@@ -2048,6 +2268,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "pending_items_assigned_broker_id_fkey"
+            columns: ["assigned_broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_ach_validation"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "pending_items_fortnight_id_fkey"
             columns: ["fortnight_id"]
             isOneToOne: false
@@ -2199,6 +2426,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "policies_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_ach_validation"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "policies_client_id_fkey"
             columns: ["client_id"]
             isOneToOne: false
@@ -2262,6 +2496,13 @@ export type Database = {
             referencedRelation: "brokers"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "production_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_ach_validation"
+            referencedColumns: ["id"]
+          },
         ]
       }
       profiles: {
@@ -2307,6 +2548,13 @@ export type Database = {
             columns: ["broker_id"]
             isOneToOne: false
             referencedRelation: "brokers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profiles_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_ach_validation"
             referencedColumns: ["id"]
           },
         ]
@@ -2380,6 +2628,13 @@ export type Database = {
             columns: ["broker_id"]
             isOneToOne: false
             referencedRelation: "brokers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "retained_commissions_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_ach_validation"
             referencedColumns: ["id"]
           },
           {
@@ -2467,6 +2722,13 @@ export type Database = {
             columns: ["broker_id"]
             isOneToOne: false
             referencedRelation: "brokers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "temp_client_import_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_ach_validation"
             referencedColumns: ["id"]
           },
           {
@@ -2568,6 +2830,74 @@ export type Database = {
       }
     }
     Views: {
+      ach_banks_active: {
+        Row: {
+          bank_name: string | null
+          id: string | null
+          route_code: string | null
+          route_code_raw: string | null
+        }
+        Insert: {
+          bank_name?: string | null
+          id?: string | null
+          route_code?: string | null
+          route_code_raw?: string | null
+        }
+        Update: {
+          bank_name?: string | null
+          id?: string | null
+          route_code?: string | null
+          route_code_raw?: string | null
+        }
+        Relationships: []
+      }
+      brokers_ach_validation: {
+        Row: {
+          active: boolean | null
+          bank_account_no: string | null
+          bank_route: string | null
+          id: string | null
+          is_ach_ready: boolean | null
+          name: string | null
+          national_id: string | null
+          nombre_completo: string | null
+          tipo_cuenta: string | null
+          validation_status: string | null
+        }
+        Insert: {
+          active?: boolean | null
+          bank_account_no?: string | null
+          bank_route?: string | null
+          id?: string | null
+          is_ach_ready?: never
+          name?: string | null
+          national_id?: string | null
+          nombre_completo?: string | null
+          tipo_cuenta?: string | null
+          validation_status?: never
+        }
+        Update: {
+          active?: boolean | null
+          bank_account_no?: string | null
+          bank_route?: string | null
+          id?: string | null
+          is_ach_ready?: never
+          name?: string | null
+          national_id?: string | null
+          nombre_completo?: string | null
+          tipo_cuenta?: string | null
+          validation_status?: never
+        }
+        Relationships: [
+          {
+            foreignKeyName: "brokers_id_fkey_profiles"
+            columns: ["id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       v_claims_full: {
         Row: {
           account_type: string | null
@@ -2604,6 +2934,13 @@ export type Database = {
             columns: ["broker_id"]
             isOneToOne: false
             referencedRelation: "brokers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comm_item_claims_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_ach_validation"
             referencedColumns: ["id"]
           },
           {
@@ -2815,6 +3152,7 @@ export type Database = {
         | "RAMOS_GENERALES"
         | "VIDA_ASSA"
         | "OTROS_PERSONAS"
+        | "NO_IDENTIFICADOS"
       case_status:
         | "PENDIENTE_REVISION"
         | "EN_PROCESO"
@@ -2829,12 +3167,21 @@ export type Database = {
         | "APROBADO_PEND_PAGO"
         | "EMITIDO"
         | "CERRADO"
+        | "PENDIENTE_DOCUMENTACION"
+        | "COTIZANDO"
+        | "REVISAR_ORIGEN"
       case_type_enum:
         | "COTIZACION"
         | "EMISION_GENERAL"
         | "EMISION_VIDA_ASSA_WEB"
         | "EMISION_VIDA_ASSA_NO_WEB"
         | "OTRO"
+        | "REHABILITACION"
+        | "MODIFICACION"
+        | "CANCELACION"
+        | "CAMBIO_CORREDOR"
+        | "RECLAMO"
+        | "EMISION_EXPRESS"
       fortnight_status_enum: "DRAFT" | "READY" | "PAID"
       map_kind: "COMMISSIONS" | "DELINQUENCY"
       notification_type:
@@ -2990,6 +3337,7 @@ export const Constants = {
         "RAMOS_GENERALES",
         "VIDA_ASSA",
         "OTROS_PERSONAS",
+        "NO_IDENTIFICADOS",
       ],
       case_status: [
         "PENDIENTE_REVISION",
@@ -3006,6 +3354,9 @@ export const Constants = {
         "APROBADO_PEND_PAGO",
         "EMITIDO",
         "CERRADO",
+        "PENDIENTE_DOCUMENTACION",
+        "COTIZANDO",
+        "REVISAR_ORIGEN",
       ],
       case_type_enum: [
         "COTIZACION",
@@ -3013,6 +3364,12 @@ export const Constants = {
         "EMISION_VIDA_ASSA_WEB",
         "EMISION_VIDA_ASSA_NO_WEB",
         "OTRO",
+        "REHABILITACION",
+        "MODIFICACION",
+        "CANCELACION",
+        "CAMBIO_CORREDOR",
+        "RECLAMO",
+        "EMISION_EXPRESS",
       ],
       fortnight_status_enum: ["DRAFT", "READY", "PAID"],
       map_kind: ["COMMISSIONS", "DELINQUENCY"],

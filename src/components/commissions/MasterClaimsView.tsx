@@ -27,7 +27,8 @@ import {
   actionGetAdjustmentsCSVData,
   actionConfirmAdjustmentsPaid,
 } from '@/app/(app)/commissions/actions';
-import { formatCurrency as formatMoney, groupClaimsByBroker, convertToCSV, downloadCSV } from '@/lib/commissions/adjustments-utils';
+import { formatCurrency as formatMoney, groupClaimsByBroker } from '@/lib/commissions/adjustments-utils';
+import { generateAdjustmentsACH, getAdjustmentsACHFilename, downloadAdjustmentsACH } from '@/lib/commissions/adjustments-ach';
 
 export function MasterClaimsView() {
   const [claims, setClaims] = useState<any[]>([]);
@@ -185,10 +186,10 @@ export function MasterClaimsView() {
     }
   };
 
-  // Generar CSV
-  const handleGenerateCSV = async () => {
+  // Generar ACH
+  const handleGenerateACH = async () => {
     if (approvedClaims.length === 0) {
-      toast.error('No hay ajustes aprobados para generar CSV');
+      toast.error('No hay ajustes aprobados para generar archivo ACH');
       return;
     }
 
@@ -197,29 +198,48 @@ export function MasterClaimsView() {
       const result = await actionGetAdjustmentsCSVData(approvedClaims);
 
       if (result.ok && result.data) {
-        const headers = ['NOMBRE', 'TIPO', 'CEDULA', 'BANCO', 'CUENTA', 'MONTO', 'CORREO', 'DESCRIPCION'];
-        const rows = result.data.map((row: any) => [
-          row.nombre,
-          row.tipo,
-          row.cedula,
-          row.banco,
-          row.cuenta,
-          row.monto,
-          row.correo,
-          row.descripcion,
-        ]);
+        // Convertir datos a formato esperado por generateAdjustmentsACH
+        const claimsReports = result.data.map((row: any) => ({
+          broker_id: row.broker_id || '',
+          broker_name: row.nombre || '',
+          broker_email: row.correo || '',
+          total_raw_amount: 0,
+          total_broker_amount: parseFloat(row.monto || '0'),
+          item_count: 1,
+          status: 'approved',
+          items: [{
+            brokers: {
+              id: row.broker_id || '',
+              name: row.nombre || '',
+              bank_route: row.ruta || '',
+              bank_account_no: row.cuenta || '',
+              tipo_cuenta: row.tipo || '',
+              nombre_completo: row.nombre || '',
+              profiles: { full_name: row.nombre || '', email: row.correo || '' }
+            }
+          }]
+        }));
 
-        const csv = convertToCSV(headers, rows);
-        const filename = `ajustes_${new Date().toISOString().split('T')[0]}.csv`;
-        downloadCSV(csv, filename);
-
-        toast.success('CSV generado exitosamente');
+        const achResult = generateAdjustmentsACH(claimsReports as any);
+        
+        if (achResult.errors.length > 0) {
+          const errorList = achResult.errors.map(e => `${e.brokerName}: ${e.errors.join(', ')}`).join('\n');
+          toast.error(`Faltan datos bancarios en ${achResult.errors.length} broker(s). No se incluirán en el archivo:\n${errorList}`, { duration: 8000 });
+        }
+        
+        if (achResult.validCount > 0) {
+          const filename = getAdjustmentsACHFilename();
+          downloadAdjustmentsACH(achResult.content, filename);
+          toast.success(`Archivo ACH generado con ${achResult.validCount} registro(s) - Total: $${achResult.totalAmount.toFixed(2)}`);
+        } else {
+          toast.error('No se pudo generar el archivo ACH. Verifica los datos bancarios de los brokers.');
+        }
       } else {
-        toast.error(result.error || 'Error al generar CSV');
+        toast.error(result.error || 'Error al obtener datos para archivo ACH');
       }
     } catch (error) {
-      console.error('Error generating CSV:', error);
-      toast.error('Error al generar CSV');
+      console.error('Error generating ACH:', error);
+      toast.error('Error inesperado al generar archivo ACH');
     } finally {
       setProcessing(false);
     }
@@ -272,8 +292,8 @@ export function MasterClaimsView() {
           <ol className="text-sm text-gray-700 space-y-1 list-decimal list-inside">
             <li>Selecciona los reportes de corredores que marcaron como "Mío"</li>
             <li>Haz clic en "Aceptar Seleccionados" y elige "Pagar Ya"</li>
-            <li>Descarga el CSV bancario con el botón verde que aparecerá</li>
-            <li>Carga el CSV en el banco y realiza las transferencias</li>
+            <li>Descarga el archivo ACH (formato oficial Banco General)</li>
+            <li>Carga el archivo en Banca en Línea Comercial y realiza las transferencias</li>
             <li>Regresa y haz clic en "Confirmar Pagado"</li>
           </ol>
         </CardContent>
@@ -352,17 +372,18 @@ export function MasterClaimsView() {
                   Ajustes Aprobados para Pagar Ya
                 </h3>
                 <p className="text-sm text-green-700">
-                  Descarga el CSV bancario y luego confirma el pago
+                  Descarga el archivo ACH (formato oficial) y luego confirma el pago
                 </p>
               </div>
               <div className="flex gap-2">
                 <Button
-                  onClick={handleGenerateCSV}
+                  onClick={handleGenerateACH}
                   disabled={processing}
-                  className="bg-[#010139] hover:bg-[#8AAA19] text-white"
+                  className="bg-[#010139] hover:bg-[#020270] text-white"
+                  title="Exportar ajustes en formato ACH Banco General"
                 >
                   <FaFileDownload className="mr-2" />
-                  Descargar CSV
+                  Descargar Banco General (ACH)
                 </Button>
                 <Button
                   onClick={handleConfirmPaid}

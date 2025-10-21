@@ -128,21 +128,29 @@ export async function PATCH(
       ? userRequest.additional_fields as Record<string, any>
       : {};
 
+    // Crear broker con campos ACH
     const { error: brokerError } = await supabase
       .from('brokers')
       .insert([{
         id: authData.user!.id,
         p_id: authData.user!.id,
+        // Datos personales
         nombre_completo: userRequest.nombre_completo,
-        cedula: userRequest.cedula,
-        telefono: userRequest.telefono,
-        licencia: userRequest.licencia,
-        fecha_nacimiento: userRequest.fecha_nacimiento,
-        tipo_cuenta: userRequest.tipo_cuenta,
-        numero_cuenta: userRequest.numero_cuenta,
-        numero_cedula: userRequest.numero_cedula_bancaria,
-        default_commission_percent: parseFloat(commission_percent),
-        ...additionalFields // Campos dinámicos
+        national_id: userRequest.cedula, // Usar national_id en lugar de cedula
+        phone: userRequest.telefono,
+        license_no: userRequest.licencia,
+        birth_date: userRequest.fecha_nacimiento,
+        // Datos bancarios ACH
+        bank_route: (userRequest as any).bank_route || null,
+        bank_account_no: (userRequest as any).account_number || userRequest.numero_cuenta || null,
+        tipo_cuenta: (userRequest as any).account_type || userRequest.tipo_cuenta || '04',
+        // Comisión
+        percent_default: parseFloat(commission_percent),
+        // Campos adicionales
+        active: true,
+        broker_type: additionalFields.broker_type || 'corredor',
+        assa_code: additionalFields.assa_code || null,
+        carnet_expiry_date: additionalFields.carnet_expiry_date || null
       }]);
 
     if (brokerError) {

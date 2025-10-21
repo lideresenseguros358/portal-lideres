@@ -62,6 +62,7 @@ type ClientRowData = {
   nationalId: string;
   email: string;
   phone: string;
+  brokerName: string;
 };
 
 interface ClientsListViewProps {
@@ -69,9 +70,10 @@ interface ClientsListViewProps {
   onView: (clientId: string) => void;
   onEdit: (clientId: string) => void;
   onDelete: (clientId: string) => void;
+  role: string;
 }
 
-const ClientsListView = ({ clients, onView, onEdit, onDelete }: ClientsListViewProps) => {
+const ClientsListView = ({ clients, onView, onEdit, onDelete, role }: ClientsListViewProps) => {
   const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set());
 
   const toggleClient = (clientId: string) => {
@@ -96,6 +98,7 @@ const ClientsListView = ({ clients, onView, onEdit, onDelete }: ClientsListViewP
         nationalId: client.national_id?.toUpperCase?.() || '—',
         email: client.email || '—',
         phone: client.phone || '—',
+        brokerName: (client as any).brokers?.name || '—',
       })),
     [clients]
   );
@@ -120,11 +123,12 @@ const ClientsListView = ({ clients, onView, onEdit, onDelete }: ClientsListViewP
             <th className="ct-th">Cédula</th>
             <th className="ct-th">Celular</th>
             <th className="ct-th">Correo</th>
+            {role === 'master' && <th className="ct-th">Corredor</th>}
             <th className="ct-th text-right">Acciones</th>
           </tr>
         </thead>
         <tbody>
-          {items.map(({ client, nationalId, email, phone }) => {
+          {items.map(({ client, nationalId, email, phone, brokerName }) => {
             const isExpanded = expandedClients.has(client.id);
             return (
               <React.Fragment key={client.id}>
@@ -146,6 +150,7 @@ const ClientsListView = ({ clients, onView, onEdit, onDelete }: ClientsListViewP
                   <td className="ct-td">{nationalId}</td>
                   <td className="ct-td">{phone}</td>
                   <td className="ct-td">{email}</td>
+                  {role === 'master' && <td className="ct-td">{brokerName}</td>}
                   <td className="ct-td">
                     <div className="ct-actions">
                       <button 
@@ -175,7 +180,7 @@ const ClientsListView = ({ clients, onView, onEdit, onDelete }: ClientsListViewP
 
                 {isExpanded && (
                   <tr>
-                    <td colSpan={5} className="ct-detail">
+                    <td colSpan={role === 'master' ? 6 : 5} className="ct-detail">
                       <div className="pol-panel">
                         <div className="pol-header">
                           <h4 className="pol-title">Pólizas del Cliente</h4>
@@ -276,7 +281,7 @@ export default function DatabaseTabs({
     if (view === 'preliminary') {
       return <PreliminaryClientsTab insurers={insurers} brokers={brokers} userRole={role} />;
     }
-    return <ClientsListView clients={clients} onView={handleView} onEdit={handleEdit} onDelete={handleDelete} />;
+    return <ClientsListView clients={clients} onView={handleView} onEdit={handleEdit} onDelete={handleDelete} role={role} />;
   };
 
   return (
@@ -410,11 +415,12 @@ export default function DatabaseTabs({
           color: #374151;
           border-bottom: 2px solid #e5e7eb;
         }
-        :global(.ct-th:nth-child(1)) { width: 25%; }
-        :global(.ct-th:nth-child(2)) { width: 15%; }
-        :global(.ct-th:nth-child(3)) { width: 15%; }
-        :global(.ct-th:nth-child(4)) { width: 30%; }
-        :global(.ct-th:nth-child(5)) { width: 15%; }
+        :global(.ct-th:nth-child(1)) { width: 20%; }
+        :global(.ct-th:nth-child(2)) { width: 12%; }
+        :global(.ct-th:nth-child(3)) { width: 12%; }
+        :global(.ct-th:nth-child(4)) { width: 20%; }
+        :global(.ct-th:nth-child(5)) { width: 18%; }
+        :global(.ct-th:nth-child(6)) { width: 18%; }
 
         :global(.text-right) {
           text-align: right;
@@ -573,13 +579,15 @@ export default function DatabaseTabs({
         @media (max-width: 768px) {
           :global(.ct-th:nth-child(3)),
           :global(.ct-th:nth-child(4)),
+          :global(.ct-th:nth-child(5)),
           :global(.ct-td:nth-child(3)),
-          :global(.ct-td:nth-child(4)) {
+          :global(.ct-td:nth-child(4)),
+          :global(.ct-td:nth-child(5)) {
             display: none;
           }
           :global(.ct-th:nth-child(1)) { width: 35%; }
           :global(.ct-th:nth-child(2)) { width: 25%; }
-          :global(.ct-th:nth-child(5)) { width: 40%; }
+          :global(.ct-th:nth-child(6)) { width: 40%; }
           
           /* Pólizas en tablet */
           :global(.pol-row) {
@@ -600,7 +608,7 @@ export default function DatabaseTabs({
             display: none;
           }
           :global(.ct-th:nth-child(1)) { width: 60%; }
-          :global(.ct-th:nth-child(5)) { width: 40%; }
+          :global(.ct-th:nth-child(6)) { width: 40%; }
           
           /* Pólizas en móvil */
           :global(.pol-panel) {

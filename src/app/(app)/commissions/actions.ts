@@ -16,7 +16,7 @@ import {
 } from '@/lib/commissions/schemas';
 import { parseCsvXlsx } from '@/lib/commissions/importers';
 import { calculateDiscounts } from '@/lib/commissions/rules';
-import { buildBankCsv } from '@/lib/commissions/bankCsv';
+import { buildBankACH } from '@/lib/commissions/bankACH';
 import { getAuthContext } from '@/lib/db/context';
 
 type FortnightRow = Tables<'fortnights'>;
@@ -1742,12 +1742,15 @@ export async function actionExportBankCsv(fortnightId: string) {
       return net > 0;
     });
 
-    const fortnightLabel = `${fortnight.period_start} al ${fortnight.period_end}`;
-    const csvContent = await buildBankCsv(filteredTotals, fortnightLabel);
+    const fortnightLabel = `PAGO QUINCENA ${fortnight.period_start} AL ${fortnight.period_end}`;
+    const achResult = await buildBankACH(filteredTotals, fortnightLabel);
 
     return {
       ok: true as const,
-      data: { csvContent }
+      bankACH: achResult.content,
+      achErrors: achResult.errors,
+      achValidCount: achResult.validCount,
+      achTotalAmount: achResult.totalAmount,
     };
   } catch (error) {
     return {
@@ -2003,7 +2006,8 @@ export async function actionPayFortnight(fortnight_id: string) {
         broker: bt.brokers as any
       }));
     
-    const csvContent = await buildBankCsv(filteredTotals, fortnight_id);
+    const achResult = await buildBankACH(filteredTotals, `PAGO COMISIONES QUINCENA`);
+    const csvContent = achResult.content;
     
     // 6. Cambiar status a PAID
     const { error: updateError } = await supabase
@@ -2241,7 +2245,8 @@ export async function actionGeneratePayNowCSV(item_ids: string[]) {
       return acc;
     }, {} as Record<string, any>);
     
-    const csvContent = await buildBankCsv(Object.values(totalsByBroker), 'Ajustes-PagoInmediato');
+    const achResult = await buildBankACH(Object.values(totalsByBroker), 'AJUSTE COMISIONES');
+    const csvContent = achResult.content;
     
     return { 
       ok: true as const, 

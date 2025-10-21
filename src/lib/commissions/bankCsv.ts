@@ -1,79 +1,48 @@
-import type { Tables } from '@/lib/supabase/server';
-
-type BrokerRow = Tables<'brokers'>;
-type FortnightBrokerTotal = Tables<'fortnight_broker_totals'>;
-
-interface BankCsvRow {
-  tipo_cuenta: string;
-  numero_cuenta: string;
-  numero_cedula: string;
-  nombre_completo: string;
-  monto: number;
-  concepto: string;
-}
-
 /**
- * Build bank CSV content from fortnight broker totals
- * Formato Banco General:
- * "Tipo de cuenta","Numero de cuenta","Numero de cedula o identificacion","Nombre completo","Monto","Concepto de pago"
+ * @deprecated ARCHIVO DEPRECADO - NO USAR
+ * 
+ * Este archivo ha sido reemplazado por el formato oficial ACH de Banco General.
+ * 
+ * USAR EN SU LUGAR:
+ * - src/lib/commissions/bankACH.ts para comisiones
+ * - src/lib/commissions/adjustments-ach.ts para ajustes
+ * - src/lib/commissions/ach-normalization.ts para funciones de normalización
+ * 
+ * El formato CSV NO es compatible con Banca en Línea Comercial de Banco General.
+ * Solo se acepta formato TXT ACH según instructivo oficial.
+ * 
+ * Este archivo se mantiene temporalmente para evitar romper imports legacy,
+ * pero DEBE ser eliminado en la próxima versión.
  */
-export async function buildBankCsv(
-  totalsByBroker: Array<FortnightBrokerTotal & { broker?: BrokerRow }>,
-  fortnightLabel?: string
-): Promise<string> {
-  const rows: BankCsvRow[] = [];
-  
-  for (const total of totalsByBroker) {
-    // Skip if net amount is 0 or negative
-    const netAmount = Number(total.net_amount) || 0;
-    if (netAmount <= 0) continue;
-    
-    const broker = total.broker;
-    if (!broker) continue;
-    
-    rows.push({
-      tipo_cuenta: (broker as any).tipo_cuenta || 'Ahorro',
-      numero_cuenta: (broker as any).numero_cuenta || 'PENDIENTE',
-      numero_cedula: (broker as any).numero_cedula || 'PENDIENTE',
-      nombre_completo: (broker as any).nombre_completo || broker.name || 'PENDIENTE',
-      monto: netAmount,
-      concepto: `Pago comisiones ${fortnightLabel || 'quincena'}`,
-    });
-  }
-  
-  // Build CSV content con headers Banco General
-  const headers = ['"Tipo de cuenta"', '"Numero de cuenta"', '"Numero de cedula o identificacion"', '"Nombre completo"', '"Monto"', '"Concepto de pago"'];
-  const csvRows = [
-    headers.join(','),
-    ...rows.map(row => [
-      `"${row.tipo_cuenta}"`,
-      `"${row.numero_cuenta}"`,
-      `"${row.numero_cedula}"`,
-      `"${row.nombre_completo}"`,
-      `"${row.monto.toFixed(2)}"`,
-      `"${row.concepto}"`,
-    ].join(','))
-  ];
-  
-  return csvRows.join('\n');
+
+import { buildBankACH } from './bankACH';
+
+/**
+ * @deprecated Usar buildBankACH() de './bankACH' en su lugar
+ */
+export async function buildBankCsv(): Promise<string> {
+  throw new Error(
+    'DEPRECADO: buildBankCsv() ya no se usa. '
+    + 'Usar buildBankACH() de ./bankACH para generar formato ACH oficial Banco General.'
+  );
 }
 
 /**
- * Generate bank CSV filename with timestamp
+ * @deprecated Usar getACHFilename() de './bankACH' en su lugar
  */
 export function getBankCsvFilename(): string {
-  const now = new Date();
-  const timestamp = now.toISOString()
-    .replace(/[:-]/g, '')
-    .replace('T', '_')
-    .split('.')[0];
-  
-  return `pagos_banco_${timestamp}.csv`;
+  throw new Error(
+    'DEPRECADO: getBankCsvFilename() ya no se usa. '
+    + 'Usar getACHFilename() de ./bankACH para generar nombre de archivo ACH.'
+  );
 }
 
 /**
- * Create downloadable blob from CSV content
+ * @deprecated Usar createACHBlob() de './bankACH' en su lugar
  */
-export function createCsvBlob(csvContent: string): Blob {
-  return new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+export function createCsvBlob(): Blob {
+  throw new Error(
+    'DEPRECADO: createCsvBlob() ya no se usa. '
+    + 'Usar createACHBlob() de ./bankACH para crear blob de archivo ACH.'
+  );
 }

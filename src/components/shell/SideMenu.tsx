@@ -24,6 +24,7 @@ import {
   FaBookOpen,
   FaChartBar,
   FaExclamationTriangle,
+  FaCalculator,
 } from "react-icons/fa";
 
 type MenuRole = "MASTER" | "BROKER";
@@ -45,6 +46,7 @@ const menuItems: Record<MenuRole, MenuItem[]> = {
     { label: "Pendientes", href: "/cases", icon: <FaClock /> },
     { label: "Descargas", href: "/downloads", icon: <FaDownload /> },
     { label: "Guías", href: "/guides", icon: <FaBookOpen /> },
+    { label: "Cotizadores", href: "/cotizadores", icon: <FaCalculator /> },
     { label: "Agenda", href: "/agenda", icon: <FaCalendarAlt /> },
     { label: "Producción", href: "/production", icon: <FaChartBar /> },
     { label: "Corredores", href: "/brokers", icon: <FaUserTie /> },

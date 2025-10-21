@@ -40,6 +40,8 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
   const [existingClients, setExistingClients] = useState<any[]>([]);
   const [selectedExistingClient, setSelectedExistingClient] = useState<any>(null);
   const [showClientSuggestions, setShowClientSuggestions] = useState(false);
+  const today = new Date().toISOString().split('T')[0];
+  
   const [formData, setFormData] = useState<FormData>({
     client_name: '',
     national_id: '',
@@ -48,7 +50,7 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
     policy_number: '',
     insurer_id: '',
     ramo: '',
-    start_date: '',
+    start_date: today || '',
     renewal_date: '',
     status: 'ACTIVA',
     broker_email: role === 'broker' ? userEmail : '',
@@ -61,6 +63,19 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
       loadBrokers();
     }
   }, [role]);
+
+  useEffect(() => {
+    if (formData.start_date) {
+      const startDate = new Date(formData.start_date);
+      const renewalDate = new Date(startDate);
+      renewalDate.setFullYear(startDate.getFullYear() + 1);
+      const renewalDateStr = renewalDate.toISOString().split('T')[0] || '';
+      
+      if (!formData.renewal_date) {
+        setFormData(prev => ({ ...prev, renewal_date: renewalDateStr }));
+      }
+    }
+  }, [formData.start_date]);
 
   const loadInsurers = async () => {
     const { data } = await supabaseClient()
@@ -109,7 +124,7 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
 
     const { data } = await supabaseClient()
       .from('clients')
-      .select('id, name, national_id, email, phone')
+      .select('id, name, national_id, email, phone, broker_id')
       .ilike('name', `%${searchTerm}%`)
       .limit(5);
 
@@ -117,14 +132,38 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
     setShowClientSuggestions(true);
   };
 
-  const selectExistingClient = (client: any) => {
+  const selectExistingClient = async (client: any) => {
     setSelectedExistingClient(client);
+    
+    let brokerEmail = formData.broker_email;
+    
+    if (client.broker_id && role === 'master') {
+      const { data: brokerData } = await supabaseClient()
+        .from('brokers')
+        .select('p_id')
+        .eq('id', client.broker_id)
+        .single();
+      
+      if (brokerData) {
+        const { data: profileData } = await supabaseClient()
+          .from('profiles')
+          .select('email')
+          .eq('id', brokerData.p_id)
+          .single();
+        
+        if (profileData) {
+          brokerEmail = profileData.email;
+        }
+      }
+    }
+    
     setFormData({
       ...formData,
       client_name: client.name,
       national_id: client.national_id || '',
       email: client.email || '',
       phone: client.phone || '',
+      broker_email: brokerEmail,
     });
     setShowClientSuggestions(false);
   };
@@ -512,6 +551,16 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
 
               {role === 'master' ? (
                 <>
+                  {selectedExistingClient && formData.broker_email && (
+                    <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                      <div className="flex items-center gap-2 text-blue-800">
+                        <FaCheckCircle className="text-blue-600" />
+                        <p className="text-sm font-medium">
+                          Corredor autocompletado desde el cliente existente
+                        </p>
+                      </div>
+                    </div>
+                  )}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Corredor <span className="text-red-500">*</span>

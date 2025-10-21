@@ -253,27 +253,41 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
     }
   };
 
-  const handleExportCsv = async () => {
+  const handleExportACH = async () => {
     if (!draftFortnight) return;
     
     setIsGeneratingCSV(true);
     try {
-      const result = await actionExportBankCsv(draftFortnight.id);
+      const result: any = await actionExportBankCsv(draftFortnight.id);
       
-      if (result.ok && result.data?.csvContent) {
-        const blob = new Blob([result.data.csvContent], { type: 'text/csv;charset=utf-8;' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(blob);
-        link.download = `banco_quincena_${draftFortnight.id}.csv`;
-        link.click();
-        URL.revokeObjectURL(link.href);
-        toast.success('CSV generado exitosamente');
+      if (result.ok) {
+        const content = result.bankACH || result.data?.csvContent || '';
+        const errors = result.achErrors || [];
+        const validCount = result.achValidCount || 0;
+        
+        if (content) {
+          const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+          const link = document.createElement('a');
+          link.href = URL.createObjectURL(blob);
+          const fecha = new Date().toISOString().split('T')[0]?.replace(/-/g, '') || 'sin_fecha';
+          link.download = `PAGOS_COMISIONES_${fecha}.txt`;
+          link.click();
+          URL.revokeObjectURL(link.href);
+          
+          if (errors.length > 0) {
+            toast.warning(`Archivo ACH generado con ${validCount} registros. ${errors.length} broker(s) excluidos por falta de datos bancarios.`);
+          } else {
+            toast.success(`Archivo ACH generado exitosamente con ${validCount} registros.`);
+          }
+        } else {
+          toast.error('No se pudo generar el archivo ACH');
+        }
       } else {
-        toast.error(result.error || 'Error al generar CSV');
+        toast.error(result.error || 'Error al generar archivo ACH');
       }
     } catch (err) {
-      console.error('Error exporting CSV:', err);
-      toast.error('Error inesperado al generar CSV');
+      console.error('Error exporting ACH:', err);
+      toast.error('Error inesperado al generar archivo ACH');
     } finally {
       setIsGeneratingCSV(false);
     }
@@ -289,13 +303,14 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
       const result = await actionPayFortnight(draftFortnight.id);
       
       if (result.ok) {
-        // Download CSV automatically
+        // Download ACH file automatically
         if (result.data?.csv) {
-          const blob = new Blob([result.data.csv], { type: 'text/csv' });
+          const blob = new Blob([result.data.csv], { type: 'text/plain;charset=utf-8' });
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = `pagos_banco_${draftFortnight.id.slice(0, 8)}.csv`;
+          const fecha = new Date().toISOString().split('T')[0]?.replace(/-/g, '') || 'sin_fecha';
+          a.download = `PAGOS_COMISIONES_${fecha}.txt`;
           a.style.display = 'none';
           document.body.appendChild(a);
           a.click();
@@ -524,17 +539,18 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
         <CardContent>
           <div className="space-y-4">
             <p className="text-sm text-gray-600">
-              Descarga el archivo CSV para cargar las transferencias en Banco General.
+              Descarga el archivo ACH (formato oficial) para carga masiva de pagos en Banca en Línea Comercial de Banco General.
             </p>
             <div className="flex flex-wrap gap-2 sm:gap-3">
               <Button
-                onClick={handleExportCsv}
+                onClick={handleExportACH}
                 disabled={isGeneratingCSV}
-                className="bg-[#8AAA19] hover:bg-[#6d8814] text-white flex-1 sm:flex-initial"
+                className="bg-[#010139] hover:bg-[#020270] text-white flex-1 sm:flex-initial"
+                title="Exportar pagos en formato ACH Banco General"
               >
                 <FaFileDownload className="mr-2" />
-                <span className="hidden sm:inline">{isGeneratingCSV ? 'Generando...' : 'Descargar CSV Banco General'}</span>
-                <span className="sm:hidden">{isGeneratingCSV ? 'Generando...' : 'CSV Banco'}</span>
+                <span className="hidden sm:inline">{isGeneratingCSV ? 'Generando archivo ACH...' : 'Descargar Banco General (ACH)'}</span>
+                <span className="sm:hidden">{isGeneratingCSV ? 'Generando...' : 'ACH Banco'}</span>
               </Button>
               <Button
                 onClick={() => setShowCloseConfirm(true)}

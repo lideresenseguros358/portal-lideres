@@ -121,7 +121,7 @@ export default function RegisterPaymentWizardNew({
     try {
       const { data, error } = await supabaseClient()
         .from('brokers')
-        .select('id, name, bank_account_no, numero_cuenta')
+        .select('id, name, bank_account_no')
         .eq('active', true)
         .order('name');
 
@@ -135,7 +135,7 @@ export default function RegisterPaymentWizardNew({
         const normalized = data.map((broker: any) => ({
           id: broker.id,
           name: broker.name ?? 'Sin nombre',
-          account_number: broker.bank_account_no ?? broker.numero_cuenta ?? '',
+          account_number: broker.bank_account_no ?? '',
         }));
         setBrokers(normalized);
       }

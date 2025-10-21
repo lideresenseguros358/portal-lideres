@@ -408,12 +408,35 @@ export async function actionUpdateCaseStatus(caseId: string, status: string, not
     if (status === 'EMITIDO') {
       const { data: caseData } = await supabase
         .from('cases')
-        .select('policy_number')
+        .select('policy_number, ctype, client_name, insurer_id')
         .eq('id', caseId)
         .single();
 
       if (!caseData?.policy_number) {
         return { ok: false as const, error: 'Número de póliza es obligatorio para EMITIDO' };
+      }
+
+      // Check if policy exists in DB (only if NOT VIDA ASSA WEB)
+      if (caseData.ctype !== 'EMISION_VIDA_ASSA_WEB') {
+        const { data: existingPolicy } = await supabase
+          .from('policies')
+          .select('id')
+          .eq('policy_number', caseData.policy_number)
+          .single();
+
+        // If policy doesn't exist, flag for preliminar creation
+        if (!existingPolicy) {
+          return { 
+            ok: true as const, 
+            data: caseData as any,
+            requires_preliminar: true,
+            preliminar_data: {
+              client_name: caseData.client_name,
+              policy_number: caseData.policy_number,
+              insurer_id: caseData.insurer_id
+            }
+          };
+        }
       }
     }
 
@@ -439,7 +462,7 @@ export async function actionUpdateCaseStatus(caseId: string, status: string, not
 
     // Trigger logs state change via database trigger
 
-    return { ok: true as const, data };
+    return { ok: true as const, data, requires_preliminar: false };
   } catch (error: any) {
     console.error('Error in actionUpdateCaseStatus:', error);
     return { ok: false as const, error: error.message };
@@ -557,7 +580,11 @@ export async function actionMarkCaseSeen(caseId: string) {
 
     const { data, error } = await supabase
       .from('cases')
-      .update({ seen_by_broker: true })
+      .update({ 
+        visto: true,
+        visto_at: new Date().toISOString(),
+        visto_by: user.id,
+      })
       .eq('id', caseId)
       .select()
       .single();
