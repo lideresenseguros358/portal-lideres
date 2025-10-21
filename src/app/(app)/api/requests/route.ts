@@ -96,8 +96,7 @@ export async function POST(request: NextRequest) {
     // Encriptar contraseña (en producción usar bcrypt, aquí simplificado)
     const encryptedPassword = Buffer.from(credentials.password).toString('base64');
 
-    // Crear solicitud con campos ACH correctos
-    // Nota: bank_route y nombre_completo_titular se agregarán en migración SQL
+    // Crear solicitud con campos ACH correctos (después de migración)
     const { data: newRequest, error } = await supabase
       .from('user_requests')
       .insert([{
@@ -107,21 +106,20 @@ export async function POST(request: NextRequest) {
         fecha_nacimiento: personalData.fecha_nacimiento,
         telefono: personalData.telefono,
         licencia: personalData.licencia || null,
-        nombre_completo: bankData.nombre_completo, // Nombre del titular ACH
-        // Campos ACH (usando estructura actual hasta regenerar types)
-        numero_cuenta: bankData.account_number, // Número de cuenta (limpio)
+        nombre_completo: personalData.nombre || bankData.nombre_completo, // Nombre del solicitante
+        // Campos ACH (estructura actualizada después de migración)
+        bank_route: bankData.bank_route, // Código de ruta bancaria
+        bank_account_no: bankData.account_number, // Número de cuenta (limpio)
         tipo_cuenta: bankData.account_type, // Código tipo: "03" o "04"
-        numero_cedula_bancaria: bankData.nombre_completo, // Titular (MAYÚS sin acentos)
+        nombre_completo_titular: bankData.nombre_completo, // Titular (MAYÚS sin acentos)
         additional_fields: {
           ...additionalFields,
           broker_type: personalData.broker_type || 'corredor',
           assa_code: personalData.assa_code || '',
-          carnet_expiry_date: personalData.carnet_expiry_date || null,
-          // Guardar bank_route en additional_fields temporalmente
-          bank_route: bankData.bank_route
+          carnet_expiry_date: personalData.carnet_expiry_date || null
         },
         status: 'pending'
-      } as any]) // Temporal hasta regenerar types
+      }])
       .select()
       .single();
 
