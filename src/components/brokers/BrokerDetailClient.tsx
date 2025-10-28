@@ -50,6 +50,7 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
         titular_cedula: result.data.national_id || '', // Cédula del titular de cuenta
         carnet_expiry_date: (result.data as any).carnet_expiry_date || '',
         broker_type: (result.data as any).broker_type || 'corredor',
+        role: (result.data as any).profiles?.role || 'broker', // Rol del usuario
       });
     } else {
       toast.error(result.error);
@@ -108,21 +109,40 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
   };
 
   const handleApplyDefaultToAll = async () => {
-    const hasOverrides = false; // TODO: Check if there are policies with overrides
-    const message = hasOverrides
-      ? '¿Aplicar % default a TODAS las pólizas? Esto eliminará los overrides existentes.'
-      : '¿Aplicar % default a todas las pólizas de este corredor?';
-
-    if (!confirm(message)) {
+    if (!confirm('¿Aplicar este % default a TODAS las pólizas de este corredor?')) {
       return;
     }
 
     const result = await actionApplyDefaultPercentToAll(brokerId);
-
     if (result.ok) {
-      toast.success(result.message);
+      toast.success(result.message || '% aplicado a todas las pólizas');
     } else {
       toast.error(result.error);
+    }
+  };
+
+  const handleForcePasswordChange = async () => {
+    if (!confirm('¿Obligar a este usuario a cambiar su contraseña en el próximo inicio de sesión?')) {
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const response = await fetch(`/api/brokers/${brokerId}/force-password-change`, {
+        method: 'POST',
+      });
+
+      const result = await response.json();
+
+      if (result.ok) {
+        toast.success('✅ Usuario deberá cambiar contraseña en próximo login');
+      } else {
+        toast.error(result.error || 'Error al configurar cambio de contraseña');
+      }
+    } catch (error: any) {
+      toast.error('Error: ' + error.message);
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -394,26 +414,51 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
             </h2>
 
             <div className="space-y-4">
+              {/* Rol */}
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Porcentaje default
+                  Rol del Usuario
+                </label>
+                <select
+                  value={formData.role}
+                  onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                  disabled={!isEditing}
+                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none disabled:bg-gray-50 disabled:text-gray-600"
+                >
+                  <option value="broker">Broker</option>
+                  <option value="master">Master</option>
+                </select>
+                {isEditing && (
+                  <p className="text-xs text-amber-600 mt-2">
+                    ⚠️ El cambio de rol se aplicará en el próximo inicio de sesión
+                  </p>
+                )}
+              </div>
+
+              {/* % Comisión Default */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  % Comisión Default
                 </label>
                 <select
                   value={formData.percent_default}
                   onChange={(e) => setFormData({ ...formData, percent_default: parseFloat(e.target.value) })}
-                  disabled={!isEditing || isOficina}
+                  disabled={!isEditing}
                   className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none disabled:bg-gray-50 disabled:text-gray-600"
                 >
-                  {PERCENT_OPTIONS.map(p => (
-                    <option key={p} value={p}>{(p * 100).toFixed(0)}%</option>
+                  {PERCENT_OPTIONS.map((percent) => (
+                    <option key={percent} value={percent}>
+                      {(percent * 100).toFixed(0)}% ({percent.toFixed(2)})
+                    </option>
                   ))}
                 </select>
-                {isOficina && (
-                  <p className="text-xs text-gray-500 mt-1">
-                    Oficina siempre tiene 100% bloqueado
-                  </p>
-                )}
               </div>
+
+              {isOficina && (
+                <p className="text-xs text-gray-500 mt-1">
+                  Oficina siempre tiene 100% bloqueado
+                </p>
+              )}
 
               {!isOficina && (
                 <button
@@ -565,7 +610,7 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
                     Usar mis datos personales (cuenta propia)
                   </span>
                 </label>
-                <p className="text-xs text-gray-500 mt-2 ml-7">
+                <p className="text-xs text-gray-500 mt-2">
                   Si la cuenta bancaria está a tu nombre, marca esta casilla para auto-llenar el titular y cédula.
                 </p>
               </div>
@@ -593,13 +638,22 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
                     Editar
                   </button>
                   {!isOficina && (
-                    <button
-                      onClick={handleDelete}
-                      className="flex-1 px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-all font-semibold flex items-center justify-center gap-2"
-                    >
-                      <FaTrash />
-                      Eliminar
-                    </button>
+                    <>
+                      <button
+                        onClick={handleForcePasswordChange}
+                        disabled={saving}
+                        className="flex-1 px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-all font-semibold flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        🔑 Forzar Cambio Contraseña
+                      </button>
+                      <button
+                        onClick={handleDelete}
+                        className="flex-1 px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-all font-semibold flex items-center justify-center gap-2"
+                      >
+                        <FaTrash />
+                        Eliminar
+                      </button>
+                    </>
                   )}
                 </>
               ) : (

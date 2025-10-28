@@ -987,35 +987,48 @@ export async function actionValidateReferences(references: string[]) {
   try {
     const supabase = await getSupabaseServer();
     
+    // Optimizado: Solo seleccionar campos necesarios y usar índice
     const { data, error } = await supabase
       .from('bank_transfers')
       .select('reference_number, amount, used_amount, remaining_amount, status, date')
-      .in('reference_number', references);
+      .in('reference_number', references)
+      .limit(references.length); // Limitar resultados al número de referencias buscadas
     
     if (error) throw error;
     
-    const found = new Set(data?.map((r: any) => r.reference_number) || []);
+    // Crear Map para búsqueda O(1) en lugar de Set
+    const transfersMap = new Map(
+      (data || []).map((r: any) => [r.reference_number, r])
+    );
+    
+    // Mapear resultados de forma más eficiente
     const result = references.map((ref) => {
-      const transfer = data?.find((r: any) => r.reference_number === ref);
-      let remaining = 0;
+      const transfer = transfersMap.get(ref);
       
-      if (transfer) {
-        // Calculate remaining amount
-        if (transfer.remaining_amount !== null && transfer.remaining_amount !== undefined) {
-          remaining = Number(transfer.remaining_amount);
-        } else {
-          remaining = Math.max(Number(transfer.amount || 0) - Number(transfer.used_amount || 0), 0);
-        }
+      if (!transfer) {
+        return {
+          reference: ref,
+          exists: false,
+          details: null
+        };
+      }
+      
+      // Calcular remaining amount
+      let remaining = 0;
+      if (transfer.remaining_amount !== null && transfer.remaining_amount !== undefined) {
+        remaining = Number(transfer.remaining_amount);
+      } else {
+        remaining = Math.max(Number(transfer.amount || 0) - Number(transfer.used_amount || 0), 0);
       }
       
       return {
         reference: ref,
-        exists: found.has(ref),
-        details: transfer ? {
+        exists: true,
+        details: {
           ...transfer,
           remaining_amount: remaining,
           status: transfer.status || 'available'
-        } : null,
+        }
       };
     });
     

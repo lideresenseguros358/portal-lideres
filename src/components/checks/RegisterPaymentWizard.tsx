@@ -34,6 +34,7 @@ export default function RegisterPaymentWizardNew({
   const [loading, setLoading] = useState(false);
   const [insurers, setInsurers] = useState<any[]>([]);
   const [brokers, setBrokers] = useState<any[]>([]);
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
   
   // Step 1: Información básica
   const [formData, setFormData] = useState({
@@ -145,16 +146,43 @@ export default function RegisterPaymentWizardNew({
     }
   };
 
+  const hasFieldError = (fieldName: string) => {
+    return validationErrors.some(error => error.toLowerCase().includes(fieldName.toLowerCase()));
+  };
+
+  const getInputClassName = (baseClass: string, fieldName: string) => {
+    const hasError = hasFieldError(fieldName);
+    return `${baseClass} ${hasError ? 'border-red-500 focus:border-red-600' : 'border-gray-300 focus:border-[#8AAA19]'}`;
+  };
+
   const validateStep = () => {
+    const errors: string[] = [];
+    
     if (step === 1) {
-      if (!formData.client_name || !formData.amount_to_pay) {
-        toast.error('Complete los campos obligatorios');
+      if (!formData.client_name) errors.push('• Nombre del cliente');
+      if (!formData.amount_to_pay) errors.push('• Monto a pagar');
+      
+      if (formData.purpose === 'poliza') {
+        if (!formData.policy_number) errors.push('• Número de póliza');
+        if (!formData.insurer_name) errors.push('• Aseguradora');
+      }
+      
+      if (formData.purpose === 'devolucion') {
+        if (formData.devolucion_tipo === 'cliente' && !formData.cuenta_banco) {
+          errors.push('• Cuenta de banco del cliente');
+        }
+        if (formData.devolucion_tipo === 'corredor' && !formData.broker_id) {
+          errors.push('• Seleccionar corredor');
+        }
+      }
+      
+      if (errors.length > 0) {
+        setValidationErrors(errors);
+        toast.error('Complete los campos requeridos');
         return false;
       }
-      if (formData.purpose === 'poliza' && (!formData.policy_number || !formData.insurer_name)) {
-        toast.error('Para pólizas, especifique número y aseguradora');
-        return false;
-      }
+      setValidationErrors([]);
+      return true;
     } else if (step === 2) {
       const amountToPay = parseFloat(formData.amount_to_pay);
       
@@ -164,37 +192,47 @@ export default function RegisterPaymentWizardNew({
         return false;
       }
       
-      // Verificar que ninguna referencia esté agotada
-      const exhaustedRef = references.find(r => r.status === 'exhausted');
-      if (exhaustedRef) {
-        toast.error('❌ Referencia agotada detectada', {
-          description: `La referencia ${exhaustedRef.reference_number} no tiene saldo disponible. Elimínela o use otra.`
+      // Verificar que todas las referencias tengan monto y fecha
+      const incompleteRef = references.find(r => !r.amount || !r.date);
+      if (incompleteRef) {
+        toast.error('Complete monto y fecha de todas las referencias', {
+          description: `La referencia ${incompleteRef.reference_number} necesita monto y fecha.`
         });
         return false;
       }
       
-      // Verificar que el monto a usar no exceda el saldo disponible
+      // NOTA: Ya NO bloqueamos si la referencia no está conciliada
+      // El bloqueo se hace al marcar como pagado, no al registrar
+      
+      // Solo advertir si alguna referencia está agotada (pero dejar continuar)
+      const exhaustedRef = references.find(r => r.status === 'exhausted');
+      if (exhaustedRef) {
+        toast.warning('⚠️ Referencia agotada detectada', {
+          description: `La referencia ${exhaustedRef.reference_number} no tiene saldo. El pago se guardará pero no podrá marcarse como pagado hasta actualizar historial banco.`
+        });
+      }
+      
+      // Advertir si el monto excede saldo disponible (pero dejar continuar)
       const overLimitRef = references.find(r => {
         if (!r.exists_in_bank) return false;
         const amountToUse = parseFloat(r.amount_to_use) || 0;
-        return amountToUse > r.remaining_amount + 0.01; // tolerance for float precision
+        return amountToUse > r.remaining_amount + 0.01;
       });
       
       if (overLimitRef) {
-        toast.error('Monto excede saldo disponible', {
-          description: `La referencia ${overLimitRef.reference_number} solo tiene $${overLimitRef.remaining_amount.toFixed(2)} disponibles.`
+        toast.warning('⚠️ Monto excede saldo disponible', {
+          description: `La referencia ${overLimitRef.reference_number} solo tiene $${overLimitRef.remaining_amount.toFixed(2)} disponibles. El pago se guardará pero verificará saldo al marcarlo como pagado.`
         });
-        return false;
       }
       
       // Calcular total usando amount_to_use
       const totalToUse = references.reduce((sum, ref) => sum + (parseFloat(ref.amount_to_use) || 0), 0);
       
-      if (totalToUse < amountToPay - 0.01) { // tolerance for float precision
-        toast.error('Referencias insuficientes', {
-          description: `Total disponible: $${totalToUse.toFixed(2)} - Necesario: $${amountToPay.toFixed(2)}`
+      // Solo advertir si es insuficiente (pero dejar continuar)
+      if (totalToUse < amountToPay - 0.01) {
+        toast.warning('⚠️ Referencias insuficientes', {
+          description: `Total referencias: $${totalToUse.toFixed(2)} - Necesario: $${amountToPay.toFixed(2)}. El pago se guardará y podrá ajustarse después.`
         });
-        return false;
       }
     }
     
@@ -345,10 +383,10 @@ export default function RegisterPaymentWizardNew({
       clearTimeout(debounceTimers.current[index]);
     }
     
-    // Crear nuevo timer con 500ms de delay
+    // Crear nuevo timer con 200ms de delay (más rápido para mejor UX)
     debounceTimers.current[index] = setTimeout(() => {
       validateReference(index);
-    }, 500);
+    }, 200);
   }, [validateReference]);
 
   // Cleanup timers on unmount
@@ -495,6 +533,23 @@ export default function RegisterPaymentWizardNew({
           {/* Step 1: Info Básica */}
           {step === 1 && (
             <div className="space-y-4 animate-fadeIn">
+              {/* Lista de errores de validación */}
+              {validationErrors.length > 0 && (
+                <div className="bg-red-50 border-2 border-red-200 rounded-lg p-4 mb-4">
+                  <div className="flex items-start gap-2">
+                    <FaExclamationTriangle className="text-red-600 mt-1 flex-shrink-0" />
+                    <div className="flex-1">
+                      <p className="font-semibold text-red-800 mb-2">Campos requeridos:</p>
+                      <ul className="text-sm text-red-700 space-y-1">
+                        {validationErrors.map((error, idx) => (
+                          <li key={idx}>{error}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Cliente <span className="text-red-500">*</span>
@@ -502,8 +557,11 @@ export default function RegisterPaymentWizardNew({
                 <input
                   type="text"
                   value={formData.client_name}
-                  onChange={createUppercaseHandler((e) => setFormData({ ...formData, client_name: e.target.value }))}
-                  className={`w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none ${uppercaseInputClass}`}
+                  onChange={createUppercaseHandler((e) => {
+                    setFormData({ ...formData, client_name: e.target.value });
+                    if (validationErrors.length > 0) setValidationErrors([]);
+                  })}
+                  className={getInputClassName(`w-full px-4 py-2 border-2 rounded-lg focus:outline-none ${uppercaseInputClass}`, 'cliente')}
                   placeholder="Nombre del cliente"
                 />
               </div>
@@ -646,8 +704,11 @@ export default function RegisterPaymentWizardNew({
                   type="number"
                   step="0.01"
                   value={formData.amount_to_pay}
-                  onChange={(e) => setFormData({ ...formData, amount_to_pay: e.target.value })}
-                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+                  onChange={(e) => {
+                    setFormData({ ...formData, amount_to_pay: e.target.value });
+                    if (validationErrors.length > 0) setValidationErrors([]);
+                  }}
+                  className={getInputClassName('w-full px-4 py-2 border-2 rounded-lg focus:outline-none', 'monto')}
                   placeholder="0.00"
                 />
               </div>
@@ -1325,13 +1386,16 @@ export default function RegisterPaymentWizardNew({
                 </div>
 
                 {!references.every(r => r.exists_in_bank) && (
-                  <div className="bg-red-50 border-2 border-red-200 rounded-lg p-4">
+                  <div className="bg-amber-50 border-2 border-amber-300 rounded-lg p-4">
                     <div className="flex gap-2">
-                      <FaExclamationTriangle className="text-red-600 mt-1 flex-shrink-0" />
+                      <FaExclamationTriangle className="text-amber-600 mt-1 flex-shrink-0" />
                       <div>
-                        <p className="font-semibold text-red-800">Algunas referencias no existen en banco</p>
-                        <p className="text-sm text-red-700 mt-1">
-                          El pago se guardará, pero no podrás marcarlo como pagado hasta actualizar el historial del banco.
+                        <p className="font-semibold text-amber-900">⚠️ Referencias sin conciliar</p>
+                        <p className="text-sm text-amber-800 mt-1">
+                          El pago se guardará correctamente. No podrás marcarlo como pagado hasta que se importe el historial del banco con estas referencias.
+                        </p>
+                        <p className="text-xs text-amber-700 mt-2 italic">
+                          ✨ La conciliación es automática: al importar historial banco, los pagos pendientes se actualizan y habilitan para marcar como pagados.
                         </p>
                       </div>
                     </div>

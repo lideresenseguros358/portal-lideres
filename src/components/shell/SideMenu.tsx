@@ -127,6 +127,14 @@ export default function SideMenu({ role }: SideMenuProps) {
           transition: transform 0.2s ease;
           z-index: 999;
           overflow-y: auto;
+          /* Ocultar scrollbar en todos los navegadores */
+          scrollbar-width: none; /* Firefox */
+          -ms-overflow-style: none; /* IE y Edge */
+        }
+
+        /* Ocultar scrollbar en Chrome, Safari y Opera */
+        .side-menu::-webkit-scrollbar {
+          display: none;
         }
 
         /* When the checkbox is checked, show the menu */

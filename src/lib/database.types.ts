@@ -3520,14 +3520,8 @@ export type Database = {
       }
     }
     Functions: {
-      _rnd_money: {
-        Args: { hi: number; lo: number }
-        Returns: number
-      }
-      app_broker_id: {
-        Args: Record<PropertyKey, never>
-        Returns: string
-      }
+      _rnd_money: { Args: { hi: number; lo: number }; Returns: number }
+      app_broker_id: { Args: never; Returns: string }
       approve_claims_and_create_preliminary: {
         Args: {
           p_approved_by: string
@@ -3540,30 +3534,18 @@ export type Database = {
           success: boolean
         }[]
       }
-      assign_pending_to_office_after_3m: {
-        Args: Record<PropertyKey, never>
-        Returns: number
-      }
-      auto_trash_expired_cases: {
-        Args: Record<PropertyKey, never>
-        Returns: number
-      }
+      assign_pending_to_office_after_3m: { Args: never; Returns: number }
+      auto_trash_expired_cases: { Args: never; Returns: number }
       batch_update_clients_policies_from_commissions: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           errors: string[]
           updated_clients: number
           updated_policies: number
         }[]
       }
-      cleanup_old_notification_hashes: {
-        Args: Record<PropertyKey, never>
-        Returns: undefined
-      }
-      cleanup_processed_temp_imports: {
-        Args: Record<PropertyKey, never>
-        Returns: number
-      }
+      cleanup_old_notification_hashes: { Args: never; Returns: undefined }
+      cleanup_processed_temp_imports: { Args: never; Returns: number }
       commissions_monthly_summary: {
         Args: { p_broker?: string; p_year: number }
         Returns: {
@@ -3572,10 +3554,7 @@ export type Database = {
           total_amount: number
         }[]
       }
-      confirm_claims_paid: {
-        Args: { p_claim_ids: string[] }
-        Returns: boolean
-      }
+      confirm_claims_paid: { Args: { p_claim_ids: string[] }; Returns: boolean }
       create_temp_client_from_pending: {
         Args: {
           p_broker_id: string
@@ -3588,16 +3567,13 @@ export type Database = {
         }
         Returns: string
       }
-      current_broker_id: {
-        Args: Record<PropertyKey, never>
-        Returns: string
-      }
+      current_broker_id: { Args: never; Returns: string }
       ensure_auth_user_from_broker: {
         Args: { p_broker_id: string }
         Returns: string
       }
       get_claims_reports_grouped: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           broker_email: string
           broker_id: string
@@ -3609,12 +3585,9 @@ export type Database = {
           total_raw_amount: number
         }[]
       }
-      get_missing_fields: {
-        Args: { temp_id: string }
-        Returns: string[]
-      }
+      get_missing_fields: { Args: { temp_id: string }; Returns: string[] }
       get_pending_items_grouped: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           client_name: string
           items: Json
@@ -3626,7 +3599,7 @@ export type Database = {
         }[]
       }
       get_queued_claims_for_fortnight: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           broker_amount: number
           broker_id: string
@@ -3634,18 +3607,9 @@ export type Database = {
           claim_ids: string[]
         }[]
       }
-      get_sla_days_remaining: {
-        Args: { p_case_id: string }
-        Returns: number
-      }
-      is_master: {
-        Args: Record<PropertyKey, never>
-        Returns: boolean
-      }
-      is_self: {
-        Args: { broker: string }
-        Returns: boolean
-      }
+      get_sla_days_remaining: { Args: { p_case_id: string }; Returns: number }
+      is_master: { Args: never; Returns: boolean }
+      is_self: { Args: { broker: string }; Returns: boolean }
       metrics_broker: {
         Args: { p_broker: string; p_fortnight: string }
         Returns: {
@@ -3662,10 +3626,7 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: undefined
       }
-      purge_deleted_cases: {
-        Args: Record<PropertyKey, never>
-        Returns: number
-      }
+      purge_deleted_cases: { Args: never; Returns: number }
       reject_claims: {
         Args: {
           p_claim_ids: string[]
@@ -3674,16 +3635,19 @@ export type Database = {
         }
         Returns: boolean
       }
-      set_user_role: {
-        Args:
-          | {
+      set_user_role:
+        | {
+            Args: {
               p_broker_id?: string
               p_email: string
               p_role: Database["public"]["Enums"]["role_enum"]
             }
-          | { p_broker_id?: string; p_email: string; p_role: string }
-        Returns: undefined
-      }
+            Returns: undefined
+          }
+        | {
+            Args: { p_broker_id?: string; p_email: string; p_role: string }
+            Returns: undefined
+          }
       validate_broker_for_ach: {
         Args: { broker_id: string }
         Returns: {

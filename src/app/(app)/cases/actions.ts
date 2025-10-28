@@ -175,7 +175,7 @@ export async function actionCreateCase(payload: {
   ctype: string;
   canal?: string;
   management_type: string;
-  insurer_id: string;
+  insurer_id?: string; // Opcional - puede ser null al inicio del caso
   broker_id: string;
   client_id?: string;
   client_name?: string;
@@ -217,7 +217,7 @@ export async function actionCreateCase(payload: {
       ctype: payload.ctype,
       canal: payload.canal || 'MANUAL',
       management_type: payload.management_type,
-      insurer_id: payload.insurer_id,
+      insurer_id: payload.insurer_id || null,
       broker_id: payload.broker_id,
       client_id: payload.client_id || null,
       client_name: payload.client_name || null,

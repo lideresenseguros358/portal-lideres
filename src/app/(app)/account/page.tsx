@@ -248,8 +248,7 @@ export default function AccountPage() {
       const { error: updateError } = await supabase
         .from("profiles")
         .update({ 
-          avatar_url: publicUrl,
-          updated_at: new Date().toISOString()
+          avatar_url: publicUrl
         })
         .eq("id", user.id);
 
@@ -329,8 +328,7 @@ export default function AccountPage() {
       const { error: updateError } = await supabase
         .from("profiles")
         .update({ 
-          avatar_url: null,
-          updated_at: new Date().toISOString()
+          avatar_url: null
         })
         .eq("id", user.id);
 

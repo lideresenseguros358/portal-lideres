@@ -153,7 +153,7 @@ export default function NewCaseWizard({ brokers, clients, insurers }: NewCaseWiz
       canal: formData.canal,
       management_type: formData.management_type,
       policy_type: formData.policy_type || undefined,
-      insurer_id: formData.insurer_id || '',
+      insurer_id: formData.insurer_id || undefined, // Cambiado de '' a undefined para evitar FK constraint error
       broker_id: formData.broker_id,
       client_id: formData.client_id || undefined,
       client_name: formData.client_name || undefined,

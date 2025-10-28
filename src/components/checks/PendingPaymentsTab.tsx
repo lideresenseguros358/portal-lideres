@@ -5,6 +5,7 @@ import { FaPlus, FaCheckCircle, FaExclamationTriangle, FaFileDownload, FaEdit, F
 import { actionGetPendingPaymentsNew, actionMarkPaymentsAsPaidNew, actionDeletePendingPayment } from '@/app/(app)/checks/actions';
 import { supabaseClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
+import UnpaidReferenceModal from './UnpaidReferenceModal';
 
 interface PendingPaymentsTabProps {
   onOpenWizard: () => void;
@@ -17,6 +18,11 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
   const [loading, setLoading] = useState(true);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [groupByReference, setGroupByReference] = useState(true);
+  const [showUnpaidModal, setShowUnpaidModal] = useState<{
+    payment: { client_name: string; amount: number };
+    references: string[];
+    action: 'paid' | 'pdf';
+  } | null>(null);
   const loadPayments = async () => {
     setLoading(true);
     try {
@@ -128,8 +134,20 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
     });
 
     if (invalidPayments.length > 0) {
-      toast.error('Algunos pagos están bloqueados', {
-        description: 'Verifica las referencias o reprograma el pago antes de continuar.'
+      // Obtener referencias no conciliadas
+      const firstInvalid = invalidPayments[0];
+      const unconciliated = (firstInvalid.payment_references || [])
+        .filter((ref: any) => !ref.exists_in_bank)
+        .map((ref: any) => ref.reference_number);
+      
+      // Mostrar modal en lugar de toast
+      setShowUnpaidModal({
+        payment: {
+          client_name: firstInvalid.client_name,
+          amount: firstInvalid.amount
+        },
+        references: unconciliated,
+        action: 'paid'
       });
       return;
     }
@@ -170,6 +188,31 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
     }
 
     const selectedPayments = payments.filter(p => selectedIds.has(p.id));
+    
+    // Verificar si hay pagos no conciliados
+    const invalidPayments = selectedPayments.filter((p) => {
+      const state = getPaymentState(p);
+      return state.blocked;
+    });
+    
+    if (invalidPayments.length > 0) {
+      // Obtener referencias no conciliadas
+      const firstInvalid = invalidPayments[0];
+      const unconciliated = (firstInvalid.payment_references || [])
+        .filter((ref: any) => !ref.exists_in_bank)
+        .map((ref: any) => ref.reference_number);
+      
+      // Mostrar modal en lugar de toast
+      setShowUnpaidModal({
+        payment: {
+          client_name: firstInvalid.client_name,
+          amount: firstInvalid.amount
+        },
+        references: unconciliated,
+        action: 'pdf'
+      });
+      return;
+    }
     
     // Obtener datos de corredores si hay pagos con broker_id
     const brokerIds = new Set<string>();
@@ -961,6 +1004,16 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
             </div>
           )}
         </div>
+      )}
+
+      {/* Modal de referencias no conciliadas */}
+      {showUnpaidModal && (
+        <UnpaidReferenceModal
+          payment={showUnpaidModal.payment}
+          references={showUnpaidModal.references}
+          action={showUnpaidModal.action}
+          onClose={() => setShowUnpaidModal(null)}
+        />
       )}
     </div>
   );

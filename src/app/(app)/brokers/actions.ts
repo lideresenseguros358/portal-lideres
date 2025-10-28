@@ -260,6 +260,15 @@ export async function actionUpdateBroker(brokerId: string, updates: Partial<Tabl
         profileUpdates.email = cleanedUpdates.email;
       }
 
+      // Sync role to profiles.role (NUEVO)
+      if ((cleanedUpdates as any).role) {
+        const newRole = (cleanedUpdates as any).role;
+        if (newRole === 'master' || newRole === 'broker') {
+          console.log('[actionUpdateBroker] Syncing role to profiles.role:', newRole);
+          profileUpdates.role = newRole;
+        }
+      }
+
       // Update profiles if there are changes
       if (Object.keys(profileUpdates).length > 0) {
         const { error: profileError } = await supabase
