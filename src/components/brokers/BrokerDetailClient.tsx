@@ -323,7 +323,7 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
               </div>
 
               {/* Birth Date */}
-              <div>
+              <div className="min-w-0">
                 <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
                   <FaBirthdayCake className="text-[#8AAA19]" />
                   Fecha de nacimiento
@@ -333,7 +333,7 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
                   value={formData.birth_date}
                   onChange={(e) => setFormData({ ...formData, birth_date: e.target.value })}
                   disabled={!isEditing}
-                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none disabled:bg-gray-50 disabled:text-gray-600"
+                  className="w-full min-w-0 px-2 sm:px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none disabled:bg-gray-50 disabled:text-gray-600 appearance-none"
                 />
               </div>
 
@@ -371,7 +371,7 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
 
               {/* Carnet Expiry Date - Solo para AGENTE */}
               {formData.broker_type === 'agente' && (
-                <div>
+                <div className="min-w-0">
                   <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
                     <FaCalendar className="text-[#8AAA19]" />
                     Vencimiento Carnet
@@ -381,8 +381,7 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
                     value={formData.carnet_expiry_date}
                     onChange={(e) => setFormData({ ...formData, carnet_expiry_date: e.target.value })}
                     disabled={!isEditing}
-                  className="w-full max-w-full px-3 sm:px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none disabled:bg-gray-50 disabled:text-gray-600"
-                  style={{ WebkitAppearance: 'none', MozAppearance: 'textfield' }}
+                    className="w-full min-w-0 px-2 sm:px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none disabled:bg-gray-50 disabled:text-gray-600 appearance-none"
                 />
                 <p className="text-xs text-gray-500 mt-1">
                   {formData.carnet_expiry_date && (() => {

@@ -6,6 +6,7 @@ import { actionGetPendingPaymentsNew, actionMarkPaymentsAsPaidNew, actionDeleteP
 import { supabaseClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import UnpaidReferenceModal from './UnpaidReferenceModal';
+import EditPaymentModal from './EditPaymentModal';
 
 interface PendingPaymentsTabProps {
   onOpenWizard: () => void;
@@ -23,6 +24,7 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
     references: string[];
     action: 'paid' | 'pdf';
   } | null>(null);
+  const [editingPayment, setEditingPayment] = useState<any | null>(null);
   const loadPayments = async () => {
     setLoading(true);
     try {
@@ -507,9 +509,9 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
                 
                 if (metadata.devolucion_tipo === 'cliente') {
                   const clientName = metadata.client_name || payment.client_name;
-                  const bankName = metadata.cuenta_banco || '-';
-                  const accountType = metadata.account_type || '-';
-                  const accountNumber = metadata.account_number || '-';
+                  const bankName = metadata.banco_nombre || '-';
+                  const accountType = metadata.tipo_cuenta || '-';
+                  const accountNumber = metadata.cuenta_banco || '-';
                   bankInfo = `<strong>Cliente:</strong> ${clientName}<br><strong>Banco:</strong> ${bankName}<br><strong>Tipo:</strong> ${accountType}<br><strong>Cuenta:</strong> ${accountNumber}`;
                 } else if (metadata.devolucion_tipo === 'corredor' && metadata.broker_id) {
                   const broker = brokersMap.get(metadata.broker_id);
@@ -609,8 +611,10 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
   };
 
   const handleEdit = (paymentId: string) => {
-    toast.info('Edición de pago pendiente en desarrollo');
-    // TODO: Abrir modal con formulario prellenado
+    const payment = payments.find(p => p.id === paymentId);
+    if (payment) {
+      setEditingPayment(payment);
+    }
   };
 
   const handleDelete = async (paymentId: string) => {
@@ -1013,6 +1017,18 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
           references={showUnpaidModal.references}
           action={showUnpaidModal.action}
           onClose={() => setShowUnpaidModal(null)}
+        />
+      )}
+
+      {/* Modal de edición */}
+      {editingPayment && (
+        <EditPaymentModal
+          payment={editingPayment}
+          onClose={() => setEditingPayment(null)}
+          onSuccess={() => {
+            setEditingPayment(null);
+            loadPayments();
+          }}
         />
       )}
     </div>

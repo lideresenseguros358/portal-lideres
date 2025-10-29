@@ -137,23 +137,31 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
     
     let brokerEmail = formData.broker_email;
     
+    // Auto-completar broker del cliente existente (solo para Master)
     if (client.broker_id && role === 'master') {
-      const { data: brokerData } = await supabaseClient()
-        .from('brokers')
-        .select('p_id')
-        .eq('id', client.broker_id)
-        .single();
-      
-      if (brokerData) {
-        const { data: profileData } = await supabaseClient()
-          .from('profiles')
-          .select('email')
-          .eq('id', brokerData.p_id)
+      try {
+        // Paso 1: Obtener el p_id del broker
+        const { data: brokerData } = await supabaseClient()
+          .from('brokers')
+          .select('p_id')
+          .eq('id', client.broker_id)
           .single();
         
-        if (profileData) {
-          brokerEmail = profileData.email;
+        if (brokerData?.p_id) {
+          // Paso 2: Obtener el email del perfil
+          const { data: profileData } = await supabaseClient()
+            .from('profiles')
+            .select('email')
+            .eq('id', brokerData.p_id)
+            .single();
+          
+          if (profileData?.email) {
+            brokerEmail = profileData.email;
+            console.log('[ClientPolicyWizard] Broker auto-completado:', brokerEmail);
+          }
         }
+      } catch (error) {
+        console.error('[ClientPolicyWizard] Error al obtener broker del cliente:', error);
       }
     }
     
@@ -166,6 +174,15 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
       broker_email: brokerEmail,
     });
     setShowClientSuggestions(false);
+    
+    // Mensaje diferente según si se autocompletó el broker o no
+    if (role === 'master' && brokerEmail && brokerEmail !== formData.broker_email) {
+      toast.success(`Cliente "${client.name}" seleccionado`, {
+        description: 'El corredor asignado al cliente se autocompletó en el Paso 3'
+      });
+    } else {
+      toast.success(`Cliente existente "${client.name}" seleccionado`);
+    }
   };
 
   const validatePolicyNumber = async (policyNumber: string): Promise<boolean> => {
@@ -501,25 +518,47 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-                <div>
+                <div className="min-w-0">
                   <label className="block text-sm font-medium text-gray-700 mb-1">Fecha de Inicio</label>
                   <input
                     type="date"
                     value={formData.start_date}
-                    onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-                    className="w-full px-2 sm:px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition text-sm sm:text-base"
+                    onChange={(e) => {
+                      const startDate = e.target.value;
+                      let renewalDate = formData.renewal_date || '';
+                      
+                      // Auto-calcular fecha de renovación (exactamente 1 año después)
+                      if (startDate) {
+                        const date = new Date(startDate + 'T00:00:00');
+                        date.setFullYear(date.getFullYear() + 1);
+                        const calculatedDate = date.toISOString().split('T')[0];
+                        if (calculatedDate) {
+                          renewalDate = calculatedDate;
+                        }
+                      }
+                      
+                      setFormData({ 
+                        ...formData, 
+                        start_date: startDate,
+                        renewal_date: renewalDate
+                      });
+                    }}
+                    className="w-full min-w-0 px-2 sm:px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition text-sm sm:text-base appearance-none"
                   />
                 </div>
 
-                <div>
+                <div className="min-w-0">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Fecha de Renovación <span className="text-red-500">*</span>
+                    {formData.start_date && (
+                      <span className="text-xs text-green-600 ml-2">✓ Auto-calculada</span>
+                    )}
                   </label>
                   <input
                     type="date"
                     value={formData.renewal_date}
                     onChange={(e) => setFormData({ ...formData, renewal_date: e.target.value })}
-                    className="w-full px-2 sm:px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition text-sm sm:text-base"
+                    className="w-full min-w-0 px-2 sm:px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition text-sm sm:text-base appearance-none"
                     required
                   />
                 </div>

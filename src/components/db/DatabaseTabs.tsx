@@ -3,7 +3,8 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Eye, Edit3, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Eye, Edit3, Trash2, ChevronDown, ChevronUp, FileDown, FileSpreadsheet } from 'lucide-react';
+import { toast } from 'sonner';
 import Modal from '@/components/Modal';
 import ClientForm from './ClientForm';
 import SearchModal from './SearchModal';
@@ -52,6 +53,173 @@ const getClientRenewalDisplay = (client: ClientWithPolicies) => {
   }, null);
 
   return earliest ? earliest.toLocaleDateString('es-PA') : '—';
+};
+
+// Función para exportar a PDF
+const exportToPDF = async (clients: ClientWithPolicies[], role: string) => {
+  try {
+    toast.loading('Generando PDF...');
+    
+    // Importación dinámica de jsPDF
+    const { jsPDF } = await import('jspdf');
+    await import('jspdf-autotable');
+    
+    const doc = new jsPDF() as any;
+    
+    // Logo y Header
+    doc.setFillColor(1, 1, 57); // #010139
+    doc.rect(0, 0, 210, 35, 'F');
+    
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(20);
+    doc.setFont('helvetica', 'bold');
+    doc.text('LÍDERES EN SEGUROS', 105, 15, { align: 'center' });
+    
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Base de Datos de Clientes', 105, 23, { align: 'center' });
+    doc.text(new Date().toLocaleDateString('es-PA', { year: 'numeric', month: 'long', day: 'numeric' }), 105, 30, { align: 'center' });
+    
+    // Preparar datos
+    const tableData = clients.map(client => {
+      const row: any[] = [
+        client.name?.toUpperCase() || '—',
+        client.national_id?.toUpperCase() || '—',
+        client.phone || '—',
+        client.email || '—',
+        client.policies?.length || 0,
+        getPrimaryInsurerName(client),
+        getClientRenewalDisplay(client)
+      ];
+      
+      if (role === 'master') {
+        row.push((client as any).brokers?.name || '—');
+      }
+      
+      return row;
+    });
+    
+    const headers = role === 'master' 
+      ? ['Cliente', 'Cédula', 'Celular', 'Correo', 'Pólizas', 'Aseguradora', 'Renovación', 'Corredor']
+      : ['Cliente', 'Cédula', 'Celular', 'Correo', 'Pólizas', 'Aseguradora', 'Renovación'];
+    
+    // Tabla
+    doc.autoTable({
+      head: [headers],
+      body: tableData,
+      startY: 40,
+      theme: 'grid',
+      headStyles: {
+        fillColor: [1, 1, 57], // #010139
+        textColor: 255,
+        fontStyle: 'bold',
+        fontSize: 9
+      },
+      bodyStyles: {
+        fontSize: 8
+      },
+      alternateRowStyles: {
+        fillColor: [245, 245, 245]
+      },
+      columnStyles: {
+        0: { cellWidth: 35 },
+        1: { cellWidth: 25 },
+        2: { cellWidth: 23 },
+        3: { cellWidth: 35 },
+        4: { cellWidth: 15, halign: 'center' },
+        5: { cellWidth: 25 },
+        6: { cellWidth: 22 },
+      },
+      margin: { left: 10, right: 10 }
+    });
+    
+    // Footer
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.setTextColor(100);
+      doc.text(
+        `Página ${i} de ${pageCount}`,
+        105,
+        doc.internal.pageSize.height - 10,
+        { align: 'center' }
+      );
+    }
+    
+    // Guardar
+    doc.save(`clientes-${new Date().toISOString().split('T')[0]}.pdf`);
+    
+    toast.dismiss();
+    toast.success('PDF descargado correctamente');
+  } catch (error) {
+    console.error('Error al generar PDF:', error);
+    toast.dismiss();
+    toast.error('Error al generar el PDF');
+  }
+};
+
+// Función para exportar a Excel
+const exportToExcel = async (clients: ClientWithPolicies[], role: string) => {
+  try {
+    toast.loading('Generando archivo Excel...');
+    
+    // Importación dinámica de xlsx
+    const XLSX = await import('xlsx');
+    
+    // Preparar datos
+    const data = clients.map(client => {
+      const row: any = {
+        'Cliente': client.name?.toUpperCase() || '—',
+        'Cédula': client.national_id?.toUpperCase() || '—',
+        'Celular': client.phone || '—',
+        'Correo': client.email || '—',
+        'Pólizas': client.policies?.length || 0,
+        'Aseguradora Principal': getPrimaryInsurerName(client),
+        'Próxima Renovación': getClientRenewalDisplay(client)
+      };
+      
+      if (role === 'master') {
+        row['Corredor Asignado'] = (client as any).brokers?.name || '—';
+      }
+      
+      return row;
+    });
+    
+    // Crear workbook
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(data);
+    
+    // Ajustar ancho de columnas
+    const colWidths = [
+      { wch: 30 }, // Cliente
+      { wch: 15 }, // Cédula
+      { wch: 15 }, // Celular
+      { wch: 30 }, // Correo
+      { wch: 10 }, // Pólizas
+      { wch: 20 }, // Aseguradora
+      { wch: 15 }, // Renovación
+    ];
+    
+    if (role === 'master') {
+      colWidths.push({ wch: 25 }); // Corredor
+    }
+    
+    ws['!cols'] = colWidths;
+    
+    // Agregar hoja al workbook
+    XLSX.utils.book_append_sheet(wb, ws, 'Clientes');
+    
+    // Descargar archivo
+    XLSX.writeFile(wb, `clientes-${new Date().toISOString().split('T')[0]}.xlsx`);
+    
+    toast.dismiss();
+    toast.success('Archivo Excel descargado correctamente');
+  } catch (error) {
+    console.error('Error al generar Excel:', error);
+    toast.dismiss();
+    toast.error('Error al generar el archivo Excel');
+  }
 };
 
 type ClientRowData = {
@@ -304,33 +472,70 @@ export default function DatabaseTabs({
       )}
       {modal === 'search' && <SearchModal />}
 
-      <div className="group-switch">
-        <button
-          className={`gs-btn ${view === 'clients' ? 'is-active' : ''}`}
-          data-group="clientes"
-          onClick={() => router.push('/db?tab=clients&view=clients', { scroll: false })}
-        >
-          CLIENTES
-        </button>
-        <button
-          className={`gs-btn ${view === 'preliminary' ? 'is-active' : ''} relative`}
-          data-group="preliminares"
-          onClick={() => router.push('/db?tab=clients&view=preliminary', { scroll: false })}
-        >
-          PRELIMINARES
-          {preliminaryCount > 0 && (
-            <span className="absolute -top-2 -right-2 bg-amber-500 text-white text-xs font-bold rounded-full h-6 w-6 flex items-center justify-center shadow-lg border-2 border-white">
-              {preliminaryCount}
-            </span>
+      {/* Integrated Toolbar: Tabs + Actions */}
+      <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-3 sm:p-4 mb-6">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+          {/* View Tabs */}
+          <div className="flex flex-wrap gap-2">
+            <button
+              className={`px-4 py-2.5 rounded-lg font-semibold text-sm transition-all duration-200 ${
+                view === 'clients'
+                  ? 'bg-gradient-to-r from-[#010139] to-[#020270] text-white shadow-md'
+                  : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+              }`}
+              onClick={() => router.push('/db?tab=clients&view=clients', { scroll: false })}
+            >
+              Clientes
+            </button>
+            <button
+              className={`px-4 py-2.5 rounded-lg font-semibold text-sm transition-all duration-200 relative ${
+                view === 'preliminary'
+                  ? 'bg-gradient-to-r from-[#010139] to-[#020270] text-white shadow-md'
+                  : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+              }`}
+              onClick={() => router.push('/db?tab=clients&view=preliminary', { scroll: false })}
+            >
+              Preliminares
+              {preliminaryCount > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 bg-amber-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center shadow-md">
+                  {preliminaryCount}
+                </span>
+              )}
+            </button>
+            <button
+              className={`px-4 py-2.5 rounded-lg font-semibold text-sm transition-all duration-200 ${
+                view === 'insurers'
+                  ? 'bg-gradient-to-r from-[#010139] to-[#020270] text-white shadow-md'
+                  : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+              }`}
+              onClick={() => router.push('/db?tab=clients&view=insurers', { scroll: false })}
+            >
+              Aseguradoras
+            </button>
+          </div>
+
+          {/* Export Actions - Only for clients view */}
+          {view === 'clients' && clients.length > 0 && (
+            <div className="flex gap-2">
+              <button
+                onClick={() => exportToPDF(clients, role)}
+                className="flex items-center gap-2 px-3 sm:px-4 py-2.5 bg-gray-50 hover:bg-[#010139] text-gray-700 hover:text-white rounded-lg transition-all duration-200 font-medium text-sm whitespace-nowrap"
+                title="Exportar a PDF"
+              >
+                <FileDown size={16} />
+                <span className="hidden sm:inline">PDF</span>
+              </button>
+              <button
+                onClick={() => exportToExcel(clients, role)}
+                className="flex items-center gap-2 px-3 sm:px-4 py-2.5 bg-gray-50 hover:bg-[#8AAA19] text-gray-700 hover:text-white rounded-lg transition-all duration-200 font-medium text-sm whitespace-nowrap"
+                title="Exportar a Excel"
+              >
+                <FileSpreadsheet size={16} />
+                <span className="hidden sm:inline">XLSX</span>
+              </button>
+            </div>
           )}
-        </button>
-        <button
-          className={`gs-btn ${view === 'insurers' ? 'is-active' : ''}`}
-          data-group="aseguradoras"
-          onClick={() => router.push('/db?tab=clients&view=insurers', { scroll: false })}
-        >
-          ASEGURADORAS
-        </button>
+        </div>
       </div>
 
       <div className="tab-content">
@@ -351,39 +556,12 @@ export default function DatabaseTabs({
           --gray-200: #e5e7eb;
         }
 
-        /* Group Switch */
-        .group-switch {
-          display: flex;
-          gap: 8px;
-          flex-wrap: wrap;
-          margin-bottom: 20px;
-        }
-        .gs-btn {
-          padding: 8px 14px;
-          border-radius: 10px;
-          border: 0;
-          font-weight: 600;
-          color: #fff;
-          background: var(--brand-primary);
-          cursor: pointer;
-          transition: all 0.2s ease;
-        }
-        .gs-btn:is(:hover, :focus-visible) {
-          filter: brightness(0.95);
-          outline: 2px solid var(--brand-primary);
-          outline-offset: 2px;
-        }
-        .gs-btn.is-active {
-          box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.55);
-        }
-
         /* Container */
         .tab-content {
           background: var(--brand-surface);
           border-radius: 16px;
-          padding: 24px;
+          padding: 20px;
           box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-          margin-top: 24px;
         }
 
         /* ============================================

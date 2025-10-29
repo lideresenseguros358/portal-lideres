@@ -46,6 +46,8 @@ export default function RegisterPaymentWizardNew({
     notes: '',
     devolucion_tipo: 'cliente' as 'cliente' | 'corredor',
     cuenta_banco: '',
+    banco_nombre: '',
+    tipo_cuenta: '',
     broker_id: '',
     broker_cuenta: ''
   });
@@ -294,24 +296,50 @@ export default function RegisterPaymentWizardNew({
     }
   };
 
-  // Debounce timer refs
+  // Debounce timer refs and abort controllers
   const debounceTimers = useRef<{ [key: number]: NodeJS.Timeout }>({});
+  const validationControllers = useRef<{ [key: number]: AbortController }>({});
 
   const validateReference = useCallback(async (index: number) => {
     const ref = references[index];
     if (!ref || !ref.reference_number) return;
+
+    // Cancelar validación anterior si existe
+    if (validationControllers.current[index]) {
+      validationControllers.current[index].abort();
+    }
 
     const newRefs = [...references];
     if (!newRefs[index]) return;
     newRefs[index].validating = true;
     setReferences(newRefs);
 
+    // Crear nuevo AbortController para esta validación
+    const controller = new AbortController();
+    validationControllers.current[index] = controller;
+
+    // Timeout de 5 segundos
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+    }, 5000);
+
     try {
       const result = await actionValidateReferences([ref.reference_number]);
+      
+      // Limpiar timeout si la validación terminó antes
+      clearTimeout(timeoutId);
+      
+      // Verificar si fue abortada
+      if (controller.signal.aborted) {
+        return;
+      }
+
       if (result.ok && result.data && result.data.length > 0) {
         const validation = result.data[0];
-        if (validation && newRefs[index]) {
-          newRefs[index]!.exists_in_bank = validation.exists;
+        const currentRefs = [...references];
+        
+        if (validation && currentRefs[index]) {
+          currentRefs[index]!.exists_in_bank = validation.exists;
           
           if (validation.exists && validation.details) {
             const transferTotal = Number(validation.details.amount) || 0;
@@ -322,16 +350,14 @@ export default function RegisterPaymentWizardNew({
             const amountToPay = parseFloat(formData.amount_to_pay) || 0;
             
             // Auto-llenar campos cuando concilia
-            // amount muestra el TOTAL de la transferencia desde banco
-            // amount_to_use será igual al amount_to_pay (se calcula después)
-            newRefs[index]!.amount = transferTotal.toString();
-            newRefs[index]!.remaining_amount = remaining;
-            newRefs[index]!.status = status;
-            newRefs[index]!.amount_to_use = amountToPay.toFixed(2); // Siempre el amount_to_pay
+            currentRefs[index]!.amount = transferTotal.toString();
+            currentRefs[index]!.remaining_amount = remaining;
+            currentRefs[index]!.status = status;
+            currentRefs[index]!.amount_to_use = amountToPay.toFixed(2);
             
             // Auto-llenar fecha si está disponible
             if (bankDate) {
-              newRefs[index]!.date = bankDate;
+              currentRefs[index]!.date = bankDate;
             }
             
             // Validar disponibilidad solo si es necesario
@@ -339,13 +365,11 @@ export default function RegisterPaymentWizardNew({
               toast.warning(`Esta referencia solo tiene $${remaining.toFixed(2)} disponibles. Necesitas $${amountToPay.toFixed(2)}`);
             }
           }
-        }
-        if (newRefs[index]) {
-          newRefs[index]!.validating = false;
-        }
-        setReferences(newRefs);
+          
+          currentRefs[index]!.validating = false;
+          setReferences(currentRefs);
 
-        if (validation) {
+          // Notificaciones
           if (!validation.exists) {
             toast.warning('Referencia no encontrada en banco', {
               description: 'Ingrese monto y fecha manualmente'
@@ -364,36 +388,68 @@ export default function RegisterPaymentWizardNew({
           }
         }
       } else {
-        if (newRefs[index]) {
-          newRefs[index]!.validating = false;
+        const currentRefs = [...references];
+        if (currentRefs[index]) {
+          currentRefs[index]!.validating = false;
+          setReferences(currentRefs);
         }
-        setReferences(newRefs);
       }
-    } catch (error) {
-      if (newRefs[index]) {
-        newRefs[index]!.validating = false;
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      
+      // No mostrar error si fue abortado intencionalmente
+      if (error?.name === 'AbortError' || controller.signal.aborted) {
+        return;
       }
-      setReferences(newRefs);
+      
+      const currentRefs = [...references];
+      if (currentRefs[index]) {
+        currentRefs[index]!.validating = false;
+        currentRefs[index]!.exists_in_bank = false;
+        setReferences(currentRefs);
+      }
+      
+      toast.error('Error al validar referencia', {
+        description: 'Intente nuevamente'
+      });
+    } finally {
+      // Limpiar el controller
+      delete validationControllers.current[index];
     }
   }, [references, formData.amount_to_pay]);
 
   const debouncedValidateReference = useCallback((index: number) => {
+    // Cancelar validación en curso
+    if (validationControllers.current[index]) {
+      validationControllers.current[index].abort();
+      delete validationControllers.current[index];
+    }
+    
     // Limpiar timer anterior
     if (debounceTimers.current[index]) {
       clearTimeout(debounceTimers.current[index]);
     }
     
-    // Crear nuevo timer con 200ms de delay (más rápido para mejor UX)
+    // Resetear estado de validating inmediatamente
+    const newRefs = [...references];
+    if (newRefs[index]) {
+      newRefs[index]!.validating = false;
+      setReferences(newRefs);
+    }
+    
+    // Crear nuevo timer con 300ms de delay (reducido para mejor UX)
     debounceTimers.current[index] = setTimeout(() => {
       validateReference(index);
-    }, 200);
-  }, [validateReference]);
+    }, 300);
+  }, [validateReference, references]);
 
-  // Cleanup timers on unmount
+  // Cleanup timers and controllers on unmount
   useEffect(() => {
     const timers = debounceTimers.current;
+    const controllers = validationControllers.current;
     return () => {
       Object.values(timers).forEach(timer => clearTimeout(timer));
+      Object.values(controllers).forEach((controller: AbortController) => controller.abort());
     };
   }, []);
 
@@ -614,21 +670,51 @@ export default function RegisterPaymentWizardNew({
                   </div>
 
                   {formData.devolucion_tipo === 'cliente' && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Cuenta de Banco <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={formData.cuenta_banco}
-                        onChange={createUppercaseHandler((e) => setFormData({ ...formData, cuenta_banco: e.target.value }))}
-                        className={`w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#010139] focus:outline-none ${uppercaseInputClass}`}
-                        placeholder="Número de cuenta del cliente"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">
-                        Nombre del titular: {formData.client_name || '(ingrese cliente arriba)'}
-                      </p>
-                    </div>
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Banco <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.banco_nombre}
+                          onChange={createUppercaseHandler((e) => setFormData({ ...formData, banco_nombre: e.target.value }))}
+                          className={`w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#010139] focus:outline-none ${uppercaseInputClass}`}
+                          placeholder="Ej: BANCO GENERAL"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Tipo de Cuenta <span className="text-red-500">*</span>
+                        </label>
+                        <select
+                          value={formData.tipo_cuenta}
+                          onChange={(e) => setFormData({ ...formData, tipo_cuenta: e.target.value })}
+                          className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#010139] focus:outline-none"
+                        >
+                          <option value="">Seleccionar...</option>
+                          <option value="CORRIENTE">Corriente</option>
+                          <option value="AHORRO">Ahorro</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Número de Cuenta <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={formData.cuenta_banco}
+                          onChange={createUppercaseHandler((e) => setFormData({ ...formData, cuenta_banco: e.target.value }))}
+                          className={`w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#010139] focus:outline-none ${uppercaseInputClass}`}
+                          placeholder="Número de cuenta del cliente"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">
+                          Titular: {formData.client_name || '(ingrese cliente arriba)'}
+                        </p>
+                      </div>
+                    </>
                   )}
 
                   {formData.devolucion_tipo === 'corredor' && (
@@ -708,6 +794,7 @@ export default function RegisterPaymentWizardNew({
                     setFormData({ ...formData, amount_to_pay: e.target.value });
                     if (validationErrors.length > 0) setValidationErrors([]);
                   }}
+                  onWheel={(e) => e.currentTarget.blur()}
                   className={getInputClassName('w-full px-4 py-2 border-2 rounded-lg focus:outline-none', 'monto')}
                   placeholder="0.00"
                 />
@@ -883,12 +970,25 @@ export default function RegisterPaymentWizardNew({
                             }
                             setReferences(newRefs);
                           }}
+                          onWheel={(e) => e.currentTarget.blur()}
                           disabled={ref.exists_in_bank}
                           className={`w-full px-4 py-2 border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none ${
                             ref.exists_in_bank ? 'bg-green-50 border-green-300 cursor-not-allowed' : 'bg-white border-gray-300'
                           }`}
                           placeholder="0.00"
                         />
+                        {!ref.exists_in_bank && ref.reference_number && !ref.validating && (
+                          <div className="mt-2 p-3 bg-amber-50 border-l-4 border-amber-400 rounded-r-lg">
+                            <p className="text-xs text-amber-800 flex items-start gap-2">
+                              <span className="text-amber-600 flex-shrink-0">⚠️</span>
+                              <span>
+                                <strong>Referencia no encontrada en banco.</strong>
+                                <br />
+                                Ingrese el monto manualmente o verifique si el número de referencia es correcto.
+                              </span>
+                            </p>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1051,6 +1151,7 @@ export default function RegisterPaymentWizardNew({
                               }
                               setDivisions(newDivs);
                             }}
+                            onWheel={(e) => e.currentTarget.blur()}
                             className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none"
                             placeholder="0.00"
                           />

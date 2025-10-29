@@ -25,7 +25,6 @@ interface Requirement {
 }
 
 export default function CasesTab({ userId }: CasesTabProps) {
-  const [kanbanEnabled, setKanbanEnabled] = useState(false);
   const [deferredReminderDays, setDeferredReminderDays] = useState(5);
   const [caseTypes, setCaseTypes] = useState<CaseType[]>([
     { id: '1', name: 'Generales', min_days: 7, max_days: 15 },
@@ -47,7 +46,6 @@ export default function CasesTab({ userId }: CasesTabProps) {
       const savedConfig = localStorage.getItem('cases_config');
       if (savedConfig) {
         const data = JSON.parse(savedConfig);
-        if (data.kanban_enabled !== undefined) setKanbanEnabled(data.kanban_enabled);
         if (data.deferred_reminder_days) setDeferredReminderDays(data.deferred_reminder_days);
         if (data.case_types) setCaseTypes(data.case_types);
         if (data.requirements) setRequirements(data.requirements);
@@ -56,7 +54,6 @@ export default function CasesTab({ userId }: CasesTabProps) {
         const response = await fetch('/api/config/cases');
         if (response.ok) {
           const data = await response.json();
-          if (data.kanban_enabled !== undefined) setKanbanEnabled(data.kanban_enabled);
           if (data.deferred_reminder_days) setDeferredReminderDays(data.deferred_reminder_days);
           if (data.case_types) setCaseTypes(data.case_types);
           if (data.requirements) setRequirements(data.requirements);
@@ -76,9 +73,8 @@ export default function CasesTab({ userId }: CasesTabProps) {
   const handleSave = async () => {
     setSaving(true);
     try {
-      // Guardar en localStorage por ahora
+      // Guardar configuración
       const config = {
-        kanban_enabled: kanbanEnabled,
         deferred_reminder_days: deferredReminderDays,
         case_types: caseTypes,
         requirements,
@@ -94,13 +90,16 @@ export default function CasesTab({ userId }: CasesTabProps) {
       });
 
       if (response.ok) {
-        toast.success('Configuración de trámites guardada');
+        toast.success('Configuración de trámites guardada exitosamente');
         setHasChanges(false);
       } else {
-        toast.error('Error al guardar configuración');
+        const errorData = await response.json().catch(() => ({}));
+        toast.error(errorData.error || 'Error al guardar configuración en el servidor');
+        // Aún así guardamos en localStorage como backup
       }
     } catch (error) {
-      toast.error('Error al guardar');
+      console.error('Error saving cases config:', error);
+      toast.error('Error de conexión al guardar. Los cambios se guardaron localmente.');
     } finally {
       setSaving(false);
     }
@@ -183,10 +182,11 @@ export default function CasesTab({ userId }: CasesTabProps) {
           </div>
           <button
             onClick={() => toast.info('Agregar requisito - En desarrollo')}
-            className="flex items-center gap-2 px-4 py-2 bg-[#8AAA19] text-white rounded-lg hover:bg-[#6d8814] transition-colors text-sm whitespace-nowrap"
+            className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-[#8AAA19] text-white rounded-lg hover:bg-[#6d8814] transition-colors text-xs sm:text-sm whitespace-nowrap"
           >
             <FaPlus />
-            <span>NUEVO REQUISITO</span>
+            <span className="hidden sm:inline">NUEVO REQUISITO</span>
+            <span className="sm:hidden">NUEVO</span>
           </button>
         </div>
 
@@ -368,39 +368,6 @@ export default function CasesTab({ userId }: CasesTabProps) {
           <p className="text-sm text-gray-600 mt-3">
             Se envía recordatorio automático con esta anticipación
           </p>
-        </div>
-      </div>
-
-      {/* Kanban Toggle */}
-      <div className="bg-white rounded-2xl shadow-lg p-6">
-        <div className="flex items-center gap-3 mb-6 pb-4 border-b">
-          <FaThLarge className="text-[#8AAA19] text-2xl" />
-          <div>
-            <h2 className="text-lg sm:text-xl md:text-2xl font-bold text-[#010139]">VISTA KANBAN</h2>
-            <p className="text-xs sm:text-sm text-gray-600">HABILITAR VISTA DE TABLERO</p>
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-          <div>
-            <p className="font-semibold text-gray-800">Vista Kanban</p>
-            <p className="text-sm text-gray-600">Permite visualizar trámites en formato de tablero</p>
-          </div>
-          <button
-            onClick={() => {
-              setKanbanEnabled(!kanbanEnabled);
-              markAsChanged();
-            }}
-            className={`relative inline-flex h-8 w-14 items-center rounded-full transition-colors ${
-              kanbanEnabled ? 'bg-[#8AAA19]' : 'bg-gray-300'
-            }`}
-          >
-            <span
-              className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
-                kanbanEnabled ? 'translate-x-7' : 'translate-x-1'
-              }`}
-            />
-          </button>
         </div>
       </div>
 

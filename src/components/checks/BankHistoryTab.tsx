@@ -284,6 +284,18 @@ export default function BankHistoryTab({ onImportSuccess, refreshTrigger }: Bank
                                     <div className="text-xs text-gray-500 mt-1">
                                       {new Date(detail.paid_at).toLocaleString('es-PA')} • {detail.purpose}
                                     </div>
+                                    {detail.notes && (
+                                      <div className="text-xs text-gray-600 mt-1 italic">
+                                        📝 {detail.notes}
+                                      </div>
+                                    )}
+                                    {detail.devolucion_tipo === 'cliente' && (
+                                      <div className="text-xs text-blue-600 mt-2 space-y-0.5">
+                                        <div><strong>Banco:</strong> {detail.banco_nombre || '-'}</div>
+                                        <div><strong>Tipo:</strong> {detail.tipo_cuenta || '-'}</div>
+                                        <div><strong>Cuenta:</strong> {detail.cuenta_banco || '-'}</div>
+                                      </div>
+                                    )}
                                   </div>
                                   <div className="text-right">
                                     <span className="font-bold text-[#8AAA19]">
@@ -395,6 +407,18 @@ export default function BankHistoryTab({ onImportSuccess, refreshTrigger }: Bank
                               <p className="text-xs text-gray-500 mt-1">
                                 {new Date(detail.paid_at).toLocaleDateString('es-PA')} • {detail.purpose}
                               </p>
+                              {detail.notes && (
+                                <p className="text-xs text-gray-600 mt-1 italic">
+                                  📝 {detail.notes}
+                                </p>
+                              )}
+                              {detail.devolucion_tipo === 'cliente' && (
+                                <div className="text-xs text-blue-600 mt-2 space-y-0.5">
+                                  <div><strong>Banco:</strong> {detail.banco_nombre || '-'}</div>
+                                  <div><strong>Tipo:</strong> {detail.tipo_cuenta || '-'}</div>
+                                  <div><strong>Cuenta:</strong> {detail.cuenta_banco || '-'}</div>
+                                </div>
+                              )}
                             </div>
                             <div className="text-right flex-shrink-0">
                               <span className="font-bold text-sm text-[#8AAA19]">

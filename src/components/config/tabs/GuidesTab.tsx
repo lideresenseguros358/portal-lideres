@@ -119,17 +119,19 @@ export default function GuidesTab({ userId }: GuidesTabProps) {
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
             <Link
               href="/guides"
-              className="flex items-center justify-center gap-2 px-4 py-2 bg-[#010139] text-white rounded-lg font-semibold hover:bg-[#020250] transition-all text-sm whitespace-nowrap"
+              className="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-[#010139] text-white rounded-lg font-semibold hover:bg-[#020250] transition-all text-xs sm:text-sm whitespace-nowrap"
             >
-              <FaExternalLinkAlt />
-              <span>VER GUÍAS</span>
+              <FaExternalLinkAlt size={14} />
+              <span className="hidden sm:inline">VER GUÍAS</span>
+              <span className="sm:hidden">VER</span>
             </Link>
             <button
               onClick={() => setShowCreateModal(true)}
-              className="flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg font-semibold hover:shadow-lg transition-all text-sm whitespace-nowrap"
+              className="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg font-semibold hover:shadow-lg transition-all text-xs sm:text-sm whitespace-nowrap"
             >
-              <FaPlus />
-              <span>NUEVA SECCIÓN</span>
+              <FaPlus size={14} />
+              <span className="hidden sm:inline">NUEVA SECCIÓN</span>
+              <span className="sm:hidden">NUEVA</span>
             </button>
           </div>
         </div>
@@ -171,15 +173,17 @@ export default function GuidesTab({ userId }: GuidesTabProps) {
                 <div className="flex items-center gap-2">
                   <Link
                     href={`/guides/${section.id}`}
-                    className="px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-sm font-semibold"
+                    className="px-3 sm:px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors text-xs sm:text-sm font-semibold whitespace-nowrap"
                   >
-                    Ver Archivos
+                    <span className="hidden sm:inline">Ver Archivos</span>
+                    <span className="sm:inline md:hidden">Ver</span>
                   </Link>
                   <button
                     onClick={() => handleDeleteSection(section.id, section.name)}
-                    className="px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-sm font-semibold"
+                    className="px-3 sm:px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-sm font-semibold"
+                    title="Eliminar sección"
                   >
-                    <FaTrash />
+                    <FaTrash size={14} />
                   </button>
                 </div>
               </div>

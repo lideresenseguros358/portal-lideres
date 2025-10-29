@@ -123,74 +123,51 @@ export default async function DatabasePage({
           <p className="text-gray-600 text-lg">Gestión inteligente de clientes, pólizas y aseguradoras</p>
         </div>
 
-        {/* Stats Section */}
-        <div className="mb-8">
-          {/* Live Stats */}
-          <div className="flex gap-4">
-              <div className="bg-gradient-to-br from-[#010139] to-[#020270] rounded-2xl shadow-2xl p-6 min-w-[140px] transform hover:scale-105 transition-all duration-300">
-                <div className="text-4xl font-black text-white mb-1">{clients.length}</div>
-                <div className="text-sm text-white/80 font-semibold uppercase tracking-wide">Clientes</div>
+        {/* Compact Header Bar */}
+        <div className="bg-gradient-to-r from-[#010139] via-[#020270] to-[#010139] rounded-2xl shadow-2xl p-4 sm:p-6 mb-6">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            {/* Stats - Compact */}
+            <div className="flex gap-3 sm:gap-4">
+              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 sm:p-4 min-w-[100px] sm:min-w-[120px] border border-white/20">
+                <div className="text-2xl sm:text-3xl font-black text-white mb-0.5">{clients.length}</div>
+                <div className="text-xs text-white/80 font-semibold uppercase">Clientes</div>
               </div>
-              <div className="bg-gradient-to-br from-[#8AAA19] to-[#6d8814] rounded-2xl shadow-2xl p-6 min-w-[140px] transform hover:scale-105 transition-all duration-300">
-                <div className="text-4xl font-black text-white mb-1">
-                  {totalPolicies}
-                </div>
-                <div className="text-sm text-white/80 font-semibold uppercase tracking-wide">Pólizas</div>
+              <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 sm:p-4 min-w-[100px] sm:min-w-[120px] border border-white/20">
+                <div className="text-2xl sm:text-3xl font-black text-white mb-0.5">{totalPolicies}</div>
+                <div className="text-xs text-white/80 font-semibold uppercase">Pólizas</div>
               </div>
             </div>
-        </div>
-
-        <div className="mb-8">
-          {/* Action Buttons */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Search Card */}
-            <Link 
-              href="/db?modal=search" 
-              scroll={false}
-              className="group relative bg-white rounded-xl shadow-lg hover:shadow-xl p-5 transition-all duration-300 hover:-translate-y-1 border border-gray-200 hover:border-[#010139]"
-            >
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-[#010139] to-[#020270] flex items-center justify-center group-hover:scale-110 transition-transform shadow-md">
-                  <FaSearch className="text-white text-lg" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-semibold text-base text-[#010139] group-hover:text-[#8AAA19] transition-colors">Búsqueda Rápida</h3>
-                  <p className="text-gray-500 text-xs mt-0.5">Encuentra clientes y pólizas</p>
-                </div>
-              </div>
-            </Link>
-
-            {/* New Client Card */}
+            
+            {/* Primary Action */}
             <Link 
               href="/db?modal=new-client" 
               scroll={false}
-              className="group relative bg-gradient-to-br from-[#010139] to-[#020270] rounded-xl shadow-lg hover:shadow-xl p-5 transition-all duration-300 hover:-translate-y-1"
+              className="group flex items-center gap-2 sm:gap-3 px-4 sm:px-6 py-3 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 font-semibold text-sm sm:text-base whitespace-nowrap w-full sm:w-auto justify-center"
             >
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-lg bg-white/20 flex items-center justify-center group-hover:bg-[#8AAA19] transition-colors shadow-md">
-                  <FaPlus className="text-white text-lg" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-semibold text-base text-white">Nuevo Cliente</h3>
-                  <p className="text-white/80 text-xs mt-0.5">Crear cliente y póliza</p>
-                </div>
-              </div>
+              <FaPlus className="text-base sm:text-lg" />
+              <span>Nuevo Cliente</span>
             </Link>
+          </div>
+        </div>
 
-            {/* Import CSV Card */}
+        {/* Secondary Actions Toolbar */}
+        <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-3 sm:p-4 mb-6">
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+            <Link 
+              href="/db?modal=search" 
+              scroll={false}
+              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-50 hover:bg-[#010139] text-gray-700 hover:text-white rounded-lg transition-all duration-200 font-medium text-sm group flex-1 sm:flex-initial"
+            >
+              <FaSearch className="text-base" />
+              <span>Buscar</span>
+            </Link>
+            
             <Link 
               href="/db/import"
-              className="group relative bg-white rounded-xl shadow-lg hover:shadow-xl p-5 transition-all duration-300 hover:-translate-y-1 border border-gray-200 hover:border-[#8AAA19]"
+              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-50 hover:bg-[#8AAA19] text-gray-700 hover:text-white rounded-lg transition-all duration-200 font-medium text-sm group flex-1 sm:flex-initial"
             >
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-[#8AAA19] to-[#6d8814] flex items-center justify-center group-hover:scale-110 transition-transform shadow-md">
-                  <FaFileImport className="text-white text-lg" />
-                </div>
-                <div className="flex-1">
-                  <h3 className="font-semibold text-base text-[#010139] group-hover:text-[#8AAA19] transition-colors">Importar CSV</h3>
-                  <p className="text-gray-500 text-xs mt-0.5">Carga masiva de datos</p>
-                </div>
-              </div>
+              <FaFileImport className="text-base" />
+              <span>Importar CSV</span>
             </Link>
           </div>
         </div>

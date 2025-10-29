@@ -93,10 +93,11 @@ export default function InsurersTab({ userId }: InsurersTabProps) {
             setSelectedInsurer(null);
             setShowWizard(true);
           }}
-          className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-xl font-semibold hover:shadow-lg transition-all whitespace-nowrap text-sm sm:text-base"
+          className="flex items-center gap-2 px-3 sm:px-6 py-2 sm:py-3 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-xl font-semibold hover:shadow-lg transition-all whitespace-nowrap text-xs sm:text-sm md:text-base"
         >
-          <FaPlus />
-          <span>NUEVA ASEGURADORA</span>
+          <FaPlus size={14} />
+          <span className="hidden sm:inline">NUEVA ASEGURADORA</span>
+          <span className="sm:hidden">NUEVA</span>
         </button>
       </div>
 
@@ -151,10 +152,10 @@ export default function InsurersTab({ userId }: InsurersTabProps) {
                   setSelectedInsurer(insurer);
                   setShowWizard(true);
                 }}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors"
+                className="flex-1 flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 transition-colors"
               >
                 <FaEdit size={14} />
-                <span className="text-sm">Editar</span>
+                <span className="text-xs sm:text-sm">Editar</span>
               </button>
 
               <button
@@ -204,16 +205,34 @@ export default function InsurersTab({ userId }: InsurersTabProps) {
       {showWizard && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto p-6">
-            <h2 className="text-2xl font-bold text-[#010139] mb-4">
-              {selectedInsurer ? 'Editar Aseguradora' : 'Nueva Aseguradora'}
-            </h2>
-            <p className="text-gray-600 mb-6">Wizard en desarrollo...</p>
-            <button
-              onClick={() => setShowWizard(false)}
-              className="px-6 py-2 bg-gray-200 hover:bg-gray-300 rounded-lg transition-colors"
-            >
-              Cerrar
-            </button>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl sm:text-2xl font-bold text-[#010139]">
+                {selectedInsurer ? 'Editar Aseguradora' : 'Nueva Aseguradora'}
+              </h2>
+              <button
+                onClick={() => setShowWizard(false)}
+                className="text-gray-400 hover:text-gray-600 text-2xl"
+              >
+                ×
+              </button>
+            </div>
+            <div className="p-8 bg-yellow-50 border border-yellow-200 rounded-lg text-center">
+              <p className="text-yellow-800 font-semibold mb-2">⚠️ Funcionalidad en desarrollo</p>
+              <p className="text-sm text-yellow-700 mb-4">
+                El wizard completo de aseguradoras estará disponible próximamente.
+              </p>
+              <p className="text-xs text-yellow-600">
+                Por ahora, las aseguradoras se gestionan directamente en la base de datos.
+              </p>
+            </div>
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={() => setShowWizard(false)}
+                className="px-6 py-2 bg-[#010139] text-white hover:bg-[#020270] rounded-lg transition-colors font-semibold"
+              >
+                Cerrar
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -277,21 +277,53 @@ export async function actionGetBankTransfers(filters?: {
     
     let results = transfers || [];
     
-    // PASO 2: Obtener TODOS los payment_details
+    // PASO 2: Obtener TODOS los payment_details con JOIN a pending_payments para traer notas
     const { data: allDetails, error: detailsError } = await supabaseAdmin
       .from('payment_details')
-      .select('*');
+      .select(`
+        *,
+        pending_payments!payment_details_payment_id_fkey (
+          notes
+        )
+      `);
     
     if (detailsError) throw detailsError;
     
-    // PASO 3: Agrupar payment_details por bank_transfer_id
+    // PASO 3: Agrupar payment_details por bank_transfer_id y parsear metadata
     const detailsByTransfer = new Map<string, any[]>();
     (allDetails || []).forEach((detail: any) => {
       if (detail.bank_transfer_id) {
+        // Parsear metadata de notes si existe
+        let metadata: any = {};
+        let displayNotes = null;
+        
+        if (detail.pending_payments?.notes) {
+          try {
+            const parsed = JSON.parse(detail.pending_payments.notes);
+            if (parsed && typeof parsed === 'object') {
+              metadata = parsed;
+              displayNotes = parsed.notes || null;
+            }
+          } catch {
+            displayNotes = detail.pending_payments.notes;
+          }
+        }
+        
+        // Agregar metadata al detail
+        const enrichedDetail = {
+          ...detail,
+          notes: displayNotes,
+          metadata: metadata,
+          banco_nombre: metadata.banco_nombre || null,
+          tipo_cuenta: metadata.tipo_cuenta || null,
+          cuenta_banco: metadata.cuenta_banco || null,
+          devolucion_tipo: metadata.devolucion_tipo || null,
+        };
+        
         if (!detailsByTransfer.has(detail.bank_transfer_id)) {
           detailsByTransfer.set(detail.bank_transfer_id, []);
         }
-        detailsByTransfer.get(detail.bank_transfer_id)!.push(detail);
+        detailsByTransfer.get(detail.bank_transfer_id)!.push(enrichedDetail);
       }
     });
     
@@ -424,8 +456,10 @@ export async function actionCreatePendingPayment(payment: {
     
     if (payment.devolucion_tipo) {
       metadata.devolucion_tipo = payment.devolucion_tipo;
-      if (payment.devolucion_tipo === 'cliente' && payment.cuenta_banco) {
-        metadata.cuenta_banco = payment.cuenta_banco;
+      if (payment.devolucion_tipo === 'cliente') {
+        metadata.cuenta_banco = payment.cuenta_banco || '';
+        metadata.banco_nombre = (payment as any).banco_nombre || '';
+        metadata.tipo_cuenta = (payment as any).tipo_cuenta || '';
       } else if (payment.devolucion_tipo === 'corredor') {
         metadata.broker_id = payment.broker_id || null;
         metadata.broker_cuenta = payment.broker_cuenta || null;
@@ -1150,6 +1184,70 @@ export async function actionMigrateBankTransfers() {
     };
   } catch (error: any) {
     console.error('Error migrating bank transfers:', error);
+    return { ok: false, error: error.message };
+  }
+}
+
+// Update pending payment
+export async function actionUpdatePendingPayment(paymentId: string, updates: {
+  client_name: string;
+  purpose: string;
+  policy_number?: string;
+  insurer_name?: string;
+  amount_to_pay: number;
+  notes?: string;
+  devolucion_tipo?: 'cliente' | 'corredor';
+  cuenta_banco?: string;
+  banco_nombre?: string;
+  tipo_cuenta?: string;
+  broker_id?: string;
+  broker_cuenta?: string;
+}) {
+  try {
+    const supabaseServer = await getSupabaseServer();
+    const { data: userData } = await supabaseServer.auth.getUser();
+
+    if (!userData || !userData.user) {
+      return { ok: false, error: 'Usuario no autenticado' };
+    }
+
+    const supabase = await getSupabaseAdmin();
+
+    // Prepare metadata for notes
+    const metadata: any = {
+      notes: updates.notes || null,
+    };
+
+    if (updates.devolucion_tipo) {
+      metadata.devolucion_tipo = updates.devolucion_tipo;
+      if (updates.devolucion_tipo === 'cliente') {
+        metadata.cuenta_banco = updates.cuenta_banco || '';
+        metadata.banco_nombre = updates.banco_nombre || '';
+        metadata.tipo_cuenta = updates.tipo_cuenta || '';
+      } else if (updates.devolucion_tipo === 'corredor') {
+        metadata.broker_id = updates.broker_id || null;
+        metadata.broker_cuenta = updates.broker_cuenta || null;
+      }
+    }
+
+    // Update pending payment
+    const { error: updateError } = await supabase
+      .from('pending_payments')
+      .update({
+        client_name: updates.client_name,
+        purpose: updates.purpose,
+        policy_number: updates.purpose === 'poliza' ? updates.policy_number : null,
+        insurer_name: updates.purpose === 'poliza' ? updates.insurer_name : null,
+        amount_to_pay: updates.amount_to_pay,
+        notes: JSON.stringify(metadata),
+      } satisfies TablesUpdate<'pending_payments'>)
+      .eq('id', paymentId);
+
+    if (updateError) throw updateError;
+
+    return { ok: true, message: 'Pago actualizado correctamente' };
+  } catch (error: any) {
+    console.error('Error updating pending payment:', error);
     return { ok: false, error: error.message };
   }
 }
