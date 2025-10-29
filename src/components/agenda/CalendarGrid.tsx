@@ -165,24 +165,56 @@ export default function CalendarGrid({
                     disabled={!item.isCurrentMonth}
                     className={`
                       relative aspect-square flex flex-col items-center justify-center
-                      rounded-lg transition-all duration-200
-                      ${item.isCurrentMonth 
-                        ? 'bg-gray-50 hover:bg-gray-100 cursor-pointer text-gray-900' 
-                        : 'bg-transparent text-gray-300 cursor-default'
+                      rounded-xl transition-all duration-300 transform
+                      ${!item.isCurrentMonth 
+                        ? 'bg-transparent text-gray-300 cursor-default' 
+                        : isTodayDate
+                        ? 'bg-gradient-to-br from-[#010139] via-[#020270] to-[#010139] text-white font-bold shadow-lg hover:shadow-xl hover:scale-110 cursor-pointer animate-pulse'
+                        : item.hasEvents
+                        ? 'bg-gradient-to-br from-[#8AAA19] via-[#7a9916] to-[#6d8814] text-white font-semibold shadow-md hover:shadow-lg hover:scale-105 cursor-pointer'
+                        : 'bg-gray-50 hover:bg-gradient-to-br hover:from-gray-100 hover:to-gray-200 hover:shadow-md hover:scale-105 cursor-pointer text-gray-900'
                       }
-                      ${isSelected ? 'ring-2 ring-[#8AAA19] bg-[#8AAA19] bg-opacity-10' : ''}
-                      ${isTodayDate ? 'ring-2 ring-[#010139] font-bold' : ''}
+                      ${isSelected && !isTodayDate && !item.hasEvents ? 'ring-4 ring-[#8AAA19] ring-opacity-50 bg-[#8AAA19] bg-opacity-20 scale-105' : ''}
+                      ${isSelected && item.hasEvents ? 'ring-4 ring-yellow-400 ring-opacity-70 scale-110 shadow-xl' : ''}
+                      ${isSelected && isTodayDate ? 'ring-4 ring-yellow-400 ring-opacity-70 scale-110' : ''}
                     `}
                   >
-                    <span className={`text-sm md:text-base ${!item.isCurrentMonth ? 'opacity-40' : ''}`}>
+                    {/* Día del mes */}
+                    <span className={`text-sm md:text-base font-bold relative z-10 ${!item.isCurrentMonth ? 'opacity-40' : ''}`}>
                       {item.day}
                     </span>
                     
-                    {item.hasEvents && item.isCurrentMonth && (
-                      <div className="absolute bottom-1 flex gap-0.5">
-                        <div className="w-1.5 h-1.5 bg-[#8AAA19] rounded-full"></div>
+                    {/* Badge de cantidad de eventos */}
+                    {item.hasEvents && item.isCurrentMonth && dayEvents.length > 0 && (
+                      <div className="absolute top-0.5 right-0.5 flex items-center justify-center">
+                        <div className={`
+                          w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold shadow-md
+                          ${isTodayDate 
+                            ? 'bg-yellow-400 text-[#010139]' 
+                            : 'bg-white text-[#8AAA19]'
+                          }
+                        `}>
+                          {dayEvents.length}
+                        </div>
                       </div>
                     )}
+                    
+                    {/* Emoji decorativo para día actual */}
+                    {isTodayDate && (
+                      <div className="absolute -top-1 -left-1 text-xl animate-bounce">
+                        ⭐
+                      </div>
+                    )}
+                    
+                    {/* Emoji decorativo para días con eventos */}
+                    {item.hasEvents && item.isCurrentMonth && !isTodayDate && (
+                      <div className="absolute -bottom-1 -right-1 text-sm">
+                        📅
+                      </div>
+                    )}
+                    
+                    {/* Efecto de brillo en hover */}
+                    <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-white/0 to-white/20 opacity-0 hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
                   </button>
                 </Tooltip.Trigger>
                 {item.isCurrentMonth && (

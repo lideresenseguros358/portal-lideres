@@ -1,18 +1,20 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { FaSearch, FaFileExport, FaUserPlus, FaEye, FaClipboardList } from 'react-icons/fa';
+import { FaSearch, FaFileExport, FaUserPlus, FaEye, FaClipboardList, FaTable } from 'react-icons/fa';
 import { toast } from 'sonner';
 import Link from 'next/link';
-import { actionGetBrokers, actionExportBrokers } from '@/app/(app)/brokers/actions';
+import { actionGetBrokers, actionExportBrokers, actionBulkUpdateBrokers } from '@/app/(app)/brokers/actions';
 import { OFICINA_EMAIL } from '@/lib/constants/brokers';
 import { createUppercaseHandler, uppercaseInputClass } from '@/lib/utils/uppercase';
+import BrokersBulkEditModal from './BrokersBulkEditModal';
 
 export default function BrokersListClient() {
   const [loading, setLoading] = useState(true);
   const [brokers, setBrokers] = useState<any[]>([]);
   const [search, setSearch] = useState('');
   const [selectedBrokers, setSelectedBrokers] = useState<string[]>([]);
+  const [showBulkEdit, setShowBulkEdit] = useState(false);
 
   const loadBrokers = useCallback(async () => {
     setLoading(true);
@@ -77,6 +79,27 @@ export default function BrokersListClient() {
     }
   };
 
+  const handleOpenBulkEdit = () => {
+    if (brokers.length === 0) {
+      toast.error('No hay corredores para editar');
+      return;
+    }
+    setShowBulkEdit(true);
+  };
+
+  const handleBulkSave = async (updates: any[]) => {
+    const result = await actionBulkUpdateBrokers(updates);
+    
+    if (result.ok) {
+      toast.success(result.message || 'Corredores actualizados correctamente');
+      await loadBrokers();
+      setShowBulkEdit(false);
+    } else {
+      toast.error(result.error);
+      throw new Error(result.error);
+    }
+  };
+
   return (
     <>
       {/* Header */}
@@ -100,6 +123,15 @@ export default function BrokersListClient() {
               <FaClipboardList />
               <span className="hidden sm:inline">Solicitudes</span>
             </Link>
+
+            <button
+              onClick={handleOpenBulkEdit}
+              className="px-4 py-2 bg-gradient-to-r from-[#010139] to-[#020270] text-white rounded-lg hover:shadow-lg transition-all flex items-center gap-2 font-semibold"
+            >
+              <FaTable />
+              <span className="hidden sm:inline">Edición Masiva</span>
+              <span className="sm:hidden">Excel</span>
+            </button>
 
             <button
               onClick={handleExport}
@@ -256,6 +288,14 @@ export default function BrokersListClient() {
           </div>
         </>
       )}
+
+      {/* Bulk Edit Modal */}
+      <BrokersBulkEditModal
+        isOpen={showBulkEdit}
+        onClose={() => setShowBulkEdit(false)}
+        brokers={brokers}
+        onSave={handleBulkSave}
+      />
     </>
   );
 }

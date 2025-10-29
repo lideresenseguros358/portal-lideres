@@ -184,10 +184,13 @@ export async function actionUpdateBroker(brokerId: string, updates: Partial<Tabl
       return { ok: false as const, error: 'Solo Master puede editar brokers' };
     }
 
+    // Extract fields that don't belong to brokers table
+    const { role: newRole, titular_cedula, ...brokerUpdates } = updates as any;
+
     // Clean up empty strings - convert to null for optional fields
-    const nullableFields = ['birth_date', 'phone', 'national_id', 'assa_code', 'license_no', 'bank_account_no', 'beneficiary_name', 'beneficiary_id', 'email', 'carnet_expiry_date'];
+    const nullableFields = ['birth_date', 'phone', 'national_id', 'assa_code', 'license_no', 'bank_account_no', 'beneficiary_name', 'beneficiary_id', 'email', 'carnet_expiry_date', 'nombre_completo', 'bank_route', 'tipo_cuenta'];
     
-    const cleanedUpdates = Object.entries(updates).reduce((acc, [key, value]) => {
+    const cleanedUpdates = Object.entries(brokerUpdates).reduce((acc, [key, value]) => {
       // Convert empty strings to null for nullable fields
       if (nullableFields.includes(key) && value === '') {
         acc[key] = null;
@@ -197,7 +200,8 @@ export async function actionUpdateBroker(brokerId: string, updates: Partial<Tabl
       return acc;
     }, {} as any);
 
-    console.log('[actionUpdateBroker] Cleaned updates:', cleanedUpdates);
+    console.log('[actionUpdateBroker] Cleaned updates (brokers only):', cleanedUpdates);
+    console.log('[actionUpdateBroker] Role to sync:', newRole);
 
     const supabase = await getSupabaseAdmin();
     console.log('[actionUpdateBroker] Using admin client for update');
@@ -260,13 +264,10 @@ export async function actionUpdateBroker(brokerId: string, updates: Partial<Tabl
         profileUpdates.email = cleanedUpdates.email;
       }
 
-      // Sync role to profiles.role (NUEVO)
-      if ((cleanedUpdates as any).role) {
-        const newRole = (cleanedUpdates as any).role;
-        if (newRole === 'master' || newRole === 'broker') {
-          console.log('[actionUpdateBroker] Syncing role to profiles.role:', newRole);
-          profileUpdates.role = newRole;
-        }
+      // Sync role to profiles.role
+      if (newRole && (newRole === 'master' || newRole === 'broker')) {
+        console.log('[actionUpdateBroker] Syncing role to profiles.role:', newRole);
+        profileUpdates.role = newRole;
       }
 
       // Update profiles if there are changes
@@ -674,6 +675,140 @@ export async function actionExportBrokers(brokerIds?: string[]) {
     return { ok: true as const, data: exportData };
   } catch (error: any) {
     console.error('Error in actionExportBrokers:', error);
+    return { ok: false as const, error: error.message };
+  }
+}
+
+// =====================================================
+// BULK UPDATE BROKERS
+// =====================================================
+
+export async function actionBulkUpdateBrokers(updates: Array<{ id: string; [key: string]: any }>) {
+  try {
+    console.log('[actionBulkUpdateBrokers] Starting bulk update for', updates.length, 'brokers');
+    
+    const supabaseServer = await getSupabaseServer();
+    const { data: { user } } = await supabaseServer.auth.getUser();
+    
+    if (!user) {
+      return { ok: false as const, error: 'No autenticado' };
+    }
+
+    // Check if user is master
+    const { data: profile } = await supabaseServer
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    if (profile?.role !== 'master') {
+      return { ok: false as const, error: 'Solo Master puede editar brokers' };
+    }
+
+    const supabase = await getSupabaseAdmin();
+    
+    // Update each broker
+    const results = [];
+    let errorCount = 0;
+    
+    for (const update of updates) {
+      const { id, role: newRole, titular_cedula, ...brokerUpdates } = update as any;
+      
+      // Skip if only id is present (no changes)
+      if (Object.keys(brokerUpdates).length === 0 && !newRole) {
+        continue;
+      }
+
+      try {
+        // Clean up empty strings
+        const nullableFields = ['birth_date', 'phone', 'national_id', 'assa_code', 'license_no', 'bank_account_no', 'beneficiary_name', 'beneficiary_id', 'email', 'carnet_expiry_date', 'nombre_completo', 'bank_route', 'tipo_cuenta'];
+        
+        const cleanedUpdates = Object.entries(brokerUpdates).reduce((acc, [key, value]) => {
+          if (nullableFields.includes(key) && value === '') {
+            acc[key] = null;
+          } else if (value !== undefined) {
+            acc[key] = value;
+          }
+          return acc;
+        }, {} as any);
+
+        // Update broker table
+        const { error: brokerError } = await supabase
+          .from('brokers')
+          .update(cleanedUpdates)
+          .eq('id', id);
+
+        if (brokerError) {
+          console.error(`[actionBulkUpdateBrokers] Error updating broker ${id}:`, brokerError);
+          errorCount++;
+          continue;
+        }
+
+        // Get broker profile
+        const { data: broker } = await supabase
+          .from('brokers')
+          .select('p_id')
+          .eq('id', id)
+          .single();
+
+        // Sync to profiles if needed
+        if (broker?.p_id) {
+          const profileUpdates: any = {};
+          
+          if (cleanedUpdates.name) {
+            profileUpdates.full_name = cleanedUpdates.name;
+          }
+          
+          if (cleanedUpdates.email) {
+            profileUpdates.email = cleanedUpdates.email;
+          }
+
+          if (newRole && (newRole === 'master' || newRole === 'broker')) {
+            profileUpdates.role = newRole;
+          }
+
+          if (Object.keys(profileUpdates).length > 0) {
+            await supabase
+              .from('profiles')
+              .update(profileUpdates)
+              .eq('id', broker.p_id);
+          }
+
+          // Sync email to auth.users if changed
+          if (cleanedUpdates.email) {
+            await supabase.auth.admin.updateUserById(
+              broker.p_id,
+              { email: cleanedUpdates.email }
+            );
+          }
+        }
+
+        results.push({ id, success: true });
+      } catch (error: any) {
+        console.error(`[actionBulkUpdateBrokers] Error processing broker ${id}:`, error);
+        errorCount++;
+        results.push({ id, success: false, error: error.message });
+      }
+    }
+
+    console.log('[actionBulkUpdateBrokers] Complete. Success:', results.length - errorCount, 'Errors:', errorCount);
+    
+    revalidatePath('/brokers');
+
+    if (errorCount > 0) {
+      return { 
+        ok: false as const, 
+        error: `${errorCount} corredores no se pudieron actualizar` 
+      };
+    }
+
+    return { 
+      ok: true as const, 
+      data: results,
+      message: `${results.length} corredor(es) actualizados correctamente`
+    };
+  } catch (error: any) {
+    console.error('Error in actionBulkUpdateBrokers:', error);
     return { ok: false as const, error: error.message };
   }
 }

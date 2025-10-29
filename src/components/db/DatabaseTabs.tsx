@@ -3,7 +3,7 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Eye, Edit3, Trash2, ChevronDown, ChevronUp, FileDown, FileSpreadsheet } from 'lucide-react';
+import { Eye, Edit3, Trash2, ChevronDown, ChevronUp, FileDown, FileSpreadsheet, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import Modal from '@/components/Modal';
 import ClientForm from './ClientForm';
@@ -11,6 +11,7 @@ import SearchModal from './SearchModal';
 import ClientsByInsurer from './ClientsByInsurer';
 import ClientPolicyWizard from './ClientPolicyWizard';
 import PreliminaryClientsTab from './PreliminaryClientsTab';
+import ExportFormatModal from './ExportFormatModal';
 import { ClientWithPolicies, InsurerWithCount } from '@/types/db';
 import { actionGetPreliminaryClients } from '@/app/(app)/db/preliminary-actions';
 
@@ -239,9 +240,12 @@ interface ClientsListViewProps {
   onEdit: (clientId: string) => void;
   onDelete: (clientId: string) => void;
   role: string;
+  selectedClients: Set<string>;
+  onToggleClient: (clientId: string) => void;
+  onSelectAll: () => void;
 }
 
-const ClientsListView = ({ clients, onView, onEdit, onDelete, role }: ClientsListViewProps) => {
+const ClientsListView = ({ clients, onView, onEdit, onDelete, role, selectedClients, onToggleClient, onSelectAll }: ClientsListViewProps) => {
   const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set());
 
   const toggleClient = (clientId: string) => {
@@ -282,11 +286,21 @@ const ClientsListView = ({ clients, onView, onEdit, onDelete, role }: ClientsLis
     );
   }
 
+  const allSelected = clients.length > 0 && selectedClients.size === clients.length;
+
   return (
     <div className="clients-wrapper">
       <table className="clients-table">
         <thead>
           <tr className="ct-head">
+            <th className="ct-th" style={{ width: '50px' }}>
+              <input
+                type="checkbox"
+                checked={allSelected}
+                onChange={onSelectAll}
+                className="w-5 h-5 text-[#8AAA19] rounded focus:ring-[#8AAA19] cursor-pointer"
+              />
+            </th>
             <th className="ct-th">Cliente</th>
             <th className="ct-th">Cédula</th>
             <th className="ct-th">Celular</th>
@@ -298,9 +312,19 @@ const ClientsListView = ({ clients, onView, onEdit, onDelete, role }: ClientsLis
         <tbody>
           {items.map(({ client, nationalId, email, phone, brokerName }) => {
             const isExpanded = expandedClients.has(client.id);
+            const isSelected = selectedClients.has(client.id);
             return (
               <React.Fragment key={client.id}>
                 <tr className="ct-item">
+                  <td className="ct-td">
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => onToggleClient(client.id)}
+                      className="w-5 h-5 text-[#8AAA19] rounded focus:ring-[#8AAA19] cursor-pointer"
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  </td>
                   <td className="ct-td">
                     <button
                       className="ct-trigger"
@@ -348,7 +372,7 @@ const ClientsListView = ({ clients, onView, onEdit, onDelete, role }: ClientsLis
 
                 {isExpanded && (
                   <tr>
-                    <td colSpan={role === 'master' ? 6 : 5} className="ct-detail">
+                    <td colSpan={role === 'master' ? 7 : 6} className="ct-detail">
                       <div className="pol-panel">
                         <div className="pol-header">
                           <h4 className="pol-title">Pólizas del Cliente</h4>
@@ -424,6 +448,8 @@ export default function DatabaseTabs({
   const clientToEditId = searchParams.get('editClient');
   const view = searchParams.get('view') || 'clients';
   const [preliminaryCount, setPreliminaryCount] = useState<number>(0);
+  const [selectedClients, setSelectedClients] = useState<Set<string>>(new Set());
+  const [showExportModal, setShowExportModal] = useState(false);
 
   // Load preliminary count
   useEffect(() => {
@@ -442,6 +468,41 @@ export default function DatabaseTabs({
   const handleEdit = handleView;
   const handleDelete = (id: string) => router.push(`/db?tab=clients&modal=delete-client&deleteClient=${id}`, { scroll: false });
 
+  const handleToggleClient = (clientId: string) => {
+    setSelectedClients((prev) => {
+      const next = new Set(prev);
+      if (next.has(clientId)) {
+        next.delete(clientId);
+      } else {
+        next.add(clientId);
+      }
+      return next;
+    });
+  };
+
+  const handleSelectAll = () => {
+    if (selectedClients.size === clients.length) {
+      setSelectedClients(new Set());
+    } else {
+      setSelectedClients(new Set(clients.map(c => c.id)));
+    }
+  };
+
+  const handleExportFormat = async (format: 'pdf' | 'excel') => {
+    const clientsToExport = selectedClients.size > 0 
+      ? clients.filter(c => selectedClients.has(c.id))
+      : clients;
+    
+    if (format === 'pdf') {
+      await exportToPDF(clientsToExport, role);
+    } else {
+      await exportToExcel(clientsToExport, role);
+    }
+    
+    setShowExportModal(false);
+    setSelectedClients(new Set());
+  };
+
   const renderTabContent = () => {
     if (view === 'insurers') {
       return <ClientsByInsurer clients={clients} insurers={insurers} />;
@@ -449,7 +510,18 @@ export default function DatabaseTabs({
     if (view === 'preliminary') {
       return <PreliminaryClientsTab insurers={insurers} brokers={brokers} userRole={role} />;
     }
-    return <ClientsListView clients={clients} onView={handleView} onEdit={handleEdit} onDelete={handleDelete} role={role} />;
+    return (
+      <ClientsListView 
+        clients={clients} 
+        onView={handleView} 
+        onEdit={handleEdit} 
+        onDelete={handleDelete} 
+        role={role}
+        selectedClients={selectedClients}
+        onToggleClient={handleToggleClient}
+        onSelectAll={handleSelectAll}
+      />
+    );
   };
 
   return (
@@ -516,24 +588,16 @@ export default function DatabaseTabs({
 
           {/* Export Actions - Only for clients view */}
           {view === 'clients' && clients.length > 0 && (
-            <div className="flex gap-2">
-              <button
-                onClick={() => exportToPDF(clients, role)}
-                className="flex items-center gap-2 px-3 sm:px-4 py-2.5 bg-gray-50 hover:bg-[#010139] text-gray-700 hover:text-white rounded-lg transition-all duration-200 font-medium text-sm whitespace-nowrap"
-                title="Exportar a PDF"
-              >
-                <FileDown size={16} />
-                <span className="hidden sm:inline">PDF</span>
-              </button>
-              <button
-                onClick={() => exportToExcel(clients, role)}
-                className="flex items-center gap-2 px-3 sm:px-4 py-2.5 bg-gray-50 hover:bg-[#8AAA19] text-gray-700 hover:text-white rounded-lg transition-all duration-200 font-medium text-sm whitespace-nowrap"
-                title="Exportar a Excel"
-              >
-                <FileSpreadsheet size={16} />
-                <span className="hidden sm:inline">XLSX</span>
-              </button>
-            </div>
+            <button
+              onClick={() => setShowExportModal(true)}
+              className="flex items-center gap-2 px-3 sm:px-4 py-2.5 bg-gradient-to-r from-[#010139] to-[#020270] hover:from-[#020270] hover:to-[#010139] text-white rounded-lg transition-all duration-200 font-semibold text-sm whitespace-nowrap shadow-lg hover:shadow-xl"
+              title="Exportar clientes"
+            >
+              <Download size={18} />
+              <span>
+                Descargar {selectedClients.size > 0 ? `(${selectedClients.size})` : ''}
+              </span>
+            </button>
           )}
         </div>
       </div>
@@ -541,6 +605,15 @@ export default function DatabaseTabs({
       <div className="tab-content">
         {renderTabContent()}
       </div>
+
+      {/* Export Format Modal */}
+      <ExportFormatModal
+        isOpen={showExportModal}
+        onClose={() => setShowExportModal(false)}
+        onSelectFormat={handleExportFormat}
+        selectedCount={selectedClients.size}
+        totalCount={clients.length}
+      />
 
       <style jsx>{`
         :global(:root) {
