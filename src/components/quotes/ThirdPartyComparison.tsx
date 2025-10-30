@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FaCheck, FaTimes, FaInfoCircle } from 'react-icons/fa';
+import { FaCheck, FaTimes, FaInfoCircle, FaStar, FaCheckCircle, FaArrowRight } from 'react-icons/fa';
 import { AUTO_THIRD_PARTY_INSURERS, COVERAGE_LABELS, AutoThirdPartyPlan, AutoInsurer } from '@/lib/constants/auto-quotes';
 import InsurerLogo from '@/components/shared/InsurerLogo';
 
@@ -46,169 +46,68 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
     }
   };
 
-  const renderCoverageIcon = (value: string) => {
+  const renderCoverageValue = (value: string) => {
     if (value === 'no') {
-      return <FaTimes className="text-red-500" size={16} />;
+      return (
+        <span className="inline-flex items-center gap-1 text-gray-400 text-sm">
+          <FaTimes size={12} /> No incluido
+        </span>
+      );
     } else if (value === 'sí') {
-      return <FaCheck className="text-green-500" size={18} />;
+      return (
+        <span className="inline-flex items-center gap-1 text-[#8AAA19] text-sm font-semibold">
+          <FaCheck size={12} /> Incluido
+        </span>
+      );
     } else {
-      return <FaCheck className="text-green-500" size={18} />;
+      return (
+        <span className="inline-flex items-center gap-1 text-[#8AAA19] text-sm">
+          <FaCheck size={12} /> {value}
+        </span>
+      );
     }
   };
 
   return (
     <>
-      {/* Desktop View */}
-      <div className="hidden lg:block overflow-x-auto">
-        <table className="w-full border-collapse">
-          <thead>
-            <tr>
-              <th className="p-4 text-left bg-gray-50 border-b-2 border-gray-200 sticky left-0 z-10">
-                <span className="font-bold text-[#010139]">Cobertura</span>
-              </th>
-              {AUTO_THIRD_PARTY_INSURERS.map((insurer) => (
-                <th key={insurer.id} className="p-4 text-center bg-gray-50 border-b-2 border-gray-200 min-w-[180px]">
-                  <div className="flex flex-col items-center gap-2">
-                    <InsurerLogo 
-                      logoUrl={insurerLogos[insurer.name.toUpperCase()]}
-                      insurerName={insurer.name}
-                      size="md"
-                    />
-                    <span className="font-bold text-sm text-[#010139]">{insurer.name}</span>
-                  </div>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {/* Basic Plans Row */}
-            <tr className="bg-blue-50">
-              <td className="p-4 font-semibold text-[#010139] sticky left-0 z-10 bg-blue-50">
-                Plan Básico
-              </td>
-              {AUTO_THIRD_PARTY_INSURERS.map((insurer) => (
-                <td key={`${insurer.id}-basic`} className="p-4 text-center border-x border-gray-200">
-                  <div className="font-bold text-2xl text-[#010139] mb-2">
-                    B/.{insurer.basicPlan.annualPremium.toFixed(2)}
-                  </div>
-                  <div className="text-xs text-gray-600 mb-3">/año</div>
-                  <button
-                    onClick={() => handlePlanClick(insurer, insurer.basicPlan, 'basic')}
-                    className="w-full px-4 py-2 bg-[#010139] hover:bg-[#020270] text-white rounded-lg transition-all font-semibold text-sm"
-                  >
-                    Seleccionar
-                  </button>
-                </td>
-              ))}
-            </tr>
-
-            {/* Coverage Rows */}
-            {Object.entries(COVERAGE_LABELS).map(([key, label]) => (
-              <tr key={key} className="border-b border-gray-100 hover:bg-gray-50">
-                <td className="p-3 text-sm text-gray-700 sticky left-0 z-10 bg-white">
-                  {label}
-                </td>
-                {AUTO_THIRD_PARTY_INSURERS.map((insurer) => {
-                  const value = insurer.basicPlan.coverages[key as keyof typeof insurer.basicPlan.coverages];
-                  return (
-                    <td key={`${insurer.id}-${key}`} className="p-3 text-center text-sm border-x border-gray-100">
-                      <div className="flex items-center justify-center gap-2">
-                        {renderCoverageIcon(value)}
-                        {value !== 'no' && value !== 'sí' && (
-                          <span className="text-xs text-gray-600">{value}</span>
-                        )}
-                      </div>
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-
-            {/* Premium Plans Row */}
-            <tr className="bg-green-50">
-              <td className="p-4 font-semibold text-[#010139] sticky left-0 z-10 bg-green-50">
-                Plan Premium
-              </td>
-              {AUTO_THIRD_PARTY_INSURERS.map((insurer) => (
-                <td key={`${insurer.id}-premium`} className="p-4 text-center border-x border-gray-200">
-                  <div className="font-bold text-2xl text-[#8AAA19] mb-2">
-                    B/.{insurer.premiumPlan.annualPremium.toFixed(2)}
-                  </div>
-                  <div className="text-xs text-gray-600 mb-3">/año</div>
-                  {insurer.premiumPlan.notes && (
-                    <div className="text-xs text-gray-600 mb-2">{insurer.premiumPlan.notes}</div>
-                  )}
-                  <button
-                    onClick={() => handlePlanClick(insurer, insurer.premiumPlan, 'premium')}
-                    className="w-full px-4 py-2 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] hover:shadow-lg text-white rounded-lg transition-all font-semibold text-sm"
-                  >
-                    Seleccionar
-                  </button>
-                </td>
-              ))}
-            </tr>
-
-            {/* Premium Coverage Rows */}
-            {Object.entries(COVERAGE_LABELS).map(([key, label]) => (
-              <tr key={`premium-${key}`} className="border-b border-gray-100 hover:bg-gray-50">
-                <td className="p-3 text-sm text-gray-700 sticky left-0 z-10 bg-white">
-                  {label}
-                </td>
-                {AUTO_THIRD_PARTY_INSURERS.map((insurer) => {
-                  const value = insurer.premiumPlan.coverages[key as keyof typeof insurer.premiumPlan.coverages];
-                  return (
-                    <td key={`${insurer.id}-premium-${key}`} className="p-3 text-center text-sm border-x border-gray-100">
-                      <div className="flex items-center justify-center gap-2">
-                        {renderCoverageIcon(value)}
-                        {value !== 'no' && value !== 'sí' && (
-                          <span className="text-xs text-gray-600">{value}</span>
-                        )}
-                      </div>
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Mobile View */}
-      <div className="lg:hidden space-y-6">
+      {/* Cards View - Mobile First */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
         {AUTO_THIRD_PARTY_INSURERS.map((insurer) => (
-          <div key={insurer.id} className="bg-white rounded-xl shadow-lg border-2 border-gray-100">
-            {/* Insurer Header */}
-            <div className={`${insurer.color} bg-opacity-10 p-4 border-b-2 border-gray-200`}>
-              <div className="flex items-center gap-3">
+          <div key={insurer.id} className="bg-white rounded-2xl shadow-lg border-2 border-gray-100 hover:border-[#8AAA19] hover:shadow-2xl transition-all duration-300 overflow-hidden group">
+            {/* Header con Logo */}
+            <div className={`bg-gradient-to-br from-[#010139] to-[#020270] p-6 text-white`}>
+              <div className="flex items-center gap-4 mb-4">
                 <InsurerLogo 
                   logoUrl={insurerLogos[insurer.name.toUpperCase()]}
                   insurerName={insurer.name}
                   size="lg"
                 />
-                <h3 className="font-bold text-lg text-[#010139]">{insurer.name}</h3>
+                <h3 className="font-bold text-xl flex-1">{insurer.name}</h3>
+              </div>
+              <div className="text-sm text-white/80 font-medium">
+                Emisión inmediata • Sin inspección
               </div>
             </div>
-            {/* Basic Plan */}
-            <div className="p-4 border-b-2 border-gray-100">
-              <div className="flex items-center justify-between mb-3">
-                <span className="font-semibold text-[#010139]">Plan Básico</span>
+
+            {/* Plan Básico */}
+            <div className="p-6 border-b-2 border-gray-100">
+              <div className="flex items-center justify-between mb-4">
+                <span className="font-bold text-[#010139] text-lg">Plan Básico</span>
                 <div className="text-right">
-                  <div className="text-2xl font-bold text-[#010139]">
-                    B/.{insurer.basicPlan.annualPremium.toFixed(2)}
+                  <div className="text-3xl font-black text-[#010139]">
+                    B/.{insurer.basicPlan.annualPremium.toFixed(0)}
                   </div>
                   <div className="text-xs text-gray-600">/año</div>
                 </div>
               </div>
 
+              {/* Coberturas destacadas */}
               <div className="space-y-2 mb-4">
-                {Object.entries(insurer.basicPlan.coverages).map(([key, value]) => (
+                {Object.entries(insurer.basicPlan.coverages).slice(0, 5).map(([key, value]) => (
                   <div key={key} className="flex items-start justify-between gap-2 text-sm">
                     <span className="text-gray-700">{COVERAGE_LABELS[key as keyof typeof COVERAGE_LABELS]}</span>
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                      {renderCoverageIcon(value)}
-                      {value !== 'no' && value !== 'sí' && (
-                        <span className="text-xs text-gray-600 max-w-[100px] text-right">{value}</span>
-                      )}
+                    <div className="text-right flex-shrink-0">
+                      {renderCoverageValue(value)}
                     </div>
                   </div>
                 ))}
@@ -216,39 +115,47 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
 
               <button
                 onClick={() => handlePlanClick(insurer, insurer.basicPlan, 'basic')}
-                className="w-full px-4 py-3 bg-[#010139] hover:bg-[#020270] text-white rounded-lg transition-all font-semibold"
+                className="w-full px-6 py-3 bg-gradient-to-r from-[#010139] to-[#020270] hover:shadow-lg text-white rounded-xl transition-all font-bold group flex items-center justify-center gap-2"
               >
-                Seleccionar Plan Básico
+                <span>Emitir Ahora</span>
+                <FaArrowRight className="group-hover:translate-x-1 transition-transform" />
               </button>
             </div>
 
-            {/* Premium Plan */}
-            <div className="p-4">
-              <div className="flex items-center justify-between mb-3">
-                <span className="font-semibold text-[#010139]">Plan Premium</span>
+            {/* Plan Premium */}
+            <div className="p-6 bg-gradient-to-br from-green-50 to-white">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-[#010139] text-lg">Plan Premium</span>
+                  <FaStar className="text-[#8AAA19]" />
+                </div>
                 <div className="text-right">
-                  <div className="text-2xl font-bold text-[#8AAA19]">
-                    B/.{insurer.premiumPlan.annualPremium.toFixed(2)}
+                  <div className="text-3xl font-black text-[#8AAA19]">
+                    B/.{insurer.premiumPlan.annualPremium.toFixed(0)}
                   </div>
                   <div className="text-xs text-gray-600">/año</div>
                 </div>
               </div>
 
+              {insurer.premiumPlan.installments.available && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-2 mb-4 text-xs text-gray-700">
+                  💳 {insurer.premiumPlan.installments.description}
+                </div>
+              )}
+
               {insurer.premiumPlan.notes && (
-                <div className="text-xs text-gray-600 mb-3 bg-yellow-50 border border-yellow-200 rounded p-2">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 mb-4 text-xs text-gray-700">
                   {insurer.premiumPlan.notes}
                 </div>
               )}
 
+              {/* Coberturas destacadas */}
               <div className="space-y-2 mb-4">
-                {Object.entries(insurer.premiumPlan.coverages).map(([key, value]) => (
+                {Object.entries(insurer.premiumPlan.coverages).slice(0, 5).map(([key, value]) => (
                   <div key={key} className="flex items-start justify-between gap-2 text-sm">
-                    <span className="text-gray-700">{COVERAGE_LABELS[key as keyof typeof COVERAGE_LABELS]}</span>
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                      {renderCoverageIcon(value)}
-                      {value !== 'no' && value !== 'sí' && (
-                        <span className="text-xs text-gray-600 max-w-[100px] text-right">{value}</span>
-                      )}
+                    <span className="text-gray-700 font-medium">{COVERAGE_LABELS[key as keyof typeof COVERAGE_LABELS]}</span>
+                    <div className="text-right flex-shrink-0">
+                      {renderCoverageValue(value)}
                     </div>
                   </div>
                 ))}
@@ -256,9 +163,10 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
 
               <button
                 onClick={() => handlePlanClick(insurer, insurer.premiumPlan, 'premium')}
-                className="w-full px-4 py-3 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] hover:shadow-lg text-white rounded-lg transition-all font-semibold"
+                className="w-full px-6 py-3 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] hover:shadow-2xl text-white rounded-xl transition-all font-bold group flex items-center justify-center gap-2"
               >
-                Seleccionar Plan Premium
+                <span>Emitir Ahora</span>
+                <FaArrowRight className="group-hover:translate-x-1 transition-transform" />
               </button>
             </div>
           </div>
