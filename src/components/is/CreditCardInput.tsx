@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import Image from 'next/image';
 
 interface CreditCardInputProps {
   onTokenReceived: (token: string, last4: string, brand: string) => void;
@@ -18,6 +19,26 @@ export default function CreditCardInput({ onTokenReceived, onError, environment 
   const [isFlipped, setIsFlipped] = useState(false);
   const [cardBrand, setCardBrand] = useState<'visa' | 'mastercard' | 'amex' | 'unknown'>('unknown');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [hasValidated, setHasValidated] = useState(false);
+  
+  // Validar automáticamente cuando todos los campos estén completos
+  useEffect(() => {
+    const cleanNumber = cardNumber.replace(/\s/g, '');
+    const allFieldsFilled = 
+      cleanNumber.length >= 15 &&
+      cardName.trim().length > 0 &&
+      bankName.trim().length > 0 &&
+      expiry.length === 5 &&
+      cvv.length >= 3;
+    
+    if (allFieldsFilled && !hasValidated && !isProcessing) {
+      const isValid = validateCard();
+      if (isValid) {
+        setHasValidated(true);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cardNumber, cardName, bankName, expiry, cvv, hasValidated, isProcessing]);
 
   // Detectar marca por BIN (primeros 6 dígitos)
   const detectCardBrand = (number: string) => {
@@ -86,42 +107,41 @@ export default function CreditCardInput({ onTokenReceived, onError, environment 
     setExpiry(formatExpiry(e.target.value));
   };
 
-  // Procesar pago (MOCK - sin conexión real)
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
+  // Validar automáticamente cuando se completen todos los campos
+  const validateCard = () => {
     // Validar marca de tarjeta primero
     if (!validateCardBrand()) {
-      return;
+      return false;
     }
     
     // Validaciones
     const cleanNumber = cardNumber.replace(/\s/g, '');
     
     if (!cardName.trim()) {
-      onError('Ingrese el nombre del titular');
-      return;
+      return false;
+    }
+    
+    if (!bankName.trim()) {
+      return false;
     }
     
     if (cleanNumber.length < 15) {
-      onError('Número de tarjeta incompleto');
-      return;
+      return false;
     }
     
     if (!luhnCheck(cleanNumber)) {
       onError('Número de tarjeta inválido');
-      return;
+      return false;
     }
     
     if (!expiry || expiry.length < 5) {
-      onError('Fecha de expiración incompleta');
-      return;
+      return false;
     }
     
     const [month, year] = expiry.split('/');
     if (!month || !year) {
       onError('Fecha de expiración inválida');
-      return;
+      return false;
     }
     
     const expMonth = parseInt(month);
@@ -132,19 +152,19 @@ export default function CreditCardInput({ onTokenReceived, onError, environment 
     
     if (expMonth < 1 || expMonth > 12) {
       onError('Mes de expiración inválido');
-      return;
+      return false;
     }
     
     if (expYear < currentYear || (expYear === currentYear && expMonth < currentMonth)) {
       onError('Tarjeta expirada');
-      return;
+      return false;
     }
     
     if (!cvv || cvv.length < 3) {
-      onError('CVV incompleto');
-      return;
+      return false;
     }
 
+    // Todo OK, procesar token
     setIsProcessing(true);
 
     // MOCK: Simular tokenización (en producción esto llamaría a IS API)
@@ -153,13 +173,11 @@ export default function CreditCardInput({ onTokenReceived, onError, environment 
       const last4 = cleanNumber.slice(-4);
       const brand = cardBrand === 'visa' ? 'Visa' : cardBrand === 'mastercard' ? 'Mastercard' : 'Amex';
       
-      console.log('[MOCK] Token generado:', mockToken);
-      console.log('[MOCK] Last4:', last4);
-      console.log('[MOCK] Brand:', brand);
-      
       setIsProcessing(false);
       onTokenReceived(mockToken, last4, brand);
     }, 1500);
+    
+    return true;
   };
 
   return (
@@ -171,11 +189,11 @@ export default function CreditCardInput({ onTokenReceived, onError, environment 
         }
       `}</style>
       
-    <div className="w-full max-w-md mx-auto">
+    <div className="w-full max-w-[400px] mx-auto">
       {/* Tarjeta 3D */}
       <div className="perspective-1000 mb-8">
         <motion.div
-          className="relative w-full h-56 cursor-pointer"
+          className="relative w-full aspect-[1.586/1] cursor-pointer"
           animate={{ rotateY: isFlipped ? 180 : 0 }}
           transition={{ duration: 0.6 }}
           style={{ transformStyle: 'preserve-3d' }}
@@ -196,24 +214,17 @@ export default function CreditCardInput({ onTokenReceived, onError, environment 
               <div className="absolute inset-0 bg-gradient-to-br from-white/30 via-transparent to-black/10 pointer-events-none" />
               
               <div className="flex justify-between items-start relative z-10">
-                {/* Favicon como chip */}
-                <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center shadow-lg border border-gray-200">
-                  <img src="/favicon.ico" alt="Logo" className="w-10 h-10 object-contain" />
+                {/* Favicon como chip - transparente */}
+                <div className="w-12 h-12 rounded-lg flex items-center justify-center">
+                  <Image src="/favicon.ico" alt="Logo" width={40} height={40} className="object-contain" />
                 </div>
                 
-                <div className="text-right">
+                <div className="text-right flex items-center justify-end">
                   {cardBrand === 'visa' && (
-                    <svg className="h-10 w-auto" viewBox="0 0 141 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <rect width="141" height="48" rx="4" fill="white"/>
-                      <path d="M58.2 15.9L47.4 32.1H40.8L35.7 18.6C35.4 17.7 35.1 17.4 34.2 17.1C32.7 16.5 30.3 15.9 28.2 15.6L28.5 15H39.3C40.5 15 41.7 15.9 42 17.4L44.7 29.1L51.9 15H58.2V15.9ZM84.9 28.5C84.9 21.9 76.5 21.6 76.5 18.6C76.5 17.7 77.4 16.8 79.2 16.5C80.1 16.5 82.5 16.2 85.2 17.7L86.4 12.3C84.9 11.7 82.8 11.1 80.4 11.1C74.4 11.1 70.2 14.4 70.2 19.2C70.2 22.8 73.5 24.6 76.2 25.8C78.9 27 79.8 27.6 79.8 28.8C79.8 30.6 77.7 31.5 75.9 31.5C72.9 31.5 71.4 30.9 69 29.7L67.8 35.4C69.6 36.3 72.6 37.2 75.6 37.2C82.2 37.2 86.4 34.2 84.9 28.5ZM105.9 32.1H111.6L106.8 15H101.7C100.5 15 99.6 15.6 99 16.8L90.3 32.1H96.6L98.1 28.2H105.6L105.9 32.1V32.1ZM99.9 23.7L102.9 16.5L104.7 23.7H99.9ZM67.5 15L62.7 32.1H56.7L61.5 15H67.5Z" fill="#1434CB"/>
-                    </svg>
+                    <Image src="/visa_logo.svg" alt="Visa" width={50} height={24} className="object-contain" />
                   )}
                   {cardBrand === 'mastercard' && (
-                    <svg className="h-10 w-auto" viewBox="0 0 48 30" fill="none" xmlns="http://www.w3.org/2000/svg">
-                      <circle cx="15" cy="15" r="15" fill="#EB001B"/>
-                      <circle cx="33" cy="15" r="15" fill="#F79E1B"/>
-                      <path fillRule="evenodd" clipRule="evenodd" d="M24 26C27.8 26 31.2 24.1 33.3 21C31.2 17.9 27.8 16 24 16C20.2 16 16.8 17.9 14.7 21C16.8 24.1 20.2 26 24 26Z" fill="#FF5F00"/>
-                    </svg>
+                    <Image src="/mastercard_logo.svg" alt="Mastercard" width={45} height={32} className="object-contain" />
                   )}
                   {cardBrand === 'amex' && (
                     <div className="bg-red-50 border border-red-300 px-2 py-1 rounded text-xs text-red-700 font-semibold">
@@ -285,7 +296,7 @@ export default function CreditCardInput({ onTokenReceived, onError, environment 
       </div>
 
       {/* Formulario */}
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={(e) => e.preventDefault()} className="space-y-4">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Número de tarjeta
@@ -357,24 +368,6 @@ export default function CreditCardInput({ onTokenReceived, onError, environment 
             />
           </div>
         </div>
-
-        <button
-          type="submit"
-          disabled={isProcessing}
-          className="w-full bg-[#010139] text-white py-3 rounded-lg font-semibold hover:bg-[#010139]/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {isProcessing ? (
-            <span className="flex items-center justify-center">
-              <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              Procesando...
-            </span>
-          ) : (
-            'Emitir Póliza'
-          )}
-        </button>
       </form>
 
       {environment === 'development' && (

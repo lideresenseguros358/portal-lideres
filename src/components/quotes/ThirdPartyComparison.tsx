@@ -19,14 +19,10 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
     fetch('/api/insurers')
       .then(res => res.json())
       .then(data => {
-        console.log('📥 Respuesta de /api/insurers:', data);
-        
         if (data.success && Array.isArray(data.insurers)) {
           const logos: Record<string, string | null> = {};
           
           data.insurers.forEach((ins: any) => {
-            console.log(`📌 Procesando aseguradora: "${ins.name}" | Logo URL: ${ins.logo_url || 'NO TIENE'}`);
-            
             // Guardar con múltiples variaciones del nombre
             const variations = [
               ins.name.toUpperCase(),
@@ -43,15 +39,10 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
             });
           });
           
-          console.log('✅ Logos almacenados en estado:', logos);
           setInsurerLogos(logos);
-        } else {
-          console.error('❌ Formato de respuesta incorrecto:', data);
         }
       })
-      .catch(err => {
-        console.error('❌ Error cargando logos:', err);
-      });
+      .catch(err => console.error('Error loading insurer logos:', err));
   }, []);
 
   const handlePlanClick = (insurer: AutoInsurer, plan: AutoThirdPartyPlan, type: 'basic' | 'premium') => {
@@ -71,9 +62,6 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
   };
 
   const getLogoUrl = (insurerName: string): string | null => {
-    console.log(`\n🔍 Buscando logo para: "${insurerName}"`);
-    console.log('💾 Logos disponibles en estado:', Object.keys(insurerLogos));
-    
     // Normalizar el nombre buscado
     const normalized = insurerName
       .toUpperCase()
@@ -95,19 +83,12 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
       firstWord,
     ].filter(Boolean);
 
-    console.log('📋 Intentando variaciones:', variations);
-
     for (const variation of variations) {
-      const logoUrl = insurerLogos[variation];
-      console.log(`  - "${variation}": ${logoUrl ? '✅ ENCONTRADO' : '❌ no existe'}`);
-      if (variation && logoUrl) {
-        console.log(`✅ USANDO LOGO: ${logoUrl}`);
-        return logoUrl;
+      if (variation && insurerLogos[variation]) {
+        return insurerLogos[variation];
       }
     }
     
-    console.error(`❌ NO SE ENCONTRÓ LOGO PARA: "${insurerName}"`);
-    console.error(`   Prueba agregar la aseguradora con nombre: "${normalized}" en la BD`);
     return null;
   };
 
