@@ -2,7 +2,6 @@
 
 import { useRouter } from 'next/navigation';
 import { FaCar, FaShieldAlt, FaArrowLeft } from 'react-icons/fa';
-import Link from 'next/link';
 
 export default function CotizarAutoPage() {
   const router = useRouter();
@@ -11,8 +10,8 @@ export default function CotizarAutoPage() {
     if (type === 'third-party') {
       router.push('/cotizadores/third-party');
     } else {
-      // Cobertura completa - usando cotizador de IS
-      router.push('/cotizadores/auto');
+      // Cobertura completa
+      router.push('/cotizadores/auto/completa');
     }
   };
 
@@ -21,13 +20,13 @@ export default function CotizarAutoPage() {
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <Link
-            href="/cotizadores"
+          <a
+            href="https://www.lideresenseguros.com"
             className="inline-flex items-center gap-2 text-[#010139] hover:text-[#8AAA19] transition-colors mb-4 font-semibold"
           >
             <FaArrowLeft />
-            <span>Volver a cotizaciones</span>
-          </Link>
+            <span>Volver al sitio web</span>
+          </a>
 
           <div className="text-center">
             <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-r from-[#010139] to-[#020270] rounded-full mb-4">

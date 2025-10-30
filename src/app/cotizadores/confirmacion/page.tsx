@@ -73,12 +73,12 @@ export default function ConfirmacionPage() {
             </div>
           )}
 
-          <Link
-            href="/cotizadores"
+          <a
+            href="https://www.lideresenseguros.com"
             className="inline-block px-8 py-3 bg-gradient-to-r from-[#010139] to-[#8AAA19] text-white rounded-lg font-semibold hover:opacity-90 transition-opacity shadow-lg"
           >
-            VOLVER AL INICIO
-          </Link>
+            VOLVER AL SITIO WEB
+          </a>
         </div>
       </div>
     );
@@ -108,12 +108,12 @@ export default function ConfirmacionPage() {
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link
-              href="/cotizadores"
+            <a
+              href="https://www.lideresenseguros.com"
               className="px-8 py-3 bg-gray-200 text-gray-800 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
             >
-              VOLVER AL INICIO
-            </Link>
+              VOLVER AL SITIO WEB
+            </a>
             
             {quoteId && (
               <Link
@@ -145,12 +145,12 @@ export default function ConfirmacionPage() {
           Estamos verificando el estado de tu pago. Por favor espera un momento.
         </p>
 
-        <Link
-          href="/cotizadores"
+        <a
+          href="https://www.lideresenseguros.com"
           className="inline-block px-8 py-3 bg-gradient-to-r from-[#010139] to-[#8AAA19] text-white rounded-lg font-semibold hover:opacity-90 transition-opacity shadow-lg"
         >
-          VOLVER AL INICIO
-        </Link>
+          VOLVER AL SITIO WEB
+        </a>
       </div>
     </div>
   );

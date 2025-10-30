@@ -207,6 +207,8 @@ export default function CreditCardInput({ onTokenReceived, onError, environment 
               backgroundSize: '200% 200%',
               animation: 'shimmer 3s ease-in-out infinite',
               backfaceVisibility: 'hidden',
+              WebkitBackfaceVisibility: 'hidden',
+              transform: 'rotateY(0deg)',
             }}
           >
             <div className="p-6 h-full flex flex-col justify-between relative">
@@ -265,6 +267,7 @@ export default function CreditCardInput({ onTokenReceived, onError, environment 
             style={{
               background: 'linear-gradient(135deg, #e8e8e8 0%, #c0c0c0 50%, #d8d8d8 100%)',
               backfaceVisibility: 'hidden',
+              WebkitBackfaceVisibility: 'hidden',
               transform: 'rotateY(180deg)',
             }}
           >

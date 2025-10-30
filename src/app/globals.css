@@ -81,6 +81,35 @@ input[type="number"] {
   appearance: textfield;
 }
 
+/* Mayúsculas automáticas en todos los inputs excepto email y password */
+input:not([type="email"]):not([type="password"]):not([type="number"]) {
+  text-transform: uppercase;
+}
+
+textarea {
+  text-transform: uppercase;
+}
+
+/* Mejorar inputs de fecha y select en mobile */
+@media (max-width: 768px) {
+  input[type="date"],
+  input[type="datetime-local"],
+  input[type="time"],
+  select {
+    min-height: 44px !important;
+    font-size: 16px !important;
+    padding: 0.75rem !important;
+  }
+  
+  /* Centrar texto de botones submit en mobile */
+  button[type="submit"] {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    text-align: center !important;
+  }
+}
+
 @layer components {
   .card {
     @apply bg-white rounded-xl shadow-md p-6;

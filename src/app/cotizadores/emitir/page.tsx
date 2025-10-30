@@ -5,20 +5,20 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useSearchParams } from 'next/navigation';
-import { useCheckout } from '@/lib/cotizadores/hooks/useCheckout';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { useUppercaseInputs } from '@/lib/cotizadores/hooks/useUppercaseInputs';
-import { useOnline } from '@/lib/cotizadores/hooks/useOnline';
+import { toast } from 'sonner';
 import InsurerBadge from '@/components/cotizadores/InsurerBadge';
-import OfflineBanner from '@/components/cotizadores/OfflineBanner';
+import CreditCardInput from '@/components/is/CreditCardInput';
 import type { QuoteOption } from '@/lib/cotizadores/types';
 
 export default function EmitirPage() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const quoteId = searchParams.get('quoteId');
-  const { goToCheckout, buildReturnUrl } = useCheckout();
   const { createUppercaseHandler } = useUppercaseInputs();
-  const isOnline = useOnline();
+  const [showPayment, setShowPayment] = useState(false);
+  const [paymentComplete, setPaymentComplete] = useState(false);
 
   const [selectedOption, setSelectedOption] = useState<QuoteOption | null>(null);
   const [contactData, setContactData] = useState({
@@ -40,26 +40,42 @@ export default function EmitirPage() {
     e.preventDefault();
 
     if (!selectedOption || !quoteId) {
-      alert('Error: Información incompleta');
+      toast.error('Error: Información incompleta');
       return;
     }
 
     // Validaciones básicas
     if (!contactData.nombre || !contactData.email || !contactData.telefono) {
-      alert('Por favor completa todos los campos obligatorios');
+      toast.error('Por favor completa todos los campos obligatorios');
       return;
     }
 
-    // Construir concept para Wix
-    const concept = `${selectedOption.insurerName}-${selectedOption.planName}`.substring(0, 100);
+    // Mostrar formulario de pago
+    setShowPayment(true);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
-    // Redirigir a Wix para pago
-    goToCheckout({
-      quoteId: quoteId,
-      amount: selectedOption.prima,
-      concept: concept,
-      returnUrl: buildReturnUrl()
-    });
+  const handlePaymentSuccess = (token: string, last4: string, brand: string) => {
+    // TODO: Enviar a backend para crear caso/póliza
+    console.log('Pago procesado:', { quoteId, token, last4, brand, contactData });
+    
+    setPaymentComplete(true);
+    toast.success('¡Pago procesado exitosamente!');
+    
+    // Guardar datos para confirmación
+    sessionStorage.setItem('paymentData', JSON.stringify({
+      quoteId,
+      token,
+      last4,
+      brand,
+      contactData,
+      selectedOption
+    }));
+    
+    // Redirigir a confirmación después de 2 segundos
+    setTimeout(() => {
+      router.push(`/cotizadores/confirmacion?quoteId=${quoteId}`);
+    }, 2000);
   };
 
   if (!selectedOption) {
@@ -72,9 +88,69 @@ export default function EmitirPage() {
     );
   }
 
+  if (paymentComplete) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-8">
+        <div className="bg-white rounded-2xl shadow-lg border-2 border-green-200 p-8 text-center">
+          <div className="text-6xl mb-4">✅</div>
+          <h2 className="text-2xl font-bold text-green-600 mb-2">¡Pago Exitoso!</h2>
+          <p className="text-gray-600">Redirigiendo a confirmación...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (showPayment) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-8">
+        <div className="mb-6">
+          <h1 className="text-3xl md:text-4xl font-bold text-[#010139] mb-2">
+            Pago de Póliza
+          </h1>
+          <p className="text-gray-600">
+            Ingresa los datos de tu tarjeta para completar el pago
+          </p>
+        </div>
+
+        {/* Resumen de pago */}
+        <div className="bg-white rounded-2xl shadow-lg border-2 border-gray-100 p-6 mb-6">
+          <div className="flex justify-between items-center">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-800">{selectedOption.insurerName}</h3>
+              <p className="text-sm text-gray-600">{selectedOption.planName}</p>
+            </div>
+            <div className="text-right">
+              <div className="text-3xl font-bold text-[#8AAA19]">
+                ${selectedOption.prima.toLocaleString()}
+              </div>
+              <div className="text-sm text-gray-500">USD/año</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Formulario de pago */}
+        <div className="bg-white rounded-2xl shadow-lg border-2 border-gray-100 p-6">
+          <CreditCardInput
+            onTokenReceived={handlePaymentSuccess}
+            onError={(error) => toast.error(error)}
+            environment="development"
+          />
+        </div>
+
+        <div className="mt-4">
+          <button
+            onClick={() => setShowPayment(false)}
+            className="text-gray-600 hover:text-gray-800 font-semibold"
+          >
+            ← Volver a datos de contacto
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
-      <OfflineBanner />
       
       <div className="max-w-4xl mx-auto px-4 py-8">
         <div className="mb-6">
@@ -200,12 +276,12 @@ export default function EmitirPage() {
           {/* Info sobre pago */}
           <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
             <div className="flex gap-3">
-              <div className="text-2xl">🔒</div>
+              <div className="text-2xl">💳</div>
               <div>
-                <h4 className="font-semibold text-blue-900 mb-1">Pago seguro</h4>
+                <h4 className="font-semibold text-blue-900 mb-1">Pago seguro con tarjeta</h4>
                 <p className="text-sm text-blue-800">
-                  Serás redirigido a nuestro portal de pagos seguro para completar la transacción. 
-                  No almacenamos información de tarjetas de crédito.
+                  En el siguiente paso ingresarás los datos de tu tarjeta de crédito de forma segura. 
+                  Aceptamos Visa y Mastercard.
                 </p>
               </div>
             </div>
@@ -215,10 +291,9 @@ export default function EmitirPage() {
           <div className="pt-4">
             <button
               type="submit"
-              disabled={!isOnline}
-              className="w-full px-6 py-4 bg-gradient-to-r from-[#010139] to-[#8AAA19] text-white rounded-lg font-bold text-lg hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+              className="w-full px-6 py-4 bg-gradient-to-r from-[#010139] to-[#8AAA19] text-white rounded-lg font-bold text-lg hover:opacity-90 transition-opacity shadow-lg"
             >
-              {!isOnline ? '⚠️ SIN CONEXIÓN' : 'IR A PAGO (WIX)'}
+              CONTINUAR A PAGO
             </button>
 
             <p className="text-xs text-gray-500 text-center mt-3">

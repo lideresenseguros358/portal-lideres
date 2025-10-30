@@ -118,12 +118,12 @@ export default function ThirdPartyIssuePage() {
             </div>
 
             <div className="flex flex-col sm:flex-row gap-4">
-              <Link
-                href="/cotizadores"
+              <a
+                href="https://www.lideresenseguros.com"
                 className="flex-1 px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-all font-semibold text-center"
               >
-                Nueva Cotización
-              </Link>
+                Volver al Sitio Web
+              </a>
               <Link
                 href="/dashboard"
                 className="flex-1 px-6 py-3 bg-gradient-to-r from-[#010139] to-[#020270] text-white rounded-lg hover:shadow-lg transition-all font-semibold text-center"
