@@ -9,10 +9,10 @@ export default function CotizarAutoPage() {
 
   const handleCoverageSelection = (type: 'third-party' | 'full-coverage') => {
     if (type === 'third-party') {
-      router.push('/quotes/third-party');
+      router.push('/cotizadores/third-party');
     } else {
-      // Cobertura completa
-      router.push('/quotes/is/auto');
+      // Cobertura completa - usando cotizador de IS
+      router.push('/cotizadores/auto');
     }
   };
 
