@@ -91,6 +91,7 @@ export default function DownloadsInsurerPage() {
             insurerId={insurerId}
             sections={sections}
             isMaster={isMaster}
+            onUpdate={loadData}
           />
         )}
       </div>

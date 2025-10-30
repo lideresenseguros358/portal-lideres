@@ -60,7 +60,7 @@ const policyTypes = [
 
 export default function PolicyTypeGrid() {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5 lg:gap-6">
       {policyTypes.map(policy => {
         const Icon = policy.icon;
         
@@ -70,41 +70,45 @@ export default function PolicyTypeGrid() {
             href={policy.href}
             className="group block"
           >
-            <div className={`relative bg-white rounded-2xl shadow-lg border-2 border-gray-200 p-4 sm:p-6 hover:shadow-2xl ${policy.hoverBorder} hover:-translate-y-2 transition-all duration-300 overflow-hidden`}>
+            <div className={`relative bg-white rounded-xl sm:rounded-2xl shadow-lg border-2 border-gray-200 p-5 sm:p-6 hover:shadow-2xl ${policy.hoverBorder} active:scale-95 sm:hover:-translate-y-2 transition-all duration-300 overflow-hidden min-h-[200px] sm:min-h-[220px] flex flex-col`}>
               {/* Badge */}
-              <div className="absolute top-3 right-3">
-                <span className="inline-block px-2 py-1 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white text-xs font-bold rounded-full shadow-md">
+              <div className="absolute top-3 right-3 z-10">
+                <span className="inline-block px-2.5 py-1 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white text-xs font-bold rounded-full shadow-md">
                   {policy.badge}
                 </span>
               </div>
               
               {/* Icon */}
-              <div className={`w-14 h-14 sm:w-16 sm:h-16 rounded-xl ${policy.iconBg} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300 shadow-md`}>
-                <Icon className={`text-2xl sm:text-3xl ${policy.iconColor}`} />
+              <div className={`w-16 h-16 sm:w-18 sm:h-18 rounded-xl ${policy.iconBg} flex items-center justify-center mb-3 sm:mb-4 group-hover:scale-110 transition-transform duration-300 shadow-md`}>
+                <Icon className={`text-3xl sm:text-4xl ${policy.iconColor}`} />
               </div>
               
-              {/* Title */}
-              <h3 className="text-lg sm:text-xl font-bold text-[#010139] mb-2 group-hover:text-[#8AAA19] transition-colors">
-                {policy.title}
-              </h3>
-              
-              {/* Description */}
-              <p className="text-gray-600 text-xs sm:text-sm mb-4 min-h-[2.5rem]">
-                {policy.description}
-              </p>
-              
-              {/* CTA Button */}
-              <div className="flex items-center justify-between">
-                <div className={`inline-flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg bg-gradient-to-r ${policy.gradient} text-white text-xs sm:text-sm font-bold shadow-lg group-hover:shadow-xl transition-shadow`}>
-                  COTIZAR Y EMITIR
+              {/* Content */}
+              <div className="flex-1 flex flex-col">
+                {/* Title */}
+                <h3 className="text-xl sm:text-2xl font-bold text-[#010139] mb-2 group-hover:text-[#8AAA19] transition-colors">
+                  {policy.title}
+                </h3>
+                
+                {/* Description */}
+                <p className="text-gray-600 text-sm sm:text-base mb-4 flex-1 leading-snug">
+                  {policy.description}
+                </p>
+                
+                {/* CTA Button */}
+                <div className="flex items-center justify-between mt-auto">
+                  <div className={`inline-flex items-center gap-2 px-4 py-2.5 sm:py-2 rounded-lg bg-gradient-to-r ${policy.gradient} text-white text-sm font-bold shadow-lg group-hover:shadow-xl transition-shadow`}>
+                    <span className="hidden sm:inline">COTIZAR Y EMITIR</span>
+                    <span className="sm:hidden">COTIZAR</span>
+                  </div>
+                  <span className="text-[#8AAA19] font-bold text-2xl group-hover:translate-x-1 transition-transform">
+                    →
+                  </span>
                 </div>
-                <span className="text-[#8AAA19] font-bold text-xl group-hover:translate-x-1 transition-transform">
-                  →
-                </span>
               </div>
               
               {/* Decorative Element */}
-              <div className="absolute -bottom-4 -right-4 w-24 h-24 bg-gradient-to-br from-gray-50 to-gray-100 rounded-full opacity-50 group-hover:opacity-100 transition-opacity"></div>
+              <div className="absolute -bottom-6 -right-6 w-28 h-28 bg-gradient-to-br from-gray-50 to-gray-100 rounded-full opacity-50 group-hover:opacity-100 transition-opacity"></div>
             </div>
           </Link>
         );

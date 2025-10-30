@@ -15,14 +15,14 @@ export default function CotizadoresLayout({ children }: { children: ReactNode })
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4">
           <div className="flex items-center justify-between">
             {/* Back Button */}
-            <Link 
-              href="/"
+            <a 
+              href="https://www.lideresenseguros.com"
               className="flex items-center gap-2 text-gray-600 hover:text-[#010139] transition-colors group"
             >
               <FaArrowLeft className="group-hover:-translate-x-1 transition-transform" />
-              <span className="font-semibold text-sm sm:text-base hidden xs:inline">Volver al inicio</span>
+              <span className="font-semibold text-sm sm:text-base hidden xs:inline">Volver al sitio web</span>
               <span className="font-semibold text-sm xs:hidden">Volver</span>
-            </Link>
+            </a>
             
             {/* Logo */}
             <div className="flex items-center gap-2 sm:gap-3">
