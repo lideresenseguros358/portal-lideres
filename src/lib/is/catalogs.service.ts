@@ -6,6 +6,9 @@
 import { ISEnvironment, IS_ENDPOINTS, CACHE_TTL } from './config';
 import { isGet } from './http-client';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import type { Database } from '@/lib/database.types';
+
+type Json = Database['public']['Tables']['is_catalogs']['Row']['catalog_data'];
 
 export interface Marca {
   vcodmarca: string;
@@ -96,7 +99,7 @@ async function getCatalog<T>(
     .from('is_catalogs')
     .upsert({
       catalog_type: catalogType,
-      catalog_data: data,
+      catalog_data: data as unknown as Json,
       environment: env,
     }, {
       onConflict: 'catalog_type,environment',

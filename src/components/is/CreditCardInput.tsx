@@ -100,6 +100,11 @@ export default function CreditCardInput({ onTokenReceived, onError, environment 
     }
     
     const [month, year] = expiry.split('/');
+    if (!month || !year) {
+      onError('Fecha de expiración inválida');
+      return;
+    }
+    
     const expMonth = parseInt(month);
     const expYear = parseInt('20' + year);
     const now = new Date();
