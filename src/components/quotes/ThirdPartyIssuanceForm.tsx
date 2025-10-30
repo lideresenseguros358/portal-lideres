@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FaUser, FaCar, FaIdCard, FaCheck } from 'react-icons/fa';
+import { FaUser, FaCar, FaIdCard, FaCheck, FaCreditCard } from 'react-icons/fa';
 import { toast } from 'sonner';
+import CreditCardInput from '@/components/is/CreditCardInput';
 
 interface FormData {
   // Datos Personales
@@ -102,6 +103,15 @@ export default function ThirdPartyIssuanceForm({
 
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  
+  // Credit card data
+  const [cardData, setCardData] = useState({
+    cardNumber: '',
+    expiry: '',
+    cvv: '',
+    cardholderName: '',
+  });
+  const [paymentValid, setPaymentValid] = useState(false);
 
   // Auto-fill driver data when "same as contractor" is checked
   useEffect(() => {
@@ -159,6 +169,13 @@ export default function ThirdPartyIssuanceForm({
         }
         return true;
 
+      case 4: // Pago con tarjeta
+        if (!paymentValid) {
+          toast.error('Por favor completa todos los datos de la tarjeta de crédito');
+          return false;
+        }
+        return true;
+
       default:
         return true;
     }
@@ -179,14 +196,15 @@ export default function ThirdPartyIssuanceForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!validateStep(3)) return;
+    if (!validateStep(4)) return;
 
     setLoading(true);
     try {
-      await onSubmit(formData);
+      // Include card data in submission (cast to any for now, API will handle it)
+      await onSubmit({ ...formData, paymentData: cardData } as any);
     } catch (error) {
       console.error('Error submitting form:', error);
-      toast.error('Error al enviar el formulario');
+      toast.error('Error al procesar el pago');
     } finally {
       setLoading(false);
     }
@@ -194,7 +212,7 @@ export default function ThirdPartyIssuanceForm({
 
   const renderStepIndicator = () => (
     <div className="flex items-center justify-center gap-2 mb-8">
-      {[1, 2, 3].map((step) => (
+      {[1, 2, 3, 4].map((step) => (
         <div key={step} className="flex items-center">
           <div className={`
             flex items-center justify-center w-10 h-10 rounded-full font-bold text-sm
@@ -203,8 +221,8 @@ export default function ThirdPartyIssuanceForm({
           `}>
             {currentStep > step ? <FaCheck /> : step}
           </div>
-          {step < 3 && (
-            <div className={`w-12 md:w-24 h-1 ${currentStep > step ? 'bg-green-500' : 'bg-gray-200'}`} />
+          {step < 4 && (
+            <div className={`w-8 md:w-16 h-1 ${currentStep > step ? 'bg-green-500' : 'bg-gray-200'}`} />
           )}
         </div>
       ))}
@@ -587,6 +605,50 @@ export default function ThirdPartyIssuanceForm({
     </div>
   );
 
+  const renderPaymentStep = () => (
+    <div className="space-y-6">
+      <div className="flex items-center gap-3 mb-6">
+        <div className="bg-[#8AAA19] p-3 rounded-full">
+          <FaCreditCard className="text-white" size={24} />
+        </div>
+        <div>
+          <h2 className="text-2xl font-bold text-[#010139]">Pago con Tarjeta de Crédito</h2>
+          <p className="text-sm text-gray-600">Información de pago para emisión inmediata</p>
+        </div>
+      </div>
+
+      <div className="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-4 mb-6">
+        <div className="flex items-start gap-3">
+          <div className="text-2xl">💳</div>
+          <div>
+            <p className="font-semibold text-[#010139] mb-1">Pago seguro</p>
+            <p className="text-sm text-gray-700">
+              Tu póliza será emitida inmediatamente una vez procesemos el pago con tu tarjeta de crédito. 
+              Toda la información es encriptada y segura.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <CreditCardInput
+        onTokenReceived={(token, last4, brand) => {
+          setCardData({ 
+            ...cardData, 
+            cardNumber: last4,
+            cardholderName: `**** **** **** ${last4}` 
+          });
+          setPaymentValid(true);
+          toast.success('Tarjeta validada correctamente');
+        }}
+        onError={(message) => {
+          setPaymentValid(false);
+          toast.error(message);
+        }}
+        environment="development"
+      />
+    </div>
+  );
+
   return (
     <form onSubmit={handleSubmit} className="max-w-4xl mx-auto">
       {/* Plan Summary */}
@@ -611,6 +673,7 @@ export default function ThirdPartyIssuanceForm({
         {currentStep === 1 && renderPersonalDataStep()}
         {currentStep === 2 && renderVehicleDataStep()}
         {currentStep === 3 && renderDriverDataStep()}
+        {currentStep === 4 && renderPaymentStep()}
       </div>
 
       {/* Navigation Buttons */}
@@ -627,7 +690,7 @@ export default function ThirdPartyIssuanceForm({
 
         <div className="flex-1" />
 
-        {currentStep < 3 ? (
+        {currentStep < 4 ? (
           <button
             type="button"
             onClick={handleNext}
@@ -648,8 +711,8 @@ export default function ThirdPartyIssuanceForm({
               </>
             ) : (
               <>
-                <FaCheck />
-                Enviar Solicitud
+                <FaCreditCard />
+                Emitir
               </>
             )}
           </button>
@@ -658,8 +721,8 @@ export default function ThirdPartyIssuanceForm({
 
       {/* Help Text */}
       <div className="mt-6 text-center text-sm text-gray-600">
-        <p>Al enviar esta solicitud, aceptas nuestros términos y condiciones.</p>
-        <p className="mt-1">Un asesor se pondrá en contacto contigo para finalizar la emisión.</p>
+        <p>Al emitir esta póliza, aceptas nuestros términos y condiciones.</p>
+        <p className="mt-1">La póliza será emitida inmediatamente una vez procesemos el pago.</p>
       </div>
     </form>
   );

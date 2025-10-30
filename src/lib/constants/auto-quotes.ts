@@ -109,10 +109,11 @@ export const AUTO_THIRD_PARTY_INSURERS: AutoInsurer[] = [
       annualPremium: 115.00,
       installments: {
         available: true,
-        description: 'Dos pagos de B/.70.00',
+        description: 'Dos pagos de B/.70.00 (Total B/.140.00 a cuotas)',
         amount: 70.00,
         payments: 2,
       },
+      notes: 'Prima anual B/.115 al contado o B/.140 en dos pagos de B/.70',
     },
     premiumPlan: {
       name: 'Plan Premium',
@@ -132,10 +133,11 @@ export const AUTO_THIRD_PARTY_INSURERS: AutoInsurer[] = [
       annualPremium: 150.00,
       installments: {
         available: true,
-        description: 'Dos pagos de B/.91.31',
+        description: 'Dos pagos de B/.91.31 (Total B/.182.61 a cuotas)',
         amount: 91.31,
         payments: 2,
       },
+      notes: 'Prima anual B/.150 al contado o B/.182.61 en dos pagos de B/.91.31',
     },
   },
   {
@@ -206,12 +208,11 @@ export const AUTO_THIRD_PARTY_INSURERS: AutoInsurer[] = [
         towing: 'no',
         legalAssistance: 'sí',
       },
-      annualPremium: 150.00,
+      annualPremium: 140.00,
       installments: {
         available: false,
         description: 'No aplica',
       },
-      notes: '💳 Más económico si se paga con tarjeta de crédito.',
     },
     premiumPlan: {
       name: 'Plan Premium',
@@ -228,12 +229,11 @@ export const AUTO_THIRD_PARTY_INSURERS: AutoInsurer[] = [
         towing: 'Por accidente o avería (hasta B/.150.00 o máximo 3 eventos por año)',
         legalAssistance: 'sí',
       },
-      annualPremium: 195.00,
+      annualPremium: 185.00,
       installments: {
         available: false,
         description: 'No aplica',
       },
-      notes: '💳 Más económico si se paga con tarjeta de crédito.',
     },
   },
   {
