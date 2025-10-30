@@ -28,6 +28,19 @@ export default function CreditCardInput({ onTokenReceived, onError, environment 
     return 'unknown';
   };
 
+  // Validar que solo sea Visa o Mastercard
+  const validateCardBrand = () => {
+    if (cardBrand === 'amex') {
+      onError('Lo sentimos, no aceptamos tarjetas American Express. Solo Visa y Mastercard.');
+      return false;
+    }
+    if (cardBrand === 'unknown' && cardNumber.replace(/\s/g, '').length >= 4) {
+      onError('Tipo de tarjeta no reconocido. Solo aceptamos Visa y Mastercard.');
+      return false;
+    }
+    return true;
+  };
+
   // Formatear número de tarjeta
   const formatCardNumber = (value: string) => {
     const cleaned = value.replace(/\D/g, '');
@@ -76,6 +89,11 @@ export default function CreditCardInput({ onTokenReceived, onError, environment 
   // Procesar pago (MOCK - sin conexión real)
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validar marca de tarjeta primero
+    if (!validateCardBrand()) {
+      return;
+    }
     
     // Validaciones
     const cleanNumber = cardNumber.replace(/\s/g, '');
@@ -178,26 +196,28 @@ export default function CreditCardInput({ onTokenReceived, onError, environment 
               <div className="absolute inset-0 bg-gradient-to-br from-white/30 via-transparent to-black/10 pointer-events-none" />
               
               <div className="flex justify-between items-start relative z-10">
-                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#010139] to-[#020270] flex items-center justify-center shadow-lg">
-                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#8AAA19] to-[#6d8814]" />
+                {/* Favicon como chip */}
+                <div className="w-12 h-12 bg-white rounded-lg flex items-center justify-center shadow-lg border border-gray-200">
+                  <img src="/favicon.ico" alt="Logo" className="w-10 h-10 object-contain" />
                 </div>
+                
                 <div className="text-right">
                   {cardBrand === 'visa' && (
-                    <div className="bg-white px-3 py-1.5 rounded-lg shadow-md">
-                      <svg className="h-8 w-auto" viewBox="0 0 48 16" fill="none">
-                        <path d="M20.5 2L17 14h-3l3.5-12h3zm8 0l-3 8-1-8h-3l2 12h2.5l5-12h-2.5zm7.5 0c-1 0-2 .5-2.5 1.5l-2.5 8.5h3l.5-2h3.5l.5 2h3L38 2h-2zm-.5 3.5l1 4.5h-2l1-4.5zM8 2L5 11 4.5 8.5 3 3.5c-.5-1-1-1.5-2-1.5H0l3.5 12h3.5L11 2H8z" fill="#1434CB"/>
-                      </svg>
-                    </div>
+                    <svg className="h-10 w-auto" viewBox="0 0 141 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <rect width="141" height="48" rx="4" fill="white"/>
+                      <path d="M58.2 15.9L47.4 32.1H40.8L35.7 18.6C35.4 17.7 35.1 17.4 34.2 17.1C32.7 16.5 30.3 15.9 28.2 15.6L28.5 15H39.3C40.5 15 41.7 15.9 42 17.4L44.7 29.1L51.9 15H58.2V15.9ZM84.9 28.5C84.9 21.9 76.5 21.6 76.5 18.6C76.5 17.7 77.4 16.8 79.2 16.5C80.1 16.5 82.5 16.2 85.2 17.7L86.4 12.3C84.9 11.7 82.8 11.1 80.4 11.1C74.4 11.1 70.2 14.4 70.2 19.2C70.2 22.8 73.5 24.6 76.2 25.8C78.9 27 79.8 27.6 79.8 28.8C79.8 30.6 77.7 31.5 75.9 31.5C72.9 31.5 71.4 30.9 69 29.7L67.8 35.4C69.6 36.3 72.6 37.2 75.6 37.2C82.2 37.2 86.4 34.2 84.9 28.5ZM105.9 32.1H111.6L106.8 15H101.7C100.5 15 99.6 15.6 99 16.8L90.3 32.1H96.6L98.1 28.2H105.6L105.9 32.1V32.1ZM99.9 23.7L102.9 16.5L104.7 23.7H99.9ZM67.5 15L62.7 32.1H56.7L61.5 15H67.5Z" fill="#1434CB"/>
+                    </svg>
                   )}
                   {cardBrand === 'mastercard' && (
-                    <div className="flex items-center gap-1">
-                      <div className="w-8 h-8 rounded-full bg-red-500 opacity-90" />
-                      <div className="w-8 h-8 rounded-full bg-orange-400 opacity-90 -ml-4" />
-                    </div>
+                    <svg className="h-10 w-auto" viewBox="0 0 48 30" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <circle cx="15" cy="15" r="15" fill="#EB001B"/>
+                      <circle cx="33" cy="15" r="15" fill="#F79E1B"/>
+                      <path fillRule="evenodd" clipRule="evenodd" d="M24 26C27.8 26 31.2 24.1 33.3 21C31.2 17.9 27.8 16 24 16C20.2 16 16.8 17.9 14.7 21C16.8 24.1 20.2 26 24 26Z" fill="#FF5F00"/>
+                    </svg>
                   )}
                   {cardBrand === 'amex' && (
-                    <div className="bg-[#006FCF] px-3 py-1.5 rounded-lg shadow-md">
-                      <div className="text-white text-sm font-bold">AMEX</div>
+                    <div className="bg-red-50 border border-red-300 px-2 py-1 rounded text-xs text-red-700 font-semibold">
+                      No aceptada
                     </div>
                   )}
                 </div>

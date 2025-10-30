@@ -19,27 +19,39 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
     fetch('/api/insurers')
       .then(res => res.json())
       .then(data => {
-        if (data.success) {
+        console.log('📥 Respuesta de /api/insurers:', data);
+        
+        if (data.success && Array.isArray(data.insurers)) {
           const logos: Record<string, string | null> = {};
+          
           data.insurers.forEach((ins: any) => {
-            // Normalizar nombre: quitar "Seguros", "de", espacios extras, etc.
-            const normalizedName = ins.name
-              .toUpperCase()
-              .replace(/\s+SEGUROS$/i, '')
-              .replace(/\s+DE\s+/gi, ' ')
-              .replace(/PANAMÁ/gi, 'PANAMA')
-              .trim();
+            console.log(`📌 Procesando aseguradora: "${ins.name}" | Logo URL: ${ins.logo_url || 'NO TIENE'}`);
             
-            // Guardar con el nombre normalizado
-            logos[normalizedName] = ins.logo_url;
-            // También guardar con el nombre completo original
-            logos[ins.name.toUpperCase()] = ins.logo_url;
+            // Guardar con múltiples variaciones del nombre
+            const variations = [
+              ins.name.toUpperCase(),
+              ins.name.toUpperCase().replace(/\s+SEGUROS$/i, '').trim(),
+              ins.name.toUpperCase().replace(/\s+DE\s+/gi, ' ').trim(),
+              ins.name.toUpperCase().replace(/PANAMÁ/gi, 'PANAMA').trim(),
+              ins.name.toUpperCase().split(' ')[0], // Primera palabra
+            ];
+            
+            variations.forEach(variation => {
+              if (variation && !logos[variation]) {
+                logos[variation] = ins.logo_url;
+              }
+            });
           });
+          
+          console.log('✅ Logos almacenados en estado:', logos);
           setInsurerLogos(logos);
-          console.log('Logos cargados:', logos); // Debug
+        } else {
+          console.error('❌ Formato de respuesta incorrecto:', data);
         }
       })
-      .catch(err => console.error('Error loading insurer logos:', err));
+      .catch(err => {
+        console.error('❌ Error cargando logos:', err);
+      });
   }, []);
 
   const handlePlanClick = (insurer: AutoInsurer, plan: AutoThirdPartyPlan, type: 'basic' | 'premium') => {
@@ -59,27 +71,43 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
   };
 
   const getLogoUrl = (insurerName: string): string | null => {
-    // Intentar múltiples variaciones del nombre
+    console.log(`\n🔍 Buscando logo para: "${insurerName}"`);
+    console.log('💾 Logos disponibles en estado:', Object.keys(insurerLogos));
+    
+    // Normalizar el nombre buscado
+    const normalized = insurerName
+      .toUpperCase()
+      .replace(/PANAMÁ/gi, 'PANAMA')
+      .replace(/Á/g, 'A')
+      .replace(/É/g, 'E')
+      .replace(/Í/g, 'I')
+      .replace(/Ó/g, 'O')
+      .replace(/Ú/g, 'U')
+      .trim();
+    
+    // Intentar múltiples variaciones
+    const firstWord = normalized.split(' ')[0] || '';
     const variations = [
-      insurerName.toUpperCase(), // Nombre completo
-      insurerName.toUpperCase().replace(/\s+SEGUROS$/i, '').trim(), // Sin "Seguros"
-      insurerName.toUpperCase().replace(/\s+DE\s+/gi, ' ').trim(), // Sin "de"
-      insurerName.toUpperCase().replace(/PANAMÁ/gi, 'PANAMA').trim(), // Panama sin acento
-      insurerName.toUpperCase().replace(/\s+SEGUROS$/i, '').replace(/\s+DE\s+/gi, ' ').trim(), // Sin "Seguros" ni "de"
-    ];
+      normalized,
+      normalized.replace(/\s+SEGUROS$/i, '').trim(),
+      normalized.replace(/\s+DE\s+/gi, ' ').trim(),
+      normalized.replace(/\s+SEGUROS$/i, '').replace(/\s+DE\s+/gi, ' ').trim(),
+      firstWord,
+    ].filter(Boolean);
 
-    console.log(`Buscando logo para: ${insurerName}`);
-    console.log('Variaciones probadas:', variations);
-    console.log('Logos disponibles:', Object.keys(insurerLogos));
+    console.log('📋 Intentando variaciones:', variations);
 
     for (const variation of variations) {
-      if (insurerLogos[variation]) {
-        console.log(`✓ Logo encontrado con variación: ${variation} -> ${insurerLogos[variation]}`);
-        return insurerLogos[variation];
+      const logoUrl = insurerLogos[variation];
+      console.log(`  - "${variation}": ${logoUrl ? '✅ ENCONTRADO' : '❌ no existe'}`);
+      if (variation && logoUrl) {
+        console.log(`✅ USANDO LOGO: ${logoUrl}`);
+        return logoUrl;
       }
     }
     
-    console.log(`✗ No se encontró logo para: ${insurerName}`);
+    console.error(`❌ NO SE ENCONTRÓ LOGO PARA: "${insurerName}"`);
+    console.error(`   Prueba agregar la aseguradora con nombre: "${normalized}" en la BD`);
     return null;
   };
 
@@ -137,6 +165,18 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
                   <div className="text-xs text-gray-600">/año</div>
                 </div>
               </div>
+
+              {insurer.basicPlan.installments.available && (
+                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-2 mb-4 text-xs text-gray-700">
+                  💳 {insurer.basicPlan.installments.description}
+                </div>
+              )}
+
+              {insurer.basicPlan.notes && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-2 mb-4 text-xs text-gray-700">
+                  {insurer.basicPlan.notes}
+                </div>
+              )}
 
               {/* Coberturas destacadas */}
               <div className="space-y-2 mb-4">

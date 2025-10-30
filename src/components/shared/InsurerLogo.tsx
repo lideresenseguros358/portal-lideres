@@ -39,12 +39,13 @@ export default function InsurerLogo({
         flex items-center justify-center 
         overflow-hidden
         flex-shrink-0
+        shadow-md
         ${className}
       `}
       title={insurerName}
     >
       {logoUrl ? (
-        <div className="w-full h-full p-1.5 flex items-center justify-center">
+        <div className="w-full h-full p-2 flex items-center justify-center bg-gradient-to-br from-[#010139] to-[#020270]">
           <Image 
             src={logoUrl} 
             alt={insurerName}
@@ -54,14 +55,13 @@ export default function InsurerLogo({
             style={{ 
               maxWidth: '100%',
               maxHeight: '100%',
-              filter: 'brightness(1.1)' // Brighten slightly for better visibility
             }}
             unoptimized
           />
         </div>
       ) : (
-        <div className="text-white font-bold text-sm">
-          {insurerName.charAt(0)}
+        <div className="text-white font-bold text-sm uppercase">
+          {insurerName.split(' ').map(w => w.charAt(0)).join('').slice(0, 2)}
         </div>
       )}
     </div>

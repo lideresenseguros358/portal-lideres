@@ -6,10 +6,16 @@ export async function GET(request: NextRequest) {
     const includeInactive = request.nextUrl.searchParams.get('includeInactive') === 'true';
     const insurers = await listInsurers(includeInactive);
     
-    return NextResponse.json(insurers);
+    return NextResponse.json({
+      success: true,
+      insurers: insurers
+    });
   } catch (error) {
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Error desconocido' },
+      { 
+        success: false,
+        error: error instanceof Error ? error.message : 'Error desconocido' 
+      },
       { status: 500 }
     );
   }
