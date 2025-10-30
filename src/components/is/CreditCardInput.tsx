@@ -12,6 +12,7 @@ interface CreditCardInputProps {
 export default function CreditCardInput({ onTokenReceived, onError, environment = 'development' }: CreditCardInputProps) {
   const [cardNumber, setCardNumber] = useState('');
   const [cardName, setCardName] = useState('');
+  const [bankName, setBankName] = useState('');
   const [expiry, setExpiry] = useState('');
   const [cvv, setCvv] = useState('');
   const [isFlipped, setIsFlipped] = useState(false);
@@ -144,6 +145,14 @@ export default function CreditCardInput({ onTokenReceived, onError, environment 
   };
 
   return (
+    <>
+      <style jsx>{`
+        @keyframes shimmer {
+          0%, 100% { background-position: 0% 50%; }
+          50% { background-position: 100% 50%; }
+        }
+      `}</style>
+      
     <div className="w-full max-w-md mx-auto">
       {/* Tarjeta 3D */}
       <div className="perspective-1000 mb-8">
@@ -156,36 +165,63 @@ export default function CreditCardInput({ onTokenReceived, onError, environment 
         >
           {/* Cara frontal */}
           <div
-            className="absolute inset-0 backface-hidden rounded-2xl shadow-2xl overflow-hidden"
+            className="absolute inset-0 backface-hidden rounded-2xl shadow-2xl overflow-hidden border border-gray-300"
             style={{
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              background: 'linear-gradient(135deg, #e8e8e8 0%, #c0c0c0 50%, #d8d8d8 100%)',
+              backgroundSize: '200% 200%',
+              animation: 'shimmer 3s ease-in-out infinite',
               backfaceVisibility: 'hidden',
             }}
           >
-            <div className="p-6 h-full flex flex-col justify-between text-white">
-              <div className="flex justify-between items-start">
-                <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm" />
+            <div className="p-6 h-full flex flex-col justify-between relative">
+              {/* Efecto metálico overlay */}
+              <div className="absolute inset-0 bg-gradient-to-br from-white/30 via-transparent to-black/10 pointer-events-none" />
+              
+              <div className="flex justify-between items-start relative z-10">
+                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#010139] to-[#020270] flex items-center justify-center shadow-lg">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#8AAA19] to-[#6d8814]" />
+                </div>
                 <div className="text-right">
-                  {cardBrand === 'visa' && <div className="text-2xl font-bold">VISA</div>}
-                  {cardBrand === 'mastercard' && <div className="text-2xl font-bold">Mastercard</div>}
-                  {cardBrand === 'amex' && <div className="text-2xl font-bold">AMEX</div>}
+                  {cardBrand === 'visa' && (
+                    <div className="bg-white px-3 py-1.5 rounded-lg shadow-md">
+                      <svg className="h-8 w-auto" viewBox="0 0 48 16" fill="none">
+                        <path d="M20.5 2L17 14h-3l3.5-12h3zm8 0l-3 8-1-8h-3l2 12h2.5l5-12h-2.5zm7.5 0c-1 0-2 .5-2.5 1.5l-2.5 8.5h3l.5-2h3.5l.5 2h3L38 2h-2zm-.5 3.5l1 4.5h-2l1-4.5zM8 2L5 11 4.5 8.5 3 3.5c-.5-1-1-1.5-2-1.5H0l3.5 12h3.5L11 2H8z" fill="#1434CB"/>
+                      </svg>
+                    </div>
+                  )}
+                  {cardBrand === 'mastercard' && (
+                    <div className="flex items-center gap-1">
+                      <div className="w-8 h-8 rounded-full bg-red-500 opacity-90" />
+                      <div className="w-8 h-8 rounded-full bg-orange-400 opacity-90 -ml-4" />
+                    </div>
+                  )}
+                  {cardBrand === 'amex' && (
+                    <div className="bg-[#006FCF] px-3 py-1.5 rounded-lg shadow-md">
+                      <div className="text-white text-sm font-bold">AMEX</div>
+                    </div>
+                  )}
                 </div>
               </div>
               
-              <div>
-                <div className="font-mono text-xl tracking-wider mb-4">
+              <div className="relative z-10">
+                {bankName && (
+                  <div className="text-xs font-semibold text-gray-700 mb-3 uppercase tracking-wider">
+                    {bankName}
+                  </div>
+                )}
+                <div className="font-mono text-xl tracking-wider mb-4 text-gray-800 font-bold">
                   {cardNumber || '#### #### #### ####'}
                 </div>
                 <div className="flex justify-between items-end">
                   <div>
-                    <div className="text-xs opacity-70">TITULAR</div>
-                    <div className="font-semibold uppercase">
+                    <div className="text-xs text-gray-600 font-medium">TITULAR</div>
+                    <div className="font-semibold uppercase text-gray-800">
                       {cardName || 'NOMBRE APELLIDO'}
                     </div>
                   </div>
                   <div>
-                    <div className="text-xs opacity-70">EXPIRA</div>
-                    <div className="font-mono">{expiry || 'MM/AA'}</div>
+                    <div className="text-xs text-gray-600 font-medium">EXPIRA</div>
+                    <div className="font-mono text-gray-800 font-semibold">{expiry || 'MM/AA'}</div>
                   </div>
                 </div>
               </div>
@@ -194,24 +230,34 @@ export default function CreditCardInput({ onTokenReceived, onError, environment 
 
           {/* Cara trasera */}
           <div
-            className="absolute inset-0 backface-hidden rounded-2xl shadow-2xl overflow-hidden"
+            className="absolute inset-0 backface-hidden rounded-2xl shadow-2xl overflow-hidden border border-gray-300"
             style={{
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+              background: 'linear-gradient(135deg, #e8e8e8 0%, #c0c0c0 50%, #d8d8d8 100%)',
               backfaceVisibility: 'hidden',
               transform: 'rotateY(180deg)',
             }}
           >
-            <div className="h-full">
-              <div className="w-full h-12 bg-black/50 mt-6" />
-              <div className="px-6 mt-6">
+            <div className="h-full relative">
+              {/* Efecto metálico overlay */}
+              <div className="absolute inset-0 bg-gradient-to-br from-white/30 via-transparent to-black/10 pointer-events-none" />
+              
+              <div className="w-full h-12 bg-gradient-to-r from-gray-700 via-gray-800 to-gray-700 mt-6" />
+              <div className="px-6 mt-6 relative z-10">
                 <div className="flex justify-end">
-                  <div className="bg-white/90 px-4 py-2 rounded">
-                    <div className="text-xs text-gray-600 mb-1">CVV</div>
-                    <div className="font-mono text-black font-bold tracking-widest">
+                  <div className="bg-white px-4 py-2 rounded-lg shadow-md border border-gray-200">
+                    <div className="text-xs text-gray-600 mb-1 font-medium">CVV</div>
+                    <div className="font-mono text-gray-800 font-bold tracking-widest text-lg">
                       {cvv || '***'}
                     </div>
                   </div>
                 </div>
+                {bankName && (
+                  <div className="mt-6 text-right">
+                    <div className="text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                      {bankName}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -243,6 +289,19 @@ export default function CreditCardInput({ onTokenReceived, onError, environment 
             value={cardName}
             onChange={(e) => setCardName(e.target.value.toUpperCase())}
             placeholder="NOMBRE APELLIDO"
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#010139] focus:border-transparent uppercase"
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Banco Emisor
+          </label>
+          <input
+            type="text"
+            value={bankName}
+            onChange={(e) => setBankName(e.target.value.toUpperCase())}
+            placeholder="Ej: BANCO GENERAL"
             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#010139] focus:border-transparent uppercase"
           />
         </div>
@@ -307,5 +366,6 @@ export default function CreditCardInput({ onTokenReceived, onError, environment 
         </div>
       )}
     </div>
+    </>
   );
 }

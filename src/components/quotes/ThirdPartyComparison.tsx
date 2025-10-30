@@ -22,9 +22,21 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
         if (data.success) {
           const logos: Record<string, string | null> = {};
           data.insurers.forEach((ins: any) => {
+            // Normalizar nombre: quitar "Seguros", "de", espacios extras, etc.
+            const normalizedName = ins.name
+              .toUpperCase()
+              .replace(/\s+SEGUROS$/i, '')
+              .replace(/\s+DE\s+/gi, ' ')
+              .replace(/PANAMÁ/gi, 'PANAMA')
+              .trim();
+            
+            // Guardar con el nombre normalizado
+            logos[normalizedName] = ins.logo_url;
+            // También guardar con el nombre completo original
             logos[ins.name.toUpperCase()] = ins.logo_url;
           });
           setInsurerLogos(logos);
+          console.log('Logos cargados:', logos); // Debug
         }
       })
       .catch(err => console.error('Error loading insurer logos:', err));
@@ -44,6 +56,31 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
       setShowInstallmentsModal(false);
       onSelectPlan(selectedPlan.insurer.id, selectedPlan.type, selectedPlan.plan);
     }
+  };
+
+  const getLogoUrl = (insurerName: string): string | null => {
+    // Intentar múltiples variaciones del nombre
+    const variations = [
+      insurerName.toUpperCase(), // Nombre completo
+      insurerName.toUpperCase().replace(/\s+SEGUROS$/i, '').trim(), // Sin "Seguros"
+      insurerName.toUpperCase().replace(/\s+DE\s+/gi, ' ').trim(), // Sin "de"
+      insurerName.toUpperCase().replace(/PANAMÁ/gi, 'PANAMA').trim(), // Panama sin acento
+      insurerName.toUpperCase().replace(/\s+SEGUROS$/i, '').replace(/\s+DE\s+/gi, ' ').trim(), // Sin "Seguros" ni "de"
+    ];
+
+    console.log(`Buscando logo para: ${insurerName}`);
+    console.log('Variaciones probadas:', variations);
+    console.log('Logos disponibles:', Object.keys(insurerLogos));
+
+    for (const variation of variations) {
+      if (insurerLogos[variation]) {
+        console.log(`✓ Logo encontrado con variación: ${variation} -> ${insurerLogos[variation]}`);
+        return insurerLogos[variation];
+      }
+    }
+    
+    console.log(`✗ No se encontró logo para: ${insurerName}`);
+    return null;
   };
 
   const renderCoverageValue = (value: string) => {
@@ -78,7 +115,7 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
             <div className={`bg-gradient-to-br from-[#010139] to-[#020270] p-6 text-white`}>
               <div className="flex items-center gap-4 mb-4">
                 <InsurerLogo 
-                  logoUrl={insurerLogos[insurer.name.toUpperCase()]}
+                  logoUrl={getLogoUrl(insurer.name)}
                   insurerName={insurer.name}
                   size="lg"
                 />
