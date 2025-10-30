@@ -27,6 +27,7 @@ interface FormData {
   start_date: string;
   renewal_date: string;
   status: string;
+  notas: string; // Notas adicionales sobre la póliza
   // Broker y %
   broker_email: string;
   percent_override: string;
@@ -53,6 +54,7 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
     start_date: today || '',
     renewal_date: '',
     status: 'ACTIVA',
+    notas: '',
     broker_email: role === 'broker' ? userEmail : '',
     percent_override: '',
   });
@@ -257,6 +259,7 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
           start_date: formData.start_date || null,
           renewal_date: formData.renewal_date || null,
           status: formData.status as 'ACTIVA' | 'VENCIDA' | 'CANCELADA',
+          notas: formData.notas || null,
           client_id: selectedExistingClient.id,
           broker_id: broker_id,
         };
@@ -297,6 +300,7 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
           start_date: formData.start_date || null,
           renewal_date: formData.renewal_date || null,
           status: formData.status as 'ACTIVA' | 'VENCIDA' | 'CANCELADA',
+          notas: formData.notas || null,
         };
 
         console.log('[ClientPolicyWizard] Creando nuevo cliente y póliza...');
@@ -576,6 +580,22 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                     <SelectItem value="CANCELADA">Cancelada</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Notas (opcional)
+                </label>
+                <textarea
+                  value={formData.notas}
+                  onChange={(e) => setFormData({ ...formData, notas: e.target.value })}
+                  rows={3}
+                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition resize-none"
+                  placeholder="Agrega cualquier información adicional sobre esta póliza..."
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  💡 Puedes agregar detalles importantes que quieras recordar sobre esta póliza
+                </p>
               </div>
             </div>
           )}

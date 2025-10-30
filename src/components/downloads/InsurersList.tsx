@@ -1,11 +1,13 @@
 'use client';
 
 import Link from 'next/link';
-import { FaBuilding, FaPlus } from 'react-icons/fa';
+import { FaPlus } from 'react-icons/fa';
+import InsurerLogo from '@/components/shared/InsurerLogo';
 
 interface Insurer {
   id: string;
   name: string;
+  logo_url?: string | null;
   sections_count?: number;
 }
 
@@ -34,7 +36,12 @@ export default function InsurersList({ scope, policyType, insurers, isMaster }: 
             min-h-[180px]
           "
         >
-          <FaBuilding className="text-5xl text-gray-400 mb-4" />
+          <InsurerLogo 
+            logoUrl={insurer.logo_url} 
+            insurerName={insurer.name} 
+            size="xl"
+            className="mb-4"
+          />
 
           <h3 className="text-lg font-bold text-[#010139] group-hover:text-[#8AAA19] transition-colors text-center">
             {insurer.name}

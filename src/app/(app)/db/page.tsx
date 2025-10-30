@@ -1,8 +1,9 @@
 import { Suspense } from "react";
 import Link from "next/link";
-import { FaPlus, FaSearch, FaFileImport } from "react-icons/fa";
+import { FaPlus, FaFileImport } from "react-icons/fa";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import DatabaseTabs from "@/components/db/DatabaseTabs";
+import InlineSearchBar from "@/components/db/InlineSearchBar";
 import type { Tables } from "@/lib/supabase/server";
 import type { ClientWithPolicies, InsurerWithCount } from "@/types/db";
 import { getAuthContext } from "@/lib/db/context";
@@ -150,23 +151,26 @@ export default async function DatabasePage({
           </div>
         </div>
 
+        {/* Search Bar with Autocomplete */}
+        <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-4 sm:p-6 mb-6">
+          <Suspense fallback={
+            <div className="flex items-center gap-2 text-gray-400">
+              <div className="animate-spin w-5 h-5 border-2 border-[#010139] border-t-transparent rounded-full"></div>
+              <span>Cargando buscador...</span>
+            </div>
+          }>
+            <InlineSearchBar initialQuery={searchQuery} />
+          </Suspense>
+        </div>
+
         {/* Secondary Actions Toolbar */}
         <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-3 sm:p-4 mb-6">
           <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
             <Link 
-              href="/db?modal=search" 
-              scroll={false}
-              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-50 hover:bg-[#010139] text-gray-700 hover:text-white rounded-lg transition-all duration-200 font-medium text-sm group flex-1 sm:flex-initial"
-            >
-              <FaSearch className="text-base" />
-              <span>Buscar</span>
-            </Link>
-            
-            <Link 
               href="/db/import"
-              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-50 hover:bg-[#8AAA19] text-gray-700 hover:text-white rounded-lg transition-all duration-200 font-medium text-sm group flex-1 sm:flex-initial"
+              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-50 text-gray-700 rounded-lg hover:bg-[#8AAA19] hover:text-white transition-all duration-200 font-medium text-sm group flex-1 sm:flex-initial"
             >
-              <FaFileImport className="text-base" />
+              <FaFileImport className="text-base group-hover:text-white" />
               <span>Importar CSV</span>
             </Link>
           </div>

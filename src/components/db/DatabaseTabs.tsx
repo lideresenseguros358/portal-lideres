@@ -3,15 +3,15 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Eye, Edit3, Trash2, ChevronDown, ChevronUp, FileDown, FileSpreadsheet, Download } from 'lucide-react';
+import { Eye, Edit3, Trash2, ChevronDown, ChevronUp, FileDown, FileSpreadsheet, Download, FolderOpen } from 'lucide-react';
 import { toast } from 'sonner';
 import Modal from '@/components/Modal';
 import ClientForm from './ClientForm';
-import SearchModal from './SearchModal';
 import ClientsByInsurer from './ClientsByInsurer';
 import ClientPolicyWizard from './ClientPolicyWizard';
 import PreliminaryClientsTab from './PreliminaryClientsTab';
 import ExportFormatModal from './ExportFormatModal';
+import ExpedienteManager from '@/components/expediente/ExpedienteManager';
 import { ClientWithPolicies, InsurerWithCount } from '@/types/db';
 import { actionGetPreliminaryClients } from '@/app/(app)/db/preliminary-actions';
 
@@ -304,7 +304,10 @@ const ClientsListView = ({ clients, onView, onEdit, onDelete, role, selectedClie
             <th className="ct-th">Cliente</th>
             <th className="ct-th">Cédula</th>
             <th className="ct-th">Celular</th>
-            <th className="ct-th">Correo</th>
+            <th className="ct-th">Pólizas</th>
+            <th className="ct-th">Aseguradora</th>
+            <th className="ct-th">Ramo</th>
+            <th className="ct-th">Renovación</th>
             {role === 'master' && <th className="ct-th">Corredor</th>}
             <th className="ct-th text-right">Acciones</th>
           </tr>
@@ -341,14 +344,76 @@ const ClientsListView = ({ clients, onView, onEdit, onDelete, role, selectedClie
                   </td>
                   <td className="ct-td">{nationalId}</td>
                   <td className="ct-td">{phone}</td>
-                  <td className="ct-td">{email}</td>
+                  <td className="ct-td">
+                    <span className="font-semibold text-[#010139]">{client.policies?.length || 0}</span>
+                  </td>
+                  <td className="ct-td">
+                    {client.policies?.length ? (
+                      <div className="flex flex-col gap-1">
+                        {client.policies.slice(0, 2).map((pol: any, idx: number) => (
+                          <span key={idx} className="text-xs text-gray-700 truncate">
+                            {pol.insurers?.name || '—'}
+                          </span>
+                        ))}
+                        {client.policies.length > 2 && (
+                          <span className="text-xs text-gray-500">+{client.policies.length - 2} más</span>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-gray-400">—</span>
+                    )}
+                  </td>
+                  <td className="ct-td">
+                    {client.policies?.length ? (
+                      <div className="flex flex-col gap-1">
+                        {client.policies.slice(0, 2).map((pol: any, idx: number) => (
+                          <span key={idx} className="text-xs text-gray-700 truncate">
+                            {pol.ramo || '—'}
+                          </span>
+                        ))}
+                        {client.policies.length > 2 && (
+                          <span className="text-xs text-gray-500">+{client.policies.length - 2} más</span>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-gray-400">—</span>
+                    )}
+                  </td>
+                  <td className="ct-td">
+                    {client.policies?.length ? (
+                      <div className="flex flex-col gap-1">
+                        {client.policies.slice(0, 2).map((pol: any, idx: number) => (
+                          <span key={idx} className="text-xs text-gray-700">
+                            {pol.renewal_date ? new Date(pol.renewal_date).toLocaleDateString('es-PA', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                          </span>
+                        ))}
+                        {client.policies.length > 2 && (
+                          <span className="text-xs text-gray-500">...</span>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-gray-400">—</span>
+                    )}
+                  </td>
                   {role === 'master' && <td className="ct-td">{brokerName}</td>}
                   <td className="ct-td">
                     <div className="ct-actions">
                       <button 
+                        className="icon-btn folder" 
+                        onClick={() => {
+                          toggleClient(client.id);
+                          toast.success('Expandir para ver expediente del cliente');
+                        }}
+                        aria-label="Ver expediente"
+                        title="Ver Expediente"
+                      >
+                        <FolderOpen size={18} />
+                      </button>
+                      <button 
                         className="icon-btn view" 
                         onClick={() => onView(client.id)}
                         aria-label="Ver cliente"
+                        title="Ver Detalles"
                       >
                         <Eye size={18} />
                       </button>
@@ -356,6 +421,7 @@ const ClientsListView = ({ clients, onView, onEdit, onDelete, role, selectedClie
                         className="icon-btn edit" 
                         onClick={() => onEdit(client.id)}
                         aria-label="Editar cliente"
+                        title="Editar Cliente"
                       >
                         <Edit3 size={18} />
                       </button>
@@ -363,6 +429,7 @@ const ClientsListView = ({ clients, onView, onEdit, onDelete, role, selectedClie
                         className="icon-btn delete" 
                         onClick={() => onDelete(client.id)}
                         aria-label="Eliminar cliente"
+                        title="Eliminar Cliente"
                       >
                         <Trash2 size={18} />
                       </button>
@@ -372,7 +439,7 @@ const ClientsListView = ({ clients, onView, onEdit, onDelete, role, selectedClie
 
                 {isExpanded && (
                   <tr>
-                    <td colSpan={role === 'master' ? 7 : 6} className="ct-detail">
+                    <td colSpan={role === 'master' ? 10 : 9} className="ct-detail">
                       <div className="pol-panel">
                         <div className="pol-header">
                           <h4 className="pol-title">Pólizas del Cliente</h4>
@@ -383,14 +450,33 @@ const ClientsListView = ({ clients, onView, onEdit, onDelete, role, selectedClie
                             {client.policies.map((policy) => (
                               <div key={policy.id} className="pol-row">
                                 <div className="pol-main">
-                                  <div className="pol-number">{policy.policy_number || 'Sin número'}</div>
-                                  <div className="pol-meta">
-                                    <span>{policy.insurers?.name?.toUpperCase?.() || '—'}</span>
-                                    <span>•</span>
-                                    <span>{policy.ramo?.toUpperCase?.() || '—'}</span>
-                                    <span>•</span>
-                                    <span>Renovación: {formatDate(policy.renewal_date)}</span>
+                                  <div className="pol-number">
+                                    📋 {policy.policy_number || 'Sin número'}
                                   </div>
+                                  <div className="pol-meta">
+                                    <span><strong>Aseguradora:</strong> {policy.insurers?.name?.toUpperCase?.() || '—'}</span>
+                                    <span>•</span>
+                                    <span><strong>Ramo:</strong> {policy.ramo?.toUpperCase?.() || '—'}</span>
+                                  </div>
+                                  <div className="pol-meta">
+                                    <span><strong>Inicio:</strong> {formatDate((policy as any).start_date)}</span>
+                                    <span>•</span>
+                                    <span><strong>Renovación:</strong> {formatDate(policy.renewal_date)}</span>
+                                    <span>•</span>
+                                    <span className={`font-semibold ${
+                                      policy.status === 'ACTIVA' ? 'text-green-600' : 
+                                      policy.status === 'VENCIDA' ? 'text-red-600' : 
+                                      'text-gray-600'
+                                    }`}>
+                                      {policy.status || 'SIN ESTADO'}
+                                    </span>
+                                  </div>
+                                  {(policy as any).notas && (
+                                    <div className="pol-notas">
+                                      <span className="pol-notas-label">💬 Notas:</span>
+                                      <span className="pol-notas-text">{(policy as any).notas}</span>
+                                    </div>
+                                  )}
                                 </div>
                                 <div className="pol-actions">
                                   <button 
@@ -421,6 +507,21 @@ const ClientsListView = ({ clients, onView, onEdit, onDelete, role, selectedClie
                         ) : (
                           <p className="no-policies">Este cliente no tiene pólizas registradas</p>
                         )}
+
+                        {/* Expediente Section */}
+                        <div className="expediente-section">
+                          <div className="expediente-header">
+                            <h4 className="pol-title">📁 Expediente del Cliente</h4>
+                            <span className="text-xs text-gray-600">Documentos permanentes</span>
+                          </div>
+                          <ExpedienteManager
+                            clientId={(client as any).id}
+                            showClientDocs={true}
+                            showPolicyDocs={false}
+                            showOtros={true}
+                            readOnly={role !== 'master'}
+                          />
+                        </div>
                       </div>
                     </td>
                   </tr>
@@ -542,7 +643,6 @@ export default function DatabaseTabs({
           <ClientForm client={clientToEdit} onClose={() => router.push('/db?tab=clients', { scroll: false })} />
         </Modal>
       )}
-      {modal === 'search' && <SearchModal />}
 
       {/* Integrated Toolbar: Tabs + Actions */}
       <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-3 sm:p-4 mb-6">
@@ -666,12 +766,16 @@ export default function DatabaseTabs({
           color: #374151;
           border-bottom: 2px solid #e5e7eb;
         }
-        :global(.ct-th:nth-child(1)) { width: 20%; }
-        :global(.ct-th:nth-child(2)) { width: 12%; }
-        :global(.ct-th:nth-child(3)) { width: 12%; }
-        :global(.ct-th:nth-child(4)) { width: 20%; }
-        :global(.ct-th:nth-child(5)) { width: 18%; }
-        :global(.ct-th:nth-child(6)) { width: 18%; }
+        :global(.ct-th:nth-child(1)) { width: 50px; }
+        :global(.ct-th:nth-child(2)) { width: 18%; }
+        :global(.ct-th:nth-child(3)) { width: 10%; }
+        :global(.ct-th:nth-child(4)) { width: 10%; }
+        :global(.ct-th:nth-child(5)) { width: 8%; }
+        :global(.ct-th:nth-child(6)) { width: 14%; }
+        :global(.ct-th:nth-child(7)) { width: 10%; }
+        :global(.ct-th:nth-child(8)) { width: 10%; }
+        :global(.ct-th:nth-child(9)) { width: 12%; }
+        :global(.ct-th:nth-child(10)) { width: 8%; }
 
         :global(.text-right) {
           text-align: right;
@@ -813,6 +917,24 @@ export default function DatabaseTabs({
           color: #6b7280;
         }
 
+        :global(.pol-notas) {
+          margin-top: 8px;
+          padding: 8px 12px;
+          background: #f0f9ff;
+          border-left: 3px solid #0ea5e9;
+          border-radius: 4px;
+          font-size: 0.75rem;
+          line-height: 1.5;
+        }
+        :global(.pol-notas-label) {
+          font-weight: 600;
+          color: #0369a1;
+          margin-right: 6px;
+        }
+        :global(.pol-notas-text) {
+          color: #374151;
+        }
+
         :global(.pol-actions) {
           display: flex;
           gap: 4px;
@@ -826,19 +948,79 @@ export default function DatabaseTabs({
           font-size: 0.875rem;
         }
 
+        /* EXPEDIENTE SECTION */
+        :global(.expediente-section) {
+          margin-top: 24px;
+          padding-top: 24px;
+          border-top: 2px solid #e5e7eb;
+        }
+        :global(.expediente-header) {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          margin-bottom: 16px;
+        }
+
+        /* BOTONES DE ACCIÓN */
+        :global(.icon-btn) {
+          padding: 8px;
+          border-radius: 6px;
+          transition: all 0.2s;
+          border: 1px solid transparent;
+          background: transparent;
+          cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+        }
+        :global(.icon-btn.folder) {
+          color: #8AAA19;
+        }
+        :global(.icon-btn.folder:hover) {
+          background: #f0f9ff;
+          border-color: #8AAA19;
+        }
+        :global(.icon-btn.view) {
+          color: #010139;
+        }
+        :global(.icon-btn.view:hover) {
+          background: #eff6ff;
+          border-color: #010139;
+        }
+        :global(.icon-btn.edit) {
+          color: #8AAA19;
+        }
+        :global(.icon-btn.edit:hover) {
+          background: #f7fee7;
+          border-color: #8AAA19;
+        }
+        :global(.icon-btn.delete) {
+          color: #dc2626;
+        }
+        :global(.icon-btn.delete:hover) {
+          background: #fef2f2;
+          border-color: #dc2626;
+        }
+
         /* RESPONSIVE */
         @media (max-width: 768px) {
-          :global(.ct-th:nth-child(3)),
           :global(.ct-th:nth-child(4)),
           :global(.ct-th:nth-child(5)),
-          :global(.ct-td:nth-child(3)),
+          :global(.ct-th:nth-child(6)),
+          :global(.ct-th:nth-child(7)),
+          :global(.ct-th:nth-child(8)),
           :global(.ct-td:nth-child(4)),
-          :global(.ct-td:nth-child(5)) {
+          :global(.ct-td:nth-child(5)),
+          :global(.ct-td:nth-child(6)),
+          :global(.ct-td:nth-child(7)),
+          :global(.ct-td:nth-child(8)) {
             display: none;
           }
-          :global(.ct-th:nth-child(1)) { width: 35%; }
-          :global(.ct-th:nth-child(2)) { width: 25%; }
-          :global(.ct-th:nth-child(6)) { width: 40%; }
+          :global(.ct-th:nth-child(1)) { width: 50px; }
+          :global(.ct-th:nth-child(2)) { width: 40%; }
+          :global(.ct-th:nth-child(3)) { width: 30%; }
+          :global(.ct-th:nth-child(9)) { width: 15%; }
+          :global(.ct-th:nth-child(10)) { width: 15%; }
           
           /* Pólizas en tablet */
           :global(.pol-row) {
@@ -854,12 +1036,14 @@ export default function DatabaseTabs({
           }
         }
         @media (max-width: 480px) {
-          :global(.ct-th:nth-child(2)),
-          :global(.ct-td:nth-child(2)) {
+          :global(.ct-th:nth-child(3)),
+          :global(.ct-td:nth-child(3)) {
             display: none;
           }
-          :global(.ct-th:nth-child(1)) { width: 60%; }
-          :global(.ct-th:nth-child(6)) { width: 40%; }
+          :global(.ct-th:nth-child(1)) { width: 50px; }
+          :global(.ct-th:nth-child(2)) { width: 50%; }
+          :global(.ct-th:nth-child(9)) { width: 20%; }
+          :global(.ct-th:nth-child(10)) { width: 30%; }
           
           /* Pólizas en móvil */
           :global(.pol-panel) {
@@ -879,19 +1063,30 @@ export default function DatabaseTabs({
             white-space: nowrap;
           }
           :global(.icon-btn) {
-            width: 36px;
-            height: 36px;
+            width: 40px;
+            height: 40px;
+            padding: 10px;
+          }
+          :global(.ct-actions) {
+            gap: 2px;
           }
         }
         
         /* Mobile First - Pantallas muy pequeñas */
         @media (max-width: 360px) {
           :global(.ct-actions) {
-            flex-direction: column;
-            gap: 2px;
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 4px;
           }
           :global(.pol-actions) {
-            gap: 2px;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 4px;
+          }
+          :global(.icon-btn) {
+            width: 100%;
+            min-height: 40px;
           }
         }
 

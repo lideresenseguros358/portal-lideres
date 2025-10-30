@@ -6,6 +6,7 @@ import { FaTimes, FaPlus, FaEdit, FaTrash } from "react-icons/fa";
 import { actionCreateClientWithPolicy } from '@/app/(app)/db/actions';
 import type { Tables } from "@/lib/supabase/client";
 import { toUppercasePayload, createUppercaseHandler, uppercaseInputClass } from '@/lib/utils/uppercase';
+import ExpedienteManager from '@/components/expediente/ExpedienteManager';
 
 import { ClientWithPolicies } from '@/types/db';
 
@@ -255,6 +256,19 @@ export default function ClientForm({ client, onClose }: ClientFormProps) {
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Expediente Section - Solo para clientes existentes */}
+          {client && (client as any).id && (
+            <div className="mt-6 pt-6 border-t">
+              <ExpedienteManager
+                clientId={(client as any).id}
+                showClientDocs={true}
+                showPolicyDocs={false}
+                showOtros={true}
+                readOnly={false}
+              />
             </div>
           )}
 

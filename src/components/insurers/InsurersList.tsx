@@ -2,10 +2,10 @@
 
 import { useState, useTransition, useRef } from 'react';
 import Link from 'next/link';
-import Image from 'next/image';
 import { FaEdit, FaPlus, FaSearch, FaToggleOn, FaToggleOff, FaClone, FaUndo, FaEye } from 'react-icons/fa';
 import { actionToggleInsurerActive, actionCloneInsurer } from '@/app/(app)/insurers/actions';
 import ContactsModal from './ContactsModal';
+import InsurerLogo from '@/components/shared/InsurerLogo';
 
 interface Contact {
   id: string;
@@ -202,22 +202,11 @@ export default function InsurersList({ initialInsurers }: InsurersListProps) {
                   style={{ backfaceVisibility: 'hidden' }}
                 >
                   <div className="flex justify-between items-start mb-4">
-                    {insurer.logo_url ? (
-                      <div className="w-12 h-12 rounded-lg bg-white border border-gray-200 flex items-center justify-center p-1">
-                        <Image 
-                          src={insurer.logo_url} 
-                          alt={insurer.name}
-                          width={48}
-                          height={48}
-                          className="object-contain"
-                          unoptimized
-                        />
-                      </div>
-                    ) : (
-                      <div className="w-12 h-12 rounded-lg bg-gray-100 flex items-center justify-center text-gray-500 text-xl font-bold">
-                        {insurer.name.charAt(0)}
-                      </div>
-                    )}
+                    <InsurerLogo 
+                      logoUrl={insurer.logo_url}
+                      insurerName={insurer.name}
+                      size="md"
+                    />
                     <span className={`px-3 py-1 rounded-full text-xs font-medium ${
                       insurer.active 
                         ? 'bg-green-100 text-green-700' 

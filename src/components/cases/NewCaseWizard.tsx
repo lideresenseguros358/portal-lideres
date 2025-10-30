@@ -1,13 +1,15 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FaArrowLeft, FaArrowRight, FaCheck, FaTimes, FaUser, FaFileAlt, FaUpload, FaEye, FaPlus, FaTrash } from 'react-icons/fa';
+import { FaArrowLeft, FaArrowRight, FaCheck, FaTimes, FaUser, FaFileAlt, FaUpload, FaEye, FaPlus, FaTrash, FaCheckCircle } from 'react-icons/fa';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { actionCreateCase } from '@/app/(app)/cases/actions';
 import { CASE_SECTIONS, CASE_STATUSES, MANAGEMENT_TYPES, POLICY_TYPES, REQUIRED_DOCUMENTS, type PolicyType } from '@/lib/constants/cases';
 import { toUppercasePayload, createUppercaseHandler, uppercaseInputClass } from '@/lib/utils/uppercase';
+import { supabaseClient } from '@/lib/supabase/client';
+import { getClientDocuments, type ExpedienteDocument } from '@/lib/storage/expediente';
 
 interface NewCaseWizardProps {
   brokers: any[];
@@ -19,6 +21,12 @@ export default function NewCaseWizard({ brokers, clients, insurers }: NewCaseWiz
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState(1);
   const [saving, setSaving] = useState(false);
+  
+  // Estados para cliente existente
+  const [existingClients, setExistingClients] = useState<any[]>([]);
+  const [selectedExistingClient, setSelectedExistingClient] = useState<any>(null);
+  const [showClientSuggestions, setShowClientSuggestions] = useState(false);
+  const [expedienteDocuments, setExpedienteDocuments] = useState<ExpedienteDocument[]>([]);
 
   // Form data
   const [formData, setFormData] = useState({
@@ -89,18 +97,101 @@ export default function NewCaseWizard({ brokers, clients, insurers }: NewCaseWiz
     }
   };
 
+  // Buscar clientes existentes
+  const searchClients = async (searchTerm: string) => {
+    if (searchTerm.length < 3) {
+      setExistingClients([]);
+      setShowClientSuggestions(false);
+      return;
+    }
+
+    const { data } = await supabaseClient()
+      .from('clients')
+      .select('id, name, national_id, email, phone, broker_id')
+      .ilike('name', `%${searchTerm}%`)
+      .limit(5);
+
+    setExistingClients(data || []);
+    setShowClientSuggestions(true);
+  };
+
+  // Seleccionar cliente existente y cargar toda su información
+  const selectExistingClient = async (client: any) => {
+    setSelectedExistingClient(client);
+    setShowClientSuggestions(false);
+    
+    // Auto-cargar broker del cliente
+    let brokerIdToSet = formData.broker_id;
+    if (client.broker_id) {
+      try {
+        const { data: brokerData } = await supabaseClient()
+          .from('brokers')
+          .select('id, p_id')
+          .eq('id', client.broker_id)
+          .single();
+        
+        if (brokerData) {
+          brokerIdToSet = brokerData.id;
+        }
+      } catch (error) {
+        console.error('[NewCaseWizard] Error al obtener broker del cliente:', error);
+      }
+    }
+
+    // Cargar documentos del expediente
+    try {
+      const docsResult = await getClientDocuments(client.id);
+      if (docsResult.ok && docsResult.data) {
+        setExpedienteDocuments(docsResult.data);
+        
+        // Auto-completar documentos cédula y licencia si existen
+        const cedulaDoc = docsResult.data.find(d => d.document_type === 'cedula');
+        const licenciaDoc = docsResult.data.find(d => d.document_type === 'licencia');
+        
+        if (cedulaDoc || licenciaDoc) {
+          toast.success('Documentos del expediente cargados', {
+            description: `${cedulaDoc ? 'Cédula' : ''}${cedulaDoc && licenciaDoc ? ' y ' : ''}${licenciaDoc ? 'Licencia' : ''} disponibles`,
+          });
+        }
+      }
+    } catch (error) {
+      console.error('[NewCaseWizard] Error al cargar documentos:', error);
+    }
+    
+    setFormData({
+      ...formData,
+      client_id: client.id,
+      client_name: client.name,
+      broker_id: brokerIdToSet,
+    });
+    
+    toast.success(`Cliente "${client.name}" seleccionado`, {
+      description: 'Se cargó la información del cliente y su corredor asignado',
+    });
+  };
+
   // Load documents when policy type changes
   useEffect(() => {
     if (formData.policy_type) {
       const docs = REQUIRED_DOCUMENTS[formData.policy_type as PolicyType] || [];
-      const documentsWithState = docs.map(doc => ({
-        ...doc,
-        uploaded: false,
-        file: undefined,
-      }));
+      const documentsWithState = docs.map(doc => {
+        // Auto-marcar como completado si existe en el expediente
+        let isFromExpediente = false;
+        if (doc.standardName === 'cedula' && expedienteDocuments.find(d => d.document_type === 'cedula')) {
+          isFromExpediente = true;
+        } else if (doc.standardName === 'licencia' && expedienteDocuments.find(d => d.document_type === 'licencia')) {
+          isFromExpediente = true;
+        }
+        
+        return {
+          ...doc,
+          uploaded: isFromExpediente, // Auto-marcar si está en expediente
+          file: undefined,
+        };
+      });
       setFormData(prev => ({ ...prev, documents: documentsWithState }));
     }
-  }, [formData.policy_type]);
+  }, [formData.policy_type, expedienteDocuments]);
 
   const handleSubmit = async () => {
     setSaving(true);
@@ -278,18 +369,70 @@ export default function NewCaseWizard({ brokers, clients, insurers }: NewCaseWiz
               </select>
             </div>
 
-            {/* Client Name */}
-            <div>
+            {/* Client Name with Search */}
+            <div className="relative">
               <label className="block text-xs sm:text-sm font-semibold text-gray-600 mb-2 uppercase">
                 Nombre del cliente *
               </label>
               <input
                 type="text"
                 value={formData.client_name}
-                onChange={createUppercaseHandler((e) => setFormData({ ...formData, client_name: e.target.value }))}
+                onChange={createUppercaseHandler((e) => {
+                  const value = e.target.value;
+                  setFormData({ ...formData, client_name: value, client_id: '' });
+                  setSelectedExistingClient(null);
+                  searchClients(value);
+                })}
+                onBlur={() => setTimeout(() => setShowClientSuggestions(false), 200)}
                 placeholder="INGRESA EL NOMBRE DEL CLIENTE"
                 className={`w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none ${uppercaseInputClass}`}
               />
+              
+              {/* Suggestions Dropdown */}
+              {showClientSuggestions && existingClients.length > 0 && (
+                <div className="absolute z-10 w-full mt-1 bg-white border-2 border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                  <div className="p-2 bg-blue-50 text-xs text-blue-700 border-b">
+                    📋 Clientes existentes - Click para auto-cargar información
+                  </div>
+                  {existingClients.map((client) => (
+                    <button
+                      key={client.id}
+                      type="button"
+                      onClick={() => selectExistingClient(client)}
+                      className="w-full text-left px-3 py-2 hover:bg-gray-100 border-b last:border-b-0 transition"
+                    >
+                      <div className="font-semibold text-sm">{client.name}</div>
+                      <div className="text-xs text-gray-600">
+                        {client.national_id && `Cédula: ${client.national_id}`}
+                        {client.email && ` • ${client.email}`}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+              
+              {/* Selected Client Indicator */}
+              {selectedExistingClient && (
+                <div className="mt-1 text-xs text-green-600 flex items-center gap-1">
+                  <FaCheckCircle /> Cliente existente seleccionado - Corredor y expediente cargados
+                </div>
+              )}
+              
+              {/* Expediente Documents Indicator */}
+              {expedienteDocuments.length > 0 && (
+                <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded text-xs">
+                  <span className="font-semibold text-green-800">📁 Documentos del expediente:</span>
+                  <div className="mt-1 flex flex-wrap gap-2">
+                    {expedienteDocuments.map((doc, idx) => (
+                      <span key={idx} className="px-2 py-1 bg-green-100 text-green-700 rounded">
+                        {doc.document_type === 'cedula' ? '🪪 Cédula' : 
+                         doc.document_type === 'licencia' ? '🚗 Licencia' : 
+                         doc.document_name || 'Otro'}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Insurer */}
@@ -497,6 +640,14 @@ export default function NewCaseWizard({ brokers, clients, insurers }: NewCaseWiz
               </div>
             )}
 
+            {expedienteDocuments.length > 0 && (
+              <div className="bg-green-50 border-l-4 border-green-500 p-4 rounded">
+                <p className="text-sm text-green-800">
+                  <strong>✅ Documentos del Expediente Cargados</strong> - Los documentos de cédula y/o licencia ya están disponibles en el expediente del cliente y se marcarán automáticamente como completados.
+                </p>
+              </div>
+            )}
+
             {formData.documents.length > 0 && (
               <>
                 {/* Required Documents */}
@@ -508,13 +659,18 @@ export default function NewCaseWizard({ brokers, clients, insurers }: NewCaseWiz
                     >
                       <div className="flex items-start gap-3">
                         <div className="flex-1">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <p className="font-semibold text-gray-700">{doc.label}</p>
                             {doc.required && (
                               <span className="text-xs px-2 py-0.5 bg-red-100 text-red-700 rounded-full font-semibold">Requerido</span>
                             )}
                             {doc.category === 'inspection' && (
                               <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full font-semibold">📸 Inspección</span>
+                            )}
+                            {doc.uploaded && !doc.file && (
+                              <span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-semibold">
+                                📁 Disponible en Expediente
+                              </span>
                             )}
                           </div>
                           

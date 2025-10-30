@@ -184,6 +184,32 @@ export default function CalendarGrid({
                       {item.day}
                     </span>
                     
+                    {/* Títulos de eventos (SOLO en Desktop - hidden en mobile) */}
+                    {item.hasEvents && item.isCurrentMonth && dayEvents.length > 0 && (
+                      <div className="hidden lg:flex flex-col gap-0.5 mt-1 w-full px-1 max-h-16 overflow-hidden">
+                        {dayEvents.slice(0, 2).map((evt) => (
+                          <div
+                            key={evt.id}
+                            className={`text-[9px] leading-tight font-medium truncate rounded px-1 py-0.5 ${
+                              isTodayDate 
+                                ? 'bg-yellow-400 bg-opacity-30 text-[#010139]' 
+                                : 'bg-white bg-opacity-40 text-gray-900'
+                            }`}
+                            title={evt.title}
+                          >
+                            {evt.title}
+                          </div>
+                        ))}
+                        {dayEvents.length > 2 && (
+                          <div className={`text-[8px] font-bold text-center ${
+                            isTodayDate ? 'text-yellow-200' : 'text-white'
+                          }`}>
+                            +{dayEvents.length - 2} más
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    
                     {/* Badge de cantidad de eventos */}
                     {item.hasEvents && item.isCurrentMonth && dayEvents.length > 0 && (
                       <div className="absolute top-0.5 right-0.5 flex items-center justify-center">
@@ -206,9 +232,9 @@ export default function CalendarGrid({
                       </div>
                     )}
                     
-                    {/* Emoji decorativo para días con eventos */}
+                    {/* Emoji decorativo para días con eventos (SOLO en Mobile - hidden en desktop) */}
                     {item.hasEvents && item.isCurrentMonth && !isTodayDate && (
-                      <div className="absolute -bottom-1 -right-1 text-sm">
+                      <div className="absolute -bottom-1 -right-1 text-sm lg:hidden">
                         📅
                       </div>
                     )}

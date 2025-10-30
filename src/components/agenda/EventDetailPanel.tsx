@@ -20,6 +20,7 @@ interface EventDetailPanelProps {
   onEventClick: (event: AgendaEvent) => void;
   onEditEvent: (event: AgendaEvent) => void;
   onDuplicateEvent: (event: AgendaEvent) => void;
+  onCreateEvent?: (date: string) => void;
 }
 
 const MONTH_NAMES = [
@@ -39,7 +40,8 @@ export default function EventDetailPanel({
   onEventUpdated,
   onEventClick,
   onEditEvent,
-  onDuplicateEvent
+  onDuplicateEvent,
+  onCreateEvent
 }: EventDetailPanelProps) {
   const [brokerId, setBrokerId] = useState<string | null>(null);
   const [attendees, setAttendees] = useState<any[]>([]);
@@ -186,24 +188,48 @@ END:VCALENDAR`;
 
   // If viewing a day (not a specific event)
   if (!event && day) {
+    const selectedDateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    
     return (
       <div className="bg-white rounded-xl shadow-lg p-6 border-2 border-gray-100 space-y-4">
         <div className="flex justify-between items-center">
           <h3 className="text-xl font-bold text-[#010139]">
             Eventos del {day} de {MONTH_NAMES[month - 1]}
           </h3>
-          <button 
-            onClick={onClose} 
-            className="text-gray-500 hover:text-gray-700 p-2"
-          >
-            <FaTimes />
-          </button>
+          <div className="flex items-center gap-2">
+            {userRole === 'master' && onCreateEvent && (
+              <button
+                onClick={() => onCreateEvent(selectedDateStr)}
+                className="p-2 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg hover:shadow-lg transition-all"
+                title="Crear evento en esta fecha"
+              >
+                <FaEdit />
+              </button>
+            )}
+            <button 
+              onClick={onClose} 
+              className="text-gray-500 hover:text-gray-700 p-2"
+            >
+              <FaTimes />
+            </button>
+          </div>
         </div>
 
         {dayEvents.length === 0 ? (
-          <p className="text-gray-500 text-center py-8">
-            No hay eventos programados para este día
-          </p>
+          <div className="text-center py-8">
+            <p className="text-gray-500 mb-4">
+              No hay eventos programados para este día
+            </p>
+            {userRole === 'master' && onCreateEvent && (
+              <button
+                onClick={() => onCreateEvent(selectedDateStr)}
+                className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-xl hover:shadow-lg transition-all transform hover:scale-105 font-medium"
+              >
+                <FaEdit />
+                Crear evento en este día
+              </button>
+            )}
+          </div>
         ) : (
           <div className="space-y-3">
             {dayEvents.map(e => (

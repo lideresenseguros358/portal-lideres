@@ -1,13 +1,14 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { FaArrowLeft, FaEdit, FaFileUpload, FaDownload, FaTrash, FaCheckCircle, FaTimesCircle, FaClock, FaUser, FaBuilding, FaFileAlt } from 'react-icons/fa';
+import { FaArrowLeft, FaEdit, FaFileUpload, FaDownload, FaTrash, FaCheckCircle, FaTimesCircle, FaClock, FaUser, FaBuilding, FaFileAlt, FaFolder } from 'react-icons/fa';
 import { toast } from 'sonner';
 import { supabaseClient } from '@/lib/supabase/client';
 import { CASE_SECTIONS, CASE_STATUSES, MANAGEMENT_TYPES, POLICY_TYPES, getSLALabel, getSLAColor, STATUS_COLORS } from '@/lib/constants/cases';
 import { actionToggleChecklistItem, actionDeleteCaseFile } from '@/app/(app)/cases/actions-details';
+import ExpedienteManager from '@/components/expediente/ExpedienteManager';
 
 interface CaseDetailClientProps {
   caseData: any;
@@ -16,8 +17,17 @@ interface CaseDetailClientProps {
 
 export default function CaseDetailClient({ caseData, userProfile }: CaseDetailClientProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [uploading, setUploading] = useState(false);
-  const [activeTab, setActiveTab] = useState<'info' | 'files' | 'checklist' | 'history'>('info');
+  const [activeTab, setActiveTab] = useState<'info' | 'files' | 'checklist' | 'history' | 'expediente'>('info');
+
+  // Leer tab desde URL al cargar
+  useEffect(() => {
+    const tabParam = searchParams.get('tab');
+    if (tabParam && ['info', 'files', 'checklist', 'history', 'expediente'].includes(tabParam)) {
+      setActiveTab(tabParam as any);
+    }
+  }, [searchParams]);
 
   const isMaster = userProfile.role === 'master';
   const isBroker = userProfile.role === 'broker';
@@ -189,6 +199,7 @@ export default function CaseDetailClient({ caseData, userProfile }: CaseDetailCl
               { id: 'files', label: 'Archivos', icon: FaFileUpload },
               { id: 'checklist', label: 'Checklist', icon: FaCheckCircle },
               { id: 'history', label: 'Historial', icon: FaClock },
+              ...(caseData.client_id ? [{ id: 'expediente', label: 'Expediente', icon: FaFolder }] : []),
             ].map((tab) => {
               const Icon = tab.icon;
               return (
@@ -453,6 +464,29 @@ export default function CaseDetailClient({ caseData, userProfile }: CaseDetailCl
                   <p className="text-gray-600">No hay historial disponible</p>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Expediente Tab */}
+          {activeTab === 'expediente' && caseData.client_id && (
+            <div className="space-y-4">
+              <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded mb-4">
+                <p className="text-sm text-blue-800">
+                  <strong>📁 Expediente del Cliente</strong> - Documentos permanentes del cliente (cédula, licencia, etc.)
+                </p>
+                <p className="text-xs text-blue-600 mt-1">
+                  {isBroker && 'Puedes ver y descargar documentos. Para agregar nuevos documentos, contacta al administrador.'}
+                  {isMaster && 'Puedes ver, descargar, agregar y eliminar documentos del expediente.'}
+                </p>
+              </div>
+              <ExpedienteManager
+                clientId={caseData.client_id}
+                policyId={null}
+                showClientDocs={true}
+                showPolicyDocs={false}
+                showOtros={true}
+                readOnly={isBroker} 
+              />
             </div>
           )}
         </div>

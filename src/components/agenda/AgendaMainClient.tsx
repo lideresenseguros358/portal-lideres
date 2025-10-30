@@ -33,6 +33,7 @@ export default function AgendaMainClient() {
   const [selectedEvent, setSelectedEvent] = useState<AgendaEvent | null>(null);
   const [showEventForm, setShowEventForm] = useState(false);
   const [eventToEdit, setEventToEdit] = useState<AgendaEvent | null>(null);
+  const [preselectedDate, setPreselectedDate] = useState<string | undefined>(undefined);
 
   // Load user data
   useEffect(() => {
@@ -177,6 +178,14 @@ export default function AgendaMainClient() {
     } as any;
     setEventToEdit(duplicated);
     setShowEventForm(true);
+  };
+
+  const handleCreateEventFromDate = (date: string) => {
+    setPreselectedDate(date);
+    setEventToEdit(null);
+    setShowEventForm(true);
+    setSelectedDay(null);
+    setSelectedEvent(null);
   };
 
   if (!userRole || !userId) {
@@ -360,6 +369,7 @@ export default function AgendaMainClient() {
               onEventClick={handleEventClick}
               onEditEvent={handleEditEvent}
               onDuplicateEvent={handleDuplicateEvent}
+              onCreateEvent={handleCreateEventFromDate}
             />
           </div>
         </div>
@@ -372,9 +382,11 @@ export default function AgendaMainClient() {
           onClose={() => {
             setShowEventForm(false);
             setEventToEdit(null);
+            setPreselectedDate(undefined);
           }}
           onSuccess={handleEventCreated}
           eventToEdit={eventToEdit}
+          preselectedDate={preselectedDate}
         />
       )}
     </div>

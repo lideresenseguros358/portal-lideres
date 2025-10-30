@@ -462,9 +462,9 @@ export default function MappingConfigurator({
                   type="button"
                   onClick={() => persist("header", "Cabecera guardada")}
                   disabled={saving.header}
-                  className="inline-flex items-center gap-2 rounded-lg bg-[var(--blue,#010139)] px-4 py-2 text-sm font-semibold text-white shadow transition-transform hover:-translate-y-0.5 hover:bg-[var(--olive,#8aaa19)] disabled:cursor-not-allowed disabled:opacity-60"
+                  className="inline-flex items-center gap-2 rounded-lg bg-[var(--blue,#010139)] px-4 py-2 text-sm font-semibold text-white shadow transition-all hover:-translate-y-0.5 hover:bg-[var(--olive,#8aaa19)] hover:text-white disabled:cursor-not-allowed disabled:opacity-60 group"
                 >
-                  <FiSave />
+                  <FiSave className="group-hover:text-white" />
                   {saving.header ? "Guardando..." : "Guardar"}
                 </button>
               </div>
@@ -649,9 +649,9 @@ function RuleSection<TTarget extends string>({
             type="button"
             onClick={onSave}
             disabled={saving}
-            className="inline-flex items-center gap-2 rounded-lg bg-[var(--blue,#010139)] px-4 py-2 text-sm font-semibold text-white shadow transition-transform hover:-translate-y-0.5 hover:bg-[var(--olive,#8aaa19)] disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex items-center gap-2 rounded-lg bg-[var(--blue,#010139)] px-4 py-2 text-sm font-semibold text-white shadow transition-all hover:-translate-y-0.5 hover:bg-[var(--olive,#8aaa19)] hover:text-white disabled:cursor-not-allowed disabled:opacity-60 group"
           >
-            <FiSave /> {saving ? "Guardando..." : "Guardar"}
+            <FiSave className="group-hover:text-white" /> {saving ? "Guardando..." : "Guardar"}
           </button>
         </div>
       </header>

@@ -315,6 +315,48 @@ export type Database = {
           },
         ]
       }
+      audit_payloads: {
+        Row: {
+          actor: string | null
+          created_at: string
+          endpoint: string
+          environment: string | null
+          error_message: string | null
+          id: string
+          policy_id: string | null
+          request_json: string
+          response_json: string
+          status_code: number | null
+          timestamp: string
+        }
+        Insert: {
+          actor?: string | null
+          created_at?: string
+          endpoint: string
+          environment?: string | null
+          error_message?: string | null
+          id?: string
+          policy_id?: string | null
+          request_json: string
+          response_json: string
+          status_code?: number | null
+          timestamp?: string
+        }
+        Update: {
+          actor?: string | null
+          created_at?: string
+          endpoint?: string
+          environment?: string | null
+          error_message?: string | null
+          id?: string
+          policy_id?: string | null
+          request_json?: string
+          response_json?: string
+          status_code?: number | null
+          timestamp?: string
+        }
+        Relationships: []
+      }
       bank_transfers: {
         Row: {
           amount: number
@@ -1764,6 +1806,72 @@ export type Database = {
           },
         ]
       }
+      expediente_documents: {
+        Row: {
+          client_id: string
+          created_at: string | null
+          document_name: string | null
+          document_type: string
+          file_name: string
+          file_path: string
+          file_size: number | null
+          id: string
+          mime_type: string | null
+          notes: string | null
+          policy_id: string | null
+          updated_at: string | null
+          uploaded_at: string | null
+          uploaded_by: string | null
+        }
+        Insert: {
+          client_id: string
+          created_at?: string | null
+          document_name?: string | null
+          document_type: string
+          file_name: string
+          file_path: string
+          file_size?: number | null
+          id?: string
+          mime_type?: string | null
+          notes?: string | null
+          policy_id?: string | null
+          updated_at?: string | null
+          uploaded_at?: string | null
+          uploaded_by?: string | null
+        }
+        Update: {
+          client_id?: string
+          created_at?: string | null
+          document_name?: string | null
+          document_type?: string
+          file_name?: string
+          file_path?: string
+          file_size?: number | null
+          id?: string
+          mime_type?: string | null
+          notes?: string | null
+          policy_id?: string | null
+          updated_at?: string | null
+          uploaded_at?: string | null
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expediente_documents_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expediente_documents_policy_id_fkey"
+            columns: ["policy_id"]
+            isOneToOne: false
+            referencedRelation: "policies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fortnight_broker_totals: {
         Row: {
           bank_snapshot: Json | null
@@ -2244,6 +2352,60 @@ export type Database = {
         }
         Relationships: []
       }
+      is_catalogs: {
+        Row: {
+          catalog_data: Json
+          catalog_type: string
+          created_at: string
+          environment: string
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          catalog_data: Json
+          catalog_type: string
+          created_at?: string
+          environment: string
+          id?: string
+          updated_at?: string
+        }
+        Update: {
+          catalog_data?: Json
+          catalog_type?: string
+          created_at?: string
+          environment?: string
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      is_daily_tokens: {
+        Row: {
+          created_at: string
+          environment: string
+          expires_at: string
+          id: string
+          token: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          environment: string
+          expires_at: string
+          id?: string
+          token: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          environment?: string
+          expires_at?: string
+          id?: string
+          token?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       notification_reads: {
         Row: {
           id: string
@@ -2652,6 +2814,7 @@ export type Database = {
           created_at: string
           id: string
           insurer_id: string
+          notas: string | null
           percent_override: number | null
           policy_number: string
           ramo: string | null
@@ -2665,6 +2828,7 @@ export type Database = {
           created_at?: string
           id?: string
           insurer_id: string
+          notas?: string | null
           percent_override?: number | null
           policy_number: string
           ramo?: string | null
@@ -2678,6 +2842,7 @@ export type Database = {
           created_at?: string
           id?: string
           insurer_id?: string
+          notas?: string | null
           percent_override?: number | null
           policy_number?: string
           ramo?: string | null
@@ -3544,6 +3709,7 @@ export type Database = {
           updated_policies: number
         }[]
       }
+      clean_expired_is_tokens: { Args: never; Returns: undefined }
       cleanup_old_notification_hashes: { Args: never; Returns: undefined }
       cleanup_processed_temp_imports: { Args: never; Returns: number }
       commissions_monthly_summary: {
@@ -3608,6 +3774,7 @@ export type Database = {
         }[]
       }
       get_sla_days_remaining: { Args: { p_case_id: string }; Returns: number }
+      get_valid_is_token: { Args: { env: string }; Returns: string }
       is_master: { Args: never; Returns: boolean }
       is_self: { Args: { broker: string }; Returns: boolean }
       metrics_broker: {

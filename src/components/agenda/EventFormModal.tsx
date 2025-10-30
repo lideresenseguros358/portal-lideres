@@ -13,13 +13,15 @@ interface EventFormModalProps {
   onClose: () => void;
   onSuccess: () => void;
   eventToEdit?: any;
+  preselectedDate?: string; // Format: YYYY-MM-DD
 }
 
 export default function EventFormModal({ 
   userId, 
   onClose, 
   onSuccess, 
-  eventToEdit 
+  eventToEdit,
+  preselectedDate
 }: EventFormModalProps) {
   // Form state
   const [title, setTitle] = useState('');
@@ -68,10 +70,17 @@ export default function EventFormModal({
 
   const setDefaultDates = () => {
     const now = new Date();
-    const tomorrow = new Date(now);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    let defaultDate: Date;
     
-    const dateStr = tomorrow.toISOString().split('T')[0] || '';
+    // Use preselected date if provided, otherwise tomorrow
+    if (preselectedDate) {
+      defaultDate = new Date(preselectedDate + 'T12:00:00');
+    } else {
+      defaultDate = new Date(now);
+      defaultDate.setDate(defaultDate.getDate() + 1);
+    }
+    
+    const dateStr = defaultDate.toISOString().split('T')[0] || '';
     const timeStr = '14:00'; // 2 PM default
     
     setStartDate(dateStr);
@@ -251,6 +260,41 @@ export default function EventFormModal({
     }
   };
 
+  // Auto-complete end date when start date changes
+  const handleStartDateChange = (newStartDate: string) => {
+    setStartDate(newStartDate);
+    // Auto-fill end date with same date if end date is empty or before start date
+    if (!endDate || endDate < newStartDate) {
+      setEndDate(newStartDate);
+    }
+  };
+
+  // Auto-complete end time (1 hour later) when start time changes
+  const handleStartTimeChange = (newStartTime: string) => {
+    setStartTime(newStartTime);
+    
+    if (!newStartTime) return;
+    
+    // Calculate end time (1 hour later)
+    const timeParts = newStartTime.split(':');
+    if (timeParts.length < 2) return;
+    
+    const hours = parseInt(timeParts[0] || '0', 10);
+    const minutes = parseInt(timeParts[1] || '0', 10);
+    
+    if (isNaN(hours) || isNaN(minutes)) return;
+    
+    const endHour = hours + 1;
+    const endMinutes = minutes;
+    
+    // Handle 24-hour wrap
+    const finalEndHour = endHour >= 24 ? 23 : endHour;
+    const finalEndMinutes = endHour >= 24 ? 59 : endMinutes;
+    
+    const autoEndTime = `${String(finalEndHour).padStart(2, '0')}:${String(finalEndMinutes).padStart(2, '0')}`;
+    setEndTime(autoEndTime);
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto my-8">
@@ -293,7 +337,7 @@ export default function EventFormModal({
               <input
                 type="date"
                 value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
+                onChange={(e) => handleStartDateChange(e.target.value)}
                 className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition-colors"
                 required
               />
@@ -305,7 +349,7 @@ export default function EventFormModal({
               <input
                 type="time"
                 value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
+                onChange={(e) => handleStartTimeChange(e.target.value)}
                 disabled={isAllDay}
                 className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition-colors disabled:bg-gray-100"
               />

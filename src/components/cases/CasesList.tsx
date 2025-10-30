@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { FaEye, FaChevronDown, FaChevronUp, FaClock, FaExclamationTriangle, FaCheckCircle, FaDownload, FaExternalLinkAlt } from 'react-icons/fa';
+import { FaEye, FaChevronDown, FaChevronUp, FaClock, FaExclamationTriangle, FaCheckCircle, FaDownload, FaExternalLinkAlt, FaFolder, FaFileAlt } from 'react-icons/fa';
 import { getSLAColor, getSLALabel, STATUS_COLORS, CASE_STATUS_LABELS, MANAGEMENT_TYPES } from '@/lib/constants/cases';
 import { actionMarkCaseSeen } from '@/app/(app)/cases/actions';
 import { toast } from 'sonner';
@@ -172,37 +172,55 @@ export default function CasesList({
                       )}
                     </div>
 
-                    {/* Actions */}
-                    <div className="flex items-center gap-2">
+                    {/* Actions Mobile-First */}
+                    <div className="flex flex-wrap items-center gap-2">
+                      {/* Expediente Button - Only if client_id exists */}
+                      {caseItem.client_id && (
+                        <Link
+                          href={`/cases/${caseItem.id}?tab=expediente`}
+                          className="p-2 sm:px-3 sm:py-2 bg-[#8AAA19] hover:bg-[#6d8814] text-white rounded-lg transition-all flex items-center gap-1 text-sm font-semibold"
+                          title="Ver Expediente"
+                        >
+                          <FaFolder />
+                          <span className="hidden sm:inline">Expediente</span>
+                        </Link>
+                      )}
+
+                      {/* Mark as Seen - Broker only */}
                       {!caseItem.seen_by_broker && userRole === 'broker' && (
                         <button
                           onClick={(e) => handleMarkSeen(caseItem.id, e)}
-                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-all"
+                          className="p-2 text-[#010139] hover:bg-blue-50 rounded-lg transition-all"
                           title="Marcar como visto"
                         >
-                          <FaEye />
+                          <FaEye size={18} />
                         </button>
                       )}
 
+                      {/* Expand/Collapse */}
                       <button
                         onClick={() => toggleExpand(caseItem.id)}
                         className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-all"
+                        title={isExpanded ? 'Contraer' : 'Expandir'}
                       >
-                        {isExpanded ? <FaChevronUp /> : <FaChevronDown />}
+                        {isExpanded ? <FaChevronUp size={18} /> : <FaChevronDown size={18} />}
                       </button>
 
+                      {/* View Detail - Primary Action */}
                       <Link
                         href={`/cases/${caseItem.id}`}
-                        className="px-4 py-2 bg-[#010139] text-white rounded-lg hover:bg-[#020270] transition-all text-sm font-semibold"
+                        className="px-3 py-2 sm:px-4 bg-gradient-to-r from-[#010139] to-[#020270] text-white rounded-lg hover:shadow-lg transition-all text-sm font-semibold flex items-center gap-1"
                       >
-                        Ver detalle
+                        <FaFileAlt className="sm:hidden" />
+                        <span className="hidden sm:inline">Ver Detalle</span>
+                        <span className="sm:hidden">Ver</span>
                       </Link>
                     </div>
                   </div>
 
                   {/* Quick Info */}
                   <div className="flex flex-wrap items-center gap-2 text-sm text-gray-600 mb-3">
-                    <span className="font-semibold">
+                    <span className="font-semibold text-[#010139]">
                       {caseItem.insurer?.name || 'Sin aseguradora'}
                     </span>
                     <span className="text-gray-400">•</span>
@@ -212,6 +230,15 @@ export default function CasesList({
                         <span className="text-gray-400">•</span>
                         <span className="font-mono text-xs bg-gray-100 px-2 py-0.5 rounded">
                           #{caseItem.ticket_ref}
+                        </span>
+                      </>
+                    )}
+                    {caseItem.client_id && (
+                      <>
+                        <span className="text-gray-400">•</span>
+                        <span className="inline-flex items-center gap-1 text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded-full border border-green-200">
+                          <FaFolder />
+                          Expediente
                         </span>
                       </>
                     )}
@@ -232,17 +259,21 @@ export default function CasesList({
                     )}
                   </div>
 
-                  {/* Progress Bar */}
+                  {/* Progress Bar with Enhanced Design */}
                   <div className="mb-2">
-                    <div className="flex items-center justify-between text-xs text-gray-600 mb-1">
-                      <span>Progreso del trámite</span>
-                      <span className="font-semibold">{progress}%</span>
+                    <div className="flex items-center justify-between text-xs mb-2">
+                      <span className="font-semibold text-gray-700">Progreso del trámite</span>
+                      <span className="font-bold text-[#010139] text-sm">{progress}%</span>
                     </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                    <div className="relative w-full bg-gray-200 rounded-full h-3 overflow-hidden shadow-inner">
                       <div
-                        className="h-full bg-gradient-to-r from-[#010139] to-[#8AAA19] transition-all duration-500 rounded-full"
+                        className="h-full bg-gradient-to-r from-[#010139] via-[#020270] to-[#8AAA19] transition-all duration-700 ease-out rounded-full relative"
                         style={{ width: `${progress}%` }}
-                      />
+                      >
+                        {progress > 10 && (
+                          <div className="absolute inset-0 bg-white/20 animate-pulse" />
+                        )}
+                      </div>
                     </div>
                   </div>
 
@@ -318,28 +349,41 @@ export default function CasesList({
                       </div>
                     )}
 
-                    {/* Deeplink a Descargas */}
-                    {(() => {
-                      const downloadsLink = getDownloadsLink(caseItem.management_type, caseItem.insurer_id);
-                      if (downloadsLink) {
-                        return (
-                          <div className="mt-3">
+                    {/* Quick Actions */}
+                    <div className="mt-4 space-y-2">
+                      {/* Expediente Button */}
+                      {caseItem.client_id && (
+                        <Link
+                          href={`/cases/${caseItem.id}?tab=expediente`}
+                          className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg font-semibold hover:shadow-lg transition-all"
+                        >
+                          <FaFolder />
+                          <span>Ver Expediente del Cliente</span>
+                        </Link>
+                      )}
+
+                      {/* Deeplink a Descargas */}
+                      {(() => {
+                        const downloadsLink = getDownloadsLink(caseItem.management_type, caseItem.insurer_id);
+                        if (downloadsLink) {
+                          return (
                             <Link
                               href={downloadsLink}
-                              className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg font-semibold hover:shadow-lg transition-all"
+                              className="flex items-center justify-center gap-2 w-full px-4 py-3 bg-gradient-to-r from-[#010139] to-[#020270] text-white rounded-lg font-semibold hover:shadow-lg transition-all"
                             >
                               <FaDownload />
-                              <span>Ver Documentos de Trámite</span>
+                              <span className="hidden sm:inline">Ver Documentos de Trámite</span>
+                              <span className="sm:hidden">Documentos</span>
                               <FaExternalLinkAlt className="text-sm" />
                             </Link>
-                            <p className="text-xs text-gray-500 text-center mt-1">
-                              Acceso rápido a formularios y requisitos
-                            </p>
-                          </div>
-                        );
-                      }
-                      return null;
-                    })()}
+                          );
+                        }
+                        return null;
+                      })()}
+                    </div>
+                    <p className="text-xs text-gray-500 text-center mt-2">
+                      Accesos rápidos a información del caso
+                    </p>
                   </div>
                 </div>
               </div>
