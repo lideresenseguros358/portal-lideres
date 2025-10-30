@@ -77,7 +77,7 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
         setFormData(prev => ({ ...prev, renewal_date: renewalDateStr }));
       }
     }
-  }, [formData.start_date]);
+  }, [formData.start_date, formData.renewal_date]);
 
   const loadInsurers = async () => {
     const { data } = await supabaseClient()

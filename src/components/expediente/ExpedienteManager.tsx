@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { FaUpload, FaDownload, FaTrash, FaFile, FaFilePdf, FaFileImage, FaPlus, FaTimes, FaEye } from 'react-icons/fa';
 import { toast } from 'sonner';
 import {
@@ -43,11 +43,7 @@ export default function ExpedienteManager({
   const [uploadDocName, setUploadDocName] = useState('');
   const [uploadNotes, setUploadNotes] = useState('');
 
-  useEffect(() => {
-    loadDocuments();
-  }, [clientId, policyId]);
-
-  const loadDocuments = async () => {
+  const loadDocuments = useCallback(async () => {
     setLoading(true);
     try {
       let allDocs: ExpedienteDocument[] = [];
@@ -76,7 +72,11 @@ export default function ExpedienteManager({
     } finally {
       setLoading(false);
     }
-  };
+  }, [clientId, policyId, showClientDocs, showPolicyDocs, onDocumentsChange]);
+
+  useEffect(() => {
+    loadDocuments();
+  }, [loadDocuments]);
 
   const handleUpload = async () => {
     if (!uploadFile) {

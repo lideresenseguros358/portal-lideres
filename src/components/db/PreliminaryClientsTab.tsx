@@ -35,7 +35,7 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
         setEditForm((prev: any) => ({ ...prev, renewal_date: renewalDateStr }));
       }
     }
-  }, [editForm.start_date, editingId]);
+  }, [editForm.start_date, editForm.renewal_date, editingId]);
 
   const loadPreliminaryClients = async () => {
     setLoading(true);

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Image from 'next/image';
 import { FaCamera, FaCheckCircle, FaTimes, FaExclamationTriangle } from 'react-icons/fa';
 import { toast } from 'sonner';
 
@@ -226,11 +227,14 @@ export default function VehiclePhotosUpload({ onPhotosChange, readOnly = false }
             <div className="p-4">
               {photo.preview ? (
                 <div className="relative">
-                  <img
-                    src={photo.preview}
-                    alt={photo.label}
-                    className="w-full h-48 object-cover rounded-lg border-2 border-gray-200"
-                  />
+                  <div className="relative w-full h-48 rounded-lg border-2 border-gray-200 overflow-hidden">
+                    <Image
+                      src={photo.preview}
+                      alt={photo.label}
+                      fill
+                      className="object-cover"
+                    />
+                  </div>
                   {!readOnly && (
                     <button
                       onClick={() => handleRemovePhoto(photo.id)}
