@@ -14,6 +14,8 @@ interface AccountMenuProps {
 export default function AccountMenu({ displayName, role, avatarUrl }: AccountMenuProps) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  // Extract base URL without query params for the key
+  const avatarKey = avatarUrl ? avatarUrl.split('?')[0] : null;
 
   useEffect(() => {
     if (!open) return;
@@ -47,10 +49,15 @@ export default function AccountMenu({ displayName, role, avatarUrl }: AccountMen
         {avatarUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img 
-            src={`${avatarUrl}${avatarUrl.includes('?') ? '&' : '?'}t=${Date.now()}`} 
+            src={avatarUrl} 
             alt={displayName} 
             className="avatar-image" 
-            key={avatarUrl}
+            key={avatarKey}
+            onError={(e) => {
+              console.error('[AccountMenu] Error loading avatar');
+              // Hide on error
+              e.currentTarget.style.display = 'none';
+            }}
           />
         ) : (
           <div className="avatar-placeholder">

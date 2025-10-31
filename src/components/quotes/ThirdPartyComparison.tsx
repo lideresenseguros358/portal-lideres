@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { FaCheck, FaTimes, FaInfoCircle, FaStar, FaCheckCircle, FaArrowRight } from 'react-icons/fa';
+import { toast } from 'sonner';
 import { AUTO_THIRD_PARTY_INSURERS, COVERAGE_LABELS, AutoThirdPartyPlan, AutoInsurer } from '@/lib/constants/auto-quotes';
 import InsurerLogo from '@/components/shared/InsurerLogo';
 
@@ -13,6 +14,7 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
   const [selectedPlan, setSelectedPlan] = useState<{insurer: AutoInsurer, plan: AutoThirdPartyPlan, type: 'basic' | 'premium'} | null>(null);
   const [showInstallmentsModal, setShowInstallmentsModal] = useState(false);
   const [insurerLogos, setInsurerLogos] = useState<Record<string, string | null>>({});
+  const [generatingQuote, setGeneratingQuote] = useState(false);
 
   useEffect(() => {
     // Cargar logos de aseguradoras
@@ -45,7 +47,86 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
       .catch(err => console.error('Error loading insurer logos:', err));
   }, []);
 
-  const handlePlanClick = (insurer: AutoInsurer, plan: AutoThirdPartyPlan, type: 'basic' | 'premium') => {
+  const handlePlanClick = async (insurer: AutoInsurer, plan: AutoThirdPartyPlan, type: 'basic' | 'premium') => {
+    // Si es INTERNACIONAL, generar cotización automática con API
+    if (insurer.id === 'internacional') {
+      try {
+        setGeneratingQuote(true);
+        toast.loading('Generando cotización...');
+        
+        // Plan 5 = DAT Particular (básico), Plan 16 = DAT Comercial (premium)
+        const vcodplancobertura = type === 'basic' ? 5 : 16;
+        
+        // Generar cotización automáticamente (sin mostrar al usuario)
+        const quoteResponse = await fetch('/api/is/auto/quote', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            vcodtipodoc: 1,
+            vnrodoc: '0-0-0',  // Temporal, se actualizará en emisión
+            vnombre: 'Cliente',
+            vapellido: 'Temporal',
+            vtelefono: '0000-0000',
+            vcorreo: 'temp@ejemplo.com',
+            vcodmarca: 204, // Default Toyota
+            vcodmodelo: 1234, // Default Corolla
+            vanioauto: new Date().getFullYear(),
+            vsumaaseg: 0, // ← DAÑOS A TERCEROS SIEMPRE 0
+            vcodplancobertura,
+            vcodgrupotarifa: 1,
+            environment: 'development',
+          }),
+        });
+        
+        if (!quoteResponse.ok) {
+          throw new Error('Error al generar cotización');
+        }
+        
+        const quoteResult = await quoteResponse.json();
+        if (!quoteResult.success || !quoteResult.idCotizacion) {
+          throw new Error('No se obtuvo ID de cotización');
+        }
+        
+        // Guardar datos para emisión
+        sessionStorage.setItem('thirdPartyQuote', JSON.stringify({
+          idCotizacion: quoteResult.idCotizacion,
+          insurerId: insurer.id,
+          insurerName: insurer.name,
+          planType: type,
+          vcodplancobertura,
+          vcodgrupotarifa: 1,
+          annualPremium: plan.annualPremium,
+          isRealAPI: true,
+        }));
+        
+        toast.dismiss();
+        toast.success('Cotización generada');
+        
+      } catch (error) {
+        console.error('[INTERNACIONAL] Error generando cotización:', error);
+        toast.dismiss();
+        toast.error('Error al generar cotización. Intenta de nuevo.');
+        setGeneratingQuote(false);
+        return;
+      } finally {
+        setGeneratingQuote(false);
+      }
+    }
+    
+    // Si es FEDPA, marcar que usa API real
+    if (insurer.id === 'fedpa') {
+      sessionStorage.setItem('thirdPartyQuote', JSON.stringify({
+        insurerId: insurer.id,
+        insurerName: insurer.name,
+        planType: type,
+        annualPremium: plan.annualPremium,
+        isRealAPI: true,
+        isFEDPA: true, // Flag específico FEDPA
+      }));
+      toast.success('Plan FEDPA seleccionado');
+    }
+    
+    // Continuar con flujo normal
     if (plan.installments.available) {
       setSelectedPlan({ insurer, plan, type });
       setShowInstallmentsModal(true);

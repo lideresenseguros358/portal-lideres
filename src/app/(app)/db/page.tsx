@@ -25,8 +25,10 @@ async function getClientsWithPolicies(searchQuery?: string): Promise<ClientWithP
         policy_number,
         insurer_id,
         ramo,
+        start_date,
         renewal_date,
         status,
+        notas,
         insurers (
           id,
           name,
@@ -143,38 +145,14 @@ export default async function DatabasePage({
             <Link 
               href="/db?modal=new-client" 
               scroll={false}
-              className="group flex items-center gap-2 sm:gap-3 px-4 sm:px-6 py-3 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 font-semibold text-sm sm:text-base whitespace-nowrap w-full sm:w-auto justify-center"
+              className="group flex items-center gap-2 sm:gap-3 px-4 sm:px-6 py-3 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 font-semibold text-sm sm:text-base whitespace-nowrap w-full sm:w-auto justify-center"
             >
-              <FaPlus className="text-base sm:text-lg" />
-              <span>Nuevo Cliente</span>
+              <FaPlus className="text-base sm:text-lg text-white" />
+              <span className="text-white">Nuevo Cliente</span>
             </Link>
           </div>
         </div>
 
-        {/* Search Bar with Autocomplete */}
-        <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-4 sm:p-6 mb-6">
-          <Suspense fallback={
-            <div className="flex items-center gap-2 text-gray-400">
-              <div className="animate-spin w-5 h-5 border-2 border-[#010139] border-t-transparent rounded-full"></div>
-              <span>Cargando buscador...</span>
-            </div>
-          }>
-            <InlineSearchBar initialQuery={searchQuery} />
-          </Suspense>
-        </div>
-
-        {/* Secondary Actions Toolbar */}
-        <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-3 sm:p-4 mb-6">
-          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
-            <Link 
-              href="/db/import"
-              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-gray-50 text-gray-700 rounded-lg hover:bg-[#8AAA19] hover:text-white transition-all duration-200 font-medium text-sm group flex-1 sm:flex-initial"
-            >
-              <FaFileImport className="text-base group-hover:text-white" />
-              <span>Importar CSV</span>
-            </Link>
-          </div>
-        </div>
 
         {/* Database Tabs Content */}
         <DatabaseTabs 

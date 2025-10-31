@@ -9,7 +9,7 @@ import { getSupabaseAdmin } from '@/lib/supabase/admin';
 
 export interface CotizacionAutoRequest {
   // Cliente
-  vcodtipodoc: string;
+  vcodtipodoc: number; // 1=CC, 2=RUC, 3=PAS - DEBE SER NÚMERO
   vnrodoc: string;
   vnombre: string;
   vapellido: string;
@@ -17,14 +17,14 @@ export interface CotizacionAutoRequest {
   vcorreo: string;
   
   // Vehículo
-  vcodmarca: string;
-  vcodmodelo: string;
+  vcodmarca: number; // Código numérico sin decimales (ej: 204 para Toyota)
+  vcodmodelo: number; // Código numérico sin decimales (ej: 1234 para Corolla)
   vanioauto: number;
   
   // Cobertura
   vsumaaseg: number;
-  vcodplancobertura: string;
-  vcodgrupotarifa: string;
+  vcodplancobertura: number; // Código numérico (ej: 14 para Cobertura Completa)
+  vcodgrupotarifa: number; // Código numérico
 }
 
 export interface CotizacionAutoResponse {

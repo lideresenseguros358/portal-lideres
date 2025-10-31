@@ -6,8 +6,112 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 import LoadingSkeleton from '@/components/cotizadores/LoadingSkeleton';
 import QuoteComparison from '@/components/cotizadores/QuoteComparison';
+
+/**
+ * Genera cotización REAL con INTERNACIONAL usando las APIs
+ */
+const generateInternacionalRealQuote = async (quoteData: any) => {
+  try {
+    // Usar códigos numéricos que vienen del formulario
+    // Si no vienen (formulario viejo), usar defaults
+    const vcodmarca = quoteData.marcaCodigo || 204; // Default Toyota si no viene
+    const vcodmodelo = quoteData.modeloCodigo || 1234; // Default Corolla si no viene
+    const vcodplancobertura = 14; // Plan 14 = Cobertura Completa Comercial
+    const vcodgrupotarifa = 1; // Grupo tarifa standard
+    
+    console.log('[INTERNACIONAL] Usando códigos:', {
+      marca: `${quoteData.marca} (${vcodmarca})`,
+      modelo: `${quoteData.modelo} (${vcodmodelo})`,
+      plan: vcodplancobertura,
+      grupo: vcodgrupotarifa,
+    });
+    
+    // Llamar API para generar cotización
+    const quoteResponse = await fetch('/api/is/auto/quote', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        vcodtipodoc: 1, // 1=CC (Cédula), 2=RUC, 3=PAS (Pasaporte) - DEBE SER NÚMERO
+        vnrodoc: quoteData.cedula || '8-999-9999',
+        vnombre: quoteData.nombreCompleto?.split(' ')[0] || 'Cliente',
+        vapellido: quoteData.nombreCompleto?.split(' ').slice(1).join(' ') || 'Potencial',
+        vtelefono: quoteData.telefono || '6000-0000',
+        vcorreo: quoteData.email || 'cliente@example.com',
+        vcodmarca,
+        vcodmodelo,
+        vanioauto: quoteData.anio || new Date().getFullYear(),
+        vsumaaseg: quoteData.valorVehiculo || 15000,
+        vcodplancobertura,
+        vcodgrupotarifa,
+        environment: 'development',
+      }),
+    });
+    
+    if (!quoteResponse.ok) {
+      console.error('Error en API quote:', await quoteResponse.text());
+      return null;
+    }
+    
+    const quoteResult = await quoteResponse.json();
+    if (!quoteResult.success || !quoteResult.idCotizacion) {
+      console.error('No se obtuvo ID de cotización');
+      return null;
+    }
+    
+    const idCotizacion = quoteResult.idCotizacion;
+    console.log('[INTERNACIONAL] ID Cotización:', idCotizacion);
+    
+    // Obtener coberturas y precio real
+    const coberturasResponse = await fetch(`/api/is/auto/coberturas?vIdPv=${idCotizacion}&env=development`);
+    
+    if (!coberturasResponse.ok) {
+      console.error('Error en API coberturas:', await coberturasResponse.text());
+      return null;
+    }
+    
+    const coberturasResult = await coberturasResponse.json();
+    if (!coberturasResult.success) {
+      console.error('No se obtuvieron coberturas');
+      return null;
+    }
+    
+    const coberturas = coberturasResult.data?.coberturas || [];
+    const primaTotal = coberturasResult.data?.total || coberturasResult.data?.primaTotal || 1200;
+    
+    console.log('[INTERNACIONAL] Prima Total REAL:', primaTotal);
+    console.log('[INTERNACIONAL] Coberturas:', coberturas.length);
+    
+    // Retornar en formato compatible con QuoteComparison
+    return {
+      id: 'internacional-real',
+      insurerName: 'INTERNACIONAL de Seguros',
+      planType: 'premium' as const,
+      isRecommended: true,
+      annualPremium: primaTotal,
+      deductible: 250,
+      coverages: coberturas.map((c: any) => ({
+        name: c.descripcion || c.nombre,
+        included: true,
+      })),
+      // Datos adicionales para emisión
+      _isReal: true,
+      _idCotizacion: idCotizacion,
+      _vcodmarca: vcodmarca,
+      _vcodmodelo: vcodmodelo,
+      _vcodplancobertura: vcodplancobertura,
+      _vcodgrupotarifa: vcodgrupotarifa,
+      // También guardar nombres para el resumen
+      _marcaNombre: quoteData.marca,
+      _modeloNombre: quoteData.modelo,
+    };
+  } catch (error) {
+    console.error('[INTERNACIONAL] Error generando cotización real:', error);
+    return null;
+  }
+};
 
 // Datos de prueba - 5 aseguradoras para auto, 2 para incendio/contenido
 const generateMockQuotes = (policyType: string, quoteData: any) => {
@@ -105,7 +209,7 @@ export default function ComparePage() {
   const [quotes, setQuotes] = useState<any[]>([]);
 
   useEffect(() => {
-    const loadQuoteData = () => {
+    const loadQuoteData = async () => {
       try {
         setLoading(true);
         
@@ -119,10 +223,32 @@ export default function ComparePage() {
         const input = JSON.parse(storedInput);
         setQuoteData(input);
         
-        // Generar cotizaciones mock
         const policyType = input.cobertura === 'COMPLETA' ? 'auto-completa' : input.policyType;
+        
+        // Generar cotizaciones mock (las otras 4 aseguradoras)
         const mockQuotes = generateMockQuotes(policyType, input);
-        setQuotes(mockQuotes);
+        
+        // Si es Auto Cobertura Completa, intentar obtener cotización REAL de INTERNACIONAL
+        if (policyType === 'auto-completa') {
+          try {
+            const internacionalQuote = await generateInternacionalRealQuote(input);
+            if (internacionalQuote) {
+              // Reemplazar la cotización mock de INTERNACIONAL con la real
+              const quotesWithReal = mockQuotes.filter(q => !q.insurerName.includes('INTERNACIONAL'));
+              quotesWithReal.unshift(internacionalQuote); // INTERNACIONAL primero
+              setQuotes(quotesWithReal);
+            } else {
+              // Si falla, usar mock
+              setQuotes(mockQuotes);
+            }
+          } catch (error) {
+            console.error('Error obteniendo cotización INTERNACIONAL:', error);
+            toast.warning('Usando cotización estimada para INTERNACIONAL');
+            setQuotes(mockQuotes);
+          }
+        } else {
+          setQuotes(mockQuotes);
+        }
         
       } catch (err) {
         console.error('Error cargando cotizaciones:', err);

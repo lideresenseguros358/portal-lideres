@@ -13,6 +13,7 @@ export default function ThirdPartyIssuePage() {
   const searchParams = useSearchParams();
   const [success, setSuccess] = useState(false);
   const [caseId, setCaseId] = useState<string | null>(null);
+  const [isRealEmission, setIsRealEmission] = useState(false);
 
   const insurerId = searchParams.get('insurer');
   const planType = searchParams.get('plan') as 'basic' | 'premium';
@@ -48,20 +49,153 @@ export default function ThirdPartyIssuePage() {
 
   const handleSubmit = async (formData: any) => {
     try {
-      // TODO: Implementar endpoint /api/cases/create para crear casos de seguro
-      // Por ahora simulamos éxito para desarrollo
-      console.log('Datos del formulario:', formData);
-      console.log('Aseguradora:', insurer.id, insurer.name);
-      console.log('Plan:', planType, plan.annualPremium);
+      // Verificar si es INTERNACIONAL con API real
+      const thirdPartyQuoteData = sessionStorage.getItem('thirdPartyQuote');
+      const quoteData = thirdPartyQuoteData ? JSON.parse(thirdPartyQuoteData) : null;
       
-      // Simular éxito
-      setCaseId(`CASE-${Date.now()}`);
-      setSuccess(true);
-      toast.success('¡Solicitud enviada exitosamente!');
+      if (quoteData?.isRealAPI && insurer.id === 'internacional') {
+        // EMISIÓN REAL CON API DE INTERNACIONAL
+        toast.loading('Emitiendo póliza...');
+        
+        const emisionResponse = await fetch('/api/is/auto/emitir', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            vIdPv: quoteData.idCotizacion,
+            vcodtipodoc: 1, // Cédula
+            vnrodoc: formData.nationalId,
+            vnombre: formData.firstName,
+            vapellido: formData.lastName,
+            vtelefono: formData.email.includes('@') ? '0000-0000' : formData.nationalId.substring(0, 8),
+            vcorreo: formData.email,
+            vcodmarca: 204, // Se usará en futuro con catálogos
+            vcodmodelo: 1234,
+            vmarca_label: formData.brand,
+            vmodelo_label: formData.model,
+            vanioauto: formData.year,
+            vsumaaseg: 0, // ← DAÑOS A TERCEROS SIEMPRE 0 (TÁCITO)
+            vcodplancobertura: quoteData.vcodplancobertura,
+            vcodgrupotarifa: quoteData.vcodgrupotarifa,
+            paymentToken: 'TEMP_TOKEN', // TODO: Integrar con tarjeta cuando esté implementado
+            tipo_cobertura: 'Daños a Terceros',
+            environment: 'development',
+          }),
+        });
+        
+        if (!emisionResponse.ok) {
+          const errorData = await emisionResponse.json();
+          throw new Error(errorData.error || 'Error al emitir póliza');
+        }
+        
+        const emisionResult = await emisionResponse.json();
+        if (!emisionResult.success) {
+          throw new Error(emisionResult.error || 'Error al emitir póliza');
+        }
+        
+        toast.dismiss();
+        toast.success(`¡Póliza emitida! Nº ${emisionResult.nroPoliza}`);
+        
+        // Guardar datos para visualización
+        sessionStorage.setItem('emittedPolicy', JSON.stringify(emisionResult));
+        
+        // Redirigir a página de visualización
+        router.push('/cotizadores/poliza-emitida');
+        
+        // Limpiar sessionStorage
+        sessionStorage.removeItem('thirdPartyQuote');
+        
+      } else if (quoteData?.isFEDPA && insurer.id === 'fedpa') {
+        // EMISIÓN REAL CON API DE FEDPA
+        toast.loading('Emitiendo póliza con FEDPA...');
+        
+        // Convertir fecha a dd/mm/yyyy
+        const formatFecha = (fecha: string) => {
+          if (fecha.includes('-')) {
+            const [year, month, day] = fecha.split('-');
+            return `${day}/${month}/${year}`;
+          }
+          return fecha;
+        };
+        
+        const emisionResponse = await fetch('/api/fedpa/emision', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            environment: 'PROD',
+            Plan: planType === 'basic' ? 342 : 343, // Planes FEDPA de terceros
+            idDoc: 'TEMP_DOC', // Temporal, en producción se debe subir primero
+            
+            // Cliente
+            PrimerNombre: formData.firstName.split(' ')[0] || formData.firstName,
+            PrimerApellido: formData.lastName.split(' ')[0] || formData.lastName,
+            SegundoNombre: formData.firstName.split(' ')[1] || '',
+            SegundoApellido: formData.lastName.split(' ')[1] || '',
+            Identificacion: formData.nationalId,
+            FechaNacimiento: formatFecha(formData.birthDate),
+            Sexo: 'M', // Se puede agregar al formulario
+            Email: formData.email,
+            Telefono: parseInt(formData.nationalId.replace(/\D/g, '').substring(0, 8)) || 60000000,
+            Celular: parseInt(formData.nationalId.replace(/\D/g, '').substring(0, 8)) || 60000000,
+            Direccion: formData.address || 'Panama',
+            esPEP: 0,
+            
+            // Vehículo
+            Uso: '10', // Particular por defecto
+            Marca: formData.brand.substring(0, 3).toUpperCase(), // Código de 3 letras
+            Modelo: formData.model.toUpperCase(),
+            Ano: formData.year.toString(),
+            Motor: formData.motorNumber || 'TEMP_MOTOR',
+            Placa: formData.plateNumber,
+            Vin: formData.vin || 'VH1221TEMPVINTMP',
+            Color: formData.color || 'ROJO',
+            Pasajero: parseInt(formData.occupants as string) || 5,
+            Puerta: 4,
+            
+            // Prima
+            PrimaTotal: plan.annualPremium,
+          }),
+        });
+        
+        if (!emisionResponse.ok) {
+          const errorData = await emisionResponse.json();
+          throw new Error(errorData.error || 'Error al emitir póliza');
+        }
+        
+        const emisionResult = await emisionResponse.json();
+        if (!emisionResult.success) {
+          throw new Error(emisionResult.error || 'Error al emitir póliza');
+        }
+        
+        toast.dismiss();
+        toast.success(`¡Póliza emitida! Nº ${emisionResult.poliza || emisionResult.nroPoliza}`);
+        
+        // Guardar datos para visualización
+        sessionStorage.setItem('emittedPolicy', JSON.stringify(emisionResult));
+        
+        // Redirigir a página de visualización
+        router.push('/cotizadores/poliza-emitida');
+        
+        // Limpiar sessionStorage
+        sessionStorage.removeItem('thirdPartyQuote');
+        
+      } else {
+        // OTRAS ASEGURADORAS - Flujo actual (simulado)
+        console.log('Datos del formulario:', formData);
+        console.log('Aseguradora:', insurer.id, insurer.name);
+        console.log('Plan:', planType, plan.annualPremium);
+        
+        // TODO: Crear caso en BD para seguimiento manual
+        setCaseId(`CASE-${Date.now()}`);
+        setSuccess(true);
+        toast.success('¡Solicitud enviada exitosamente!');
+      }
+      
       window.scrollTo({ top: 0, behavior: 'smooth' });
-    } catch (error) {
+      
+    } catch (error: any) {
       console.error('Error submitting form:', error);
-      toast.error('Error al procesar la solicitud');
+      toast.dismiss();
+      toast.error(error.message || 'Error al procesar la solicitud');
     }
   };
 
@@ -75,30 +209,52 @@ export default function ThirdPartyIssuePage() {
             </div>
 
             <h1 className="text-3xl font-bold text-[#010139] mb-4">
-              ¡Solicitud Enviada!
+              {isRealEmission ? '¡Póliza Emitida!' : '¡Solicitud Enviada!'}
             </h1>
 
             <p className="text-lg text-gray-700 mb-6">
-              Tu solicitud de seguro ha sido recibida exitosamente.
+              {isRealEmission 
+                ? 'Tu póliza ha sido emitida exitosamente.' 
+                : 'Tu solicitud de seguro ha sido recibida exitosamente.'}
             </p>
 
-            <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-6 mb-6 text-left">
-              <h3 className="font-bold text-[#010139] mb-3">Próximos Pasos:</h3>
-              <ul className="space-y-2 text-sm text-gray-700">
-                <li className="flex items-start gap-2">
-                  <span className="text-[#8AAA19] font-bold">1.</span>
-                  <span>Un asesor revisará tu solicitud en las próximas horas</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-[#8AAA19] font-bold">2.</span>
-                  <span>Recibirás un correo electrónico con la confirmación</span>
-                </li>
-                <li className="flex items-start gap-2">
-                  <span className="text-[#8AAA19] font-bold">3.</span>
-                  <span>Te contactaremos para coordinar el pago y emisión de la póliza</span>
-                </li>
-              </ul>
-            </div>
+            {isRealEmission ? (
+              <div className="bg-green-50 border-2 border-green-200 rounded-lg p-6 mb-6 text-left">
+                <h3 className="font-bold text-[#010139] mb-3">✅ Póliza Confirmada:</h3>
+                <ul className="space-y-2 text-sm text-gray-700">
+                  <li className="flex items-start gap-2">
+                    <span className="text-[#8AAA19] font-bold">•</span>
+                    <span>Tu póliza ha sido emitida automáticamente</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-[#8AAA19] font-bold">•</span>
+                    <span>Recibirás un correo con los documentos de la póliza</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-[#8AAA19] font-bold">•</span>
+                    <span>El pago se procesará según el plan seleccionado</span>
+                  </li>
+                </ul>
+              </div>
+            ) : (
+              <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-6 mb-6 text-left">
+                <h3 className="font-bold text-[#010139] mb-3">Próximos Pasos:</h3>
+                <ul className="space-y-2 text-sm text-gray-700">
+                  <li className="flex items-start gap-2">
+                    <span className="text-[#8AAA19] font-bold">1.</span>
+                    <span>Un asesor revisará tu solicitud en las próximas horas</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-[#8AAA19] font-bold">2.</span>
+                    <span>Recibirás un correo electrónico con la confirmación</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-[#8AAA19] font-bold">3.</span>
+                    <span>Te contactaremos para coordinar el pago y emisión de la póliza</span>
+                  </li>
+                </ul>
+              </div>
+            )}
 
             <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
               <p className="text-sm text-gray-600 mb-2">
@@ -112,7 +268,7 @@ export default function ThirdPartyIssuePage() {
               </p>
               {caseId && (
                 <p className="text-xs text-gray-500 mt-2">
-                  Número de referencia: {caseId.slice(0, 8)}
+                  {isRealEmission ? `Número de Póliza: ${caseId}` : `Número de referencia: ${caseId.slice(0, 8)}`}
                 </p>
               )}
             </div>

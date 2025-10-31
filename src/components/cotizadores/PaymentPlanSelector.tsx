@@ -34,19 +34,35 @@ export default function PaymentPlanSelector({ annualPremium, onContinue }: Payme
     onContinue(installments, monthlyPayment);
   };
 
-  // Opciones de cuotas con emojis
-  const installmentOptions = [
-    { value: 1, label: '1 Pago', emoji: '💰', description: 'Pago único' },
-    { value: 2, label: '2 Cuotas', emoji: '✌️', description: 'Cada 6 meses' },
-    { value: 3, label: '3 Cuotas', emoji: '🎯', description: 'Cada 4 meses' },
-    { value: 4, label: '4 Cuotas', emoji: '🍀', description: 'Cada 3 meses' },
-    { value: 5, label: '5 Cuotas', emoji: '🌟', description: 'Popular' },
-    { value: 6, label: '6 Cuotas', emoji: '📅', description: 'Cada 2 meses' },
-    { value: 7, label: '7 Cuotas', emoji: '🎲', description: 'Flexible' },
-    { value: 8, label: '8 Cuotas', emoji: '🎪', description: 'Más tiempo' },
-    { value: 9, label: '9 Cuotas', emoji: '🎨', description: 'Cómodo' },
-    { value: 10, label: '10 Cuotas', emoji: '🏆', description: 'Máximo permitido' },
-  ];
+  // Función para obtener el emoji dinámico según las cuotas
+  const getEmoji = (numInstallments: number): string => {
+    // 10 = 🙈 (mono con ojos tapados - muchas cuotas)
+    // 9-2 = progresivamente más feliz
+    // 1 = 🤩 (estrellas en los ojos - pago contado)
+    const emojiMap: Record<number, string> = {
+      10: '🙈', // Ojos tapados - menos entusiasmo
+      9: '😔',  // Pensativo
+      8: '😐',  // Neutral
+      7: '🙂',  // Leve sonrisa
+      6: '😊',  // Sonrisa
+      5: '😄',  // Contento
+      4: '😁',  // Muy contento
+      3: '😍',  // Enamorado
+      2: '🥳',  // Festejando
+      1: '🤩',  // Estrellas en los ojos - ¡Al contado!
+    };
+    return emojiMap[numInstallments] || '😊';
+  };
+
+  // Descripción según las cuotas
+  const getDescription = (numInstallments: number): string => {
+    if (numInstallments === 1) return '¡Excelente decisión! Pago al contado';
+    if (numInstallments === 2) return 'Muy bueno - Cada 6 meses';
+    if (numInstallments <= 4) return 'Buena opción - Cuotas trimestrales';
+    if (numInstallments <= 6) return 'Opción popular - Más cómodo';
+    if (numInstallments <= 8) return 'Más cuotas - Más tiempo';
+    return 'Máximo permitido - 10 cuotas';
+  };
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -108,40 +124,41 @@ export default function PaymentPlanSelector({ annualPremium, onContinue }: Payme
             </div>
           </div>
 
-          {/* Selected Option Display */}
-          <div className="text-center mt-6">
-            {(() => {
-              const selectedOption = installmentOptions[installments - 1];
-              if (!selectedOption) return null;
+          {/* Selected Option Display - Emoji Central Dinámico */}
+          <div className="text-center mt-8">
+            <div className="relative inline-block">
+              {/* Emoji Grande Central */}
+              <div className="text-8xl mb-4 animate-bounce">
+                {getEmoji(installments)}
+              </div>
               
-              return (
-                <div className="inline-flex items-center gap-3 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white px-6 py-3 rounded-xl shadow-lg">
-                  <span className="text-3xl">{selectedOption.emoji}</span>
-                  <div className="text-left">
-                    <div className="font-bold text-lg">{selectedOption.label}</div>
-                    <div className="text-xs opacity-90">{selectedOption.description}</div>
-                  </div>
+              {/* Información de cuotas */}
+              <div className="bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white px-8 py-4 rounded-2xl shadow-2xl">
+                <div className="font-black text-3xl mb-1">
+                  {installments} {installments === 1 ? 'Pago' : 'Cuotas'}
                 </div>
-              );
-            })()}
+                <div className="text-sm opacity-90">
+                  {getDescription(installments)}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Quick Selection Buttons */}
+        {/* Quick Selection Buttons - Solo números */}
         <div className="grid grid-cols-5 sm:grid-cols-10 gap-2 mb-6">
-          {installmentOptions.map((option) => (
+          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
             <button
-              key={option.value}
-              onClick={() => setInstallments(option.value)}
-              className={`p-2 rounded-lg border-2 transition-all ${
-                installments === option.value
+              key={num}
+              onClick={() => setInstallments(num)}
+              className={`p-3 rounded-lg border-2 transition-all ${
+                installments === num
                   ? 'border-[#8AAA19] bg-[#8AAA19] text-white scale-110 shadow-lg'
                   : 'border-gray-200 hover:border-[#8AAA19] hover:bg-gray-50'
               }`}
-              title={option.label}
+              title={`${num} ${num === 1 ? 'Pago' : 'Cuotas'}`}
             >
-              <div className="text-2xl mb-1">{option.emoji}</div>
-              <div className="text-xs font-bold">{option.value}</div>
+              <div className="text-xl font-black">{num}</div>
             </button>
           ))}
         </div>

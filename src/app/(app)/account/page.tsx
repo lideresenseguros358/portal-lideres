@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
 import { supabaseClient } from "@/lib/supabase/client";
 import { FaCamera, FaUserCircle, FaTrash } from "react-icons/fa";
 import { useUppercaseInput } from "@/lib/hooks/useUppercaseInput";
@@ -104,7 +103,13 @@ export default function AccountPage() {
       }
 
       console.log('✅ Perfil actualizado correctamente');
-      setSuccess("Perfil actualizado correctamente");
+      
+      // Show warnings if any
+      if ((result as any).warnings && (result as any).warnings.length > 0) {
+        setSuccess(`⚠️ Perfil actualizado con advertencias: ${(result as any).warnings.join(', ')}`);
+      } else {
+        setSuccess("✅ Perfil actualizado correctamente");
+      }
       
       // Reload profile to reflect changes
       await loadProfile();
@@ -174,10 +179,9 @@ export default function AccountPage() {
       if (!user) throw new Error("Usuario no autenticado");
 
       const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg';
-      const timestamp = Date.now();
-      const fileName = `${user.id}_${timestamp}.${fileExt}`;
-      const filePath = fileName;
-
+      // Nombre de archivo fijo por usuario (sin timestamp)
+      const fileName = `${user.id}.${fileExt}`;
+      
       console.log('🔄 Subiendo avatar:', { 
         fileName, 
         fileSize: file.size, 
@@ -185,41 +189,53 @@ export default function AccountPage() {
         userId: user.id 
       });
 
-      // Primero, intenta eliminar el avatar anterior si existe
+      // ====== CLEANUP: Eliminar archivos antiguos con timestamp ======
       if (avatarUrl) {
         try {
-          const oldFileName = avatarUrl.split('/').pop()?.split('?')[0]; // Remove query params
-          if (oldFileName && oldFileName.startsWith(user.id)) {
-            console.log('🗑️ Eliminando avatar anterior:', oldFileName);
-            const { error: removeError } = await supabase.storage
-              .from('avatar')
-              .remove([oldFileName]);
+          // Listar todos los archivos del usuario para limpiar huerfanos
+          const { data: files } = await supabase.storage
+            .from('avatar')
+            .list('', {
+              search: user.id
+            });
+
+          if (files && files.length > 0) {
+            const filesToDelete = files
+              .map(f => f.name)
+              .filter(name => name.startsWith(user.id) && name !== fileName); // Excluir el nuevo nombre
             
-            if (removeError) {
-              console.warn('⚠️ No se pudo eliminar avatar anterior:', removeError);
-              // No throw, continuar con el upload
+            if (filesToDelete.length > 0) {
+              console.log('🗑️ Limpiando archivos antiguos:', filesToDelete);
+              const { error: removeError } = await supabase.storage
+                .from('avatar')
+                .remove(filesToDelete);
+              
+              if (removeError) {
+                console.warn('⚠️ Error limpiando archivos antiguos:', removeError);
+              } else {
+                console.log('✅ Archivos antiguos eliminados');
+              }
             }
           }
         } catch (cleanupErr) {
-          console.warn('⚠️ Error en limpieza de avatar anterior:', cleanupErr);
+          console.warn('⚠️ Error en limpieza de archivos:', cleanupErr);
           // Continue with upload anyway
         }
       }
 
-      // Upload to storage con upsert para sobrescribir
-      console.log('📤 Iniciando upload a bucket "avatar"...');
+      // ====== UPLOAD: Subir con upsert para sobrescribir ======
+      console.log('📤 Subiendo a bucket "avatar" (upsert)...');
       const { error: uploadError, data: uploadData } = await supabase.storage
         .from('avatar')
-        .upload(filePath, file, {
+        .upload(fileName, file, {
           cacheControl: '3600',
-          upsert: true,
+          upsert: true,  // Sobrescribe si ya existe
           contentType: file.type
         });
 
       if (uploadError) {
         console.error('❌ Error de upload:', uploadError);
         
-        // Proporcionar mensaje más específico según el error
         if (uploadError.message.includes('Bucket not found')) {
           throw new Error('El bucket de storage "avatar" no existe. Contacta al administrador.');
         } else if (uploadError.message.includes('policy')) {
@@ -231,10 +247,11 @@ export default function AccountPage() {
 
       console.log('✅ Upload exitoso:', uploadData);
 
-      // Get public URL with timestamp to force cache refresh
+      // ====== GET PUBLIC URL: Con timestamp para forzar cache refresh ======
+      const timestamp = Date.now();
       const { data: { publicUrl } } = supabase.storage
         .from('avatar')
-        .getPublicUrl(filePath, {
+        .getPublicUrl(fileName, {
           transform: {
             width: 300,
             height: 300,
@@ -242,38 +259,33 @@ export default function AccountPage() {
           }
         });
 
-      console.log('🔗 Public URL generada:', publicUrl);
+      // Add timestamp to URL to force cache refresh
+      const urlWithTimestamp = `${publicUrl}?t=${timestamp}`;
+      console.log('🔗 Public URL generada:', urlWithTimestamp);
 
-      // Update profile in database
+      // ====== UPDATE DATABASE ======
       const { error: updateError } = await supabase
         .from("profiles")
         .update({ 
-          avatar_url: publicUrl
+          avatar_url: urlWithTimestamp
         })
         .eq("id", user.id);
 
       if (updateError) {
         console.error('❌ Error actualizando perfil en BD:', updateError);
-        
         // Intentar eliminar el archivo subido si falla la actualización
-        await supabase.storage.from('avatar').remove([filePath]);
-        
+        await supabase.storage.from('avatar').remove([fileName]);
         throw new Error(`Error al actualizar perfil: ${updateError.message}`);
       }
 
       console.log('✅ Perfil actualizado en BD');
 
-      // Update local state
-      setAvatarUrl(publicUrl);
-      setAvatarTimestamp(Date.now());
+      // ====== UPDATE STATE & REFRESH ======
+      setAvatarUrl(urlWithTimestamp);
+      setAvatarTimestamp(timestamp);
       setSuccess("✅ Foto de perfil actualizada correctamente");
       
-      // Reload profile to ensure consistency
-      console.log('🔄 Recargando perfil...');
       await loadProfile();
-      
-      // Refresh layout to update navbar avatar
-      console.log('🔄 Refrescando layout...');
       router.refresh();
       
       console.log('✅ Proceso completo exitoso');
@@ -282,8 +294,7 @@ export default function AccountPage() {
       setError(err.message || "Error al subir la foto");
     } finally {
       setSaving(false);
-      // Reset file input
-      e.target.value = '';
+      e.target.value = ''; // Reset input
     }
   };
 
@@ -300,30 +311,37 @@ export default function AccountPage() {
 
       console.log('🗑️ Eliminando foto de perfil...');
 
-      // Delete from storage if exists
-      if (avatarUrl) {
-        try {
-          const fileName = avatarUrl.split('/').pop()?.split('?')[0]; // Remove query params
-          if (fileName) {
-            console.log('🗑️ Eliminando archivo del storage:', fileName);
+      // ====== DELETE ALL USER FILES FROM STORAGE ======
+      try {
+        // Listar todos los archivos del usuario
+        const { data: files } = await supabase.storage
+          .from('avatar')
+          .list('', {
+            search: user.id
+          });
+
+        if (files && files.length > 0) {
+          const filesToDelete = files.map(f => f.name).filter(name => name.startsWith(user.id));
+          
+          if (filesToDelete.length > 0) {
+            console.log('🗑️ Eliminando archivos del storage:', filesToDelete);
             const { error: deleteError } = await supabase.storage
               .from('avatar')
-              .remove([fileName]);
+              .remove(filesToDelete);
             
             if (deleteError) {
-              console.warn('⚠️ Error eliminando archivo del storage:', deleteError);
-              // No throw, continue to update profile
+              console.warn('⚠️ Error eliminando archivos:', deleteError);
             } else {
-              console.log('✅ Archivo eliminado del storage');
+              console.log('✅ Archivos eliminados del storage');
             }
           }
-        } catch (storageErr) {
-          console.warn('⚠️ Error en eliminación de storage:', storageErr);
-          // Continue anyway
         }
+      } catch (storageErr) {
+        console.warn('⚠️ Error en eliminación de storage:', storageErr);
+        // Continue anyway
       }
 
-      // Update profile
+      // ====== UPDATE DATABASE ======
       console.log('🔄 Actualizando perfil en BD...');
       const { error: updateError } = await supabase
         .from("profiles")
@@ -339,16 +357,12 @@ export default function AccountPage() {
 
       console.log('✅ Perfil actualizado en BD');
 
+      // ====== UPDATE STATE & REFRESH ======
       setAvatarUrl(null);
       setAvatarTimestamp(Date.now());
       setSuccess("✅ Foto de perfil eliminada correctamente");
       
-      // Reload profile
-      console.log('🔄 Recargando perfil...');
       await loadProfile();
-      
-      // Refresh layout to update navbar avatar
-      console.log('🔄 Refrescando layout...');
       router.refresh();
       
       console.log('✅ Eliminación completa exitosa');
@@ -378,17 +392,16 @@ export default function AccountPage() {
           <div className="avatar-container">
             {avatarUrl ? (
               <div className="avatar-wrapper">
-                <Image 
-                  key={`${avatarUrl}-${avatarTimestamp}`}
-                  src={`${avatarUrl}${avatarUrl.includes('?') ? '&' : '?'}t=${avatarTimestamp}`}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img 
+                  key={avatarUrl}
+                  src={avatarUrl}
                   alt="Avatar" 
                   className="avatar-img" 
                   width={150} 
                   height={150}
-                  unoptimized
                   onError={(e) => {
-                    console.error('Error cargando imagen:', e);
-                    // Fallback to placeholder if image fails to load
+                    console.error('[Account] Error cargando avatar');
                     e.currentTarget.style.display = 'none';
                   }}
                 />
@@ -489,13 +502,23 @@ export default function AccountPage() {
             </div>
 
             <div className="info-group">
-              <label>Titular de la Cuenta</label>
+              <label>Titular ACH (Normalizado)</label>
               <p>{broker.nombre_completo || "No especificado"}</p>
+              {broker.nombre_completo && (
+                <small style={{ color: '#666', fontSize: '12px' }}>
+                  Formato ACH: MAYÚSCULAS sin acentos
+                </small>
+              )}
+            </div>
+
+            <div className="info-group">
+              <label>Nombre Titular (Referencia)</label>
+              <p>{broker.beneficiary_name || broker.name || "No especificado"}</p>
             </div>
 
             <div className="info-group">
               <label>Cédula del Titular</label>
-              <p>{broker.national_id || "No especificado"}</p>
+              <p>{broker.beneficiary_id || broker.national_id || "No especificado"}</p>
             </div>
 
             <div style={{ 

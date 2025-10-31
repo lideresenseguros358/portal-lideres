@@ -23,6 +23,8 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
   const [formData, setFormData] = useState<any>({});
   const [saving, setSaving] = useState(false);
   const [useBrokerData, setUseBrokerData] = useState(false);
+  const [showPercentModal, setShowPercentModal] = useState(false);
+  const [pendingUpdates, setPendingUpdates] = useState<any>(null);
 
   useEffect(() => {
     loadBroker();
@@ -47,7 +49,8 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
         bank_account_no: result.data.bank_account_no || '',
         tipo_cuenta: result.data.tipo_cuenta || '04',
         nombre_completo: result.data.nombre_completo || '',
-        titular_cedula: result.data.national_id || '', // Cédula del titular de cuenta
+        beneficiary_name: result.data.beneficiary_name || '',
+        beneficiary_id: result.data.beneficiary_id || '', // Cédula del titular de cuenta
         carnet_expiry_date: (result.data as any).carnet_expiry_date || '',
         broker_type: (result.data as any).broker_type || 'corredor',
         role: (result.data as any).profiles?.role || 'broker', // Rol del usuario
@@ -63,17 +66,51 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
     console.log('[BrokerDetailClient] handleSave called');
     console.log('[BrokerDetailClient] Form data:', formData);
     
-    setSaving(true);
     const normalizedData = toUppercasePayload(formData);
-    console.log('[BrokerDetailClient] Normalized data:', normalizedData);
-    console.log('[BrokerDetailClient] Calling actionUpdateBroker with ID:', brokerId);
     
-    const result = await actionUpdateBroker(brokerId, normalizedData);
+    // Check if percent_default changed
+    const percentChanged = broker.percent_default !== formData.percent_default;
+    
+    if (percentChanged && !isOficina) {
+      // Ask what to do with the percentage change
+      setPendingUpdates(normalizedData);
+      setShowPercentModal(true);
+    } else {
+      // No percent change, just save normally
+      await saveUpdates(normalizedData, false);
+    }
+  };
+
+  const saveUpdates = async (updates: any, applyToExisting: boolean) => {
+    setSaving(true);
+    console.log('[BrokerDetailClient] Saving updates:', updates);
+    console.log('[BrokerDetailClient] Apply to existing policies:', applyToExisting);
+    
+    const result = await actionUpdateBroker(brokerId, updates);
     console.log('[BrokerDetailClient] Result:', result);
 
     if (result.ok) {
-      toast.success('Corredor actualizado correctamente');
+      // Show warnings if any
+      if ((result as any).warnings && (result as any).warnings.length > 0) {
+        toast.warning(`Corredor actualizado con advertencias: ${(result as any).warnings.join(', ')}`);
+      }
+      
+      // If we need to apply to existing policies
+      if (applyToExisting) {
+        const applyResult = await actionApplyDefaultPercentToAll(brokerId);
+        if (applyResult.ok) {
+          toast.success('✅ Corredor actualizado y % aplicado a todas las pólizas');
+        } else {
+          toast.warning('Corredor actualizado pero hubo un error aplicando % a pólizas: ' + applyResult.error);
+        }
+      } else {
+        if (!(result as any).warnings || (result as any).warnings.length === 0) {
+          toast.success('✅ Corredor actualizado correctamente');
+        }
+      }
       setIsEditing(false);
+      setShowPercentModal(false);
+      setPendingUpdates(null);
       loadBroker();
     } else {
       toast.error(result.error);
@@ -108,18 +145,6 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
     }
   };
 
-  const handleApplyDefaultToAll = async () => {
-    if (!confirm('¿Aplicar este % default a TODAS las pólizas de este corredor?')) {
-      return;
-    }
-
-    const result = await actionApplyDefaultPercentToAll(brokerId);
-    if (result.ok) {
-      toast.success(result.message || '% aplicado a todas las pólizas');
-    } else {
-      toast.error(result.error);
-    }
-  };
 
   const handleForcePasswordChange = async () => {
     if (!confirm('¿Obligar a este usuario a cambiar su contraseña en el próximo inicio de sesión?')) {
@@ -421,15 +446,27 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
                 <select
                   value={formData.role}
                   onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                  disabled={!isEditing}
+                  disabled={!isEditing || isOficina}
                   className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none disabled:bg-gray-50 disabled:text-gray-600"
                 >
                   <option value="broker">Broker</option>
                   <option value="master">Master</option>
                 </select>
-                {isEditing && (
-                  <p className="text-xs text-amber-600 mt-2">
-                    ⚠️ El cambio de rol se aplicará en el próximo inicio de sesión
+                {isEditing && !isOficina && (
+                  <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                    <p className="text-xs text-amber-800">
+                      <strong>⚠️ Importante:</strong> El cambio de rol se aplicará inmediatamente en la base de datos. 
+                      El usuario verá los cambios en su próximo inicio de sesión.
+                    </p>
+                    <p className="text-xs text-amber-700 mt-1">
+                      • <strong>Broker:</strong> Acceso a su cartera y herramientas básicas<br/>
+                      • <strong>Master:</strong> Acceso completo al sistema y gestión de todos los corredores
+                    </p>
+                  </div>
+                )}
+                {isOficina && (
+                  <p className="text-xs text-gray-500 mt-2">
+                    El rol de Oficina no puede ser modificado
                   </p>
                 )}
               </div>
@@ -453,19 +490,16 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
                 </select>
               </div>
 
-              {isOficina && (
-                <p className="text-xs text-gray-500 mt-1">
-                  Oficina siempre tiene 100% bloqueado
+              {isEditing && !isOficina && (
+                <p className="text-xs text-blue-600 mt-2">
+                  💡 Al guardar, podrás elegir si el nuevo porcentaje aplica solo a nuevas pólizas o a todas las existentes.
                 </p>
               )}
 
-              {!isOficina && (
-                <button
-                  onClick={handleApplyDefaultToAll}
-                  className="w-full px-4 py-3 bg-[#8AAA19] hover:bg-[#7a9916] text-white rounded-lg transition-all font-semibold"
-                >
-                  Aplicar % default a todas las pólizas
-                </button>
+              {!isEditing && isOficina && (
+                <p className="text-xs text-gray-500 mt-1">
+                  Oficina siempre tiene 100% bloqueado
+                </p>
               )}
             </div>
           </div>
@@ -569,8 +603,8 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
                 </label>
                 <input
                   type="text"
-                  value={formData.titular_cedula}
-                  onChange={(e) => setFormData({ ...formData, titular_cedula: e.target.value })}
+                  value={formData.beneficiary_id}
+                  onChange={(e) => setFormData({ ...formData, beneficiary_id: e.target.value })}
                   disabled={!isEditing || useBrokerData}
                   placeholder="8-123-4567"
                   className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none disabled:bg-gray-50 disabled:text-gray-600"
@@ -599,7 +633,8 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
                         setFormData({
                           ...formData,
                           nombre_completo: brokerName,
-                          titular_cedula: formData.national_id
+                          beneficiary_name: brokerName,
+                          beneficiary_id: formData.national_id
                         });
                       }
                     }}
@@ -760,6 +795,102 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
           </div>
         </div>
       </div>
+
+      {/* Modal: Cambio de Porcentaje */}
+      {showPercentModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-amber-100 rounded-full">
+                <FaPercentage className="text-2xl text-amber-600" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-[#010139]">
+                  Cambio de % de Comisión
+                </h3>
+                <p className="text-sm text-gray-600">
+                  De {(broker.percent_default * 100).toFixed(0)}% → {(formData.percent_default * 100).toFixed(0)}%
+                </p>
+              </div>
+            </div>
+
+            <div className="border-t border-gray-200 pt-4">
+              <p className="text-gray-700 mb-4">
+                ¿Cómo deseas aplicar este cambio de porcentaje?
+              </p>
+
+              <div className="space-y-3">
+                {/* Opción 1: Solo nuevas pólizas */}
+                <button
+                  onClick={() => saveUpdates(pendingUpdates, false)}
+                  disabled={saving}
+                  className="w-full p-4 text-left border-2 border-gray-300 rounded-lg hover:border-[#8AAA19] hover:bg-gray-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="mt-1">
+                      <div className="w-5 h-5 rounded-full border-2 border-[#8AAA19] flex items-center justify-center">
+                        <div className="w-2 h-2 rounded-full bg-[#8AAA19]"></div>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-gray-900">
+                        📝 Solo para nuevas pólizas
+                      </p>
+                      <p className="text-sm text-gray-600 mt-1">
+                        El nuevo porcentaje se aplicará únicamente a las pólizas que se agreguen en el futuro. 
+                        Las pólizas existentes mantendrán su porcentaje actual.
+                      </p>
+                    </div>
+                  </div>
+                </button>
+
+                {/* Opción 2: Todas las pólizas */}
+                <button
+                  onClick={() => saveUpdates(pendingUpdates, true)}
+                  disabled={saving}
+                  className="w-full p-4 text-left border-2 border-amber-300 bg-amber-50 rounded-lg hover:border-amber-500 hover:bg-amber-100 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="mt-1">
+                      <div className="w-5 h-5 rounded-full border-2 border-amber-600 flex items-center justify-center">
+                        <div className="w-2 h-2 rounded-full bg-amber-600"></div>
+                      </div>
+                    </div>
+                    <div>
+                      <p className="font-semibold text-amber-900">
+                        ⚠️ Aplicar a TODAS las pólizas existentes
+                      </p>
+                      <p className="text-sm text-amber-700 mt-1">
+                        El nuevo porcentaje se aplicará a TODAS las pólizas en la cartera de este corredor, 
+                        incluyendo las existentes. Esto afecta la base de datos completa.
+                      </p>
+                    </div>
+                  </div>
+                </button>
+              </div>
+
+              {/* Botón Cancelar */}
+              <button
+                onClick={() => {
+                  setShowPercentModal(false);
+                  setPendingUpdates(null);
+                }}
+                disabled={saving}
+                className="w-full mt-4 px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Cancelar
+              </button>
+            </div>
+
+            {saving && (
+              <div className="flex items-center justify-center gap-2 text-[#010139]">
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-[#010139]"></div>
+                <span>Guardando cambios...</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </>
   );
 }

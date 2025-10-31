@@ -167,12 +167,26 @@ export default function ExpedienteManager({
 
   const getDocumentTypeLabel = (type: DocumentType, name: string | null) => {
     const labels: Record<DocumentType, string> = {
-      cedula: 'Cédula',
+      cedula: 'CEDULA/PASAPORTE',
       licencia: 'Licencia',
       registro_vehicular: 'Registro Vehicular',
       otros: name || 'Otro Documento',
     };
     return labels[type];
+  };
+
+  // Get required documents that should always be shown
+  const getRequiredDocuments = () => {
+    const required: DocumentType[] = [];
+    if (showClientDocs) {
+      required.push('cedula');
+    }
+    return required;
+  };
+
+  // Check if a required document exists
+  const hasRequiredDoc = (type: DocumentType) => {
+    return documents.some(doc => doc.document_type === type);
   };
 
   const filterDocuments = () => {
@@ -203,54 +217,128 @@ export default function ExpedienteManager({
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <h3 className="text-lg font-bold text-[#010139]">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="text-base font-bold text-[#010139]">
           📁 Expediente del Cliente
         </h3>
         {!readOnly && (
           <button
             onClick={() => setShowUploadModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg hover:shadow-lg transition-all text-sm font-medium"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg hover:shadow-lg transition-all text-xs font-medium"
           >
-            <FaPlus />
-            Subir Documento
+            <FaPlus size={12} />
+            <span className="hidden sm:inline">Subir</span>
+            <span className="sm:hidden">+</span>
           </button>
         )}
       </div>
 
       {/* Documents List */}
-      {filteredDocs.length === 0 ? (
-        <div className="text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
-          <FaFile className="mx-auto text-4xl text-gray-400 mb-2" />
-          <p className="text-gray-500">No hay documentos en el expediente</p>
-          {!readOnly && (
-            <button
-              onClick={() => setShowUploadModal(true)}
-              className="mt-4 text-[#8AAA19] font-medium hover:underline"
-            >
-              Subir primer documento
-            </button>
-          )}
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {filteredDocs.map((doc) => (
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3">
+        {/* Required documents - always show */}
+        {getRequiredDocuments().map((reqType) => {
+          const doc = documents.find(d => d.document_type === reqType);
+          const hasDoc = !!doc;
+
+          if (hasDoc && doc) {
+            // Document exists - show normally
+            return (
+              <div
+                key={doc.id}
+                className="flex items-center gap-2 p-2.5 sm:p-3 bg-white border border-gray-200 rounded-lg hover:border-[#8AAA19] transition-all"
+              >
+                <div className="text-lg sm:text-xl flex-shrink-0">
+                  {getDocumentIcon(doc.mime_type)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-[#010139] truncate text-xs sm:text-sm">
+                    {getDocumentTypeLabel(doc.document_type, doc.document_name)}
+                  </p>
+                  <p className="text-[10px] sm:text-xs text-gray-500 truncate">{doc.file_name}</p>
+                  {doc.notes && (
+                    <p className="text-[10px] text-gray-600 italic mt-0.5">{doc.notes}</p>
+                  )}
+                  <p className="text-[9px] sm:text-[10px] text-gray-400 mt-0.5">
+                    {new Date(doc.uploaded_at).toLocaleDateString('es-PA', {
+                      day: '2-digit',
+                      month: 'short',
+                      year: 'numeric',
+                    })}
+                  </p>
+                </div>
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <button
+                    onClick={() => handleDownload(doc)}
+                    className="p-1.5 text-[#010139] hover:bg-gray-100 rounded transition-all"
+                    title="Descargar"
+                  >
+                    <FaDownload size={14} />
+                  </button>
+                  {!readOnly && (
+                    <button
+                      onClick={() => handleDelete(doc.id)}
+                      className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-all"
+                      title="Eliminar"
+                    >
+                      <FaTrash size={14} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          } else {
+            // Document missing - show placeholder with "Falta"
+            return (
+              <div
+                key={reqType}
+                className="flex items-center gap-2 p-2.5 sm:p-3 bg-amber-50 border border-amber-300 rounded-lg"
+              >
+                <div className="text-lg sm:text-xl flex-shrink-0 text-amber-600">
+                  <FaFile />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-amber-900 text-xs sm:text-sm">
+                    {getDocumentTypeLabel(reqType, null)}
+                  </p>
+                  <p className="text-xs text-amber-700 font-medium mt-0.5">
+                    ⚠️ Falta
+                  </p>
+                </div>
+                {!readOnly && (
+                  <button
+                    onClick={() => {
+                      setUploadDocType(reqType);
+                      setShowUploadModal(true);
+                    }}
+                    className="flex items-center gap-1 px-2 py-1.5 bg-[#8AAA19] text-white rounded-lg hover:bg-[#6d8814] transition-all text-xs font-medium"
+                  >
+                    <FaPlus size={10} />
+                    Incluir
+                  </button>
+                )}
+              </div>
+            );
+          }
+        })}
+
+        {/* Other uploaded documents */}
+        {filteredDocs.filter(doc => !getRequiredDocuments().includes(doc.document_type)).map((doc) => (
             <div
               key={doc.id}
-              className="flex items-center gap-3 p-4 bg-white border-2 border-gray-200 rounded-lg hover:border-[#8AAA19] hover:shadow-md transition-all"
+              className="flex items-center gap-2 p-2.5 sm:p-3 bg-white border border-gray-200 rounded-lg hover:border-[#8AAA19] transition-all"
             >
-              <div className="text-2xl flex-shrink-0">
+              <div className="text-lg sm:text-xl flex-shrink-0">
                 {getDocumentIcon(doc.mime_type)}
               </div>
               <div className="flex-1 min-w-0">
-                <p className="font-semibold text-[#010139] truncate">
+                <p className="font-semibold text-[#010139] truncate text-xs sm:text-sm">
                   {getDocumentTypeLabel(doc.document_type, doc.document_name)}
                 </p>
-                <p className="text-xs text-gray-500 truncate">{doc.file_name}</p>
+                <p className="text-[10px] sm:text-xs text-gray-500 truncate">{doc.file_name}</p>
                 {doc.notes && (
-                  <p className="text-xs text-gray-600 italic mt-1">{doc.notes}</p>
+                  <p className="text-[10px] text-gray-600 italic mt-0.5">{doc.notes}</p>
                 )}
-                <p className="text-[10px] text-gray-400 mt-1">
+                <p className="text-[9px] sm:text-[10px] text-gray-400 mt-0.5">
                   {new Date(doc.uploaded_at).toLocaleDateString('es-PA', {
                     day: '2-digit',
                     month: 'short',
@@ -258,58 +346,57 @@ export default function ExpedienteManager({
                   })}
                 </p>
               </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
+              <div className="flex items-center gap-1 flex-shrink-0">
                 <button
                   onClick={() => handleDownload(doc)}
-                  className="p-2 text-[#010139] hover:bg-gray-100 rounded-lg transition-all"
+                  className="p-1.5 text-[#010139] hover:bg-gray-100 rounded transition-all"
                   title="Descargar"
                 >
-                  <FaDownload />
+                  <FaDownload size={14} />
                 </button>
                 {!readOnly && (
                   <button
                     onClick={() => handleDelete(doc.id)}
-                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-all"
+                    className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-all"
                     title="Eliminar"
                   >
-                    <FaTrash />
+                    <FaTrash size={14} />
                   </button>
                 )}
               </div>
             </div>
           ))}
-        </div>
-      )}
+      </div>
 
       {/* Upload Modal */}
       {showUploadModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white border-b-2 border-gray-100 px-6 py-4 flex items-center justify-between">
-              <h3 className="text-xl font-bold text-[#010139]">Subir Documento</h3>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-3 sm:p-4">
+          <div className="bg-white rounded-lg shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
+              <h3 className="text-base font-bold text-[#010139]">Subir Documento</h3>
               <button
                 onClick={() => {
                   setShowUploadModal(false);
                   resetUploadForm();
                 }}
-                className="p-2 hover:bg-gray-100 rounded-lg transition-all"
+                className="p-1.5 hover:bg-gray-100 rounded transition-all"
               >
-                <FaTimes className="text-gray-600" />
+                <FaTimes size={16} className="text-gray-600" />
               </button>
             </div>
 
-            <div className="p-6 space-y-4">
+            <div className="p-4 space-y-3">
               {/* Document Type */}
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
                   Tipo de Documento *
                 </label>
                 <select
                   value={uploadDocType}
                   onChange={(e) => setUploadDocType(e.target.value as DocumentType)}
-                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none text-sm"
                 >
-                  {showClientDocs && <option value="cedula">Cédula</option>}
+                  {showClientDocs && <option value="cedula">CEDULA/PASAPORTE</option>}
                   {showClientDocs && <option value="licencia">Licencia</option>}
                   {showPolicyDocs && policyId && (
                     <option value="registro_vehicular">Registro Vehicular</option>
@@ -321,7 +408,7 @@ export default function ExpedienteManager({
               {/* Document Name (only for "otros") */}
               {uploadDocType === 'otros' && (
                 <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
                     Nombre del Documento *
                   </label>
                   <input
@@ -329,56 +416,56 @@ export default function ExpedienteManager({
                     value={uploadDocName}
                     onChange={(e) => setUploadDocName(e.target.value)}
                     placeholder="Ej: Carta de autorización"
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none text-sm"
                   />
                 </div>
               )}
 
               {/* File Input */}
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
                   Archivo *
                 </label>
                 <input
                   type="file"
                   accept=".pdf,.jpg,.jpeg,.png,.webp"
                   onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
-                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none text-sm"
                 />
-                <p className="text-xs text-gray-500 mt-1">
-                  Formatos permitidos: PDF, JPG, PNG, WebP (máx. 10MB)
+                <p className="text-[10px] text-gray-500 mt-1">
+                  PDF, JPG, PNG, WebP (máx. 10MB)
                 </p>
               </div>
 
               {/* Notes */}
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
                   Notas (opcional)
                 </label>
                 <textarea
                   value={uploadNotes}
                   onChange={(e) => setUploadNotes(e.target.value)}
-                  rows={3}
-                  placeholder="Agrega notas sobre este documento..."
-                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none resize-none"
+                  rows={2}
+                  placeholder="Notas sobre este documento..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none resize-none text-sm"
                 />
               </div>
 
               {/* Actions */}
-              <div className="flex gap-3 pt-4">
+              <div className="flex gap-2 pt-2">
                 <button
                   onClick={() => {
                     setShowUploadModal(false);
                     resetUploadForm();
                   }}
-                  className="flex-1 px-6 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-all font-medium"
+                  className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-all font-medium text-sm"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={handleUpload}
                   disabled={uploading || !uploadFile}
-                  className="flex-1 px-6 py-3 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg hover:shadow-lg transition-all font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 px-4 py-2 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg hover:shadow-lg transition-all font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {uploading ? 'Subiendo...' : 'Subir'}
                 </button>

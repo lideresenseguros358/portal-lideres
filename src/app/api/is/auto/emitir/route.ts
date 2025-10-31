@@ -75,18 +75,18 @@ export async function POST(request: NextRequest) {
     const result = await emitirPolizaAuto(
       {
         vIdPv,
-        vcodtipodoc: vcodtipodoc || 'CED',
+        vcodtipodoc: parseInt(vcodtipodoc as string) || 1, // Asegurar que sea número (1=CC)
         vnrodoc,
         vnombre,
         vapellido,
         vtelefono,
         vcorreo,
-        vcodmarca,
-        vcodmodelo,
+        vcodmarca: parseInt(vcodmarca as string), // Asegurar que sea número
+        vcodmodelo: parseInt(vcodmodelo as string), // Asegurar que sea número
         vanioauto: parseInt(vanioauto),
         vsumaaseg: parseFloat(vsumaaseg) || 0,
-        vcodplancobertura,
-        vcodgrupotarifa,
+        vcodplancobertura: parseInt(vcodplancobertura as string), // Asegurar que sea número
+        vcodgrupotarifa: parseInt(vcodgrupotarifa as string), // Asegurar que sea número
         paymentToken,
       },
       environment as ISEnvironment
@@ -120,13 +120,42 @@ export async function POST(request: NextRequest) {
       // No fallar emisión si BD falla, pero logear
     }
     
-    return NextResponse.json({
+    // Preparar datos completos para visualización de póliza
+    const policyData = {
       success: true,
+      insurer: 'INTERNACIONAL',
       nroPoliza: result.nroPoliza,
+      poliza: result.nroPoliza, // Alias
       pdfUrl: result.pdfUrl,
       clientId: clientePolicyResult.clientId,
       policyId: clientePolicyResult.policyId,
-    });
+      ramo: 'AUTO',
+      // Datos del cliente para visualización
+      cliente: {
+        nombre: `${vnombre} ${vapellido}`.trim(),
+        cedula: vnrodoc,
+        email: vcorreo,
+        telefono: vtelefono,
+      },
+      // Datos del vehículo
+      vehiculo: {
+        marca: vmarca_label || 'N/A',
+        modelo: vmodelo_label || 'N/A',
+        ano: parseInt(vanioauto),
+        placa: 'Por asignar', // No tenemos placa en el flujo actual
+      },
+      // Prima (si está disponible en result)
+      prima: result.prima ? {
+        total: result.prima,
+      } : undefined,
+      // Vigencia (si está disponible)
+      vigencia: result.vigencia || {
+        desde: new Date().toLocaleDateString('es-PA'),
+        hasta: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toLocaleDateString('es-PA'),
+      },
+    };
+    
+    return NextResponse.json(policyData);
     
   } catch (error: any) {
     console.error('[API IS Auto Emitir] Error:', error);

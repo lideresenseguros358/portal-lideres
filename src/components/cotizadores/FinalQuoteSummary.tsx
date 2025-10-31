@@ -23,6 +23,8 @@ interface FinalQuoteSummaryProps {
   selectedPlan: any;
   installments: number;
   monthlyPayment: number;
+  emissionData?: any;
+  inspectionPhotos?: any[];
   onConfirm: () => void;
 }
 
@@ -31,6 +33,8 @@ export default function FinalQuoteSummary({
   selectedPlan,
   installments,
   monthlyPayment,
+  emissionData,
+  inspectionPhotos,
   onConfirm
 }: FinalQuoteSummaryProps) {
   const router = useRouter();

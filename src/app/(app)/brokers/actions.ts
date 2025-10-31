@@ -159,161 +159,144 @@ export async function actionGetBroker(brokerId: string) {
 export async function actionUpdateBroker(brokerId: string, updates: Partial<TablesUpdate<'brokers'>>) {
   try {
     console.log('[actionUpdateBroker] Starting update for brokerId:', brokerId);
-    console.log('[actionUpdateBroker] Updates payload (raw):', updates);
+    console.log('[actionUpdateBroker] Updates payload:', updates);
     
+    // ====== AUTHENTICATION & AUTHORIZATION ======
     const supabaseServer = await getSupabaseServer();
     const { data: { user } } = await supabaseServer.auth.getUser();
     
     if (!user) {
-      console.log('[actionUpdateBroker] No user authenticated');
       return { ok: false as const, error: 'No autenticado' };
     }
 
-    console.log('[actionUpdateBroker] User ID:', user.id);
-
-    // Check if user is master
     const { data: profile } = await supabaseServer
       .from('profiles')
       .select('role')
       .eq('id', user.id)
       .single();
 
-    console.log('[actionUpdateBroker] User role:', profile?.role);
-
     if (profile?.role !== 'master') {
       return { ok: false as const, error: 'Solo Master puede editar brokers' };
     }
 
-    // Extract fields that don't belong to brokers table
-    const { role: newRole, titular_cedula, ...brokerUpdates } = updates as any;
-
-    // Clean up empty strings - convert to null for optional fields
-    const nullableFields = ['birth_date', 'phone', 'national_id', 'assa_code', 'license_no', 'bank_account_no', 'beneficiary_name', 'beneficiary_id', 'email', 'carnet_expiry_date', 'nombre_completo', 'bank_route', 'tipo_cuenta'];
-    
-    const cleanedUpdates = Object.entries(brokerUpdates).reduce((acc, [key, value]) => {
-      // Convert empty strings to null for nullable fields
-      if (nullableFields.includes(key) && value === '') {
-        acc[key] = null;
-      } else if (value !== undefined) {
-        acc[key] = value;
-      }
-      return acc;
-    }, {} as any);
-
-    console.log('[actionUpdateBroker] Cleaned updates (brokers only):', cleanedUpdates);
-    console.log('[actionUpdateBroker] Role to sync:', newRole);
-
     const supabase = await getSupabaseAdmin();
-    console.log('[actionUpdateBroker] Using admin client for update');
 
-    // Get broker with profile info
-    const { data: broker } = await supabase
+    // ====== GET BROKER INFO ======
+    const { data: broker, error: fetchError } = await supabase
       .from('brokers')
       .select('p_id, email')
       .eq('id', brokerId)
       .single();
 
-    if (!broker) {
+    if (fetchError || !broker) {
       return { ok: false as const, error: 'Corredor no encontrado' };
     }
 
-    // Get profile email separately
-    let brokerEmail = broker?.email;
-    if (broker.p_id) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('email')
-        .eq('id', broker.p_id)
-        .single();
-      if (profile?.email) {
-        brokerEmail = profile.email;
-      }
-    }
-    if (brokerEmail === OFICINA_EMAIL && cleanedUpdates.percent_default && cleanedUpdates.percent_default !== 1.00) {
-      return { ok: false as const, error: 'No se puede cambiar el % de Oficina (siempre 100%)' };
+    // ====== EXTRACT ROLE & PREPARE UPDATES ======
+    const { role: newRole, ...brokerUpdates } = updates as any;
+
+    // Clean up empty strings - convert to null for optional fields
+    const nullableFields = [
+      'birth_date', 'phone', 'national_id', 'assa_code', 'license_no', 
+      'bank_account_no', 'beneficiary_name', 'beneficiary_id', 'email', 
+      'carnet_expiry_date', 'nombre_completo', 'bank_route', 'tipo_cuenta'
+    ];
+    
+    const cleanedBrokerUpdates: Record<string, any> = {};
+    for (const [key, value] of Object.entries(brokerUpdates)) {
+      if (value === undefined) continue;
+      cleanedBrokerUpdates[key] = (nullableFields.includes(key) && value === '') ? null : value;
     }
 
-    console.log('[actionUpdateBroker] Executing UPDATE query on brokers table...');
-    const { data: updatedBroker, error } = await supabase
+    // Prevent changing Oficina's percent
+    const { data: existingProfile } = await supabase
+      .from('profiles')
+      .select('email')
+      .eq('id', broker.p_id)
+      .single();
+      
+    if (existingProfile?.email === OFICINA_EMAIL) {
+      if (cleanedBrokerUpdates.percent_default && cleanedBrokerUpdates.percent_default !== 1.00) {
+        return { ok: false as const, error: 'No se puede cambiar el % de Oficina (siempre 100%)' };
+      }
+      if (newRole) {
+        return { ok: false as const, error: 'No se puede cambiar el rol de Oficina' };
+      }
+    }
+
+    // ====== UPDATE BROKERS TABLE ======
+    console.log('[actionUpdateBroker] Updating brokers table:', cleanedBrokerUpdates);
+    const { data: updatedBroker, error: updateError } = await supabase
       .from('brokers')
-      .update(cleanedUpdates)
+      .update(cleanedBrokerUpdates satisfies TablesUpdate<'brokers'>)
       .eq('id', brokerId)
       .select()
       .single();
 
-    if (error) {
-      console.error('[actionUpdateBroker] Error updating broker:', error);
-      return { ok: false as const, error: error.message };
+    if (updateError) {
+      console.error('[actionUpdateBroker] Error updating broker:', updateError);
+      return { ok: false as const, error: updateError.message };
     }
 
-    console.log('[actionUpdateBroker] Broker table updated successfully');
-
-    // Sync data to profiles and auth.users
-    if (broker.p_id) {
-      const profileUpdates: any = {};
-      
-      // Sync name to profiles.full_name
-      if (cleanedUpdates.name) {
-        console.log('[actionUpdateBroker] Syncing name to profiles.full_name');
-        profileUpdates.full_name = cleanedUpdates.name;
-      }
-      
-      // Sync email to profiles.email
-      if (cleanedUpdates.email) {
-        console.log('[actionUpdateBroker] Syncing email to profiles.email');
-        profileUpdates.email = cleanedUpdates.email;
-      }
-
-      // Sync role to profiles.role
-      if (newRole && (newRole === 'master' || newRole === 'broker')) {
-        console.log('[actionUpdateBroker] Syncing role to profiles.role:', newRole);
-        profileUpdates.role = newRole;
-      }
-
-      // Update profiles if there are changes
-      if (Object.keys(profileUpdates).length > 0) {
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .update(profileUpdates)
-          .eq('id', broker.p_id);
-
-        if (profileError) {
-          console.error('[actionUpdateBroker] Warning: Could not sync to profiles:', profileError);
-          // Don't fail the whole operation, just log the warning
-        } else {
-          console.log('[actionUpdateBroker] Profile synced successfully:', profileUpdates);
-        }
-      }
-
-      // Sync email to auth.users if email was changed
-      if (cleanedUpdates.email) {
-        console.log('[actionUpdateBroker] Syncing email to auth.users');
-        const { error: authError } = await supabase.auth.admin.updateUserById(
-          broker.p_id,
-          { email: cleanedUpdates.email }
-        );
-
-        if (authError) {
-          console.error('[actionUpdateBroker] Warning: Could not sync email to auth.users:', authError);
-          // Don't fail the whole operation, just log the warning
-        } else {
-          console.log('[actionUpdateBroker] Auth email synced successfully');
-        }
-      }
-    }
-
-    console.log('[actionUpdateBroker] Update successful, data:', updatedBroker);
-    console.log('[actionUpdateBroker] Revalidating paths...');
+    // ====== SYNC TO PROFILES & AUTH.USERS ======
+    const syncErrors: string[] = [];
     
+    // Prepare profile updates
+    const profileUpdates: Partial<TablesUpdate<'profiles'>> = {};
+    if (cleanedBrokerUpdates.name !== undefined) {
+      profileUpdates.full_name = cleanedBrokerUpdates.name;
+    }
+    if (cleanedBrokerUpdates.email !== undefined) {
+      profileUpdates.email = cleanedBrokerUpdates.email;
+    }
+    if (newRole && (newRole === 'master' || newRole === 'broker')) {
+      profileUpdates.role = newRole;
+    }
+
+    // Update profiles if there are changes
+    if (Object.keys(profileUpdates).length > 0) {
+      console.log('[actionUpdateBroker] Syncing to profiles:', profileUpdates);
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .update(profileUpdates)
+        .eq('id', broker.p_id);
+
+      if (profileError) {
+        console.error('[actionUpdateBroker] Profile sync error:', profileError);
+        syncErrors.push('profiles: ' + profileError.message);
+      }
+    }
+
+    // Sync email to auth.users if changed
+    if (cleanedBrokerUpdates.email !== undefined && cleanedBrokerUpdates.email !== null) {
+      console.log('[actionUpdateBroker] Syncing email to auth.users');
+      const { error: authError } = await supabase.auth.admin.updateUserById(
+        broker.p_id,
+        { email: cleanedBrokerUpdates.email }
+      );
+
+      if (authError) {
+        console.error('[actionUpdateBroker] Auth sync error:', authError);
+        syncErrors.push('auth: ' + authError.message);
+      }
+    }
+
+    // ====== REVALIDATE PATHS ======
     revalidatePath('/brokers');
     revalidatePath(`/brokers/${brokerId}`);
-    revalidatePath('/account');  // Revalidate account page if broker updates their own profile
-    revalidatePath('/', 'layout'); // Revalidate layout to update navbar
+    revalidatePath('/account');
+    revalidatePath('/', 'layout');
 
-    console.log('[actionUpdateBroker] Complete!');
-    return { ok: true as const, data: updatedBroker };
+    console.log('[actionUpdateBroker] Complete! Sync errors:', syncErrors.length);
+    
+    // Return success even if sync had issues (broker table is updated)
+    return { 
+      ok: true as const, 
+      data: updatedBroker,
+      warnings: syncErrors.length > 0 ? syncErrors : undefined
+    };
   } catch (error: any) {
-    console.error('Error in actionUpdateBroker:', error);
+    console.error('[actionUpdateBroker] Unexpected error:', error);
     return { ok: false as const, error: error.message };
   }
 }
@@ -707,105 +690,91 @@ export async function actionBulkUpdateBrokers(updates: Array<{ id: string; [key:
 
     const supabase = await getSupabaseAdmin();
     
-    // Update each broker
+    // ====== BULK UPDATE PROCESS ======
     const results = [];
-    let errorCount = 0;
+    const nullableFields = [
+      'birth_date', 'phone', 'national_id', 'assa_code', 'license_no', 
+      'bank_account_no', 'beneficiary_name', 'beneficiary_id', 'email', 
+      'carnet_expiry_date', 'nombre_completo', 'bank_route', 'tipo_cuenta'
+    ];
     
     for (const update of updates) {
-      const { id, role: newRole, titular_cedula, ...brokerUpdates } = update as any;
+      const { id, role: newRole, ...brokerUpdates } = update as any;
       
-      // Skip if only id is present (no changes)
+      // Skip if no changes
       if (Object.keys(brokerUpdates).length === 0 && !newRole) {
         continue;
       }
 
       try {
-        // Clean up empty strings
-        const nullableFields = ['birth_date', 'phone', 'national_id', 'assa_code', 'license_no', 'bank_account_no', 'beneficiary_name', 'beneficiary_id', 'email', 'carnet_expiry_date', 'nombre_completo', 'bank_route', 'tipo_cuenta'];
-        
-        const cleanedUpdates = Object.entries(brokerUpdates).reduce((acc, [key, value]) => {
-          if (nullableFields.includes(key) && value === '') {
-            acc[key] = null;
-          } else if (value !== undefined) {
-            acc[key] = value;
-          }
-          return acc;
-        }, {} as any);
+        // Clean updates
+        const cleanedUpdates: Record<string, any> = {};
+        for (const [key, value] of Object.entries(brokerUpdates)) {
+          if (value === undefined) continue;
+          cleanedUpdates[key] = (nullableFields.includes(key) && value === '') ? null : value;
+        }
 
-        // Update broker table
-        const { error: brokerError } = await supabase
+        // Update brokers table
+        const { data: broker, error: brokerError } = await supabase
           .from('brokers')
-          .update(cleanedUpdates)
-          .eq('id', id);
+          .update(cleanedUpdates satisfies TablesUpdate<'brokers'>)
+          .eq('id', id)
+          .select('p_id')
+          .single();
 
-        if (brokerError) {
+        if (brokerError || !broker) {
           console.error(`[actionBulkUpdateBrokers] Error updating broker ${id}:`, brokerError);
-          errorCount++;
+          results.push({ id, success: false, error: brokerError?.message || 'Unknown error' });
           continue;
         }
 
-        // Get broker profile
-        const { data: broker } = await supabase
-          .from('brokers')
-          .select('p_id')
-          .eq('id', id)
-          .single();
-
         // Sync to profiles if needed
-        if (broker?.p_id) {
-          const profileUpdates: any = {};
-          
-          if (cleanedUpdates.name) {
-            profileUpdates.full_name = cleanedUpdates.name;
-          }
-          
-          if (cleanedUpdates.email) {
-            profileUpdates.email = cleanedUpdates.email;
-          }
+        const profileUpdates: Partial<TablesUpdate<'profiles'>> = {};
+        if (cleanedUpdates.name !== undefined) profileUpdates.full_name = cleanedUpdates.name;
+        if (cleanedUpdates.email !== undefined) profileUpdates.email = cleanedUpdates.email;
+        if (newRole && (newRole === 'master' || newRole === 'broker')) profileUpdates.role = newRole;
 
-          if (newRole && (newRole === 'master' || newRole === 'broker')) {
-            profileUpdates.role = newRole;
-          }
+        if (Object.keys(profileUpdates).length > 0) {
+          await supabase
+            .from('profiles')
+            .update(profileUpdates)
+            .eq('id', broker.p_id);
+        }
 
-          if (Object.keys(profileUpdates).length > 0) {
-            await supabase
-              .from('profiles')
-              .update(profileUpdates)
-              .eq('id', broker.p_id);
-          }
-
-          // Sync email to auth.users if changed
-          if (cleanedUpdates.email) {
-            await supabase.auth.admin.updateUserById(
-              broker.p_id,
-              { email: cleanedUpdates.email }
-            );
-          }
+        // Sync email to auth.users if changed
+        if (cleanedUpdates.email !== undefined && cleanedUpdates.email !== null) {
+          await supabase.auth.admin.updateUserById(
+            broker.p_id,
+            { email: cleanedUpdates.email }
+          );
         }
 
         results.push({ id, success: true });
       } catch (error: any) {
         console.error(`[actionBulkUpdateBrokers] Error processing broker ${id}:`, error);
-        errorCount++;
         results.push({ id, success: false, error: error.message });
       }
     }
 
-    console.log('[actionBulkUpdateBrokers] Complete. Success:', results.length - errorCount, 'Errors:', errorCount);
+    const successCount = results.filter(r => r.success).length;
+    const errorCount = results.filter(r => !r.success).length;
+    console.log(`[actionBulkUpdateBrokers] Complete. Success: ${successCount}, Errors: ${errorCount}`);
     
     revalidatePath('/brokers');
 
-    if (errorCount > 0) {
+    if (errorCount > 0 && successCount === 0) {
       return { 
         ok: false as const, 
-        error: `${errorCount} corredores no se pudieron actualizar` 
+        error: `No se pudo actualizar ningún corredor. ${errorCount} errores.` 
       };
     }
 
     return { 
       ok: true as const, 
       data: results,
-      message: `${results.length} corredor(es) actualizados correctamente`
+      message: successCount > 0 
+        ? `${successCount} corredor(es) actualizados${errorCount > 0 ? ` (${errorCount} con errores)` : ''}`
+        : 'No se realizaron cambios'
     };
   } catch (error: any) {
     console.error('Error in actionBulkUpdateBrokers:', error);

@@ -1,17 +1,18 @@
 'use client';
 
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Eye, Edit3, Trash2, ChevronDown, ChevronUp, FileDown, FileSpreadsheet, Download, FolderOpen } from 'lucide-react';
+import { Eye, Edit3, Trash2, ChevronDown, ChevronUp, FileDown, FileSpreadsheet, Download, FolderOpen, Filter, Upload, CheckSquare, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import Modal from '@/components/Modal';
 import ClientForm from './ClientForm';
-import ClientsByInsurer from './ClientsByInsurer';
+import ClientsByMonth from './ClientsByMonth';
 import ClientPolicyWizard from './ClientPolicyWizard';
 import PreliminaryClientsTab from './PreliminaryClientsTab';
 import ExportFormatModal from './ExportFormatModal';
 import ExpedienteManager from '@/components/expediente/ExpedienteManager';
+import InlineSearchBar from './InlineSearchBar';
 import { ClientWithPolicies, InsurerWithCount } from '@/types/db';
 import { actionGetPreliminaryClients } from '@/app/(app)/db/preliminary-actions';
 
@@ -23,6 +24,13 @@ interface DatabaseTabsProps {
   searchQuery?: string;
   role: string;
   userEmail: string;
+}
+
+interface FilterOptions {
+  insurer?: string;
+  ramo?: string;
+  month?: number;
+  broker?: string;
 }
 
 const formatDate = (value?: string | null) => {
@@ -243,9 +251,10 @@ interface ClientsListViewProps {
   selectedClients: Set<string>;
   onToggleClient: (clientId: string) => void;
   onSelectAll: () => void;
+  selectionMode: boolean;
 }
 
-const ClientsListView = ({ clients, onView, onEdit, onDelete, role, selectedClients, onToggleClient, onSelectAll }: ClientsListViewProps) => {
+const ClientsListView = ({ clients, onView, onEdit, onDelete, role, selectedClients, onToggleClient, onSelectAll, selectionMode }: ClientsListViewProps) => {
   const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set());
 
   const toggleClient = (clientId: string) => {
@@ -289,27 +298,27 @@ const ClientsListView = ({ clients, onView, onEdit, onDelete, role, selectedClie
   const allSelected = clients.length > 0 && selectedClients.size === clients.length;
 
   return (
-    <div className="clients-wrapper">
+    <div className={`clients-wrapper ${selectionMode ? 'with-selection' : ''}`}>
       <table className="clients-table">
         <thead>
           <tr className="ct-head">
-            <th className="ct-th" style={{ width: '50px' }}>
-              <input
-                type="checkbox"
-                checked={allSelected}
-                onChange={onSelectAll}
-                className="w-5 h-5 text-[#8AAA19] rounded focus:ring-[#8AAA19] cursor-pointer"
-              />
-            </th>
-            <th className="ct-th">Cliente</th>
-            <th className="ct-th">Cédula</th>
-            <th className="ct-th">Celular</th>
-            <th className="ct-th">Pólizas</th>
-            <th className="ct-th">Aseguradora</th>
-            <th className="ct-th">Ramo</th>
-            <th className="ct-th">Renovación</th>
-            {role === 'master' && <th className="ct-th">Corredor</th>}
-            <th className="ct-th text-right">Acciones</th>
+            {selectionMode && (
+              <th className="ct-th" style={{ width: '50px' }}>
+                <input
+                  type="checkbox"
+                  checked={allSelected}
+                  onChange={onSelectAll}
+                  className="w-5 h-5 text-[#8AAA19] rounded focus:ring-[#8AAA19] cursor-pointer"
+                />
+              </th>
+            )}
+            <th className="ct-th ct-th-name">Cliente</th>
+            <th className="ct-th ct-th-cedula">Cédula</th>
+            <th className="ct-th ct-th-correo">Correo</th>
+            <th className="ct-th ct-th-celular">Celular</th>
+            <th className="ct-th ct-th-polizas">Pólizas</th>
+            {role === 'master' && <th className="ct-th ct-th-corredor">Corredor</th>}
+            <th className="ct-th ct-th-acciones text-right">Acciones</th>
           </tr>
         </thead>
         <tbody>
@@ -319,16 +328,18 @@ const ClientsListView = ({ clients, onView, onEdit, onDelete, role, selectedClie
             return (
               <React.Fragment key={client.id}>
                 <tr className="ct-item">
-                  <td className="ct-td">
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      onChange={() => onToggleClient(client.id)}
-                      className="w-5 h-5 text-[#8AAA19] rounded focus:ring-[#8AAA19] cursor-pointer"
-                      onClick={(e) => e.stopPropagation()}
-                    />
-                  </td>
-                  <td className="ct-td">
+                  {selectionMode && (
+                    <td className="ct-td">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => onToggleClient(client.id)}
+                        className="w-5 h-5 text-[#8AAA19] rounded focus:ring-[#8AAA19] cursor-pointer"
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    </td>
+                  )}
+                  <td className="ct-td ct-td-name">
                     <button
                       className="ct-trigger"
                       aria-expanded={isExpanded}
@@ -342,61 +353,14 @@ const ClientsListView = ({ clients, onView, onEdit, onDelete, role, selectedClie
                       )}
                     </button>
                   </td>
-                  <td className="ct-td">{nationalId}</td>
-                  <td className="ct-td">{phone}</td>
-                  <td className="ct-td">
+                  <td className="ct-td ct-td-cedula">{nationalId}</td>
+                  <td className="ct-td ct-td-correo">{email}</td>
+                  <td className="ct-td ct-td-celular">{phone}</td>
+                  <td className="ct-td ct-td-polizas">
                     <span className="font-semibold text-[#010139]">{client.policies?.length || 0}</span>
                   </td>
-                  <td className="ct-td">
-                    {client.policies?.length ? (
-                      <div className="flex flex-col gap-1">
-                        {client.policies.slice(0, 2).map((pol: any, idx: number) => (
-                          <span key={idx} className="text-xs text-gray-700 truncate">
-                            {pol.insurers?.name || '—'}
-                          </span>
-                        ))}
-                        {client.policies.length > 2 && (
-                          <span className="text-xs text-gray-500">+{client.policies.length - 2} más</span>
-                        )}
-                      </div>
-                    ) : (
-                      <span className="text-gray-400">—</span>
-                    )}
-                  </td>
-                  <td className="ct-td">
-                    {client.policies?.length ? (
-                      <div className="flex flex-col gap-1">
-                        {client.policies.slice(0, 2).map((pol: any, idx: number) => (
-                          <span key={idx} className="text-xs text-gray-700 truncate">
-                            {pol.ramo || '—'}
-                          </span>
-                        ))}
-                        {client.policies.length > 2 && (
-                          <span className="text-xs text-gray-500">+{client.policies.length - 2} más</span>
-                        )}
-                      </div>
-                    ) : (
-                      <span className="text-gray-400">—</span>
-                    )}
-                  </td>
-                  <td className="ct-td">
-                    {client.policies?.length ? (
-                      <div className="flex flex-col gap-1">
-                        {client.policies.slice(0, 2).map((pol: any, idx: number) => (
-                          <span key={idx} className="text-xs text-gray-700">
-                            {pol.renewal_date ? new Date(pol.renewal_date).toLocaleDateString('es-PA', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
-                          </span>
-                        ))}
-                        {client.policies.length > 2 && (
-                          <span className="text-xs text-gray-500">...</span>
-                        )}
-                      </div>
-                    ) : (
-                      <span className="text-gray-400">—</span>
-                    )}
-                  </td>
-                  {role === 'master' && <td className="ct-td">{brokerName}</td>}
-                  <td className="ct-td">
+                  {role === 'master' && <td className="ct-td ct-td-corredor">{brokerName}</td>}
+                  <td className="ct-td ct-td-acciones">
                     <div className="ct-actions">
                       <button 
                         className="icon-btn folder" 
@@ -439,7 +403,7 @@ const ClientsListView = ({ clients, onView, onEdit, onDelete, role, selectedClie
 
                 {isExpanded && (
                   <tr>
-                    <td colSpan={role === 'master' ? 10 : 9} className="ct-detail">
+                    <td colSpan={selectionMode ? (role === 'master' ? 8 : 7) : (role === 'master' ? 7 : 6)} className="ct-detail">
                       <div className="pol-panel">
                         <div className="pol-header">
                           <h4 className="pol-title">Pólizas del Cliente</h4>
@@ -510,10 +474,6 @@ const ClientsListView = ({ clients, onView, onEdit, onDelete, role, selectedClie
 
                         {/* Expediente Section */}
                         <div className="expediente-section">
-                          <div className="expediente-header">
-                            <h4 className="pol-title">📁 Expediente del Cliente</h4>
-                            <span className="text-xs text-gray-600">Documentos permanentes</span>
-                          </div>
                           <ExpedienteManager
                             clientId={(client as any).id}
                             showClientDocs={true}
@@ -535,11 +495,12 @@ const ClientsListView = ({ clients, onView, onEdit, onDelete, role, selectedClie
   );
 };
 
-export default function DatabaseTabs({ 
+export default function DatabaseTabs({
   activeTab, 
   clients, 
   insurers,
   brokers,
+  searchQuery,
   role,
   userEmail,
 }: DatabaseTabsProps) {
@@ -551,6 +512,9 @@ export default function DatabaseTabs({
   const [preliminaryCount, setPreliminaryCount] = useState<number>(0);
   const [selectedClients, setSelectedClients] = useState<Set<string>>(new Set());
   const [showExportModal, setShowExportModal] = useState(false);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [filters, setFilters] = useState<FilterOptions>({});
+  const [showFilters, setShowFilters] = useState(false);
 
   // Load preliminary count
   useEffect(() => {
@@ -562,6 +526,26 @@ export default function DatabaseTabs({
     };
     loadCount();
   }, [view]);
+
+  // Count policies renewing this month
+  const renewalsThisMonth = useMemo(() => {
+    const currentDate = new Date();
+    const currentMonth = currentDate.getMonth();
+    const currentYear = currentDate.getFullYear();
+    
+    let count = 0;
+    clients.forEach(client => {
+      client.policies?.forEach(policy => {
+        if (policy.renewal_date) {
+          const renewalDate = new Date(policy.renewal_date);
+          if (renewalDate.getMonth() === currentMonth && renewalDate.getFullYear() === currentYear) {
+            count++;
+          }
+        }
+      });
+    });
+    return count;
+  }, [clients]);
 
   const clientToEdit = clientToEditId ? clients.find(c => c.id === clientToEditId) : null;
 
@@ -604,16 +588,81 @@ export default function DatabaseTabs({
     setSelectedClients(new Set());
   };
 
+  // Aplicar filtros a los clientes
+  const filteredClients = useMemo(() => {
+    let filtered = [...clients];
+
+    if (filters.insurer) {
+      filtered = filtered.filter(client => 
+        client.policies?.some(p => p.insurer_id === filters.insurer)
+      );
+    }
+
+    if (filters.ramo) {
+      filtered = filtered.filter(client => 
+        client.policies?.some(p => p.ramo?.toLowerCase() === filters.ramo?.toLowerCase())
+      );
+    }
+
+    if (filters.month !== undefined) {
+      filtered = filtered.filter(client => 
+        client.policies?.some(p => {
+          if (!p.renewal_date) return false;
+          const renewalMonth = new Date(p.renewal_date).getMonth();
+          return renewalMonth === filters.month;
+        })
+      );
+    }
+
+    if (filters.broker && role === 'master') {
+      filtered = filtered.filter(client => 
+        (client as any).brokers?.id === filters.broker
+      );
+    }
+
+    return filtered;
+  }, [clients, filters, role]);
+
+  // Obtener opciones únicas para filtros
+  const filterOptions = useMemo(() => {
+    const insurerMap = new Map<string, {id: string, name: string}>();
+    const ramoSet = new Set<string>();
+    const brokerMap = new Map<string, {id: string, name: string}>();
+
+    clients.forEach(client => {
+      client.policies?.forEach(policy => {
+        if (policy.insurer_id && policy.insurers?.name) {
+          insurerMap.set(policy.insurer_id, { id: policy.insurer_id, name: policy.insurers.name });
+        }
+        if (policy.ramo) {
+          ramoSet.add(policy.ramo);
+        }
+      });
+      if ((client as any).brokers) {
+        const broker = (client as any).brokers;
+        brokerMap.set(broker.id, { id: broker.id, name: broker.name });
+      }
+    });
+
+    return {
+      insurers: Array.from(insurerMap.values()),
+      ramos: Array.from(ramoSet).sort(),
+      brokers: Array.from(brokerMap.values()).sort((a, b) => a.name.localeCompare(b.name))
+    };
+  }, [clients]);
+
+  const hasActiveFilters = Object.keys(filters).length > 0;
+
   const renderTabContent = () => {
-    if (view === 'insurers') {
-      return <ClientsByInsurer clients={clients} insurers={insurers} />;
+    if (view === 'renewals') {
+      return <ClientsByMonth clients={clients} />;
     }
     if (view === 'preliminary') {
       return <PreliminaryClientsTab insurers={insurers} brokers={brokers} userRole={role} />;
     }
     return (
       <ClientsListView 
-        clients={clients} 
+        clients={filteredClients} 
         onView={handleView} 
         onEdit={handleEdit} 
         onDelete={handleDelete} 
@@ -621,6 +670,7 @@ export default function DatabaseTabs({
         selectedClients={selectedClients}
         onToggleClient={handleToggleClient}
         onSelectAll={handleSelectAll}
+        selectionMode={selectionMode}
       />
     );
   };
@@ -675,32 +725,231 @@ export default function DatabaseTabs({
               )}
             </button>
             <button
-              className={`px-4 py-2.5 rounded-lg font-semibold text-sm transition-all duration-200 ${
-                view === 'insurers'
+              className={`px-4 py-2.5 rounded-lg font-semibold text-sm transition-all duration-200 relative ${
+                view === 'renewals'
                   ? 'bg-gradient-to-r from-[#010139] to-[#020270] text-white shadow-md'
                   : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
               }`}
-              onClick={() => router.push('/db?tab=clients&view=insurers', { scroll: false })}
+              onClick={() => router.push('/db?tab=clients&view=renewals', { scroll: false })}
+              title={renewalsThisMonth > 0 ? `Tienes ${renewalsThisMonth} póliza(s) que van a renovar este mes` : 'Ver renovaciones por mes'}
             >
-              Aseguradoras
+              📅 Por Mes de Renovación
+              {renewalsThisMonth > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 bg-blue-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center shadow-md">
+                  {renewalsThisMonth}
+                </span>
+              )}
             </button>
           </div>
 
-          {/* Export Actions - Only for clients view */}
+          {/* Search + Action Icons - Only for clients view */}
           {view === 'clients' && clients.length > 0 && (
-            <button
-              onClick={() => setShowExportModal(true)}
-              className="flex items-center gap-2 px-3 sm:px-4 py-2.5 bg-gradient-to-r from-[#010139] to-[#020270] hover:from-[#020270] hover:to-[#010139] text-white rounded-lg transition-all duration-200 font-semibold text-sm whitespace-nowrap shadow-lg hover:shadow-xl"
-              title="Exportar clientes"
-            >
-              <Download size={18} />
-              <span>
-                Descargar {selectedClients.size > 0 ? `(${selectedClients.size})` : ''}
-              </span>
-            </button>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
+              {/* Search Bar */}
+              <div className="flex-1 sm:flex-initial sm:min-w-[280px]">
+                <Suspense fallback={
+                  <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg text-gray-400 text-sm">
+                    <div className="animate-spin w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full"></div>
+                    <span>Cargando...</span>
+                  </div>
+                }>
+                  <InlineSearchBar initialQuery={searchQuery} />
+                </Suspense>
+              </div>
+
+              {/* Separador */}
+              <div className="hidden sm:block w-px h-8 bg-gray-300"></div>
+
+              {/* Action Icons */}
+              <div className="flex items-center gap-1 justify-end sm:justify-start">
+              {/* Filtrar */}
+              <button
+                onClick={() => setShowFilters(!showFilters)}
+                className={`p-2.5 rounded-lg transition-all duration-200 relative ${
+                  showFilters || hasActiveFilters
+                    ? 'bg-[#8AAA19] text-white shadow-lg'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+                title="Filtrar clientes"
+              >
+                <Filter size={20} />
+                {hasActiveFilters && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+                    {Object.keys(filters).length}
+                  </span>
+                )}
+              </button>
+
+              {/* Seleccionar */}
+              <button
+                onClick={() => {
+                  setSelectionMode(!selectionMode);
+                  if (selectionMode) {
+                    setSelectedClients(new Set());
+                  }
+                }}
+                className={`p-2.5 rounded-lg transition-all duration-200 relative ${
+                  selectionMode
+                    ? 'bg-[#8AAA19] text-white shadow-lg'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+                title="Modo selección"
+              >
+                <CheckSquare size={20} />
+                {selectedClients.size > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-blue-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+                    {selectedClients.size}
+                  </span>
+                )}
+              </button>
+
+              {/* Separador */}
+              <div className="w-px h-6 bg-gray-300 mx-1"></div>
+
+              {/* Importar CSV */}
+              <a
+                href="/db/import"
+                className="p-2.5 rounded-lg bg-gray-100 text-gray-700 hover:bg-blue-100 hover:text-blue-600 transition-all duration-200"
+                title="Importar CSV"
+              >
+                <Upload size={20} />
+              </a>
+
+              {/* Descargar */}
+              <button
+                onClick={() => setShowExportModal(true)}
+                className="p-2.5 rounded-lg bg-[#010139] text-white hover:bg-[#020270] transition-all duration-200 shadow-md hover:shadow-lg"
+                title="Descargar clientes"
+              >
+                <Download size={20} />
+              </button>
+              </div>
+            </div>
           )}
         </div>
       </div>
+
+      {/* Filtros - Solo para vista de clientes */}
+      {view === 'clients' && showFilters && (
+        <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-4 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
+              <Filter size={16} className="text-[#8AAA19]" />
+              Filtrar y Seleccionar Clientes
+            </h3>
+            {hasActiveFilters && (
+              <button
+                onClick={() => setFilters({})}
+                className="text-xs text-red-600 hover:text-red-700 font-medium"
+              >
+                Limpiar filtros
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {/* Filtro por Aseguradora */}
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Aseguradora</label>
+                <select
+                  value={filters.insurer || ''}
+                  onChange={(e) => setFilters({ ...filters, insurer: e.target.value || undefined })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#8AAA19] focus:border-transparent"
+                >
+                  <option value="">Todas</option>
+                  {filterOptions.insurers.map((ins: any) => (
+                    <option key={ins.id} value={ins.id}>{ins.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Filtro por Ramo */}
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Ramo</label>
+                <select
+                  value={filters.ramo || ''}
+                  onChange={(e) => setFilters({ ...filters, ramo: e.target.value || undefined })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#8AAA19] focus:border-transparent"
+                >
+                  <option value="">Todos</option>
+                  {filterOptions.ramos.map((ramo: string) => (
+                    <option key={ramo} value={ramo}>{ramo}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Filtro por Mes */}
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Mes de Renovación</label>
+                <select
+                  value={filters.month !== undefined ? filters.month : ''}
+                  onChange={(e) => setFilters({ ...filters, month: e.target.value ? parseInt(e.target.value) : undefined })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#8AAA19] focus:border-transparent"
+                >
+                  <option value="">Todos</option>
+                  <option value="0">Enero</option>
+                  <option value="1">Febrero</option>
+                  <option value="2">Marzo</option>
+                  <option value="3">Abril</option>
+                  <option value="4">Mayo</option>
+                  <option value="5">Junio</option>
+                  <option value="6">Julio</option>
+                  <option value="7">Agosto</option>
+                  <option value="8">Septiembre</option>
+                  <option value="9">Octubre</option>
+                  <option value="10">Noviembre</option>
+                  <option value="11">Diciembre</option>
+                </select>
+              </div>
+
+              {/* Filtro por Corredor - Solo Master */}
+              {role === 'master' && (
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Corredor</label>
+                  <select
+                    value={filters.broker || ''}
+                    onChange={(e) => setFilters({ ...filters, broker: e.target.value || undefined })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-[#8AAA19] focus:border-transparent"
+                  >
+                    <option value="">Todos</option>
+                    {filterOptions.brokers.map((broker: any) => (
+                      <option key={broker.id} value={broker.id}>{broker.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+
+            {/* Resumen de filtros activos */}
+            {hasActiveFilters && (
+              <div className="mt-3 pt-3 border-t flex flex-wrap gap-2">
+                {filters.insurer && (
+                  <span className="inline-flex items-center gap-1 bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">
+                    Aseguradora: {filterOptions.insurers.find((i: any) => i.id === filters.insurer)?.name}
+                  </span>
+                )}
+                {filters.ramo && (
+                  <span className="inline-flex items-center gap-1 bg-green-100 text-green-800 text-xs px-2 py-1 rounded">
+                    Ramo: {filters.ramo}
+                  </span>
+                )}
+                {filters.month !== undefined && (
+                  <span className="inline-flex items-center gap-1 bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded">
+                    Mes: {['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'][filters.month]}
+                  </span>
+                )}
+                {filters.broker && role === 'master' && (
+                  <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded">
+                    Corredor: {filterOptions.brokers.find((b: any) => b.id === filters.broker)?.name}
+                  </span>
+                )}
+                <span className="text-xs text-gray-600">
+                  {filteredClients.length} de {clients.length} clientes
+                </span>
+              </div>
+            )}
+        </div>
+      )}
 
       <div className="tab-content">
         {renderTabContent()}
@@ -746,12 +995,34 @@ export default function DatabaseTabs({
           width: 100%;
           overflow-x: auto;
           -webkit-overflow-scrolling: touch;
+          position: relative;
+        }
+        
+        /* Indicador visual de scroll en mobile */
+        @media (max-width: 768px) {
+          :global(.clients-wrapper)::after {
+            content: '';
+            position: sticky;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            width: 30px;
+            background: linear-gradient(to left, rgba(255,255,255,0.9), transparent);
+            pointer-events: none;
+          }
         }
 
         :global(.clients-table) {
           width: 100%;
-          table-layout: fixed;
           border-collapse: collapse;
+          min-width: 900px;
+        }
+        
+        @media (max-width: 768px) {
+          :global(.clients-table) {
+            min-width: 100%;
+            table-layout: auto;
+          }
         }
 
         :global(.clients-table thead) {
@@ -759,23 +1030,85 @@ export default function DatabaseTabs({
         }
 
         :global(.ct-th) {
-          padding: 12px 16px;
+          padding: 12px 8px;
           text-align: left;
           font-weight: 600;
           font-size: 0.875rem;
           color: #374151;
           border-bottom: 2px solid #e5e7eb;
+          white-space: nowrap;
         }
-        :global(.ct-th:nth-child(1)) { width: 50px; }
-        :global(.ct-th:nth-child(2)) { width: 18%; }
-        :global(.ct-th:nth-child(3)) { width: 10%; }
-        :global(.ct-th:nth-child(4)) { width: 10%; }
-        :global(.ct-th:nth-child(5)) { width: 8%; }
-        :global(.ct-th:nth-child(6)) { width: 14%; }
-        :global(.ct-th:nth-child(7)) { width: 10%; }
-        :global(.ct-th:nth-child(8)) { width: 10%; }
-        :global(.ct-th:nth-child(9)) { width: 12%; }
-        :global(.ct-th:nth-child(10)) { width: 8%; }
+        
+        @media (min-width: 769px) {
+          /* DISTRIBUCIÓN CON CLASES ESPECÍFICAS - No depende de nth-child */
+          
+          /* Checkbox (cuando existe) */
+          :global(.ct-th:has(input[type="checkbox"])),
+          :global(.ct-td:has(input[type="checkbox"])) { 
+            width: 50px !important;
+          }
+          
+          /* Cliente - Se reduce cuando hay checkbox */
+          :global(.ct-th-name),
+          :global(.ct-td-name) {
+            width: 30% !important;
+            min-width: 250px !important;
+          }
+          
+          :global(.with-selection .ct-th-name),
+          :global(.with-selection .ct-td-name) {
+            width: 28% !important;
+            min-width: 230px !important;
+          }
+          
+          /* Cédula */
+          :global(.ct-th-cedula),
+          :global(.ct-td-cedula) {
+            width: 10% !important;
+            min-width: 120px !important;
+            max-width: 150px !important;
+          }
+          
+          /* Correo */
+          :global(.ct-th-correo),
+          :global(.ct-td-correo) {
+            width: 18% !important;
+            min-width: 180px !important;
+          }
+          
+          /* Celular */
+          :global(.ct-th-celular),
+          :global(.ct-td-celular) {
+            width: 10% !important;
+            min-width: 110px !important;
+          }
+          
+          /* Pólizas */
+          :global(.ct-th-polizas),
+          :global(.ct-td-polizas) {
+            width: 6% !important;
+            min-width: 60px !important;
+            text-align: center;
+          }
+          
+          /* Corredor */
+          :global(.ct-th-corredor),
+          :global(.ct-td-corredor) {
+            width: 18% !important;
+            min-width: 180px !important;
+          }
+          
+          /* Acciones */
+          :global(.ct-th-acciones),
+          :global(.ct-td-acciones) {
+            width: 8% !important;
+            min-width: 100px !important;
+          }
+          
+          :global(.ct-name) {
+            max-width: none;
+          }
+        }
 
         :global(.text-right) {
           text-align: right;
@@ -791,13 +1124,34 @@ export default function DatabaseTabs({
 
         /* CELDAS */
         :global(.ct-td) {
-          padding: 16px;
+          padding: 12px 8px;
           font-size: 0.875rem;
           color: #111827;
           vertical-align: middle;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
+        }
+        
+        /* En PC, no hacer wrap del texto en celdas normales */
+        @media (min-width: 769px) {
+          :global(.ct-td) {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+          }
+          
+          /* Excepción: la columna del nombre puede hacer wrap */
+          :global(.ct-td-name) {
+            white-space: normal !important;
+            overflow: visible !important;
+          }
+        }
+        
+        /* En mobile, permitir wrap para todas las celdas */
+        @media (max-width: 768px) {
+          :global(.ct-td) {
+            word-wrap: break-word;
+            word-break: break-word;
+            hyphens: auto;
+          }
         }
 
         /* TRIGGER PARA DESPLEGAR */
@@ -807,14 +1161,24 @@ export default function DatabaseTabs({
           cursor: pointer;
           display: flex;
           align-items: center;
-          justify-content: space-between;
+          justify-content: flex-start;
           width: 100%;
           padding: 0;
           gap: 8px;
+          text-align: left;
         }
         :global(.ct-name) {
           font-weight: 600;
           color: #111827;
+          flex: 1 1 auto;
+          text-align: left;
+        }
+        
+        @media (min-width: 769px) {
+          :global(.ct-name) {
+            white-space: normal;
+            word-wrap: break-word;
+          }
         }
         :global(.ct-trigger:hover .ct-name) {
           color: #3b82f6;
@@ -1004,23 +1368,33 @@ export default function DatabaseTabs({
 
         /* RESPONSIVE */
         @media (max-width: 768px) {
-          :global(.ct-th:nth-child(4)),
-          :global(.ct-th:nth-child(5)),
-          :global(.ct-th:nth-child(6)),
-          :global(.ct-th:nth-child(7)),
-          :global(.ct-th:nth-child(8)),
-          :global(.ct-td:nth-child(4)),
-          :global(.ct-td:nth-child(5)),
-          :global(.ct-td:nth-child(6)),
-          :global(.ct-td:nth-child(7)),
-          :global(.ct-td:nth-child(8)) {
+          :global(.clients-wrapper) {
+            margin: 0 -20px;
+            padding: 0 20px;
+          }
+          
+          :global(.ct-th),
+          :global(.ct-td) {
+            padding: 10px 6px;
+            font-size: 0.8125rem;
+          }
+          
+          /* Ocultar Correo, Celular, Pólizas y Corredor en tablet */
+          :global(.ct-th-correo),
+          :global(.ct-td-correo),
+          :global(.ct-th-celular),
+          :global(.ct-td-celular),
+          :global(.ct-th-polizas),
+          :global(.ct-td-polizas),
+          :global(.ct-th-corredor),
+          :global(.ct-td-corredor) {
             display: none;
           }
-          :global(.ct-th:nth-child(1)) { width: 50px; }
-          :global(.ct-th:nth-child(2)) { width: 40%; }
-          :global(.ct-th:nth-child(3)) { width: 30%; }
-          :global(.ct-th:nth-child(9)) { width: 15%; }
-          :global(.ct-th:nth-child(10)) { width: 15%; }
+          
+          :global(.ct-name) {
+            font-size: 0.875rem;
+            line-height: 1.4;
+          }
           
           /* Pólizas en tablet */
           :global(.pol-row) {
@@ -1036,14 +1410,31 @@ export default function DatabaseTabs({
           }
         }
         @media (max-width: 480px) {
+          :global(.tab-content) {
+            padding: 12px;
+          }
+          
+          /* Solo mostrar: Checkbox (si activo), Cliente y Acciones */
           :global(.ct-th:nth-child(3)),
           :global(.ct-td:nth-child(3)) {
             display: none;
           }
-          :global(.ct-th:nth-child(1)) { width: 50px; }
-          :global(.ct-th:nth-child(2)) { width: 50%; }
-          :global(.ct-th:nth-child(9)) { width: 20%; }
-          :global(.ct-th:nth-child(10)) { width: 30%; }
+          
+          :global(.ct-th),
+          :global(.ct-td) {
+            padding: 8px 4px;
+            font-size: 0.75rem;
+          }
+          
+          :global(.ct-name) {
+            font-size: 0.8125rem;
+          }
+          
+          /* Dar más espacio al nombre en mobile */
+          :global(.ct-th-name),
+          :global(.ct-td-name) {
+            width: 70% !important;
+          }
           
           /* Pólizas en móvil */
           :global(.pol-panel) {

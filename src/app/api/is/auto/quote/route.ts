@@ -56,18 +56,18 @@ export async function POST(request: NextRequest) {
     // Generar cotización
     const result = await generarCotizacionAuto(
       {
-        vcodtipodoc: vcodtipodoc || 'CED',
+        vcodtipodoc: parseInt(vcodtipodoc as string) || 1, // Asegurar que sea número (1=CC)
         vnrodoc,
         vnombre,
         vapellido,
         vtelefono,
         vcorreo,
-        vcodmarca,
-        vcodmodelo,
+        vcodmarca: parseInt(vcodmarca as string), // Asegurar que sea número
+        vcodmodelo: parseInt(vcodmodelo as string), // Asegurar que sea número
         vanioauto: parseInt(vanioauto),
         vsumaaseg: parseFloat(vsumaaseg) || 0,
-        vcodplancobertura,
-        vcodgrupotarifa,
+        vcodplancobertura: parseInt(vcodplancobertura as string), // Asegurar que sea número
+        vcodgrupotarifa: parseInt(vcodgrupotarifa as string), // Asegurar que sea número
       },
       environment as ISEnvironment
     );

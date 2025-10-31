@@ -576,12 +576,6 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
             <strong>IMPORTANTE:</strong> Verificar datos bancarios antes de procesar los pagos
           </p>
         </div>
-
-        <script>
-          window.onload = function() {
-            window.print();
-          };
-        </script>
       </body>
       </html>
     `;

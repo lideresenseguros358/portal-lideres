@@ -110,11 +110,13 @@ export default function QuoteComparison({ policyType, quotes, quoteData }: Quote
       quoteData
     }));
 
-    // Redirigir a selección de cuotas (auto completa) o emisión directa
+    // Redirigir según tipo de póliza
     if (policyType === 'auto-completa') {
+      // Auto completa: inicia con selección de cuotas
       router.push('/cotizadores/emitir?step=payment');
     } else {
-      router.push('/cotizadores/emitir?step=review');
+      // Vida/Incendio/Contenido: directo a información de pago
+      router.push('/cotizadores/emitir?step=payment-info');
     }
   };
 
@@ -124,7 +126,28 @@ export default function QuoteComparison({ policyType, quotes, quoteData }: Quote
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 py-6 px-4">
+    <>
+      <style jsx global>{`
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: #f1f1f1;
+          border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: #8AAA19;
+          border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: #6d8814;
+        }
+        .custom-scrollbar {
+          scrollbar-width: thin;
+          scrollbar-color: #8AAA19 #f1f1f1;
+        }
+      `}</style>
+      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 py-6 px-4">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="text-center mb-8">
@@ -142,13 +165,13 @@ export default function QuoteComparison({ policyType, quotes, quoteData }: Quote
         {/* Quotes Grid */}
         <div className={`grid grid-cols-1 ${
           policyType === 'auto-completa' 
-            ? 'md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5' 
+            ? 'sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5' 
             : 'md:grid-cols-2 max-w-4xl mx-auto'
-        } gap-4 sm:gap-6`}>
+        } gap-4 lg:gap-5`}>
           {quotes.map((quote) => (
             <div
               key={quote.id}
-              className={`relative bg-white rounded-xl shadow-lg border-2 transition-all duration-300 overflow-hidden group ${
+              className={`relative bg-white rounded-xl shadow-lg border-2 transition-all duration-300 overflow-hidden group flex flex-col h-full ${
                 quote.isRecommended 
                   ? 'border-[#8AAA19] shadow-[#8AAA19]/20' 
                   : 'border-gray-200 hover:border-[#010139]'
@@ -166,20 +189,20 @@ export default function QuoteComparison({ policyType, quotes, quoteData }: Quote
                 </div>
               )}
 
-              {/* Header con Logo - Estilo igual a daños a terceros */}
-              <div className="bg-gradient-to-br from-[#010139] to-[#020270] p-5 text-white">
-                <div className="flex items-center gap-3 mb-3">
+              {/* Header con Logo */}
+              <div className="bg-gradient-to-br from-[#010139] to-[#020270] p-4 text-white flex-shrink-0">
+                <div className="flex items-center gap-2 mb-2">
                   <InsurerLogo 
                     logoUrl={getLogoUrl(quote.insurerName)}
                     insurerName={quote.insurerName}
                     size="md"
                   />
-                  <div className="flex-1">
-                    <h3 className="font-bold text-base sm:text-lg">{quote.insurerName}</h3>
+                  <div className="flex-1 min-w-0">
+                    <h3 className="font-bold text-sm leading-tight truncate">{quote.insurerName}</h3>
                   </div>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${
+                  <span className={`inline-block px-2 py-1 rounded-full text-[10px] font-semibold ${
                     quote.planType === 'premium' 
                       ? 'bg-[#8AAA19] text-white'
                       : 'bg-white/20 text-white'
@@ -187,65 +210,67 @@ export default function QuoteComparison({ policyType, quotes, quoteData }: Quote
                     {quote.planType === 'premium' ? 'Premium' : 'Básico'}
                   </span>
                   {quote.isRecommended && (
-                    <FaStar className="text-[#8AAA19] text-xl" />
+                    <FaStar className="text-[#8AAA19] text-lg" />
                   )}
                 </div>
               </div>
 
               {/* Card Content */}
-              <div className="p-4 sm:p-5">
+              <div className="p-3 flex flex-col flex-1">
 
                 {/* Price */}
-                <div className="text-center mb-4 py-3 bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg">
-                  <div className="text-xs text-gray-600 mb-1">Prima Anual</div>
-                  <div className="text-2xl sm:text-3xl font-bold text-[#010139]">
+                <div className="text-center mb-3 py-2 bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg flex-shrink-0">
+                  <div className="text-[10px] text-gray-600 mb-0.5">Prima Anual</div>
+                  <div className="text-xl sm:text-2xl font-bold text-[#010139]">
                     ${quote.annualPremium.toLocaleString()}
                   </div>
-                  <div className="text-xs text-gray-500 mt-1">
+                  <div className="text-[10px] text-gray-500 mt-0.5">
                     Deducible: ${quote.deductible.toLocaleString()}
                   </div>
                 </div>
 
                 {/* Coverages */}
-                <div className="mb-4 space-y-2 max-h-48 overflow-y-auto">
-                  <div className="flex items-center gap-2 mb-2">
-                    <FaShieldAlt className="text-[#8AAA19] flex-shrink-0" />
-                    <span className="text-xs font-bold text-gray-700">Coberturas Incluidas:</span>
+                <div className="mb-3 flex-1 overflow-hidden">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    <FaShieldAlt className="text-[#8AAA19] flex-shrink-0 text-sm" />
+                    <span className="text-[11px] font-bold text-gray-700">Coberturas:</span>
                   </div>
-                  {quote.coverages.map((coverage, idx) => (
-                    <div 
-                      key={idx} 
-                      className={`flex items-start gap-2 text-xs ${
-                        coverage.included ? 'text-gray-700' : 'text-gray-400 line-through'
-                      }`}
-                    >
-                      <FaCheckCircle 
-                        className={`flex-shrink-0 mt-0.5 ${
-                          coverage.included ? 'text-[#8AAA19]' : 'text-gray-300'
-                        }`} 
-                      />
-                      <span>{coverage.name}</span>
-                    </div>
-                  ))}
+                  <div className="space-y-1.5 max-h-[180px] overflow-y-auto pr-1 custom-scrollbar">
+                    {quote.coverages.map((coverage, idx) => (
+                      <div 
+                        key={idx} 
+                        className={`flex items-start gap-1.5 text-[11px] leading-tight ${
+                          coverage.included ? 'text-gray-700' : 'text-gray-400 line-through'
+                        }`}
+                      >
+                        <FaCheckCircle 
+                          className={`flex-shrink-0 mt-0.5 text-xs ${
+                            coverage.included ? 'text-[#8AAA19]' : 'text-gray-300'
+                          }`} 
+                        />
+                        <span className="break-words">{coverage.name}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
                 {/* Actions */}
-                <div className="space-y-2">
+                <div className="space-y-2 flex-shrink-0">
                   {/* Improve Button */}
                   <button
                     onClick={() => handleImprove(quote.id)}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-gray-100 text-gray-600 rounded-lg font-semibold text-sm hover:bg-gray-200 transition-colors"
+                    className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg font-semibold text-[11px] hover:bg-gray-200 transition-colors"
                     disabled
                     title="Próximamente disponible"
                   >
-                    <FaCog className="text-gray-400" />
+                    <FaCog className="text-gray-400 text-xs" />
                     Mejorar Plan
                   </button>
 
                   {/* Select Button */}
                   <button
                     onClick={() => handleSelectPlan(quote.id)}
-                    className={`w-full px-4 py-3 rounded-lg font-bold text-sm transition-all ${
+                    className={`w-full px-3 py-2.5 rounded-lg font-bold text-xs transition-all ${
                       quote.isRecommended
                         ? 'bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white hover:shadow-xl'
                         : 'bg-gradient-to-r from-[#010139] to-[#020270] text-white hover:shadow-xl'
@@ -268,5 +293,6 @@ export default function QuoteComparison({ policyType, quotes, quoteData }: Quote
         </div>
       </div>
     </div>
+    </>
   );
 }
