@@ -4,6 +4,7 @@
  */
 
 import { VALIDATION_RULES } from './config';
+import { FedpaError } from './types';
 
 // ============================================
 // NORMALIZACIÓN
@@ -14,6 +15,16 @@ import { VALIDATION_RULES } from './config';
  */
 export function normalizeText(text: string): string {
   return text.trim().toUpperCase();
+}
+
+/**
+ * Normaliza strings a formato FEDPA (MAYÚSCULAS, sin acentos)
+ */
+export function normalizarString(str: string): string {
+  return str
+    .toUpperCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
 }
 
 /**
@@ -359,4 +370,17 @@ export function calcularTotalConImpuestos(
     impuesto2,
     total: Number(total.toFixed(2)),
   };
+}
+
+// ============================================
+// ERROR HANDLING
+// ============================================
+
+/**
+ * Convierte FedpaError o string a string para compatibilidad de tipos
+ */
+export function getErrorMessage(error: FedpaError | string | undefined, defaultMsg: string): string {
+  if (!error) return defaultMsg;
+  if (typeof error === 'string') return error;
+  return error.message || defaultMsg;
 }

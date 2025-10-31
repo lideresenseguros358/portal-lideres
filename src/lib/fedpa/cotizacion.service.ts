@@ -53,7 +53,7 @@ export async function generarCotizacion(
   }
   
   // Parsear respuesta según estructura de FEDPA
-  const data = response.data || {};
+  const data = (response.data || {}) as any;
   const coberturas = data.coberturas || [];
   
   // Calcular totales

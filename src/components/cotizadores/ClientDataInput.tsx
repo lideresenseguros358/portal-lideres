@@ -109,7 +109,7 @@ export default function ClientDataInput({
     // Debounce
     const timer = setTimeout(searchClient, 800);
     return () => clearTimeout(timer);
-  }, [cedula]);
+  }, [cedula, onNombreChange, onEmailChange, onTelefonoChange, onClientFound]);
 
   const handleScanSuccess = (qrData: CedulaQRData) => {
     // Llenar cédula (esto disparará la búsqueda automática)

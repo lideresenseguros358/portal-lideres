@@ -43,9 +43,12 @@ export async function generarToken(
   
   if (!response.success || !response.data?.token) {
     console.error('[FEDPA Auth] Error:', response.error);
+    const errorMsg = typeof response.error === 'string' 
+      ? response.error 
+      : response.error?.message || 'No se pudo generar el token';
     return {
       success: false,
-      error: response.error || 'No se pudo generar el token',
+      error: errorMsg,
     };
   }
   
@@ -56,24 +59,21 @@ export async function generarToken(
   const cacheKey = `fedpa_token_${env}`;
   tokenCache.set(cacheKey, { token, exp });
   
-  // Guardar en BD (Supabase)
-  try {
-    const supabase = getSupabaseAdmin();
-    await supabase
-      .from('fedpa_tokens')
-      .upsert({
-        session_id: cacheKey,
-        token,
-        exp,
-        amb: env,
-        created_at: new Date().toISOString(),
-      }, {
-        onConflict: 'session_id',
-      });
-  } catch (dbError) {
-    console.warn('[FEDPA Auth] No se pudo guardar token en BD:', dbError);
-    // No fallar si BD no está disponible
-  }
+  // TODO: Guardar en BD cuando se cree tabla fedpa_tokens
+  // try {
+  //   const supabase = getSupabaseAdmin();
+  //   await supabase
+  //     .from('fedpa_tokens')
+  //     .upsert({
+  //       session_id: cacheKey,
+  //       token,
+  //       exp,
+  //       amb: env,
+  //       created_at: new Date().toISOString(),
+  //     });
+  // } catch (dbError) {
+  //   console.warn('[FEDPA Auth] No se pudo guardar token en BD:', dbError);
+  // }
   
   console.log('[FEDPA Auth] Token generado exitosamente');
   
@@ -105,28 +105,28 @@ export async function obtenerToken(
     };
   }
   
-  // 2. Verificar BD
-  try {
-    const supabase = getSupabaseAdmin();
-    const { data } = await supabase
-      .from('fedpa_tokens')
-      .select('*')
-      .eq('session_id', cacheKey)
-      .eq('amb', env)
-      .single();
-    
-    if (data && data.exp > Date.now() + 5 * 60 * 1000) {
-      console.log('[FEDPA Auth] Usando token desde BD');
-      // Actualizar cache memoria
-      tokenCache.set(cacheKey, { token: data.token, exp: data.exp });
-      return {
-        success: true,
-        token: data.token,
-      };
-    }
-  } catch (dbError) {
-    console.warn('[FEDPA Auth] Error consultando BD:', dbError);
-  }
+  // 2. TODO: Verificar BD cuando se cree tabla fedpa_tokens
+  // try {
+  //   const supabase = getSupabaseAdmin();
+  //   const { data } = await supabase
+  //     .from('fedpa_tokens')
+  //     .select('*')
+  //     .eq('session_id', cacheKey)
+  //     .eq('amb', env)
+  //     .single();
+  //   
+  //   if (data && data.exp > Date.now() + 5 * 60 * 1000) {
+  //     console.log('[FEDPA Auth] Usando token desde BD');
+  //     // Actualizar cache memoria
+  //     tokenCache.set(cacheKey, { token: data.token, exp: data.exp });
+  //     return {
+  //       success: true,
+  //       token: data.token,
+  //     };
+  //   }
+  // } catch (dbError) {
+  //   console.warn('[FEDPA Auth] Error consultando BD:', dbError);
+  // }
   
   // 3. Generar nuevo token
   console.log('[FEDPA Auth] Generando nuevo token...');

@@ -52,7 +52,7 @@ export async function emitirPoliza(
     };
   }
   
-  const data = response.data || {};
+  const data = (response.data || {}) as any;
   
   // Validar que se haya emitido correctamente
   if (!data.poliza && !data.success) {
@@ -125,7 +125,7 @@ export async function emitirPolizaFallback(
     };
   }
   
-  const data = response.data || {};
+  const data = (response.data || {}) as any;
   
   return {
     success: true,
@@ -162,7 +162,7 @@ export async function obtenerNumeroPoliza(
     };
   }
   
-  const data = response.data || {};
+  const data = (response.data || {}) as any;
   const nroPoliza = data.nroPoliza || data.numero;
   
   console.log('[FEDPA Emisión] Número de póliza obtenido:', nroPoliza);
@@ -206,27 +206,29 @@ function normalizarDatosEmision(request: EmitirPolizaRequest): EmitirPolizaReque
 }
 
 /**
- * Guardar emisión en base de datos
+ * Guardar emisión en BD para histórico
+ * TODO: Crear tabla fedpa_emisiones cuando sea necesario
  */
 async function guardarEmisionBD(
   request: EmitirPolizaRequest,
   response: EmitirPolizaResponse,
   env: FedpaEnvironment
 ): Promise<void> {
-  const supabase = getSupabaseAdmin();
+  // TODO: Descomentar cuando se cree la tabla fedpa_emisiones
+  // const supabase = getSupabaseAdmin();
+  // 
+  // await supabase
+  //   .from('fedpa_emisiones')
+  //   .insert({
+  //     payload: request as any,
+  //     response: response as any,
+  //     nro_poliza: response.poliza,
+  //     vigencia_desde: response.desde,
+  //     vigencia_hasta: response.hasta,
+  //     created_at: new Date().toISOString(),
+  //   });
   
-  await supabase
-    .from('fedpa_emisiones')
-    .insert({
-      payload: request as any,
-      response: response as any,
-      nro_poliza: response.poliza,
-      vigencia_desde: response.desde,
-      vigencia_hasta: response.hasta,
-      created_at: new Date().toISOString(),
-    });
-  
-  console.log('[FEDPA Emisión] Guardado en BD');
+  console.log('[FEDPA Emisión] Guardado en BD (pendiente crear tabla)');
 }
 
 /**
@@ -303,6 +305,9 @@ export async function crearClienteYPolizaFEDPA(
     // 4. Convertir fechas de dd/mm/yyyy a yyyy-mm-dd
     const convertDate = (ddmmyyyy: string): string => {
       const [day, month, year] = ddmmyyyy.split('/');
+      if (!day || !month || !year) {
+        return ddmmyyyy; // Retornar original si formato inválido
+      }
       return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
     };
     

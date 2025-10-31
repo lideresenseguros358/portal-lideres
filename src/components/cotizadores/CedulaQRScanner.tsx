@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { FaCamera, FaTimes, FaIdCard } from 'react-icons/fa';
 import { parseCedulaQR, formatNombre, type CedulaQRData } from '@/lib/utils/cedula-qr-parser';
@@ -21,6 +21,39 @@ export default function CedulaQRScanner({ onScanSuccess, onClose }: CedulaQRScan
   const [error, setError] = useState<string | null>(null);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const hasStartedRef = useRef(false);
+
+  const handleScanSuccess = useCallback(async (qrText: string) => {
+    try {
+      // Detener el escáner
+      if (scannerRef.current?.isScanning) {
+        await scannerRef.current.stop();
+      }
+
+      // Parsear el QR
+      const cedulaData = parseCedulaQR(qrText);
+      
+      if (!cedulaData) {
+        toast.error('QR inválido. Asegúrate de escanear el QR de la cédula.');
+        setError('QR de cédula inválido');
+        return;
+      }
+
+      // Formatear nombres
+      const formattedData: CedulaQRData = {
+        ...cedulaData,
+        nombreCompleto: formatNombre(cedulaData.nombreCompleto),
+        apellidoCompleto: formatNombre(cedulaData.apellidoCompleto),
+      };
+
+      toast.success('¡Cédula escaneada correctamente!');
+      onScanSuccess(formattedData);
+      onClose();
+    } catch (err) {
+      console.error('Error procesando QR:', err);
+      toast.error('Error al procesar el QR');
+      setError('Error al procesar el QR');
+    }
+  }, [onScanSuccess, onClose]);
 
   useEffect(() => {
     if (hasStartedRef.current) return;
@@ -78,40 +111,7 @@ export default function CedulaQRScanner({ onScanSuccess, onClose }: CedulaQRScan
           .catch((err) => console.error('Error deteniendo escáner:', err));
       }
     };
-  }, []);
-
-  const handleScanSuccess = async (qrText: string) => {
-    try {
-      // Detener el escáner
-      if (scannerRef.current?.isScanning) {
-        await scannerRef.current.stop();
-      }
-
-      // Parsear el QR
-      const cedulaData = parseCedulaQR(qrText);
-      
-      if (!cedulaData) {
-        toast.error('QR inválido. Asegúrate de escanear el QR de la cédula.');
-        setError('QR de cédula inválido');
-        return;
-      }
-
-      // Formatear nombres
-      const formattedData: CedulaQRData = {
-        ...cedulaData,
-        nombreCompleto: formatNombre(cedulaData.nombreCompleto),
-        apellidoCompleto: formatNombre(cedulaData.apellidoCompleto),
-      };
-
-      toast.success('¡Cédula escaneada correctamente!');
-      onScanSuccess(formattedData);
-      onClose();
-    } catch (err) {
-      console.error('Error procesando QR:', err);
-      toast.error('Error al procesar el QR');
-      setError('Error al procesar el QR');
-    }
-  };
+  }, [handleScanSuccess]);
 
   const handleClose = async () => {
     if (scannerRef.current?.isScanning) {

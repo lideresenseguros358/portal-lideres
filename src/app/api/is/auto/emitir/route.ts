@@ -144,12 +144,8 @@ export async function POST(request: NextRequest) {
         ano: parseInt(vanioauto),
         placa: 'Por asignar', // No tenemos placa en el flujo actual
       },
-      // Prima (si está disponible en result)
-      prima: result.prima ? {
-        total: result.prima,
-      } : undefined,
-      // Vigencia (si está disponible)
-      vigencia: result.vigencia || {
+      // Vigencia por defecto (1 año)
+      vigencia: {
         desde: new Date().toLocaleDateString('es-PA'),
         hasta: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toLocaleDateString('es-PA'),
       },

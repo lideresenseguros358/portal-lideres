@@ -27,13 +27,16 @@ export async function obtenerPlanes(
     };
   }
   
-  const response = await clientResult.client.get<any>(EMISOR_PLAN_ENDPOINTS.PLANES);
+  const response = await clientResult.client.get(EMISOR_PLAN_ENDPOINTS.PLANES);
   
   if (!response.success) {
     console.error('[FEDPA Planes] Error:', response.error);
+    const errorMsg = typeof response.error === 'string' 
+      ? response.error 
+      : response.error?.message || 'Error obteniendo planes';
     return {
       success: false,
-      error: response.error || 'Error obteniendo planes',
+      error: errorMsg,
     };
   }
   
@@ -66,16 +69,19 @@ export async function obtenerBeneficios(
     };
   }
   
-  const response = await clientResult.client.get<any>(
+  const response = await clientResult.client.get(
     EMISOR_PLAN_ENDPOINTS.BENEFICIOS,
     { plan: planId }
   );
   
   if (!response.success) {
     console.error('[FEDPA Planes] Error:', response.error);
+    const errorMsg = typeof response.error === 'string' 
+      ? response.error 
+      : response.error?.message || 'Error obteniendo beneficios';
     return {
       success: false,
-      error: response.error || 'Error obteniendo beneficios',
+      error: errorMsg,
     };
   }
   

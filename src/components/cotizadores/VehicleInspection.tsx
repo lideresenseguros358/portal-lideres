@@ -168,6 +168,7 @@ export default function VehicleInspection({ onContinue }: VehicleInspectionProps
             >
               {photo.preview ? (
                 <>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img 
                     src={photo.preview} 
                     alt={photo.name}

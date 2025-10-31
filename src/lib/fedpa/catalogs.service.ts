@@ -4,7 +4,7 @@
  */
 
 import { createFedpaClient } from './http-client';
-import { FEDPA_CONFIG, FedpaEnvironment, EMISOR_EXTERNO_ENDPOINTS } from './config';
+import { EMISOR_EXTERNO_ENDPOINTS, FEDPA_CONFIG, FedpaEnvironment } from './config';
 import type { LimitesResponse, UsosResponse, PlanesAsignadosResponse } from './types';
 
 // ============================================
@@ -26,14 +26,17 @@ export async function obtenerLimites(
   
   if (!response.success) {
     console.error('[FEDPA Catálogos] Error obteniendo límites:', response.error);
+    const errorMsg = typeof response.error === 'string' 
+      ? response.error 
+      : response.error?.message || 'Error obteniendo límites';
     return {
       success: false,
-      error: response.error || 'Error obteniendo límites',
+      error: errorMsg,
     };
   }
   
   // La respuesta puede ser directamente el array o { data: [...] }
-  const limites = Array.isArray(response.data) ? response.data : response.data?.data || [];
+  const limites = Array.isArray(response.data) ? response.data : (response.data as any)?.data || [];
   
   console.log('[FEDPA Catálogos] Límites obtenidos:', limites.length);
   
@@ -62,13 +65,16 @@ export async function obtenerUsos(
   
   if (!response.success) {
     console.error('[FEDPA Catálogos] Error obteniendo usos:', response.error);
+    const errorMsg = typeof response.error === 'string' 
+      ? response.error 
+      : response.error?.message || 'Error obteniendo usos';
     return {
       success: false,
-      error: response.error || 'Error obteniendo usos',
+      error: errorMsg,
     };
   }
   
-  const usos = Array.isArray(response.data) ? response.data : response.data?.data || [];
+  const usos = Array.isArray(response.data) ? response.data : (response.data as any)?.data || [];
   
   console.log('[FEDPA Catálogos] Usos obtenidos:', usos.length);
   
@@ -97,13 +103,16 @@ export async function obtenerPlanesCC(
   
   if (!response.success) {
     console.error('[FEDPA Catálogos] Error obteniendo planes CC:', response.error);
+    const errorMsg = typeof response.error === 'string' 
+      ? response.error 
+      : response.error?.message || 'Error obteniendo planes CC';
     return {
       success: false,
-      error: response.error || 'Error obteniendo planes CC',
+      error: errorMsg,
     };
   }
   
-  const planes = Array.isArray(response.data) ? response.data : response.data?.data || [];
+  const planes = Array.isArray(response.data) ? response.data : (response.data as any)?.data || [];
   
   console.log('[FEDPA Catálogos] Planes CC obtenidos:', planes.length);
   
@@ -132,13 +141,16 @@ export async function obtenerBeneficiosExternos(
   
   if (!response.success) {
     console.error('[FEDPA Catálogos] Error obteniendo beneficios:', response.error);
+    const errorMsg = typeof response.error === 'string' 
+      ? response.error 
+      : response.error?.message || 'Error obteniendo beneficios';
     return {
       success: false,
-      error: response.error || 'Error obteniendo beneficios',
+      error: errorMsg,
     };
   }
   
-  const beneficios = Array.isArray(response.data) ? response.data : response.data?.data || [];
+  const beneficios = Array.isArray(response.data) ? response.data : (response.data as any)?.data || [];
   
   console.log('[FEDPA Catálogos] Beneficios obtenidos:', beneficios.length);
   
