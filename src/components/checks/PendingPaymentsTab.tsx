@@ -163,11 +163,14 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
       if (result.ok) {
         toast.success('✅ ' + result.message);
         setSelectedIds(new Set());
+        
+        // Recargar inmediatamente los pagos para actualizar contadores
+        await loadPayments();
+        
         // Notificar al padre para refrescar ambas pestañas (historial y pendientes)
         if (onPaymentPaid) {
           onPaymentPaid();
         }
-        // NO poner loading=false aquí, el refresh manejará el loading state
       } else {
         toast.error('Error al marcar pagos', { description: result.error });
         setLoading(false);
@@ -625,11 +628,14 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
       
       if (result.ok) {
         toast.success('✅ ' + result.message);
-        // Notificar al padre para refrescar (se recargará automáticamente por refreshTrigger)
+        
+        // Recargar inmediatamente los pagos para actualizar contadores
+        await loadPayments();
+        
+        // Notificar al padre para refrescar historial también
         if (onPaymentPaid) {
           onPaymentPaid();
         }
-        // NO poner loading=false aquí, el refresh manejará el loading state
       } else {
         toast.error('Error al eliminar pago', { description: result.error });
         setLoading(false);
