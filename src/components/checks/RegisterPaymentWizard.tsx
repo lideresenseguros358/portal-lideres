@@ -53,6 +53,8 @@ export default function RegisterPaymentWizardNew({
   });
 
   // Step 2: Referencias
+  const [isDeductFromBroker, setIsDeductFromBroker] = useState(false);
+  const [selectedBrokerId, setSelectedBrokerId] = useState('');
   const [multipleRefs, setMultipleRefs] = useState(false);
   const [references, setReferences] = useState([{
     reference_number: '',
@@ -187,6 +189,15 @@ export default function RegisterPaymentWizardNew({
       return true;
     } else if (step === 2) {
       const amountToPay = parseFloat(formData.amount_to_pay);
+      
+      // Si es descuento a corredor, validar broker seleccionado
+      if (isDeductFromBroker) {
+        if (!selectedBrokerId) {
+          toast.error('Seleccione un corredor');
+          return false;
+        }
+        return true; // No necesita validar referencias
+      }
       
       // Verificar que todas las referencias tengan número
       if (references.some(r => !r.reference_number)) {
@@ -475,12 +486,30 @@ export default function RegisterPaymentWizardNew({
   const handleSubmit = async () => {
     setLoading(true);
     try {
-      const validReferences = references.map(ref => ({
-        reference_number: ref.reference_number,
-        date: (ref.date || new Date().toISOString().split('T')[0]) as string,
-        amount: parseFloat(ref.amount),
-        amount_to_use: parseFloat(ref.amount_to_use || ref.amount)
-      }));
+      let validReferences;
+      let isDeductPayment = false;
+      
+      // Si es descuento a corredor, crear referencia sintética
+      if (isDeductFromBroker && selectedBrokerId) {
+        const broker = brokers.find(b => b.id === selectedBrokerId);
+        const brokerName = broker?.name || 'CORREDOR';
+        
+        validReferences = [{
+          reference_number: `DESCUENTO-${Date.now()}`,
+          date: new Date().toISOString().split('T')[0] as string,
+          amount: parseFloat(formData.amount_to_pay),
+          amount_to_use: parseFloat(formData.amount_to_pay)
+        }];
+        
+        isDeductPayment = true;
+      } else {
+        validReferences = references.map(ref => ({
+          reference_number: ref.reference_number,
+          date: (ref.date || new Date().toISOString().split('T')[0]) as string,
+          amount: parseFloat(ref.amount),
+          amount_to_use: parseFloat(ref.amount_to_use || ref.amount)
+        }));
+      }
       
       // Preparar divisiones si están activas
       const validDivisions = divideSingle ? divisions.map(div => ({
@@ -504,7 +533,9 @@ export default function RegisterPaymentWizardNew({
         amount_to_pay: parseFloat(formData.amount_to_pay),
         references: validReferences,
         divisions: validDivisions,
-        advance_id: advancePrefill?.id ?? advanceId ?? undefined
+        advance_id: advancePrefill?.id ?? advanceId ?? undefined,
+        is_broker_deduction: isDeductPayment,
+        deduction_broker_id: isDeductPayment ? selectedBrokerId : undefined
       };
 
       const result = await actionCreatePendingPayment(payload);
@@ -816,20 +847,90 @@ export default function RegisterPaymentWizardNew({
           {/* Step 2: Referencias */}
           {step === 2 && (
             <div className="space-y-4 animate-fadeIn">
-              <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg">
+              {/* Toggle: Descuento a Corredor */}
+              <div className="flex items-center gap-2 p-4 bg-gradient-to-r from-[#8AAA19]/10 to-[#8AAA19]/5 border-2 border-[#8AAA19]/30 rounded-lg">
                 <input
                   type="checkbox"
-                  id="multipleRefs"
-                  checked={multipleRefs}
-                  onChange={(e) => setMultipleRefs(e.target.checked)}
+                  id="isDeductFromBroker"
+                  checked={isDeductFromBroker}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setIsDeductFromBroker(checked);
+                    if (checked) {
+                      // Limpiar referencias cuando se activa descuento
+                      setMultipleRefs(false);
+                      setReferences([{
+                        reference_number: '',
+                        date: new Date().toISOString().split('T')[0],
+                        amount: '',
+                        amount_to_use: '',
+                        exists_in_bank: false,
+                        validating: false,
+                        status: null,
+                        remaining_amount: 0
+                      }]);
+                    }
+                  }}
                   className="w-5 h-5 text-[#8AAA19] rounded focus:ring-[#8AAA19]"
                 />
-                <label htmlFor="multipleRefs" className="text-sm font-medium text-gray-700">
-                  Pagos Múltiples (varias transferencias para este pago)
-                </label>
+                <div className="flex-1">
+                  <label htmlFor="isDeductFromBroker" className="text-sm font-bold text-[#010139] block">
+                    💰 Descuento a Corredor (sin transferencia bancaria)
+                  </label>
+                  <p className="text-xs text-gray-600 mt-0.5">
+                    Se creará un adelanto automáticamente y se descontará de las comisiones del corredor
+                  </p>
+                </div>
               </div>
 
-              {references.map((ref, index) => (
+              {!isDeductFromBroker && (
+                <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg">
+                  <input
+                    type="checkbox"
+                    id="multipleRefs"
+                    checked={multipleRefs}
+                    onChange={(e) => setMultipleRefs(e.target.checked)}
+                    className="w-5 h-5 text-[#8AAA19] rounded focus:ring-[#8AAA19]"
+                  />
+                  <label htmlFor="multipleRefs" className="text-sm font-medium text-gray-700">
+                    Pagos Múltiples (varias transferencias para este pago)
+                  </label>
+                </div>
+              )}
+
+              {/* Dropdown de Corredores (si está activo descuento) */}
+              {isDeductFromBroker && (
+                <div className="border-2 border-[#8AAA19]/30 rounded-lg p-4 bg-white">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Corredor a descontar <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={selectedBrokerId}
+                    onChange={(e) => setSelectedBrokerId(e.target.value)}
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none text-base"
+                  >
+                    <option value="">Seleccione un corredor...</option>
+                    {brokers.map((broker) => (
+                      <option key={broker.id} value={broker.id}>
+                        {broker.name}
+                      </option>
+                    ))}
+                  </select>
+                  {selectedBrokerId && (
+                    <div className="mt-3 p-3 bg-green-50 border-l-4 border-green-500 rounded-r-lg">
+                      <p className="text-sm text-green-800">
+                        ✅ Este pago se descontará de las comisiones de <strong>{brokers.find(b => b.id === selectedBrokerId)?.name}</strong>
+                      </p>
+                      <p className="text-xs text-green-600 mt-1">
+                        Se creará un adelanto por <strong>${amountToPay.toFixed(2)}</strong> que se descontará en la próxima quincena
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Referencias (solo si NO es descuento a corredor) */}
+              {!isDeductFromBroker && references.map((ref, index) => (
                 <div key={index} className="border-2 border-gray-200 rounded-lg p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <h4 className="font-semibold text-gray-700">Referencia {index + 1}</h4>
@@ -995,7 +1096,7 @@ export default function RegisterPaymentWizardNew({
                 </div>
               ))}
 
-              {multipleRefs && (
+              {!isDeductFromBroker && multipleRefs && (
                 <button
                   onClick={addReference}
                   className="w-full py-2 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:border-[#8AAA19] hover:text-[#8AAA19] transition font-medium flex items-center justify-center gap-2"
@@ -1006,6 +1107,7 @@ export default function RegisterPaymentWizardNew({
               )}
 
               {/* Resumen de montos */}
+              {!isDeductFromBroker && (
               <div className="bg-gray-50 rounded-lg p-4 space-y-2">
                 <div className="flex justify-between">
                   <span className="text-gray-700">Monto a Pagar:</span>
@@ -1031,6 +1133,7 @@ export default function RegisterPaymentWizardNew({
                   </p>
                 )}
               </div>
+              )}
             </div>
           )}
 

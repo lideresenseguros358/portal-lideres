@@ -701,8 +701,11 @@ export async function actionBulkUpdateBrokers(updates: Array<{ id: string; [key:
     for (const update of updates) {
       const { id, role: newRole, ...brokerUpdates } = update as any;
       
+      console.log(`[actionBulkUpdateBrokers] Processing broker ${id}:`, { newRole, brokerUpdates });
+      
       // Skip if no changes
       if (Object.keys(brokerUpdates).length === 0 && !newRole) {
+        console.log(`[actionBulkUpdateBrokers] Skipping broker ${id} - no changes`);
         continue;
       }
 
@@ -713,13 +716,15 @@ export async function actionBulkUpdateBrokers(updates: Array<{ id: string; [key:
           if (value === undefined) continue;
           cleanedUpdates[key] = (nullableFields.includes(key) && value === '') ? null : value;
         }
+        
+        console.log(`[actionBulkUpdateBrokers] Cleaned updates for ${id}:`, cleanedUpdates);
 
         // Update brokers table
         const { data: broker, error: brokerError } = await supabase
           .from('brokers')
           .update(cleanedUpdates satisfies TablesUpdate<'brokers'>)
           .eq('id', id)
-          .select('p_id')
+          .select('p_id, email')
           .single();
 
         if (brokerError || !broker) {
@@ -728,25 +733,51 @@ export async function actionBulkUpdateBrokers(updates: Array<{ id: string; [key:
           continue;
         }
 
+        // Check if this is Oficina - cannot change Oficina's role
+        const { data: existingProfile } = await supabase
+          .from('profiles')
+          .select('email')
+          .eq('id', broker.p_id)
+          .single();
+          
+        if (existingProfile?.email === OFICINA_EMAIL && newRole) {
+          console.log(`[actionBulkUpdateBrokers] Skipping role update for Oficina`);
+          results.push({ id, success: true, warning: 'Rol de Oficina no modificado' });
+          continue;
+        }
+
         // Sync to profiles if needed
         const profileUpdates: Partial<TablesUpdate<'profiles'>> = {};
         if (cleanedUpdates.name !== undefined) profileUpdates.full_name = cleanedUpdates.name;
         if (cleanedUpdates.email !== undefined) profileUpdates.email = cleanedUpdates.email;
-        if (newRole && (newRole === 'master' || newRole === 'broker')) profileUpdates.role = newRole;
+        if (newRole && (newRole === 'master' || newRole === 'broker')) {
+          profileUpdates.role = newRole;
+          console.log(`[actionBulkUpdateBrokers] Role update for ${id}: ${newRole}`);
+        }
 
         if (Object.keys(profileUpdates).length > 0) {
-          await supabase
+          console.log(`[actionBulkUpdateBrokers] Syncing to profiles for ${id}:`, profileUpdates);
+          const { error: profileError } = await supabase
             .from('profiles')
             .update(profileUpdates)
             .eq('id', broker.p_id);
+            
+          if (profileError) {
+            console.error(`[actionBulkUpdateBrokers] Profile sync error for ${id}:`, profileError);
+          }
         }
 
         // Sync email to auth.users if changed
         if (cleanedUpdates.email !== undefined && cleanedUpdates.email !== null) {
-          await supabase.auth.admin.updateUserById(
+          console.log(`[actionBulkUpdateBrokers] Syncing email to auth.users for ${id}`);
+          const { error: authError } = await supabase.auth.admin.updateUserById(
             broker.p_id,
             { email: cleanedUpdates.email }
           );
+          
+          if (authError) {
+            console.error(`[actionBulkUpdateBrokers] Auth sync error for ${id}:`, authError);
+          }
         }
 
         results.push({ id, success: true });
@@ -759,8 +790,10 @@ export async function actionBulkUpdateBrokers(updates: Array<{ id: string; [key:
     const successCount = results.filter(r => r.success).length;
     const errorCount = results.filter(r => !r.success).length;
     console.log(`[actionBulkUpdateBrokers] Complete. Success: ${successCount}, Errors: ${errorCount}`);
+    console.log(`[actionBulkUpdateBrokers] Results:`, results);
     
     revalidatePath('/brokers');
+    revalidatePath('/', 'layout');
 
     if (errorCount > 0 && successCount === 0) {
       return { 

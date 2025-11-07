@@ -191,25 +191,29 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
                     {advancesToShow.length} adelantos
                   </TableCell>
                   <TableCell className="text-center">
-                    <Button 
-                      size="sm" 
-                      variant="ghost"
-                      className="hover:bg-[#010139] hover:text-white"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        const pendingAdv = brokerData.advances
-                          .filter(a => a.status === 'pending')
-                          .map(a => ({ id: a.id, amount: a.amount, reason: a.reason }));
-                        setPaymentModal({
-                          isOpen: true,
-                          brokerId: bId,
-                          brokerName: brokerData.broker_name,
-                          pendingAdvances: pendingAdv,
-                        });
-                      }}
-                    >
-                      Pago Externo
-                    </Button>
+                    {status === 'pending' ? (
+                      <Button 
+                        size="sm" 
+                        variant="ghost"
+                        className="hover:bg-[#010139] hover:text-white"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const pendingAdv = brokerData.advances
+                            .filter(a => a.status === 'pending')
+                            .map(a => ({ id: a.id, amount: a.amount, reason: a.reason }));
+                          setPaymentModal({
+                            isOpen: true,
+                            brokerId: bId,
+                            brokerName: brokerData.broker_name,
+                            pendingAdvances: pendingAdv,
+                          });
+                        }}
+                      >
+                        Pago Externo
+                      </Button>
+                    ) : (
+                      <span className="text-sm text-gray-500">Saldado</span>
+                    )}
                   </TableCell>
                 </TableRow>
               )}
@@ -310,66 +314,74 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card className="shadow-lg border-l-4 border-l-[#010139]">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-gray-600 flex items-center gap-2">
-              <FaMoneyBillWave className="text-[#010139]" />
+        <Card className="bg-white shadow-xl border-l-4 border-l-[#010139] hover:shadow-2xl transition-all">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+              <div className="p-2 bg-[#010139]/10 rounded-lg">
+                <FaMoneyBillWave className="text-[#010139]" size={18} />
+              </div>
               Total Adelantos Pendientes
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold text-[#010139] font-mono">
+            <p className="text-3xl font-bold text-[#010139] font-mono">
               {totals.pendingTotal.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
             </p>
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-sm text-gray-500 mt-2">
               {Object.keys(groupedData).length} corredores con adelantos
             </p>
           </CardContent>
         </Card>
         
-        <Card className="shadow-lg border-l-4 border-l-[#8AAA19]">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-gray-600 flex items-center gap-2">
-              <FaDollarSign className="text-[#8AAA19]" />
+        <Card className="bg-white shadow-xl border-l-4 border-l-[#8AAA19] hover:shadow-2xl transition-all">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+              <div className="p-2 bg-[#8AAA19]/10 rounded-lg">
+                <FaDollarSign className="text-[#8AAA19]" size={18} />
+              </div>
               Total Adelantos Saldados
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold text-[#8AAA19] font-mono">
+            <p className="text-3xl font-bold text-[#8AAA19] font-mono">
               {totals.paidTotal.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
             </p>
-            <p className="text-xs text-gray-500 mt-1">En el año {year}</p>
+            <p className="text-sm text-gray-500 mt-2">En el año {year}</p>
           </CardContent>
         </Card>
         
         {role === 'master' && (
-          <Card className="shadow-lg border-l-4 border-l-green-500 hover:shadow-xl transition-shadow cursor-pointer"
+          <Card className="bg-gradient-to-br from-green-50 to-emerald-50 shadow-xl border-l-4 border-l-green-500 hover:shadow-2xl hover:scale-105 transition-all cursor-pointer"
                 onClick={() => setIsAddModalOpen(true)}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm text-gray-600 flex items-center gap-2">
-                <FaPlus className="text-green-500" />
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                <div className="p-2 bg-green-500/20 rounded-lg">
+                  <FaPlus className="text-green-600" size={18} />
+                </div>
                 Crear Nuevo Adelanto
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-lg text-gray-700">Click para agregar</p>
-              <p className="text-xs text-gray-500 mt-1">Registrar adelanto a corredor</p>
+              <p className="text-lg font-semibold text-gray-700">Click para agregar</p>
+              <p className="text-sm text-gray-600 mt-1">Registrar adelanto a corredor</p>
             </CardContent>
           </Card>
         )}
       </div>
 
       {/* Main Table */}
-      <Card className="shadow-lg">
-        <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100">
+      <Card className="bg-white shadow-xl">
+        <CardHeader className="bg-gradient-to-r from-[#010139] to-[#020270] text-white rounded-t-lg">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-2">
-              <FaHistory className="text-[#010139] text-lg" />
-              <CardTitle className="text-[#010139]">Gestión de Adelantos</CardTitle>
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-white/20 rounded-lg">
+                <FaHistory className="text-white" size={20} />
+              </div>
+              <CardTitle className="text-white text-xl">Gestión de Adelantos</CardTitle>
             </div>
-            <div className="flex flex-wrap items-center gap-2 sm:gap-4">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3">
               <Select value={String(year)} onValueChange={(value) => setYear(Number(value))}>
-                <SelectTrigger className="w-24 border-[#010139]/20">
+                <SelectTrigger className="w-28 bg-white/10 border-white/30 text-white backdrop-blur-sm hover:bg-white/20">
                   <SelectValue placeholder="Año" />
                 </SelectTrigger>
                 <SelectContent>
@@ -379,7 +391,7 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
               {role === 'master' && (
                 <Button 
                   onClick={() => setIsAddModalOpen(true)}
-                  className="bg-[#010139] hover:bg-[#8AAA19] text-white transition-colors"
+                  className="bg-[#8AAA19] hover:bg-[#6d8814] text-white shadow-lg transition-all hover:scale-105"
                 >
                   <FaPlus className="mr-2 h-3 w-3" />
                   <span className="hidden sm:inline">Nuevo Adelanto</span>
@@ -391,28 +403,20 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
         </CardHeader>
         <CardContent className="p-0">
           <Tabs defaultValue="pending" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 rounded-t-none bg-gray-100">
-              <TabsTrigger value="pending" className="data-[state=active]:bg-white data-[state=active]:text-[#010139]">
+            <TabsList className="grid w-full grid-cols-2 rounded-none bg-gray-50 border-b-2 border-gray-200">
+              <TabsTrigger value="pending" className="data-[state=active]:bg-white data-[state=active]:text-[#010139] data-[state=active]:border-b-2 data-[state=active]:border-[#010139] rounded-none font-semibold">
                 Deudas Activas
               </TabsTrigger>
-              <TabsTrigger value="paid" className="data-[state=active]:bg-white data-[state=active]:text-[#8AAA19]">
+              <TabsTrigger value="paid" className="data-[state=active]:bg-white data-[state=active]:text-[#8AAA19] data-[state=active]:border-b-2 data-[state=active]:border-[#8AAA19] rounded-none font-semibold">
                 Deudas Saldadas
               </TabsTrigger>
             </TabsList>
-            <div className="p-6">
+            <div className="p-6 bg-white">
               <TabsContent value="pending">
-                <Card className="shadow-inner">
-                  <CardContent className="p-3">
-                    {renderTable('pending')}
-                  </CardContent>
-                </Card>
+                {renderTable('pending')}
               </TabsContent>
               <TabsContent value="paid">
-                <Card className="shadow-inner">
-                  <CardContent className="p-3">
-                    {renderTable('paid')}
-                  </CardContent>
-                </Card>
+                {renderTable('paid')}
               </TabsContent>
             </div>
           </Tabs>

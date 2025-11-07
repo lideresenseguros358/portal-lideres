@@ -65,11 +65,32 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
   const handleSave = async () => {
     console.log('[BrokerDetailClient] handleSave called');
     console.log('[BrokerDetailClient] Form data:', formData);
+    console.log('[BrokerDetailClient] Broker type:', formData.broker_type);
+    console.log('[BrokerDetailClient] Role:', formData.role);
     
-    const normalizedData = toUppercasePayload(formData);
+    // Prepare updates - filter out undefined and unchanged values
+    const updates: any = {};
+    const fieldsToUpdate = [
+      'name', 'phone', 'national_id', 'birth_date', 'assa_code', 'license_no',
+      'percent_default', 'bank_route', 'bank_account_no', 'tipo_cuenta', 
+      'nombre_completo', 'beneficiary_id', 'carnet_expiry_date', 'broker_type', 'role'
+    ];
+    
+    for (const field of fieldsToUpdate) {
+      if (formData[field] !== undefined && formData[field] !== broker[field]) {
+        updates[field] = formData[field];
+      }
+    }
+    
+    console.log('[BrokerDetailClient] Updates to send:', updates);
+    
+    // Apply uppercase to text fields (not to role, email, etc)
+    const normalizedData = toUppercasePayload(updates);
+    
+    console.log('[BrokerDetailClient] Normalized data:', normalizedData);
     
     // Check if percent_default changed
-    const percentChanged = broker.percent_default !== formData.percent_default;
+    const percentChanged = 'percent_default' in normalizedData && broker.percent_default !== normalizedData.percent_default;
     
     if (percentChanged && !isOficina) {
       // Ask what to do with the percentage change
@@ -86,36 +107,52 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
     console.log('[BrokerDetailClient] Saving updates:', updates);
     console.log('[BrokerDetailClient] Apply to existing policies:', applyToExisting);
     
-    const result = await actionUpdateBroker(brokerId, updates);
-    console.log('[BrokerDetailClient] Result:', result);
+    try {
+      const result = await actionUpdateBroker(brokerId, updates);
+      console.log('[BrokerDetailClient] Result:', result);
 
-    if (result.ok) {
-      // Show warnings if any
-      if ((result as any).warnings && (result as any).warnings.length > 0) {
-        toast.warning(`Corredor actualizado con advertencias: ${(result as any).warnings.join(', ')}`);
-      }
-      
-      // If we need to apply to existing policies
-      if (applyToExisting) {
-        const applyResult = await actionApplyDefaultPercentToAll(brokerId);
-        if (applyResult.ok) {
-          toast.success('✅ Corredor actualizado y % aplicado a todas las pólizas');
+      if (result.ok) {
+        // Show warnings if any
+        if ((result as any).warnings && (result as any).warnings.length > 0) {
+          toast.warning(`Corredor actualizado con advertencias: ${(result as any).warnings.join(', ')}`);
+        }
+        
+        // If we need to apply to existing policies
+        if (applyToExisting) {
+          const applyResult = await actionApplyDefaultPercentToAll(brokerId);
+          if (applyResult.ok) {
+            toast.success('✅ Corredor actualizado y % aplicado a todas las pólizas');
+          } else {
+            toast.warning('Corredor actualizado pero hubo un error aplicando % a pólizas: ' + applyResult.error);
+          }
         } else {
-          toast.warning('Corredor actualizado pero hubo un error aplicando % a pólizas: ' + applyResult.error);
+          if (!(result as any).warnings || (result as any).warnings.length === 0) {
+            toast.success('✅ Corredor actualizado correctamente');
+          }
         }
+        
+        // Cerrar modal y limpiar estado
+        setShowPercentModal(false);
+        setPendingUpdates(null);
+        setIsEditing(false);
+        
+        // Recargar datos del broker
+        await loadBroker();
       } else {
-        if (!(result as any).warnings || (result as any).warnings.length === 0) {
-          toast.success('✅ Corredor actualizado correctamente');
-        }
+        toast.error(result.error);
+        // Cerrar modal en caso de error también
+        setShowPercentModal(false);
+        setPendingUpdates(null);
       }
-      setIsEditing(false);
+    } catch (error: any) {
+      console.error('[BrokerDetailClient] Error saving:', error);
+      toast.error('Error inesperado al guardar: ' + error.message);
+      // Cerrar modal en caso de excepción
       setShowPercentModal(false);
       setPendingUpdates(null);
-      loadBroker();
-    } else {
-      toast.error(result.error);
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   };
 
   const handleToggleActive = async () => {
@@ -800,92 +837,92 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
       {showPercentModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full p-6 space-y-4">
-            <div className="flex items-center gap-3">
-              <div className="p-3 bg-amber-100 rounded-full">
-                <FaPercentage className="text-2xl text-amber-600" />
-              </div>
-              <div>
-                <h3 className="text-xl font-bold text-[#010139]">
-                  Cambio de % de Comisión
-                </h3>
-                <p className="text-sm text-gray-600">
-                  De {(broker.percent_default * 100).toFixed(0)}% → {(formData.percent_default * 100).toFixed(0)}%
-                </p>
-              </div>
-            </div>
-
-            <div className="border-t border-gray-200 pt-4">
-              <p className="text-gray-700 mb-4">
-                ¿Cómo deseas aplicar este cambio de porcentaje?
-              </p>
-
-              <div className="space-y-3">
-                {/* Opción 1: Solo nuevas pólizas */}
-                <button
-                  onClick={() => saveUpdates(pendingUpdates, false)}
-                  disabled={saving}
-                  className="w-full p-4 text-left border-2 border-gray-300 rounded-lg hover:border-[#8AAA19] hover:bg-gray-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="mt-1">
-                      <div className="w-5 h-5 rounded-full border-2 border-[#8AAA19] flex items-center justify-center">
-                        <div className="w-2 h-2 rounded-full bg-[#8AAA19]"></div>
-                      </div>
-                    </div>
-                    <div>
-                      <p className="font-semibold text-gray-900">
-                        📝 Solo para nuevas pólizas
-                      </p>
-                      <p className="text-sm text-gray-600 mt-1">
-                        El nuevo porcentaje se aplicará únicamente a las pólizas que se agreguen en el futuro. 
-                        Las pólizas existentes mantendrán su porcentaje actual.
-                      </p>
-                    </div>
+            {!saving ? (
+              <>
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-amber-100 rounded-full">
+                    <FaPercentage className="text-2xl text-amber-600" />
                   </div>
-                </button>
-
-                {/* Opción 2: Todas las pólizas */}
-                <button
-                  onClick={() => saveUpdates(pendingUpdates, true)}
-                  disabled={saving}
-                  className="w-full p-4 text-left border-2 border-amber-300 bg-amber-50 rounded-lg hover:border-amber-500 hover:bg-amber-100 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <div className="flex items-start gap-3">
-                    <div className="mt-1">
-                      <div className="w-5 h-5 rounded-full border-2 border-amber-600 flex items-center justify-center">
-                        <div className="w-2 h-2 rounded-full bg-amber-600"></div>
-                      </div>
-                    </div>
-                    <div>
-                      <p className="font-semibold text-amber-900">
-                        ⚠️ Aplicar a TODAS las pólizas existentes
-                      </p>
-                      <p className="text-sm text-amber-700 mt-1">
-                        El nuevo porcentaje se aplicará a TODAS las pólizas en la cartera de este corredor, 
-                        incluyendo las existentes. Esto afecta la base de datos completa.
-                      </p>
-                    </div>
+                  <div>
+                    <h3 className="text-xl font-bold text-[#010139]">
+                      Cambio de % de Comisión
+                    </h3>
+                    <p className="text-sm text-gray-600">
+                      De {(broker.percent_default * 100).toFixed(0)}% → {(formData.percent_default * 100).toFixed(0)}%
+                    </p>
                   </div>
-                </button>
-              </div>
+                </div>
 
-              {/* Botón Cancelar */}
-              <button
-                onClick={() => {
-                  setShowPercentModal(false);
-                  setPendingUpdates(null);
-                }}
-                disabled={saving}
-                className="w-full mt-4 px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Cancelar
-              </button>
-            </div>
+                <div className="border-t border-gray-200 pt-4">
+                  <p className="text-gray-700 mb-4">
+                    ¿Cómo deseas aplicar este cambio de porcentaje?
+                  </p>
 
-            {saving && (
-              <div className="flex items-center justify-center gap-2 text-[#010139]">
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-[#010139]"></div>
-                <span>Guardando cambios...</span>
+                  <div className="space-y-3">
+                    {/* Opción 1: Solo nuevas pólizas */}
+                    <button
+                      onClick={() => saveUpdates(pendingUpdates, false)}
+                      className="w-full p-4 text-left border-2 border-gray-300 rounded-lg hover:border-[#8AAA19] hover:bg-gray-50 transition-all"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="mt-1">
+                          <div className="w-5 h-5 rounded-full border-2 border-[#8AAA19] flex items-center justify-center">
+                            <div className="w-2 h-2 rounded-full bg-[#8AAA19]"></div>
+                          </div>
+                        </div>
+                        <div>
+                          <p className="font-semibold text-gray-900">
+                            📝 Solo para nuevas pólizas
+                          </p>
+                          <p className="text-sm text-gray-600 mt-1">
+                            El nuevo porcentaje se aplicará únicamente a las pólizas que se agreguen en el futuro. 
+                            Las pólizas existentes mantendrán su porcentaje actual.
+                          </p>
+                        </div>
+                      </div>
+                    </button>
+
+                    {/* Opción 2: Todas las pólizas */}
+                    <button
+                      onClick={() => saveUpdates(pendingUpdates, true)}
+                      className="w-full p-4 text-left border-2 border-amber-300 bg-amber-50 rounded-lg hover:border-amber-500 hover:bg-amber-100 transition-all"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="mt-1">
+                          <div className="w-5 h-5 rounded-full border-2 border-amber-600 flex items-center justify-center">
+                            <div className="w-2 h-2 rounded-full bg-amber-600"></div>
+                          </div>
+                        </div>
+                        <div>
+                          <p className="font-semibold text-amber-900">
+                            ⚠️ Aplicar a TODAS las pólizas existentes
+                          </p>
+                          <p className="text-sm text-amber-700 mt-1">
+                            El nuevo porcentaje se aplicará a TODAS las pólizas en la cartera de este corredor, 
+                            incluyendo las existentes. Esto afecta la base de datos completa.
+                          </p>
+                        </div>
+                      </div>
+                    </button>
+                  </div>
+
+                  {/* Botón Cancelar */}
+                  <button
+                    onClick={() => {
+                      setShowPercentModal(false);
+                      setPendingUpdates(null);
+                    }}
+                    className="w-full mt-4 px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-all font-semibold"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="py-12 flex flex-col items-center justify-center gap-4 text-[#010139]">
+                <div className="animate-spin rounded-full h-12 w-12 border-4 border-[#010139] border-t-transparent"></div>
+                <span className="text-lg font-semibold">Guardando cambios...</span>
+                <p className="text-sm text-gray-600">Por favor espera...</p>
               </div>
             )}
           </div>

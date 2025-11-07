@@ -6,7 +6,10 @@
 /**
  * Convierte recursivamente todos los valores string de un objeto a mayúsculas
  * Mantiene nulls, numbers, booleans, arrays y objetos anidados
+ * Excluye campos específicos que NO deben convertirse a mayúsculas
  */
+const EXCLUDE_UPPERCASE_FIELDS = ['role', 'email', 'password', 'token', 'tipo_cuenta', 'bank_route'];
+
 export function toUppercasePayload<T extends Record<string, any>>(obj: T): T {
   if (!obj || typeof obj !== 'object') return obj;
 
@@ -19,7 +22,7 @@ export function toUppercasePayload<T extends Record<string, any>>(obj: T): T {
   for (const [key, value] of Object.entries(obj)) {
     if (value === null || value === undefined) {
       result[key] = value;
-    } else if (typeof value === 'string') {
+    } else if (typeof value === 'string' && !EXCLUDE_UPPERCASE_FIELDS.includes(key)) {
       result[key] = value.toUpperCase();
     } else if (typeof value === 'object') {
       result[key] = toUppercasePayload(value);

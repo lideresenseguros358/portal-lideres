@@ -692,31 +692,93 @@ export async function actionApplyAdvancePayment(payload: {
       }
     }
 
-    // Si es transferencia externa, crear pending_payment y esperar a que la referencia esté disponible
+    // Si es transferencia externa, validar referencia y aplicar directamente
     if (payment_type === 'external_transfer' && reference_number) {
-      // Crear pending_payment para el adelanto
-      const { error: pendingError } = await supabase.from('pending_payments').insert({
-        client_name: `ADELANTO - ${(advance as any).broker_id}`,
-        policy_number: `ADV-${advance_id.substring(0, 8)}`,
-        insurer_name: 'ADELANTO',
-        purpose: `Pago adelanto por transferencia - Ref: ${reference_number}`,
-        amount_to_pay: amount,
-        total_received: amount,
-        can_be_paid: false, // Se activará cuando la referencia esté en banco
-        notes: JSON.stringify({
-          source: 'advance_external',
-          advance_id,
-          reference_number,
-          payment_date: payment_date || new Date().toISOString().split('T')[0],
-        }),
-        created_by: applied_by,
-      } satisfies TablesInsert<'pending_payments'>);
-
-      if (pendingError) throw pendingError;
-
-      revalidatePath('/(app)/commissions');
-      revalidatePath('/(app)/checks');
-      return { ok: true as const, message: 'Transferencia registrada. Se aplicará cuando la referencia esté disponible en banco.' };
+      console.log(`💳 Procesando transferencia externa - Ref: ${reference_number} - Monto: $${amount}`);
+      
+      // Buscar la referencia en bank_transfers
+      const { data: transfer, error: transferError } = await supabase
+        .from('bank_transfers')
+        .select('*')
+        .eq('reference_number', reference_number)
+        .single();
+      
+      if (transferError || !transfer) {
+        return { 
+          ok: false as const, 
+          error: `La referencia "${reference_number}" no existe en el historial de banco. Por favor, impórtela primero.` 
+        };
+      }
+      
+      // Validar que el monto no exceda el disponible en la transferencia
+      const transferAmount = Number(transfer.amount) || 0;
+      const transferUsed = Number(transfer.used_amount) || 0;
+      const transferRemaining = transferAmount - transferUsed;
+      
+      if (amount > transferRemaining) {
+        return { 
+          ok: false as const, 
+          error: `El monto a utilizar ($${amount.toFixed(2)}) excede el saldo disponible de la referencia ($${transferRemaining.toFixed(2)}).` 
+        };
+      }
+      
+      console.log(`✅ Referencia validada - Disponible: $${transferRemaining.toFixed(2)} - A usar: $${amount.toFixed(2)}`);
+      
+      // Obtener información del adelanto y broker
+      const { data: advanceData } = await supabase
+        .from('advances')
+        .select(`
+          id,
+          amount,
+          reason,
+          broker_id,
+          brokers (name)
+        `)
+        .eq('id', advance_id)
+        .single();
+      
+      const brokerName = (advanceData as any)?.brokers?.name || 'CORREDOR';
+      const advanceReason = (advanceData as any)?.reason || 'Adelanto';
+      
+      // Actualizar bank_transfers con el monto usado
+      const newUsedAmount = transferUsed + amount;
+      const newRemainingAmount = transferAmount - newUsedAmount;
+      const newStatus = newRemainingAmount <= 0.01 ? 'used' : 
+                       newUsedAmount > 0 ? 'partial' : 'available';
+      
+      const { error: updateTransferError } = await supabase
+        .from('bank_transfers')
+        .update({
+          used_amount: newUsedAmount,
+          remaining_amount: newRemainingAmount,
+          status: newStatus
+        } satisfies TablesUpdate<'bank_transfers'>)
+        .eq('id', transfer.id);
+      
+      if (updateTransferError) throw updateTransferError;
+      
+      console.log(`📝 Bank transfer actualizado - Usado: $${newUsedAmount.toFixed(2)} - Remanente: $${newRemainingAmount.toFixed(2)} - Status: ${newStatus}`);
+      
+      // Crear registro en payment_details para trazabilidad
+      const { error: detailError } = await supabase
+        .from('payment_details')
+        .insert([{
+          bank_transfer_id: transfer.id,
+          payment_id: null, // No hay pending_payment en este flujo
+          policy_number: `ADV-${advance_id.substring(0, 8)}`,
+          insurer_name: 'ADELANTO',
+          client_name: `Adelanto: ${brokerName}`,
+          purpose: advanceReason,
+          amount_used: amount,
+          paid_at: payment_date || new Date().toISOString()
+        }] satisfies TablesInsert<'payment_details'>[]);
+      
+      if (detailError) {
+        console.error('Error creating payment detail:', detailError);
+        // No fallar, solo log
+      }
+      
+      console.log(`✅ Transferencia aplicada al adelanto - Registrada en historial banco`);
     }
 
     // Para efectivo u otros pagos, aplicar directamente
@@ -754,25 +816,56 @@ export async function actionApplyAdvancePayment(payload: {
 
     // Si el adelanto está saldado, habilitar pending_payment relacionado para que pueda ser marcado como pagado
     if (newStatus === 'PAID') {
+      console.log(`✅ Adelanto ${advance_id} completamente pagado - Buscando pagos pendientes relacionados...`);
+      
       // Buscar pending_payment con este advance_id en notes
+      console.log(`🔍 Buscando pagos pendientes asociados al adelanto ${advance_id}...`);
+      
       const { data: pendingPayments } = await supabase
         .from('pending_payments')
-        .select('id, notes')
-        .eq('purpose', 'DESCUENTO A CORREDOR')
+        .select('id, notes, client_name, amount_to_pay, can_be_paid, purpose')
+        .eq('purpose', 'otro') // Descuentos a corredor usan purpose='otro'
         .eq('status', 'pending');
+
+      console.log(`📊 Se encontraron ${pendingPayments?.length || 0} pagos con purpose='otro' pendientes`);
 
       if (pendingPayments && pendingPayments.length > 0) {
         for (const payment of pendingPayments) {
-          // Check if notes contain this advance_id
-          if (payment.notes?.includes(`Adelanto ID: ${advance_id}`)) {
+          // Parsear notes para extraer advance_id (puede ser JSON o texto)
+          let paymentAdvanceId: string | null = null;
+          
+          try {
+            if (payment.notes && typeof payment.notes === 'string') {
+              if (payment.notes.startsWith('{')) {
+                const parsed = JSON.parse(payment.notes);
+                paymentAdvanceId = parsed.advance_id || null;
+              } else if (payment.notes.includes('Adelanto ID:')) {
+                const match = payment.notes.match(/Adelanto ID:\s*([a-f0-9-]+)/i);
+                paymentAdvanceId = match ? (match[1] ?? null) : null;
+              }
+            }
+          } catch (e) {
+            console.error('Error parsing notes for advance_id:', e);
+          }
+          
+          console.log(`🔍 Pago "${payment.client_name}": advance_id=${paymentAdvanceId}, buscando=${advance_id}`);
+          
+          // Si coincide el advance_id y aún no está habilitado
+          if (paymentAdvanceId === advance_id && !payment.can_be_paid) {
+            console.log(`🔓 Habilitando pago pendiente: ${payment.client_name} - $${payment.amount_to_pay}`);
+            
             await supabase
               .from('pending_payments')
               .update({
                 can_be_paid: true,
               } satisfies TablesUpdate<'pending_payments'>)
               .eq('id', payment.id);
+            
+            console.log(`✅ Pago pendiente habilitado - Ahora puede marcarse como pagado en la pestaña de Pagos Pendientes`);
           }
         }
+      } else {
+        console.log(`⚠️ No se encontraron pagos pendientes con purpose "otro"`);
       }
     }
 

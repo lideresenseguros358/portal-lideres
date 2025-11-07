@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { FaPlus, FaCheckCircle, FaExclamationTriangle, FaFileDownload, FaEdit, FaTrash } from 'react-icons/fa';
 import { actionGetPendingPaymentsNew, actionMarkPaymentsAsPaidNew, actionDeletePendingPayment } from '@/app/(app)/checks/actions';
 import { supabaseClient } from '@/lib/supabase/client';
@@ -25,25 +25,40 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
     action: 'paid' | 'pdf';
   } | null>(null);
   const [editingPayment, setEditingPayment] = useState<any | null>(null);
-  const loadPayments = async () => {
+
+  const loadPayments = useCallback(async () => {
+    console.log('🔄 [PendingPaymentsTab] Iniciando carga de pagos...');
     setLoading(true);
     try {
       const result = await actionGetPendingPaymentsNew({ status: 'pending' });
+      console.log('📦 [PendingPaymentsTab] Resultado de la consulta:', result);
+      
       if (result.ok) {
-        setPayments(result.data || []);
+        const paymentsData = result.data || [];
+        console.log(`📊 [PendingPaymentsTab] Pagos cargados: ${paymentsData.length} pagos pendientes`);
+        console.log(`💰 [PendingPaymentsTab] Total a pagar: $${paymentsData.reduce((sum, p) => sum + Number(p.amount_to_pay || 0), 0).toFixed(2)}`);
+        console.log(`💵 [PendingPaymentsTab] Total recibido: $${paymentsData.reduce((sum, p) => sum + Number(p.total_received || 0), 0).toFixed(2)}`);
+        
+        // Force state update with new array reference
+        setPayments([...paymentsData]);
+        console.log('✅ [PendingPaymentsTab] Estado actualizado con nuevos pagos');
       } else {
+        console.error('❌ [PendingPaymentsTab] Error al cargar pagos:', result.error);
         toast.error('Error al cargar pagos');
       }
-    } catch (error) {
+    } catch (error: any) {
+      console.error('❌ [PendingPaymentsTab] Excepción al cargar pagos:', error);
       toast.error('Error inesperado');
     } finally {
       setLoading(false);
+      console.log('🏁 [PendingPaymentsTab] Carga completada');
     }
-  };
+  }, []); // No dependencies needed as we only use setters and actions
 
   useEffect(() => {
+    console.log('🔵 [PendingPaymentsTab] useEffect disparado - refreshTrigger:', refreshTrigger);
     loadPayments();
-  }, [refreshTrigger]);
+  }, [refreshTrigger, loadPayments]);
 
   const toggleSelect = (id: string) => {
     const payment = payments.find((p) => p.id === id);
@@ -173,10 +188,10 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
         }
       } else {
         toast.error('Error al marcar pagos', { description: result.error });
-        setLoading(false);
       }
     } catch (error: any) {
       toast.error('Error inesperado', { description: error.message });
+    } finally {
       setLoading(false);
     }
   };
@@ -638,10 +653,10 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
         }
       } else {
         toast.error('Error al eliminar pago', { description: result.error });
-        setLoading(false);
       }
     } catch (error: any) {
       toast.error('Error al eliminar pago', { description: error.message });
+    } finally {
       setLoading(false);
     }
   };
@@ -652,12 +667,13 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
       <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-[#010139]">Pagos Pendientes</h2>
-          <p className="text-gray-600">Gestión de pagos por procesar</p>
+          <p className="text-gray-600 text-sm">
+            Gestiona los pagos registrados que están pendientes de ser conciliados y pagados
+          </p>
         </div>
-
         <button
           onClick={onOpenWizard}
-          className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-xl hover:shadow-lg transition-all transform hover:scale-105 font-medium"
+          className="px-6 py-3 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-xl hover:shadow-lg transition-all font-semibold flex items-center gap-2"
         >
           <FaPlus />
           Nuevo Pago
@@ -811,7 +827,7 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
                 }`}
               >
                 {/* Header con checkbox y acciones */}
-                <div className="flex items-start gap-4 mb-4">
+                <div className="flex items-start gap-3 mb-4">
                   <input
                     type="checkbox"
                     checked={selectedIds.has(payment.id)}
@@ -819,7 +835,53 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
                     className="w-5 h-5 text-[#8AAA19] rounded focus:ring-[#8AAA19] mt-1 flex-shrink-0"
                   />
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-4">
+                    {/* Layout móvil: Vertical */}
+                    <div className="md:hidden space-y-3">
+                      {/* Nombre y datos del cliente */}
+                      <div>
+                        <h3 className="font-bold text-base text-[#010139] break-words leading-tight">{payment.client_name}</h3>
+                        {payment.policy_number && (
+                          <p className="text-xs text-gray-600 break-words mt-1">Póliza: {payment.policy_number}</p>
+                        )}
+                        {payment.insurer_name && (
+                          <p className="text-xs text-gray-600 break-words">{payment.insurer_name}</p>
+                        )}
+                      </div>
+                      {/* Monto y acciones en una fila */}
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="text-xl font-bold text-[#8AAA19]">
+                            ${parseFloat(payment.amount_to_pay).toFixed(2)}
+                          </div>
+                          <div className="text-xs text-gray-500">A pagar</div>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEdit(payment.id);
+                            }}
+                            className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            title="Editar pago"
+                          >
+                            <FaEdit size={14} />
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDelete(payment.id);
+                            }}
+                            className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Eliminar pago"
+                          >
+                            <FaTrash size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Layout desktop: Horizontal */}
+                    <div className="hidden md:flex items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">
                         <h3 className="font-bold text-lg text-[#010139] break-words">{payment.client_name}</h3>
                         {payment.policy_number && (
@@ -944,8 +1006,8 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
                         : 'border-gray-100 hover:border-gray-300'
                     }`}
                   >
-                    {/* Contenido del pago - igual que arriba */}
-                    <div className="flex items-start gap-4 mb-4">
+                    {/* Contenido del pago */}
+                    <div className="flex items-start gap-3 mb-4">
                       <input
                         type="checkbox"
                         checked={selectedIds.has(payment.id)}
@@ -953,7 +1015,51 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
                         className="w-5 h-5 text-[#8AAA19] rounded focus:ring-[#8AAA19] mt-1 flex-shrink-0"
                       />
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-start justify-between gap-4">
+                        {/* Layout móvil: Vertical */}
+                        <div className="md:hidden space-y-3">
+                          <div>
+                            <h3 className="font-bold text-base text-[#010139] break-words leading-tight">{payment.client_name}</h3>
+                            {payment.policy_number && (
+                              <p className="text-xs text-gray-600 break-words mt-1">Póliza: {payment.policy_number}</p>
+                            )}
+                            {payment.insurer_name && (
+                              <p className="text-xs text-gray-600 break-words">{payment.insurer_name}</p>
+                            )}
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="text-xl font-bold text-[#8AAA19]">
+                                ${parseFloat(payment.amount_to_pay).toFixed(2)}
+                              </div>
+                              <div className="text-xs text-gray-500">A pagar</div>
+                            </div>
+                            <div className="flex gap-2">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleEdit(payment.id);
+                                }}
+                                className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                                title="Editar pago"
+                              >
+                                <FaEdit size={14} />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDelete(payment.id);
+                                }}
+                                className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                title="Eliminar pago"
+                              >
+                                <FaTrash size={14} />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                        
+                        {/* Layout desktop: Horizontal */}
+                        <div className="hidden md:flex items-start justify-between gap-4">
                           <div className="flex-1 min-w-0">
                             <h3 className="font-bold text-lg text-[#010139] break-words">{payment.client_name}</h3>
                             {payment.policy_number && (
@@ -963,8 +1069,35 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
                               <p className="text-sm text-gray-600 break-words">{payment.insurer_name}</p>
                             )}
                           </div>
-                          <div className="text-2xl font-bold text-[#8AAA19] whitespace-nowrap">
-                            ${parseFloat(payment.amount_to_pay).toFixed(2)}
+                          <div className="flex items-start gap-4 flex-shrink-0">
+                            <div className="text-right">
+                              <div className="text-2xl font-bold text-[#8AAA19] whitespace-nowrap">
+                                ${parseFloat(payment.amount_to_pay).toFixed(2)}
+                              </div>
+                              <div className="text-xs text-gray-500">A pagar</div>
+                            </div>
+                            <div className="flex gap-2 items-start">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleEdit(payment.id);
+                                }}
+                                className="p-2.5 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors flex-shrink-0"
+                                title="Editar pago"
+                              >
+                                <FaEdit size={16} />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDelete(payment.id);
+                                }}
+                                className="p-2.5 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
+                                title="Eliminar pago"
+                              >
+                                <FaTrash size={16} />
+                              </button>
+                            </div>
                           </div>
                         </div>
                       </div>

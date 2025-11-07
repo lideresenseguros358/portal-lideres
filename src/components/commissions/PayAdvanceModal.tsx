@@ -1,14 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { FaMoneyBillWave, FaExchangeAlt } from 'react-icons/fa';
+import { FaMoneyBillWave, FaExchangeAlt, FaCheckCircle, FaExclamationTriangle, FaSpinner } from 'react-icons/fa';
 import { toast } from 'sonner';
 import { actionApplyAdvancePayment } from '@/app/(app)/commissions/actions';
+import { supabaseClient } from '@/lib/supabase/client';
 
 interface AdvanceItem {
   id: string;
@@ -39,6 +40,16 @@ export function PayAdvanceModal({ isOpen, onClose, onSuccess, brokerId, brokerNa
   const [referenceNumber, setReferenceNumber] = useState('');
   const [transferDate, setTransferDate] = useState('');
   
+  // Reference validation
+  const [validatingRef, setValidatingRef] = useState(false);
+  const [refValidation, setRefValidation] = useState<{
+    exists: boolean;
+    amount: number;
+    usedAmount: number;
+    remainingAmount: number;
+    status: string;
+  } | null>(null);
+  
   // Cash fields
   const [cashDate, setCashDate] = useState('');
   
@@ -54,7 +65,73 @@ export function PayAdvanceModal({ isOpen, onClose, onSuccess, brokerId, brokerNa
     setCashDate('');
     setAdvancePayments([]);
     setPaymentType('transfer');
+    setRefValidation(null);
   };
+
+  // Validar referencia cuando se ingresa
+  useEffect(() => {
+    const validateReference = async () => {
+      if (!referenceNumber || referenceNumber.length < 3) {
+        setRefValidation(null);
+        return;
+      }
+
+      setValidatingRef(true);
+      try {
+        const { data: transfer, error } = await supabaseClient()
+          .from('bank_transfers')
+          .select('*')
+          .eq('reference_number', referenceNumber)
+          .single();
+
+        if (error || !transfer) {
+          setRefValidation(null);
+        } else {
+          const amount = Number(transfer.amount) || 0;
+          const usedAmount = Number(transfer.used_amount) || 0;
+          const remainingAmount = amount - usedAmount;
+          
+          setRefValidation({
+            exists: true,
+            amount,
+            usedAmount,
+            remainingAmount,
+            status: transfer.status || 'available'
+          });
+
+          // Auto-llenar montos si hay adelantos seleccionados
+          if (advancePayments.length === 0 && pendingAdvances.length > 0) {
+            let remaining = remainingAmount;
+            const newPayments: AdvancePayment[] = [];
+            
+            for (const advance of pendingAdvances) {
+              if (remaining <= 0) break;
+              
+              const amountToApply = Math.min(advance.amount, remaining);
+              newPayments.push({
+                advanceId: advance.id,
+                amount: amountToApply,
+                reason: advance.reason || 'Sin motivo'
+              });
+              remaining -= amountToApply;
+            }
+            
+            if (newPayments.length > 0) {
+              setAdvancePayments(newPayments);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error validating reference:', error);
+        setRefValidation(null);
+      } finally {
+        setValidatingRef(false);
+      }
+    };
+
+    const timeoutId = setTimeout(validateReference, 500);
+    return () => clearTimeout(timeoutId);
+  }, [referenceNumber]);
 
   const handleAdvanceAmountChange = (advanceId: string, amount: string, reason: string) => {
     const numAmount = parseFloat(amount) || 0;
@@ -83,6 +160,18 @@ export function PayAdvanceModal({ isOpen, onClose, onSuccess, brokerId, brokerNa
         toast.error('Debe completar número de referencia y fecha');
         return;
       }
+      
+      // Validar que la referencia exista
+      if (!refValidation?.exists) {
+        toast.error('La referencia ingresada no existe en el historial de banco');
+        return;
+      }
+      
+      // Validar que no exceda el monto disponible
+      if (totalAssigned > refValidation.remainingAmount) {
+        toast.error(`El monto total ($${totalAssigned.toFixed(2)}) excede el saldo disponible de la referencia ($${refValidation.remainingAmount.toFixed(2)})`);
+        return;
+      }
     } else {
       if (!cashDate) {
         toast.error('Debe completar la fecha del pago');
@@ -102,7 +191,7 @@ export function PayAdvanceModal({ isOpen, onClose, onSuccess, brokerId, brokerNa
         const result = await actionApplyAdvancePayment({
           advance_id: payment.advanceId,
           amount: payment.amount,
-          payment_type: paymentType === 'transfer' ? 'external_transfer' : 'external_cash',
+          payment_type: paymentType === 'transfer' ? 'external_transfer' : 'cash',
           reference_number: paymentType === 'transfer' ? referenceNumber : undefined,
           payment_date: paymentType === 'transfer' ? transferDate : cashDate,
         });
@@ -116,7 +205,7 @@ export function PayAdvanceModal({ isOpen, onClose, onSuccess, brokerId, brokerNa
 
       toast.success(
         paymentType === 'transfer' 
-          ? `Transferencia registrada ($${totalAssigned.toFixed(2)}). Se aplicará cuando la referencia esté disponible.` 
+          ? `Transferencia aplicada exitosamente ($${totalAssigned.toFixed(2)}) - Registrada en historial de banco` 
           : `Pago en efectivo aplicado exitosamente ($${totalAssigned.toFixed(2)})`
       );
       resetForm();
@@ -159,20 +248,44 @@ export function PayAdvanceModal({ isOpen, onClose, onSuccess, brokerId, brokerNa
           <TabsContent value="transfer" className="space-y-4 mt-4 flex-1 overflow-auto">
             <div className="bg-blue-50 border-l-4 border-blue-500 p-3 rounded">
               <p className="text-sm text-blue-800">
-                💡 La transferencia se registrará en el historial de banco. Se aplicará automáticamente cuando la referencia esté disponible.
+                💡 La transferencia se validará contra el historial de banco y se aplicará automáticamente.
               </p>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="ref">Número de Referencia *</Label>
-                <Input
-                  id="ref"
-                  value={referenceNumber}
-                  onChange={(e) => setReferenceNumber(e.target.value.toUpperCase())}
-                  placeholder="Ej: REF123456"
-                  className="uppercase"
-                />
+                <div className="relative">
+                  <Input
+                    id="ref"
+                    value={referenceNumber}
+                    onChange={(e) => setReferenceNumber(e.target.value.toUpperCase())}
+                    placeholder="Ej: REF123456"
+                    className="uppercase pr-10"
+                  />
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    {validatingRef && <FaSpinner className="animate-spin text-gray-400" />}
+                    {!validatingRef && refValidation?.exists && (
+                      <FaCheckCircle className="text-green-600" />
+                    )}
+                    {!validatingRef && referenceNumber && !refValidation?.exists && referenceNumber.length >= 3 && (
+                      <FaExclamationTriangle className="text-red-600" />
+                    )}
+                  </div>
+                </div>
+                {refValidation?.exists && (
+                  <div className="text-xs space-y-1 p-2 bg-green-50 border border-green-200 rounded">
+                    <p className="text-green-800 font-semibold">✅ Referencia encontrada</p>
+                    <p className="text-green-700">Monto total: <span className="font-mono font-bold">${refValidation.amount.toFixed(2)}</span></p>
+                    <p className="text-green-700">Usado: <span className="font-mono">${refValidation.usedAmount.toFixed(2)}</span></p>
+                    <p className="text-green-700">Disponible: <span className="font-mono font-bold">${refValidation.remainingAmount.toFixed(2)}</span></p>
+                  </div>
+                )}
+                {!validatingRef && referenceNumber && !refValidation?.exists && referenceNumber.length >= 3 && (
+                  <div className="text-xs p-2 bg-red-50 border border-red-200 rounded">
+                    <p className="text-red-800">❌ Referencia no encontrada en historial de banco</p>
+                  </div>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="transfer-date">Fecha *</Label>
@@ -204,11 +317,12 @@ export function PayAdvanceModal({ isOpen, onClose, onSuccess, brokerId, brokerNa
                           <Input
                             type="number"
                             step="0.01"
-                            max={advance.amount}
+                            max={refValidation?.remainingAmount ? Math.min(advance.amount, refValidation.remainingAmount) : advance.amount}
                             value={currentPayment?.amount || ''}
                             onChange={(e) => handleAdvanceAmountChange(advance.id, e.target.value, advance.reason || 'Sin motivo')}
                             placeholder="0.00"
                             className="text-right text-sm"
+                            disabled={!refValidation?.exists}
                           />
                         </div>
                       </div>

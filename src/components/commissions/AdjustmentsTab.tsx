@@ -401,13 +401,11 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
 // Vista de ajustes pagados (historial)
 const PaidAdjustmentsView = () => {
   return (
-    <Card className="shadow-inner">
-      <CardContent className="p-8 text-center">
-        <FaHistory className="text-6xl text-gray-300 mx-auto mb-4" />
-        <h3 className="text-lg font-semibold text-gray-600 mb-2">Historial de Ajustes Pagados</h3>
-        <p className="text-sm text-gray-500">Los ajustes confirmados como pagados aparecerán aquí</p>
-      </CardContent>
-    </Card>
+    <div className="p-8 text-center bg-white rounded-lg">
+      <FaHistory className="text-6xl text-gray-300 mx-auto mb-4" />
+      <h3 className="text-lg font-semibold text-gray-600 mb-2">Historial de Ajustes Pagados</h3>
+      <p className="text-sm text-gray-500">Esta funcionalidad estará disponible próximamente</p>
+    </div>
   );
 };
 
@@ -436,12 +434,14 @@ export default function AdjustmentsTab({ role, brokerId, brokers, onActionSucces
   const tabs = role === 'master' ? masterTabs : brokerTabs;
 
   return (
-    <Card className="shadow-lg">
-      <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100">
-        <CardTitle className="text-[#010139] flex items-center gap-2">
-          <FaHistory />
-          Ajustes de Comisión
-        </CardTitle>
+    <Card className="bg-white shadow-xl">
+      <CardHeader className="bg-gradient-to-r from-[#010139] to-[#020270] text-white rounded-t-lg">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-white/20 rounded-lg">
+            <FaHistory className="text-white" size={20} />
+          </div>
+          <CardTitle className="text-white text-xl">Gestión de Ajustes</CardTitle>
+        </div>
       </CardHeader>
       <CardContent className="p-0">
         {/* Tabs con patrón de Pendientes */}
