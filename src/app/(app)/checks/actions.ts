@@ -979,11 +979,39 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
       });
     }
 
-    const invalidReferences = payments.flatMap((payment: any) =>
-      (payment.payment_references || [])
-        .filter((ref: any) => !transferMap.has(String(ref.reference_number)))
-        .map((ref: any) => ref.reference_number)
-    );
+    // Validar referencias solo para pagos normales (no descuentos a corredor)
+    const invalidReferences = payments
+      .filter((payment: any) => {
+        // Excluir descuentos a corredor de la validación
+        if (payment.notes) {
+          try {
+            let metadata: any = null;
+            if (typeof payment.notes === 'object' && payment.notes !== null) {
+              metadata = payment.notes;
+            } else if (typeof payment.notes === 'string') {
+              metadata = JSON.parse(payment.notes);
+            }
+            
+            if (metadata) {
+              const hasAutoFlag = metadata.is_auto_advance === true;
+              const hasAdvanceIdDirect = !!metadata.advance_id;
+              const hasAdvanceIdInNotes = metadata.notes && typeof metadata.notes === 'string' && 
+                                         metadata.notes.includes('Adelanto ID:');
+              if (hasAutoFlag || hasAdvanceIdDirect || hasAdvanceIdInNotes) {
+                return false; // Excluir de validación
+              }
+            }
+          } catch (e) {
+            // Si no se puede parsear, incluir en validación
+          }
+        }
+        return true; // Incluir en validación
+      })
+      .flatMap((payment: any) =>
+        (payment.payment_references || [])
+          .filter((ref: any) => !transferMap.has(String(ref.reference_number)))
+          .map((ref: any) => ref.reference_number)
+      );
 
     if (invalidReferences.length > 0) {
       const labels = invalidReferences.map((ref: string) => `"${ref}"`).join(', ');
@@ -996,14 +1024,24 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
     // For each payment, update bank transfers and create payment details
     for (const payment of payments || []) {
       const refs = payment.payment_references || [];
-      // Verificar si es descuento a corredor (purpose = 'otro' + metadata con advance_id e is_auto_advance)
+      // Verificar si es descuento a corredor: tiene is_auto_advance, advance_id o "Adelanto ID:" en notes
       let isDescuentoCorredor = false;
-      if (payment.purpose === 'otro' && payment.notes) {
+      if (payment.notes) {
         try {
-          const parsed = typeof payment.notes === 'string' && payment.notes.startsWith('{') 
-            ? JSON.parse(payment.notes) 
-            : null;
-          isDescuentoCorredor = !!(parsed?.advance_id && parsed?.is_auto_advance);
+          let metadata: any = null;
+          if (typeof payment.notes === 'object' && payment.notes !== null) {
+            metadata = payment.notes;
+          } else if (typeof payment.notes === 'string') {
+            metadata = JSON.parse(payment.notes);
+          }
+          
+          if (metadata) {
+            const hasAutoFlag = metadata.is_auto_advance === true;
+            const hasAdvanceIdDirect = !!metadata.advance_id;
+            const hasAdvanceIdInNotes = metadata.notes && typeof metadata.notes === 'string' && 
+                                       metadata.notes.includes('Adelanto ID:');
+            isDescuentoCorredor = hasAutoFlag || hasAdvanceIdDirect || hasAdvanceIdInNotes;
+          }
         } catch (e) {
           // Si no se puede parsear, no es descuento a corredor
         }
@@ -1019,7 +1057,9 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
 
       const paidAt = new Date().toISOString();
 
-      for (const ref of refs) {
+      // Solo procesar referencias normales si NO es descuento a corredor
+      if (!isDescuentoCorredor) {
+        for (const ref of refs) {
         const referenceNumber = String(ref.reference_number);
         const transfer = transferMap.get(referenceNumber);
 
@@ -1095,20 +1135,34 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
         });
 
         existingDetailKeys.add(detailKey);
-      }
+        }
+      } // Fin de if (!isDescuentoCorredor)
 
-      // Special handling for DESCUENTO A CORREDOR (purpose='otro' + is_auto_advance)
+      // Special handling for DESCUENTO A CORREDOR
       if (isDescuentoCorredor) {
-        // Extraer advance_id de las notas (puede ser JSON o texto)
+        // Extraer advance_id usando la misma lógica de sincronización
         let advanceId: string | null = null;
         try {
-          if (payment.notes && typeof payment.notes === 'string') {
-            if (payment.notes.startsWith('{')) {
-              const parsed = JSON.parse(payment.notes);
-              advanceId = parsed.advance_id || null;
-            } else {
-              const advanceIdMatch = payment.notes.match(/Adelanto ID: (.+)/);
-              advanceId = advanceIdMatch ? advanceIdMatch[1] : null;
+          if (payment.notes) {
+            let metadata: any = null;
+            if (typeof payment.notes === 'object' && payment.notes !== null) {
+              metadata = payment.notes;
+            } else if (typeof payment.notes === 'string') {
+              metadata = JSON.parse(payment.notes);
+            }
+            
+            if (metadata) {
+              // Buscar advance_id en 2 lugares:
+              // 1. Campo directo metadata.advance_id
+              // 2. Texto dentro de metadata.notes
+              if (metadata.advance_id) {
+                advanceId = metadata.advance_id;
+              } else if (metadata.notes && typeof metadata.notes === 'string') {
+                const match = metadata.notes.match(/Adelanto ID:\s*([a-f0-9-]+)/i);
+                if (match && match[1]) {
+                  advanceId = match[1];
+                }
+              }
             }
           }
         } catch (e) {
@@ -1154,8 +1208,11 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
         // Descripción detallada: Cliente, Corredor, Monto
         const detailedDescription = `Descuento aplicado a ${brokerName} por pago de cliente ${payment.client_name} - Monto: $${advanceAmount.toFixed(2)}`;
         
+        // Generar reference_number único usando ID del pago
+        const uniqueReference = `DESC-${payment.id.substring(0, 8).toUpperCase()}`;
+        
         const transferPayload: TablesInsert<'bank_transfers'> = {
-          reference_number: 'DESCUENTO A CORREDOR', // Texto literal según requerimiento
+          reference_number: uniqueReference, // Único por pago
           date: dateStr as string,
           amount: advanceAmount, // Monto total del adelanto descontado
           used_amount: advanceAmount, // Igual al amount = status 'exhausted' automático
