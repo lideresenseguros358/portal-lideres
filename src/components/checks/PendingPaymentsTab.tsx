@@ -938,8 +938,7 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
                 <div className="space-y-2 mb-4">
                   <h4 className="text-sm font-semibold text-gray-700">Referencias:</h4>
                   {payment.payment_references?.map((ref: any) => {
-                    // Para descuentos a corredor, si el adelanto está pagado (can_be_paid=true), mostrar en verde
-                    const isDescuentoCorredor = payment.purpose === 'otro';
+                    const isDescuentoCorredor = isDescuentoACorredor(payment);
                     const isValid = isDescuentoCorredor ? payment.can_be_paid : ref.exists_in_bank;
                     
                     const refClass = isValid
@@ -1120,8 +1119,7 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
                     <div className="space-y-2 mb-4">
                       <h4 className="text-sm font-semibold text-gray-700">Referencias:</h4>
                       {payment.payment_references?.map((ref: any) => {
-                        // Para descuentos a corredor, si el adelanto está pagado (can_be_paid=true), mostrar en verde
-                        const isDescuentoCorredor = payment.purpose === 'otro';
+                        const isDescuentoCorredor = isDescuentoACorredor(payment);
                         const isValid = isDescuentoCorredor ? payment.can_be_paid : ref.exists_in_bank;
                         
                         return (
@@ -1196,6 +1194,31 @@ function StatusBadge({ payment }: { payment: any }) {
   );
 }
 
+// Helper para detectar descuentos a corredor
+function isDescuentoACorredor(payment: any): boolean {
+  try {
+    if (payment.notes) {
+      let metadata: any = null;
+      if (typeof payment.notes === 'object' && payment.notes !== null) {
+        metadata = payment.notes;
+      } else if (typeof payment.notes === 'string') {
+        metadata = JSON.parse(payment.notes);
+      }
+      
+      if (metadata) {
+        const hasAutoFlag = metadata.is_auto_advance === true;
+        const hasAdvanceIdDirect = !!metadata.advance_id;
+        const hasAdvanceIdInNotes = metadata.notes && typeof metadata.notes === 'string' && 
+                                   metadata.notes.includes('Adelanto ID:');
+        return hasAutoFlag || hasAdvanceIdDirect || hasAdvanceIdInNotes;
+      }
+    }
+  } catch (e) {
+    // Si no se puede parsear, no es descuento a corredor
+  }
+  return false;
+}
+
 function getPaymentState(payment: any) {
   const now = new Date();
   const created = new Date(payment.created_at);
@@ -1204,9 +1227,7 @@ function getPaymentState(payment: any) {
   const applied = Number(payment.total_received ?? 0);
   const remaining = Math.max(total - applied, 0);
 
-  // Para descuentos a corredor (purpose='otro'), NO validar exists_in_bank
-  // porque sus referencias no son bancarias reales
-  const isDescuentoCorredor = payment.purpose === 'otro';
+  const isDescuentoCorredor = isDescuentoACorredor(payment);
   
   const hasErrors = !isDescuentoCorredor && payment.payment_references?.some((ref: any) => !ref.exists_in_bank);
   if (hasErrors || !payment.can_be_paid) {

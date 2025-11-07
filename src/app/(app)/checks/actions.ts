@@ -200,22 +200,46 @@ export async function actionImportBankHistoryXLSX(transfers: Array<{
       .eq('exists_in_bank', false);
     
     // Update pending_payments.can_be_paid where all references now exist
-    // IMPORTANTE: Excluir pagos de descuento a corredor (purpose='otro')
+    // IMPORTANTE: Excluir pagos de descuento a corredor (is_auto_advance=true)
     const { data: pendingWithRefs } = await supabase
       .from('pending_payments')
       .select(`
         id,
-        purpose,
+        notes,
         payment_references (id, reference_number, exists_in_bank)
       `)
-      .eq('can_be_paid', false)
-      .neq('purpose', 'otro'); // EXCLUIR descuentos a corredor
+      .eq('can_be_paid', false);
     
     const toUpdate: string[] = [];
     (pendingWithRefs || []).forEach((p: any) => {
-      const allExist = p.payment_references?.every((ref: any) => ref.exists_in_bank);
-      if (allExist && p.payment_references?.length > 0) {
-        toUpdate.push(p.id);
+      // Verificar si es descuento a corredor
+      let isDescuentoCorredor = false;
+      try {
+        if (p.notes) {
+          let metadata: any = null;
+          if (typeof p.notes === 'object' && p.notes !== null) {
+            metadata = p.notes;
+          } else if (typeof p.notes === 'string') {
+            metadata = JSON.parse(p.notes);
+          }
+          if (metadata) {
+            const hasAutoFlag = metadata.is_auto_advance === true;
+            const hasAdvanceIdDirect = !!metadata.advance_id;
+            const hasAdvanceIdInNotes = metadata.notes && typeof metadata.notes === 'string' && 
+                                       metadata.notes.includes('Adelanto ID:');
+            isDescuentoCorredor = hasAutoFlag || hasAdvanceIdDirect || hasAdvanceIdInNotes;
+          }
+        }
+      } catch (e) {
+        // Si no se puede parsear, no es descuento a corredor
+      }
+      
+      // Solo actualizar si NO es descuento a corredor y todas las refs existen
+      if (!isDescuentoCorredor) {
+        const allExist = p.payment_references?.every((ref: any) => ref.exists_in_bank);
+        if (allExist && p.payment_references?.length > 0) {
+          toUpdate.push(p.id);
+        }
       }
     });
     
@@ -581,7 +605,7 @@ export async function actionCreatePendingPayment(payment: {
           client_name: payment.client_name,
           policy_number: payment.policy_number,
           insurer_name: payment.insurer_name,
-          purpose: payment.is_broker_deduction ? 'otro' : payment.purpose,
+          purpose: payment.purpose, // Mantener el purpose original del wizard (poliza/devolucion/otro)
           amount_to_pay: payment.amount_to_pay,
           total_received,
           can_be_paid: false, // SIEMPRE false para descuentos hasta que adelanto esté PAID
@@ -738,23 +762,47 @@ export async function actionGetPendingPaymentsNew(filters?: {
           .in('id', toUpdate);
         
         // Actualizar pending_payments.can_be_paid
-        // IMPORTANTE: Excluir pagos de descuento a corredor (purpose='otro')
+        // IMPORTANTE: Excluir pagos de descuento a corredor (is_auto_advance=true en notes)
         // porque estos se habilitan cuando el adelanto se paga, no por referencias bancarias
         const { data: pendingWithRefs } = await supabaseAdmin
           .from('pending_payments')
           .select(`
             id,
-            purpose,
+            notes,
             payment_references (id, exists_in_bank)
           `)
-          .eq('can_be_paid', false)
-          .neq('purpose', 'otro'); // EXCLUIR descuentos a corredor
+          .eq('can_be_paid', false);
         
         const paymentsToUpdate: string[] = [];
         (pendingWithRefs || []).forEach((p: any) => {
-          const allExist = p.payment_references?.every((ref: any) => ref.exists_in_bank);
-          if (allExist && p.payment_references?.length > 0) {
-            paymentsToUpdate.push(p.id);
+          // Verificar si es descuento a corredor
+          let isDescuentoCorredor = false;
+          try {
+            if (p.notes) {
+              let metadata: any = null;
+              if (typeof p.notes === 'object' && p.notes !== null) {
+                metadata = p.notes;
+              } else if (typeof p.notes === 'string') {
+                metadata = JSON.parse(p.notes);
+              }
+              if (metadata) {
+                const hasAutoFlag = metadata.is_auto_advance === true;
+                const hasAdvanceIdDirect = !!metadata.advance_id;
+                const hasAdvanceIdInNotes = metadata.notes && typeof metadata.notes === 'string' && 
+                                           metadata.notes.includes('Adelanto ID:');
+                isDescuentoCorredor = hasAutoFlag || hasAdvanceIdDirect || hasAdvanceIdInNotes;
+              }
+            }
+          } catch (e) {
+            // Si no se puede parsear, no es descuento a corredor
+          }
+          
+          // Solo actualizar si NO es descuento a corredor y todas las refs existen
+          if (!isDescuentoCorredor) {
+            const allExist = p.payment_references?.every((ref: any) => ref.exists_in_bank);
+            if (allExist && p.payment_references?.length > 0) {
+              paymentsToUpdate.push(p.id);
+            }
           }
         });
         
@@ -1576,18 +1624,51 @@ export async function actionSyncPendingPaymentsWithAdvances() {
       return { ok: true, message: 'No hay adelantos pagados para sincronizar', updated: 0 };
     }
 
-    // Buscar todos los pagos pendientes no habilitados con purpose='otro'
-    const { data: pendingPayments, error: paymentsError } = await supabase
+    // Buscar todos los pagos pendientes no habilitados que sean descuentos a corredor
+    // Los descuentos a corredor tienen is_auto_advance=true en notes (metadata)
+    const { data: allPendingPayments, error: paymentsError } = await supabase
       .from('pending_payments')
       .select('id, notes, client_name, amount_to_pay, can_be_paid, purpose, status')
-      .eq('purpose', 'otro')
       .eq('status', 'pending')
       .eq('can_be_paid', false); // Solo los que NO están habilitados
 
     if (paymentsError) throw paymentsError;
 
-    if (!pendingPayments || pendingPayments.length === 0) {
+    if (!allPendingPayments || allPendingPayments.length === 0) {
       return { ok: true, message: 'No hay pagos pendientes para sincronizar', updated: 0 };
+    }
+
+    // Filtrar descuentos a corredor: tienen is_auto_advance=true O tienen advance_id en notes
+    const pendingPayments = allPendingPayments.filter(payment => {
+      try {
+        if (payment.notes) {
+          let metadata: any = null;
+          if (typeof payment.notes === 'object' && payment.notes !== null) {
+            metadata = payment.notes;
+          } else if (typeof payment.notes === 'string') {
+            metadata = JSON.parse(payment.notes);
+          }
+          
+          if (metadata) {
+            // Es descuento a corredor si tiene:
+            // 1. is_auto_advance=true (pagos nuevos)
+            // 2. advance_id directo (algunos pagos)
+            // 3. "Adelanto ID:" en el campo notes (pagos antiguos)
+            const hasAutoFlag = metadata.is_auto_advance === true;
+            const hasAdvanceIdDirect = !!metadata.advance_id;
+            const hasAdvanceIdInNotes = metadata.notes && typeof metadata.notes === 'string' && 
+                                       metadata.notes.includes('Adelanto ID:');
+            return hasAutoFlag || hasAdvanceIdDirect || hasAdvanceIdInNotes;
+          }
+        }
+      } catch (e) {
+        // Si no se puede parsear, no es descuento a corredor
+      }
+      return false;
+    });
+
+    if (pendingPayments.length === 0) {
+      return { ok: true, message: 'No hay descuentos a corredor para sincronizar', updated: 0 };
     }
 
     // Crear un Set con los IDs de adelantos pagados para búsqueda rápida
@@ -1597,23 +1678,34 @@ export async function actionSyncPendingPaymentsWithAdvances() {
 
     // Revisar cada pago pendiente
     for (const payment of pendingPayments) {
-      let paymentAdvanceId: string | null = null;
-
       try {
+        // Parsear notes para extraer advance_id
+        let paymentAdvanceId: string | null = null;
+
         if (payment.notes) {
-          // Si notes es un objeto (JSONB parseado automáticamente por Supabase)
-          if (typeof payment.notes === 'object' && payment.notes !== null) {
-            paymentAdvanceId = (payment.notes as any).advance_id || null;
-          }
-          // Si notes es un string JSON
-          else if (typeof payment.notes === 'string') {
-            if (payment.notes.startsWith('{')) {
-              const parsed = JSON.parse(payment.notes);
-              paymentAdvanceId = parsed.advance_id || null;
-            } else if (payment.notes.includes('Adelanto ID:')) {
-              const match = payment.notes.match(/Adelanto ID:\s*([a-f0-9-]+)/i);
-              paymentAdvanceId = match ? (match[1] ?? null) : null;
+          try {
+            let metadata: any = null;
+            if (typeof payment.notes === 'object' && payment.notes !== null) {
+              metadata = payment.notes;
+            } else if (typeof payment.notes === 'string') {
+              metadata = JSON.parse(payment.notes);
             }
+            
+            if (metadata) {
+              // Buscar advance_id en 3 lugares:
+              // 1. Campo directo metadata.advance_id
+              // 2. Texto dentro de metadata.notes
+              if (metadata.advance_id) {
+                paymentAdvanceId = metadata.advance_id;
+              } else if (metadata.notes && typeof metadata.notes === 'string') {
+                const match = metadata.notes.match(/Adelanto ID:\s*([a-f0-9-]+)/i);
+                if (match && match[1]) {
+                  paymentAdvanceId = match[1];
+                }
+              }
+            }
+          } catch (e) {
+            // Error parsing notes
           }
         }
 
@@ -1631,7 +1723,7 @@ export async function actionSyncPendingPaymentsWithAdvances() {
           }
         }
       } catch (e) {
-        console.error(`❌ Error procesando pago ${payment.id}:`, e);
+        console.error(`Error procesando pago ${payment.id}:`, e);
       }
     }
 

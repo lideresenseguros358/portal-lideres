@@ -817,32 +817,49 @@ export async function actionApplyAdvancePayment(payload: {
     // Si el adelanto está saldado, habilitar pending_payment relacionado para que pueda ser marcado como pagado
     if (newStatus === 'PAID') {
       
-      const { data: pendingPayments } = await supabase
+      // Buscar todos los pagos pendientes para filtrar los descuentos a corredor
+      const { data: allPendingPayments } = await supabase
         .from('pending_payments')
         .select('id, notes, client_name, amount_to_pay, can_be_paid, purpose')
-        .eq('purpose', 'otro') // Descuentos a corredor usan purpose='otro'
         .eq('status', 'pending');
 
-      if (pendingPayments && pendingPayments.length > 0) {
+      if (allPendingPayments && allPendingPayments.length > 0) {
+        // Filtrar descuentos a corredor: tienen is_auto_advance=true, advance_id o "Adelanto ID:" en notes
+        const pendingPayments = allPendingPayments.filter(payment => {
+          try {
+            if (payment.notes) {
+              let metadata: any = null;
+              if (typeof payment.notes === 'object' && payment.notes !== null) {
+                metadata = payment.notes;
+              } else if (typeof payment.notes === 'string') {
+                metadata = JSON.parse(payment.notes);
+              }
+              
+              if (metadata) {
+                const hasAutoFlag = metadata.is_auto_advance === true;
+                const hasAdvanceIdDirect = !!metadata.advance_id;
+                const hasAdvanceIdInNotes = metadata.notes && typeof metadata.notes === 'string' && 
+                                           metadata.notes.includes('Adelanto ID:');
+                return hasAutoFlag || hasAdvanceIdDirect || hasAdvanceIdInNotes;
+              }
+            }
+          } catch (e) {
+            // Si no se puede parsear, no es descuento a corredor
+          }
+          return false;
+        });
+
         for (const payment of pendingPayments) {
-          // Parsear notes para extraer advance_id (puede ser JSON object o string)
+          // Parsear notes para extraer advance_id
           let paymentAdvanceId: string | null = null;
           
           try {
             if (payment.notes) {
-              // Si notes es un objeto (JSONB parseado automáticamente por Supabase)
               if (typeof payment.notes === 'object' && payment.notes !== null) {
                 paymentAdvanceId = (payment.notes as any).advance_id || null;
-              }
-              // Si notes es un string JSON
-              else if (typeof payment.notes === 'string') {
-                if (payment.notes.startsWith('{')) {
-                  const parsed = JSON.parse(payment.notes);
-                  paymentAdvanceId = parsed.advance_id || null;
-                } else if (payment.notes.includes('Adelanto ID:')) {
-                  const match = payment.notes.match(/Adelanto ID:\s*([a-f0-9-]+)/i);
-                  paymentAdvanceId = match ? (match[1] ?? null) : null;
-                }
+              } else if (typeof payment.notes === 'string') {
+                const parsed = JSON.parse(payment.notes);
+                paymentAdvanceId = parsed.advance_id || null;
               }
             }
           } catch (e) {
