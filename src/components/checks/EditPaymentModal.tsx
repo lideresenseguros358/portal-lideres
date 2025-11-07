@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FaTimes, FaSave } from 'react-icons/fa';
+import { FaTimes, FaSave, FaPlus, FaTrash } from 'react-icons/fa';
 import { toast } from 'sonner';
-import { actionUpdatePendingPayment, actionGetInsurers } from '@/app/(app)/checks/actions';
+import { actionUpdatePendingPaymentFull, actionGetInsurers, actionGetBankTransfers } from '@/app/(app)/checks/actions';
 import { createUppercaseHandler, uppercaseInputClass } from '@/lib/utils/uppercase';
 import { supabaseClient } from '@/lib/supabase/client';
 
@@ -48,10 +48,70 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
     broker_cuenta: metadata.broker_cuenta || '',
   });
 
+  // Referencias bancarias
+  const [references, setReferences] = useState<Array<{
+    reference_number: string;
+    date: string;
+    amount: string;
+    amount_to_use: string;
+  }>>([]);
+
+  // Divisiones (si el pago original tenía divisiones)
+  const [hasDivisions, setHasDivisions] = useState(false);
+  const [divisions, setDivisions] = useState<Array<{
+    purpose: 'poliza' | 'devolucion' | 'otro';
+    policy_number: string;
+    insurer_name: string;
+    amount: string;
+    return_type?: string;
+    client_name?: string;
+    bank_name?: string;
+    account_number?: string;
+    account_type?: string;
+    broker_id?: string;
+    description?: string;
+  }>>([]);
+
+  const [availableReferences, setAvailableReferences] = useState<any[]>([]);
+
   useEffect(() => {
     loadInsurers();
     loadBrokers();
+    loadPaymentReferences();
+    loadAvailableReferences();
   }, []);
+
+  const loadPaymentReferences = async () => {
+    const client = supabaseClient();
+    const { data, error } = await client
+      .from('payment_references')
+      .select('*')
+      .eq('payment_id', payment.id);
+    
+    if (!error && data && data.length > 0) {
+      setReferences(data.map(ref => ({
+        reference_number: ref.reference_number || '',
+        date: (ref.date || new Date().toISOString().split('T')[0]) as string,
+        amount: ref.amount?.toString() || '',
+        amount_to_use: ref.amount_to_use?.toString() || ref.amount?.toString() || ''
+      })));
+    } else {
+      // Si no hay referencias, inicializar con una vacía
+      setReferences([{
+        reference_number: '',
+        date: new Date().toISOString().split('T')[0] as string,
+        amount: '',
+        amount_to_use: ''
+      }]);
+    }
+  };
+
+  const loadAvailableReferences = async () => {
+    const result = await actionGetBankTransfers();
+    if (result.ok && result.data) {
+      setAvailableReferences(result.data);
+    }
+  };
 
   const loadInsurers = async () => {
     const result = await actionGetInsurers();
@@ -85,7 +145,21 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
       return;
     }
 
-    if (formData.purpose === 'poliza') {
+    // Validar referencias
+    const validReferences = references.filter(ref => ref.reference_number.trim());
+    if (validReferences.length === 0) {
+      toast.error('Debe agregar al menos una referencia bancaria');
+      return;
+    }
+
+    for (const ref of validReferences) {
+      if (!ref.amount || parseFloat(ref.amount) <= 0) {
+        toast.error(`La referencia ${ref.reference_number} debe tener un monto válido`);
+        return;
+      }
+    }
+
+    if (formData.purpose === 'poliza' && !hasDivisions) {
       if (!formData.policy_number.trim()) {
         toast.error('El número de póliza es requerido');
         return;
@@ -118,12 +192,42 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
       }
     }
 
+    // Validar divisiones si están activadas
+    if (hasDivisions) {
+      const validDivisions = divisions.filter(div => parseFloat(div.amount || '0') > 0);
+      if (validDivisions.length === 0) {
+        toast.error('Debe agregar al menos una división');
+        return;
+      }
+
+      const totalDivisions = validDivisions.reduce((sum, div) => sum + parseFloat(div.amount || '0'), 0);
+      const totalPayment = parseFloat(formData.amount_to_pay);
+      if (Math.abs(totalDivisions - totalPayment) > 0.01) {
+        toast.error(`La suma de divisiones ($${totalDivisions.toFixed(2)}) debe ser igual al monto total ($${totalPayment.toFixed(2)})`);
+        return;
+      }
+
+      for (const div of validDivisions) {
+        if (div.purpose === 'poliza' && !div.policy_number) {
+          toast.error('Todas las divisiones de póliza deben tener número de póliza');
+          return;
+        }
+      }
+    }
+
     setLoading(true);
 
     try {
-      const result = await actionUpdatePendingPayment(payment.id, {
+      const result = await actionUpdatePendingPaymentFull(payment.id, {
         ...formData,
         amount_to_pay: parseFloat(formData.amount_to_pay),
+        references: validReferences.map(ref => ({
+          reference_number: ref.reference_number,
+          date: ref.date,
+          amount: parseFloat(ref.amount),
+          amount_to_use: parseFloat(ref.amount_to_use || ref.amount)
+        })),
+        divisions: hasDivisions ? divisions.filter(div => parseFloat(div.amount || '0') > 0) : undefined
       });
 
       if (result.ok) {
@@ -137,6 +241,34 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
     } finally {
       setLoading(false);
     }
+  };
+
+  const addReference = () => {
+    setReferences([...references, {
+      reference_number: '',
+      date: new Date().toISOString().split('T')[0] as string,
+      amount: '',
+      amount_to_use: ''
+    }]);
+  };
+
+  const removeReference = (index: number) => {
+    if (references.length > 1) {
+      setReferences(references.filter((_, i) => i !== index));
+    }
+  };
+
+  const addDivision = () => {
+    setDivisions([...divisions, {
+      purpose: 'poliza',
+      policy_number: '',
+      insurer_name: '',
+      amount: ''
+    }]);
+  };
+
+  const removeDivision = (index: number) => {
+    setDivisions(divisions.filter((_, i) => i !== index));
   };
 
   return (
@@ -339,6 +471,231 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
               placeholder="0.00"
             />
           </div>
+
+          {/* Referencias Bancarias */}
+          <div className="border-2 border-gray-200 rounded-lg p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold text-gray-700">Referencias Bancarias</h3>
+              <button
+                type="button"
+                onClick={addReference}
+                className="px-3 py-1 bg-[#8AAA19] text-white rounded-lg text-sm hover:bg-[#7a9916] transition flex items-center gap-1"
+              >
+                <FaPlus /> Agregar
+              </button>
+            </div>
+            {references.map((ref, index) => (
+              <div key={index} className="grid grid-cols-12 gap-2 mb-2">
+                <div className="col-span-4">
+                  <input
+                    type="text"
+                    placeholder="# Referencia"
+                    value={ref.reference_number}
+                    onChange={(e) => {
+                      const newRefs = [...references];
+                      if (newRefs[index]) {
+                        newRefs[index].reference_number = e.target.value;
+                        setReferences(newRefs);
+                      }
+                    }}
+                    list="available-references"
+                    className="w-full px-3 py-2 border rounded text-sm"
+                  />
+                </div>
+                <div className="col-span-3">
+                  <input
+                    type="date"
+                    value={ref.date}
+                    onChange={(e) => {
+                      const newRefs = [...references];
+                      if (newRefs[index]) {
+                        newRefs[index].date = e.target.value;
+                        setReferences(newRefs);
+                      }
+                    }}
+                    className="w-full px-3 py-2 border rounded text-sm"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="Monto"
+                    value={ref.amount}
+                    onChange={(e) => {
+                      const newRefs = [...references];
+                      if (newRefs[index]) {
+                        newRefs[index].amount = e.target.value;
+                        if (!newRefs[index].amount_to_use) {
+                          newRefs[index].amount_to_use = e.target.value;
+                        }
+                        setReferences(newRefs);
+                      }
+                    }}
+                    className="w-full px-3 py-2 border rounded text-sm"
+                  />
+                </div>
+                <div className="col-span-2">
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="A usar"
+                    value={ref.amount_to_use}
+                    onChange={(e) => {
+                      const newRefs = [...references];
+                      if (newRefs[index]) {
+                        newRefs[index].amount_to_use = e.target.value;
+                        setReferences(newRefs);
+                      }
+                    }}
+                    className="w-full px-3 py-2 border rounded text-sm"
+                  />
+                </div>
+                <div className="col-span-1 flex items-center justify-center">
+                  {references.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => removeReference(index)}
+                      className="p-2 text-red-500 hover:bg-red-50 rounded transition"
+                    >
+                      <FaTrash />
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+            <datalist id="available-references">
+              {availableReferences.map((ref) => (
+                <option key={ref.id} value={ref.reference_number} />
+              ))}
+            </datalist>
+          </div>
+
+          {/* Divisiones (opcional) */}
+          <div>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={hasDivisions}
+                onChange={(e) => {
+                  setHasDivisions(e.target.checked);
+                  if (e.target.checked && divisions.length === 0) {
+                    setDivisions([{
+                      purpose: formData.purpose,
+                      policy_number: formData.policy_number,
+                      insurer_name: formData.insurer_name,
+                      amount: formData.amount_to_pay
+                    }]);
+                  }
+                }}
+                className="w-4 h-4 text-[#8AAA19]"
+              />
+              <span className="text-sm font-medium text-gray-700">Dividir este pago en múltiples conceptos</span>
+            </label>
+          </div>
+
+          {hasDivisions && (
+            <div className="border-2 border-gray-200 rounded-lg p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold text-gray-700">Divisiones del Pago</h3>
+                <button
+                  type="button"
+                  onClick={addDivision}
+                  className="px-3 py-1 bg-[#8AAA19] text-white rounded-lg text-sm hover:bg-[#7a9916] transition flex items-center gap-1"
+                >
+                  <FaPlus /> Agregar
+                </button>
+              </div>
+              {divisions.map((div, index) => (
+                <div key={index} className="border rounded-lg p-3 bg-gray-50">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Propósito</label>
+                      <select
+                        value={div.purpose}
+                        onChange={(e) => {
+                          const newDivs = [...divisions];
+                          if (newDivs[index]) {
+                            newDivs[index].purpose = e.target.value as any;
+                            setDivisions(newDivs);
+                          }
+                        }}
+                        className="w-full px-3 py-2 border rounded text-sm"
+                      >
+                        <option value="poliza">Póliza</option>
+                        <option value="devolucion">Devolución</option>
+                        <option value="otro">Otro</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Monto</label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={div.amount}
+                        onChange={(e) => {
+                          const newDivs = [...divisions];
+                          if (newDivs[index]) {
+                            newDivs[index].amount = e.target.value;
+                            setDivisions(newDivs);
+                          }
+                        }}
+                        className="w-full px-3 py-2 border rounded text-sm"
+                      />
+                    </div>
+                    {div.purpose === 'poliza' && (
+                      <>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Póliza</label>
+                          <input
+                            type="text"
+                            value={div.policy_number}
+                            onChange={(e) => {
+                              const newDivs = [...divisions];
+                              if (newDivs[index]) {
+                                newDivs[index].policy_number = e.target.value;
+                                setDivisions(newDivs);
+                              }
+                            }}
+                            className="w-full px-3 py-2 border rounded text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Aseguradora</label>
+                          <select
+                            value={div.insurer_name}
+                            onChange={(e) => {
+                              const newDivs = [...divisions];
+                              if (newDivs[index]) {
+                                newDivs[index].insurer_name = e.target.value;
+                                setDivisions(newDivs);
+                              }
+                            }}
+                            className="w-full px-3 py-2 border rounded text-sm"
+                          >
+                            <option value="">Seleccionar...</option>
+                            {insurers.map((ins) => (
+                              <option key={ins.id} value={ins.name}>{ins.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeDivision(index)}
+                    className="mt-2 text-xs text-red-500 hover:text-red-700 flex items-center gap-1"
+                  >
+                    <FaTrash /> Eliminar división
+                  </button>
+                </div>
+              ))}
+              <div className="text-sm text-gray-600">
+                <strong>Total divisiones:</strong> ${divisions.reduce((sum, div) => sum + parseFloat(div.amount || '0'), 0).toFixed(2)} / ${formData.amount_to_pay}
+              </div>
+            </div>
+          )}
 
           {/* Notas */}
           <div>

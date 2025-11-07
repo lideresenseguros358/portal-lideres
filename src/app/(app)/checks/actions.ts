@@ -1,8 +1,9 @@
 'use server';
 
-import { getSupabaseServer } from '@/lib/supabase/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
-import type { DB, Tables, TablesInsert, TablesUpdate } from '@/lib/supabase/client';
+import { getSupabaseServer } from '@/lib/supabase/server';
+import type { Tables, TablesInsert, TablesUpdate } from '@/lib/supabase/client';
+import { revalidatePath } from 'next/cache';
 import { actionApplyAdvancePayment } from '@/app/(app)/commissions/actions';
 
 const AMOUNT_TOLERANCE = 0.01;
@@ -1403,7 +1404,7 @@ export async function actionMigrateBankTransfers() {
   }
 }
 
-// Update pending payment
+// Update pending payment (básico - sin referencias)
 export async function actionUpdatePendingPayment(paymentId: string, updates: {
   client_name: string;
   purpose: string;
@@ -1461,6 +1462,124 @@ export async function actionUpdatePendingPayment(paymentId: string, updates: {
     if (updateError) throw updateError;
 
     return { ok: true, message: 'Pago actualizado correctamente' };
+  } catch (error: any) {
+    console.error('Error updating pending payment:', error);
+    return { ok: false, error: error.message };
+  }
+}
+
+// Update pending payment (completo - con referencias y divisiones)
+export async function actionUpdatePendingPaymentFull(paymentId: string, updates: {
+  client_name: string;
+  purpose: string;
+  policy_number?: string;
+  insurer_name?: string;
+  amount_to_pay: number;
+  notes?: string;
+  devolucion_tipo?: 'cliente' | 'corredor';
+  cuenta_banco?: string;
+  banco_nombre?: string;
+  tipo_cuenta?: string;
+  broker_id?: string;
+  broker_cuenta?: string;
+  references: Array<{
+    reference_number: string;
+    date: string;
+    amount: number;
+    amount_to_use: number;
+  }>;
+  divisions?: Array<any>;
+}) {
+  try {
+    const supabaseServer = await getSupabaseServer();
+    const { data: userData } = await supabaseServer.auth.getUser();
+
+    if (!userData || !userData.user) {
+      return { ok: false, error: 'Usuario no autenticado' };
+    }
+
+    const supabase = await getSupabaseAdmin();
+
+    console.log(`📝 Actualizando pago pendiente ${paymentId}...`);
+
+    // Prepare metadata for notes
+    const metadata: any = {
+      notes: updates.notes || null,
+    };
+
+    if (updates.devolucion_tipo) {
+      metadata.devolucion_tipo = updates.devolucion_tipo;
+      if (updates.devolucion_tipo === 'cliente') {
+        metadata.cuenta_banco = updates.cuenta_banco || '';
+        metadata.banco_nombre = updates.banco_nombre || '';
+        metadata.tipo_cuenta = updates.tipo_cuenta || '';
+      } else if (updates.devolucion_tipo === 'corredor') {
+        metadata.broker_id = updates.broker_id || null;
+        metadata.broker_cuenta = updates.broker_cuenta || null;
+      }
+    }
+
+    // Update pending payment
+    const { error: updateError } = await supabase
+      .from('pending_payments')
+      .update({
+        client_name: updates.client_name,
+        purpose: updates.purpose,
+        policy_number: updates.purpose === 'poliza' && !updates.divisions ? updates.policy_number : null,
+        insurer_name: updates.purpose === 'poliza' && !updates.divisions ? updates.insurer_name : null,
+        amount_to_pay: updates.amount_to_pay,
+        notes: JSON.stringify(metadata),
+      } satisfies TablesUpdate<'pending_payments'>)
+      .eq('id', paymentId);
+
+    if (updateError) {
+      console.error('❌ Error actualizando pago:', updateError);
+      throw updateError;
+    }
+
+    console.log('✅ Pago pendiente actualizado');
+
+    // Delete existing references
+    console.log('🗑️ Eliminando referencias antiguas...');
+    const { error: deleteRefsError } = await supabase
+      .from('payment_references')
+      .delete()
+      .eq('payment_id', paymentId);
+
+    if (deleteRefsError) {
+      console.error('❌ Error eliminando referencias:', deleteRefsError);
+      throw deleteRefsError;
+    }
+
+    console.log('✅ Referencias antiguas eliminadas');
+
+    // Insert new references
+    console.log(`📝 Insertando ${updates.references.length} nuevas referencias...`);
+    const newReferences = updates.references.map(ref => ({
+      payment_id: paymentId,
+      reference_number: ref.reference_number,
+      date: ref.date,
+      amount: ref.amount,
+      amount_to_use: ref.amount_to_use,
+      exists_in_bank: true // Se asume que existe
+    }));
+
+    const { error: refsError } = await supabase
+      .from('payment_references')
+      .insert(newReferences satisfies TablesInsert<'payment_references'>[]);
+
+    if (refsError) {
+      console.error('❌ Error insertando referencias:', refsError);
+      throw refsError;
+    }
+
+    console.log('✅ Nuevas referencias insertadas');
+
+    // TODO: Handle divisions if needed in the future
+
+    revalidatePath('/(app)/checks');
+    
+    return { ok: true, message: 'Pago actualizado correctamente con todas sus referencias' };
   } catch (error: any) {
     console.error('Error updating pending payment:', error);
     return { ok: false, error: error.message };
