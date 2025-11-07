@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { FaPlus, FaCheckCircle, FaExclamationTriangle, FaFileDownload, FaEdit, FaTrash } from 'react-icons/fa';
-import { actionGetPendingPaymentsNew, actionMarkPaymentsAsPaidNew, actionDeletePendingPayment } from '@/app/(app)/checks/actions';
+import { actionGetPendingPaymentsNew, actionMarkPaymentsAsPaidNew, actionDeletePendingPayment, actionSyncPendingPaymentsWithAdvances } from '@/app/(app)/checks/actions';
 import { supabaseClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import UnpaidReferenceModal from './UnpaidReferenceModal';
@@ -56,8 +56,17 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
   }, []); // No dependencies needed as we only use setters and actions
 
   useEffect(() => {
-    console.log('🔵 [PendingPaymentsTab] useEffect disparado - refreshTrigger:', refreshTrigger);
-    loadPayments();
+    // Sincronización automática silenciosa en segundo plano
+    const autoSync = async () => {
+      try {
+        await actionSyncPendingPaymentsWithAdvances();
+      } catch (error) {
+        // Silencioso - no mostrar error al usuario
+      }
+    };
+    
+    // Ejecutar sincronización y luego cargar pagos
+    autoSync().then(() => loadPayments());
   }, [refreshTrigger, loadPayments]);
 
   const toggleSelect = (id: string) => {
@@ -929,7 +938,11 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
                 <div className="space-y-2 mb-4">
                   <h4 className="text-sm font-semibold text-gray-700">Referencias:</h4>
                   {payment.payment_references?.map((ref: any) => {
-                    const refClass = ref.exists_in_bank
+                    // Para descuentos a corredor, si el adelanto está pagado (can_be_paid=true), mostrar en verde
+                    const isDescuentoCorredor = payment.purpose === 'otro';
+                    const isValid = isDescuentoCorredor ? payment.can_be_paid : ref.exists_in_bank;
+                    
+                    const refClass = isValid
                       ? 'bg-green-50 border border-green-200'
                       : 'bg-red-50 border border-red-200';
 
@@ -939,7 +952,7 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
                         className={`flex items-center justify-between p-2 rounded-lg ${refClass}`}
                       >
                         <div className="flex items-center gap-2">
-                          {ref.exists_in_bank ? (
+                          {isValid ? (
                             <FaCheckCircle className="text-green-600" />
                           ) : (
                             <FaExclamationTriangle className="text-red-600" />
@@ -1106,26 +1119,32 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
                     {/* Referencias */}
                     <div className="space-y-2 mb-4">
                       <h4 className="text-sm font-semibold text-gray-700">Referencias:</h4>
-                      {payment.payment_references?.map((ref: any) => (
-                        <div
-                          key={ref.id}
-                          className={`flex items-center justify-between p-2 rounded-lg ${
-                            ref.exists_in_bank ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2">
-                            {ref.exists_in_bank ? (
-                              <FaCheckCircle className="text-green-600" />
-                            ) : (
-                              <FaExclamationTriangle className="text-red-600" />
-                            )}
-                            <span className="text-sm font-mono font-semibold">{ref.reference_number}</span>
+                      {payment.payment_references?.map((ref: any) => {
+                        // Para descuentos a corredor, si el adelanto está pagado (can_be_paid=true), mostrar en verde
+                        const isDescuentoCorredor = payment.purpose === 'otro';
+                        const isValid = isDescuentoCorredor ? payment.can_be_paid : ref.exists_in_bank;
+                        
+                        return (
+                          <div
+                            key={ref.id}
+                            className={`flex items-center justify-between p-2 rounded-lg ${
+                              isValid ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              {isValid ? (
+                                <FaCheckCircle className="text-green-600" />
+                              ) : (
+                                <FaExclamationTriangle className="text-red-600" />
+                              )}
+                              <span className="text-sm font-mono font-semibold">{ref.reference_number}</span>
+                            </div>
+                            <span className="text-sm font-semibold">
+                              ${Number(ref.amount).toFixed(2)}
+                            </span>
                           </div>
-                          <span className="text-sm font-semibold">
-                            ${Number(ref.amount).toFixed(2)}
-                          </span>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
 
                     {/* Status badge */}
@@ -1185,11 +1204,15 @@ function getPaymentState(payment: any) {
   const applied = Number(payment.total_received ?? 0);
   const remaining = Math.max(total - applied, 0);
 
-  const hasErrors = payment.payment_references?.some((ref: any) => !ref.exists_in_bank);
+  // Para descuentos a corredor (purpose='otro'), NO validar exists_in_bank
+  // porque sus referencias no son bancarias reales
+  const isDescuentoCorredor = payment.purpose === 'otro';
+  
+  const hasErrors = !isDescuentoCorredor && payment.payment_references?.some((ref: any) => !ref.exists_in_bank);
   if (hasErrors || !payment.can_be_paid) {
     return {
       key: 'blocked',
-      label: 'Referencia no conciliada',
+      label: isDescuentoCorredor ? 'Adelanto pendiente' : 'Referencia no conciliada',
       badgeClass: 'bg-red-100 text-red-800 border-red-300',
       blocked: true,
     } as const;

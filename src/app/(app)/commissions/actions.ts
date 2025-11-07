@@ -816,10 +816,6 @@ export async function actionApplyAdvancePayment(payload: {
 
     // Si el adelanto está saldado, habilitar pending_payment relacionado para que pueda ser marcado como pagado
     if (newStatus === 'PAID') {
-      console.log(`✅ Adelanto ${advance_id} completamente pagado - Buscando pagos pendientes relacionados...`);
-      
-      // Buscar pending_payment con este advance_id en notes
-      console.log(`🔍 Buscando pagos pendientes asociados al adelanto ${advance_id}...`);
       
       const { data: pendingPayments } = await supabase
         .from('pending_payments')
@@ -827,45 +823,42 @@ export async function actionApplyAdvancePayment(payload: {
         .eq('purpose', 'otro') // Descuentos a corredor usan purpose='otro'
         .eq('status', 'pending');
 
-      console.log(`📊 Se encontraron ${pendingPayments?.length || 0} pagos con purpose='otro' pendientes`);
-
       if (pendingPayments && pendingPayments.length > 0) {
         for (const payment of pendingPayments) {
-          // Parsear notes para extraer advance_id (puede ser JSON o texto)
+          // Parsear notes para extraer advance_id (puede ser JSON object o string)
           let paymentAdvanceId: string | null = null;
           
           try {
-            if (payment.notes && typeof payment.notes === 'string') {
-              if (payment.notes.startsWith('{')) {
-                const parsed = JSON.parse(payment.notes);
-                paymentAdvanceId = parsed.advance_id || null;
-              } else if (payment.notes.includes('Adelanto ID:')) {
-                const match = payment.notes.match(/Adelanto ID:\s*([a-f0-9-]+)/i);
-                paymentAdvanceId = match ? (match[1] ?? null) : null;
+            if (payment.notes) {
+              // Si notes es un objeto (JSONB parseado automáticamente por Supabase)
+              if (typeof payment.notes === 'object' && payment.notes !== null) {
+                paymentAdvanceId = (payment.notes as any).advance_id || null;
+              }
+              // Si notes es un string JSON
+              else if (typeof payment.notes === 'string') {
+                if (payment.notes.startsWith('{')) {
+                  const parsed = JSON.parse(payment.notes);
+                  paymentAdvanceId = parsed.advance_id || null;
+                } else if (payment.notes.includes('Adelanto ID:')) {
+                  const match = payment.notes.match(/Adelanto ID:\s*([a-f0-9-]+)/i);
+                  paymentAdvanceId = match ? (match[1] ?? null) : null;
+                }
               }
             }
           } catch (e) {
             console.error('Error parsing notes for advance_id:', e);
           }
           
-          console.log(`🔍 Pago "${payment.client_name}": advance_id=${paymentAdvanceId}, buscando=${advance_id}`);
-          
           // Si coincide el advance_id y aún no está habilitado
           if (paymentAdvanceId === advance_id && !payment.can_be_paid) {
-            console.log(`🔓 Habilitando pago pendiente: ${payment.client_name} - $${payment.amount_to_pay}`);
-            
             await supabase
               .from('pending_payments')
               .update({
                 can_be_paid: true,
               } satisfies TablesUpdate<'pending_payments'>)
               .eq('id', payment.id);
-            
-            console.log(`✅ Pago pendiente habilitado - Ahora puede marcarse como pagado en la pestaña de Pagos Pendientes`);
           }
         }
-      } else {
-        console.log(`⚠️ No se encontraron pagos pendientes con purpose "otro"`);
       }
     }
 

@@ -200,13 +200,16 @@ export async function actionImportBankHistoryXLSX(transfers: Array<{
       .eq('exists_in_bank', false);
     
     // Update pending_payments.can_be_paid where all references now exist
+    // IMPORTANTE: Excluir pagos de descuento a corredor (purpose='otro')
     const { data: pendingWithRefs } = await supabase
       .from('pending_payments')
       .select(`
         id,
+        purpose,
         payment_references (id, reference_number, exists_in_bank)
       `)
-      .eq('can_be_paid', false);
+      .eq('can_be_paid', false)
+      .neq('purpose', 'otro'); // EXCLUIR descuentos a corredor
     
     const toUpdate: string[] = [];
     (pendingWithRefs || []).forEach((p: any) => {
@@ -503,7 +506,7 @@ export async function actionCreatePendingPayment(payment: {
         if (advanceError) throw advanceError;
         
         createdAdvanceId = newAdvance.id;
-        console.log(`✅ Adelanto creado: ID ${createdAdvanceId} - Status: PENDING - Será descontado cuando se confirme pagado`);
+        console.log(`✅ Adelanto creado: ID ${createdAdvanceId} - Status: PENDING`);
         
         // Agregar ID del adelanto al metadata para identificar descuentos a corredor
         metadata.advance_id = createdAdvanceId;
@@ -735,13 +738,17 @@ export async function actionGetPendingPaymentsNew(filters?: {
           .in('id', toUpdate);
         
         // Actualizar pending_payments.can_be_paid
+        // IMPORTANTE: Excluir pagos de descuento a corredor (purpose='otro')
+        // porque estos se habilitan cuando el adelanto se paga, no por referencias bancarias
         const { data: pendingWithRefs } = await supabaseAdmin
           .from('pending_payments')
           .select(`
             id,
+            purpose,
             payment_references (id, exists_in_bank)
           `)
-          .eq('can_be_paid', false);
+          .eq('can_be_paid', false)
+          .neq('purpose', 'otro'); // EXCLUIR descuentos a corredor
         
         const paymentsToUpdate: string[] = [];
         (pendingWithRefs || []).forEach((p: any) => {
@@ -984,11 +991,6 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
         }
 
         const amountToUse = Number(ref.amount_to_use) || 0;
-        console.log(`📊 Pago ${payment.client_name} - Ref ${referenceNumber}:`, {
-          amount: ref.amount,
-          amount_to_use: ref.amount_to_use,
-          parsed_amount_to_use: amountToUse
-        });
         if (amountToUse <= 0) {
           continue;
         }
@@ -1027,13 +1029,6 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
 
         if (detailError) throw detailError;
 
-        console.log(`Actualizando transfer ${referenceNumber}:`, {
-          id: transfer.id,
-          used_amount: newUsedAmount,
-          remaining_will_be_calculated: newRemainingAmount,
-          status_will_be_calculated: newStatus
-        });
-
         // remaining_amount y status son columnas generadas, solo actualizar used_amount
         const { error: transferUpdateError } = await supabase
           .from('bank_transfers')
@@ -1042,12 +1037,7 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
           } satisfies TablesUpdate<'bank_transfers'>)
           .eq('id', transfer.id);
 
-        if (transferUpdateError) {
-          console.error('Error actualizando transfer:', transferUpdateError);
-          throw transferUpdateError;
-        }
-        
-        console.log(`Transfer ${referenceNumber} actualizado exitosamente`);
+        if (transferUpdateError) throw transferUpdateError;
 
         transferMap.set(referenceNumber, {
           ...transfer,
@@ -1061,8 +1051,6 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
 
       // Special handling for DESCUENTO A CORREDOR (purpose='otro' + is_auto_advance)
       if (isDescuentoCorredor) {
-        console.log('💳 Procesando descuento a corredor - Creando transferencia sintética en banco...');
-        
         // Extraer advance_id de las notas (puede ser JSON o texto)
         let advanceId: string | null = null;
         try {
@@ -1078,8 +1066,6 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
         } catch (e) {
           console.error('Error parsing notes for advance_id:', e);
         }
-        
-        console.log(`📝 Advance ID extraído: ${advanceId}`);
         
         // Obtener información del adelanto y broker
         let brokerName = 'CORREDOR';
@@ -1120,12 +1106,6 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
         // Descripción detallada: Cliente, Corredor, Monto
         const detailedDescription = `Descuento aplicado a ${brokerName} por pago de cliente ${payment.client_name} - Monto: $${advanceAmount.toFixed(2)}`;
         
-        console.log(`💳 Creando transferencia sintética en bank_transfers:`);
-        console.log(`   - Referencia: "DESCUENTO A CORREDOR"`);
-        console.log(`   - Descripción: "${detailedDescription}"`);
-        console.log(`   - Monto: $${advanceAmount.toFixed(2)}`);
-        console.log(`   - Status: AGOTADO (used_amount = amount)`);
-        
         const transferPayload: TablesInsert<'bank_transfers'> = {
           reference_number: 'DESCUENTO A CORREDOR', // Texto literal según requerimiento
           date: dateStr as string,
@@ -1141,16 +1121,9 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
           .select()
           .single();
 
-        if (transferError) {
-          console.error('❌ Error creating bank transfer for descuento:', transferError);
-          throw transferError;
-        }
-        
-        console.log(`✅ Transferencia sintética creada en bank_transfers: ID ${newTransfer.id}`);
+        if (transferError) throw transferError;
 
         // Create payment_details linking to this transfer
-        console.log(`📝 Creando payment_details para vincular pago con transferencia...`);
-        
         const { error: detailError } = await supabase
           .from('payment_details')
           .insert([{
@@ -1164,14 +1137,7 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
             paid_at: paidAt,
           }] satisfies TablesInsert<'payment_details'>[]);
 
-        if (detailError) {
-          console.error('❌ Error creating payment detail for descuento:', detailError);
-          throw detailError;
-        }
-        
-        console.log(`✅ payment_details creado: vincula pago ${payment.id} con transferencia ${newTransfer.id}`);
-        console.log(`✅ DESCUENTO A CORREDOR registrado exitosamente en historial de banco`);
-        console.log(`📊 Flujo completado: Pago Pendiente → Adelanto PAID → Marcar como Pagado → Historial Banco`);
+        if (detailError) throw detailError;
       }
 
       const { error: paymentUpdateError } = await supabase
@@ -1582,6 +1548,102 @@ export async function actionUpdatePendingPaymentFull(paymentId: string, updates:
     return { ok: true, message: 'Pago actualizado correctamente con todas sus referencias' };
   } catch (error: any) {
     console.error('Error updating pending payment:', error);
+    return { ok: false, error: error.message };
+  }
+}
+
+// Sincronizar pagos pendientes con adelantos pagados (para casos existentes)
+export async function actionSyncPendingPaymentsWithAdvances() {
+  try {
+    const supabaseServer = await getSupabaseServer();
+    const { data: userData } = await supabaseServer.auth.getUser();
+
+    if (!userData || !userData.user) {
+      return { ok: false, error: 'Usuario no autenticado' };
+    }
+
+    const supabase = await getSupabaseAdmin();
+
+    // Buscar todos los adelantos completamente pagados
+    const { data: paidAdvances, error: advancesError } = await supabase
+      .from('advances')
+      .select('id, broker_id, amount, reason, status')
+      .eq('status', 'PAID');
+
+    if (advancesError) throw advancesError;
+
+    if (!paidAdvances || paidAdvances.length === 0) {
+      return { ok: true, message: 'No hay adelantos pagados para sincronizar', updated: 0 };
+    }
+
+    // Buscar todos los pagos pendientes no habilitados con purpose='otro'
+    const { data: pendingPayments, error: paymentsError } = await supabase
+      .from('pending_payments')
+      .select('id, notes, client_name, amount_to_pay, can_be_paid, purpose, status')
+      .eq('purpose', 'otro')
+      .eq('status', 'pending')
+      .eq('can_be_paid', false); // Solo los que NO están habilitados
+
+    if (paymentsError) throw paymentsError;
+
+    if (!pendingPayments || pendingPayments.length === 0) {
+      return { ok: true, message: 'No hay pagos pendientes para sincronizar', updated: 0 };
+    }
+
+    // Crear un Set con los IDs de adelantos pagados para búsqueda rápida
+    const paidAdvanceIds = new Set(paidAdvances.map(a => a.id));
+
+    let updatedCount = 0;
+
+    // Revisar cada pago pendiente
+    for (const payment of pendingPayments) {
+      let paymentAdvanceId: string | null = null;
+
+      try {
+        if (payment.notes) {
+          // Si notes es un objeto (JSONB parseado automáticamente por Supabase)
+          if (typeof payment.notes === 'object' && payment.notes !== null) {
+            paymentAdvanceId = (payment.notes as any).advance_id || null;
+          }
+          // Si notes es un string JSON
+          else if (typeof payment.notes === 'string') {
+            if (payment.notes.startsWith('{')) {
+              const parsed = JSON.parse(payment.notes);
+              paymentAdvanceId = parsed.advance_id || null;
+            } else if (payment.notes.includes('Adelanto ID:')) {
+              const match = payment.notes.match(/Adelanto ID:\s*([a-f0-9-]+)/i);
+              paymentAdvanceId = match ? (match[1] ?? null) : null;
+            }
+          }
+        }
+
+        // Si el adelanto asociado está en el set de pagados, habilitar el pago
+        if (paymentAdvanceId && paidAdvanceIds.has(paymentAdvanceId)) {
+          const { error: updateError } = await supabase
+            .from('pending_payments')
+            .update({
+              can_be_paid: true,
+            } satisfies TablesUpdate<'pending_payments'>)
+            .eq('id', payment.id);
+
+          if (!updateError) {
+            updatedCount++;
+          }
+        }
+      } catch (e) {
+        console.error(`❌ Error procesando pago ${payment.id}:`, e);
+      }
+    }
+
+    revalidatePath('/(app)/checks');
+
+    return { 
+      ok: true, 
+      message: `Sincronización completada: ${updatedCount} pago(s) habilitado(s)`,
+      updated: updatedCount 
+    };
+  } catch (error: any) {
+    console.error('Error en sincronización:', error);
     return { ok: false, error: error.message };
   }
 }
