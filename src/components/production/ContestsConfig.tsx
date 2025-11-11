@@ -204,11 +204,12 @@ export default function ContestsConfig() {
             </label>
             <input
               type="number"
-              value={assa.goal}
-              onChange={(e) => setAssa({ ...assa, goal: parseFloat(e.target.value) || 0 })}
+              value={assa.goal === 0 ? '' : assa.goal}
+              onChange={(e) => setAssa({ ...assa, goal: e.target.value === '' ? 0 : parseFloat(e.target.value) })}
               className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none font-mono"
               min="0"
               step="1000"
+              placeholder="0"
             />
           </div>
         </div>
@@ -235,11 +236,12 @@ export default function ContestsConfig() {
             </label>
             <input
               type="number"
-              value={assa.goal_double || 0}
-              onChange={(e) => setAssa({ ...assa, goal_double: parseFloat(e.target.value) || 0 })}
+              value={(assa.goal_double || 0) === 0 ? '' : (assa.goal_double || 0)}
+              onChange={(e) => setAssa({ ...assa, goal_double: e.target.value === '' ? 0 : parseFloat(e.target.value) })}
               className="w-full px-4 py-2 border-2 border-[#8AAA19] rounded-lg focus:border-[#6d8814] focus:outline-none font-mono"
               min="0"
               step="1000"
+              placeholder="0"
             />
           </div>
         )}
@@ -328,11 +330,12 @@ export default function ContestsConfig() {
             </label>
             <input
               type="number"
-              value={convivio.goal}
-              onChange={(e) => setConvivio({ ...convivio, goal: parseFloat(e.target.value) || 0 })}
+              value={convivio.goal === 0 ? '' : convivio.goal}
+              onChange={(e) => setConvivio({ ...convivio, goal: e.target.value === '' ? 0 : parseFloat(e.target.value) })}
               className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none font-mono"
               min="0"
               step="1000"
+              placeholder="0"
             />
           </div>
 
@@ -342,11 +345,12 @@ export default function ContestsConfig() {
             </label>
             <input
               type="number"
-              value={convivio.goal_double || 0}
-              onChange={(e) => setConvivio({ ...convivio, goal_double: parseFloat(e.target.value) || 0 })}
+              value={(convivio.goal_double || 0) === 0 ? '' : (convivio.goal_double || 0)}
+              onChange={(e) => setConvivio({ ...convivio, goal_double: e.target.value === '' ? 0 : parseFloat(e.target.value) })}
               className="w-full px-4 py-2 border-2 border-[#8AAA19] rounded-lg focus:border-[#6d8814] focus:outline-none font-mono"
               min="0"
               step="1000"
+              placeholder="0"
             />
           </div>
         </div>

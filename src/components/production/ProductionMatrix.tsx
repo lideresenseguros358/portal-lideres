@@ -371,9 +371,10 @@ export default function ProductionMatrix({ year, role, brokerId, brokers }: Prod
                           {isMaster ? (
                             <input
                               type="number"
-                              value={monthData.bruto}
-                              onChange={(e) => handleMonthEdit(broker.broker_id, month.key, parseFloat(e.target.value) || 0)}
+                              value={monthData.bruto === 0 ? '' : monthData.bruto}
+                              onChange={(e) => handleMonthEdit(broker.broker_id, month.key, e.target.value === '' ? 0 : parseFloat(e.target.value))}
                               className="w-full px-2 py-1 text-center border border-gray-300 rounded focus:border-[#8AAA19] focus:outline-none font-mono"
+                              placeholder="0"
                             />
                           ) : (
                             <span className="font-mono">{formatCurrency(monthData.bruto)}</span>
@@ -392,9 +393,10 @@ export default function ProductionMatrix({ year, role, brokerId, brokers }: Prod
                       {isMaster ? (
                         <input
                           type="number"
-                          value={broker.canceladas_ytd}
-                          onChange={(e) => handleCanceladasEdit(broker.broker_id, parseFloat(e.target.value) || 0)}
+                          value={broker.canceladas_ytd === 0 ? '' : broker.canceladas_ytd}
+                          onChange={(e) => handleCanceladasEdit(broker.broker_id, e.target.value === '' ? 0 : parseFloat(e.target.value))}
                           className="w-full px-2 py-1 text-center border border-red-300 rounded focus:border-red-500 focus:outline-none font-mono text-red-600"
+                          placeholder="0"
                         />
                       ) : (
                         <span className="font-mono text-red-600">{formatCurrency(broker.canceladas_ytd)}</span>

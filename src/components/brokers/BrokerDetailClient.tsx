@@ -50,7 +50,6 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
         tipo_cuenta: result.data.tipo_cuenta || '04',
         nombre_completo: result.data.nombre_completo || '',
         beneficiary_name: result.data.beneficiary_name || '',
-        beneficiary_id: result.data.beneficiary_id || '', // Cédula del titular de cuenta
         carnet_expiry_date: (result.data as any).carnet_expiry_date || '',
         broker_type: (result.data as any).broker_type || 'corredor',
         role: (result.data as any).profiles?.role || 'broker', // Rol del usuario
@@ -73,7 +72,7 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
     const fieldsToUpdate = [
       'name', 'phone', 'national_id', 'birth_date', 'assa_code', 'license_no',
       'percent_default', 'bank_route', 'bank_account_no', 'tipo_cuenta', 
-      'nombre_completo', 'beneficiary_id', 'carnet_expiry_date', 'broker_type', 'role'
+      'nombre_completo', 'beneficiary_name', 'carnet_expiry_date', 'broker_type', 'role'
     ];
     
     for (const field of fieldsToUpdate) {
@@ -604,7 +603,7 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
                 />
                 {isEditing && (
                   <p className="text-xs text-gray-500 mt-1">
-                    Sin espacios ni guiones. Máx 17 caracteres.
+                    ⚠️ Solo números. Sin espacios, guiones ni símbolos. Máx 17 caracteres.
                   </p>
                 )}
               </div>
@@ -633,25 +632,30 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
                 )}
               </div>
 
-              {/* Cédula del Titular */}
+              {/* Nombre visible (beneficiary_name) - Opcional si es diferente */}
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Cédula del titular
+                  Nombre para cheque <span className="text-gray-400">(si es diferente al titular ACH)</span>
                 </label>
                 <input
                   type="text"
-                  value={formData.beneficiary_id}
-                  onChange={(e) => setFormData({ ...formData, beneficiary_id: e.target.value })}
-                  disabled={!isEditing || useBrokerData}
-                  placeholder="8-123-4567"
-                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none disabled:bg-gray-50 disabled:text-gray-600"
+                  value={formData.beneficiary_name}
+                  onChange={(e) => {
+                    const normalized = toUpperNoAccents(e.target.value);
+                    setFormData({ ...formData, beneficiary_name: normalized.substring(0, 22) });
+                  }}
+                  disabled={!isEditing}
+                  maxLength={22}
+                  placeholder="NOMBRE PARA CHEQUE"
+                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none disabled:bg-gray-50 disabled:text-gray-600 uppercase"
                 />
                 {isEditing && (
                   <p className="text-xs text-gray-500 mt-1">
-                    Cédula del titular de la cuenta bancaria.
+                    Opcional. Solo si el nombre para cheques/pagos es diferente al titular ACH.
                   </p>
                 )}
               </div>
+
             </div>
 
             {/* Checkbox: Usar datos del broker */}
@@ -670,8 +674,7 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
                         setFormData({
                           ...formData,
                           nombre_completo: brokerName,
-                          beneficiary_name: brokerName,
-                          beneficiary_id: formData.national_id
+                          beneficiary_name: brokerName
                         });
                       }
                     }}

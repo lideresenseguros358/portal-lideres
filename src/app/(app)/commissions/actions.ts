@@ -2034,7 +2034,6 @@ export async function actionPayFortnight(fortnight_id: string) {
           id,
           name,
           bank_account_no,
-          beneficiary_id,
           beneficiary_name
         )
       `)
@@ -2109,7 +2108,9 @@ export async function actionPayFortnight(fortnight_id: string) {
         broker: bt.brokers as any
       }));
     
-    const achResult = await buildBankACH(filteredTotals, `PAGO COMISIONES QUINCENA`);
+    // Generar label con período de la quincena
+    const fortnightLabel = `PAGO COMISIONES ${formatFortnightLabel(fortnight.period_start, fortnight.period_end)}`.toUpperCase();
+    const achResult = await buildBankACH(filteredTotals, fortnightLabel);
     const csvContent = achResult.content;
     
     // 6. Cambiar status a PAID
@@ -2310,7 +2311,6 @@ export async function actionGeneratePayNowCSV(item_ids: string[]) {
           id,
           name,
           bank_account_no,
-          beneficiary_id,
           beneficiary_name,
           percent_default
         )
@@ -2348,7 +2348,14 @@ export async function actionGeneratePayNowCSV(item_ids: string[]) {
       return acc;
     }, {} as Record<string, any>);
     
-    const achResult = await buildBankACH(Object.values(totalsByBroker), 'AJUSTE COMISIONES');
+    // Generar referencia con fecha para ajustes
+    const now = new Date();
+    const day = String(now.getDate()).padStart(2, '0');
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const year = now.getFullYear();
+    const adjustmentRef = `AJUSTES ${day}/${month}/${year}`;
+    
+    const achResult = await buildBankACH(Object.values(totalsByBroker), adjustmentRef);
     const csvContent = achResult.content;
     
     return { 

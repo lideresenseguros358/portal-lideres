@@ -516,11 +516,6 @@ export default function AccountPage() {
               <p>{broker.beneficiary_name || broker.name || "No especificado"}</p>
             </div>
 
-            <div className="info-group">
-              <label>Cédula del Titular</label>
-              <p>{broker.beneficiary_id || broker.national_id || "No especificado"}</p>
-            </div>
-
             <div style={{ 
               marginTop: '16px', 
               padding: '12px', 

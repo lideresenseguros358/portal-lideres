@@ -494,7 +494,7 @@ export default function NewUserWizard() {
                   required
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  Sin espacios ni guiones. Máximo 17 caracteres.
+                  ⚠️ Solo números permitidos. Sin espacios, guiones ni símbolos. Máximo 17 caracteres.
                 </p>
               </div>
 

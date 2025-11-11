@@ -7,13 +7,26 @@
 import type { ClaimReport } from './adjustments-utils';
 import {
   toUpperNoAccents,
-  cleanAccountNumber,
+  formatAccountForACH,
   normalizeRoute,
   truncate,
   getAccountTypeCode,
   formatACHAmount,
-  cleanBeneficiaryId
+  cleanBeneficiaryId,
+  generateACHReference
 } from './ach-normalization';
+
+/**
+ * Genera referencia ACH para ajustes con fecha actual
+ */
+function generateAdjustmentReference(): string {
+  const now = new Date();
+  const day = String(now.getDate()).padStart(2, '0');
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const year = now.getFullYear();
+  
+  return generateACHReference(`AJUSTES ${day}/${month}/${year}`);
+}
 
 interface ACHRecord {
   id_beneficiario: string;        // 1-15 chars
@@ -78,9 +91,9 @@ export function generateAdjustmentsACH(reports: ClaimReport[]): {
     
     // Normalizar datos según formato ACH oficial
     const beneficiaryId = cleanBeneficiaryId(String(sequenceId).padStart(3, '0'));
-    const beneficiaryName = toUpperNoAccents((broker as any).nombre_completo || broker.profiles?.full_name || broker.name || '');
+    const beneficiaryName = toUpperNoAccents((broker as any).beneficiary_name || (broker as any).nombre_completo || broker.profiles?.full_name || broker.name || '');
     const bankRoute = normalizeRoute(rawBankRoute);
-    const accountNumber = cleanAccountNumber(rawAccountNumber);
+    const accountNumber = formatAccountForACH(rawAccountNumber); // Formatea con 0 al inicio si es necesario
     const accountType = rawAccountType;
     
     const record: ACHRecord = {
@@ -91,7 +104,7 @@ export function generateAdjustmentsACH(reports: ClaimReport[]): {
       producto_destino: getAccountTypeCode(accountType),
       monto: formatACHAmount(report.total_broker_amount),
       tipo_pago: 'C',
-      referencia_texto: 'REF*TXT**AJUSTE COMISIONES\\'
+      referencia_texto: generateAdjustmentReference()
     };
     
     records.push(record);

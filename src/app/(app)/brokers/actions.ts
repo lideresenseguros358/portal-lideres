@@ -198,8 +198,8 @@ export async function actionUpdateBroker(brokerId: string, updates: Partial<Tabl
     // Clean up empty strings - convert to null for optional fields
     const nullableFields = [
       'birth_date', 'phone', 'national_id', 'assa_code', 'license_no', 
-      'bank_account_no', 'beneficiary_name', 'beneficiary_id', 'email', 
-      'carnet_expiry_date', 'nombre_completo', 'bank_route', 'tipo_cuenta'
+      'bank_account_no', 'beneficiary_name', 'email', 'carnet_expiry_date', 
+      'nombre_completo', 'bank_route', 'tipo_cuenta'
     ];
     
     const cleanedBrokerUpdates: Record<string, any> = {};
@@ -648,8 +648,7 @@ export async function actionExportBrokers(brokerIds?: string[]) {
       licencia: b.license_no || '',
       banco: b.bank_account_no || '', // Bank name would need separate table
       numero_cuenta: b.bank_account_no || '',
-      titular: b.beneficiary_name || '',
-      cedula_titular: b.beneficiary_id || '',
+      titular: b.nombre_completo || '',
       percent_default: b.percent_default || '',
       estado: b.active ? 'Activo' : 'Inactivo',
       fecha_creacion: (b.profiles as any)?.created_at || b.created_at || '',
@@ -694,8 +693,8 @@ export async function actionBulkUpdateBrokers(updates: Array<{ id: string; [key:
     const results = [];
     const nullableFields = [
       'birth_date', 'phone', 'national_id', 'assa_code', 'license_no', 
-      'bank_account_no', 'beneficiary_name', 'beneficiary_id', 'email', 
-      'carnet_expiry_date', 'nombre_completo', 'bank_route', 'tipo_cuenta'
+      'bank_account_no', 'beneficiary_name', 'email', 'carnet_expiry_date', 
+      'nombre_completo', 'bank_route', 'tipo_cuenta'
     ];
     
     for (const update of updates) {

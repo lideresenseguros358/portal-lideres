@@ -62,7 +62,7 @@ export function toUpperNoAccents(text: string | null | undefined): string {
 }
 
 /**
- * Limpia número de cuenta para formato ACH
+ * Limpia número de cuenta para inputs (SIN agregar 0)
  * - Elimina espacios, guiones y símbolos
  * - Solo permite alfanuméricos
  * - Límite: 17 caracteres
@@ -84,6 +84,28 @@ export function cleanAccountNumber(accountNumber: string | null | undefined): st
   
   // Limitar a 17 caracteres
   return clean.substring(0, 17);
+}
+
+/**
+ * Formatea número de cuenta para archivos ACH
+ * - Limpia el número de cuenta
+ * - Agrega 0 al inicio si empieza con 3 o 4 (problema de Excel con notación científica)
+ * 
+ * @param accountNumber - Número de cuenta a formatear
+ * @returns Número de cuenta formateado para ACH
+ */
+export function formatAccountForACH(accountNumber: string | null | undefined): string {
+  // Primero limpiar
+  let clean = cleanAccountNumber(accountNumber);
+  
+  if (!clean) return '';
+  
+  // Si empieza con 3 o 4, agregar 0 al inicio
+  if (/^[34]/.test(clean)) {
+    clean = '0' + clean;
+  }
+  
+  return clean;
 }
 
 /**
@@ -222,8 +244,9 @@ export function validateBrokerForACH(broker: any): {
   if (!broker.bank_account_no) {
     errors.push('Falta número de cuenta');
   } else {
-    const cleaned = cleanAccountNumber(broker.bank_account_no);
-    if (!cleaned || cleaned.length === 0) {
+    // Usar formatAccountForACH para validar con el formato final
+    const formatted = formatAccountForACH(broker.bank_account_no);
+    if (!formatted || formatted.length === 0) {
       errors.push('Número de cuenta inválido');
     }
   }
@@ -233,11 +256,11 @@ export function validateBrokerForACH(broker: any): {
     errors.push('Falta tipo de cuenta');
   }
   
-  // Validar nombre del beneficiario
-  if (!broker.nombre_completo && !broker.name) {
+  // Validar nombre del beneficiario (prioridad: beneficiary_name)
+  if (!broker.beneficiary_name && !broker.nombre_completo && !broker.name) {
     errors.push('Falta nombre del beneficiario');
   } else {
-    const name = toUpperNoAccents(broker.nombre_completo || broker.name);
+    const name = toUpperNoAccents(broker.beneficiary_name || broker.nombre_completo || broker.name);
     if (!name || name.length === 0) {
       errors.push('Nombre del beneficiario inválido');
     }

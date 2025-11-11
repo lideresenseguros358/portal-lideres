@@ -85,8 +85,8 @@ export default function MetaPersonalModal({
             </label>
             <input
               type="number"
-              value={meta}
-              onChange={(e) => setMeta(parseFloat(e.target.value) || 0)}
+              value={meta === 0 ? '' : meta}
+              onChange={(e) => setMeta(e.target.value === '' ? 0 : parseFloat(e.target.value))}
               min="0"
               step="1000"
               className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none font-mono text-xl text-center"

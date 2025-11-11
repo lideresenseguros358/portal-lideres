@@ -104,8 +104,8 @@ export default function MonthInputModal({
             </label>
             <input
               type="number"
-              value={bruto}
-              onChange={(e) => setBruto(parseFloat(e.target.value) || 0)}
+              value={bruto === 0 ? '' : bruto}
+              onChange={(e) => setBruto(e.target.value === '' ? 0 : parseFloat(e.target.value))}
               min="0"
               step="0.01"
               className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none font-mono text-lg"
@@ -126,8 +126,8 @@ export default function MonthInputModal({
             </label>
             <input
               type="number"
-              value={numPolizas}
-              onChange={(e) => setNumPolizas(parseInt(e.target.value) || 0)}
+              value={numPolizas === 0 ? '' : numPolizas}
+              onChange={(e) => setNumPolizas(e.target.value === '' ? 0 : parseInt(e.target.value))}
               min="0"
               step="1"
               className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none font-mono text-lg"
@@ -147,9 +147,9 @@ export default function MonthInputModal({
             </label>
             <input
               type="number"
-              value={canceladas}
+              value={canceladas === 0 ? '' : canceladas}
               onChange={(e) => {
-                const value = parseFloat(e.target.value) || 0;
+                const value = e.target.value === '' ? 0 : parseFloat(e.target.value);
                 setCanceladas(value);
                 if (value > bruto) {
                   setError('Las canceladas no pueden ser mayores que la cifra bruta');

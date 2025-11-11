@@ -13,7 +13,7 @@
 import type { Tables } from '@/lib/supabase/server';
 import {
   toUpperNoAccents,
-  cleanAccountNumber,
+  formatAccountForACH,
   normalizeRoute,
   truncate,
   getAccountTypeCode,
@@ -101,9 +101,9 @@ export async function buildBankACH(
     // NOTA: bank_route está conectado con tabla ach_banks via foreign key,
     // garantizando que siempre sea un código de ruta válido de un banco activo
     const beneficiaryId = cleanBeneficiaryId(String(sequenceId).padStart(3, '0'));
-    const beneficiaryName = toUpperNoAccents(broker.nombre_completo || broker.name || '');
+    const beneficiaryName = toUpperNoAccents(broker.beneficiary_name || broker.nombre_completo || broker.name || '');
     const bankRoute = normalizeRoute(broker.bank_route); // Código de ruta del banco (ej: 71)
-    const accountNumber = cleanAccountNumber(broker.bank_account_no);
+    const accountNumber = formatAccountForACH(broker.bank_account_no); // Formatea con 0 al inicio si es necesario
     const accountType = broker.tipo_cuenta || ''; // Solo '03' (Corriente) o '04' (Ahorro)
     
     // Construir registro ACH con formato exacto del instructivo oficial

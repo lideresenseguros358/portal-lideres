@@ -465,7 +465,6 @@ export type Database = {
           bank_account_no: string | null
           bank_id: string | null
           bank_route: string | null
-          beneficiary_id: string | null
           beneficiary_name: string | null
           birth_date: string | null
           broker_type: Database["public"]["Enums"]["broker_type_enum"] | null
@@ -489,7 +488,6 @@ export type Database = {
           bank_account_no?: string | null
           bank_id?: string | null
           bank_route?: string | null
-          beneficiary_id?: string | null
           beneficiary_name?: string | null
           birth_date?: string | null
           broker_type?: Database["public"]["Enums"]["broker_type_enum"] | null
@@ -513,7 +511,6 @@ export type Database = {
           bank_account_no?: string | null
           bank_id?: string | null
           bank_route?: string | null
-          beneficiary_id?: string | null
           beneficiary_name?: string | null
           birth_date?: string | null
           broker_type?: Database["public"]["Enums"]["broker_type_enum"] | null
