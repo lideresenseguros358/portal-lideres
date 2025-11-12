@@ -125,6 +125,8 @@ export default function FoldersView({ folders: initialFolders, isMaster, onUpdat
     const targetIndex = direction === 'up' ? folderIndex - 1 : folderIndex + 1;
     const folder = folders[folderIndex];
     const targetFolder = folders[targetIndex];
+    
+    if (!folder || !targetFolder) return;
 
     try {
       // Intercambiar display_order

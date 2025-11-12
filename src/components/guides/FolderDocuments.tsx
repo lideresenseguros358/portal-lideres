@@ -206,6 +206,8 @@ export default function FolderDocuments({ folderId, isMaster, onUpdate }: Folder
     const targetIndex = direction === 'up' ? docIndex - 1 : docIndex + 1;
     const doc = documents[docIndex];
     const targetDoc = documents[targetIndex];
+    
+    if (!doc || !targetDoc) return;
 
     try {
       await fetch('/api/guides/files', {

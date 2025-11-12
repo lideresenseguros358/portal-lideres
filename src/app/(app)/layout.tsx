@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import Link from "next/link";
 import Image from "next/image";
 import { FaBars, FaBell } from "react-icons/fa";
@@ -35,6 +36,8 @@ export default async function AppLayout({
   if (!profile) {
     redirect("/login");
   }
+
+  // Note: Password change enforcement is handled by middleware.ts
 
   const role = profile.role === "master" ? "MASTER" : "BROKER";
   const displayName = profile.full_name || user.email || "Usuario";

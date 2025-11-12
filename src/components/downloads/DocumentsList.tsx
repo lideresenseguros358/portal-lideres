@@ -239,6 +239,8 @@ export default function DocumentsList({ scope, policyType, insurerId, isMaster, 
     if (docIndex === -1) return;
 
     const doc = documents[docIndex];
+    if (!doc) return;
+
     const sectionDocs = documents.filter(d => d.section_id === doc.section_id).sort((a, b) => a.display_order - b.display_order);
     const sectionIndex = sectionDocs.findIndex(d => d.id === docId);
 
@@ -249,6 +251,7 @@ export default function DocumentsList({ scope, policyType, insurerId, isMaster, 
 
     const targetIndex = direction === 'up' ? sectionIndex - 1 : sectionIndex + 1;
     const targetDoc = sectionDocs[targetIndex];
+    if (!targetDoc) return;
 
     try {
       // Intercambiar display_order
