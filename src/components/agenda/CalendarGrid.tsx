@@ -232,10 +232,10 @@ export default function CalendarGrid({
                       </div>
                     )}
                     
-                    {/* Emoji decorativo para días con eventos (SOLO en Mobile - hidden en desktop) */}
+                    {/* Indicador de eventos para mobile (SOLO en Mobile - hidden en desktop) */}
                     {item.hasEvents && item.isCurrentMonth && !isTodayDate && (
-                      <div className="absolute -bottom-1 -right-1 text-sm lg:hidden">
-                        📅
+                      <div className="absolute -bottom-0.5 -right-0.5 lg:hidden">
+                        <div className="w-2 h-2 rounded-full bg-yellow-400 border border-white shadow-sm"></div>
                       </div>
                     )}
                     

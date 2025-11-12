@@ -32,6 +32,8 @@ export default function AccountPage() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [bankName, setBankName] = useState("");
+  const [accountTypeName, setAccountTypeName] = useState("");
 
   const loadProfile = useCallback(async () => {
     try {
@@ -67,6 +69,30 @@ export default function AccountPage() {
         if (brokerData) {
           setBroker(brokerData);
           setPhone(brokerData.phone || "");
+        }
+
+        // Load bank name
+        if (brokerData?.bank_route) {
+          const { data: bankData } = await supabase
+            .from("ach_banks")
+            .select("bank_name")
+            .eq("route_code", brokerData.bank_route)
+            .single();
+          if (bankData) {
+            setBankName(bankData.bank_name);
+          }
+        }
+
+        // Load account type name
+        if (brokerData?.tipo_cuenta) {
+          const { data: accountType } = await supabase
+            .from("ach_account_types")
+            .select("name")
+            .eq("code", brokerData.tipo_cuenta)
+            .single();
+          if (accountType) {
+            setAccountTypeName(accountType.name);
+          }
         }
       }
     } catch (err) {
@@ -266,13 +292,7 @@ export default function AccountPage() {
       const timestamp = Date.now();
       const { data: { publicUrl } } = supabase.storage
         .from('avatar')
-        .getPublicUrl(fileName, {
-          transform: {
-            width: 300,
-            height: 300,
-            quality: 80
-          }
-        });
+        .getPublicUrl(fileName);
 
       // Add timestamp to URL to force cache refresh
       const urlWithTimestamp = `${publicUrl}?t=${timestamp}`;
@@ -483,6 +503,7 @@ export default function AccountPage() {
               id="phone"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
+              placeholder="+507 1234-5678"
             />
           </div>
 
@@ -498,17 +519,13 @@ export default function AccountPage() {
             <p className="section-note">Solo el administrador puede modificar estos datos</p>
             
             <div className="info-group">
-              <label>Banco (Código de Ruta)</label>
-              <p>{broker.bank_route || "No especificado"}</p>
+              <label>Banco</label>
+              <p>{bankName || "No especificado"}</p>
             </div>
 
             <div className="info-group">
               <label>Tipo de Cuenta</label>
-              <p>
-                {broker.tipo_cuenta === '03' ? 'Corriente (03)' : 
-                 broker.tipo_cuenta === '04' ? 'Ahorro (04)' : 
-                 broker.tipo_cuenta || "No especificado"}
-              </p>
+              <p>{accountTypeName || "No especificado"}</p>
             </div>
 
             <div className="info-group">
@@ -517,18 +534,13 @@ export default function AccountPage() {
             </div>
 
             <div className="info-group">
-              <label>Titular ACH (Normalizado)</label>
-              <p>{broker.nombre_completo || "No especificado"}</p>
+              <label>Titular</label>
+              <p>{broker.nombre_completo || broker.name || "No especificado"}</p>
               {broker.nombre_completo && (
                 <small style={{ color: '#666', fontSize: '12px' }}>
                   Formato ACH: MAYÚSCULAS sin acentos
                 </small>
               )}
-            </div>
-
-            <div className="info-group">
-              <label>Nombre Titular (Referencia)</label>
-              <p>{broker.beneficiary_name || broker.name || "No especificado"}</p>
             </div>
 
             <div style={{ 

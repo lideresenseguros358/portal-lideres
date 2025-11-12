@@ -226,7 +226,7 @@ export function PayAdvanceModal({ isOpen, onClose, onSuccess, brokerId, brokerNa
         onClose();
       }
     }}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+      <DialogContent className="max-w-4xl w-[95vw] sm:w-full max-h-[95vh] sm:max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold text-[#010139]">Registrar Pago Externo</DialogTitle>
           <DialogDescription>
@@ -252,7 +252,7 @@ export function PayAdvanceModal({ isOpen, onClose, onSuccess, brokerId, brokerNa
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="ref">Número de Referencia *</Label>
                 <div className="relative">

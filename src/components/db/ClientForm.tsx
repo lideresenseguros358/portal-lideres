@@ -134,16 +134,16 @@ export default function ClientForm({ client, onClose }: ClientFormProps) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto border-2 border-gray-200">
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4">
+      <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[95vh] sm:max-h-[90vh] flex flex-col my-2 border-2 border-gray-200">
         {/* Header con gradiente corporativo */}
-        <div className="sticky top-0 bg-gradient-to-r from-[#010139] to-[#020270] px-6 py-4 flex items-center justify-between rounded-t-xl z-10">
+        <div className="bg-gradient-to-r from-[#010139] to-[#020270] px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between rounded-t-xl flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-white/10 rounded-lg">
               <FaEdit size={20} className="text-white" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-white">
+              <h2 className="text-base sm:text-xl font-bold text-white">
                 {client ? "Editar Cliente" : "Nuevo Cliente"}
               </h2>
               <p className="text-xs text-white/80">
@@ -160,7 +160,7 @@ export default function ClientForm({ client, onClose }: ClientFormProps) {
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 sm:space-y-6 overflow-y-auto flex-1">
           {error && (
             <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
               {error}
@@ -267,16 +267,18 @@ export default function ClientForm({ client, onClose }: ClientFormProps) {
 
           {client && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-bold text-[#010139] border-b-2 border-[#8AAA19] pb-2 flex-1">
+              {/* Sección de Pólizas con mejor layout */}
+              <div className="space-y-3">
+                <h3 className="text-base sm:text-lg font-bold text-[#010139] border-b-2 border-[#8AAA19] pb-2">
                   📄 Pólizas del Cliente
                 </h3>
                 <button
                   type="button"
                   onClick={() => setShowPolicyForm(true)}
-                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg hover:shadow-lg transition-all text-sm font-semibold"
+                  className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg hover:shadow-lg transition-all text-sm font-semibold"
                 >
-                  <FaPlus size={14} /> Nueva Póliza
+                  <FaPlus size={14} />
+                  <span>Nueva Póliza</span>
                 </button>
               </div>
 
@@ -580,6 +582,7 @@ function PolicyForm({ clientId, policy, onClose, onSave }: PolicyFormProps) {
       const savedPolicy = await response.json();
       console.log('[PolicyForm] Póliza guardada:', savedPolicy);
       onSave(savedPolicy);
+      onClose(); // Cerrar modal automáticamente después de guardar
     } catch (err) {
       console.error('[PolicyForm] Error:', err);
       setError(err instanceof Error ? err.message : "Error al guardar la póliza");
@@ -589,16 +592,16 @@ function PolicyForm({ clientId, policy, onClose, onSave }: PolicyFormProps) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[110] p-3 sm:p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border-2 border-gray-200">
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[110] p-2 sm:p-4">
+      <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[95vh] sm:max-h-[90vh] flex flex-col my-2 border-2 border-gray-200">
         {/* Header con gradiente corporativo */}
-        <div className="sticky top-0 bg-gradient-to-r from-[#010139] to-[#020270] px-5 py-4 flex items-center justify-between rounded-t-xl z-10">
+        <div className="bg-gradient-to-r from-[#010139] to-[#020270] px-4 sm:px-5 py-3 sm:py-4 flex items-center justify-between rounded-t-xl flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-white/10 rounded-lg">
               <FaPlus size={18} className="text-white" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-white">
+              <h3 className="text-base sm:text-lg font-bold text-white">
                 {policy ? "Editar Póliza" : "Nueva Póliza"}
               </h3>
               <p className="text-xs text-white/80">
@@ -614,7 +617,7 @@ function PolicyForm({ clientId, policy, onClose, onSave }: PolicyFormProps) {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-5 space-y-5">
+        <form onSubmit={handleSubmit} className="p-4 sm:p-5 space-y-4 sm:space-y-5 overflow-y-auto flex-1">
           {error && (
             <div className="p-3 bg-red-100 border border-red-400 text-red-700 rounded">
               {error}
@@ -709,7 +712,7 @@ function PolicyForm({ clientId, policy, onClose, onSave }: PolicyFormProps) {
                   type="date"
                   value={formData.start_date}
                   onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none text-sm font-medium transition-all"
+                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none text-sm font-medium transition-all"
                 />
               </div>
               <div>
@@ -720,7 +723,7 @@ function PolicyForm({ clientId, policy, onClose, onSave }: PolicyFormProps) {
                   type="date"
                   value={formData.renewal_date}
                   onChange={(e) => setFormData({ ...formData, renewal_date: e.target.value })}
-                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none text-sm font-medium transition-all"
+                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none text-sm font-medium transition-all"
                 />
               </div>
             </div>

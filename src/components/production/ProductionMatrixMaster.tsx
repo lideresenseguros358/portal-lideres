@@ -69,9 +69,9 @@ export default function ProductionMatrixMaster({ year }: ProductionMatrixMasterP
   const [semester, setSemester] = useState<1 | 2>(1); // 1 = Ene-Jun, 2 = Jul-Dic
   const [searchTerm, setSearchTerm] = useState(''); // Buscador
   
-  // Paginación
-  const [currentPage, setCurrentPage] = useState(1);
-  const brokersPerPage = 10;
+  // "Cargar más" en lugar de paginación
+  const [visibleCount, setVisibleCount] = useState(10);
+  const brokersPerLoad = 10;
   
   // Modal states
   const [monthModal, setMonthModal] = useState<{
@@ -244,16 +244,14 @@ export default function ProductionMatrixMaster({ year }: ProductionMatrixMasterP
     broker.assa_code?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  // Paginación
-  const totalPages = Math.ceil(filteredProduction.length / brokersPerPage);
-  const startIndex = (currentPage - 1) * brokersPerPage;
-  const endIndex = startIndex + brokersPerPage;
-  const paginatedProduction = filteredProduction.slice(startIndex, endIndex);
+  // "Cargar más" - mostrar visibleCount brokers
+  const displayedProduction = filteredProduction.slice(0, visibleCount);
+  const hasMore = visibleCount < filteredProduction.length;
 
-  // Resetear página al buscar
+  // Resetear contador al buscar o cambiar semestre
   useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm]);
+    setVisibleCount(10);
+  }, [searchTerm, semester]);
 
   if (loading) {
     return (
@@ -278,133 +276,125 @@ export default function ProductionMatrixMaster({ year }: ProductionMatrixMasterP
 
       {/* Selector de Semestre - Rediseñado Responsive */}
       <div className="bg-white rounded-xl shadow-lg p-4 mb-6">
-        {/* Version Desktop */}
-        <div className="hidden md:flex items-center justify-center gap-3">
+        {/* Version Desktop - Más sutil */}
+        <div className="hidden md:flex items-center justify-center gap-2">
           <button
             onClick={() => setSemester(1)}
             disabled={semester === 1}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-semibold transition-all ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
               semester === 1 
-                ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-                : 'bg-gradient-to-r from-[#010139] to-[#020270] text-white hover:shadow-lg hover:scale-105'
+                ? 'text-gray-400 cursor-not-allowed' 
+                : 'text-[#010139] hover:bg-gray-100'
             }`}
           >
-            <FaChevronLeft size={16} />
+            <FaChevronLeft size={12} />
             <span>Ene-Jun</span>
           </button>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <button
               onClick={() => setSemester(1)}
-              className={`px-6 py-3 rounded-lg font-bold transition-all ${
+              className={`px-5 py-2 rounded-lg text-sm font-semibold transition-all ${
                 semester === 1 
-                  ? 'bg-gradient-to-r from-[#010139] to-[#020270] text-white shadow-lg ring-2 ring-[#8AAA19] ring-offset-2' 
+                  ? 'bg-[#010139] text-white shadow-sm' 
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
-              <div className="text-sm font-semibold">1er Semestre</div>
-              <div className="text-xs font-normal opacity-90">Enero - Junio</div>
+              1er Semestre
             </button>
             
-            <div className="w-px h-12 bg-gray-300"></div>
+            <div className="w-px h-6 bg-gray-300"></div>
             
             <button
               onClick={() => setSemester(2)}
-              className={`px-6 py-3 rounded-lg font-bold transition-all ${
+              className={`px-5 py-2 rounded-lg text-sm font-semibold transition-all ${
                 semester === 2 
-                  ? 'bg-gradient-to-r from-[#010139] to-[#020270] text-white shadow-lg ring-2 ring-[#8AAA19] ring-offset-2' 
+                  ? 'bg-[#010139] text-white shadow-sm' 
                   : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}
             >
-              <div className="text-sm font-semibold">2do Semestre</div>
-              <div className="text-xs font-normal opacity-90">Julio - Diciembre</div>
+              2do Semestre
             </button>
           </div>
 
           <button
             onClick={() => setSemester(2)}
             disabled={semester === 2}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-semibold transition-all ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
               semester === 2 
-                ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-                : 'bg-gradient-to-r from-[#010139] to-[#020270] text-white hover:shadow-lg hover:scale-105'
+                ? 'text-gray-400 cursor-not-allowed' 
+                : 'text-[#010139] hover:bg-gray-100'
             }`}
           >
             <span>Jul-Dic</span>
-            <FaChevronRight size={16} />
+            <FaChevronRight size={12} />
           </button>
         </div>
 
-        {/* Version Mobile/Tablet */}
-        <div className="md:hidden space-y-3">
-          {/* Indicador visual */}
-          <div className="flex items-center justify-center gap-2">
-            <div className={`h-2 flex-1 rounded-full transition-all ${
-              semester === 1 ? 'bg-[#8AAA19]' : 'bg-gray-200'
+        {/* Version Mobile - Más sutil */}
+        <div className="md:hidden space-y-2">
+          {/* Indicador visual discreto */}
+          <div className="flex items-center justify-center gap-1.5">
+            <div className={`h-1.5 flex-1 rounded-full transition-all ${
+              semester === 1 ? 'bg-[#8AAA19]' : 'bg-gray-300'
             }`}></div>
-            <div className={`h-2 flex-1 rounded-full transition-all ${
-              semester === 2 ? 'bg-[#8AAA19]' : 'bg-gray-200'
+            <div className={`h-1.5 flex-1 rounded-full transition-all ${
+              semester === 2 ? 'bg-[#8AAA19]' : 'bg-gray-300'
             }`}></div>
           </div>
 
-          {/* Botones grandes para mobile */}
+          {/* Botones compactos para mobile */}
           <div className="grid grid-cols-2 gap-2">
             <button
               onClick={() => setSemester(1)}
-              className={`p-4 rounded-xl font-bold transition-all ${
+              className={`p-3 rounded-lg text-sm font-semibold transition-all ${
                 semester === 1 
-                  ? 'bg-gradient-to-br from-[#010139] to-[#020270] text-white shadow-lg border-2 border-[#8AAA19]' 
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border-2 border-transparent'
+                  ? 'bg-[#010139] text-white shadow-sm' 
+                  : 'bg-gray-100 text-gray-600 active:bg-gray-200'
               }`}
             >
-              <div className="text-base mb-1">🌱 1er Semestre</div>
-              <div className="text-xs opacity-80">Ene - Jun</div>
-              {semester === 1 && (
-                <div className="text-[10px] mt-1 text-[#8AAA19] font-normal">✅ Activo</div>
-              )}
+              <div>1er Semestre</div>
+              <div className="text-xs opacity-70 font-normal mt-0.5">Ene - Jun</div>
             </button>
 
             <button
               onClick={() => setSemester(2)}
-              className={`p-4 rounded-xl font-bold transition-all ${
+              className={`p-3 rounded-lg text-sm font-semibold transition-all ${
                 semester === 2 
-                  ? 'bg-gradient-to-br from-[#010139] to-[#020270] text-white shadow-lg border-2 border-[#8AAA19]' 
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border-2 border-transparent'
+                  ? 'bg-[#010139] text-white shadow-sm' 
+                  : 'bg-gray-100 text-gray-600 active:bg-gray-200'
               }`}
             >
-              <div className="text-base mb-1">☀️ 2do Semestre</div>
-              <div className="text-xs opacity-80">Jul - Dic</div>
-              {semester === 2 && (
-                <div className="text-[10px] mt-1 text-[#8AAA19] font-normal">✅ Activo</div>
-              )}
+              <div>2do Semestre</div>
+              <div className="text-xs opacity-70 font-normal mt-0.5">Jul - Dic</div>
             </button>
           </div>
 
-          {/* Navegación rápida mobile */}
+          {/* Navegación rápida mobile más sutil */}
           <div className="flex items-center justify-center gap-2">
             <button
               onClick={() => setSemester(1)}
               disabled={semester === 1}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm transition-all ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                 semester === 1 
-                  ? 'bg-gray-100 text-gray-400' 
-                  : 'bg-[#010139] text-white active:scale-95'
+                  ? 'text-gray-400' 
+                  : 'text-[#010139] active:bg-gray-100'
               }`}
             >
-              <FaChevronLeft size={12} />
+              <FaChevronLeft size={10} />
               Anterior
             </button>
             <button
               onClick={() => setSemester(2)}
               disabled={semester === 2}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm transition-all ${
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
                 semester === 2 
-                  ? 'bg-gray-100 text-gray-400' 
-                  : 'bg-[#010139] text-white active:scale-95'
+                  ? 'text-gray-400' 
+                  : 'text-[#010139] active:bg-gray-100'
               }`}
             >
               Siguiente
-              <FaChevronRight size={12} />
+              <FaChevronRight size={10} />
             </button>
           </div>
         </div>
@@ -449,7 +439,7 @@ export default function ProductionMatrixMaster({ year }: ProductionMatrixMasterP
 
             {/* Body */}
             <tbody className="divide-y divide-gray-200">
-              {paginatedProduction.length === 0 ? (
+              {displayedProduction.length === 0 ? (
                 <tr>
                   <td colSpan={currentMonths.length + 6} className="px-6 py-12 text-center">
                     <div className="flex flex-col items-center gap-3">
@@ -461,7 +451,7 @@ export default function ProductionMatrixMaster({ year }: ProductionMatrixMasterP
                   </td>
                 </tr>
               ) : (
-                paginatedProduction.map((broker) => {
+                displayedProduction.map((broker) => {
                   const { brutoYTD, netoYTD, numPolizasYTD } = calculateYTD(broker.months, broker.canceladas_ytd);
                   const percentage = calculatePercentage(netoYTD, broker.meta_personal);
 
@@ -554,40 +544,18 @@ export default function ProductionMatrixMaster({ year }: ProductionMatrixMasterP
           </table>
         </div>
 
-        {/* Paginación */}
-        {totalPages > 1 && (
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50">
-            <button
-              onClick={() => {
-                setCurrentPage(prev => Math.max(1, prev - 1));
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-              }}
-              disabled={currentPage === 1}
-              className="w-full sm:w-auto px-6 py-3 bg-[#010139] text-white rounded-lg font-semibold hover:bg-[#020270] transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              <FaChevronLeft />
-              Anterior
-            </button>
-            
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-600">
-                Página <span className="font-bold text-[#010139]">{currentPage}</span> de <span className="font-bold">{totalPages}</span>
-              </span>
-              <span className="text-xs text-gray-500">
-                ({filteredProduction.length} corredor{filteredProduction.length !== 1 ? 'es' : ''})
-              </span>
+        {/* Botón "Cargar más" */}
+        {hasMore && (
+          <div className="flex flex-col items-center gap-3 px-6 py-4 border-t border-gray-200 bg-gray-50">
+            <div className="text-sm text-gray-600">
+              Mostrando <span className="font-bold text-[#010139]">{displayedProduction.length}</span> de <span className="font-bold">{filteredProduction.length}</span> corredor{filteredProduction.length !== 1 ? 'es' : ''}
             </div>
-            
             <button
-              onClick={() => {
-                setCurrentPage(prev => Math.min(totalPages, prev + 1));
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-              }}
-              disabled={currentPage === totalPages}
-              className="w-full sm:w-auto px-6 py-3 bg-[#010139] text-white rounded-lg font-semibold hover:bg-[#020270] transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              onClick={() => setVisibleCount(prev => prev + brokersPerLoad)}
+              className="px-6 py-2.5 bg-white border-2 border-[#010139] text-[#010139] rounded-lg font-semibold hover:bg-[#010139] hover:text-white transition-all flex items-center justify-center gap-2"
             >
-              Siguiente
-              <FaChevronRight />
+              Ver más corredores
+              <FaChevronRight size={14} />
             </button>
           </div>
         )}

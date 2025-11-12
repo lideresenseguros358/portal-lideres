@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { FaSearch, FaPlus } from 'react-icons/fa';
+import { useState } from 'react';
+import { FaSearch } from 'react-icons/fa';
 import { GuideSection } from '@/lib/guides/types';
-import SectionsList from './SectionsList';
+import FoldersView from './FoldersView';
 import SearchModal from '@/components/shared/SearchModal';
 import { toast } from 'sonner';
 
@@ -14,7 +14,7 @@ interface GuidesMainClientProps {
 
 export default function GuidesMainClient({ initialSections, isMaster }: GuidesMainClientProps) {
   const [sections, setSections] = useState<GuideSection[]>(initialSections);
-  const [showSearch, setShowSearch] = useState(true); // Auto-abrir al entrar
+  const [showSearch, setShowSearch] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const loadSections = async () => {
@@ -65,14 +65,14 @@ export default function GuidesMainClient({ initialSections, isMaster }: GuidesMa
           </button>
         </div>
 
-        {/* Secciones */}
+        {/* Carpetas */}
         {loading ? (
           <div className="text-center py-12">
             <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-[#010139] border-t-transparent"></div>
-            <p className="mt-4 text-gray-600">Cargando secciones...</p>
+            <p className="mt-4 text-gray-600">Cargando carpetas...</p>
           </div>
         ) : (
-          <SectionsList sections={sections} isMaster={isMaster} />
+          <FoldersView folders={sections} isMaster={isMaster} onUpdate={loadSections} />
         )}
 
         {/* Modal de Búsqueda */}

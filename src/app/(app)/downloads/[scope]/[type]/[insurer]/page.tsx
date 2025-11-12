@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { FaArrowLeft } from 'react-icons/fa';
-import SectionsList from '@/components/downloads/SectionsList';
+import DocumentsList from '@/components/downloads/DocumentsList';
 import { getPolicyTypeLabel } from '@/lib/downloads/constants';
 import { toast } from 'sonner';
 
@@ -15,7 +15,6 @@ export default function DownloadsInsurerPage() {
   const insurerId = params.insurer as string;
 
   const [insurer, setInsurer] = useState<any>(null);
-  const [sections, setSections] = useState<any[]>([]);
   const [isMaster, setIsMaster] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -32,13 +31,6 @@ export default function DownloadsInsurerPage() {
       const insurerData = await insurerRes.json();
       if (insurerData.success) {
         setInsurer(insurerData.insurer);
-      }
-
-      // Cargar secciones
-      const sectionsRes = await fetch(`/api/downloads/sections?scope=${scope}&policy_type=${policyType}&insurer_id=${insurerId}`);
-      const sectionsData = await sectionsRes.json();
-      if (sectionsData.success) {
-        setSections(sectionsData.sections);
       }
 
       // Verificar rol
@@ -75,7 +67,7 @@ export default function DownloadsInsurerPage() {
             {insurer?.name || 'Cargando...'}
           </h1>
           <p className="text-gray-600">
-            Selecciona una sección
+            Documentos disponibles para descarga
           </p>
         </div>
 
@@ -85,11 +77,10 @@ export default function DownloadsInsurerPage() {
             <p className="mt-4 text-gray-600">Cargando...</p>
           </div>
         ) : (
-          <SectionsList
+          <DocumentsList
             scope={scope}
             policyType={policyType}
             insurerId={insurerId}
-            sections={sections}
             isMaster={isMaster}
             onUpdate={loadData}
           />

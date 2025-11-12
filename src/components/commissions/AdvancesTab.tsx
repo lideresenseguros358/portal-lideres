@@ -201,6 +201,8 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
 
     return (
       <div className="advances-table-wrapper">
+        {/* Tabla para desktop */}
+        <div className="hidden md:block">
         <Table>
           <TableHeader>
             <TableRow className="border-b-2 border-gray-200 bg-gray-50">
@@ -327,39 +329,110 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
         })}
         </TableBody>
         </Table>
+        </div>
+        
+        {/* Cards para mobile */}
+        <div className="md:hidden space-y-3">
+          {Object.entries(groupedData).map(([bId, brokerData]) => {
+            const advancesToShow = brokerData.advances.filter(a => a.status === status);
+            if (advancesToShow.length === 0) return null;
+            
+            return (
+              <div key={`mobile-broker-${bId}`} className="space-y-2">
+                {role === 'master' && (
+                  <div 
+                    onClick={() => toggleBroker(bId)}
+                    className="bg-gradient-to-r from-[#010139] to-[#020270] text-white p-3 rounded-lg cursor-pointer"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        {expandedBrokers.has(bId) ? <FaChevronDown /> : <FaChevronRight />}
+                        <span className="font-bold">{brokerData.broker_name}</span>
+                      </div>
+                      <span className="font-bold text-[#8AAA19]">
+                        {status === 'pending' 
+                          ? brokerData.total_pending.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
+                          : brokerData.total_paid.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
+                        }
+                      </span>
+                    </div>
+                    <div className="text-xs text-white/80 mt-1">
+                      {advancesToShow.length} adelanto{advancesToShow.length !== 1 ? 's' : ''}
+                    </div>
+                  </div>
+                )}
+                
+                {(role === 'broker' || expandedBrokers.has(bId)) && advancesToShow.map(advance => (
+                  <div key={`mobile-${advance.id}`} className="bg-white border-2 border-gray-200 rounded-lg p-3 space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-[#010139] text-sm">
+                          {advance.reason || 'Sin motivo especificado'}
+                        </p>
+                        {advance.is_recurring && (
+                          <span className="inline-block mt-1 text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-semibold">
+                            ♻️ Recurrente
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <p className="font-bold text-[#8AAA19] font-mono text-base">
+                          {status === 'pending'
+                            ? advance.amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
+                            : (advance.total_paid || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' })
+                          }
+                        </p>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {new Date(advance.created_at).toLocaleDateString('es-PA')}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-2 pt-2 border-t border-gray-200">
+                      {role === 'master' && (
+                        <Button
+                          size="sm"
+                          onClick={() => setEditingAdvance(advance)}
+                          className="flex-1 bg-[#010139] hover:bg-[#020270] text-xs"
+                        >
+                          <FaEdit className="text-xs" /> Editar
+                        </Button>
+                      )}
+                      {status === 'pending' && (
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            setPaymentModal({
+                              isOpen: true,
+                              brokerId: advance.brokers?.id || null,
+                              brokerName: advance.brokers?.name || 'Desconocido',
+                              pendingAdvances: [{ id: advance.id, amount: advance.amount, reason: advance.reason }],
+                            });
+                          }}
+                          className="flex-1 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] hover:from-[#7a9916] hover:to-[#5c7312] text-xs"
+                        >
+                          <FaDollarSign className="text-xs" /> Pagar
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setSelectedAdvanceId(advance.id)}
+                        className="flex-1 text-xs"
+                      >
+                        <FaHistory className="text-xs" /> Historial
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+        </div>
         <style jsx global>{`
           .advances-table-wrapper {
             overflow-x: auto;
             -webkit-overflow-scrolling: touch;
-          }
-          
-          /* Responsive para tabla de adelantos */
-          @media (max-width: 768px) {
-            .advances-th-date,
-            .advances-table-wrapper tbody td:nth-child(4) {
-              display: none;
-            }
-          }
-          
-          @media (max-width: 640px) {
-            .advances-th-amount,
-            .advances-table-wrapper tbody td:nth-child(3) {
-              font-size: 0.875rem;
-            }
-            .advances-th-actions,
-            .advances-table-wrapper tbody td:nth-child(5) {
-              min-width: 120px;
-            }
-          }
-          
-          @media (max-width: 480px) {
-            .advances-table-wrapper {
-              font-size: 0.875rem;
-            }
-            .advances-table-wrapper button {
-              font-size: 0.75rem;
-              padding: 0.375rem 0.75rem;
-            }
           }
         `}</style>
       </div>

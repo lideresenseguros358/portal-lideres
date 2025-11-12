@@ -216,12 +216,12 @@ export default function ExpedienteManager({
 
   return (
     <div className="space-y-3">
-      {/* Header with "Nuevo Documento" button */}
+      {/* Header with "Nuevo Documento" button - Mobile First */}
       {!readOnly && (
         <div className="flex items-center justify-end">
           <button
             onClick={() => setShowUploadModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg hover:shadow-lg transition-all text-sm font-semibold"
+            className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg hover:shadow-lg transition-all text-sm font-semibold"
           >
             <FaFolderPlus size={14} />
             <span>Nuevo Documento</span>
@@ -262,13 +262,13 @@ export default function ExpedienteManager({
                     })}
                   </p>
                 </div>
-                <div className="flex items-center gap-1 flex-shrink-0">
+                <div className="flex flex-col sm:flex-row items-center gap-1 flex-shrink-0">
                   <button
                     onClick={() => handleDownload(doc)}
-                    className="p-1.5 text-[#010139] hover:bg-gray-100 rounded transition-all"
-                    title="Descargar"
+                    className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-all"
+                    title="Previsualizar/Descargar"
                   >
-                    <FaDownload size={14} />
+                    <FaEye size={14} />
                   </button>
                   {!readOnly && (
                     <button
@@ -306,7 +306,7 @@ export default function ExpedienteManager({
                       setUploadDocType(reqType);
                       setShowUploadModal(true);
                     }}
-                    className="flex items-center gap-1.5 px-3 py-2 bg-[#010139] text-white rounded-lg hover:bg-[#020270] transition-all text-xs font-semibold shadow-md hover:shadow-lg"
+                    className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3 py-2 bg-[#010139] text-white rounded-lg hover:bg-[#020270] transition-all text-xs font-semibold shadow-md hover:shadow-lg"
                     title="Subir cédula/pasaporte del cliente"
                   >
                     <FaIdCard size={12} />
@@ -343,13 +343,13 @@ export default function ExpedienteManager({
                   })}
                 </p>
               </div>
-              <div className="flex items-center gap-1 flex-shrink-0">
+              <div className="flex flex-col sm:flex-row items-center gap-1 flex-shrink-0">
                 <button
                   onClick={() => handleDownload(doc)}
-                  className="p-1.5 text-[#010139] hover:bg-gray-100 rounded transition-all"
-                  title="Descargar"
+                  className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-all"
+                  title="Previsualizar/Descargar"
                 >
-                  <FaDownload size={14} />
+                  <FaEye size={14} />
                 </button>
                 {!readOnly && (
                   <button

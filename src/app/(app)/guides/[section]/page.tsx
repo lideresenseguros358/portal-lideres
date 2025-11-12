@@ -2,11 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { FaArrowLeft, FaPlus, FaFolder } from 'react-icons/fa';
-import { GuideFile, GuideSection } from '@/lib/guides/types';
-import FilesList from '@/components/guides/FilesList';
-import UploadFileModal from '@/components/shared/UploadFileModal';
-import SearchModal from '@/components/shared/SearchModal';
+import { FaArrowLeft, FaFolder } from 'react-icons/fa';
+import { GuideSection } from '@/lib/guides/types';
+import FolderDocuments from '@/components/guides/FolderDocuments';
 import { toast } from 'sonner';
 
 export default function GuideSectionPage() {
@@ -15,12 +13,8 @@ export default function GuideSectionPage() {
   const sectionId = params.section as string;
 
   const [section, setSection] = useState<GuideSection | null>(null);
-  const [files, setFiles] = useState<GuideFile[]>([]);
-  const [allSections, setAllSections] = useState<GuideSection[]>([]);
   const [isMaster, setIsMaster] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [showUpload, setShowUpload] = useState(false);
-  const [showSearch, setShowSearch] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -36,14 +30,6 @@ export default function GuideSectionPage() {
       if (sectionData.success) {
         const currentSection = sectionData.sections.find((s: GuideSection) => s.id === sectionId);
         setSection(currentSection || null);
-        setAllSections(sectionData.sections);
-      }
-
-      // Cargar archivos
-      const filesRes = await fetch(`/api/guides/files?section_id=${sectionId}`);
-      const filesData = await filesRes.json();
-      if (filesData.success) {
-        setFiles(filesData.files);
       }
 
       // Verificar rol
@@ -101,77 +87,16 @@ export default function GuideSectionPage() {
             <span>Volver a Guías</span>
           </button>
 
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-              <h1 className="text-3xl font-bold text-[#010139] mb-2">
-                {section.name}
-              </h1>
-              <p className="text-gray-600">
-                {files.length} documento{files.length !== 1 ? 's' : ''}
-              </p>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => setShowSearch(true)}
-                className="
-                  px-6 py-3 rounded-lg
-                  bg-[#010139] text-white font-semibold
-                  hover:bg-[#020250] hover:scale-105
-                  transition-all duration-200
-                  flex items-center gap-2
-                "
-              >
-                <FaFolder />
-                <span className="hidden sm:inline">Buscar en Guías</span>
-              </button>
-
-              {isMaster && (
-                <button
-                  onClick={() => setShowUpload(true)}
-                  className="
-                    px-6 py-3 rounded-lg
-                    bg-gradient-to-r from-[#8AAA19] to-[#6d8814]
-                    text-white font-bold
-                    shadow-lg hover:shadow-xl
-                    hover:scale-105
-                    transition-all duration-200
-                    flex items-center gap-2
-                  "
-                >
-                  <FaPlus />
-                  <span>Subir Documento</span>
-                </button>
-              )}
-            </div>
-          </div>
+          <h1 className="text-3xl font-bold text-[#010139] mb-2">
+            {section.name}
+          </h1>
         </div>
 
-        {/* Lista de Archivos */}
-        <FilesList
-          files={files}
+        {/* Documentos de la carpeta */}
+        <FolderDocuments
+          folderId={sectionId}
           isMaster={isMaster}
           onUpdate={loadData}
-        />
-
-        {/* Modales */}
-        <UploadFileModal
-          isOpen={showUpload}
-          onClose={() => setShowUpload(false)}
-          onSuccess={loadData}
-          currentSectionId={sectionId}
-          currentSectionName={section.name}
-          allSections={allSections.filter(s => s.id !== sectionId)}
-          uploadEndpoint="/api/guides/upload"
-          createEndpoint="/api/guides/files"
-        />
-
-        <SearchModal
-          isOpen={showSearch}
-          onClose={() => setShowSearch(false)}
-          searchEndpoint="/api/guides/search"
-          title="Buscar en Guías"
-          placeholder="Buscar documento..."
         />
       </div>
     </div>

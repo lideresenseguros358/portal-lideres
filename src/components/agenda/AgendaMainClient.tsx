@@ -296,43 +296,62 @@ export default function AgendaMainClient() {
                   <div
                     key={event.id}
                     onClick={() => handleEventClick(event)}
-                    className="flex items-start gap-4 p-4 rounded-xl border-2 border-gray-100 hover:border-[#8AAA19] hover:shadow-md transition-all cursor-pointer group"
+                    className="flex flex-col sm:flex-row items-start gap-3 sm:gap-4 p-3 sm:p-4 rounded-xl border-2 border-gray-100 hover:border-[#8AAA19] hover:shadow-md transition-all cursor-pointer group"
                   >
-                    {/* Fecha */}
-                    <div className="flex-shrink-0 text-center">
-                      <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-[#010139] to-[#020270] text-white flex flex-col items-center justify-center">
-                        <div className="text-2xl font-bold">{day}</div>
-                        <div className="text-xs uppercase">{MONTH_NAMES[currentMonth - 1]?.substring(0, 3)}</div>
+                    {/* Header: Fecha + Badge en mobile */}
+                    <div className="flex items-center justify-between w-full sm:w-auto gap-3">
+                      {/* Fecha */}
+                      <div className="flex-shrink-0 text-center">
+                        <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-gradient-to-br from-[#010139] to-[#020270] text-white flex flex-col items-center justify-center">
+                          <div className="text-xl sm:text-2xl font-bold">{day}</div>
+                          <div className="text-[10px] sm:text-xs uppercase">{MONTH_NAMES[currentMonth - 1]?.substring(0, 3)}</div>
+                        </div>
+                        <div className="text-[10px] sm:text-xs text-gray-500 mt-1 capitalize hidden sm:block">{dayName}</div>
                       </div>
-                      <div className="text-xs text-gray-500 mt-1 capitalize">{dayName}</div>
+                      
+                      {/* Badge de Modalidad (visible en mobile) */}
+                      <div className="sm:hidden flex-shrink-0">
+                        <span
+                          className={`px-2 py-1 rounded-full text-[10px] font-semibold border-2 ${
+                            event.modality === 'virtual'
+                              ? 'bg-blue-50 text-blue-700 border-blue-300'
+                              : event.modality === 'presencial'
+                              ? 'bg-green-50 text-green-700 border-green-300'
+                              : 'bg-purple-50 text-purple-700 border-purple-300'
+                          }`}
+                        >
+                          {event.modality.charAt(0).toUpperCase() + event.modality.slice(1)}
+                        </span>
+                      </div>
                     </div>
 
-                    {/* Info del Evento */}
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-lg font-bold text-[#010139] group-hover:text-[#8AAA19] transition-colors truncate">
+                    {/* Info del Evento - Mejor distribución */}
+                    <div className="flex-1 min-w-0 w-full sm:w-auto">
+                      <h3 className="text-base sm:text-lg font-bold text-[#010139] group-hover:text-[#8AAA19] transition-colors break-words">
                         {event.title}
                       </h3>
                       {event.details && (
-                        <p className="text-sm text-gray-600 line-clamp-2 mt-1">
+                        <p className="text-xs sm:text-sm text-gray-600 line-clamp-3 sm:line-clamp-2 mt-1 break-words">
                           {event.details}
                         </p>
                       )}
-                      <div className="flex flex-wrap items-center gap-3 mt-2 text-xs text-gray-500">
+                      <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-2 text-[10px] sm:text-xs text-gray-500">
+                        <span className="text-gray-400 capitalize sm:hidden">{dayName}</span>
                         {!event.is_all_day && (
                           <span className="flex items-center gap-1">
                             🕐 {eventTime}
                           </span>
                         )}
                         {event.location_name && (
-                          <span className="flex items-center gap-1">
-                            📍 {event.location_name}
+                          <span className="flex items-center gap-1 max-w-[200px] sm:max-w-none truncate">
+                            📍 <span className="truncate">{event.location_name}</span>
                           </span>
                         )}
                       </div>
                     </div>
 
-                    {/* Badge de Modalidad */}
-                    <div className="flex-shrink-0">
+                    {/* Badge de Modalidad (hidden en mobile, visible en desktop) */}
+                    <div className="hidden sm:block flex-shrink-0">
                       <span
                         className={`px-3 py-1 rounded-full text-xs font-semibold border-2 ${
                           event.modality === 'virtual'

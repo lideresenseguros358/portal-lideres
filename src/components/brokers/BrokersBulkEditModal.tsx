@@ -132,12 +132,12 @@ export default function BrokersBulkEditModal({ isOpen, onClose, brokers, onSave 
         </div>
 
         {/* Table Container */}
-        <div className="flex-1 overflow-auto p-6">
+        <div className="flex-1 overflow-auto">
           <div className="min-w-max">
             <table className="w-full border-collapse">
-              <thead>
-                <tr className="bg-gradient-to-r from-[#010139] to-[#020270] text-white sticky top-0 z-10">
-                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase border-r border-white/20">Nombre</th>
+              <thead className="sticky top-0 z-10">
+                <tr className="bg-gradient-to-r from-[#010139] to-[#020270] text-white">
+                  <th className="px-3 py-3 text-left text-xs font-semibold uppercase border-r border-white/20 whitespace-nowrap">Nombre</th>
                   <th className="px-3 py-3 text-left text-xs font-semibold uppercase border-r border-white/20">Teléfono</th>
                   <th className="px-3 py-3 text-left text-xs font-semibold uppercase border-r border-white/20">Cédula</th>
                   <th className="px-3 py-3 text-left text-xs font-semibold uppercase border-r border-white/20">F. Nacimiento</th>
@@ -317,25 +317,26 @@ export default function BrokersBulkEditModal({ isOpen, onClose, brokers, onSave 
         </div>
 
         {/* Footer */}
-        <div className="p-6 border-t border-gray-200 flex items-center justify-between bg-gray-50">
-          <p className="text-sm text-gray-600">
-            💡 Tip: Usa Tab para moverte entre campos. Los cambios se guardan al hacer clic en "Guardar cambios"
+        <div className="p-4 sm:p-6 border-t border-gray-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 bg-gray-50">
+          <p className="text-xs sm:text-sm text-gray-600">
+            💡 <span className="hidden sm:inline">Tip: Usa Tab para moverte entre campos. Los cambios se guardan al hacer clic en "Guardar cambios"</span>
+            <span className="sm:hidden">Usa Tab para navegar</span>
           </p>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
             <button
               onClick={onClose}
               disabled={saving}
-              className="px-6 py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-all font-semibold disabled:opacity-50"
+              className="flex-1 sm:flex-none px-4 sm:px-6 py-2 sm:py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-all font-semibold disabled:opacity-50 text-sm sm:text-base"
             >
               Cancelar
             </button>
             <button
               onClick={handleSave}
               disabled={saving}
-              className="px-6 py-3 bg-[#8AAA19] hover:bg-[#7a9916] text-white rounded-lg transition-all font-semibold flex items-center gap-2 disabled:opacity-50"
+              className="flex-1 sm:flex-none px-4 sm:px-6 py-2 sm:py-3 bg-[#8AAA19] hover:bg-[#7a9916] text-white rounded-lg transition-all font-semibold flex items-center justify-center gap-2 disabled:opacity-50 text-sm sm:text-base"
             >
               <FaSave />
-              {saving ? 'Guardando...' : 'Guardar cambios'}
+              {saving ? 'Guardando...' : 'Guardar'}
             </button>
           </div>
         </div>
