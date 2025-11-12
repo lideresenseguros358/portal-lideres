@@ -134,9 +134,13 @@ export type Database = {
           broker_id: string
           created_at: string | null
           created_by: string | null
+          end_date: string | null
+          fortnight_type: string | null
           id: string
           is_active: boolean | null
+          last_generated_at: string | null
           reason: string
+          recurrence_count: number | null
           start_date: string
           updated_at: string | null
         }
@@ -145,9 +149,13 @@ export type Database = {
           broker_id: string
           created_at?: string | null
           created_by?: string | null
+          end_date?: string | null
+          fortnight_type?: string | null
           id?: string
           is_active?: boolean | null
+          last_generated_at?: string | null
           reason: string
+          recurrence_count?: number | null
           start_date?: string
           updated_at?: string | null
         }
@@ -156,9 +164,13 @@ export type Database = {
           broker_id?: string
           created_at?: string | null
           created_by?: string | null
+          end_date?: string | null
+          fortnight_type?: string | null
           id?: string
           is_active?: boolean | null
+          last_generated_at?: string | null
           reason?: string
+          recurrence_count?: number | null
           start_date?: string
           updated_at?: string | null
         }
@@ -200,7 +212,9 @@ export type Database = {
           created_at: string
           created_by: string | null
           id: string
+          is_recurring: boolean | null
           reason: string | null
+          recurrence_id: string | null
           status: string
         }
         Insert: {
@@ -209,7 +223,9 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          is_recurring?: boolean | null
           reason?: string | null
+          recurrence_id?: string | null
           status?: string
         }
         Update: {
@@ -218,7 +234,9 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           id?: string
+          is_recurring?: boolean | null
           reason?: string | null
+          recurrence_id?: string | null
           status?: string
         }
         Relationships: [
@@ -255,6 +273,13 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "advances_recurrence_id_fkey"
+            columns: ["recurrence_id"]
+            isOneToOne: false
+            referencedRelation: "advance_recurrences"
             referencedColumns: ["id"]
           },
         ]

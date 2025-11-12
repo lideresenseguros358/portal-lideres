@@ -46,6 +46,7 @@ export async function PUT(
       percent_override: body.percent_override !== null && body.percent_override !== undefined
         ? Number(body.percent_override)
         : null,
+      notas: body.notas?.trim().toUpperCase() || null,
     };
 
     // Actualizar póliza

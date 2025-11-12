@@ -69,6 +69,7 @@ export default function RegisterPaymentWizardNew({
 
   // Step 3: División (opcional)
   const [divideSingle, setDivideSingle] = useState(false);
+  const [sameClient, setSameClient] = useState(true); // Nuevo: controla si es el mismo cliente
   const [divisions, setDivisions] = useState([{
     purpose: 'poliza' as 'poliza' | 'devolucion' | 'otro',
     policy_number: '',
@@ -278,6 +279,11 @@ export default function RegisterPaymentWizardNew({
         }
         if (div.purpose === 'poliza' && !div.policy_number) {
           toast.error(`División ${i + 1}: El número de póliza es requerido`);
+          return false;
+        }
+        // Validar client_name cuando no es el mismo cliente
+        if (!sameClient && !div.client_name) {
+          toast.error(`División ${i + 1}: El nombre del cliente es requerido`);
           return false;
         }
         // Validar devolución
@@ -519,7 +525,8 @@ export default function RegisterPaymentWizardNew({
         amount: parseFloat(div.amount),
         // Campos de devolución
         return_type: div.return_type || undefined,
-        client_name: div.client_name || undefined,
+        // Si es mismo cliente, usar el del formulario principal, si no, usar el de la división
+        client_name: sameClient ? formData.client_name : (div.client_name || undefined),
         broker_id: div.broker_id || undefined,
         bank_name: div.bank_name || undefined,
         account_type: div.account_type || undefined,
@@ -1174,6 +1181,23 @@ export default function RegisterPaymentWizardNew({
                     Dividir una sola transferencia en múltiples pagos (ej: una ref para varias pólizas)
                   </label>
                 </div>
+                
+                {/* Checkbox: Mismo cliente */}
+                {divideSingle && (
+                  <div className="flex items-center gap-2 ml-7">
+                    <input
+                      type="checkbox"
+                      id="sameClient"
+                      checked={sameClient}
+                      onChange={(e) => setSameClient(e.target.checked)}
+                      className="w-5 h-5 text-[#8AAA19] rounded focus:ring-[#8AAA19]"
+                    />
+                    <label htmlFor="sameClient" className="text-sm font-medium text-gray-700">
+                      Mismo cliente
+                    </label>
+                  </div>
+                )}
+                
                 <div className="ml-7 text-xs space-y-1">
                   <p className="text-gray-600">
                     Tienes <strong className="text-blue-600">${totalBankReferences.toFixed(2)}</strong> disponibles de las referencias. Puedes dividirlos en varios pagos.
@@ -1181,6 +1205,11 @@ export default function RegisterPaymentWizardNew({
                   <p className="text-gray-500 italic">
                     Tip: La primera división se llena automáticamente con los datos del Paso 1.
                   </p>
+                  {!sameClient && divideSingle && (
+                    <p className="text-amber-600 italic font-medium">
+                      ⚠️ Al dividir entre diferentes clientes, ingresa el nombre en cada división.
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -1259,6 +1288,29 @@ export default function RegisterPaymentWizardNew({
                             placeholder="0.00"
                           />
                         </div>
+                        
+                        {/* Campo Nombre Cliente - Solo cuando no es el mismo cliente */}
+                        {!sameClient && (
+                          <div className="col-span-2">
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Nombre del Cliente
+                              <span className="text-red-500 ml-1">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={div.client_name || ''}
+                              onChange={createUppercaseHandler((e) => {
+                                const newDivs = [...divisions];
+                                if (newDivs[index]) {
+                                  newDivs[index]!.client_name = e.target.value;
+                                }
+                                setDivisions(newDivs);
+                              })}
+                              className={`w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none ${uppercaseInputClass}`}
+                              placeholder="Nombre del cliente para esta división"
+                            />
+                          </div>
+                        )}
                         
                         {div.purpose === 'poliza' && (
                           <>

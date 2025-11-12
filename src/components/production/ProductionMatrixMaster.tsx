@@ -276,34 +276,138 @@ export default function ProductionMatrixMaster({ year }: ProductionMatrixMasterP
         />
       </div>
 
-      {/* Selector de Semestre */}
-      <div className="bg-white rounded-xl shadow-lg p-4 mb-6 flex items-center justify-between">
-        <button
-          onClick={() => setSemester(1)}
-          disabled={semester === 1}
-          className="px-4 py-2 rounded-lg font-semibold transition-all disabled:opacity-30"
-        >
-          <FaChevronLeft className="inline mr-2" />
-          Anterior
-        </button>
+      {/* Selector de Semestre - Rediseñado Responsive */}
+      <div className="bg-white rounded-xl shadow-lg p-4 mb-6">
+        {/* Version Desktop */}
+        <div className="hidden md:flex items-center justify-center gap-3">
+          <button
+            onClick={() => setSemester(1)}
+            disabled={semester === 1}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-semibold transition-all ${
+              semester === 1 
+                ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                : 'bg-gradient-to-r from-[#010139] to-[#020270] text-white hover:shadow-lg hover:scale-105'
+            }`}
+          >
+            <FaChevronLeft size={16} />
+            <span>Ene-Jun</span>
+          </button>
 
-        <div className="flex items-center gap-4">
-          <div className={`px-6 py-3 rounded-lg font-bold transition-all ${semester === 1 ? 'bg-[#010139] text-white shadow-lg' : 'bg-gray-100 text-gray-500'}`}>
-            Enero - Junio
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setSemester(1)}
+              className={`px-6 py-3 rounded-lg font-bold transition-all ${
+                semester === 1 
+                  ? 'bg-gradient-to-r from-[#010139] to-[#020270] text-white shadow-lg ring-2 ring-[#8AAA19] ring-offset-2' 
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              <div className="text-sm font-semibold">1er Semestre</div>
+              <div className="text-xs font-normal opacity-90">Enero - Junio</div>
+            </button>
+            
+            <div className="w-px h-12 bg-gray-300"></div>
+            
+            <button
+              onClick={() => setSemester(2)}
+              className={`px-6 py-3 rounded-lg font-bold transition-all ${
+                semester === 2 
+                  ? 'bg-gradient-to-r from-[#010139] to-[#020270] text-white shadow-lg ring-2 ring-[#8AAA19] ring-offset-2' 
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              <div className="text-sm font-semibold">2do Semestre</div>
+              <div className="text-xs font-normal opacity-90">Julio - Diciembre</div>
+            </button>
           </div>
-          <div className={`px-6 py-3 rounded-lg font-bold transition-all ${semester === 2 ? 'bg-[#010139] text-white shadow-lg' : 'bg-gray-100 text-gray-500'}`}>
-            Julio - Diciembre
-          </div>
+
+          <button
+            onClick={() => setSemester(2)}
+            disabled={semester === 2}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-semibold transition-all ${
+              semester === 2 
+                ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
+                : 'bg-gradient-to-r from-[#010139] to-[#020270] text-white hover:shadow-lg hover:scale-105'
+            }`}
+          >
+            <span>Jul-Dic</span>
+            <FaChevronRight size={16} />
+          </button>
         </div>
 
-        <button
-          onClick={() => setSemester(2)}
-          disabled={semester === 2}
-          className="px-4 py-2 rounded-lg font-semibold transition-all disabled:opacity-30"
-        >
-          Siguiente
-          <FaChevronRight className="inline ml-2" />
-        </button>
+        {/* Version Mobile/Tablet */}
+        <div className="md:hidden space-y-3">
+          {/* Indicador visual */}
+          <div className="flex items-center justify-center gap-2">
+            <div className={`h-2 flex-1 rounded-full transition-all ${
+              semester === 1 ? 'bg-[#8AAA19]' : 'bg-gray-200'
+            }`}></div>
+            <div className={`h-2 flex-1 rounded-full transition-all ${
+              semester === 2 ? 'bg-[#8AAA19]' : 'bg-gray-200'
+            }`}></div>
+          </div>
+
+          {/* Botones grandes para mobile */}
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              onClick={() => setSemester(1)}
+              className={`p-4 rounded-xl font-bold transition-all ${
+                semester === 1 
+                  ? 'bg-gradient-to-br from-[#010139] to-[#020270] text-white shadow-lg border-2 border-[#8AAA19]' 
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border-2 border-transparent'
+              }`}
+            >
+              <div className="text-base mb-1">🌱 1er Semestre</div>
+              <div className="text-xs opacity-80">Ene - Jun</div>
+              {semester === 1 && (
+                <div className="text-[10px] mt-1 text-[#8AAA19] font-normal">✅ Activo</div>
+              )}
+            </button>
+
+            <button
+              onClick={() => setSemester(2)}
+              className={`p-4 rounded-xl font-bold transition-all ${
+                semester === 2 
+                  ? 'bg-gradient-to-br from-[#010139] to-[#020270] text-white shadow-lg border-2 border-[#8AAA19]' 
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border-2 border-transparent'
+              }`}
+            >
+              <div className="text-base mb-1">☀️ 2do Semestre</div>
+              <div className="text-xs opacity-80">Jul - Dic</div>
+              {semester === 2 && (
+                <div className="text-[10px] mt-1 text-[#8AAA19] font-normal">✅ Activo</div>
+              )}
+            </button>
+          </div>
+
+          {/* Navegación rápida mobile */}
+          <div className="flex items-center justify-center gap-2">
+            <button
+              onClick={() => setSemester(1)}
+              disabled={semester === 1}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm transition-all ${
+                semester === 1 
+                  ? 'bg-gray-100 text-gray-400' 
+                  : 'bg-[#010139] text-white active:scale-95'
+              }`}
+            >
+              <FaChevronLeft size={12} />
+              Anterior
+            </button>
+            <button
+              onClick={() => setSemester(2)}
+              disabled={semester === 2}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm transition-all ${
+                semester === 2 
+                  ? 'bg-gray-100 text-gray-400' 
+                  : 'bg-[#010139] text-white active:scale-95'
+              }`}
+            >
+              Siguiente
+              <FaChevronRight size={12} />
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Tabla de Producción */}

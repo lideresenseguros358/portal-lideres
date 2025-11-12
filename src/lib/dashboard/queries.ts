@@ -521,46 +521,38 @@ export async function getFinanceData() {
     annualAccumulated = (annualTotals ?? []).reduce((acc, item) => acc + toNumber(item.net_amount), 0);
   }
   
-  // Get checks data from pending_payments
+  // Get checks data - CORREGIDO según lógica real
   const { getSupabaseAdmin } = await import('@/lib/supabase/admin');
   const adminClient = await getSupabaseAdmin();
   
-  // Get all pending payments from current year
-  const { data: paymentsData, error: paymentsError } = await adminClient
+  // 1. Total Recibido: suma total del historial banco
+  const { data: transfers } = await adminClient
+    .from('bank_transfers')
+    .select('amount, used_amount');
+  
+  const received = (transfers || []).reduce((sum, t) => sum + toNumber(t.amount), 0);
+  
+  // 2. Total Aplicado: suma de used_amount del historial banco
+  const applied = (transfers || []).reduce((sum, t) => sum + toNumber(t.used_amount), 0);
+  
+  // 3. Pendientes: suma de pending_payments con status='pending'
+  const { data: pendingPayments } = await adminClient
     .from('pending_payments')
-    .select('amount_to_pay, can_be_paid, purpose, created_at')
-    .gte('created_at', `${currentYear}-01-01`)
-    .lte('created_at', `${currentYear}-12-31`);
+    .select('amount_to_pay')
+    .eq('status', 'pending');
   
-  console.log('[CHECKS DEBUG]', {
-    currentYear,
-    paymentsCount: paymentsData?.length,
-    paymentsError,
-    sample: paymentsData?.[0]
-  });
+  const pending = (pendingPayments || []).reduce((sum, p) => sum + toNumber(p.amount_to_pay), 0);
   
-  // Calculate totals
-  let received = 0;  // Total de pagos registrados
-  let applied = 0;   // Total de pagos que pueden ser pagados (can_be_paid true)
-  let pending = 0;   // Total de pagos pendientes (can_be_paid false)
-  let returned = 0;  // Total de devoluciones (purpose contiene "devol")
+  // 4. Devoluciones: pending_payments tipo 'devolution' con status='paid'
+  const { data: devolutions } = await adminClient
+    .from('pending_payments')
+    .select('amount_to_pay')
+    .eq('purpose', 'devolution')
+    .eq('status', 'paid');
   
-  (paymentsData ?? []).forEach((payment: any) => {
-    const amount = toNumber(payment.amount_to_pay);
-    received += amount; // Todos cuentan como recibidos
-    
-    const isRefund = payment.purpose?.toLowerCase().includes('devol');
-    
-    if (isRefund) {
-      returned += amount;
-    } else if (payment.can_be_paid) {
-      applied += amount;
-    } else {
-      pending += amount;
-    }
-  });
+  const returned = (devolutions || []).reduce((sum, d) => sum + toNumber(d.amount_to_pay), 0);
   
-  console.log('[CHECKS TOTALS]', { received, applied, pending, returned });
+  console.log('[DASHBOARD CHECKS STATS]', { received, applied, pending, returned });
   
   return {
     lastPaidAmount,

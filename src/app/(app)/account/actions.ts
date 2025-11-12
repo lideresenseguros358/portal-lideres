@@ -106,3 +106,41 @@ export async function actionUpdateProfile(params: UpdateProfileParams) {
     return { ok: false as const, error: error.message };
   }
 }
+
+export async function actionResetMustChangePassword() {
+  try {
+    console.log('[actionResetMustChangePassword] Starting reset');
+
+    // ====== AUTHENTICATION ======
+    const supabaseServer = await getSupabaseServer();
+    const { data: { user } } = await supabaseServer.auth.getUser();
+    
+    if (!user) {
+      return { ok: false as const, error: 'No autenticado' };
+    }
+
+    const supabase = await getSupabaseAdmin();
+
+    // ====== RESET must_change_password FLAG ======
+    const { error: updateError } = await supabase
+      .from('profiles')
+      .update({ must_change_password: false })
+      .eq('id', user.id);
+
+    if (updateError) {
+      console.error('[actionResetMustChangePassword] Error:', updateError);
+      return { ok: false as const, error: updateError.message };
+    }
+
+    console.log('[actionResetMustChangePassword] Flag reset successfully for user:', user.id);
+
+    // ====== REVALIDATE PATHS ======
+    revalidatePath('/account');
+    revalidatePath('/', 'layout');
+
+    return { ok: true as const };
+  } catch (error: any) {
+    console.error('[actionResetMustChangePassword] Unexpected error:', error);
+    return { ok: false as const, error: error.message };
+  }
+}

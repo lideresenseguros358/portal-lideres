@@ -60,6 +60,78 @@ export interface PendingPayment {
   } | null;
 }
 
+// Dashboard stats for checks page
+export async function actionGetChecksDashboardStats() {
+  try {
+    const supabase = getSupabaseAdmin();
+    
+    // 1. Total Recibido: suma total del historial banco
+    const { data: transfers } = await supabase
+      .from('bank_transfers')
+      .select('amount');
+    
+    const totalReceived = (transfers || []).reduce((sum, t) => sum + (Number(t.amount) || 0), 0);
+    
+    // 2. Total Aplicado: payment_details de pagos ya marcados como pagados
+    const { data: paidPayments } = await supabase
+      .from('pending_payments')
+      .select('id')
+      .eq('status', 'paid');
+    
+    const paidIds = (paidPayments || []).map(p => p.id);
+    
+    let totalApplied = 0;
+    if (paidIds.length > 0) {
+      const { data: details } = await supabase
+        .from('payment_details')
+        .select('amount_used')
+        .in('payment_id', paidIds);
+      
+      totalApplied = (details || []).reduce((sum, d) => sum + (Number(d.amount_used) || 0), 0);
+    }
+    
+    // 3. Pendientes: suma de pending_payments con status='pending'
+    const { data: pendingPayments } = await supabase
+      .from('pending_payments')
+      .select('amount_to_pay')
+      .eq('status', 'pending');
+    
+    const totalPending = (pendingPayments || []).reduce((sum, p) => sum + (Number(p.amount_to_pay) || 0), 0);
+    
+    // 4. Devoluciones: pending_payments tipo 'devolution' con status='paid'
+    const { data: devolutions } = await supabase
+      .from('pending_payments')
+      .select('amount_to_pay')
+      .eq('purpose', 'devolution')
+      .eq('status', 'paid');
+    
+    const totalDevolutions = (devolutions || []).reduce((sum, d) => sum + (Number(d.amount_to_pay) || 0), 0);
+    
+    console.log('[actionGetChecksDashboardStats] Stats:', {
+      totalReceived,
+      totalApplied,
+      totalPending,
+      totalDevolutions
+    });
+    
+    return {
+      ok: true as const,
+      data: {
+        totalReceived,
+        totalApplied,
+        totalPending,
+        totalDevolutions
+      }
+    };
+  } catch (error) {
+    console.error('[actionGetChecksDashboardStats] Error:', error);
+    return {
+      ok: false as const,
+      error: String(error)
+    };
+  }
+}
+
 // Fetch advance details for prefilling payments
 export async function actionGetAdvanceDetails(advanceId: string) {
   try {

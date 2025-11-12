@@ -25,7 +25,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import { FaMoneyBillWave, FaUser, FaDollarSign, FaFileAlt, FaCalendarAlt, FaCog } from 'react-icons/fa';
+import { FaMoneyBillWave, FaUser, FaDollarSign, FaFileAlt, FaCalendarAlt, FaCog, FaInfinity, FaStopCircle } from 'react-icons/fa';
 import { RecurrencesManagerModal } from './RecurrencesManagerModal';
 
 const AddAdvanceSchema = z.object({
@@ -46,6 +46,9 @@ interface Props {
 export function AddAdvanceModal({ isOpen, onClose, onSuccess, brokers }: Props) {
   const [isRecurrent, setIsRecurrent] = useState(false);
   const [showRecurrencesManager, setShowRecurrencesManager] = useState(false);
+  const [fortnightType, setFortnightType] = useState<'Q1' | 'Q2' | 'BOTH'>('Q1');
+  const [hasEndDate, setHasEndDate] = useState(false);
+  const [endDate, setEndDate] = useState('');
   
   const form = useForm<AddAdvanceForm>({
     resolver: zodResolver(AddAdvanceSchema),
@@ -63,12 +66,24 @@ export function AddAdvanceModal({ isOpen, onClose, onSuccess, brokers }: Props) 
         broker_id: values.broker_id,
         amount: values.amount,
         reason: values.reason,
+        fortnight_type: fortnightType,
+        end_date: hasEndDate && endDate ? endDate : null,
       });
       if (result.ok) {
-        toast.success('Adelanto recurrente creado. Se generará automáticamente cada mes.');
+        const adelantosCreados = fortnightType === 'BOTH' ? 2 : 1;
+        const descriptionText = fortnightType === 'BOTH'
+          ? 'Se han creado 2 adelantos (Q1 y Q2) y se generarán automáticamente cada mes.'
+          : 'Se ha creado el primer adelanto y se generará automáticamente cada mes.';
+        
+        toast.success('Adelanto recurrente creado exitosamente', { 
+          description: descriptionText
+        });
         onSuccess();
         form.reset();
         setIsRecurrent(false);
+        setHasEndDate(false);
+        setEndDate('');
+        setFortnightType('Q1');
         onClose();
       } else {
         toast.error('Error al crear recurrencia.', { description: result.error });
@@ -89,9 +104,9 @@ export function AddAdvanceModal({ isOpen, onClose, onSuccess, brokers }: Props) 
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[500px] p-0 gap-0 overflow-hidden">
+      <DialogContent className="sm:max-w-[500px] max-h-[90vh] p-0 gap-0 flex flex-col">
         {/* Header con gradiente corporativo */}
-        <DialogHeader className="bg-gradient-to-r from-[#010139] to-[#020270] text-white p-6 pb-8">
+        <DialogHeader className="bg-gradient-to-r from-[#010139] to-[#020270] text-white p-6 pb-8 flex-shrink-0">
           <div className="flex items-center gap-3 mb-2">
             <div className="p-3 bg-white/10 rounded-lg">
               <FaMoneyBillWave className="text-2xl" />
@@ -106,7 +121,8 @@ export function AddAdvanceModal({ isOpen, onClose, onSuccess, brokers }: Props) 
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="p-6 space-y-6">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="overflow-y-auto flex-1">
+            <div className="p-6 space-y-6">
             {/* Corredor */}
             <FormField
               control={form.control}
@@ -192,15 +208,122 @@ export function AddAdvanceModal({ isOpen, onClose, onSuccess, brokers }: Props) 
                   <FaCalendarAlt className="text-blue-600 text-xl" />
                   <div>
                     <p className="font-semibold text-sm text-gray-900">Adelanto Recurrente</p>
-                    <p className="text-xs text-gray-600">Se creará automáticamente cada mes</p>
+                    <p className="text-xs text-gray-600">Se crea ahora y se repetirá automáticamente cada mes</p>
                   </div>
                 </div>
                 <Checkbox
                   checked={isRecurrent}
-                  onCheckedChange={(checked) => setIsRecurrent(checked as boolean)}
+                  onCheckedChange={(checked) => {
+                    setIsRecurrent(checked as boolean);
+                    if (!checked) {
+                      setHasEndDate(false);
+                      setEndDate('');
+                      setFortnightType('Q1');
+                    }
+                  }}
                   className="data-[state=checked]:bg-[#8AAA19] data-[state=checked]:border-[#8AAA19]"
                 />
               </div>
+
+              {/* Configuración de Recurrencia */}
+              {isRecurrent && (
+                <div className="mt-3 p-4 bg-gray-50 rounded-lg border border-gray-300 space-y-4">
+                  {/* Quincena */}
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-2">
+                      ¿En qué quincena se debe aplicar?
+                    </label>
+                    <div className="grid grid-cols-3 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setFortnightType('Q1')}
+                        className={`p-3 rounded-lg border-2 transition-all ${
+                          fortnightType === 'Q1'
+                            ? 'bg-[#8AAA19] border-[#8AAA19] text-white shadow-md'
+                            : 'bg-white border-gray-300 text-gray-700 hover:border-[#8AAA19]'
+                        }`}
+                      >
+                        <div className="font-bold text-sm">Primera</div>
+                        <div className="text-xs opacity-90">Días 1-15</div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFortnightType('Q2')}
+                        className={`p-3 rounded-lg border-2 transition-all ${
+                          fortnightType === 'Q2'
+                            ? 'bg-[#8AAA19] border-[#8AAA19] text-white shadow-md'
+                            : 'bg-white border-gray-300 text-gray-700 hover:border-[#8AAA19]'
+                        }`}
+                      >
+                        <div className="font-bold text-sm">Segunda</div>
+                        <div className="text-xs opacity-90">Días 16-fin</div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFortnightType('BOTH')}
+                        className={`p-3 rounded-lg border-2 transition-all ${
+                          fortnightType === 'BOTH'
+                            ? 'bg-[#8AAA19] border-[#8AAA19] text-white shadow-md'
+                            : 'bg-white border-gray-300 text-gray-700 hover:border-[#8AAA19]'
+                        }`}
+                      >
+                        <div className="font-bold text-sm">Ambas</div>
+                        <div className="text-xs opacity-90">2 veces/mes</div>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Fecha de Vencimiento */}
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-2">
+                      Duración de la Recurrencia
+                    </label>
+                    <div className="space-y-2">
+                      <button
+                        type="button"
+                        onClick={() => setHasEndDate(false)}
+                        className={`w-full p-3 rounded-lg border-2 transition-all flex items-center gap-3 ${
+                          !hasEndDate
+                            ? 'bg-blue-50 border-blue-500 text-blue-900'
+                            : 'bg-white border-gray-300 text-gray-700 hover:border-blue-500'
+                        }`}
+                      >
+                        <FaInfinity className={!hasEndDate ? 'text-blue-600' : 'text-gray-500'} />
+                        <div className="text-left">
+                          <div className="font-semibold text-sm">Recurrencia Infinita</div>
+                          <div className="text-xs opacity-75">Se generará indefinidamente hasta que lo desactives</div>
+                        </div>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setHasEndDate(true)}
+                        className={`w-full p-3 rounded-lg border-2 transition-all flex items-center gap-3 ${
+                          hasEndDate
+                            ? 'bg-blue-50 border-blue-500 text-blue-900'
+                            : 'bg-white border-gray-300 text-gray-700 hover:border-blue-500'
+                        }`}
+                      >
+                        <FaStopCircle className={hasEndDate ? 'text-blue-600' : 'text-gray-500'} />
+                        <div className="text-left">
+                          <div className="font-semibold text-sm">Con Fecha de Vencimiento</div>
+                          <div className="text-xs opacity-75">Especifica hasta cuándo debe aplicarse</div>
+                        </div>
+                      </button>
+                    </div>
+                    {hasEndDate && (
+                      <div className="mt-2">
+                        <Input
+                          type="date"
+                          value={endDate}
+                          onChange={(e) => setEndDate(e.target.value)}
+                          min={new Date().toISOString().split('T')[0]}
+                          className="border-2 border-blue-300 focus:border-blue-500 h-11"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Botón para gestionar recurrencias */}
               <Button
@@ -213,9 +336,10 @@ export function AddAdvanceModal({ isOpen, onClose, onSuccess, brokers }: Props) 
                 Gestionar Adelantos Recurrentes
               </Button>
             </div>
+            </div>
 
             {/* Footer con botones */}
-            <DialogFooter className="gap-3 sm:gap-2 pt-4 border-t border-gray-200">
+            <DialogFooter className="gap-3 sm:gap-2 pt-4 border-t border-gray-200 flex-shrink-0 px-6 pb-6">
               <Button 
                 type="button" 
                 variant="outline" 

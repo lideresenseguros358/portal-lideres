@@ -6,6 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FaMoneyBillWave, FaChevronDown, FaChevronRight, FaCheckCircle } from 'react-icons/fa';
 import { actionGetAdvances } from '@/app/(app)/commissions/actions';
+import { BrokerRecurringAdvancesCard } from './BrokerRecurringAdvancesCard';
 
 interface Props {
   brokerId: string;
@@ -20,6 +21,8 @@ interface Advance {
   reason: string | null;
   status: 'pending' | 'paid';
   created_at: string;
+  is_recurring?: boolean;
+  recurrence_id?: string | null;
   payments?: Array<{
     date: string;
     amount: number;
@@ -120,6 +123,9 @@ export default function BrokerAdvancesTab({ brokerId }: Props) {
         </Card>
       </div>
 
+      {/* Recurring Advances Card */}
+      <BrokerRecurringAdvancesCard brokerId={brokerId} />
+
       <Tabs defaultValue="active" className="w-full">
         <TabsList className="grid w-full grid-cols-1 sm:grid-cols-2 gap-2">
           <TabsTrigger value="active">Adelantos Activos</TabsTrigger>
@@ -166,7 +172,16 @@ export default function BrokerAdvancesTab({ brokerId }: Props) {
                                   <FaChevronRight className="text-gray-400" />
                                 }
                               </TableCell>
-                              <TableCell className="text-gray-700">{advance.reason || 'Sin motivo'}</TableCell>
+                              <TableCell className="text-gray-700">
+                                <div className="flex items-center gap-2">
+                                  <span>{advance.reason || 'Sin motivo'}</span>
+                                  {advance.is_recurring && (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-800 border border-purple-300">
+                                      🔁 RECURRENTE
+                                    </span>
+                                  )}
+                                </div>
+                              </TableCell>
                               <TableCell className="text-right font-mono text-[#010139] font-semibold">
                                 {formatCurrency(advance.amount)}
                               </TableCell>
@@ -251,7 +266,16 @@ export default function BrokerAdvancesTab({ brokerId }: Props) {
                                 <FaChevronRight className="text-gray-400" />
                               }
                             </TableCell>
-                            <TableCell className="text-gray-700">{advance.reason || 'Sin motivo'}</TableCell>
+                            <TableCell className="text-gray-700">
+                              <div className="flex items-center gap-2">
+                                <span>{advance.reason || 'Sin motivo'}</span>
+                                {advance.is_recurring && (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-800 border border-purple-300">
+                                    🔁 RECURRENTE
+                                  </span>
+                                )}
+                              </div>
+                            </TableCell>
                             <TableCell className="text-right font-mono text-[#8AAA19] font-bold text-lg">
                               {formatCurrency(advance.amount)}
                             </TableCell>

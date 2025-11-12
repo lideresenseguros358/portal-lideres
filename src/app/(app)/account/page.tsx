@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { supabaseClient } from "@/lib/supabase/client";
 import { FaCamera, FaUserCircle, FaTrash } from "react-icons/fa";
 import { useUppercaseInput } from "@/lib/hooks/useUppercaseInput";
-import { actionUpdateProfile } from "./actions";
+import { actionUpdateProfile, actionResetMustChangePassword } from "./actions";
 import type { Database } from "@/lib/database.types";
 
 type ProfileRow = Database["public"]["Tables"]["profiles"]["Row"];
@@ -137,16 +137,31 @@ export default function AccountPage() {
     setSuccess(null);
 
     try {
+      // Update password
       const { error } = await supabase.auth.updateUser({
         password: newPassword
       });
 
       if (error) throw error;
 
-      setSuccess("Contraseña actualizada correctamente");
+      // Reset must_change_password flag using server action
+      const resetResult = await actionResetMustChangePassword();
+      
+      if (!resetResult.ok) {
+        console.error('[Account] Error resetting must_change_password:', resetResult.error);
+        setError('Contraseña actualizada pero hubo un error al resetear el flag de cambio obligatorio. Contacta al administrador.');
+        return;
+      }
+
+      console.log('[Account] Password updated and must_change_password flag reset successfully');
+      setSuccess("✅ Contraseña actualizada correctamente");
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
+      
+      // Reload profile to reflect changes
+      await loadProfile();
+      router.refresh();
     } catch (err: any) {
       setError(err.message || "Error al actualizar la contraseña");
     } finally {

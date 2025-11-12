@@ -51,6 +51,7 @@ export async function POST(request: NextRequest) {
       percent_override: body.percent_override !== null && body.percent_override !== undefined
         ? Number(body.percent_override)
         : null,
+      notas: body.notas?.trim().toUpperCase() || null,
     };
 
     // Si no se proporciona broker_id, buscar el broker del cliente

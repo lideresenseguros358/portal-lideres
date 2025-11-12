@@ -21,6 +21,10 @@ interface Recurrence {
   is_active: boolean;
   broker_id: string;
   brokers: { id: string; name: string } | null;
+  fortnight_type: 'Q1' | 'Q2' | 'BOTH';
+  end_date: string | null;
+  recurrence_count: number;
+  last_generated_at: string | null;
 }
 
 interface Props {
@@ -135,6 +139,9 @@ export function RecurrencesManagerModal({ isOpen, onClose, onSuccess }: Props) {
                   <TableHead>Corredor</TableHead>
                   <TableHead>Motivo</TableHead>
                   <TableHead className="text-right">Monto</TableHead>
+                  <TableHead className="text-center">Quincena</TableHead>
+                  <TableHead className="text-center">Vencimiento</TableHead>
+                  <TableHead className="text-center">Generaciones</TableHead>
                   <TableHead className="text-center">Estado</TableHead>
                   <TableHead className="text-center">Acciones</TableHead>
                 </TableRow>
@@ -168,6 +175,36 @@ export function RecurrencesManagerModal({ isOpen, onClose, onSuccess }: Props) {
                       ) : (
                         `$${rec.amount.toFixed(2)}`
                       )}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <span className={`px-2 py-1 rounded text-xs font-semibold ${
+                        rec.fortnight_type === 'Q1'
+                          ? 'bg-blue-100 text-blue-800'
+                          : rec.fortnight_type === 'Q2'
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-purple-100 text-purple-800'
+                      }`}>
+                        {rec.fortnight_type === 'Q1' ? 'Q1 (1-15)' : rec.fortnight_type === 'Q2' ? 'Q2 (16-fin)' : 'AMBAS (2x/mes)'}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-center text-sm">
+                      {rec.end_date ? (
+                        <span className="text-amber-700 font-medium">
+                          {new Date(rec.end_date).toLocaleDateString('es-PA')}
+                        </span>
+                      ) : (
+                        <span className="text-gray-500 italic">∞ Infinita</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <div className="flex flex-col items-center">
+                        <span className="text-lg font-bold text-[#010139]">{rec.recurrence_count}</span>
+                        {rec.last_generated_at && (
+                          <span className="text-xs text-gray-500">
+                            Última: {new Date(rec.last_generated_at).toLocaleDateString('es-PA')}
+                          </span>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell className="text-center">
                       <Button

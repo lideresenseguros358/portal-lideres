@@ -1,9 +1,9 @@
 'use client';
 
-import React, { useMemo, useState, useEffect, Suspense } from 'react';
+import React, { useMemo, useState, useEffect, useRef, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Eye, Edit3, Trash2, ChevronDown, ChevronUp, FileDown, FileSpreadsheet, Download, FolderOpen, Filter, Upload, CheckSquare, Search } from 'lucide-react';
+import { Eye, Edit3, Trash2, ChevronDown, ChevronUp, FileDown, FileSpreadsheet, Download, FolderOpen, Filter, Upload, CheckSquare, Search, MoreVertical } from 'lucide-react';
 import { toast } from 'sonner';
 import Modal from '@/components/Modal';
 import ClientForm from './ClientForm';
@@ -24,6 +24,13 @@ interface DatabaseTabsProps {
   searchQuery?: string;
   role: string;
   userEmail: string;
+}
+
+interface PolicyModalData {
+  id: string;
+  policy_number: string;
+  clientId: string;
+  clientName: string;
 }
 
 interface FilterOptions {
@@ -64,138 +71,358 @@ const getClientRenewalDisplay = (client: ClientWithPolicies) => {
   return earliest ? earliest.toLocaleDateString('es-PA') : '—';
 };
 
-// Función para exportar a PDF
+// Función para exportar a PDF con tabla única denormalizada
 const exportToPDF = async (clients: ClientWithPolicies[], role: string) => {
+  const toastId = toast.loading('Generando PDF...');
+  
   try {
-    toast.loading('Generando PDF...');
-    
-    // Importación dinámica de jsPDF
-    const { jsPDF } = await import('jspdf');
-    await import('jspdf-autotable');
-    
-    const doc = new jsPDF() as any;
-    
-    // Logo y Header
-    doc.setFillColor(1, 1, 57); // #010139
-    doc.rect(0, 0, 210, 35, 'F');
-    
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(20);
-    doc.setFont('helvetica', 'bold');
-    doc.text('LÍDERES EN SEGUROS', 105, 15, { align: 'center' });
-    
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'normal');
-    doc.text('Base de Datos de Clientes', 105, 23, { align: 'center' });
-    doc.text(new Date().toLocaleDateString('es-PA', { year: 'numeric', month: 'long', day: 'numeric' }), 105, 30, { align: 'center' });
-    
-    // Preparar datos
-    const tableData = clients.map(client => {
-      const row: any[] = [
-        client.name?.toUpperCase() || '—',
-        client.national_id?.toUpperCase() || '—',
-        client.phone || '—',
-        client.email || '—',
-        client.policies?.length || 0,
-        getPrimaryInsurerName(client),
-        getClientRenewalDisplay(client)
-      ];
-      
-      if (role === 'master') {
-        row.push((client as any).brokers?.name || '—');
-      }
-      
-      return row;
-    });
-    
-    const headers = role === 'master' 
-      ? ['Cliente', 'Cédula', 'Celular', 'Correo', 'Pólizas', 'Aseguradora', 'Renovación', 'Corredor']
-      : ['Cliente', 'Cédula', 'Celular', 'Correo', 'Pólizas', 'Aseguradora', 'Renovación'];
-    
-    // Tabla
-    doc.autoTable({
-      head: [headers],
-      body: tableData,
-      startY: 40,
-      theme: 'grid',
-      headStyles: {
-        fillColor: [1, 1, 57], // #010139
-        textColor: 255,
-        fontStyle: 'bold',
-        fontSize: 9
-      },
-      bodyStyles: {
-        fontSize: 8
-      },
-      alternateRowStyles: {
-        fillColor: [245, 245, 245]
-      },
-      columnStyles: {
-        0: { cellWidth: 35 },
-        1: { cellWidth: 25 },
-        2: { cellWidth: 23 },
-        3: { cellWidth: 35 },
-        4: { cellWidth: 15, halign: 'center' },
-        5: { cellWidth: 25 },
-        6: { cellWidth: 22 },
-      },
-      margin: { left: 10, right: 10 }
-    });
-    
-    // Footer
-    const pageCount = doc.internal.getNumberOfPages();
-    for (let i = 1; i <= pageCount; i++) {
-      doc.setPage(i);
-      doc.setFontSize(8);
-      doc.setTextColor(100);
-      doc.text(
-        `Página ${i} de ${pageCount}`,
-        105,
-        doc.internal.pageSize.height - 10,
-        { align: 'center' }
-      );
+    if (!clients || clients.length === 0) {
+      toast.error('No hay clientes para exportar', { id: toastId });
+      return;
     }
     
-    // Guardar
-    doc.save(`clientes-${new Date().toISOString().split('T')[0]}.pdf`);
+    console.log('[PDF] Iniciando generación de PDF para', clients.length, 'clientes');
+    console.log('[PDF] Importando librerías...');
     
-    toast.dismiss();
-    toast.success('PDF descargado correctamente');
+    // Importar autotable y usar su función default
+    const autoTableModule = await import('jspdf-autotable');
+    const autoTable = autoTableModule.default;
+    
+    // Luego importar jsPDF
+    const jsPDFModule = await import('jspdf');
+    const jsPDF = jsPDFModule.jsPDF || jsPDFModule.default;
+    
+    console.log('[PDF] Librerías importadas, creando documento en modo landscape');
+    
+    const doc = new jsPDF('landscape') as any; // Horizontal para más columnas
+    console.log('[PDF] Documento creado, usando autoTable como función externa');
+    
+    // Función para agregar header con logo
+    const addHeader = () => {
+      const pageWidth = doc.internal.pageSize.width;
+      
+      // Fondo azul
+      doc.setFillColor(1, 1, 57); // #010139
+      doc.rect(0, 0, pageWidth, 28, 'F');
+      
+      // Línea verde
+      doc.setDrawColor(138, 170, 25); // #8AAA19
+      doc.setLineWidth(0.8);
+      doc.line(10, 24, pageWidth - 10, 24);
+      
+      // Logo (intentar cargar, si falla continuar sin logo)
+      // Nota: En jsPDF, addImage requiere que la imagen esté cargada
+      // Por ahora omitimos el logo para evitar errores async
+      // TODO: Implementar carga async del logo si es necesario
+      
+      // Título
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
+      doc.text('LÍDERES EN SEGUROS', pageWidth / 2, 11, { align: 'center' });
+      
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Base de Datos - Clientes y Pólizas', pageWidth / 2, 17, { align: 'center' });
+      
+      doc.setFontSize(7);
+      doc.text(new Date().toLocaleDateString('es-PA', { year: 'numeric', month: 'long', day: 'numeric' }), pageWidth / 2, 22, { align: 'center' });
+    };
+    
+    // Función para agregar footer
+    const addFooter = () => {
+      const pageCount = (doc as any).internal.getNumberOfPages();
+      const pageWidth = doc.internal.pageSize.width;
+      const pageHeight = doc.internal.pageSize.height;
+      
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        
+        doc.setDrawColor(138, 170, 25);
+        doc.setLineWidth(0.5);
+        doc.line(10, pageHeight - 20, pageWidth - 10, pageHeight - 20);
+        
+        doc.setFontSize(8);
+        doc.setTextColor(100);
+        doc.text(`Página ${i} de ${pageCount}`, pageWidth / 2, pageHeight - 12, { align: 'center' });
+        
+        doc.setFontSize(7);
+        doc.setTextColor(150);
+        doc.text('Líderes en Seguros © 2025', pageWidth / 2, pageHeight - 7, { align: 'center' });
+      }
+    };
+    
+    try {
+      addHeader();
+      console.log('[PDF] Header agregado');
+    } catch (headerError) {
+      console.error('[PDF] Error en header:', headerError);
+      throw new Error('Error al generar header del PDF');
+    }
+    
+    // Preparar datos denormalizados (igual que Excel)
+    console.log('[PDF] Preparando datos denormalizados...');
+    const tableData: any[] = [];
+    
+    clients.forEach(client => {
+      if (client.policies && client.policies.length > 0) {
+        // Por cada póliza, crear una fila con info del cliente + póliza
+        client.policies.forEach(policy => {
+          try {
+            const row = [
+              client.name?.toUpperCase() || '—',
+              client.national_id?.toUpperCase() || '—',
+              client.email || '—',
+              client.phone || '—',
+            ];
+            
+            if (role === 'master') {
+              row.push((client as any).brokers?.name || '—');
+            }
+            
+            row.push(
+              policy.policy_number || '—',
+              policy.insurers?.name || '—',
+              policy.ramo || '—',
+              policy.start_date ? new Date(policy.start_date).toLocaleDateString('es-PA') : '—',
+              policy.renewal_date ? new Date(policy.renewal_date).toLocaleDateString('es-PA') : '—',
+              policy.status || '—'
+            );
+            
+            if (role === 'master') {
+              row.push(policy.percent_override ? `${policy.percent_override}%` : 'Def');
+            }
+            
+            // Agregar notas si existen (truncadas)
+            const notes = policy.notas ? policy.notas.substring(0, 50) + (policy.notas.length > 50 ? '...' : '') : '';
+            row.push(notes);
+            
+            tableData.push(row);
+          } catch (policyError) {
+            console.error(`[PDF] Error procesando póliza:`, policyError);
+          }
+        });
+      } else {
+        // Cliente sin pólizas
+        const row = [
+          client.name?.toUpperCase() || '—',
+          client.national_id?.toUpperCase() || '—',
+          client.email || '—',
+          client.phone || '—',
+        ];
+        
+        if (role === 'master') {
+          row.push((client as any).brokers?.name || '—');
+        }
+        
+        row.push('SIN PÓLIZAS', '—', '—', '—', '—', '—');
+        
+        if (role === 'master') {
+          row.push('—');
+        }
+        
+        row.push(''); // Notas vacías
+        
+        tableData.push(row);
+      }
+    });
+    
+    console.log(`[PDF] ${tableData.length} registros preparados`);
+    
+    if (tableData.length === 0) {
+      console.warn('[PDF] No hay datos para exportar');
+      toast.error('No hay datos para exportar en PDF', { id: toastId });
+      return;
+    }
+    
+    // Headers de la tabla
+    const headers = ['Cliente', 'Cédula', 'Email', 'Teléfono'];
+    if (role === 'master') headers.push('Corredor');
+    headers.push('N° Póliza', 'Aseguradora', 'Ramo', 'F. Inicio', 'F. Renovación', 'Estado');
+    if (role === 'master') headers.push('% Com.');
+    headers.push('Notas');
+    
+    console.log('[PDF] Headers:', headers.length, 'columnas');
+    
+    // Información del reporte
+    try {
+      doc.setFontSize(7);
+      doc.setTextColor(100);
+      doc.text(`Total: ${tableData.length} registros`, 14, 32);
+      console.log('[PDF] Info del reporte agregada');
+    } catch (infoError) {
+      console.error('[PDF] Error agregando info:', infoError);
+    }
+    
+    // Generar tabla única usando autoTable como función
+    try {
+      autoTable(doc, {
+        head: [headers],
+        body: tableData,
+        startY: 35,
+        theme: 'striped',
+        headStyles: {
+          fillColor: [1, 1, 57],
+          textColor: [255, 255, 255],
+          fontStyle: 'bold',
+          fontSize: 7,
+          halign: 'center',
+          cellPadding: 1.5
+        },
+        bodyStyles: {
+          fontSize: 6,
+          textColor: [50, 50, 50],
+          cellPadding: 1
+        },
+        alternateRowStyles: {
+          fillColor: [248, 249, 250]
+        },
+        columnStyles: role === 'master' ? {
+          0: { cellWidth: 30 },  // Cliente
+          1: { cellWidth: 18 },  // Cédula
+          2: { cellWidth: 30 },  // Email
+          3: { cellWidth: 18 },  // Teléfono
+          4: { cellWidth: 25 },  // Corredor
+          5: { cellWidth: 25 },  // N° Póliza
+          6: { cellWidth: 25 },  // Aseguradora
+          7: { cellWidth: 20 },  // Ramo
+          8: { cellWidth: 18 },  // F. Inicio
+          9: { cellWidth: 18 },  // F. Renovación
+          10: { cellWidth: 15, halign: 'center' }, // Estado
+          11: { cellWidth: 12, halign: 'center' }, // % Com.
+          12: { cellWidth: 30 }  // Notas
+        } : {
+          0: { cellWidth: 35 },  // Cliente
+          1: { cellWidth: 20 },  // Cédula
+          2: { cellWidth: 35 },  // Email
+          3: { cellWidth: 20 },  // Teléfono
+          4: { cellWidth: 28 },  // N° Póliza
+          5: { cellWidth: 28 },  // Aseguradora
+          6: { cellWidth: 22 },  // Ramo
+          7: { cellWidth: 20 },  // F. Inicio
+          8: { cellWidth: 20 },  // F. Renovación
+          9: { cellWidth: 18, halign: 'center' }, // Estado
+          10: { cellWidth: 35 }  // Notas
+        },
+        margin: { left: 10, right: 10 },
+        didDrawPage: function(data: any) {
+          // Agregar header en cada página nueva
+          if (data.pageNumber > 1) {
+            addHeader();
+          }
+        }
+      });
+      
+      console.log('[PDF] Tabla generada exitosamente');
+    } catch (tableError) {
+      console.error('[PDF] Error generando tabla:', tableError);
+      throw tableError;
+    }
+    
+    console.log('[PDF] Agregando footer...');
+    
+    try {
+      addFooter();
+      console.log('[PDF] Footer agregado');
+    } catch (footerError) {
+      console.error('[PDF] Error en footer:', footerError);
+      // Continuar sin footer si falla
+    }
+    
+    console.log('[PDF] Guardando archivo...');
+    
+    try {
+      const fileName = `lideres-clientes-polizas-${new Date().toISOString().split('T')[0]}.pdf`;
+      doc.save(fileName);
+      console.log('[PDF] PDF guardado exitosamente:', fileName);
+      toast.success(`PDF descargado: ${fileName} (${tableData.length} registros)`, { id: toastId });
+    } catch (saveError) {
+      console.error('[PDF] Error al guardar:', saveError);
+      throw new Error('Error al guardar el archivo PDF');
+    }
   } catch (error) {
-    console.error('Error al generar PDF:', error);
-    toast.dismiss();
-    toast.error('Error al generar el PDF');
+    console.error('[PDF] Error al generar PDF:', error);
+    console.error('[PDF] Stack:', error instanceof Error ? error.stack : 'No stack available');
+    const errorMsg = error instanceof Error ? error.message : 'Error desconocido';
+    toast.error(`Error al generar el PDF: ${errorMsg}. Revisa la consola para más detalles.`, { id: toastId });
   }
 };
 
-// Función para exportar a Excel
+// Función para exportar a Excel - Una sola hoja con clientes y pólizas denormalizados
 const exportToExcel = async (clients: ClientWithPolicies[], role: string) => {
+  const toastId = toast.loading('Generando archivo Excel...');
+  
   try {
-    toast.loading('Generando archivo Excel...');
-    
-    // Importación dinámica de xlsx
     const XLSX = await import('xlsx');
     
-    // Preparar datos
-    const data = clients.map(client => {
-      const row: any = {
-        'Cliente': client.name?.toUpperCase() || '—',
-        'Cédula': client.national_id?.toUpperCase() || '—',
-        'Celular': client.phone || '—',
-        'Correo': client.email || '—',
-        'Pólizas': client.policies?.length || 0,
-        'Aseguradora Principal': getPrimaryInsurerName(client),
-        'Próxima Renovación': getClientRenewalDisplay(client)
-      };
-      
-      if (role === 'master') {
-        row['Corredor Asignado'] = (client as any).brokers?.name || '—';
+    // Crear una sola tabla con cliente + póliza en cada fila
+    // Si un cliente tiene múltiples pólizas, repetir su info en cada fila
+    const data: any[] = [];
+    
+    clients.forEach(client => {
+      if (client.policies && client.policies.length > 0) {
+        // Por cada póliza del cliente, crear una fila con info del cliente + póliza
+        client.policies.forEach(policy => {
+          const row: any = {
+            'Cliente': client.name?.toUpperCase() || '—',
+            'Cédula': client.national_id?.toUpperCase() || '—',
+            'Email': client.email || '—',
+            'Teléfono': client.phone || '—',
+          };
+          
+          if (role === 'master') {
+            row['Corredor'] = (client as any).brokers?.name || '—';
+          }
+          
+          // Agregar información de la póliza
+          row['N° Póliza'] = policy.policy_number || '—';
+          row['Aseguradora'] = policy.insurers?.name || '—';
+          row['Ramo'] = policy.ramo || '—';
+          row['Fecha Inicio'] = policy.start_date ? new Date(policy.start_date).toLocaleDateString('es-PA') : '—';
+          row['Fecha Renovación'] = policy.renewal_date ? new Date(policy.renewal_date).toLocaleDateString('es-PA') : '—';
+          row['Estado'] = policy.status || '—';
+          
+          if (role === 'master') {
+            row['% Comisión'] = policy.percent_override !== null && policy.percent_override !== undefined
+              ? `${policy.percent_override}%`
+              : 'Default';
+          }
+          
+          row['Notas'] = policy.notas || '';
+          
+          data.push(row);
+        });
+      } else {
+        // Si el cliente no tiene pólizas, agregar una fila solo con info del cliente
+        const row: any = {
+          'Cliente': client.name?.toUpperCase() || '—',
+          'Cédula': client.national_id?.toUpperCase() || '—',
+          'Email': client.email || '—',
+          'Teléfono': client.phone || '—',
+        };
+        
+        if (role === 'master') {
+          row['Corredor'] = (client as any).brokers?.name || '—';
+        }
+        
+        row['N° Póliza'] = 'SIN PÓLIZAS';
+        row['Aseguradora'] = '—';
+        row['Ramo'] = '—';
+        row['Fecha Inicio'] = '—';
+        row['Fecha Renovación'] = '—';
+        row['Estado'] = '—';
+        
+        if (role === 'master') {
+          row['% Comisión'] = '—';
+        }
+        
+        row['Notas'] = '';
+        
+        data.push(row);
       }
-      
-      return row;
     });
     
-    // Crear workbook
+    // Crear workbook con una sola hoja
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(data);
     
@@ -203,31 +430,43 @@ const exportToExcel = async (clients: ClientWithPolicies[], role: string) => {
     const colWidths = [
       { wch: 30 }, // Cliente
       { wch: 15 }, // Cédula
-      { wch: 15 }, // Celular
-      { wch: 30 }, // Correo
-      { wch: 10 }, // Pólizas
-      { wch: 20 }, // Aseguradora
-      { wch: 15 }, // Renovación
+      { wch: 30 }, // Email
+      { wch: 15 }, // Teléfono
     ];
     
     if (role === 'master') {
       colWidths.push({ wch: 25 }); // Corredor
     }
     
+    colWidths.push(
+      { wch: 22 }, // N° Póliza
+      { wch: 22 }, // Aseguradora
+      { wch: 20 }, // Ramo
+      { wch: 15 }, // Fecha Inicio
+      { wch: 15 }, // Fecha Renovación
+      { wch: 12 }  // Estado
+    );
+    
+    if (role === 'master') {
+      colWidths.push({ wch: 15 }); // % Comisión
+    }
+    
+    colWidths.push({ wch: 50 }); // Notas
+    
     ws['!cols'] = colWidths;
     
     // Agregar hoja al workbook
-    XLSX.utils.book_append_sheet(wb, ws, 'Clientes');
+    XLSX.utils.book_append_sheet(wb, ws, 'Clientes y Pólizas');
     
     // Descargar archivo
-    XLSX.writeFile(wb, `clientes-${new Date().toISOString().split('T')[0]}.xlsx`);
+    const fileName = `lideres-clientes-polizas-${new Date().toISOString().split('T')[0]}.xlsx`;
+    XLSX.writeFile(wb, fileName);
     
-    toast.dismiss();
-    toast.success('Archivo Excel descargado correctamente');
+    toast.success(`Excel descargado: ${fileName} (${data.length} registros)`, { id: toastId });
   } catch (error) {
     console.error('Error al generar Excel:', error);
-    toast.dismiss();
-    toast.error('Error al generar el archivo Excel');
+    const errorMsg = error instanceof Error ? error.message : 'Error desconocido';
+    toast.error(`Error al generar el Excel: ${errorMsg}`, { id: toastId });
   }
 };
 
@@ -252,10 +491,16 @@ interface ClientsListViewProps {
   onToggleClient: (clientId: string) => void;
   onSelectAll: () => void;
   selectionMode: boolean;
+  onViewPolicy: (policyId: string) => void;
+  onEditPolicy: (policyId: string) => void;
+  onDeletePolicy: (policyId: string, policyNumber: string) => void;
 }
 
-const ClientsListView = ({ clients, onView, onEdit, onDelete, role, selectedClients, onToggleClient, onSelectAll, selectionMode }: ClientsListViewProps) => {
+const ClientsListView = ({ clients, onView, onEdit, onDelete, role, selectedClients, onToggleClient, onSelectAll, selectionMode, onViewPolicy, onEditPolicy, onDeletePolicy }: ClientsListViewProps) => {
   const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set());
+  const [openMenuClient, setOpenMenuClient] = useState<string | null>(null);
+  const [openMenuPolicy, setOpenMenuPolicy] = useState<string | null>(null);
+  const [expandedExpedientes, setExpandedExpedientes] = useState<Set<string>>(new Set());
 
   const toggleClient = (clientId: string) => {
     setExpandedClients((prev) => {
@@ -318,7 +563,7 @@ const ClientsListView = ({ clients, onView, onEdit, onDelete, role, selectedClie
             <th className="ct-th ct-th-celular">Celular</th>
             <th className="ct-th ct-th-polizas">Pólizas</th>
             {role === 'master' && <th className="ct-th ct-th-corredor">Corredor</th>}
-            <th className="ct-th ct-th-acciones text-right">Acciones</th>
+            <th className="ct-th ct-th-acciones"></th>
           </tr>
         </thead>
         <tbody>
@@ -361,42 +606,68 @@ const ClientsListView = ({ clients, onView, onEdit, onDelete, role, selectedClie
                   </td>
                   {role === 'master' && <td className="ct-td ct-td-corredor">{brokerName}</td>}
                   <td className="ct-td ct-td-acciones">
-                    <div className="ct-actions">
-                      <button 
-                        className="icon-btn folder" 
-                        onClick={() => {
-                          toggleClient(client.id);
-                          toast.success('Expandir para ver expediente del cliente');
+                    <div className="relative flex justify-center">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setOpenMenuClient(openMenuClient === client.id ? null : client.id);
                         }}
-                        aria-label="Ver expediente"
-                        title="Ver Expediente"
+                        className="p-2 hover:bg-gray-100 rounded-lg transition-all"
+                        aria-label="Acciones"
                       >
-                        <FolderOpen size={18} />
+                        <MoreVertical size={20} className="text-gray-600" />
                       </button>
-                      <button 
-                        className="icon-btn view" 
-                        onClick={() => onView(client.id)}
-                        aria-label="Ver cliente"
-                        title="Ver Detalles"
-                      >
-                        <Eye size={18} />
-                      </button>
-                      <button 
-                        className="icon-btn edit" 
-                        onClick={() => onEdit(client.id)}
-                        aria-label="Editar cliente"
-                        title="Editar Cliente"
-                      >
-                        <Edit3 size={18} />
-                      </button>
-                      <button 
-                        className="icon-btn delete" 
-                        onClick={() => onDelete(client.id)}
-                        aria-label="Eliminar cliente"
-                        title="Eliminar Cliente"
-                      >
-                        <Trash2 size={18} />
-                      </button>
+                      {openMenuClient === client.id && (
+                        <>
+                          <div 
+                            className="fixed inset-0 z-[100]" 
+                            onClick={() => setOpenMenuClient(null)}
+                          />
+                          <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-[101]">
+                            <button
+                              onClick={() => {
+                                toggleClient(client.id);
+                                setOpenMenuClient(null);
+                              }}
+                              className="w-full text-left px-4 py-2.5 hover:bg-gray-50 flex items-center gap-3 text-sm text-gray-700"
+                            >
+                              <ChevronDown size={16} className="text-[#8AAA19]" />
+                              {isExpanded ? 'Contraer' : 'Expandir'}
+                            </button>
+                            <button
+                              onClick={() => {
+                                onView(client.id);
+                                setOpenMenuClient(null);
+                              }}
+                              className="w-full text-left px-4 py-2.5 hover:bg-gray-50 flex items-center gap-3 text-sm text-gray-700"
+                            >
+                              <Eye size={16} className="text-[#010139]" />
+                              Ver Detalles
+                            </button>
+                            <button
+                              onClick={() => {
+                                onEdit(client.id);
+                                setOpenMenuClient(null);
+                              }}
+                              className="w-full text-left px-4 py-2.5 hover:bg-gray-50 flex items-center gap-3 text-sm text-gray-700"
+                            >
+                              <Edit3 size={16} className="text-[#8AAA19]" />
+                              Editar Cliente
+                            </button>
+                            <div className="border-t border-gray-100 my-1"></div>
+                            <button
+                              onClick={() => {
+                                onDelete(client.id);
+                                setOpenMenuClient(null);
+                              }}
+                              className="w-full text-left px-4 py-2.5 hover:bg-red-50 flex items-center gap-3 text-sm text-red-600"
+                            >
+                              <Trash2 size={16} />
+                              Eliminar Cliente
+                            </button>
+                          </div>
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -411,7 +682,12 @@ const ClientsListView = ({ clients, onView, onEdit, onDelete, role, selectedClie
                         </div>
                         {client.policies?.length ? (
                           <div className="pol-list">
-                            {client.policies.map((policy) => (
+                            {client.policies.map((policy) => {
+                              // Debug: verificar si hay notas
+                              if (policy.notas) {
+                                console.log('Policy con notas:', policy.policy_number, policy.notas);
+                              }
+                              return (
                               <div key={policy.id} className="pol-row">
                                 <div className="pol-main">
                                   <div className="pol-number">
@@ -423,7 +699,7 @@ const ClientsListView = ({ clients, onView, onEdit, onDelete, role, selectedClie
                                     <span><strong>Ramo:</strong> {policy.ramo?.toUpperCase?.() || '—'}</span>
                                   </div>
                                   <div className="pol-meta">
-                                    <span><strong>Inicio:</strong> {formatDate((policy as any).start_date)}</span>
+                                    <span><strong>Inicio:</strong> {formatDate(policy.start_date)}</span>
                                     <span>•</span>
                                     <span><strong>Renovación:</strong> {formatDate(policy.renewal_date)}</span>
                                     <span>•</span>
@@ -435,52 +711,121 @@ const ClientsListView = ({ clients, onView, onEdit, onDelete, role, selectedClie
                                       {policy.status || 'SIN ESTADO'}
                                     </span>
                                   </div>
-                                  {(policy as any).notas && (
+                                  {policy.notas && (
                                     <div className="pol-notas">
                                       <span className="pol-notas-label">💬 Notas:</span>
-                                      <span className="pol-notas-text">{(policy as any).notas}</span>
+                                      <span className="pol-notas-text">{policy.notas}</span>
                                     </div>
                                   )}
                                 </div>
-                                <div className="pol-actions">
-                                  <button 
-                                    className="icon-btn view" 
-                                    aria-label="Ver póliza"
-                                    onClick={() => console.log('Ver póliza:', policy.id)}
+                                <div className="pol-actions relative">
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setOpenMenuPolicy(openMenuPolicy === policy.id ? null : policy.id);
+                                    }}
+                                    className="p-2 hover:bg-gray-100 rounded-lg transition-all"
+                                    aria-label="Acciones de póliza"
                                   >
-                                    <Eye size={16} />
+                                    <MoreVertical size={20} className="text-gray-600" />
                                   </button>
-                                  <button 
-                                    className="icon-btn edit" 
-                                    aria-label="Editar póliza"
-                                    onClick={() => console.log('Editar póliza:', policy.id)}
-                                  >
-                                    <Edit3 size={16} />
-                                  </button>
-                                  <button 
-                                    className="icon-btn delete" 
-                                    aria-label="Eliminar póliza"
-                                    onClick={() => console.log('Eliminar póliza:', policy.id)}
-                                  >
-                                    <Trash2 size={16} />
-                                  </button>
+                                  {openMenuPolicy === policy.id && (
+                                    <>
+                                      <div 
+                                        className="fixed inset-0 z-[100]" 
+                                        onClick={() => setOpenMenuPolicy(null)}
+                                      />
+                                      <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-[101]">
+                                        <button
+                                          onClick={() => {
+                                            onViewPolicy(policy.id);
+                                            setOpenMenuPolicy(null);
+                                          }}
+                                          className="w-full text-left px-4 py-2.5 hover:bg-gray-50 flex items-center gap-3 text-sm text-gray-700"
+                                        >
+                                          <Eye size={16} className="text-[#010139]" />
+                                          Ver Detalles
+                                        </button>
+                                        <button
+                                          onClick={() => {
+                                            onEditPolicy(policy.id);
+                                            setOpenMenuPolicy(null);
+                                          }}
+                                          className="w-full text-left px-4 py-2.5 hover:bg-gray-50 flex items-center gap-3 text-sm text-gray-700"
+                                        >
+                                          <Edit3 size={16} className="text-[#8AAA19]" />
+                                          Editar Póliza
+                                        </button>
+                                        {role === 'master' && (
+                                          <>
+                                            <div className="border-t border-gray-100 my-1"></div>
+                                            <button
+                                              onClick={() => {
+                                                onDeletePolicy(policy.id, policy.policy_number || 'Sin número');
+                                                setOpenMenuPolicy(null);
+                                              }}
+                                              className="w-full text-left px-4 py-2.5 hover:bg-red-50 flex items-center gap-3 text-sm text-red-600"
+                                            >
+                                              <Trash2 size={16} />
+                                              Eliminar Póliza
+                                            </button>
+                                          </>
+                                        )}
+                                      </div>
+                                    </>
+                                  )}
                                 </div>
                               </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         ) : (
                           <p className="no-policies">Este cliente no tiene pólizas registradas</p>
                         )}
 
-                        {/* Expediente Section */}
+                        {/* Expediente Section - Colapsable */}
                         <div className="expediente-section">
-                          <ExpedienteManager
-                            clientId={(client as any).id}
-                            showClientDocs={true}
-                            showPolicyDocs={false}
-                            showOtros={true}
-                            readOnly={role !== 'master'}
-                          />
+                          <button
+                            onClick={() => {
+                              setExpandedExpedientes(prev => {
+                                const next = new Set(prev);
+                                if (next.has(client.id)) {
+                                  next.delete(client.id);
+                                } else {
+                                  next.add(client.id);
+                                }
+                                return next;
+                              });
+                            }}
+                            className="w-full flex items-center justify-between p-3 bg-gradient-to-r from-gray-50 to-gray-100 hover:from-gray-100 hover:to-gray-200 rounded-lg border border-gray-200 transition-all"
+                          >
+                            <div className="flex items-center gap-2">
+                              <FolderOpen size={18} className="text-[#8AAA19]" />
+                              <span className="text-sm font-bold text-[#010139]">
+                                Expediente del Cliente
+                              </span>
+                              <span className="text-xs text-gray-500">
+                                ({client.policies?.length || 0} documento(s))
+                              </span>
+                            </div>
+                            {expandedExpedientes.has(client.id) ? (
+                              <ChevronUp size={18} className="text-gray-600" />
+                            ) : (
+                              <ChevronDown size={18} className="text-gray-600" />
+                            )}
+                          </button>
+                          
+                          {expandedExpedientes.has(client.id) && (
+                            <div className="mt-3 p-4 bg-white rounded-lg border border-gray-200">
+                              <ExpedienteManager
+                                clientId={(client as any).id}
+                                showClientDocs={true}
+                                showPolicyDocs={false}
+                                showOtros={true}
+                                readOnly={role !== 'master'}
+                              />
+                            </div>
+                          )}
                         </div>
                       </div>
                     </td>
@@ -551,7 +896,49 @@ export default function DatabaseTabs({
 
   const handleView = (id: string) => router.push(`/db?tab=clients&modal=edit-client&editClient=${id}`, { scroll: false });
   const handleEdit = handleView;
-  const handleDelete = (id: string) => router.push(`/db?tab=clients&modal=delete-client&deleteClient=${id}`, { scroll: false });
+  const handleDelete = (id: string) => {
+    if (confirm('¿Estás seguro de eliminar este cliente y todas sus pólizas?')) {
+      // TODO: Implementar eliminación de cliente
+      toast.error('Funcionalidad de eliminación en desarrollo');
+    }
+  };
+
+  const handleViewPolicy = (policyId: string) => {
+    toast.info('Vista detallada de póliza en desarrollo');
+  };
+
+  const handleEditPolicy = (policyId: string) => {
+    // Encontrar el cliente que tiene esta póliza
+    const clientWithPolicy = clients.find(c => 
+      c.policies?.some(p => p.id === policyId)
+    );
+    
+    if (clientWithPolicy) {
+      router.push(`/db?tab=clients&modal=edit-client&editClient=${clientWithPolicy.id}&editPolicy=${policyId}`, { scroll: false });
+    } else {
+      toast.error('No se encontró el cliente de esta póliza');
+    }
+  };
+
+  const handleDeletePolicy = async (policyId: string, policyNumber: string) => {
+    if (!confirm(`¿Eliminar la póliza ${policyNumber}?`)) return;
+    
+    try {
+      const response = await fetch(`/api/db/policies/${policyId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Error al eliminar');
+      }
+
+      toast.success('Póliza eliminada correctamente');
+      router.refresh();
+    } catch (error: any) {
+      toast.error(error.message || 'Error al eliminar la póliza');
+    }
+  };
 
   const handleToggleClient = (clientId: string) => {
     setSelectedClients((prev) => {
@@ -671,6 +1058,9 @@ export default function DatabaseTabs({
         onToggleClient={handleToggleClient}
         onSelectAll={handleSelectAll}
         selectionMode={selectionMode}
+        onViewPolicy={handleViewPolicy}
+        onEditPolicy={handleEditPolicy}
+        onDeletePolicy={handleDeletePolicy}
       />
     );
   };
@@ -696,28 +1086,30 @@ export default function DatabaseTabs({
 
       {/* Integrated Toolbar: Tabs + Actions */}
       <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-3 sm:p-4 mb-6">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+        <div className="flex flex-col lg:flex-row lg:items-center gap-3">
           {/* View Tabs */}
-          <div className="flex flex-wrap gap-2">
+          <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap lg:flex-shrink-0">
             <button
-              className={`px-4 py-2.5 rounded-lg font-semibold text-sm transition-all duration-200 ${
+              className={`px-2 sm:px-4 py-2.5 rounded-lg font-semibold text-xs sm:text-sm transition-all duration-200 whitespace-nowrap ${
                 view === 'clients'
                   ? 'bg-gradient-to-r from-[#010139] to-[#020270] text-white shadow-md'
                   : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
               }`}
               onClick={() => router.push('/db?tab=clients&view=clients', { scroll: false })}
             >
-              Clientes
+              <span className="hidden sm:inline">Clientes</span>
+              <span className="sm:hidden">👥</span>
             </button>
             <button
-              className={`px-4 py-2.5 rounded-lg font-semibold text-sm transition-all duration-200 relative ${
+              className={`px-2 sm:px-4 py-2.5 rounded-lg font-semibold text-xs sm:text-sm transition-all duration-200 relative whitespace-nowrap ${
                 view === 'preliminary'
                   ? 'bg-gradient-to-r from-[#010139] to-[#020270] text-white shadow-md'
                   : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
               }`}
               onClick={() => router.push('/db?tab=clients&view=preliminary', { scroll: false })}
             >
-              Preliminares
+              <span className="hidden sm:inline">Preliminares</span>
+              <span className="sm:hidden">📝</span>
               {preliminaryCount > 0 && (
                 <span className="absolute -top-1.5 -right-1.5 bg-amber-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center shadow-md">
                   {preliminaryCount}
@@ -725,7 +1117,7 @@ export default function DatabaseTabs({
               )}
             </button>
             <button
-              className={`px-4 py-2.5 rounded-lg font-semibold text-sm transition-all duration-200 relative ${
+              className={`px-2 sm:px-4 py-2.5 rounded-lg font-semibold text-xs sm:text-sm transition-all duration-200 relative whitespace-nowrap ${
                 view === 'renewals'
                   ? 'bg-gradient-to-r from-[#010139] to-[#020270] text-white shadow-md'
                   : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
@@ -733,7 +1125,8 @@ export default function DatabaseTabs({
               onClick={() => router.push('/db?tab=clients&view=renewals', { scroll: false })}
               title={renewalsThisMonth > 0 ? `Tienes ${renewalsThisMonth} póliza(s) que van a renovar este mes` : 'Ver renovaciones por mes'}
             >
-              📅 Por Mes de Renovación
+              <span className="hidden sm:inline">📅 Por Mes</span>
+              <span className="sm:hidden">📅</span>
               {renewalsThisMonth > 0 && (
                 <span className="absolute -top-1.5 -right-1.5 bg-blue-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center shadow-md">
                   {renewalsThisMonth}
@@ -744,9 +1137,9 @@ export default function DatabaseTabs({
 
           {/* Search + Action Icons - Only for clients view */}
           {view === 'clients' && clients.length > 0 && (
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3 w-full sm:w-auto">
+            <div className="flex flex-col sm:flex-row gap-3 w-full lg:flex-1 lg:justify-end">
               {/* Search Bar */}
-              <div className="flex-1 sm:flex-initial sm:min-w-[280px]">
+              <div className="w-full sm:w-auto sm:min-w-[240px] lg:min-w-[280px]">
                 <Suspense fallback={
                   <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg text-gray-400 text-sm">
                     <div className="animate-spin w-4 h-4 border-2 border-gray-400 border-t-transparent rounded-full"></div>
@@ -757,72 +1150,73 @@ export default function DatabaseTabs({
                 </Suspense>
               </div>
 
-              {/* Separador */}
-              <div className="hidden sm:block w-px h-8 bg-gray-300"></div>
+              {/* Action Buttons */}
+              <div className="grid grid-cols-2 sm:flex sm:flex-row gap-2 sm:gap-1 sm:flex-shrink-0">
+                {/* Filtrar */}
+                <button
+                  onClick={() => setShowFilters(!showFilters)}
+                  className={`flex items-center justify-center gap-2 px-3 py-2.5 sm:p-2.5 rounded-lg transition-all duration-200 relative ${
+                    showFilters || hasActiveFilters
+                      ? 'bg-[#8AAA19] text-white shadow-lg'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                  title="Filtrar clientes"
+                >
+                  <Filter size={18} />
+                  <span className="text-xs font-semibold sm:hidden">Filtrar</span>
+                  {hasActiveFilters && (
+                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+                      {Object.keys(filters).length}
+                    </span>
+                  )}
+                </button>
 
-              {/* Action Icons */}
-              <div className="flex items-center gap-1 justify-end sm:justify-start">
-              {/* Filtrar */}
-              <button
-                onClick={() => setShowFilters(!showFilters)}
-                className={`p-2.5 rounded-lg transition-all duration-200 relative ${
-                  showFilters || hasActiveFilters
-                    ? 'bg-[#8AAA19] text-white shadow-lg'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-                title="Filtrar clientes"
-              >
-                <Filter size={20} />
-                {hasActiveFilters && (
-                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
-                    {Object.keys(filters).length}
-                  </span>
-                )}
-              </button>
+                {/* Seleccionar */}
+                <button
+                  onClick={() => {
+                    setSelectionMode(!selectionMode);
+                    if (selectionMode) {
+                      setSelectedClients(new Set());
+                    }
+                  }}
+                  className={`flex items-center justify-center gap-2 px-3 py-2.5 sm:p-2.5 rounded-lg transition-all duration-200 relative ${
+                    selectionMode
+                      ? 'bg-[#8AAA19] text-white shadow-lg'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                  title="Modo selección"
+                >
+                  <CheckSquare size={18} />
+                  <span className="text-xs font-semibold sm:hidden">Seleccionar</span>
+                  {selectedClients.size > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-blue-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
+                      {selectedClients.size}
+                    </span>
+                  )}
+                </button>
 
-              {/* Seleccionar */}
-              <button
-                onClick={() => {
-                  setSelectionMode(!selectionMode);
-                  if (selectionMode) {
-                    setSelectedClients(new Set());
-                  }
-                }}
-                className={`p-2.5 rounded-lg transition-all duration-200 relative ${
-                  selectionMode
-                    ? 'bg-[#8AAA19] text-white shadow-lg'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-                title="Modo selección"
-              >
-                <CheckSquare size={20} />
-                {selectedClients.size > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-blue-500 text-white text-[10px] font-bold rounded-full w-4 h-4 flex items-center justify-center">
-                    {selectedClients.size}
-                  </span>
-                )}
-              </button>
+                {/* Separador - Solo visible en desktop */}
+                <div className="hidden sm:block w-px h-6 bg-gray-300 mx-1"></div>
 
-              {/* Separador */}
-              <div className="w-px h-6 bg-gray-300 mx-1"></div>
+                {/* Importar CSV */}
+                <a
+                  href="/db/import"
+                  className="flex items-center justify-center gap-2 px-3 py-2.5 sm:p-2.5 rounded-lg bg-gray-100 text-gray-700 hover:bg-blue-100 hover:text-blue-600 transition-all duration-200"
+                  title="Importar CSV"
+                >
+                  <Upload size={18} />
+                  <span className="text-xs font-semibold sm:hidden">Importar</span>
+                </a>
 
-              {/* Importar CSV */}
-              <a
-                href="/db/import"
-                className="p-2.5 rounded-lg bg-gray-100 text-gray-700 hover:bg-blue-100 hover:text-blue-600 transition-all duration-200"
-                title="Importar CSV"
-              >
-                <Upload size={20} />
-              </a>
-
-              {/* Descargar */}
-              <button
-                onClick={() => setShowExportModal(true)}
-                className="p-2.5 rounded-lg bg-[#010139] text-white hover:bg-[#020270] transition-all duration-200 shadow-md hover:shadow-lg"
-                title="Descargar clientes"
-              >
-                <Download size={20} />
-              </button>
+                {/* Descargar */}
+                <button
+                  onClick={() => setShowExportModal(true)}
+                  className="flex items-center justify-center gap-2 px-3 py-2.5 sm:p-2.5 rounded-lg bg-[#010139] text-white hover:bg-[#020270] transition-all duration-200 shadow-md hover:shadow-lg"
+                  title="Descargar clientes"
+                >
+                  <Download size={18} />
+                  <span className="text-xs font-semibold sm:hidden">Exportar</span>
+                </button>
               </div>
             </div>
           )}
@@ -998,6 +1392,15 @@ export default function DatabaseTabs({
           position: relative;
         }
         
+        /* Permitir que los dropdowns se muestren correctamente */
+        :global(.clients-table tbody tr) {
+          position: relative;
+        }
+        
+        :global(.ct-td-acciones) {
+          overflow: visible !important;
+        }
+        
         /* Indicador visual de scroll en mobile */
         @media (max-width: 768px) {
           :global(.clients-wrapper)::after {
@@ -1021,6 +1424,12 @@ export default function DatabaseTabs({
         @media (max-width: 768px) {
           :global(.clients-table) {
             min-width: 100%;
+            table-layout: fixed;
+          }
+        }
+        
+        @media (max-width: 480px) {
+          :global(.clients-table) {
             table-layout: auto;
           }
         }
@@ -1048,63 +1457,51 @@ export default function DatabaseTabs({
             width: 50px !important;
           }
           
-          /* Cliente - Se reduce cuando hay checkbox */
+          /* Cliente - Más espacio ahora */
           :global(.ct-th-name),
           :global(.ct-td-name) {
-            width: 30% !important;
-            min-width: 250px !important;
+            width: 35% !important;
+            min-width: 280px !important;
           }
           
           :global(.with-selection .ct-th-name),
           :global(.with-selection .ct-td-name) {
-            width: 28% !important;
-            min-width: 230px !important;
+            width: 32% !important;
+            min-width: 260px !important;
           }
           
-          /* Cédula */
+          /* Cédula - Más espacio */
           :global(.ct-th-cedula),
           :global(.ct-td-cedula) {
-            width: 10% !important;
-            min-width: 120px !important;
-            max-width: 150px !important;
+            width: 12% !important;
+            min-width: 130px !important;
+            max-width: 180px !important;
           }
           
-          /* Correo */
+          /* Correo - Más espacio */
           :global(.ct-th-correo),
           :global(.ct-td-correo) {
-            width: 18% !important;
-            min-width: 180px !important;
+            width: 20% !important;
+            min-width: 200px !important;
           }
           
           /* Celular */
           :global(.ct-th-celular),
           :global(.ct-td-celular) {
-            width: 10% !important;
-            min-width: 110px !important;
+            width: 12% !important;
+            min-width: 120px !important;
           }
           
           /* Pólizas */
           :global(.ct-th-polizas),
           :global(.ct-td-polizas) {
-            width: 6% !important;
-            min-width: 60px !important;
+            width: 7% !important;
+            min-width: 70px !important;
             text-align: center;
           }
           
-          /* Corredor */
+          /* Corredor - Más espacio */
           :global(.ct-th-corredor),
-          :global(.ct-td-corredor) {
-            width: 18% !important;
-            min-width: 180px !important;
-          }
-          
-          /* Acciones */
-          :global(.ct-th-acciones),
-          :global(.ct-td-acciones) {
-            width: 8% !important;
-            min-width: 100px !important;
-          }
-          
           :global(.ct-name) {
             max-width: none;
           }
@@ -1145,12 +1542,23 @@ export default function DatabaseTabs({
           }
         }
         
-        /* En mobile, permitir wrap para todas las celdas */
+        /* En mobile, permitir wrap más natural */
         @media (max-width: 768px) {
           :global(.ct-td) {
             word-wrap: break-word;
-            word-break: break-word;
-            hyphens: auto;
+            overflow-wrap: break-word;
+          }
+          
+          /* Nombre del cliente: wrap sin partir palabras abruptamente */
+          :global(.ct-td-name) {
+            word-break: normal !important;
+            hyphens: none !important;
+            line-height: 1.3 !important;
+          }
+          
+          :global(.ct-name) {
+            display: block;
+            line-height: 1.3;
           }
         }
 
@@ -1215,12 +1623,14 @@ export default function DatabaseTabs({
 
         /* PANEL DE PÓLIZAS */
         :global(.ct-detail) {
-          padding: 16px !important;
+          padding: 20px !important;
           background: #f9fafb !important;
         }
         :global(.pol-panel) {
           background: white;
-          padding: 16px;
+          padding: 24px;
+          border-radius: 8px;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
         }
 
         :global(.pol-header) {
@@ -1232,33 +1642,46 @@ export default function DatabaseTabs({
           border-bottom: 1px solid #e5e7eb;
         }
         :global(.pol-title) {
-          font-size: 0.875rem;
-          font-weight: 600;
-          color: #111827;
+          font-size: 1.125rem;
+          font-weight: 700;
+          color: #010139;
           margin: 0;
         }
         :global(.pol-count) {
-          font-size: 0.75rem;
-          color: #6b7280;
+          font-size: 0.875rem;
+          font-weight: 600;
+          color: #8AAA19;
+          background: #f0f9ff;
+          padding: 4px 12px;
+          border-radius: 12px;
         }
 
         :global(.pol-list) {
           display: flex;
           flex-direction: column;
-          gap: 8px;
+          gap: 12px;
         }
 
         :global(.pol-row) {
           display: flex;
           justify-content: space-between;
-          align-items: center;
-          padding: 12px;
-          border: 1px solid #e5e7eb;
-          border-radius: 6px;
-          gap: 12px;
+          align-items: flex-start;
+          padding: 18px 20px;
+          border: 2px solid #e5e7eb;
+          border-radius: 8px;
+          gap: 20px;
+          transition: all 0.2s ease;
         }
         :global(.pol-row:hover) {
           background: #f9fafb;
+          border-color: #8AAA19;
+          box-shadow: 0 2px 8px rgba(138, 170, 25, 0.1);
+        }
+        
+        @media (min-width: 769px) {
+          :global(.pol-row) {
+            align-items: center;
+          }
         }
 
         :global(.pol-main) {
@@ -1266,34 +1689,39 @@ export default function DatabaseTabs({
           min-width: 0; /* Permite que el flex item se encoja */
         }
         :global(.pol-number) {
-          font-weight: 600;
-          color: #111827;
-          font-size: 0.875rem;
-          margin-bottom: 4px;
+          font-weight: 700;
+          color: #010139;
+          font-size: 1rem;
+          margin-bottom: 8px;
           word-break: break-word;
         }
         :global(.pol-meta) {
           display: flex;
           align-items: center;
           flex-wrap: wrap;
-          gap: 6px;
-          font-size: 0.75rem;
-          color: #6b7280;
+          gap: 12px;
+          font-size: 0.875rem;
+          color: #374151;
+          line-height: 1.6;
+        }
+        :global(.pol-meta strong) {
+          color: #111827;
+          font-weight: 600;
         }
 
         :global(.pol-notas) {
-          margin-top: 8px;
-          padding: 8px 12px;
+          margin-top: 12px;
+          padding: 12px 16px;
           background: #f0f9ff;
-          border-left: 3px solid #0ea5e9;
-          border-radius: 4px;
-          font-size: 0.75rem;
-          line-height: 1.5;
+          border-left: 4px solid #0ea5e9;
+          border-radius: 6px;
+          font-size: 0.875rem;
+          line-height: 1.6;
         }
         :global(.pol-notas-label) {
-          font-weight: 600;
+          font-weight: 700;
           color: #0369a1;
-          margin-right: 6px;
+          margin-right: 8px;
         }
         :global(.pol-notas-text) {
           color: #374151;
@@ -1301,8 +1729,10 @@ export default function DatabaseTabs({
 
         :global(.pol-actions) {
           display: flex;
-          gap: 4px;
-          flex-shrink: 0; /* No permite que se encoja */
+          gap: 6px;
+          flex-shrink: 0;
+          justify-content: flex-end;
+          min-width: 44px;
         }
 
         :global(.no-policies) {
@@ -1325,7 +1755,7 @@ export default function DatabaseTabs({
           margin-bottom: 16px;
         }
 
-        /* BOTONES DE ACCIÓN */
+        /* BOTONES DE ACCIÓN - Ya no se necesitan estilos individuales */
         :global(.icon-btn) {
           padding: 8px;
           border-radius: 6px;
@@ -1336,34 +1766,6 @@ export default function DatabaseTabs({
           display: inline-flex;
           align-items: center;
           justify-content: center;
-        }
-        :global(.icon-btn.folder) {
-          color: #8AAA19;
-        }
-        :global(.icon-btn.folder:hover) {
-          background: #f0f9ff;
-          border-color: #8AAA19;
-        }
-        :global(.icon-btn.view) {
-          color: #010139;
-        }
-        :global(.icon-btn.view:hover) {
-          background: #eff6ff;
-          border-color: #010139;
-        }
-        :global(.icon-btn.edit) {
-          color: #8AAA19;
-        }
-        :global(.icon-btn.edit:hover) {
-          background: #f7fee7;
-          border-color: #8AAA19;
-        }
-        :global(.icon-btn.delete) {
-          color: #dc2626;
-        }
-        :global(.icon-btn.delete:hover) {
-          background: #fef2f2;
-          border-color: #dc2626;
         }
 
         /* RESPONSIVE */
@@ -1392,8 +1794,29 @@ export default function DatabaseTabs({
           }
           
           :global(.ct-name) {
-            font-size: 0.875rem;
-            line-height: 1.4;
+            font-size: 0.9375rem;
+            font-weight: 600;
+            line-height: 1.35;
+          }
+          
+          /* Distribución en tablet: Nombre, Cédula, Acciones */
+          :global(.ct-th-name),
+          :global(.ct-td-name) {
+            width: 60% !important;
+            min-width: 0 !important;
+            padding-right: 12px !important;
+          }
+          
+          :global(.ct-th-cedula),
+          :global(.ct-td-cedula) {
+            width: 30% !important;
+          }
+          
+          :global(.ct-th-acciones),
+          :global(.ct-td-acciones) {
+            width: 60px !important;
+            min-width: 60px !important;
+            max-width: 60px !important;
           }
           
           /* Pólizas en tablet */
@@ -1411,7 +1834,12 @@ export default function DatabaseTabs({
         }
         @media (max-width: 480px) {
           :global(.tab-content) {
-            padding: 12px;
+            padding: 12px 0;
+          }
+          
+          :global(.clients-wrapper) {
+            margin: 0;
+            padding: 0;
           }
           
           /* Solo mostrar: Checkbox (si activo), Cliente y Acciones */
@@ -1422,18 +1850,37 @@ export default function DatabaseTabs({
           
           :global(.ct-th),
           :global(.ct-td) {
-            padding: 8px 4px;
-            font-size: 0.75rem;
-          }
-          
-          :global(.ct-name) {
+            padding: 10px 6px;
             font-size: 0.8125rem;
           }
           
-          /* Dar más espacio al nombre en mobile */
+          :global(.ct-name) {
+            font-size: 0.875rem;
+            font-weight: 600;
+            line-height: 1.4;
+          }
+          
+          /* Distribución optimizada en mobile */
           :global(.ct-th-name),
           :global(.ct-td-name) {
-            width: 70% !important;
+            width: auto !important;
+            min-width: 0 !important;
+            padding-right: 12px !important;
+          }
+          
+          /* Acciones - Un solo botón */
+          :global(.ct-th-acciones),
+          :global(.ct-td-acciones) {
+            width: 60px !important;
+            min-width: 60px !important;
+            max-width: 60px !important;
+          }
+          
+          /* Checkbox si está activo */
+          :global(.with-selection .ct-th:has(input[type="checkbox"])),
+          :global(.with-selection .ct-td:has(input[type="checkbox"])) {
+            width: 44px !important;
+            padding: 8px 4px !important;
           }
           
           /* Pólizas en móvil */
@@ -1454,30 +1901,51 @@ export default function DatabaseTabs({
             white-space: nowrap;
           }
           :global(.icon-btn) {
-            width: 40px;
-            height: 40px;
-            padding: 10px;
+            width: 32px;
+            height: 32px;
+            padding: 6px;
           }
           :global(.ct-actions) {
-            gap: 2px;
+            gap: 3px;
+            flex-wrap: nowrap;
           }
         }
         
         /* Mobile First - Pantallas muy pequeñas */
         @media (max-width: 360px) {
+          :global(.ct-name) {
+            font-size: 0.8125rem;
+            line-height: 1.3;
+          }
+          
+          :global(.ct-th),
+          :global(.ct-td) {
+            padding: 8px 4px;
+          }
+          
           :global(.ct-actions) {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
-            gap: 4px;
+            gap: 3px;
           }
+          
           :global(.pol-actions) {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
             gap: 4px;
           }
+          
           :global(.icon-btn) {
             width: 100%;
-            min-height: 40px;
+            min-height: 38px;
+          }
+          
+          /* Acciones - Un solo botón */
+          :global(.ct-th-acciones),
+          :global(.ct-td-acciones) {
+            width: 60px !important;
+            min-width: 60px !important;
+            max-width: 60px !important;
           }
         }
 

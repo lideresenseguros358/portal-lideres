@@ -1,17 +1,18 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { actionGetAdvances } from '@/app/(app)/commissions/actions';
+import { actionGetAdvances, actionGetPaidAdvancesTotal } from '@/app/(app)/commissions/actions';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { FaChevronDown, FaChevronRight, FaMoneyBillWave, FaPlus, FaHistory, FaDollarSign } from 'react-icons/fa';
+import { FaChevronDown, FaChevronRight, FaMoneyBillWave, FaPlus, FaHistory, FaDollarSign, FaEdit } from 'react-icons/fa';
 import { AddAdvanceModal } from './AddAdvanceModal';
 import { AdvanceHistoryModal } from './AdvanceHistoryModal';
 import { PayAdvanceModal } from './PayAdvanceModal';
+import { EditAdvanceModal } from './EditAdvanceModal';
 
 // Types
 type AdvanceStatus = 'pending' | 'paid';
@@ -23,12 +24,16 @@ interface Advance {
   status: AdvanceStatus;
   created_at: string;
   brokers: { id: string; name: string | null } | null;
+  is_recurring?: boolean;
+  recurrence_id?: string | null;
+  total_paid?: number; // Total pagado desde advance_logs
 }
 
 interface GroupedAdvances {
   [brokerId: string]: {
     broker_name: string;
     total_pending: number;
+    total_paid: number; // Total pagado por este broker
     advances: Advance[];
   };
 }
@@ -42,9 +47,11 @@ interface Props {
 export function AdvancesTab({ role, brokerId, brokers }: Props) {
   const [year, setYear] = useState(new Date().getFullYear());
   const [allAdvances, setAllAdvances] = useState<Advance[]>([]);
+  const [paidTotal, setPaidTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedAdvanceId, setSelectedAdvanceId] = useState<string | null>(null);
+  const [editingAdvance, setEditingAdvance] = useState<Advance | null>(null);
   const [expandedBrokers, setExpandedBrokers] = useState<Set<string>>(new Set());
   const [paymentModal, setPaymentModal] = useState<{
     isOpen: boolean;
@@ -58,9 +65,33 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
     pendingAdvances: [],
   });
 
+  // Sincronizar adelantos recurrentes existentes (solo una vez)
+  const syncRecurrences = useCallback(async () => {
+    try {
+      console.log('[AdvancesTab] Syncing recurrences...');
+      const response = await fetch('/commissions/sync-recurrences', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const result = await response.json();
+      console.log('[AdvancesTab] Sync result:', result);
+      if (result.synced > 0) {
+        console.log('[AdvancesTab] Synced', result.synced, 'recurrences');
+      }
+    } catch (error) {
+      console.error('[AdvancesTab] Error syncing recurrences:', error);
+      // No mostramos error al usuario, solo logging
+    }
+  }, []);
+
   const loadAdvances = useCallback(async () => {
     setLoading(true);
     try {
+      // Intentar sincronizar recurrencias primero (solo master)
+      if (role === 'master') {
+        await syncRecurrences();
+      }
+      
       const result = await actionGetAdvances(role === 'broker' ? brokerId || undefined : undefined, year);
       console.log('[AdvancesTab] Result from actionGetAdvances:', result);
       if (result.ok) {
@@ -75,8 +106,11 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
             status: normalizedStatus,
             created_at: item.created_at,
             brokers: (item as any).brokers ?? null,
+            is_recurring: (item as any).is_recurring ?? false,
+            recurrence_id: (item as any).recurrence_id ?? null,
+            total_paid: (item as any).total_paid ? Number((item as any).total_paid) : undefined,
           };
-          console.log('[AdvancesTab] Normalized advance:', advance.id, advance.status, advance.amount);
+          console.log('[AdvancesTab] Normalized advance:', advance.id, advance.status, advance.amount, 'total_paid:', advance.total_paid, 'recurring:', advance.is_recurring);
           return advance;
         });
         setAllAdvances(normalized);
@@ -84,13 +118,23 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
         console.error('[AdvancesTab] Error loading advances:', result.error);
         toast.error('Error al cargar adelantos', { description: result.error });
       }
+      
+      // Cargar total de deudas saldadas desde advance_logs
+      const paidResult = await actionGetPaidAdvancesTotal(role === 'broker' ? brokerId || undefined : undefined, year);
+      if (paidResult.ok) {
+        console.log('[AdvancesTab] Paid total from logs:', paidResult.total);
+        setPaidTotal(paidResult.total);
+      } else {
+        console.error('[AdvancesTab] Error loading paid total:', paidResult.error);
+        setPaidTotal(0);
+      }
     } catch (error) {
       console.error('[AdvancesTab] Exception loading advances:', error);
       toast.error('Error inesperado al cargar adelantos');
     } finally {
       setLoading(false);
     }
-  }, [role, brokerId, year]);
+  }, [role, brokerId, year, syncRecurrences]);
 
   useEffect(() => {
     loadAdvances();
@@ -104,11 +148,15 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
         acc[bId] = {
           broker_name: advance.brokers?.name || 'Desconocido',
           total_pending: 0,
+          total_paid: 0,
           advances: [],
         };
       }
       if (advance.status === 'pending') {
         acc[bId].total_pending += advance.amount;
+      }
+      if (advance.status === 'paid' && advance.total_paid) {
+        acc[bId].total_paid += advance.total_paid;
       }
       acc[bId].advances.push(advance);
       console.log('[AdvancesTab] Group accumulate:', bId, advance.status, acc[bId].advances.length);
@@ -185,7 +233,10 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
                   </TableCell>
                   <TableCell className="font-bold text-[#010139]">{brokerData.broker_name}</TableCell>
                   <TableCell className="text-right font-bold text-[#8AAA19] font-mono">
-                    {brokerData.total_pending.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                    {status === 'pending' 
+                      ? brokerData.total_pending.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
+                      : brokerData.total_paid.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
+                    }
                   </TableCell>
                   <TableCell className="text-center text-gray-600">
                     {advancesToShow.length} adelantos
@@ -224,23 +275,50 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
                 >
                   {role === 'master' && <TableCell></TableCell>}
                   <TableCell className={role === 'master' ? 'pl-12 text-gray-600' : 'text-gray-700'}>
-                    {advance.reason || 'Sin motivo especificado'}
+                    <div className="flex items-center gap-2">
+                      <span>{advance.reason || 'Sin motivo especificado'}</span>
+                      {advance.is_recurring && (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-800 border border-purple-300">
+                          🔁 RECURRENTE
+                        </span>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="text-right font-mono text-gray-700">
-                    {advance.amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                    {status === 'pending'
+                      ? advance.amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
+                      : (advance.total_paid || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' })
+                    }
                   </TableCell>
                   <TableCell className="text-center text-gray-500 text-sm">
                     {new Date(advance.created_at).toLocaleDateString('es-PA')}
                   </TableCell>
                   <TableCell className="text-center">
-                    <Button
-                      size="sm"
-                      variant="ghost" 
-                      onClick={() => setSelectedAdvanceId(advance.id)}
-                      className="hover:bg-[#8AAA19] hover:text-white"
-                    >
-                      Ver Historial
-                    </Button>
+                    <div className="flex items-center justify-center gap-2">
+                      {role === 'master' && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingAdvance(advance);
+                          }}
+                          className="hover:bg-[#010139] hover:text-white"
+                          title="Editar adelanto"
+                        >
+                          <FaEdit className="text-sm" />
+                        </Button>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="ghost" 
+                        onClick={() => setSelectedAdvanceId(advance.id)}
+                        className="hover:bg-[#8AAA19] hover:text-white"
+                        title="Ver historial"
+                      >
+                        <FaHistory className="text-sm" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -290,18 +368,30 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
 
   // Calculate totals
   const totals = useMemo(() => {
-    const pendingTotal = allAdvances
-      .filter(a => a.status === 'pending')
-      .reduce((sum, a) => sum + a.amount, 0);
-    const paidTotal = allAdvances
-      .filter(a => a.status === 'paid')
-      .reduce((sum, a) => sum + a.amount, 0);
+    const pendingAdvances = allAdvances.filter(a => a.status === 'pending');
+    const paidAdvances = allAdvances.filter(a => a.status === 'paid');
+    
+    const pendingTotal = pendingAdvances.reduce((sum, a) => sum + a.amount, 0);
+    // paidTotal ya viene de advance_logs (suma de pagos realizados)
+    
+    console.log('[AdvancesTab] Totals calculation:');
+    console.log('  - Total advances:', allAdvances.length);
+    console.log('  - Pending advances:', pendingAdvances.length, 'Total:', pendingTotal);
+    console.log('  - Paid advances:', paidAdvances.length, 'Total from logs:', paidTotal);
+    
+    // Verificar si hay adelantos con montos inválidos en pendientes
+    const invalidAmounts = pendingAdvances.filter(a => isNaN(a.amount) || a.amount === null);
+    if (invalidAmounts.length > 0) {
+      console.warn('[AdvancesTab] Found pending advances with invalid amounts:', invalidAmounts);
+    }
+    
     return { pendingTotal, paidTotal };
-  }, [allAdvances]);
+  }, [allAdvances, paidTotal]);
 
   return (
     <div className="space-y-6">
       <AddAdvanceModal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} onSuccess={loadAdvances} brokers={brokers} />
+      <EditAdvanceModal advance={editingAdvance} onClose={() => setEditingAdvance(null)} onSuccess={loadAdvances} />
       <AdvanceHistoryModal isOpen={!!selectedAdvanceId} onClose={() => setSelectedAdvanceId(null)} advanceId={selectedAdvanceId} />
       <PayAdvanceModal 
         isOpen={paymentModal.isOpen} 

@@ -27,6 +27,38 @@ export default function NewCaseWizard({ brokers, clients, insurers }: NewCaseWiz
   const [selectedExistingClient, setSelectedExistingClient] = useState<any>(null);
   const [showClientSuggestions, setShowClientSuggestions] = useState(false);
   const [expedienteDocuments, setExpedienteDocuments] = useState<ExpedienteDocument[]>([]);
+  
+  // Estados para autenticación
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [userBrokerId, setUserBrokerId] = useState<string | null>(null);
+  
+  // Obtener información del usuario al montar
+  useEffect(() => {
+    const fetchUserInfo = async () => {
+      const { data: { user } } = await supabaseClient().auth.getUser();
+      if (user) {
+        const { data: profile } = await supabaseClient()
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .single();
+        
+        setUserRole(profile?.role || null);
+        
+        // Si es broker, obtener su broker_id
+        if (profile?.role === 'broker') {
+          const { data: broker } = await supabaseClient()
+            .from('brokers')
+            .select('id')
+            .eq('p_id', user.id)
+            .single();
+          
+          setUserBrokerId(broker?.id || null);
+        }
+      }
+    };
+    fetchUserInfo();
+  }, []);
 
   // Form data
   const [formData, setFormData] = useState({
@@ -105,11 +137,17 @@ export default function NewCaseWizard({ brokers, clients, insurers }: NewCaseWiz
       return;
     }
 
-    const { data } = await supabaseClient()
+    let query = supabaseClient()
       .from('clients')
       .select('id, name, national_id, email, phone, broker_id')
-      .ilike('name', `%${searchTerm}%`)
-      .limit(5);
+      .ilike('name', `%${searchTerm}%`);
+    
+    // Si es broker, solo mostrar sus clientes
+    if (userRole === 'broker' && userBrokerId) {
+      query = query.eq('broker_id', userBrokerId);
+    }
+    
+    const { data } = await query.limit(5);
 
     setExistingClients(data || []);
     setShowClientSuggestions(true);

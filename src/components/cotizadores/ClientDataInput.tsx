@@ -28,6 +28,8 @@ interface ClientDataInputProps {
   onEmailChange?: (email: string) => void;
   onTelefonoChange?: (telefono: string) => void;
   onClientFound?: (clientData: any) => void;
+  role?: string; // Rol del usuario: 'master' | 'broker'
+  userBrokerId?: string | null; // ID del broker si el usuario es broker
   errors?: {
     cedula?: string;
     nombreCompleto?: string;
@@ -46,6 +48,8 @@ export default function ClientDataInput({
   onEmailChange,
   onTelefonoChange,
   onClientFound,
+  role,
+  userBrokerId,
   errors = {},
 }: ClientDataInputProps) {
   const [showScanner, setShowScanner] = useState(false);
@@ -72,11 +76,17 @@ export default function ClientDataInput({
       setIsSearching(true);
       
       try {
-        const { data, error } = await supabaseClient()
+        let query = supabaseClient()
           .from('clients')
           .select('*')
-          .eq('national_id', cedula)
-          .single();
+          .eq('national_id', cedula);
+        
+        // Si es broker, solo buscar en sus clientes
+        if (role === 'broker' && userBrokerId) {
+          query = query.eq('broker_id', userBrokerId);
+        }
+        
+        const { data, error } = await query.single();
 
         if (error) {
           if (error.code !== 'PGRST116') { // Not found is OK

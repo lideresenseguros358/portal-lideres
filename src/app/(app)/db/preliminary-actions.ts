@@ -29,7 +29,7 @@ export async function actionGetPreliminaryClients() {
       .select(`
         *,
         insurers(id, name),
-        brokers(id, name, p_id, profiles!p_id(full_name, email))
+        brokers(id, name, p_id, profiles!brokers_p_id_fkey(full_name, email))
       `)
       .eq('migrated', false)
       .order('created_at', { ascending: false });

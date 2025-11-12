@@ -6,6 +6,7 @@ import { supabaseClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { createUppercaseHandler, uppercaseInputClass } from '@/lib/utils/uppercase';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { checkSpecialOverride } from '@/lib/constants/policy-types';
 
 interface WizardProps {
   onClose: () => void;
@@ -41,6 +42,8 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
   const [existingClients, setExistingClients] = useState<any[]>([]);
   const [selectedExistingClient, setSelectedExistingClient] = useState<any>(null);
   const [showClientSuggestions, setShowClientSuggestions] = useState(false);
+  const [userBrokerId, setUserBrokerId] = useState<string | null>(null);
+  const [specialOverride, setSpecialOverride] = useState<{ hasSpecialOverride: boolean; overrideValue: number | null; condition?: string }>({ hasSpecialOverride: false, overrideValue: null });
   const today = new Date().toISOString().split('T')[0];
   
   const [formData, setFormData] = useState<FormData>({
@@ -64,6 +67,30 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
     if (role === 'master') {
       loadBrokers();
     }
+    
+    // Obtener broker_id y percent_default si es broker
+    if (role === 'broker') {
+      const fetchBrokerInfo = async () => {
+        const { data: { user } } = await supabaseClient().auth.getUser();
+        if (user) {
+          const { data: broker } = await supabaseClient()
+            .from('brokers')
+            .select('id, percent_default')
+            .eq('p_id', user.id)
+            .single();
+          
+          if (broker) {
+            setUserBrokerId(broker.id);
+            // Establecer el porcentaje default del broker
+            setFormData(prev => ({
+              ...prev,
+              percent_override: broker.percent_default?.toString() || ''
+            }));
+          }
+        }
+      };
+      fetchBrokerInfo();
+    }
   }, [role]);
 
   useEffect(() => {
@@ -78,6 +105,24 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
       }
     }
   }, [formData.start_date, formData.renewal_date]);
+  
+  // Verificar condición especial ASSA + VIDA
+  useEffect(() => {
+    if (formData.insurer_id && formData.ramo && insurers.length > 0) {
+      const selectedInsurer = insurers.find(i => i.id === formData.insurer_id);
+      const override = checkSpecialOverride(selectedInsurer?.name, formData.ramo);
+      
+      setSpecialOverride(override);
+      
+      // Si hay condición especial, aplicar automáticamente el override
+      if (override.hasSpecialOverride && override.overrideValue !== null) {
+        setFormData(prev => ({
+          ...prev,
+          percent_override: String(override.overrideValue)
+        }));
+      }
+    }
+  }, [formData.insurer_id, formData.ramo, insurers]);
 
   const loadInsurers = async () => {
     const { data } = await supabaseClient()
@@ -124,11 +169,17 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
       return;
     }
 
-    const { data } = await supabaseClient()
+    let query = supabaseClient()
       .from('clients')
       .select('id, name, national_id, email, phone, broker_id')
-      .ilike('name', `%${searchTerm}%`)
-      .limit(5);
+      .ilike('name', `%${searchTerm}%`);
+    
+    // Si es broker, solo mostrar sus clientes
+    if (role === 'broker' && userBrokerId) {
+      query = query.eq('broker_id', userBrokerId);
+    }
+    
+    const { data } = await query.limit(5);
 
     setExistingClients(data || []);
     setShowClientSuggestions(true);
@@ -201,19 +252,44 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
 
   const validateStep = async () => {
     if (step === 1) {
-      if (!formData.client_name) {
+      if (!formData.client_name.trim()) {
         toast.error('El nombre del cliente es obligatorio');
         return false;
       }
+      if (!formData.national_id.trim()) {
+        toast.error('La cédula/pasaporte/RUC es obligatoria');
+        return false;
+      }
+      if (!formData.email.trim()) {
+        toast.error('El email es obligatorio');
+        return false;
+      }
+      if (!formData.phone.trim()) {
+        toast.error('El teléfono es obligatorio');
+        return false;
+      }
     } else if (step === 2) {
-      if (!formData.policy_number || !formData.insurer_id) {
-        toast.error('Número de póliza y aseguradora son obligatorios');
+      if (!formData.policy_number.trim()) {
+        toast.error('El número de póliza es obligatorio');
+        return false;
+      }
+      if (!formData.insurer_id) {
+        toast.error('La aseguradora es obligatoria');
+        return false;
+      }
+      if (!formData.ramo.trim()) {
+        toast.error('El ramo/tipo de seguro es obligatorio');
+        return false;
+      }
+      if (!formData.start_date) {
+        toast.error('La fecha de inicio es obligatoria');
         return false;
       }
       if (!formData.renewal_date) {
         toast.error('La fecha de renovación es obligatoria');
         return false;
       }
+      // Estado siempre es ACTIVA - no necesita validación
       // Validar que el número de póliza no exista
       const isValid = await validatePolicyNumber(formData.policy_number);
       if (!isValid) {
@@ -223,6 +299,10 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
     } else if (step === 3 && role === 'master') {
       if (!formData.broker_email) {
         toast.error('Debe seleccionar un corredor');
+        return false;
+      }
+      if (!formData.percent_override || formData.percent_override.trim() === '') {
+        toast.error('El porcentaje de comisión es obligatorio');
         return false;
       }
     }
@@ -258,7 +338,7 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
           ramo: formData.ramo ? formData.ramo.toUpperCase() : null,
           start_date: formData.start_date || null,
           renewal_date: formData.renewal_date || null,
-          status: formData.status as 'ACTIVA' | 'VENCIDA' | 'CANCELADA',
+          status: 'ACTIVA' as 'ACTIVA' | 'VENCIDA' | 'CANCELADA', // Siempre ACTIVA para nuevos registros
           notas: formData.notas || null,
           client_id: selectedExistingClient.id,
           broker_id: broker_id,
@@ -299,7 +379,7 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
           ramo: formData.ramo ? formData.ramo.toUpperCase() : null,
           start_date: formData.start_date || null,
           renewal_date: formData.renewal_date || null,
-          status: formData.status as 'ACTIVA' | 'VENCIDA' | 'CANCELADA',
+          status: 'ACTIVA' as 'ACTIVA' | 'VENCIDA' | 'CANCELADA', // Siempre ACTIVA para nuevos registros
           notas: formData.notas || null,
         };
 
@@ -382,8 +462,7 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
               
               <div className="bg-blue-50 border-l-4 border-blue-500 p-2 sm:p-3 rounded mb-2 sm:mb-4">
                 <p className="text-xs sm:text-sm text-blue-800">
-                  <span className="text-red-500 font-bold">*</span> Campos obligatorios. 
-                  Los demás son opcionales.
+                  <span className="text-red-500 font-bold">*</span> Todos los campos son obligatorios excepto Notas.
                 </p>
               </div>
               
@@ -433,25 +512,24 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
 
               <div>
                 <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
-                  Cédula / Pasaporte / RUC
+                  Cédula / Pasaporte / RUC <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
+                  required
                   value={formData.national_id}
                   onChange={createUppercaseHandler((e) => setFormData({ ...formData, national_id: e.target.value }))}
                   className={`w-full px-3 py-2 sm:px-4 text-sm sm:text-base border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition ${uppercaseInputClass}`}
                   placeholder="8-123-4567"
                 />
-                <p className="text-[10px] sm:text-xs text-gray-500 mt-1">
-                  ℹ️ Campo opcional - puede dejarse vacío si no se dispone del dato
-                </p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div>
-                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Email</label>
+                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Email <span className="text-red-500">*</span></label>
                   <input
                     type="email"
+                    required
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     className="w-full px-3 py-2 sm:px-4 text-sm sm:text-base border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition"
@@ -460,9 +538,10 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                 </div>
 
                 <div>
-                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Teléfono</label>
+                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Teléfono <span className="text-red-500">*</span></label>
                   <input
                     type="tel"
+                    required
                     value={formData.phone}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                     className="w-full px-3 py-2 sm:px-4 text-sm sm:text-base border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition"
@@ -503,6 +582,7 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                 </label>
                 <input
                   type="text"
+                  required
                   value={formData.policy_number}
                   onChange={createUppercaseHandler((e) => setFormData({ ...formData, policy_number: e.target.value }))}
                   className={`w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition ${uppercaseInputClass}`}
@@ -511,9 +591,10 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Ramo / Tipo de Seguro</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Ramo / Tipo de Seguro <span className="text-red-500">*</span></label>
                 <input
                   type="text"
+                  required
                   value={formData.ramo}
                   onChange={createUppercaseHandler((e) => setFormData({ ...formData, ramo: e.target.value }))}
                   className={`w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition ${uppercaseInputClass}`}
@@ -523,9 +604,10 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
                 <div className="min-w-0">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Fecha de Inicio</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Fecha de Inicio <span className="text-red-500">*</span></label>
                   <input
                     type="date"
+                    required
                     value={formData.start_date}
                     onChange={(e) => {
                       const startDate = e.target.value;
@@ -566,20 +648,6 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                     required
                   />
                 </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Estado</label>
-                <Select value={formData.status} onValueChange={(value) => setFormData({ ...formData, status: value })}>
-                  <SelectTrigger className="w-full border-2 border-gray-300 focus:border-[#8AAA19] text-sm sm:text-base">
-                    <SelectValue placeholder="Seleccionar estado" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ACTIVA">Activa</SelectItem>
-                    <SelectItem value="VENCIDA">Vencida</SelectItem>
-                    <SelectItem value="CANCELADA">Cancelada</SelectItem>
-                  </SelectContent>
-                </Select>
               </div>
 
               <div>
@@ -628,10 +696,15 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                       value={formData.broker_email} 
                       onValueChange={(value) => {
                         const selected = brokers.find((b: any) => b.profile?.email === value);
+                        // Aplicar condición especial ASSA + VIDA si aplica, sino usar default del broker
+                        const percentToUse = specialOverride.hasSpecialOverride && specialOverride.overrideValue !== null
+                          ? String(specialOverride.overrideValue)
+                          : (selected as any)?.percent_default?.toString() || '';
+                        
                         setFormData({ 
                           ...formData, 
                           broker_email: value,
-                          percent_override: (selected as any)?.percent_default?.toString() || ''
+                          percent_override: percentToUse
                         });
                       }}
                     >
@@ -641,7 +714,7 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                       <SelectContent className="max-h-[200px] overflow-auto">
                         {brokers.map((broker: any) => (
                           <SelectItem key={broker.id} value={broker.profile?.email}>
-                            {broker.name || broker.profile?.full_name} ({broker.profile?.email})
+                            {broker.name || broker.profile?.full_name}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -650,29 +723,71 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Porcentaje de Comisión (%)
+                      Porcentaje de Comisión (%) {specialOverride.hasSpecialOverride ? '(Condición Especial)' : ''} <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      required
+                      value={formData.percent_override}
+                      onChange={(e) => setFormData({ ...formData, percent_override: e.target.value })}
+                      className={`w-full px-4 py-2 border-2 rounded-lg focus:outline-none transition ${
+                        specialOverride.hasSpecialOverride 
+                          ? 'border-blue-300 bg-blue-50 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20' 
+                          : 'border-gray-300 focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20'
+                      }`}
+                      placeholder="15.5"
+                    />
+                    {specialOverride.hasSpecialOverride ? (
+                      <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
+                        <p className="text-xs text-blue-700 font-semibold">
+                          🔒 Condición Especial ASSA + VIDA: 1.0% automático. Editable pero protegido de cambios masivos.
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-gray-500 mt-1">
+                        Porcentaje default del corredor seleccionado. Puede modificarse si es necesario.
+                      </p>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="space-y-4">
+                  <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
+                    <p className="text-sm text-blue-800">
+                      <strong>Corredor asignado:</strong> Tú
+                    </p>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Porcentaje de Comisión (%) {specialOverride.hasSpecialOverride ? '(Condición Especial)' : ''}
                     </label>
                     <input
                       type="number"
                       step="0.01"
                       value={formData.percent_override}
-                      onChange={(e) => setFormData({ ...formData, percent_override: e.target.value })}
-                      className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition"
-                      placeholder="15.5"
+                      readOnly
+                      disabled
+                      className={`w-full px-4 py-2 border-2 rounded-lg cursor-not-allowed ${
+                        specialOverride.hasSpecialOverride 
+                          ? 'border-blue-300 bg-blue-50 text-blue-900' 
+                          : 'border-gray-300 bg-gray-100 text-gray-700'
+                      }`}
+                      placeholder="Se usará tu porcentaje default"
                     />
-                    <p className="text-xs text-gray-500 mt-1">
-                      Si se deja vacío, se usará el porcentaje default del corredor
-                    </p>
+                    {specialOverride.hasSpecialOverride ? (
+                      <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
+                        <p className="text-xs text-blue-700 font-semibold">
+                          🔒 Condición Especial ASSA + VIDA: 1.0% automático aplicado.
+                        </p>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-blue-600 mt-2">
+                        Se usará tu porcentaje de comisión predeterminado automáticamente
+                      </p>
+                    )}
                   </div>
-                </>
-              ) : (
-                <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
-                  <p className="text-sm text-blue-800">
-                    <strong>Corredor asignado:</strong> Tú ({userEmail})
-                  </p>
-                  <p className="text-xs text-blue-600 mt-2">
-                    Se usará tu porcentaje de comisión predeterminado
-                  </p>
                 </div>
               )}
             </div>

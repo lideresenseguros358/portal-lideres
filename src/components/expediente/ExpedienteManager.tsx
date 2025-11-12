@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { FaUpload, FaDownload, FaTrash, FaFile, FaFilePdf, FaFileImage, FaPlus, FaTimes, FaEye } from 'react-icons/fa';
+import { FaUpload, FaDownload, FaTrash, FaFile, FaFilePdf, FaFileImage, FaPlus, FaTimes, FaEye, FaIdCard, FaFolderPlus } from 'react-icons/fa';
 import { toast } from 'sonner';
 import {
   uploadExpedienteDocument,
@@ -215,23 +215,19 @@ export default function ExpedienteManager({
   }
 
   return (
-    <div className="space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-base font-bold text-[#010139]">
-          📁 Expediente del Cliente
-        </h3>
-        {!readOnly && (
+    <div className="space-y-3">
+      {/* Header with "Nuevo Documento" button */}
+      {!readOnly && (
+        <div className="flex items-center justify-end">
           <button
             onClick={() => setShowUploadModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg hover:shadow-lg transition-all text-xs font-medium"
+            className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg hover:shadow-lg transition-all text-sm font-semibold"
           >
-            <FaPlus size={12} />
-            <span className="hidden sm:inline">Subir</span>
-            <span className="sm:hidden">+</span>
+            <FaFolderPlus size={14} />
+            <span>Nuevo Documento</span>
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Documents List */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3">
@@ -310,10 +306,11 @@ export default function ExpedienteManager({
                       setUploadDocType(reqType);
                       setShowUploadModal(true);
                     }}
-                    className="flex items-center gap-1 px-2 py-1.5 bg-[#8AAA19] text-white rounded-lg hover:bg-[#6d8814] transition-all text-xs font-medium"
+                    className="flex items-center gap-1.5 px-3 py-2 bg-[#010139] text-white rounded-lg hover:bg-[#020270] transition-all text-xs font-semibold shadow-md hover:shadow-lg"
+                    title="Subir cédula/pasaporte del cliente"
                   >
-                    <FaPlus size={10} />
-                    Incluir
+                    <FaIdCard size={12} />
+                    <span>Incluir Cédula</span>
                   </button>
                 )}
               </div>
@@ -368,106 +365,153 @@ export default function ExpedienteManager({
           ))}
       </div>
 
-      {/* Upload Modal */}
+      {/* Upload Modal - Rediseñado con branding corporativo */}
       {showUploadModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-3 sm:p-4">
-          <div className="bg-white rounded-lg shadow-2xl max-w-md w-full max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
-              <h3 className="text-base font-bold text-[#010139]">Subir Documento</h3>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto border-2 border-gray-200">
+            {/* Header con gradiente corporativo */}
+            <div className="sticky top-0 bg-gradient-to-r from-[#010139] to-[#020270] px-5 py-4 flex items-center justify-between rounded-t-xl">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-white/10 rounded-lg">
+                  <FaFolderPlus size={20} className="text-white" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white">Subir Documento</h3>
+                  <p className="text-xs text-white/80">Agregar archivo al expediente</p>
+                </div>
+              </div>
               <button
                 onClick={() => {
                   setShowUploadModal(false);
                   resetUploadForm();
                 }}
-                className="p-1.5 hover:bg-gray-100 rounded transition-all"
+                className="p-2 hover:bg-white/10 rounded-lg transition-all"
               >
-                <FaTimes size={16} className="text-gray-600" />
+                <FaTimes size={18} className="text-white" />
               </button>
             </div>
 
-            <div className="p-4 space-y-3">
-              {/* Document Type */}
+            <div className="p-5 space-y-4">
+              {/* Document Type con iconos */}
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                <label className="block text-sm font-bold text-[#010139] mb-2 flex items-center gap-2">
+                  <FaFile size={14} className="text-[#8AAA19]" />
                   Tipo de Documento *
                 </label>
                 <select
                   value={uploadDocType}
                   onChange={(e) => setUploadDocType(e.target.value as DocumentType)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none text-sm"
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none text-sm font-medium transition-all"
                 >
-                  {showClientDocs && <option value="cedula">CEDULA/PASAPORTE</option>}
-                  {showClientDocs && <option value="licencia">Licencia</option>}
-                  {showPolicyDocs && policyId && (
-                    <option value="registro_vehicular">Registro Vehicular</option>
+                  {showClientDocs && (
+                    <option value="cedula">🆔 CÉDULA/PASAPORTE</option>
                   )}
-                  {showOtros && <option value="otros">Otros</option>}
+                  {showClientDocs && (
+                    <option value="licencia">🚗 Licencia de Conducir</option>
+                  )}
+                  {showPolicyDocs && policyId && (
+                    <option value="registro_vehicular">📄 Registro Vehicular</option>
+                  )}
+                  {showOtros && (
+                    <option value="otros">📂 Otros Documentos</option>
+                  )}
                 </select>
+                <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
+                  {uploadDocType === 'cedula' && 'ℹ️ Documento de identificación del cliente'}
+                  {uploadDocType === 'licencia' && 'ℹ️ Licencia de conducir vigente'}
+                  {uploadDocType === 'registro_vehicular' && 'ℹ️ Registro del vehículo asegurado'}
+                  {uploadDocType === 'otros' && 'ℹ️ Documento adicional personalizado'}
+                </p>
               </div>
 
               {/* Document Name (only for "otros") */}
               {uploadDocType === 'otros' && (
-                <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">
-                    Nombre del Documento *
+                <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
+                  <label className="block text-sm font-bold text-[#010139] mb-2">
+                    ✏️ Nombre del Documento *
                   </label>
                   <input
                     type="text"
                     value={uploadDocName}
                     onChange={(e) => setUploadDocName(e.target.value)}
-                    placeholder="Ej: Carta de autorización"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none text-sm"
+                    placeholder="Ej: Carta de autorización, Certificado médico..."
+                    className="w-full px-4 py-3 border-2 border-blue-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none text-sm font-medium"
                   />
+                  <p className="text-xs text-blue-700 mt-2">
+                    💡 Dale un nombre descriptivo para identificarlo fácilmente
+                  </p>
                 </div>
               )}
 
-              {/* File Input */}
+              {/* File Input con mejor diseño */}
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">
-                  Archivo *
+                <label className="block text-sm font-bold text-[#010139] mb-2 flex items-center gap-2">
+                  <FaUpload size={14} className="text-[#8AAA19]" />
+                  Seleccionar Archivo *
                 </label>
-                <input
-                  type="file"
-                  accept=".pdf,.jpg,.jpeg,.png,.webp"
-                  onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none text-sm"
-                />
-                <p className="text-[10px] text-gray-500 mt-1">
-                  PDF, JPG, PNG, WebP (máx. 10MB)
-                </p>
+                <div className="relative">
+                  <input
+                    type="file"
+                    accept=".pdf,.jpg,.jpeg,.png,.webp"
+                    onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                    className="w-full px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none text-sm font-medium hover:border-[#8AAA19] transition-all cursor-pointer"
+                  />
+                </div>
+                {uploadFile ? (
+                  <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2">
+                    <FaFilePdf size={16} className="text-green-600" />
+                    <span className="text-sm text-green-800 font-medium truncate">
+                      {uploadFile.name}
+                    </span>
+                  </div>
+                ) : (
+                  <p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
+                    📁 PDF, JPG, PNG, WebP (máx. 10MB)
+                  </p>
+                )}
               </div>
 
               {/* Notes */}
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">
-                  Notas (opcional)
+                <label className="block text-sm font-bold text-[#010139] mb-2">
+                  📝 Notas (opcional)
                 </label>
                 <textarea
                   value={uploadNotes}
                   onChange={(e) => setUploadNotes(e.target.value)}
-                  rows={2}
-                  placeholder="Notas sobre este documento..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none resize-none text-sm"
+                  rows={3}
+                  placeholder="Agrega notas o comentarios sobre este documento..."
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none resize-none text-sm"
                 />
               </div>
 
-              {/* Actions */}
-              <div className="flex gap-2 pt-2">
+              {/* Actions con mejor diseño */}
+              <div className="flex gap-3 pt-3 border-t-2 border-gray-100">
                 <button
                   onClick={() => {
                     setShowUploadModal(false);
                     resetUploadForm();
                   }}
-                  className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-all font-medium text-sm"
+                  className="flex-1 px-5 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-all font-semibold text-sm"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={handleUpload}
                   disabled={uploading || !uploadFile}
-                  className="flex-1 px-4 py-2 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg hover:shadow-lg transition-all font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 px-5 py-3 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg hover:shadow-lg hover:scale-[1.02] transition-all font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-2"
                 >
-                  {uploading ? 'Subiendo...' : 'Subir'}
+                  {uploading ? (
+                    <>
+                      <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
+                      <span>Subiendo...</span>
+                    </>
+                  ) : (
+                    <>
+                      <FaUpload size={14} />
+                      <span>Subir Documento</span>
+                    </>
+                  )}
                 </button>
               </div>
             </div>

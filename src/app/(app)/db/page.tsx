@@ -29,6 +29,7 @@ async function getClientsWithPolicies(searchQuery?: string): Promise<ClientWithP
         renewal_date,
         status,
         notas,
+        percent_override,
         insurers (
           id,
           name,

@@ -6,8 +6,11 @@ export interface ClientWithPolicies extends Tables<'clients'> {
     policy_number: string;
     insurer_id: string;
     ramo: string | null;
+    start_date: string | null;
     renewal_date: string | null;
     status: string;
+    notas: string | null;
+    percent_override: number | null;
     insurers: {
       id: string;
       name: string;

@@ -603,6 +603,54 @@ export async function actionGetAllAdvances() {
   }
 }
 
+// Get total paid advances by summing advance_logs
+export async function actionGetPaidAdvancesTotal(brokerId?: string, year?: number) {
+  const supabase = await getSupabaseAdmin();
+  try {
+    let advancesQuery = supabase
+      .from('advances')
+      .select('id, created_at')
+      .eq('status', 'PAID');
+
+    if (brokerId) {
+      advancesQuery = advancesQuery.eq('broker_id', brokerId);
+    }
+
+    if (year) {
+      const startDate = `${year}-01-01`;
+      const endDate = `${year}-12-31`;
+      advancesQuery = advancesQuery.gte('created_at', startDate).lte('created_at', endDate);
+    }
+
+    const { data: paidAdvances, error: advancesError } = await advancesQuery;
+
+    if (advancesError) throw advancesError;
+
+    if (!paidAdvances || paidAdvances.length === 0) {
+      return { ok: true as const, total: 0 };
+    }
+
+    // Get sum of payments from advance_logs for these advances
+    const advanceIds = paidAdvances.map(a => a.id);
+    
+    const { data: logs, error: logsError } = await supabase
+      .from('advance_logs')
+      .select('amount')
+      .in('advance_id', advanceIds);
+
+    if (logsError) throw logsError;
+
+    const total = (logs || []).reduce((sum, log) => sum + (Number(log.amount) || 0), 0);
+    
+    console.log('[actionGetPaidAdvancesTotal] Paid advances:', paidAdvances.length, 'Total from logs:', total);
+
+    return { ok: true as const, total };
+  } catch (error) {
+    console.error('[actionGetPaidAdvancesTotal] Exception:', error);
+    return { ok: false as const, error: String(error), total: 0 };
+  }
+}
+
 // Get advances filtered by broker and year
 export async function actionGetAdvances(brokerId?: string, year?: number) {
   const supabase = await getSupabaseAdmin();
@@ -632,7 +680,64 @@ export async function actionGetAdvances(brokerId?: string, year?: number) {
     }
     
     console.log('[actionGetAdvances] Loaded advances:', data?.length || 0);
-    return { ok: true as const, data: data || [] };
+    
+    // Para adelantos pagados, obtener el total pagado desde advance_logs
+    let dataWithTotalPaid = data || [];
+    if (data && data.length > 0) {
+      const paidAdvances = data.filter(a => a.status === 'PAID');
+      
+      if (paidAdvances.length > 0) {
+        const paidIds = paidAdvances.map(a => a.id);
+        
+        // Obtener suma de pagos por adelanto
+        const { data: logs } = await supabase
+          .from('advance_logs')
+          .select('advance_id, amount')
+          .in('advance_id', paidIds);
+        
+        if (logs) {
+          // Agrupar por advance_id
+          const paymentsByAdvance = logs.reduce((acc: any, log: any) => {
+            if (!acc[log.advance_id]) acc[log.advance_id] = 0;
+            acc[log.advance_id] += Number(log.amount) || 0;
+            return acc;
+          }, {});
+          
+          // Agregar total_paid a cada adelanto
+          dataWithTotalPaid = data.map((adv: any) => ({
+            ...adv,
+            total_paid: adv.status === 'PAID' ? (paymentsByAdvance[adv.id] || 0) : undefined
+          }));
+          
+          console.log('[actionGetAdvances] Added total_paid to', paidAdvances.length, 'paid advances');
+        }
+      }
+    }
+    
+    // Debug: contar por status
+    if (dataWithTotalPaid) {
+      const statusCounts = dataWithTotalPaid.reduce((acc: any, adv: any) => {
+        const status = adv.status?.toLowerCase() || 'unknown';
+        acc[status] = (acc[status] || 0) + 1;
+        return acc;
+      }, {});
+      console.log('[actionGetAdvances] Status counts:', statusCounts);
+      
+      // Calcular totales por status
+      const totals = dataWithTotalPaid.reduce((acc: any, adv: any) => {
+        const status = adv.status?.toLowerCase() || 'unknown';
+        if (!acc[status]) acc[status] = 0;
+        if (status === 'paid') {
+          acc[status] += Number(adv.total_paid) || 0;
+        } else {
+          acc[status] += Number(adv.amount) || 0;
+        }
+        return acc;
+      }, {});
+      console.log('[actionGetAdvances] Totals by status:', totals);
+    }
+    
+    return { ok: true as const, data: dataWithTotalPaid };
   } catch (error) {
     console.error('[actionGetAdvances] Exception:', error);
     return { ok: false as const, error: String(error) };
@@ -1056,6 +1161,43 @@ export async function actionAddAdvance(brokerId: string, payload: { amount: numb
   });
 }
 
+// Update advance
+export async function actionUpdateAdvance(advanceId: string, payload: { amount: number; reason: string }) {
+  try {
+    const { userId } = await getAuthContext();
+    const supabase = getSupabaseAdmin();
+    
+    console.log('[actionUpdateAdvance] Updating advance:', advanceId, payload);
+    
+    const { data, error } = await supabase
+      .from('advances')
+      .update({
+        amount: payload.amount,
+        reason: payload.reason,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', advanceId)
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('[actionUpdateAdvance] Error:', error);
+      throw error;
+    }
+    
+    console.log('[actionUpdateAdvance] Updated successfully:', data.id);
+    
+    revalidatePath('/(app)/commissions');
+    return { ok: true as const, data };
+  } catch (error) {
+    console.error('[actionUpdateAdvance] Exception:', error);
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : 'Error desconocido',
+    };
+  }
+}
+
 export async function actionRejectAdvance(advanceId: string) {
   try {
     const supabase = getSupabaseAdmin();
@@ -1081,6 +1223,7 @@ export async function actionRejectAdvance(advanceId: string) {
 
 export async function actionGetAdvanceRecurrences(brokerId?: string) {
   try {
+    console.log('[actionGetAdvanceRecurrences] Fetching recurrences for broker:', brokerId);
     const supabase = getSupabaseAdmin();
     
     let query = (supabase as any)
@@ -1089,12 +1232,20 @@ export async function actionGetAdvanceRecurrences(brokerId?: string) {
       .order('created_at', { ascending: false });
     
     if (brokerId) {
+      console.log('[actionGetAdvanceRecurrences] Filtering by broker_id:', brokerId);
       query = query.eq('broker_id', brokerId);
     }
     
     const { data, error } = await query;
     
-    if (error) throw error;
+    if (error) {
+      console.error('[actionGetAdvanceRecurrences] Error:', error);
+      throw error;
+    }
+    
+    console.log('[actionGetAdvanceRecurrences] Found', data?.length || 0, 'recurrences');
+    console.log('[actionGetAdvanceRecurrences] Data:', JSON.stringify(data, null, 2));
+    
     return { ok: true as const, data: data || [] };
   } catch (error) {
     return {
@@ -1108,28 +1259,108 @@ export async function actionCreateAdvanceRecurrence(payload: {
   broker_id: string;
   amount: number;
   reason: string;
+  fortnight_type: 'Q1' | 'Q2' | 'BOTH';
+  end_date: string | null;
 }) {
   try {
     const { userId } = await getAuthContext();
     const supabase = getSupabaseAdmin();
     
-    const { data, error } = await (supabase as any)
+    console.log('[actionCreateAdvanceRecurrence] Creating recurrence:', payload);
+    
+    // 1. Crear la recurrencia
+    const { data: recurrence, error: recurrenceError } = await (supabase as any)
       .from('advance_recurrences')
       .insert({
         broker_id: payload.broker_id,
         amount: payload.amount,
         reason: payload.reason,
+        fortnight_type: payload.fortnight_type,
+        end_date: payload.end_date,
         is_active: true,
         start_date: new Date().toISOString().split('T')[0],
         created_by: userId,
+        recurrence_count: 0,
       })
       .select()
       .single();
     
-    if (error) throw error;
+    if (recurrenceError) {
+      console.error('[actionCreateAdvanceRecurrence] Error creating recurrence:', recurrenceError);
+      throw recurrenceError;
+    }
+    
+    console.log('[actionCreateAdvanceRecurrence] Recurrence created:', recurrence.id);
+    
+    // 2. Generar adelanto(s) inmediatamente
+    const advancesToCreate = [];
+    
+    if (payload.fortnight_type === 'BOTH') {
+      // Crear DOS adelantos: uno para Q1 y otro para Q2
+      advancesToCreate.push({
+        broker_id: payload.broker_id,
+        amount: payload.amount,
+        reason: `${payload.reason} (Recurrente Q1)`,
+        status: 'pending',
+        created_by: userId,
+        is_recurring: true,
+        recurrence_id: recurrence.id,
+      });
+      advancesToCreate.push({
+        broker_id: payload.broker_id,
+        amount: payload.amount,
+        reason: `${payload.reason} (Recurrente Q2)`,
+        status: 'pending',
+        created_by: userId,
+        is_recurring: true,
+        recurrence_id: recurrence.id,
+      });
+    } else {
+      // Crear UN adelanto para la quincena especificada
+      const quincenaText = payload.fortnight_type === 'Q1' ? 'Q1' : 'Q2';
+      advancesToCreate.push({
+        broker_id: payload.broker_id,
+        amount: payload.amount,
+        reason: `${payload.reason} (Recurrente ${quincenaText})`,
+        status: 'pending',
+        created_by: userId,
+        is_recurring: true,
+        recurrence_id: recurrence.id,
+      });
+    }
+    
+    const { data: createdAdvances, error: advanceError } = await supabase
+      .from('advances')
+      .insert(advancesToCreate)
+      .select();
+    
+    if (advanceError) {
+      console.error('[actionCreateAdvanceRecurrence] Error creating advances:', advanceError);
+      throw advanceError;
+    }
+    
+    console.log('[actionCreateAdvanceRecurrence] Created', createdAdvances?.length || 0, 'advance(s)');
+    
+    // 3. Actualizar contador de la recurrencia
+    const now = new Date().toISOString();
+    const countToAdd = advancesToCreate.length; // 1 o 2
+    const { error: updateError } = await (supabase as any)
+      .from('advance_recurrences')
+      .update({
+        recurrence_count: countToAdd,
+        last_generated_at: now,
+      })
+      .eq('id', recurrence.id);
+    
+    if (updateError) {
+      console.error('[actionCreateAdvanceRecurrence] Error updating recurrence count:', updateError);
+      // No lanzamos error aquí porque el adelanto ya se creó
+    }
+    
+    console.log('[actionCreateAdvanceRecurrence] Recurrence completed successfully');
     
     revalidatePath('/(app)/commissions');
-    return { ok: true as const, data };
+    return { ok: true as const, data: recurrence };
   } catch (error) {
     return {
       ok: false as const,

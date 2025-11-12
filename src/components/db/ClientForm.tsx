@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { FaTimes, FaPlus, FaEdit, FaTrash } from "react-icons/fa";
 import { actionCreateClientWithPolicy } from '@/app/(app)/db/actions';
 import type { Tables } from "@/lib/supabase/client";
 import { toUppercasePayload, createUppercaseHandler, uppercaseInputClass } from '@/lib/utils/uppercase';
 import ExpedienteManager from '@/components/expediente/ExpedienteManager';
+import { POLICY_TYPES, checkSpecialOverride } from '@/lib/constants/policy-types';
 
 import { ClientWithPolicies } from '@/types/db';
 
@@ -22,6 +23,9 @@ interface ClientFormProps {
 
 export default function ClientForm({ client, onClose }: ClientFormProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const editPolicyId = searchParams.get('editPolicy');
+  
   const [formData, setFormData] = useState({
     name: client?.name || "",
     national_id: client?.national_id || "",
@@ -36,6 +40,33 @@ export default function ClientForm({ client, onClose }: ClientFormProps) {
   const [editingPolicy, setEditingPolicy] = useState<PolicyRow | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  
+  // Abrir automáticamente el formulario de edición de póliza si se especifica editPolicy
+  useEffect(() => {
+    if (editPolicyId && client) {
+      // Buscar la póliza en las pólizas del cliente
+      const policyToEdit = client.policies?.find(p => p.id === editPolicyId);
+      if (policyToEdit) {
+        // Usar los datos de la póliza tal como están, agregando campos opcionales si faltan
+        const policyData = {
+          id: policyToEdit.id,
+          policy_number: policyToEdit.policy_number,
+          insurer_id: policyToEdit.insurer_id,
+          ramo: policyToEdit.ramo,
+          start_date: policyToEdit.start_date,
+          renewal_date: policyToEdit.renewal_date,
+          status: policyToEdit.status as "ACTIVA" | "CANCELADA" | "VENCIDA",
+          notas: policyToEdit.notas,
+          broker_id: client.broker_id || null,
+          client_id: client.id,
+          created_at: new Date().toISOString(),
+          percent_override: null,
+        } as PolicyRow;
+        setEditingPolicy(policyData);
+        setShowPolicyForm(true);
+      }
+    }
+  }, [editPolicyId, client]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -103,98 +134,120 @@ export default function ClientForm({ client, onClose }: ClientFormProps) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg max-w-2xl w-full m-4 max-h-[90vh] overflow-y-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b">
-          <h2 className="text-xl font-semibold text-gray-800">
-            {client ? "Editar Cliente" : "Nuevo Cliente"}
-          </h2>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4">
+      <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto border-2 border-gray-200">
+        {/* Header con gradiente corporativo */}
+        <div className="sticky top-0 bg-gradient-to-r from-[#010139] to-[#020270] px-6 py-4 flex items-center justify-between rounded-t-xl z-10">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-white/10 rounded-lg">
+              <FaEdit size={20} className="text-white" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-white">
+                {client ? "Editar Cliente" : "Nuevo Cliente"}
+              </h2>
+              <p className="text-xs text-white/80">
+                {client ? "Actualizar información del cliente" : "Agregar un nuevo cliente al sistema"}
+              </p>
+            </div>
+          </div>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
+            className="p-2 hover:bg-white/10 rounded-lg transition-all"
           >
-            <FaTimes size={20} />
+            <FaTimes size={20} className="text-white" />
           </button>
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6">
+        <form onSubmit={handleSubmit} className="p-6 space-y-6">
           {error && (
             <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
               {error}
             </div>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Nombre Completo *
-              </label>
-              <input
-                type="text"
-                required
-                value={formData.name}
-                onChange={createUppercaseHandler((e) => setFormData({ ...formData, name: e.target.value }))}
-                className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${uppercaseInputClass}`}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Cédula/RUC
-              </label>
-              <input
-                type="text"
-                value={formData.national_id}
-                onChange={createUppercaseHandler((e) => setFormData({ ...formData, national_id: e.target.value }))}
-                className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${uppercaseInputClass}`}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Teléfono
-              </label>
-              <input
-                type="tel"
-                value={formData.phone}
-                onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Correo Electrónico
-              </label>
-              <input
-                type="email"
-                value={formData.email}
-                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            <div className="md:col-span-2">
-              <label className="flex items-center gap-2">
+          {/* Datos del Cliente */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-bold text-[#010139] border-b-2 border-[#8AAA19] pb-2">
+              👤 Información del Cliente
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="md:col-span-2">
+                <label className="block text-sm font-bold text-[#010139] mb-2">
+                  Nombre Completo *
+                </label>
                 <input
-                  type="checkbox"
-                  checked={formData.active}
-                  onChange={(e) => setFormData({ ...formData, active: e.target.checked })}
-                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  type="text"
+                  required
+                  value={formData.name}
+                  onChange={createUppercaseHandler((e) => setFormData({ ...formData, name: e.target.value }))}
+                  className={`w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none text-sm font-medium transition-all ${uppercaseInputClass}`}
+                  placeholder="Ej: JUAN PÉREZ"
                 />
-                <span className="text-sm font-medium text-gray-700">Cliente Activo</span>
-              </label>
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-[#010139] mb-2">
+                  🆔 Cédula/RUC
+                </label>
+                <input
+                  type="text"
+                  value={formData.national_id}
+                  onChange={createUppercaseHandler((e) => setFormData({ ...formData, national_id: e.target.value }))}
+                  className={`w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none text-sm font-medium transition-all ${uppercaseInputClass}`}
+                  placeholder="8-123-4567"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-bold text-[#010139] mb-2">
+                  📞 Teléfono
+                </label>
+                <input
+                  type="tel"
+                  value={formData.phone}
+                  onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none text-sm font-medium transition-all"
+                  placeholder="6123-4567"
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="block text-sm font-bold text-[#010139] mb-2">
+                  ✉️ Correo Electrónico
+                </label>
+                <input
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none text-sm font-medium transition-all"
+                  placeholder="cliente@email.com"
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border-2 border-gray-200 hover:border-[#8AAA19] transition-all cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={formData.active}
+                    onChange={(e) => setFormData({ ...formData, active: e.target.checked })}
+                    className="w-5 h-5 rounded border-gray-300 text-[#8AAA19] focus:ring-[#8AAA19]"
+                  />
+                  <span className="text-sm font-semibold text-gray-700">✅ Cliente Activo</span>
+                </label>
+              </div>
             </div>
           </div>
 
-          {/* Policies Section */}
+          {/* Póliza Inicial para clientes nuevos */}
           {!client && (
-            <div className="mt-6 pt-6 border-t">
-              <h3 className="text-lg font-medium text-gray-800 mb-4">Póliza Inicial</h3>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+            <div className="space-y-4">
+              <h3 className="text-lg font-bold text-[#010139] border-b-2 border-[#8AAA19] pb-2">
+                📄 Póliza Inicial
+              </h3>
+              <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
+                <label className="block text-sm font-bold text-[#010139] mb-2">
                   Número de Póliza *
                 </label>
                 <input
@@ -202,54 +255,75 @@ export default function ClientForm({ client, onClose }: ClientFormProps) {
                   required
                   value={formData.policy_number}
                   onChange={createUppercaseHandler((e) => setFormData({ ...formData, policy_number: e.target.value }))}
-                  className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${uppercaseInputClass}`}
+                  className={`w-full px-4 py-3 border-2 border-blue-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none text-sm font-medium ${uppercaseInputClass}`}
+                  placeholder="AUTO-12345"
                 />
+                <p className="text-xs text-blue-700 mt-2">
+                  💡 Podrás agregar más pólizas después de crear el cliente
+                </p>
               </div>
             </div>
           )}
 
           {client && (
-            <div className="mt-6 pt-6 border-t">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-medium text-gray-800">Pólizas</h3>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-bold text-[#010139] border-b-2 border-[#8AAA19] pb-2 flex-1">
+                  📄 Pólizas del Cliente
+                </h3>
                 <button
                   type="button"
                   onClick={() => setShowPolicyForm(true)}
-                  className="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700 flex items-center gap-1"
+                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg hover:shadow-lg transition-all text-sm font-semibold"
                 >
-                  <FaPlus size={12} /> Nueva Póliza
+                  <FaPlus size={14} /> Nueva Póliza
                 </button>
               </div>
 
               {policies.length === 0 ? (
-                <p className="text-gray-500 text-sm">No hay pólizas registradas</p>
+                <div className="text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+                  <p className="text-gray-500 text-sm">📄 No hay pólizas registradas</p>
+                  <p className="text-xs text-gray-400 mt-1">Haz clic en "Nueva Póliza" para agregar una</p>
+                </div>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {policies.map((policy) => (
-                    <div key={policy.id} className="flex items-center justify-between p-3 bg-gray-50 rounded">
-                      <div>
-                        <div className="font-medium text-sm">{policy.policy_number}</div>
-                        <div className="text-xs text-gray-500">{policy.ramo}</div>
+                    <div key={policy.id} className="flex items-center justify-between p-4 bg-gradient-to-r from-gray-50 to-white rounded-lg border-2 border-gray-200 hover:border-[#8AAA19] transition-all">
+                      <div className="flex-1">
+                        <div className="font-bold text-sm text-[#010139]">{policy.policy_number}</div>
+                        <div className="text-xs text-gray-600 mt-1">
+                          <span className="font-medium">{policy.ramo}</span>
+                          {policy.status && (
+                            <span className={`ml-2 px-2 py-0.5 rounded text-xs font-semibold ${
+                              policy.status === 'ACTIVA' ? 'bg-green-100 text-green-700' :
+                              policy.status === 'VENCIDA' ? 'bg-red-100 text-red-700' :
+                              'bg-gray-100 text-gray-700'
+                            }`}>
+                              {policy.status}
+                            </span>
+                          )}
+                        </div>
                       </div>
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
                           onClick={() => {
-                            // Find the original policy data to pass to the form, which expects a simple PolicyRow
                             const policyToEdit = client?.policies?.find(p => p.id === policy.id) || null;
                             setEditingPolicy(policyToEdit as PolicyRow | null);
                             setShowPolicyForm(true);
                           }}
-                          className="text-blue-600 hover:text-blue-800"
+                          className="p-2 text-[#010139] hover:bg-blue-100 rounded-lg transition-all"
+                          title="Editar póliza"
                         >
-                          <FaEdit size={14} />
+                          <FaEdit size={16} />
                         </button>
                         <button
                           type="button"
                           onClick={() => handleDeletePolicy(policy.id)}
-                          className="text-red-600 hover:text-red-800"
+                          className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-all"
+                          title="Eliminar póliza"
                         >
-                          <FaTrash size={14} />
+                          <FaTrash size={16} />
                         </button>
                       </div>
                     </div>
@@ -261,7 +335,10 @@ export default function ClientForm({ client, onClose }: ClientFormProps) {
 
           {/* Expediente Section - Solo para clientes existentes */}
           {client && (client as any).id && (
-            <div className="mt-6 pt-6 border-t">
+            <div className="space-y-4">
+              <h3 className="text-lg font-bold text-[#010139] border-b-2 border-[#8AAA19] pb-2">
+                📁 Expediente
+              </h3>
               <ExpedienteManager
                 clientId={(client as any).id}
                 showClientDocs={true}
@@ -273,52 +350,64 @@ export default function ClientForm({ client, onClose }: ClientFormProps) {
           )}
 
           {/* Form Actions */}
-          <div className="mt-6 pt-6 border-t flex justify-end gap-3">
+          <div className="sticky bottom-0 bg-white border-t-2 border-gray-100 pt-4 flex justify-end gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
+              className="px-6 py-3 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-all font-semibold text-sm"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="px-4 py-2 bg-[#010139] text-white rounded-md hover:bg-[#8aaa19] disabled:opacity-50 transition-colors"
+              className="px-6 py-3 bg-gradient-to-r from-[#010139] to-[#020270] text-white rounded-lg hover:shadow-lg hover:scale-[1.02] transition-all font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center gap-2"
             >
-              {loading ? "Guardando..." : "Guardar"}
+              {loading ? (
+                <>
+                  <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
+                  <span>Guardando...</span>
+                </>
+              ) : (
+                <span>{client ? "Guardar Cambios" : "Crear Cliente"}</span>
+              )}
             </button>
           </div>
         </form>
-
-        {/* Policy Form Modal */}
-        {showPolicyForm && client && (
-          <PolicyForm
-            clientId={client.id}
-            policy={editingPolicy}
-            onClose={() => {
-              setShowPolicyForm(false);
-              setEditingPolicy(null);
-            }}
-            onSave={(savedPolicy) => {
-              const newPolicyForState: PolicyWithInsurer = {
-                ...savedPolicy,
-                insurers: null, // We don't have this info from the form
-              };
-
-              if (editingPolicy) {
-                setPolicies(policies.map(p => (p.id === savedPolicy.id ? newPolicyForState : p)));
-              } else {
-                setPolicies([...policies, newPolicyForState]);
-              }
-              setShowPolicyForm(false);
-              setEditingPolicy(null);
-              // Refresh the page to update the client list
-              router.refresh();
-            }}
-          />
-        )}
       </div>
+      
+      {/* Policy Form Modal - Renderizado por separado */}
+      {showPolicyForm && client && (
+        <PolicyForm
+          clientId={client.id}
+          policy={editingPolicy}
+          onClose={() => {
+            setShowPolicyForm(false);
+            setEditingPolicy(null);
+            // Remover el parámetro editPolicy de la URL
+            if (editPolicyId) {
+              const params = new URLSearchParams(window.location.search);
+              params.delete('editPolicy');
+              router.replace(`${window.location.pathname}?${params.toString()}`, { scroll: false });
+            }
+          }}
+          onSave={(savedPolicy) => {
+            const newPolicyForState: PolicyWithInsurer = {
+              ...savedPolicy,
+              insurers: null,
+            };
+
+            if (editingPolicy) {
+              setPolicies(policies.map(p => (p.id === savedPolicy.id ? newPolicyForState : p)));
+            } else {
+              setPolicies([...policies, newPolicyForState]);
+            }
+            setShowPolicyForm(false);
+            setEditingPolicy(null);
+            router.refresh();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -339,6 +428,7 @@ type PolicyFormState = {
   renewal_date: string;
   status: "ACTIVA" | "CANCELADA" | "VENCIDA";
   percent_override: string;
+  notas: string;
 };
 
 function PolicyForm({ clientId, policy, onClose, onSave }: PolicyFormProps) {
@@ -352,10 +442,12 @@ function PolicyForm({ clientId, policy, onClose, onSave }: PolicyFormProps) {
     percent_override: policy?.percent_override !== null && policy?.percent_override !== undefined
       ? String(policy.percent_override)
       : "",
+    notas: (policy as any)?.notas || "",
   });
   const [loading, setLoading] = useState(false);
   const [insurers, setInsurers] = useState<{ id: string; name: string }[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [specialOverride, setSpecialOverride] = useState<{ hasSpecialOverride: boolean; overrideValue: number | null; condition?: string }>({ hasSpecialOverride: false, overrideValue: null });
 
   useEffect(() => {
     let mounted = true;
@@ -363,13 +455,21 @@ function PolicyForm({ clientId, policy, onClose, onSave }: PolicyFormProps) {
       try {
         const response = await fetch('/api/insurers', { cache: 'no-store' });
         if (!response.ok) throw new Error('Error cargando aseguradoras');
-        const data = await response.json();
+        const result = await response.json();
         if (mounted) {
-          setInsurers(data || []);
+          // La API devuelve { success: true, insurers: [...] }
+          if (result.success && Array.isArray(result.insurers)) {
+            setInsurers(result.insurers);
+          } else {
+            console.warn('Formato inesperado de insurers:', result);
+            setInsurers([]);
+          }
         }
       } catch (err) {
+        console.error('Error loading insurers:', err);
         if (mounted) {
           setError(err instanceof Error ? err.message : 'Error cargando aseguradoras');
+          setInsurers([]); // Set empty array on error
         }
       }
     })();
@@ -378,6 +478,24 @@ function PolicyForm({ clientId, policy, onClose, onSave }: PolicyFormProps) {
       mounted = false;
     };
   }, []);
+
+  // Verificar condición especial ASSA + VIDA
+  useEffect(() => {
+    if (formData.insurer_id && formData.ramo && insurers.length > 0) {
+      const selectedInsurer = insurers.find((i: { id: string; name: string }) => i.id === formData.insurer_id);
+      const override = checkSpecialOverride(selectedInsurer?.name, formData.ramo);
+      
+      setSpecialOverride(override);
+      
+      // Aplicar automáticamente el override si es condición especial
+      if (override.hasSpecialOverride && override.overrideValue !== null) {
+        setFormData(prev => ({
+          ...prev,
+          percent_override: String(override.overrideValue)
+        }));
+      }
+    }
+  }, [formData.insurer_id, formData.ramo, insurers]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -397,6 +515,13 @@ function PolicyForm({ clientId, policy, onClose, onSave }: PolicyFormProps) {
         return;
       }
 
+      // Validar que si es OTROS, las notas contengan el tipo específico
+      if (formData.ramo === 'OTROS' && (!formData.notas || formData.notas.trim().length < 5)) {
+        setError('Cuando el tipo es OTROS, debes especificar el tipo de póliza en las notas (mínimo 5 caracteres).');
+        setLoading(false);
+        return;
+      }
+
       const url = policy 
         ? `/api/db/policies/${policy.id}`
         : "/api/db/policies";
@@ -406,6 +531,14 @@ function PolicyForm({ clientId, policy, onClose, onSave }: PolicyFormProps) {
       console.log('[PolicyForm] Guardando póliza...');
       console.log('[PolicyForm] Method:', method);
       console.log('[PolicyForm] URL:', url);
+
+      // Construir notas con indicador de condición especial si aplica
+      let notasFinales = formData.notas.trim().toUpperCase();
+      if (specialOverride.hasSpecialOverride && !notasFinales.includes('[ASSA-VIDA-1.0%]')) {
+        notasFinales = notasFinales 
+          ? `[ASSA-VIDA-1.0%] ${notasFinales}` 
+          : '[ASSA-VIDA-1.0% - OVERRIDE PROTEGIDO]';
+      }
 
       const payload = {
         client_id: clientId,
@@ -419,6 +552,7 @@ function PolicyForm({ clientId, policy, onClose, onSave }: PolicyFormProps) {
           formData.percent_override === ""
             ? null
             : Number(formData.percent_override),
+        notas: notasFinales || null,
       };
       
       console.log('[PolicyForm] Payload:', payload);
@@ -455,143 +589,227 @@ function PolicyForm({ clientId, policy, onClose, onSave }: PolicyFormProps) {
   };
 
   return (
-    <div className="absolute inset-0 bg-white rounded-lg">
-      <div className="flex items-center justify-between p-6 border-b">
-        <h3 className="text-lg font-semibold text-gray-800">
-          {policy ? "Editar Póliza" : "Nueva Póliza"}
-        </h3>
-        <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-          <FaTimes size={20} />
-        </button>
-      </div>
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[110] p-3 sm:p-4">
+      <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border-2 border-gray-200">
+        {/* Header con gradiente corporativo */}
+        <div className="sticky top-0 bg-gradient-to-r from-[#010139] to-[#020270] px-5 py-4 flex items-center justify-between rounded-t-xl z-10">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-white/10 rounded-lg">
+              <FaPlus size={18} className="text-white" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-white">
+                {policy ? "Editar Póliza" : "Nueva Póliza"}
+              </h3>
+              <p className="text-xs text-white/80">
+                {policy ? "Actualizar información de la póliza" : "Agregar una nueva póliza al cliente"}
+              </p>
+            </div>
+          </div>
+          <button 
+            onClick={onClose} 
+            className="p-2 hover:bg-white/10 rounded-lg transition-all"
+          >
+            <FaTimes size={18} className="text-white" />
+          </button>
+        </div>
 
-      <form onSubmit={handleSubmit} className="p-6">
-        <div className="space-y-4">
+        <form onSubmit={handleSubmit} className="p-5 space-y-5">
           {error && (
             <div className="p-3 bg-red-100 border border-red-400 text-red-700 rounded">
               {error}
             </div>
           )}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Número de Póliza *
-            </label>
-            <input
-              type="text"
-              required
-              value={formData.policy_number}
-              onChange={createUppercaseHandler((e) => setFormData({ ...formData, policy_number: e.target.value }))}
-              className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${uppercaseInputClass}`}
-            />
-          </div>
+            <div>
+              <label className="block text-sm font-bold text-[#010139] mb-2">
+                📝 Número de Póliza *
+              </label>
+              <input
+                type="text"
+                required
+                value={formData.policy_number}
+                onChange={createUppercaseHandler((e) => setFormData({ ...formData, policy_number: e.target.value }))}
+                className={`w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none text-sm font-medium transition-all ${uppercaseInputClass}`}
+                placeholder="AUTO-12345"
+              />
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Aseguradora *
-            </label>
-            <select
-              required
-              value={formData.insurer_id}
-              onChange={(e) => setFormData({ ...formData, insurer_id: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="all" disabled>
-                Selecciona aseguradora
-              </option>
-              {insurers.map((insurer) => (
-                <option key={insurer.id} value={insurer.id}>
-                  {insurer.name}
+            <div>
+              <label className="block text-sm font-bold text-[#010139] mb-2">
+                🏢 Aseguradora *
+              </label>
+              <select
+                required
+                value={formData.insurer_id}
+                onChange={(e) => setFormData({ ...formData, insurer_id: e.target.value })}
+                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none text-sm font-medium transition-all"
+                disabled={!insurers.length}
+              >
+                <option value="all" disabled>
+                  {insurers.length === 0 ? 'Cargando aseguradoras...' : 'Selecciona una aseguradora'}
                 </option>
-              ))}
-            </select>
-          </div>
+                {Array.isArray(insurers) && insurers.map((insurer) => (
+                  <option key={insurer.id} value={insurer.id}>
+                    {insurer.name}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Ramo *
-            </label>
-            <input
-              type="text"
-              required
-              value={formData.ramo}
-              onChange={createUppercaseHandler((e) => setFormData({ ...formData, ramo: e.target.value }))}
-              className={`w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 ${uppercaseInputClass}`}
-            />
-          </div>
+            <div>
+              <label className="block text-sm font-bold text-[#010139] mb-2">
+                📊 Tipo de Póliza *
+              </label>
+              <select
+                required
+                value={formData.ramo}
+                onChange={(e) => setFormData({ ...formData, ramo: e.target.value })}
+                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none text-sm font-medium transition-all"
+              >
+                <option value="" disabled>
+                  Selecciona el tipo de póliza
+                </option>
+                {POLICY_TYPES.map((type) => (
+                  <option key={type.value} value={type.value}>
+                    {type.label}
+                  </option>
+                ))}
+              </select>
+              {specialOverride.hasSpecialOverride && (
+                <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-2 text-xs">
+                  <span className="font-bold text-blue-700">ℹ️</span>
+                  <span className="text-blue-700">
+                    Esta combinación (ASSA + VIDA) tiene un override automático de 1.0%. Protegido de cambios masivos.
+                  </span>
+                </div>
+              )}
+            </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Estado
-            </label>
-            <select
-              value={formData.status}
-              onChange={(e) => setFormData({ ...formData, status: e.target.value as PolicyFormState['status'] })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            <div>
+              <label className="block text-sm font-bold text-[#010139] mb-2">
+                🟢 Estado
+              </label>
+              <select
+                value={formData.status}
+                onChange={(e) => setFormData({ ...formData, status: e.target.value as PolicyFormState['status'] })}
+                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none text-sm font-medium transition-all"
+              >
+                <option value="ACTIVA">✅ ACTIVA</option>
+                <option value="VENCIDA">🔴 VENCIDA</option>
+                <option value="CANCELADA">❌ CANCELADA</option>
+              </select>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-bold text-[#010139] mb-2">
+                  📅 Fecha de Inicio
+                </label>
+                <input
+                  type="date"
+                  value={formData.start_date}
+                  onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none text-sm font-medium transition-all"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-[#010139] mb-2">
+                  🔁 Fecha de Renovación
+                </label>
+                <input
+                  type="date"
+                  value={formData.renewal_date}
+                  onChange={(e) => setFormData({ ...formData, renewal_date: e.target.value })}
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none text-sm font-medium transition-all"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-bold text-[#010139] mb-2">
+                💰 % Comisión Override {specialOverride.hasSpecialOverride ? '(Condición Especial)' : '(opcional)'}
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                value={formData.percent_override}
+                onChange={(e) => setFormData({ ...formData, percent_override: e.target.value })}
+                className={`w-full px-4 py-3 border-2 rounded-lg focus:ring-2 focus:outline-none text-sm font-medium transition-all ${
+                  specialOverride.hasSpecialOverride 
+                    ? 'border-blue-300 bg-blue-50 focus:border-blue-500 focus:ring-blue-500/20' 
+                    : 'border-gray-300 focus:border-[#8AAA19] focus:ring-[#8AAA19]/20'
+                }`}
+                placeholder="Ej: 5.50"
+              />
+              {specialOverride.hasSpecialOverride ? (
+                <p className="text-xs text-blue-600 mt-1 font-semibold">
+                  🔒 1.0% automático (ASSA + VIDA). Editable pero protegido de cambios masivos.
+                </p>
+              ) : (
+                <p className="text-xs text-gray-500 mt-1">
+                  💡 Dejar vacío para usar el porcentaje por defecto
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-bold text-[#010139] mb-2">
+                💬 Notas {formData.ramo === 'OTROS' && <span className="text-red-600">*</span>}
+              </label>
+              <textarea
+                value={formData.notas}
+                onChange={createUppercaseHandler((e) => setFormData({ ...formData, notas: e.target.value }))}
+                className={`w-full px-4 py-3 border-2 rounded-lg focus:ring-2 focus:outline-none text-sm font-medium transition-all ${uppercaseInputClass} ${
+                  formData.ramo === 'OTROS' 
+                    ? 'border-orange-300 bg-orange-50 focus:border-orange-500 focus:ring-orange-500/20' 
+                    : 'border-gray-300 focus:border-[#8AAA19] focus:ring-[#8AAA19]/20'
+                }`}
+                placeholder={formData.ramo === 'OTROS' 
+                  ? "ESPECIFICAR TIPO DE PÓLIZA (REQUERIDO): EJ. FIANZA, CAUCIONES, ETC..."
+                  : "AGREGAR NOTAS O COMENTARIOS SOBRE LA PÓLIZA..."
+                }
+                rows={3}
+                required={formData.ramo === 'OTROS'}
+              />
+              {formData.ramo === 'OTROS' ? (
+                <p className="text-xs text-orange-600 mt-1 font-semibold">
+                  ⚠️ REQUERIDO: Debes especificar qué tipo de póliza es (mínimo 5 caracteres)
+                </p>
+              ) : (
+                <p className="text-xs text-gray-500 mt-1">
+                  💡 Información adicional que quieras recordar sobre esta póliza
+                </p>
+              )}
+            </div>
+
+          <div className="sticky bottom-0 bg-white border-t-2 border-gray-100 pt-4 flex justify-end gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-6 py-3 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-all font-semibold text-sm"
             >
-              <option value="ACTIVA">ACTIVA</option>
-              <option value="VENCIDA">VENCIDA</option>
-              <option value="CANCELADA">CANCELADA</option>
-            </select>
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={loading}
+              className="px-6 py-3 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg hover:shadow-lg hover:scale-[1.02] transition-all font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center gap-2"
+            >
+              {loading ? (
+                <>
+                  <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
+                  <span>Guardando...</span>
+                </>
+              ) : (
+                <>
+                  <FaPlus size={14} />
+                  <span>{policy ? "Guardar Cambios" : "Crear Póliza"}</span>
+                </>
+              )}
+            </button>
           </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Fecha inicio
-              </label>
-              <input
-                type="date"
-                value={formData.start_date}
-                onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-                className="w-full px-2 sm:px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Fecha renovación
-              </label>
-              <input
-                type="date"
-                value={formData.renewal_date}
-                onChange={(e) => setFormData({ ...formData, renewal_date: e.target.value })}
-                className="w-full px-2 sm:px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm sm:text-base"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              % override (opcional)
-            </label>
-            <input
-              type="number"
-              step="0.01"
-              value={formData.percent_override}
-              onChange={(e) => setFormData({ ...formData, percent_override: e.target.value })}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-
-          {/* Add more fields as needed */}
-        </div>
-
-        <div className="mt-6 flex justify-end gap-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200"
-          >
-            Cancelar
-          </button>
-          <button
-            type="submit"
-            disabled={loading}
-            className="px-4 py-2 bg-[#010139] text-white rounded-md hover:bg-[#8aaa19] disabled:opacity-50 transition-colors"
-          >
-            {loading ? "Guardando..." : "Guardar"}
-          </button>
-        </div>
-      </form>
+        </form>
+      </div>
     </div>
   );
 }
