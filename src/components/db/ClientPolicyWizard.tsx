@@ -6,7 +6,7 @@ import { supabaseClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import { createUppercaseHandler, uppercaseInputClass } from '@/lib/utils/uppercase';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { checkSpecialOverride } from '@/lib/constants/policy-types';
+import { POLICY_TYPES, checkSpecialOverride } from '@/lib/constants/policy-types';
 
 interface WizardProps {
   onClose: () => void;
@@ -591,15 +591,24 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Ramo / Tipo de Seguro <span className="text-red-500">*</span></label>
-                <input
-                  type="text"
-                  required
-                  value={formData.ramo}
-                  onChange={createUppercaseHandler((e) => setFormData({ ...formData, ramo: e.target.value }))}
-                  className={`w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition ${uppercaseInputClass}`}
-                  placeholder="Autos, Vida, Incendio..."
-                />
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Tipo de Póliza <span className="text-red-500">*</span>
+                </label>
+                <Select 
+                  value={formData.ramo} 
+                  onValueChange={(value) => setFormData({ ...formData, ramo: value })}
+                >
+                  <SelectTrigger className="w-full border-2 border-gray-300 focus:border-[#8AAA19]">
+                    <SelectValue placeholder="Selecciona el tipo de póliza..." />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-[300px] overflow-auto">
+                    {POLICY_TYPES.map((type) => (
+                      <SelectItem key={type.value} value={type.value}>
+                        {type.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">

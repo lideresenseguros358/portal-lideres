@@ -306,13 +306,13 @@ export default function ProductionMatrix({ year, role, brokerId, brokers }: Prod
                   </th>
                 ))}
                 <th className="px-3 py-3 text-center text-xs font-semibold text-[#010139] border-b-2 border-gray-200 min-w-[120px]">
-                  Bruto YTD
+                  Bruto Año en curso
                 </th>
                 <th className="px-3 py-3 text-center text-xs font-semibold text-red-600 border-b-2 border-gray-200 min-w-[120px]">
                   Cancel. Anual
                 </th>
                 <th className="px-3 py-3 text-center text-xs font-semibold text-[#8AAA19] border-b-2 border-gray-200 min-w-[120px]">
-                  Neto YTD
+                  Neto Año en curso
                 </th>
                 <th className="px-3 py-3 text-center text-xs font-semibold text-[#010139] border-b-2 border-gray-200 min-w-[100px]">
                   Var %

@@ -282,7 +282,7 @@ export default function ProductionAnalyticsView({ year, brokers }: ProductionAna
               <FaChartLine className="text-xl lg:text-2xl text-[#8AAA19]" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-xs lg:text-sm text-gray-600 truncate">Neto Total</p>
+              <p className="text-xs lg:text-sm text-gray-600 truncate">Neto Año en curso</p>
               <p className="text-lg lg:text-2xl font-bold text-[#8AAA19] font-mono truncate">{formatCurrency(totalNetoYTD)}</p>
               <p className="text-[10px] lg:text-xs text-gray-500 truncate">{totalNumPolizasYTD} pólizas</p>
             </div>

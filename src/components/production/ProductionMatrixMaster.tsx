@@ -172,7 +172,7 @@ export default function ProductionMatrixMaster({ year }: ProductionMatrixMasterP
           return b;
         }));
         toast.success('Cifras guardadas exitosamente');
-        loadProduction(); // Recargar para actualizar YTD
+        loadProduction(); // Recargar para actualizar totales del año
       } else {
         const error = await response.json();
         toast.error(error.error || 'Error al guardar');
@@ -529,7 +529,7 @@ export default function ProductionMatrixMaster({ year }: ProductionMatrixMasterP
                           <div className="text-[10px] text-gray-600">{numPolizasYTD}p</div>
                           {/* Tooltip */}
                           <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-30 shadow-xl">
-                            <div className="font-semibold mb-1">Total Bruto YTD</div>
+                            <div className="font-semibold mb-1">Total Bruto Año en curso</div>
                             <div>💰 Monto: <span className="font-mono">${brutoYTD.toLocaleString()}</span></div>
                             <div>📋 Pólizas: <span className="font-mono">{numPolizasYTD}</span></div>
                             <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 -mb-1 border-4 border-transparent border-b-gray-900"></div>
@@ -543,7 +543,7 @@ export default function ProductionMatrixMaster({ year }: ProductionMatrixMasterP
                           <span className="font-mono text-red-600 cursor-help">${(broker.canceladas_ytd / 1000).toFixed(0)}k</span>
                           {/* Tooltip */}
                           <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-30 shadow-xl">
-                            <div className="font-semibold mb-1">Canceladas YTD</div>
+                            <div className="font-semibold mb-1">Canceladas Año en curso</div>
                             <div className="text-red-400">❌ Total: <span className="font-mono">${broker.canceladas_ytd.toLocaleString()}</span></div>
                             <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 -mb-1 border-4 border-transparent border-b-gray-900"></div>
                           </div>
@@ -556,7 +556,7 @@ export default function ProductionMatrixMaster({ year }: ProductionMatrixMasterP
                           <span className="font-mono text-[#8AAA19] cursor-help">${(netoYTD / 1000).toFixed(0)}k</span>
                           {/* Tooltip */}
                           <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-30 shadow-xl">
-                            <div className="font-semibold mb-1">Neto Total YTD</div>
+                            <div className="font-semibold mb-1">Neto Total Año en curso</div>
                             <div className="text-green-400">✅ Monto: <span className="font-mono">${netoYTD.toLocaleString()}</span></div>
                             <div className="text-gray-300 text-[10px] mt-1">(Bruto - Canceladas)</div>
                             <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 -mb-1 border-4 border-transparent border-b-gray-900"></div>
