@@ -393,9 +393,9 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
                         <Button
                           size="sm"
                           onClick={() => setEditingAdvance(advance)}
-                          className="flex-1 bg-[#010139] hover:bg-[#020270] text-xs"
+                          className="flex-1 bg-[#010139] hover:bg-[#020270] text-white text-xs"
                         >
-                          <FaEdit className="text-xs" /> Editar
+                          <FaEdit className="text-xs text-white" /> Editar
                         </Button>
                       )}
                       {status === 'pending' && (
@@ -409,9 +409,9 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
                               pendingAdvances: [{ id: advance.id, amount: advance.amount, reason: advance.reason }],
                             });
                           }}
-                          className="flex-1 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] hover:from-[#7a9916] hover:to-[#5c7312] text-xs"
+                          className="flex-1 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] hover:from-[#7a9916] hover:to-[#5c7312] text-white text-xs"
                         >
-                          <FaDollarSign className="text-xs" /> Pagar
+                          <FaDollarSign className="text-xs text-white" /> Pagar
                         </Button>
                       )}
                       <Button

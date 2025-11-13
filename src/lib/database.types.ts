@@ -2927,6 +2927,7 @@ export type Database = {
           id: string
           month: number
           num_polizas: number
+          persistencia: number | null
           pma_neto: number
           updated_at: string | null
           year: number
@@ -2940,6 +2941,7 @@ export type Database = {
           id?: string
           month: number
           num_polizas?: number
+          persistencia?: number | null
           pma_neto?: number
           updated_at?: string | null
           year: number
@@ -2953,6 +2955,7 @@ export type Database = {
           id?: string
           month?: number
           num_polizas?: number
+          persistencia?: number | null
           pma_neto?: number
           updated_at?: string | null
           year?: number

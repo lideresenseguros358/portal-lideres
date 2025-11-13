@@ -118,15 +118,15 @@ export default function BrokersListClient() {
           <div className="flex flex-wrap items-center gap-2">
             <Link
               href="/requests"
-              className="px-4 py-2 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg hover:shadow-lg transition-all flex items-center gap-2 font-semibold"
+              className="px-4 py-2.5 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg hover:shadow-lg transition-all flex items-center gap-2 font-semibold"
             >
-              <FaClipboardList />
-              <span className="hidden sm:inline">Solicitudes</span>
+              <FaClipboardList className="text-white" />
+              <span className="hidden sm:inline text-white">Solicitudes</span>
             </Link>
 
             <button
               onClick={handleOpenBulkEdit}
-              className="px-4 py-2 bg-gradient-to-r from-[#010139] to-[#020270] text-white rounded-lg hover:shadow-lg transition-all flex items-center gap-2 font-semibold"
+              className="px-4 py-2.5 bg-gradient-to-r from-[#010139] to-[#020270] text-white rounded-lg hover:shadow-lg transition-all flex items-center gap-2 font-semibold"
             >
               <FaTable />
               <span className="hidden sm:inline">Edición Masiva</span>
@@ -135,7 +135,7 @@ export default function BrokersListClient() {
 
             <button
               onClick={handleExport}
-              className="px-4 py-2 bg-[#010139] hover:bg-[#020270] text-white rounded-lg transition-all flex items-center gap-2 font-semibold"
+              className="px-4 py-2.5 bg-[#010139] hover:bg-[#020270] text-white rounded-lg transition-all flex items-center gap-2 font-semibold"
             >
               <FaFileExport />
               <span className="hidden sm:inline">

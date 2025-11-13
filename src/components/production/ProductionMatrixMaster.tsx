@@ -12,6 +12,7 @@ interface MonthData {
   bruto: number;
   num_polizas: number;
   canceladas: number;
+  persistencia: number | null;
 }
 
 interface BrokerProduction {
@@ -126,12 +127,18 @@ export default function ProductionMatrixMaster({ year }: ProductionMatrixMasterP
     });
   };
 
-  const handleMonthSave = async (bruto: number, numPolizas: number, canceladas: number) => {
+  const handleMonthSave = async (bruto: number, numPolizas: number, canceladas: number, persistencia: number | null) => {
     if (!monthModal.broker || !monthModal.monthKey) return;
 
     // Validar que canceladas no sea mayor que bruto
     if (canceladas > bruto) {
       toast.error('Las canceladas no pueden ser mayores que la cifra bruta');
+      return;
+    }
+
+    // Validar que persistencia esté entre 0 y 100 si está definida
+    if (persistencia !== null && (persistencia < 0 || persistencia > 100)) {
+      toast.error('La persistencia debe estar entre 0% y 100%');
       return;
     }
 
@@ -146,6 +153,7 @@ export default function ProductionMatrixMaster({ year }: ProductionMatrixMasterP
           bruto,
           num_polizas: numPolizas,
           canceladas,
+          persistencia,
         }),
       });
 
@@ -157,7 +165,7 @@ export default function ProductionMatrixMaster({ year }: ProductionMatrixMasterP
               ...b,
               months: {
                 ...b.months,
-                [monthModal.monthKey!]: { bruto, num_polizas: numPolizas, canceladas }
+                [monthModal.monthKey!]: { bruto, num_polizas: numPolizas, canceladas, persistencia }
               }
             };
           }
@@ -401,8 +409,8 @@ export default function ProductionMatrixMaster({ year }: ProductionMatrixMasterP
       </div>
 
       {/* Tabla de Producción */}
-      <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-        <div className="overflow-x-auto">
+      <div className="bg-white rounded-xl shadow-lg">
+        <div className="overflow-x-auto pb-32">
           <table className="min-w-full border-collapse">
             {/* Header */}
             <thead>
@@ -478,52 +486,105 @@ export default function ProductionMatrixMaster({ year }: ProductionMatrixMasterP
                       {currentMonths.map(month => {
                         const monthKey = month.key as keyof typeof broker.months;
                         const monthData = broker.months[monthKey];
+                        const neto = monthData.bruto - (monthData.canceladas || 0);
 
                         return (
                           <td key={month.key} className="px-1 py-1 text-center text-xs border-b border-gray-200">
-                            <button
-                              onClick={() => handleMonthClick(broker, month.key, month.label)}
-                              className="w-full px-1 py-1 rounded hover:bg-blue-50 transition-colors border border-transparent hover:border-blue-300 group"
-                            >
-                              <div className="font-mono text-xs">
-                                ${(monthData.bruto / 1000).toFixed(0)}k
+                            <div className="relative group">
+                              <button
+                                onClick={() => handleMonthClick(broker, month.key, month.label)}
+                                className="w-full px-1 py-1 rounded hover:bg-blue-50 transition-colors border border-transparent hover:border-blue-300"
+                              >
+                                <div className="font-mono text-xs">
+                                  ${(monthData.bruto / 1000).toFixed(0)}k
+                                </div>
+                                <div className="text-[10px] text-gray-500">
+                                  {monthData.num_polizas}p
+                                </div>
+                                <FaEdit className="text-gray-400 group-hover:text-blue-600 mx-auto mt-1" style={{ fontSize: '10px' }} />
+                              </button>
+                              {/* Tooltip */}
+                              <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-30 shadow-xl">
+                                <div className="font-semibold mb-1">{month.label} - {broker.broker_name}</div>
+                                <div className="space-y-0.5 text-left">
+                                  <div>💰 Bruto: <span className="font-mono">${monthData.bruto.toLocaleString()}</span></div>
+                                  <div>📋 Pólizas: <span className="font-mono">{monthData.num_polizas}</span></div>
+                                  <div className="text-red-400">❌ Canceladas: <span className="font-mono">${(monthData.canceladas || 0).toLocaleString()}</span></div>
+                                  <div className="text-green-400">✅ Neto: <span className="font-mono">${neto.toLocaleString()}</span></div>
+                                  {monthData.persistencia !== null && (
+                                    <div className="text-blue-400">📊 Persistencia: <span className="font-mono">{monthData.persistencia.toFixed(2)}%</span></div>
+                                  )}
+                                </div>
+                                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 -mb-1 border-4 border-transparent border-b-gray-900"></div>
                               </div>
-                              <div className="text-[10px] text-gray-500">
-                                {monthData.num_polizas}p
-                              </div>
-                              <FaEdit className="text-gray-400 group-hover:text-blue-600 mx-auto mt-1" style={{ fontSize: '10px' }} />
-                            </button>
+                            </div>
                           </td>
                         );
                       })}
 
                       {/* Total Bruto */}
                       <td className="px-2 py-2 text-center text-xs font-bold border-b border-gray-200 bg-gray-50">
-                        <div className="font-mono">${(brutoYTD / 1000).toFixed(0)}k</div>
-                        <div className="text-[10px] text-gray-600">{numPolizasYTD}p</div>
+                        <div className="relative group">
+                          <div className="font-mono cursor-help">${(brutoYTD / 1000).toFixed(0)}k</div>
+                          <div className="text-[10px] text-gray-600">{numPolizasYTD}p</div>
+                          {/* Tooltip */}
+                          <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-30 shadow-xl">
+                            <div className="font-semibold mb-1">Total Bruto YTD</div>
+                            <div>💰 Monto: <span className="font-mono">${brutoYTD.toLocaleString()}</span></div>
+                            <div>📋 Pólizas: <span className="font-mono">{numPolizasYTD}</span></div>
+                            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 -mb-1 border-4 border-transparent border-b-gray-900"></div>
+                          </div>
+                        </div>
                       </td>
 
                       {/* Canceladas */}
                       <td className="px-2 py-2 text-center text-xs font-semibold border-b border-gray-200 bg-red-50">
-                        <span className="font-mono text-red-600">${(broker.canceladas_ytd / 1000).toFixed(0)}k</span>
+                        <div className="relative group">
+                          <span className="font-mono text-red-600 cursor-help">${(broker.canceladas_ytd / 1000).toFixed(0)}k</span>
+                          {/* Tooltip */}
+                          <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-30 shadow-xl">
+                            <div className="font-semibold mb-1">Canceladas YTD</div>
+                            <div className="text-red-400">❌ Total: <span className="font-mono">${broker.canceladas_ytd.toLocaleString()}</span></div>
+                            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 -mb-1 border-4 border-transparent border-b-gray-900"></div>
+                          </div>
+                        </div>
                       </td>
 
                       {/* Neto Total */}
                       <td className="px-2 py-2 text-center text-xs font-bold border-b border-gray-200 bg-green-50">
-                        <span className="font-mono text-[#8AAA19]">${(netoYTD / 1000).toFixed(0)}k</span>
+                        <div className="relative group">
+                          <span className="font-mono text-[#8AAA19] cursor-help">${(netoYTD / 1000).toFixed(0)}k</span>
+                          {/* Tooltip */}
+                          <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-30 shadow-xl">
+                            <div className="font-semibold mb-1">Neto Total YTD</div>
+                            <div className="text-green-400">✅ Monto: <span className="font-mono">${netoYTD.toLocaleString()}</span></div>
+                            <div className="text-gray-300 text-[10px] mt-1">(Bruto - Canceladas)</div>
+                            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 -mb-1 border-4 border-transparent border-b-gray-900"></div>
+                          </div>
+                        </div>
                       </td>
 
                       {/* Meta Personal */}
                       <td className="px-2 py-2 text-center text-xs border-b border-gray-200">
-                        <button
-                          onClick={() => handleMetaClick(broker)}
-                          className="w-full px-1 py-1 rounded hover:bg-yellow-50 transition-colors border border-transparent hover:border-yellow-300 group"
-                        >
-                          <div className="font-mono font-bold text-[#010139] text-xs">
-                            ${(broker.meta_personal / 1000).toFixed(0)}k
+                        <div className="relative group">
+                          <button
+                            onClick={() => handleMetaClick(broker)}
+                            className="w-full px-1 py-1 rounded hover:bg-yellow-50 transition-colors border border-transparent hover:border-yellow-300"
+                          >
+                            <div className="font-mono font-bold text-[#010139] text-xs">
+                              ${(broker.meta_personal / 1000).toFixed(0)}k
+                            </div>
+                            <FaBullseye className="text-gray-400 group-hover:text-yellow-600 mx-auto mt-1" style={{ fontSize: '10px' }} />
+                          </button>
+                          {/* Tooltip */}
+                          <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-30 shadow-xl">
+                            <div className="font-semibold mb-1">Meta Personal {year}</div>
+                            <div>🎯 Objetivo: <span className="font-mono">${broker.meta_personal.toLocaleString()}</span></div>
+                            <div className="text-green-400">✅ Logrado: <span className="font-mono">${netoYTD.toLocaleString()}</span></div>
+                            <div className="text-yellow-400">⏳ Falta: <span className="font-mono">${Math.max(0, broker.meta_personal - netoYTD).toLocaleString()}</span></div>
+                            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 -mb-1 border-4 border-transparent border-b-gray-900"></div>
                           </div>
-                          <FaBullseye className="text-gray-400 group-hover:text-yellow-600 mx-auto mt-1" style={{ fontSize: '10px' }} />
-                        </button>
+                        </div>
                       </td>
                       {/* % Cumplido */}
                       <td className="px-2 py-2 text-center text-xs font-bold border-b border-gray-200">
@@ -579,6 +640,7 @@ export default function ProductionMatrixMaster({ year }: ProductionMatrixMasterP
         initialBruto={monthModal.broker && monthModal.monthKey ? monthModal.broker.months[monthModal.monthKey as keyof typeof monthModal.broker.months].bruto : 0}
         initialNumPolizas={monthModal.broker && monthModal.monthKey ? monthModal.broker.months[monthModal.monthKey as keyof typeof monthModal.broker.months].num_polizas : 0}
         initialCanceladas={monthModal.broker && monthModal.monthKey ? monthModal.broker.months[monthModal.monthKey as keyof typeof monthModal.broker.months].canceladas : 0}
+        initialPersistencia={monthModal.broker && monthModal.monthKey ? monthModal.broker.months[monthModal.monthKey as keyof typeof monthModal.broker.months].persistencia : null}
       />
 
       <MetaPersonalModal

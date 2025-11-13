@@ -705,7 +705,21 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
           <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-blue-500">
             <h3 className="text-sm font-semibold text-gray-600 uppercase mb-2">Total Recibido</h3>
             <p className="text-3xl font-bold text-blue-600 font-mono">
-              ${payments.reduce((sum, p) => sum + Number(p.total_received || 0), 0).toFixed(2)}
+              ${(() => {
+                // Deduplicar referencias para no sumar la misma transferencia múltiples veces
+                const uniqueReferences = new Map<string, number>();
+                payments.forEach(p => {
+                  p.payment_references?.forEach((ref: any) => {
+                    const refNum = ref.reference_number;
+                    const amount = Number(ref.amount || 0);
+                    if (!uniqueReferences.has(refNum) && amount > 0) {
+                      uniqueReferences.set(refNum, amount);
+                    }
+                  });
+                });
+                const total = Array.from(uniqueReferences.values()).reduce((sum, amount) => sum + amount, 0);
+                return total.toFixed(2);
+              })()}
             </p>
           </div>
         </div>

@@ -3,7 +3,7 @@ import Image from 'next/image';
 interface InsurerLogoProps {
   logoUrl?: string | null;
   insurerName: string;
-  size?: 'sm' | 'md' | 'lg' | 'xl';
+  size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl';
   className?: string;
 }
 
@@ -12,6 +12,9 @@ const sizeClasses = {
   md: 'w-12 h-12',
   lg: 'w-16 h-16',
   xl: 'w-24 h-24',
+  '2xl': 'w-32 h-32',
+  '3xl': 'w-40 h-40',
+  '4xl': 'w-48 h-48',
 };
 
 const imageSizes = {
@@ -19,6 +22,9 @@ const imageSizes = {
   md: 48,
   lg: 64,
   xl: 96,
+  '2xl': 128,
+  '3xl': 160,
+  '4xl': 192,
 };
 
 export default function InsurerLogo({ 

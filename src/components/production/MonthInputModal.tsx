@@ -1,17 +1,18 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FaTimes, FaSave, FaDollarSign, FaFileInvoice } from 'react-icons/fa';
+import { FaTimes, FaSave, FaDollarSign, FaFileInvoice, FaPercentage } from 'react-icons/fa';
 
 interface MonthInputModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (bruto: number, numPolizas: number, canceladas: number) => Promise<void>;
+  onSave: (bruto: number, numPolizas: number, canceladas: number, persistencia: number | null) => Promise<void>;
   brokerName: string;
   monthName: string;
   initialBruto?: number;
   initialNumPolizas?: number;
   initialCanceladas?: number;
+  initialPersistencia?: number | null;
 }
 
 export default function MonthInputModal({
@@ -23,10 +24,12 @@ export default function MonthInputModal({
   initialBruto = 0,
   initialNumPolizas = 0,
   initialCanceladas = 0,
+  initialPersistencia = null,
 }: MonthInputModalProps) {
   const [bruto, setBruto] = useState(initialBruto);
   const [numPolizas, setNumPolizas] = useState(initialNumPolizas);
   const [canceladas, setCanceladas] = useState(initialCanceladas);
+  const [persistencia, setPersistencia] = useState<number | null>(initialPersistencia);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -35,9 +38,10 @@ export default function MonthInputModal({
       setBruto(initialBruto);
       setNumPolizas(initialNumPolizas);
       setCanceladas(initialCanceladas);
+      setPersistencia(initialPersistencia);
       setError('');
     }
-  }, [isOpen, initialBruto, initialNumPolizas, initialCanceladas]);
+  }, [isOpen, initialBruto, initialNumPolizas, initialCanceladas, initialPersistencia]);
 
   const handleSave = async () => {
     // Validar que canceladas no sea mayor que bruto
@@ -45,11 +49,17 @@ export default function MonthInputModal({
       setError('Las canceladas no pueden ser mayores que la cifra bruta');
       return;
     }
+
+    // Validar que persistencia esté entre 0 y 100 si está definida
+    if (persistencia !== null && (persistencia < 0 || persistencia > 100)) {
+      setError('La persistencia debe estar entre 0% y 100%');
+      return;
+    }
     
     setError('');
     setSaving(true);
     try {
-      await onSave(bruto, numPolizas, canceladas);
+      await onSave(bruto, numPolizas, canceladas, persistencia);
       onClose();
     } catch (error) {
       console.error('Error saving:', error);
@@ -70,13 +80,13 @@ export default function MonthInputModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4 overflow-y-auto">
       <div 
-        className="bg-white rounded-2xl shadow-2xl max-w-md w-full transform transition-all"
+        className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[90vh] flex flex-col transform transition-all my-8"
         onKeyDown={handleKeyDown}
       >
         {/* Header */}
-        <div className="bg-gradient-to-r from-[#010139] to-[#020252] text-white p-6 rounded-t-2xl">
+        <div className="bg-gradient-to-r from-[#010139] to-[#020252] text-white p-6 rounded-t-2xl flex-shrink-0">
           <div className="flex items-center justify-between">
             <div>
               <h3 className="text-xl font-bold">Ingresar Cifras del Mes</h3>
@@ -95,7 +105,7 @@ export default function MonthInputModal({
         </div>
 
         {/* Body */}
-        <div className="p-6 space-y-6">
+        <div className="p-6 space-y-6 overflow-y-auto flex-1">
           {/* Campo: Cifra Bruta */}
           <div>
             <label className="block text-sm font-semibold text-[#010139] mb-2">
@@ -169,15 +179,53 @@ export default function MonthInputModal({
             <p className="text-xs text-gray-500 mt-1">
               Monto de pólizas canceladas en este mes
             </p>
-            {error && (
-              <p className="text-xs text-red-600 mt-1 font-semibold">
-                ⚠️ {error}
-              </p>
-            )}
           </div>
 
+          {/* Campo: Persistencia */}
+          <div>
+            <label className="block text-sm font-semibold text-[#010139] mb-2">
+              <FaPercentage className="inline mr-2 text-blue-600" />
+              Persistencia (%)
+            </label>
+            <input
+              type="number"
+              value={persistencia === null ? '' : persistencia}
+              onChange={(e) => {
+                const value = e.target.value === '' ? null : parseFloat(e.target.value);
+                setPersistencia(value);
+                if (value !== null && (value < 0 || value > 100)) {
+                  setError('La persistencia debe estar entre 0% y 100%');
+                } else if (canceladas > bruto) {
+                  setError('Las canceladas no pueden ser mayores que la cifra bruta');
+                } else {
+                  setError('');
+                }
+              }}
+              min="0"
+              max="100"
+              step="0.01"
+              className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none font-mono text-lg ${
+                error ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
+              }`}
+              placeholder="Ej: 85.5"
+              disabled={saving}
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Porcentaje de retención de clientes/pólizas (0-100)
+            </p>
+          </div>
+
+          {/* Mensaje de error */}
+          {error && (
+            <div className="bg-red-50 border-2 border-red-200 rounded-lg p-3">
+              <p className="text-xs text-red-600 font-semibold">
+                ⚠️ {error}
+              </p>
+            </div>
+          )}
+
           {/* Resumen */}
-          {(bruto > 0 || numPolizas > 0 || canceladas > 0) && (
+          {(bruto > 0 || numPolizas > 0 || canceladas > 0 || persistencia !== null) && (
             <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg p-4">
               <p className="text-sm font-semibold text-blue-800 mb-3">
                 📊 Resumen del Mes:
@@ -206,13 +254,23 @@ export default function MonthInputModal({
                     <span className="font-mono text-gray-700 text-xs">${(bruto / numPolizas).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
                   </div>
                 )}
+                {persistencia !== null && (
+                  <div className="flex justify-between items-center mt-3 pt-3 border-t border-blue-200">
+                    <span className="text-blue-700 font-semibold">Persistencia:</span>
+                    <span className={`font-mono font-bold text-lg ${
+                      persistencia < 80 ? 'text-red-600' :
+                      persistencia < 85 ? 'text-yellow-600' :
+                      'text-green-600'
+                    }`}>{persistencia.toFixed(2)}%</span>
+                  </div>
+                )}
               </div>
             </div>
           )}
         </div>
 
         {/* Footer */}
-        <div className="bg-gray-50 px-6 py-4 rounded-b-2xl flex justify-end gap-3">
+        <div className="bg-gray-50 px-6 py-4 rounded-b-2xl flex justify-end gap-3 flex-shrink-0">
           <button
             onClick={onClose}
             className="px-6 py-2 border-2 border-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-100 transition-colors"

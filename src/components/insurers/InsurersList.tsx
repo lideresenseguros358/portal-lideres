@@ -206,7 +206,7 @@ export default function InsurersList({ initialInsurers }: InsurersListProps) {
               >
                 {/* Card Front - Logo protagonista */}
                 <div 
-                  className="absolute inset-0 flex flex-col p-4"
+                  className="absolute inset-0 flex flex-col p-4 bg-white rounded-2xl"
                   style={{ backfaceVisibility: 'hidden' }}
                 >
                   {/* Badge de estado en esquina */}
@@ -225,7 +225,7 @@ export default function InsurersList({ initialInsurers }: InsurersListProps) {
                     <InsurerLogo 
                       logoUrl={insurer.logo_url}
                       insurerName={insurer.name}
-                      size="lg"
+                      size="2xl"
                     />
                   </div>
                   
@@ -257,7 +257,7 @@ export default function InsurersList({ initialInsurers }: InsurersListProps) {
                 </div>
                 {/* Card Back */}
                 <div 
-                  className="absolute inset-0 flex flex-col p-6"
+                  className="absolute inset-0 flex flex-col p-6 bg-white rounded-2xl"
                   style={{ 
                     backfaceVisibility: 'hidden',
                     transform: 'rotateY(180deg)'

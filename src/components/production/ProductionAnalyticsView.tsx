@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
-import { FaBullseye, FaArrowUp, FaTrophy, FaChartLine, FaUsers } from 'react-icons/fa';
+import { FaBullseye, FaArrowUp, FaTrophy, FaChartLine, FaUsers, FaInfoCircle } from 'react-icons/fa';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Area, AreaChart } from 'recharts';
 import ProductionBrokerView from './ProductionBrokerView';
 import { uppercaseInputClass } from '@/lib/utils/uppercase';
@@ -152,6 +152,12 @@ export default function ProductionAnalyticsView({ year, brokers }: ProductionAna
 
   const crecimientoGlobal = totalPreviousYTD > 0 ? ((totalNetoYTD - totalPreviousYTD) / totalPreviousYTD) * 100 : 0;
 
+  // Contar brokers con ventas (producción > 0)
+  const brokersConVentas = allBrokersData.filter(broker => {
+    const brutoYTD = Object.values(broker.months).reduce((sum: number, m: any) => sum + (m.bruto || 0), 0);
+    return brutoYTD > 0;
+  }).length;
+
   // Mejor mes agregado
   const mejorMesActual = aggregateMonthlyData.length > 0
     ? aggregateMonthlyData.reduce((max, m) => m.actual > (max?.actual || 0) ? m : max)
@@ -160,6 +166,41 @@ export default function ProductionAnalyticsView({ year, brokers }: ProductionAna
   const mejorMesAnterior = aggregateMonthlyData.length > 0
     ? aggregateMonthlyData.reduce((max, m) => m.anterior > (max?.anterior || 0) ? m : max)
     : undefined;
+
+  // Calcular última persistencia registrada
+  const ultimaPersistencia = (() => {
+    const currentMonth = new Date().getMonth(); // 0-11
+    // Buscar desde el mes actual hacia atrás
+    for (let i = currentMonth; i >= 0; i--) {
+      const monthKey = MONTH_KEYS[i];
+      if (!monthKey) continue;
+      for (const broker of allBrokersData) {
+        if (!broker.months) continue;
+        const monthData = broker.months[monthKey as keyof typeof broker.months];
+        const persistencia = monthData?.persistencia;
+        if (persistencia !== null && persistencia !== undefined) {
+          return { value: persistencia, month: MONTH_NAMES[i] };
+        }
+      }
+    }
+    return null;
+  })();
+
+  // Calcular promedio de persistencias del año
+  const persistenciaPromedio = (() => {
+    let sum = 0;
+    let count = 0;
+    allBrokersData.forEach(broker => {
+      MONTH_KEYS.forEach(key => {
+        const persistencia = broker.months[key]?.persistencia;
+        if (persistencia !== null && persistencia !== undefined) {
+          sum += persistencia;
+          count++;
+        }
+      });
+    });
+    return count > 0 ? sum / count : null;
+  })();
 
   // Tendencia
   const tendencia = aggregateMonthlyData.map((m, i) => {
@@ -191,7 +232,7 @@ export default function ProductionAnalyticsView({ year, brokers }: ProductionAna
               <span className="truncate">Vista Agregada - Todos los Brokers</span>
             </h2>
             <p className="text-xs sm:text-sm text-gray-600 mt-1">
-              {allBrokersData.length} brokers activos
+              {brokersConVentas} brokers con ventas
             </p>
           </div>
           <select
@@ -209,25 +250,25 @@ export default function ProductionAnalyticsView({ year, brokers }: ProductionAna
         </div>
       </div>
 
-      {/* KPI Cards Agregados */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      {/* KPI Cards Agregados - En una sola línea en PC */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
         {/* Meta Global */}
-        <div className="bg-gradient-to-br from-[#010139] to-[#020252] rounded-xl shadow-lg p-6 text-white">
-          <div className="flex items-center gap-3 mb-3">
-            <FaBullseye className="text-3xl text-[#8AAA19]" />
-            <div>
-              <p className="text-sm text-gray-300">Meta Global {year}</p>
-              <p className="text-2xl font-bold font-mono">{formatCurrency(metaGlobal)}</p>
+        <div className="bg-gradient-to-br from-[#010139] to-[#020252] rounded-xl shadow-lg p-4 lg:p-6 text-white">
+          <div className="flex items-center gap-2 lg:gap-3 mb-2 lg:mb-3">
+            <FaBullseye className="text-2xl lg:text-3xl text-[#8AAA19] flex-shrink-0" />
+            <div className="min-w-0 flex-1">
+              <p className="text-xs lg:text-sm text-gray-300 truncate">Meta Global {year}</p>
+              <p className="text-lg lg:text-2xl font-bold font-mono truncate">{formatCurrency(metaGlobal)}</p>
             </div>
           </div>
-          <div className="mt-4">
-            <div className="flex justify-between text-sm mb-1">
+          <div className="mt-3 lg:mt-4">
+            <div className="flex justify-between text-xs lg:text-sm mb-1">
               <span>Progreso</span>
               <span className="font-bold">{porcentajeCumplidoGlobal.toFixed(1)}%</span>
             </div>
-            <div className="w-full bg-gray-700 rounded-full h-3">
+            <div className="w-full bg-gray-700 rounded-full h-2 lg:h-3">
               <div 
-                className={`h-3 rounded-full transition-all ${porcentajeCumplidoGlobal >= 100 ? 'bg-green-500' : 'bg-[#8AAA19]'}`}
+                className={`h-2 lg:h-3 rounded-full transition-all ${porcentajeCumplidoGlobal >= 100 ? 'bg-green-500' : 'bg-[#8AAA19]'}`}
                 style={{ width: `${Math.min(porcentajeCumplidoGlobal, 100)}%` }}
               />
             </div>
@@ -235,45 +276,45 @@ export default function ProductionAnalyticsView({ year, brokers }: ProductionAna
         </div>
 
         {/* Neto Total */}
-        <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-[#8AAA19]">
-          <div className="flex items-center gap-3">
-            <div className="bg-green-100 p-3 rounded-lg">
-              <FaChartLine className="text-2xl text-[#8AAA19]" />
+        <div className="bg-white rounded-xl shadow-lg p-4 lg:p-6 border-l-4 border-[#8AAA19]">
+          <div className="flex items-center gap-2 lg:gap-3">
+            <div className="bg-green-100 p-2 lg:p-3 rounded-lg flex-shrink-0">
+              <FaChartLine className="text-xl lg:text-2xl text-[#8AAA19]" />
             </div>
-            <div>
-              <p className="text-sm text-gray-600">Neto Total</p>
-              <p className="text-2xl font-bold text-[#8AAA19] font-mono">{formatCurrency(totalNetoYTD)}</p>
-              <p className="text-xs text-gray-500">{totalNumPolizasYTD} pólizas</p>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs lg:text-sm text-gray-600 truncate">Neto Total</p>
+              <p className="text-lg lg:text-2xl font-bold text-[#8AAA19] font-mono truncate">{formatCurrency(totalNetoYTD)}</p>
+              <p className="text-[10px] lg:text-xs text-gray-500 truncate">{totalNumPolizasYTD} pólizas</p>
             </div>
           </div>
         </div>
 
         {/* Crecimiento */}
-        <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-blue-500">
-          <div className="flex items-center gap-3">
-            <div className="bg-blue-100 p-3 rounded-lg">
-              <FaArrowUp className="text-2xl text-blue-600" />
+        <div className="bg-white rounded-xl shadow-lg p-4 lg:p-6 border-l-4 border-blue-500">
+          <div className="flex items-center gap-2 lg:gap-3">
+            <div className="bg-blue-100 p-2 lg:p-3 rounded-lg flex-shrink-0">
+              <FaArrowUp className="text-xl lg:text-2xl text-blue-600" />
             </div>
-            <div>
-              <p className="text-sm text-gray-600">vs {year - 1}</p>
-              <p className={`text-2xl font-bold font-mono ${crecimientoGlobal >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs lg:text-sm text-gray-600 truncate">vs {year - 1}</p>
+              <p className={`text-lg lg:text-2xl font-bold font-mono truncate ${crecimientoGlobal >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                 {crecimientoGlobal >= 0 ? '+' : ''}{crecimientoGlobal.toFixed(1)}%
               </p>
-              <p className="text-xs text-gray-500">{formatCurrency(totalPreviousYTD)} anterior</p>
+              <p className="text-[10px] lg:text-xs text-gray-500 truncate">{formatCurrency(totalPreviousYTD)} anterior</p>
             </div>
           </div>
         </div>
 
         {/* Mejor Mes */}
-        <div className="bg-white rounded-xl shadow-lg p-6 border-l-4 border-yellow-500">
-          <div className="flex items-center gap-3">
-            <div className="bg-yellow-100 p-3 rounded-lg">
-              <FaTrophy className="text-2xl text-yellow-600" />
+        <div className="bg-white rounded-xl shadow-lg p-4 lg:p-6 border-l-4 border-yellow-500">
+          <div className="flex items-center gap-2 lg:gap-3">
+            <div className="bg-yellow-100 p-2 lg:p-3 rounded-lg flex-shrink-0">
+              <FaTrophy className="text-xl lg:text-2xl text-yellow-600" />
             </div>
-            <div>
-              <p className="text-sm text-gray-600">Mejor Mes {year}</p>
-              <p className="text-xl font-bold text-yellow-600">{mejorMesActual?.name || '-'}</p>
-              <p className="text-sm font-mono text-gray-700">{formatCurrency(mejorMesActual?.actual || 0)}</p>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs lg:text-sm text-gray-600 truncate">Mejor Mes {year}</p>
+              <p className="text-lg lg:text-xl font-bold text-yellow-600 truncate">{mejorMesActual?.name || '-'}</p>
+              <p className="text-xs lg:text-sm font-mono text-gray-700 truncate">{formatCurrency(mejorMesActual?.actual || 0)}</p>
             </div>
           </div>
         </div>
@@ -302,8 +343,8 @@ export default function ProductionAnalyticsView({ year, brokers }: ProductionAna
                   <p className="text-lg font-bold text-gray-700 font-mono">{formatCurrency(totalBrutoYTD / (12 - mesesRestantes || 1))}</p>
                 </div>
                 <div className="bg-white rounded-lg p-3 border border-orange-200">
-                  <p className="text-xs text-gray-600">Brokers activos</p>
-                  <p className="text-lg font-bold text-[#010139] font-mono">{allBrokersData.length}</p>
+                  <p className="text-xs text-gray-600">Brokers con ventas</p>
+                  <p className="text-lg font-bold text-[#010139] font-mono">{brokersConVentas}</p>
                 </div>
               </div>
             </div>

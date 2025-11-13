@@ -85,18 +85,18 @@ export async function GET(request: NextRequest) {
           assa_code: broker.assa_code || '',
           meta_personal: parseFloat(broker.meta_personal as any) || 0,
           months: {
-            jan: { bruto: 0, num_polizas: 0, canceladas: 0 },
-            feb: { bruto: 0, num_polizas: 0, canceladas: 0 },
-            mar: { bruto: 0, num_polizas: 0, canceladas: 0 },
-            apr: { bruto: 0, num_polizas: 0, canceladas: 0 },
-            may: { bruto: 0, num_polizas: 0, canceladas: 0 },
-            jun: { bruto: 0, num_polizas: 0, canceladas: 0 },
-            jul: { bruto: 0, num_polizas: 0, canceladas: 0 },
-            aug: { bruto: 0, num_polizas: 0, canceladas: 0 },
-            sep: { bruto: 0, num_polizas: 0, canceladas: 0 },
-            oct: { bruto: 0, num_polizas: 0, canceladas: 0 },
-            nov: { bruto: 0, num_polizas: 0, canceladas: 0 },
-            dec: { bruto: 0, num_polizas: 0, canceladas: 0 },
+            jan: { bruto: 0, num_polizas: 0, canceladas: 0, persistencia: null },
+            feb: { bruto: 0, num_polizas: 0, canceladas: 0, persistencia: null },
+            mar: { bruto: 0, num_polizas: 0, canceladas: 0, persistencia: null },
+            apr: { bruto: 0, num_polizas: 0, canceladas: 0, persistencia: null },
+            may: { bruto: 0, num_polizas: 0, canceladas: 0, persistencia: null },
+            jun: { bruto: 0, num_polizas: 0, canceladas: 0, persistencia: null },
+            jul: { bruto: 0, num_polizas: 0, canceladas: 0, persistencia: null },
+            aug: { bruto: 0, num_polizas: 0, canceladas: 0, persistencia: null },
+            sep: { bruto: 0, num_polizas: 0, canceladas: 0, persistencia: null },
+            oct: { bruto: 0, num_polizas: 0, canceladas: 0, persistencia: null },
+            nov: { bruto: 0, num_polizas: 0, canceladas: 0, persistencia: null },
+            dec: { bruto: 0, num_polizas: 0, canceladas: 0, persistencia: null },
           },
           canceladas_ytd: 0,
           previous_year: { bruto_ytd: 0, neto_ytd: 0, num_polizas_ytd: 0 }
@@ -184,6 +184,7 @@ export async function GET(request: NextRequest) {
           bruto: parseFloat(record.bruto) || 0,
           num_polizas: parseInt(record.num_polizas) || 0,
           canceladas: parseFloat(record.canceladas) || 0,
+          persistencia: record.persistencia !== null && record.persistencia !== undefined ? parseFloat(record.persistencia) : null,
         };
         // Acumular canceladas YTD
         broker.canceladas_ytd += parseFloat(record.canceladas) || 0;
@@ -250,6 +251,7 @@ export async function PUT(request: NextRequest) {
       bruto,           // Cifra bruta del mes
       num_polizas,     // Número de pólizas vendidas
       canceladas,      // Canceladas del mes
+      persistencia,    // Persistencia del mes (%)
       canceladas_ytd,  // Canceladas anuales (legacy)
       meta_personal    // Meta personal del broker
     } = body;
@@ -320,6 +322,12 @@ export async function PUT(request: NextRequest) {
       return NextResponse.json({ error: 'Canceladas no puede ser mayor que bruto' }, { status: 400 });
     }
 
+    // Validar persistencia si se proporciona
+    const persistenciaValue = persistencia !== undefined && persistencia !== null ? parseFloat(persistencia) : null;
+    if (persistenciaValue !== null && (persistenciaValue < 0 || persistenciaValue > 100)) {
+      return NextResponse.json({ error: 'Persistencia debe estar entre 0 y 100' }, { status: 400 });
+    }
+
     // Convertir month key ('jan', 'feb'...) a número (1-12)
     const monthKeys = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
     const monthIndex = monthKeys.indexOf(monthKey);
@@ -338,6 +346,7 @@ export async function PUT(request: NextRequest) {
         bruto,
         num_polizas,
         canceladas: canceladasValue,
+        persistencia: persistenciaValue,
         updated_at: new Date().toISOString(),
       }, {
         onConflict: 'broker_id,year,month',
