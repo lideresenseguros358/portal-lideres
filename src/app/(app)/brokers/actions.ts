@@ -253,6 +253,12 @@ export async function actionUpdateBroker(brokerId: string, updates: Partial<Tabl
       profileUpdates.role = newRole;
     }
 
+    // SIEMPRE asegurar que el nombre esté sincronizado con profiles
+    // Esto garantiza que brokers.name y profiles.full_name siempre coincidan
+    if (!profileUpdates.full_name && updatedBroker.name) {
+      profileUpdates.full_name = updatedBroker.name;
+    }
+
     // Update profiles if there are changes
     if (Object.keys(profileUpdates).length > 0) {
       console.log('[actionUpdateBroker] Syncing to profiles:', profileUpdates);
@@ -745,9 +751,26 @@ export async function actionBulkUpdateBrokers(updates: Array<{ id: string; [key:
           continue;
         }
 
-        // Sync to profiles if needed
+        // Sync to profiles - SIEMPRE sincronizar nombre para mantener consistencia
         const profileUpdates: Partial<TablesUpdate<'profiles'>> = {};
-        if (cleanedUpdates.name !== undefined) profileUpdates.full_name = cleanedUpdates.name;
+        
+        // Si se actualizó el nombre en brokers, sincronizar con profiles
+        if (cleanedUpdates.name !== undefined) {
+          profileUpdates.full_name = cleanedUpdates.name;
+        } else if (broker.email || broker.p_id) {
+          // Si NO se actualizó el nombre pero el broker existe, asegurar sincronización
+          // Obtener el nombre actual del broker para sincronizarlo
+          const { data: currentBroker } = await supabase
+            .from('brokers')
+            .select('name')
+            .eq('id', id)
+            .single();
+          
+          if (currentBroker?.name) {
+            profileUpdates.full_name = currentBroker.name;
+          }
+        }
+        
         if (cleanedUpdates.email !== undefined) profileUpdates.email = cleanedUpdates.email;
         if (newRole && (newRole === 'master' || newRole === 'broker')) {
           profileUpdates.role = newRole;
@@ -810,6 +833,95 @@ export async function actionBulkUpdateBrokers(updates: Array<{ id: string; [key:
     };
   } catch (error: any) {
     console.error('Error in actionBulkUpdateBrokers:', error);
+    return { ok: false as const, error: error.message };
+  }
+}
+
+// =====================================================
+// SYNC ALL BROKERS NAMES WITH PROFILES
+// =====================================================
+
+export async function actionSyncBrokersWithProfiles() {
+  try {
+    console.log('[actionSyncBrokersWithProfiles] Starting sync...');
+    
+    const supabaseServer = await getSupabaseServer();
+    const { data: { user } } = await supabaseServer.auth.getUser();
+    
+    if (!user) {
+      return { ok: false as const, error: 'No autenticado' };
+    }
+
+    // Check if user is master
+    const { data: profile } = await supabaseServer
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    if (profile?.role !== 'master') {
+      return { ok: false as const, error: 'Solo Master puede ejecutar esta acción' };
+    }
+
+    const supabase = await getSupabaseAdmin();
+    
+    // Get all brokers
+    const { data: brokers, error: brokersError } = await supabase
+      .from('brokers')
+      .select('id, p_id, name, email')
+      .order('name', { ascending: true });
+
+    if (brokersError || !brokers) {
+      return { ok: false as const, error: brokersError?.message || 'No se encontraron brokers' };
+    }
+
+    console.log(`[actionSyncBrokersWithProfiles] Found ${brokers.length} brokers to sync`);
+
+    let syncedCount = 0;
+    let errorCount = 0;
+    const errors: string[] = [];
+
+    for (const broker of brokers) {
+      if (!broker.p_id || !broker.name) {
+        console.log(`[actionSyncBrokersWithProfiles] Skipping broker ${broker.id} - missing p_id or name`);
+        continue;
+      }
+
+      try {
+        // Update profiles.full_name with brokers.name
+        const { error: syncError } = await supabase
+          .from('profiles')
+          .update({ full_name: broker.name })
+          .eq('id', broker.p_id);
+
+        if (syncError) {
+          console.error(`[actionSyncBrokersWithProfiles] Error syncing broker ${broker.id}:`, syncError);
+          errors.push(`${broker.name}: ${syncError.message}`);
+          errorCount++;
+        } else {
+          syncedCount++;
+        }
+      } catch (error: any) {
+        console.error(`[actionSyncBrokersWithProfiles] Exception syncing broker ${broker.id}:`, error);
+        errors.push(`${broker.name}: ${error.message}`);
+        errorCount++;
+      }
+    }
+
+    console.log(`[actionSyncBrokersWithProfiles] Complete. Synced: ${syncedCount}, Errors: ${errorCount}`);
+
+    revalidatePath('/brokers');
+    revalidatePath('/', 'layout');
+
+    return {
+      ok: true as const,
+      message: `Sincronización completa. ${syncedCount} brokers actualizados${errorCount > 0 ? `, ${errorCount} errores` : ''}`,
+      syncedCount,
+      errorCount,
+      errors: errorCount > 0 ? errors : undefined
+    };
+  } catch (error: any) {
+    console.error('Error in actionSyncBrokersWithProfiles:', error);
     return { ok: false as const, error: error.message };
   }
 }
