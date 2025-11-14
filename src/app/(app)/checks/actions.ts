@@ -481,6 +481,8 @@ export async function actionCreatePendingPayment(payment: {
   broker_cuenta?: string;
   is_broker_deduction?: boolean;
   deduction_broker_id?: string;
+  discount_type?: 'full' | 'partial';
+  discount_amount?: number;
 }) {
   try {
     const supabaseServer = await getSupabaseServer();
@@ -496,9 +498,14 @@ export async function actionCreatePendingPayment(payment: {
     // Calculate total received
     const total_received = payment.references.reduce((sum, ref) => sum + ref.amount, 0);
     
-    // Para descuento a corredor, NO validar referencias ni crear transferencias sintéticas ahora
-    // Solo se creará en bank_transfers cuando se marque como pagado
-    const skipBankValidation = payment.is_broker_deduction && payment.deduction_broker_id;
+    // Determinar si es descuento y qué tipo
+    const isBrokerDeduction = payment.is_broker_deduction && payment.deduction_broker_id;
+    const isPartialDeduction = isBrokerDeduction && payment.discount_type === 'partial';
+    const isFullDeduction = isBrokerDeduction && (!payment.discount_type || payment.discount_type === 'full');
+    
+    // Para descuento a corredor FULL, NO validar referencias ni crear transferencias sintéticas ahora
+    // Para descuento PARCIAL, SÍ validar las referencias bancarias (solo el resto se descuenta)
+    const skipBankValidation = isFullDeduction;
     
     if (skipBankValidation) {
       console.log('⏭️  Descuento a corredor: Saltando validación de banco (se creará al marcar como pagado)');
@@ -568,30 +575,45 @@ export async function actionCreatePendingPayment(payment: {
       notes: payment.notes || null,
     };
     
-    // Si es descuento a corredor, crear adelanto automáticamente
+    // Si es descuento a corredor, obtener nombre del broker
     let createdAdvanceId: string | undefined;
     let brokerNameForMessage = '';
-    if (payment.is_broker_deduction && payment.deduction_broker_id) {
+    const hasDivisions = payment.divisions && payment.divisions.length > 0;
+    
+    // Obtener nombre del broker para mensajes
+    if (isBrokerDeduction) {
+      const { data: brokerData } = await supabase
+        .from('brokers')
+        .select('name')
+        .eq('id', payment.deduction_broker_id!)
+        .single();
+      
+      brokerNameForMessage = brokerData?.name || 'Corredor';
+    }
+    
+    // Solo crear adelanto único si NO hay divisiones
+    // Si hay divisiones, cada una creará su propio adelanto más adelante
+    if (isBrokerDeduction && !hasDivisions) {
       try {
-        // Obtener nombre del broker para el motivo
-        const { data: brokerData } = await supabase
-          .from('brokers')
-          .select('name')
-          .eq('id', payment.deduction_broker_id)
-          .single();
+        const brokerName = brokerNameForMessage;
         
-        const brokerName = brokerData?.name || 'Corredor';
-        brokerNameForMessage = brokerName;
-        const advanceReason = `Descuento por pago: ${payment.client_name}`;
+        // Determinar monto del adelanto: discount_amount si es parcial, amount_to_pay si es full
+        const advanceAmount = isPartialDeduction 
+          ? (payment.discount_amount ?? 0)
+          : payment.amount_to_pay;
         
-        console.log(`💰 Creando adelanto automático para ${brokerName} - Cliente: ${payment.client_name} - Monto: $${payment.amount_to_pay}`);
+        const advanceReason = isPartialDeduction
+          ? `Descuento parcial por pago: ${payment.client_name}`
+          : `Descuento por pago: ${payment.client_name}`;
+        
+        console.log(`💰 Creando adelanto automático para ${brokerName} - Cliente: ${payment.client_name} - Monto: $${advanceAmount} (${payment.discount_type || 'full'})`);
         
         // Crear adelanto
         const { data: newAdvance, error: advanceError } = await supabase
           .from('advances')
           .insert([{
-            broker_id: payment.deduction_broker_id,
-            amount: payment.amount_to_pay,
+            broker_id: payment.deduction_broker_id!,
+            amount: advanceAmount,
             reason: advanceReason,
             status: 'PENDING',
             created_by: user.id
@@ -609,6 +631,10 @@ export async function actionCreatePendingPayment(payment: {
         metadata.is_auto_advance = true; // Flag para identificar descuentos a corredor
         metadata.broker_id = payment.deduction_broker_id;
         metadata.source = 'broker_deduction'; // Identificador adicional
+        metadata.discount_type = payment.discount_type || 'full';
+        if (isPartialDeduction && payment.discount_amount) {
+          metadata.discount_amount = payment.discount_amount;
+        }
         
       } catch (error: any) {
         console.error('❌ Error al crear adelanto automático:', error);
@@ -634,12 +660,56 @@ export async function actionCreatePendingPayment(payment: {
     }
     
     // Si hay divisiones, crear múltiples pagos pendientes
+    // Si además es descuento a corredor, crear un adelanto por cada división
+    const batchId = hasDivisions ? `batch-${Date.now()}-${Math.random().toString(36).substr(2, 9)}` : undefined;
+    
     const paymentsToCreate = payment.divisions && payment.divisions.length > 0
-      ? payment.divisions.map(div => {
+      ? await Promise.all(payment.divisions.map(async (div, divIndex) => {
           // Crear metadata específico para cada división
           const divMetadata: any = {
             notes: div.description || payment.notes || null,
+            batch_id: batchId, // Identificador de grupo para divisiones
+            division_index: divIndex, // Posición en el grupo
+            total_divisions: payment.divisions!.length, // Total de divisiones en el grupo
           };
+          
+          // Si es descuento a corredor con divisiones, crear adelanto para esta división
+          if (isBrokerDeduction) {
+            try {
+              const divAmount = parseFloat(div.amount.toString()) || 0;
+              const divClient = div.client_name || payment.client_name;
+              
+              console.log(`💰 Creando adelanto para división - Cliente: ${divClient} - Monto: $${divAmount}`);
+              
+              const { data: newDivAdvance, error: divAdvanceError } = await supabase
+                .from('advances')
+                .insert([{
+                  broker_id: payment.deduction_broker_id!,
+                  amount: divAmount,
+                  reason: `Descuento división: ${divClient} - ${div.policy_number || 'Sin póliza'}`,
+                  status: 'PENDING',
+                  created_by: user.id
+                }] satisfies TablesInsert<'advances'>[])
+                .select()
+                .single();
+              
+              if (divAdvanceError) {
+                console.error('Error creando adelanto de división:', divAdvanceError);
+                throw divAdvanceError;
+              }
+              
+              // Guardar advance_id en metadata de esta división
+              divMetadata.advance_id = newDivAdvance.id;
+              divMetadata.is_auto_advance = true;
+              divMetadata.broker_id = payment.deduction_broker_id;
+              divMetadata.source = 'broker_deduction';
+              
+              console.log(`✅ Adelanto de división creado: ID ${newDivAdvance.id}`);
+            } catch (error: any) {
+              console.error('❌ Error al crear adelanto de división:', error);
+              throw error;
+            }
+          }
           
           if (payment.advance_id) {
             divMetadata.source = 'advance_external';
@@ -667,12 +737,12 @@ export async function actionCreatePendingPayment(payment: {
             purpose: div.purpose,
             amount_to_pay: div.amount,
             total_received: div.amount, // Cada división recibe su monto
-            can_be_paid,
+            can_be_paid: isBrokerDeduction ? false : can_be_paid, // false para descuentos
             status: 'pending' as const,
             notes: JSON.stringify(divMetadata),
             created_by: user.id
           };
-        })
+        }))
       : [{
           client_name: payment.client_name,
           policy_number: payment.policy_number,
@@ -710,7 +780,7 @@ export async function actionCreatePendingPayment(payment: {
         reference_number: ref.reference_number,
         date: ref.date,
         amount: ref.amount, // Monto total de la transferencia bancaria
-        amount_to_use: pendingPayment.amount_to_pay, // Monto del pago (división o completo)
+        amount_to_use: ref.amount_to_use, // Monto específico que se usará de esta referencia
         exists_in_bank: skipBankValidation ? false : bankRefMap.has(ref.reference_number) // false para descuento a corredor
       }));
       allReferencesToInsert.push(...referencesToInsert);
@@ -727,7 +797,17 @@ export async function actionCreatePendingPayment(payment: {
 
     // Mensaje personalizado para descuento a corredor
     let successMessage = 'Pago pendiente creado exitosamente';
-    if (payment.is_broker_deduction && createdAdvanceId && brokerNameForMessage) {
+    if (isBrokerDeduction && hasDivisions) {
+      // Múltiples adelantos creados (uno por división)
+      const totalDivisions = pendingPayments.length;
+      const totalAmount = pendingPayments.reduce((sum, p) => sum + Number(p.amount_to_pay), 0);
+      
+      successMessage = `✅ ${totalDivisions} adelantos creados\n\n` +
+        `• Corredor: ${brokerNameForMessage || 'Seleccionado'}\n` +
+        `• Total: $${totalAmount.toFixed(2)}\n` +
+        `• Divisiones: ${totalDivisions}\n\n` +
+        `Cada división se conciliará individualmente cuando su adelanto esté pagado`;
+    } else if (payment.is_broker_deduction && createdAdvanceId && brokerNameForMessage) {
       console.log('✅ Pago pendiente de descuento a corredor creado con purpose="otro"');
 
       successMessage = `✅ Adelanto creado para ${brokerNameForMessage}\n\n` +
@@ -1394,6 +1474,51 @@ export async function actionValidateReferences(references: string[]) {
       (data || []).map((r: any) => [r.reference_number, r])
     );
     
+    // Consultar pagos pendientes que usan estas referencias
+    const { data: pendingRefs, error: pendingError } = await supabase
+      .from('payment_references')
+      .select(`
+        reference_number,
+        amount_to_use,
+        payment_id,
+        pending_payments!inner (
+          id,
+          client_name,
+          amount_to_pay,
+          status
+        )
+      `)
+      .in('reference_number', references)
+      .eq('pending_payments.status', 'pending');
+    
+    if (pendingError) {
+      console.error('Error consultando pagos pendientes:', pendingError);
+    }
+    
+    // Calcular cuánto está siendo usado por pagos pendientes para cada referencia
+    const pendingUsageMap = new Map<string, { total: number; payments: any[] }>();
+    
+    if (pendingRefs && pendingRefs.length > 0) {
+      pendingRefs.forEach((pr: any) => {
+        const refNum = pr.reference_number;
+        const amountUsed = Number(pr.amount_to_use || 0);
+        const paymentInfo = {
+          payment_id: pr.payment_id,
+          client_name: pr.pending_payments?.client_name || 'Desconocido',
+          amount_to_pay: pr.pending_payments?.amount_to_pay || 0,
+          amount_to_use: amountUsed
+        };
+        
+        if (!pendingUsageMap.has(refNum)) {
+          pendingUsageMap.set(refNum, { total: 0, payments: [] });
+        }
+        
+        const current = pendingUsageMap.get(refNum)!;
+        current.total += amountUsed;
+        current.payments.push(paymentInfo);
+      });
+    }
+    
     // Mapear resultados de forma más eficiente
     const result = references.map((ref) => {
       const transfer = transfersMap.get(ref);
@@ -1406,12 +1531,30 @@ export async function actionValidateReferences(references: string[]) {
         };
       }
       
-      // Calcular remaining amount
+      // Calcular remaining amount del banco
       let remaining = 0;
       if (transfer.remaining_amount !== null && transfer.remaining_amount !== undefined) {
         remaining = Number(transfer.remaining_amount);
       } else {
         remaining = Math.max(Number(transfer.amount || 0) - Number(transfer.used_amount || 0), 0);
+      }
+      
+      // Obtener uso por pagos pendientes
+      const pendingUsage = pendingUsageMap.get(ref);
+      const pendingUsedAmount = pendingUsage?.total || 0;
+      const availableAfterPending = Math.max(remaining - pendingUsedAmount, 0);
+      
+      // Determinar estado
+      let status = transfer.status || 'available';
+      let blocked = false;
+      let blockReason = null;
+      
+      if (pendingUsedAmount > 0 && availableAfterPending <= 0.01) {
+        status = 'blocked_by_pending';
+        blocked = true;
+        blockReason = `Esta referencia ya está siendo usada completamente por ${pendingUsage!.payments.length} pago(s) pendiente(s)`;
+      } else if (remaining <= 0.01) {
+        status = 'exhausted';
       }
       
       return {
@@ -1420,7 +1563,12 @@ export async function actionValidateReferences(references: string[]) {
         details: {
           ...transfer,
           remaining_amount: remaining,
-          status: transfer.status || 'available'
+          pending_used_amount: pendingUsedAmount,
+          available_after_pending: availableAfterPending,
+          status,
+          blocked,
+          block_reason: blockReason,
+          pending_payments: pendingUsage?.payments || []
         }
       };
     });
@@ -1632,6 +1780,8 @@ export async function actionUpdatePendingPaymentFull(paymentId: string, updates:
     amount_to_use: number;
   }>;
   divisions?: Array<any>;
+  is_broker_deduction?: boolean;
+  deduction_broker_id?: string;
 }) {
   try {
     const supabaseServer = await getSupabaseServer();
@@ -1645,8 +1795,56 @@ export async function actionUpdatePendingPaymentFull(paymentId: string, updates:
 
     console.log(`📝 Actualizando pago pendiente ${paymentId}...`);
 
-    // Prepare metadata for notes
+    // Obtener pago original para detectar si era descuento a corredor y su adelanto ligado
+    const { data: originalPayment, error: originalError } = await supabase
+      .from('pending_payments')
+      .select('id, amount_to_pay, notes')
+      .eq('id', paymentId)
+      .single();
+
+    if (originalError) {
+      console.error('❌ Error obteniendo pago original:', originalError);
+      throw originalError;
+    }
+
+    let originalMetadata: any = {};
+    let originalAdvanceId: string | null = null;
+    let originalIsBrokerDeduction = false;
+    let batchId: string | null = null;
+
+    if (originalPayment?.notes) {
+      try {
+        if (typeof originalPayment.notes === 'object' && originalPayment.notes !== null) {
+          originalMetadata = originalPayment.notes;
+        } else if (typeof originalPayment.notes === 'string') {
+          originalMetadata = JSON.parse(originalPayment.notes);
+        }
+      } catch {
+        originalMetadata = {};
+      }
+    }
+
+    if (originalMetadata) {
+      originalIsBrokerDeduction = originalMetadata.is_auto_advance === true || originalMetadata.source === 'broker_deduction';
+      if (originalMetadata.advance_id) {
+        originalAdvanceId = originalMetadata.advance_id as string;
+      }
+      if (originalMetadata.batch_id) {
+        batchId = originalMetadata.batch_id as string;
+      }
+    }
+    
+    // Si pertenece a un batch, informar en logs
+    if (batchId) {
+      console.log(`ℹ️  Este pago pertenece a un grupo de divisiones (batch: ${batchId}). ` +
+                  `División ${originalMetadata.division_index + 1} de ${originalMetadata.total_divisions}`);
+    }
+
+    const willBeBrokerDeduction = !!(updates.is_broker_deduction && updates.deduction_broker_id);
+
+    // Prepare metadata for notes (partiendo del metadata original para no perder flags)
     const metadata: any = {
+      ...originalMetadata,
       notes: updates.notes || null,
     };
 
@@ -1662,6 +1860,70 @@ export async function actionUpdatePendingPaymentFull(paymentId: string, updates:
       }
     }
 
+    // Manejo de adelantos asociados al pago pendiente
+    let advanceIdToUse: string | null = originalAdvanceId;
+
+    // Caso 1: antes NO era descuento a corredor y ahora SÍ lo es -> crear adelanto
+    if (!originalIsBrokerDeduction && willBeBrokerDeduction && updates.deduction_broker_id) {
+      console.log('💰 Creando adelanto por edición de pago pendiente (nuevo descuento a corredor)...');
+      const { data: newAdvance, error: advanceError } = await supabase
+        .from('advances')
+        .insert([{
+          broker_id: updates.deduction_broker_id,
+          amount: updates.amount_to_pay,
+          reason: `Descuento por pago editado: ${updates.client_name}`,
+          status: 'PENDING',
+          created_by: userData.user.id,
+        }] satisfies TablesInsert<'advances'>[])
+        .select()
+        .single();
+
+      if (advanceError) {
+        console.error('❌ Error creando adelanto desde edición:', advanceError);
+        throw advanceError;
+      }
+
+      advanceIdToUse = newAdvance.id as string;
+      metadata.advance_id = advanceIdToUse;
+      metadata.is_auto_advance = true;
+      metadata.broker_id = updates.deduction_broker_id;
+      metadata.source = 'broker_deduction';
+    }
+
+    // Caso 2: antes SÍ era descuento a corredor y ahora NO lo es -> cancelar adelanto
+    if (originalIsBrokerDeduction && !willBeBrokerDeduction && originalAdvanceId) {
+      console.log(`🧹 Cancelando adelanto ligado al pago ${paymentId} (ID adelanto: ${originalAdvanceId})...`);
+      const { error: cancelAdvanceError } = await supabase
+        .from('advances')
+        .update({ status: 'CANCELLED' } satisfies TablesUpdate<'advances'>)
+        .eq('id', originalAdvanceId);
+
+      if (cancelAdvanceError) {
+        console.error('❌ Error cancelando adelanto ligado:', cancelAdvanceError);
+        throw cancelAdvanceError;
+      }
+
+      // Limpiar metadata de descuento a corredor
+      delete metadata.is_auto_advance;
+      delete metadata.advance_id;
+      delete metadata.source;
+      // mantener metadata.broker_id sólo si viene de devolucion_tipo
+    }
+
+    // Caso 3: sigue siendo descuento a corredor, actualizar monto del adelanto si existe
+    if (originalIsBrokerDeduction && willBeBrokerDeduction && originalAdvanceId) {
+      console.log(`🔄 Actualizando monto de adelanto ligado ${originalAdvanceId}...`);
+      const { error: updateAdvanceError } = await supabase
+        .from('advances')
+        .update({ amount: updates.amount_to_pay } satisfies TablesUpdate<'advances'>)
+        .eq('id', originalAdvanceId);
+
+      if (updateAdvanceError) {
+        console.error('❌ Error actualizando adelanto ligado:', updateAdvanceError);
+        throw updateAdvanceError;
+      }
+    }
+
     // Update pending payment
     const { error: updateError } = await supabase
       .from('pending_payments')
@@ -1672,6 +1934,8 @@ export async function actionUpdatePendingPaymentFull(paymentId: string, updates:
         insurer_name: updates.purpose === 'poliza' && !updates.divisions ? updates.insurer_name : null,
         amount_to_pay: updates.amount_to_pay,
         notes: JSON.stringify(metadata),
+        // Si es descuento a corredor, mantener can_be_paid en false para que dependa del adelanto
+        ...(willBeBrokerDeduction ? { can_be_paid: false } : {}),
       } satisfies TablesUpdate<'pending_payments'>)
       .eq('id', paymentId);
 
@@ -1722,7 +1986,24 @@ export async function actionUpdatePendingPaymentFull(paymentId: string, updates:
 
     revalidatePath('/(app)/checks');
     
-    return { ok: true, message: 'Pago actualizado correctamente con todas sus referencias' };
+    // Mensaje personalizado según el caso
+    let successMessage = 'Pago actualizado correctamente con todas sus referencias';
+    
+    if (originalIsBrokerDeduction && willBeBrokerDeduction && originalAdvanceId) {
+      successMessage = `✅ Pago y adelanto actualizados correctamente\n\n` +
+        `• Monto del pago: $${updates.amount_to_pay.toFixed(2)}\n` +
+        `• Adelanto ligado también actualizado a: $${updates.amount_to_pay.toFixed(2)}`;
+    } else if (!originalIsBrokerDeduction && willBeBrokerDeduction) {
+      successMessage = `✅ Pago convertido a descuento a corredor\n\n` +
+        `• Se creó un nuevo adelanto por: $${updates.amount_to_pay.toFixed(2)}\n` +
+        `• El pago quedará habilitado cuando el adelanto esté pagado`;
+    } else if (originalIsBrokerDeduction && !willBeBrokerDeduction) {
+      successMessage = `✅ Pago convertido a referencia bancaria\n\n` +
+        `• El adelanto asociado fue cancelado\n` +
+        `• Ahora usa referencias bancarias normales`;
+    }
+    
+    return { ok: true, message: successMessage };
   } catch (error: any) {
     console.error('Error updating pending payment:', error);
     return { ok: false, error: error.message };
@@ -1880,7 +2161,72 @@ export async function actionDeletePendingPayment(paymentId: string) {
     }
 
     const supabase = await getSupabaseAdmin();
+
+    // Buscar pago para ver si está ligado a un adelanto y si pertenece a un batch
+    const { data: payment, error: fetchError } = await supabase
+      .from('pending_payments')
+      .select('id, notes, client_name')
+      .eq('id', paymentId)
+      .single();
+
+    if (fetchError) throw fetchError;
+
+    let metadata: any = {};
+    let advanceIdToCancel: string | null = null;
+    let batchId: string | null = null;
+
+    if (payment?.notes) {
+      try {
+        if (typeof payment.notes === 'object' && payment.notes !== null) {
+          metadata = payment.notes;
+        } else if (typeof payment.notes === 'string') {
+          metadata = JSON.parse(payment.notes);
+        }
+
+        if (metadata && metadata.advance_id) {
+          advanceIdToCancel = metadata.advance_id as string;
+        }
+        
+        if (metadata && metadata.batch_id) {
+          batchId = metadata.batch_id as string;
+        }
+      } catch {
+        metadata = {};
+      }
+    }
+
+    // Si el pago estaba ligado a un adelanto, marcarlo como CANCELLED para que deje de contar en saldos activos
+    if (advanceIdToCancel) {
+      console.log(`🧹 Cancelando adelanto ligado al pago eliminado ${paymentId} (adelanto ${advanceIdToCancel})...`);
+      const { error: cancelAdvanceError } = await supabase
+        .from('advances')
+        .update({ status: 'CANCELLED' } satisfies TablesUpdate<'advances'>)
+        .eq('id', advanceIdToCancel);
+
+      if (cancelAdvanceError) {
+        console.error('❌ Error cancelando adelanto ligado al eliminar pago:', cancelAdvanceError);
+      }
+    }
     
+    // Si pertenece a un batch (divisiones), informar sobre otros pagos del grupo
+    let otherPaymentsInfo = null;
+    if (batchId) {
+      const { data: batchPayments } = await supabase
+        .from('pending_payments')
+        .select('id')
+        .neq('id', paymentId)
+        .ilike('notes', `%${batchId}%`);
+      
+      if (batchPayments && batchPayments.length > 0) {
+        otherPaymentsInfo = {
+          batch_id: batchId,
+          remaining_count: batchPayments.length,
+          remaining_ids: batchPayments.map(p => p.id)
+        };
+        console.log(`ℹ️  Este pago pertenece a un grupo de divisiones. Quedan ${batchPayments.length} pagos del mismo grupo.`);
+      }
+    }
+
     // Delete payment references first (cascade)
     const { error: refsError } = await supabase
       .from('payment_references')
@@ -1897,7 +2243,22 @@ export async function actionDeletePendingPayment(paymentId: string) {
     
     if (paymentError) throw paymentError;
     
-    return { ok: true, message: 'Pago pendiente eliminado correctamente' };
+    // Retornar mensaje según si hay más pagos del grupo
+    let message = 'Pago pendiente eliminado correctamente';
+    if (otherPaymentsInfo && otherPaymentsInfo.remaining_count > 0) {
+      message += `\n\nℹ️  Este pago era parte de un grupo de ${metadata.total_divisions || 'varias'} divisiones. ` +
+                 `Aún quedan ${otherPaymentsInfo.remaining_count} pago(s) pendiente(s) del mismo grupo.`;
+    }
+    
+    if (advanceIdToCancel) {
+      message += '\n\n✅ Adelanto asociado cancelado correctamente.';
+    }
+    
+    return { 
+      ok: true, 
+      message,
+      batch_info: otherPaymentsInfo 
+    };
   } catch (error: any) {
     console.error('Error deleting pending payment:', error);
     return { ok: false, error: error.message };

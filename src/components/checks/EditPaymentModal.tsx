@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FaTimes, FaSave, FaPlus, FaTrash } from 'react-icons/fa';
+import { FaTimes, FaSave, FaPlus, FaTrash, FaCheckCircle, FaExclamationTriangle, FaSpinner } from 'react-icons/fa';
 import { toast } from 'sonner';
-import { actionUpdatePendingPaymentFull, actionGetInsurers, actionGetBankTransfers } from '@/app/(app)/checks/actions';
+import { actionUpdatePendingPaymentFull, actionGetInsurers, actionGetBankTransfers, actionValidateReferences } from '@/app/(app)/checks/actions';
 import { createUppercaseHandler, uppercaseInputClass } from '@/lib/utils/uppercase';
 import { supabaseClient } from '@/lib/supabase/client';
 
@@ -48,12 +48,23 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
     broker_cuenta: metadata.broker_cuenta || '',
   });
 
-  // Referencias bancarias
+  // Descuento a corredor (detectado desde metadata de pagos creados como descuento automático)
+  const initialBrokerDeduction = metadata.is_auto_advance === true || metadata.source === 'broker_deduction';
+  const [isBrokerDeduction, setIsBrokerDeduction] = useState<boolean>(initialBrokerDeduction);
+  const [deductionBrokerId, setDeductionBrokerId] = useState<string>(
+    (metadata.broker_id as string) || formData.broker_id || ''
+  );
+
+  // Referencias bancarias con validación
   const [references, setReferences] = useState<Array<{
     reference_number: string;
     date: string;
     amount: string;
     amount_to_use: string;
+    exists_in_bank?: boolean;
+    validating?: boolean;
+    status?: string | null;
+    remaining_amount?: number;
   }>>([]);
 
   // Divisiones (si el pago original tenía divisiones)
@@ -133,6 +144,72 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
     }
   };
 
+  // Validación de referencias con debounce
+  const validateReference = async (index: number, refNumber: string) => {
+    if (!refNumber || refNumber.trim() === '') {
+      return;
+    }
+
+    // Marcar como validando
+    setReferences(prev => {
+      const updated = [...prev];
+      if (updated[index]) {
+        updated[index] = { ...updated[index], validating: true };
+      }
+      return updated;
+    });
+
+    // Debounce: esperar 500ms
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    try {
+      const result = await actionValidateReferences([refNumber]);
+      
+      if (result.ok && result.data && result.data.length > 0) {
+        const validated = result.data[0];
+        const details = validated?.details || {};
+        
+        setReferences(prev => {
+          const updated = [...prev];
+          if (updated[index]) {
+            updated[index] = {
+              ...updated[index],
+              validating: false,
+              exists_in_bank: validated?.exists || false,
+              status: details.status || null,
+              remaining_amount: details.remaining_amount || 0,
+              amount: validated?.exists && details.amount ? details.amount.toString() : updated[index].amount
+            };
+          }
+          return updated;
+        });
+      } else {
+        // No encontrada
+        setReferences(prev => {
+          const updated = [...prev];
+          if (updated[index]) {
+            updated[index] = {
+              ...updated[index],
+              validating: false,
+              exists_in_bank: false,
+              status: 'not_found'
+            };
+          }
+          return updated;
+        });
+      }
+    } catch (error) {
+      console.error('Error validating reference:', error);
+      setReferences(prev => {
+        const updated = [...prev];
+        if (updated[index]) {
+          updated[index] = { ...updated[index], validating: false };
+        }
+        return updated;
+      });
+    }
+  };
+
   const handleSave = async () => {
     // Validaciones básicas
     if (!formData.client_name.trim()) {
@@ -147,15 +224,19 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
 
     // Validar referencias
     const validReferences = references.filter(ref => ref.reference_number.trim());
-    if (validReferences.length === 0) {
-      toast.error('Debe agregar al menos una referencia bancaria');
-      return;
-    }
 
-    for (const ref of validReferences) {
-      if (!ref.amount || parseFloat(ref.amount) <= 0) {
-        toast.error(`La referencia ${ref.reference_number} debe tener un monto válido`);
+    // Si NO es descuento a corredor, requerimos referencias bancarias
+    if (!isBrokerDeduction) {
+      if (validReferences.length === 0) {
+        toast.error('Debe agregar al menos una referencia bancaria');
         return;
+      }
+
+      for (const ref of validReferences) {
+        if (!ref.amount || parseFloat(ref.amount) <= 0) {
+          toast.error(`La referencia ${ref.reference_number} debe tener un monto válido`);
+          return;
+        }
       }
     }
 
@@ -189,6 +270,14 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
           toast.error('El corredor es requerido');
           return;
         }
+      }
+    }
+
+    // Validar selección de corredor cuando se marca como descuento a corredor
+    if (isBrokerDeduction) {
+      if (!deductionBrokerId) {
+        toast.error('Debe seleccionar el corredor al que se le descontará este pago');
+        return;
       }
     }
 
@@ -227,7 +316,9 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
           amount: parseFloat(ref.amount),
           amount_to_use: parseFloat(ref.amount_to_use || ref.amount)
         })),
-        divisions: hasDivisions ? divisions.filter(div => parseFloat(div.amount || '0') > 0) : undefined
+        divisions: hasDivisions ? divisions.filter(div => parseFloat(div.amount || '0') > 0) : undefined,
+        is_broker_deduction: isBrokerDeduction,
+        deduction_broker_id: isBrokerDeduction ? deductionBrokerId : undefined,
       });
 
       if (result.ok) {
@@ -472,6 +563,68 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
             />
           </div>
 
+          {/* Descuento a corredor */}
+          <div className="border-2 border-[#8AAA19]/40 rounded-lg p-4 bg-[#f9fbea] space-y-3">
+            <div className="flex items-start gap-3">
+              <input
+                type="checkbox"
+                id="edit-broker-deduction"
+                checked={isBrokerDeduction}
+                onChange={(e) => setIsBrokerDeduction(e.target.checked)}
+                className="mt-1 w-5 h-5 text-[#8AAA19] rounded focus:ring-[#8AAA19]"
+              />
+              <div className="flex-1">
+                <label htmlFor="edit-broker-deduction" className="font-semibold text-sm text-[#010139]">
+                  💰 Descontar este pago al corredor (adelanto en comisiones)
+                </label>
+                <p className="text-xs text-gray-600 mt-1">
+                  Si está activo, el monto completo se convierte en un adelanto al corredor seleccionado.
+                  Puedes convertir este pago entre referencia bancaria y descuento a corredor.
+                </p>
+              </div>
+            </div>
+
+            {isBrokerDeduction && (
+              <div className="mt-3 space-y-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Corredor a descontar <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={deductionBrokerId}
+                  onChange={(e) => setDeductionBrokerId(e.target.value)}
+                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none text-sm"
+                >
+                  <option value="">Seleccionar corredor...</option>
+                  {brokers.map((broker) => (
+                    <option key={broker.id} value={broker.id}>{broker.name}</option>
+                  ))}
+                </select>
+                {deductionBrokerId && (
+                  <>
+                    <p className="text-xs text-green-700 mt-1">
+                      Este pago se descontará de las comisiones del corredor seleccionado por
+                      <span className="font-semibold"> ${parseFloat(formData.amount_to_pay || '0').toFixed(2)}</span>.
+                    </p>
+                    <div className="mt-2 p-2 bg-blue-50 border-l-4 border-blue-500 rounded-r">
+                      <p className="text-xs text-blue-800 font-semibold">
+                        🔄 Sincronización automática activada
+                      </p>
+                      <p className="text-[11px] text-blue-700 mt-1">
+                        Si cambias el monto del pago, el adelanto ligado se actualizará automáticamente al mismo valor.
+                      </p>
+                    </div>
+                  </>
+                )}
+                <p className="text-[11px] text-amber-700 mt-2">
+                  💡 <strong>Conversión:</strong> Al activar/desactivar esta opción:
+                  <br/>• Activar: crea un adelanto automático
+                  <br/>• Desactivar: cancela el adelanto ligado
+                  <br/>• Mantener activo + editar monto: sincroniza adelanto
+                </p>
+              </div>
+            )}
+          </div>
+
           {/* Referencias Bancarias */}
           <div className="border-2 border-gray-200 rounded-lg p-4">
             <div className="flex items-center justify-between mb-3">
@@ -486,7 +639,7 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
             </div>
             {references.map((ref, index) => (
               <div key={index} className="grid grid-cols-12 gap-2 mb-2">
-                <div className="col-span-4">
+                <div className="col-span-4 relative">
                   <input
                     type="text"
                     placeholder="# Referencia"
@@ -496,11 +649,34 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
                       if (newRefs[index]) {
                         newRefs[index].reference_number = e.target.value;
                         setReferences(newRefs);
+                        // Validar referencia con debounce
+                        validateReference(index, e.target.value);
                       }
                     }}
                     list="available-references"
-                    className="w-full px-3 py-2 border rounded text-sm"
+                    className="w-full px-3 py-2 pr-8 border rounded text-sm"
                   />
+                  {/* Iconos de validación */}
+                  <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
+                    {ref.validating && (
+                      <FaSpinner className="text-blue-500 animate-spin" size={16} />
+                    )}
+                    {!ref.validating && ref.exists_in_bank && (
+                      <FaCheckCircle className="text-green-600" size={16} title="Referencia válida" />
+                    )}
+                    {!ref.validating && ref.exists_in_bank === false && ref.reference_number && (
+                      <FaExclamationTriangle className="text-red-600" size={16} title="Referencia no encontrada" />
+                    )}
+                    {!ref.validating && ref.status === 'exhausted' && (
+                      <FaExclamationTriangle className="text-orange-600" size={16} title="Referencia agotada" />
+                    )}
+                  </div>
+                  {/* Info adicional de validación */}
+                  {!ref.validating && ref.exists_in_bank && ref.remaining_amount !== undefined && (
+                    <p className="text-xs text-gray-600 mt-1">
+                      Disponible: ${ref.remaining_amount.toFixed(2)}
+                    </p>
+                  )}
                 </div>
                 <div className="col-span-3">
                   <input

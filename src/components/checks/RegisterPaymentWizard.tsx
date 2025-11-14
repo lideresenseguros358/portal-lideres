@@ -55,6 +55,8 @@ export default function RegisterPaymentWizardNew({
   // Step 2: Referencias
   const [isDeductFromBroker, setIsDeductFromBroker] = useState(false);
   const [selectedBrokerId, setSelectedBrokerId] = useState('');
+  const [deductMode, setDeductMode] = useState<'full' | 'partial'>('full');
+  const [partialDeductAmount, setPartialDeductAmount] = useState('');
   const [multipleRefs, setMultipleRefs] = useState(false);
   const [references, setReferences] = useState([{
     reference_number: '',
@@ -197,7 +199,30 @@ export default function RegisterPaymentWizardNew({
           toast.error('Seleccione un corredor');
           return false;
         }
-        return true; // No necesita validar referencias
+
+        // Si es descuento parcial, validar monto y referencias
+        if (deductMode === 'partial') {
+          const discount = parseFloat(partialDeductAmount) || 0;
+
+          if (discount <= 0 || discount > amountToPay + 0.01) {
+            toast.error('Monto de descuento inválido', {
+              description: 'El descuento debe ser mayor a 0 y menor o igual al monto total'
+            });
+            return false;
+          }
+
+          const remaining = amountToPay - discount;
+          if (remaining <= 0.01) {
+            toast.error('El restante a conciliar por banco debe ser mayor a 0');
+            return false;
+          }
+
+          // Continuar validando referencias para el resto bancario
+          // (las validaciones de referencias siguen después de este bloque)
+        } else {
+          // Descuento 100% - no necesita referencias
+          return true;
+        }
       }
       
       // Verificar que todas las referencias tengan número
@@ -211,6 +236,22 @@ export default function RegisterPaymentWizardNew({
       if (incompleteRef) {
         toast.error('Complete monto y fecha de todas las referencias', {
           description: `La referencia ${incompleteRef.reference_number} necesita monto y fecha.`
+        });
+        return false;
+      }
+      
+      // BLOQUEO CRÍTICO: Verificar si alguna referencia está bloqueada por pagos pendientes
+      const blockedRef = references.find(r => (r as any).blocked === true);
+      if (blockedRef) {
+        const blockReason = (blockedRef as any).block_reason || 'Esta referencia ya está siendo usada por otros pagos pendientes';
+        const pendingPayments = (blockedRef as any).pending_payments || [];
+        const paymentsList = pendingPayments
+          .map((p: any) => `  • ${p.client_name}: $${Number(p.amount_to_use).toFixed(2)}`)
+          .join('\n');
+        
+        toast.error('🚫 No puedes continuar', {
+          description: `La referencia ${blockedRef.reference_number} está bloqueada:\n\n${blockReason}\n\nPagos que la están usando:\n${paymentsList}\n\nDebes pagar o cancelar esos pagos primero.`,
+          duration: 12000
         });
         return false;
       }
@@ -253,14 +294,19 @@ export default function RegisterPaymentWizardNew({
     // Validar step 3: Divisiones (si están activas)
     if (step === 3 && divideSingle) {
       const totalDivs = divisions.reduce((sum, div) => sum + (parseFloat(div.amount) || 0), 0);
-      const totalBankRefs = references.reduce((sum, ref) => sum + (parseFloat(ref.amount) || 0), 0);
       
-      // Las divisiones deben ser <= total de referencias (no necesariamente iguales)
-      if (totalDivs > totalBankRefs + 0.01) {
-        toast.error('Error en divisiones', {
-          description: `Las divisiones ($${totalDivs.toFixed(2)}) exceden el total disponible ($${totalBankRefs.toFixed(2)})`
-        });
-        return false;
+      // Solo validar contra referencias si NO es descuento a corredor
+      // Cuando es descuento a corredor, cada división crea su propio adelanto sin límite
+      if (!isDeductFromBroker) {
+        const totalBankRefs = references.reduce((sum, ref) => sum + (parseFloat(ref.amount) || 0), 0);
+        
+        // Las divisiones deben ser <= total de referencias (no necesariamente iguales)
+        if (totalDivs > totalBankRefs + 0.01) {
+          toast.error('Error en divisiones', {
+            description: `Las divisiones ($${totalDivs.toFixed(2)}) exceden el total disponible ($${totalBankRefs.toFixed(2)})`
+          });
+          return false;
+        }
       }
       
       if (totalDivs === 0) {
@@ -361,25 +407,38 @@ export default function RegisterPaymentWizardNew({
           if (validation.exists && validation.details) {
             const transferTotal = Number(validation.details.amount) || 0;
             const remaining = Number(validation.details.remaining_amount) || 0;
+            const availableAfterPending = Number(validation.details.available_after_pending) || remaining;
+            const pendingUsed = Number(validation.details.pending_used_amount) || 0;
             const status = validation.details.status || 'available';
+            const blocked = validation.details.blocked || false;
+            const blockReason = validation.details.block_reason;
+            const pendingPayments = validation.details.pending_payments || [];
             const bankDate = validation.details.date;
-            
-            const amountToPay = parseFloat(formData.amount_to_pay) || 0;
             
             // Auto-llenar campos cuando concilia
             currentRefs[index]!.amount = transferTotal.toString();
             currentRefs[index]!.remaining_amount = remaining;
-            currentRefs[index]!.status = status;
-            currentRefs[index]!.amount_to_use = amountToPay.toFixed(2);
+            currentRefs[index]!.status = blocked ? 'blocked_by_pending' : status;
+            
+            // Guardar info de bloqueo en el estado
+            if (blocked) {
+              (currentRefs[index] as any).blocked = true;
+              (currentRefs[index] as any).block_reason = blockReason;
+              (currentRefs[index] as any).pending_payments = pendingPayments;
+            }
             
             // Auto-llenar fecha si está disponible
             if (bankDate) {
               currentRefs[index]!.date = bankDate;
             }
             
-            // Validar disponibilidad solo si es necesario
-            if (amountToPay > remaining) {
-              toast.warning(`Esta referencia solo tiene $${remaining.toFixed(2)} disponibles. Necesitas $${amountToPay.toFixed(2)}`);
+            // Validar disponibilidad considerando pagos pendientes
+            if (!blocked && parseFloat(formData.amount_to_pay) > availableAfterPending) {
+              if (pendingUsed > 0) {
+                toast.warning(`Esta referencia tiene $${availableAfterPending.toFixed(2)} disponibles (descontando $${pendingUsed.toFixed(2)} de pagos pendientes). Necesitas $${parseFloat(formData.amount_to_pay).toFixed(2)}`);
+              } else {
+                toast.warning(`Esta referencia solo tiene $${remaining.toFixed(2)} disponibles. Necesitas $${parseFloat(formData.amount_to_pay).toFixed(2)}`);
+              }
             }
           }
           
@@ -391,17 +450,46 @@ export default function RegisterPaymentWizardNew({
             toast.warning('Referencia no encontrada en banco', {
               description: 'Ingrese monto y fecha manualmente'
             });
+          } else if (validation.details?.blocked) {
+            const pendingPayments = validation.details.pending_payments || [];
+            const pendingUsed = Number(validation.details.pending_used_amount) || 0;
+            const paymentsList = pendingPayments
+              .map((p: any) => `• ${p.client_name}: $${Number(p.amount_to_use).toFixed(2)}`)
+              .join('\n');
+            
+            toast.error('🚫 Referencia bloqueada por pagos pendientes', {
+              description: `Reservado: $${pendingUsed.toFixed(2)}\n\nPagos pendientes:\n${paymentsList}\n\nNo puedes usar esta referencia hasta que se paguen o cancelen estos pagos.`,
+              duration: 10000
+            });
           } else if (validation.details?.status === 'exhausted') {
             toast.error('❌ Referencia agotada', {
               description: 'Esta referencia ya fue usada completamente y no tiene saldo disponible'
             });
           } else if (validation.details?.status === 'partial') {
             const remaining = Number(validation.details.remaining_amount) || 0;
-            toast.success('⚠️ Referencia parcialmente usada', {
-              description: `Saldo disponible: $${remaining.toFixed(2)}`
-            });
+            const availableAfterPending = Number(validation.details.available_after_pending) || remaining;
+            const pendingUsed = Number(validation.details.pending_used_amount) || 0;
+            
+            if (pendingUsed > 0) {
+              toast.warning('⚠️ Referencia parcialmente usada con pagos pendientes', {
+                description: `Banco: $${remaining.toFixed(2)} | Reservado por pendientes: $${pendingUsed.toFixed(2)} | Disponible: $${availableAfterPending.toFixed(2)}`,
+                duration: 7000
+              });
+            } else {
+              toast.success('⚠️ Referencia parcialmente usada', {
+                description: `Saldo disponible: $${remaining.toFixed(2)}`
+              });
+            }
           } else {
-            toast.success('✅ Referencia válida');
+            const pendingUsed = Number(validation.details?.pending_used_amount) || 0;
+            if (pendingUsed > 0) {
+              const availableAfterPending = Number(validation.details.available_after_pending) || 0;
+              toast.success('✅ Referencia válida con pagos pendientes', {
+                description: `Reservado: $${pendingUsed.toFixed(2)} | Disponible: $${availableAfterPending.toFixed(2)}`
+              });
+            } else {
+              toast.success('✅ Referencia válida');
+            }
           }
         }
       } else {
@@ -494,27 +582,130 @@ export default function RegisterPaymentWizardNew({
     try {
       let validReferences;
       let isDeductPayment = false;
+      const totalAmount = parseFloat(formData.amount_to_pay) || 0;
       
-      // Si es descuento a corredor, crear referencia sintética
-      if (isDeductFromBroker && selectedBrokerId) {
+      // Calcular monto de descuento y tipo
+      const discountAmount = isDeductFromBroker && deductMode === 'partial'
+        ? parseFloat(partialDeductAmount) || 0
+        : isDeductFromBroker && deductMode === 'full'
+        ? totalAmount
+        : 0;
+
+      const discountType = isDeductFromBroker && deductMode === 'partial'
+        ? 'partial'
+        : isDeductFromBroker
+        ? 'full'
+        : undefined;
+      
+      // Si es descuento a corredor FULL (100%), crear referencia sintética
+      if (isDeductFromBroker && selectedBrokerId && deductMode === 'full') {
         const broker = brokers.find(b => b.id === selectedBrokerId);
         const brokerName = broker?.name || 'CORREDOR';
         
         validReferences = [{
           reference_number: `DESCUENTO-${Date.now()}`,
           date: new Date().toISOString().split('T')[0] as string,
-          amount: parseFloat(formData.amount_to_pay),
-          amount_to_use: parseFloat(formData.amount_to_pay)
+          amount: totalAmount,
+          amount_to_use: totalAmount
         }];
         
         isDeductPayment = true;
       } else {
-        validReferences = references.map(ref => ({
-          reference_number: ref.reference_number,
-          date: (ref.date || new Date().toISOString().split('T')[0]) as string,
-          amount: parseFloat(ref.amount),
-          amount_to_use: parseFloat(ref.amount_to_use || ref.amount)
-        }));
+        // Para descuento parcial o pago normal, calcular monto a cubrir con banco
+        const amountToCoverByBank = isDeductFromBroker && deductMode === 'partial'
+          ? totalAmount - discountAmount
+          : totalAmount;
+        const refsWithAmount = references
+          .map((ref, index) => ({
+            index,
+            reference_number: ref.reference_number,
+            date: (ref.date || new Date().toISOString().split('T')[0]) as string,
+            amount: parseFloat(ref.amount) || 0,
+          }))
+          .filter(r => r.amount > 0);
+
+        // Si no hay montos válidos, no cambiamos la lógica original y dejamos que el backend valide
+        if (refsWithAmount.length === 0) {
+          validReferences = references.map(ref => ({
+            reference_number: ref.reference_number,
+            date: (ref.date || new Date().toISOString().split('T')[0]) as string,
+            amount: parseFloat(ref.amount),
+            amount_to_use: parseFloat(ref.amount_to_use || ref.amount)
+          }));
+        } else {
+          // Shuffle aleatorio de las referencias para decidir cuál dejar con excedente
+          const shuffled = [...refsWithAmount];
+          for (let i = shuffled.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            const temp = shuffled[i]!;
+            shuffled[i] = shuffled[j]!;
+            shuffled[j] = temp;
+          }
+
+          let remainingToAllocate = amountToCoverByBank;
+          const allocationMap: { [idx: number]: { amount: number; amount_to_use: number } } = {};
+          const allocationDetails: string[] = [];
+          
+          // Marcar como pago de descuento si es parcial
+          if (isDeductFromBroker && deductMode === 'partial') {
+            isDeductPayment = true;
+          }
+
+          for (const item of shuffled) {
+            if (remainingToAllocate <= 0) {
+              allocationMap[item.index] = {
+                amount: item.amount,
+                amount_to_use: 0,
+              };
+              continue;
+            }
+
+            if (item.amount <= remainingToAllocate + 0.0001) {
+              // Consumir la referencia completa
+              allocationMap[item.index] = {
+                amount: item.amount,
+                amount_to_use: item.amount,
+              };
+              remainingToAllocate -= item.amount;
+              allocationDetails.push(`REF ${item.reference_number}: USADO COMPLETO $${item.amount.toFixed(2)}`);
+            } else {
+              // Solo usar lo necesario y dejar excedente en esta referencia
+              const amountToUse = remainingToAllocate;
+              const excess = item.amount - amountToUse;
+              allocationMap[item.index] = {
+                amount: item.amount,
+                amount_to_use: amountToUse,
+              };
+              remainingToAllocate = 0;
+              allocationDetails.push(
+                `REF ${item.reference_number}: USADO $${amountToUse.toFixed(2)} (EXCEDENTE $${excess.toFixed(2)})`
+              );
+            }
+          }
+
+          // Construir validReferences respetando el orden original de "references"
+          validReferences = references.map((ref, idx) => {
+            const alloc = allocationMap[idx];
+            const baseAmount = parseFloat(ref.amount) || 0;
+            const amount = alloc ? alloc.amount : baseAmount;
+            const amount_to_use = alloc ? alloc.amount_to_use : 0;
+
+            return {
+              reference_number: ref.reference_number,
+              date: (ref.date || new Date().toISOString().split('T')[0]) as string,
+              amount,
+              amount_to_use,
+            };
+          });
+
+          // Anexar detalle de uso de referencias a las notas del formulario para que viaje al backend
+          if (allocationDetails.length > 0) {
+            const allocationNote = `REFS: ${allocationDetails.join(' | ')}`;
+            formData.notes = formData.notes
+              ? `${formData.notes} | ${allocationNote}`
+              : allocationNote;
+          }
+        }
       }
       
       // Preparar divisiones si están activas
@@ -537,12 +728,14 @@ export default function RegisterPaymentWizardNew({
       
       const payload = {
         ...formData,
-        amount_to_pay: parseFloat(formData.amount_to_pay),
+        amount_to_pay: totalAmount,
         references: validReferences,
         divisions: validDivisions,
         advance_id: advancePrefill?.id ?? advanceId ?? undefined,
         is_broker_deduction: isDeductPayment,
-        deduction_broker_id: isDeductPayment ? selectedBrokerId : undefined
+        deduction_broker_id: isDeductPayment ? selectedBrokerId : undefined,
+        discount_type: discountType as 'full' | 'partial' | undefined,
+        discount_amount: discountAmount || undefined
       };
 
       const result = await actionCreatePendingPayment(payload);
@@ -924,20 +1117,94 @@ export default function RegisterPaymentWizardNew({
                     ))}
                   </select>
                   {selectedBrokerId && (
-                    <div className="mt-3 p-3 bg-green-50 border-l-4 border-green-500 rounded-r-lg">
-                      <p className="text-sm text-green-800">
-                        ✅ Este pago se descontará de las comisiones de <strong>{brokers.find(b => b.id === selectedBrokerId)?.name}</strong>
-                      </p>
-                      <p className="text-xs text-green-600 mt-1">
-                        Se creará un adelanto por <strong>${amountToPay.toFixed(2)}</strong> que se descontará en la próxima quincena
-                      </p>
-                    </div>
+                    <>
+                      {/* Tipo de descuento: Full o Parcial */}
+                      <div className="mt-4 space-y-3">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Tipo de descuento
+                        </label>
+                        <div className="flex flex-col sm:flex-row gap-3">
+                          <label className="flex items-center gap-2 cursor-pointer p-3 border-2 rounded-lg transition-all hover:bg-gray-50 has-[:checked]:border-[#8AAA19] has-[:checked]:bg-[#8AAA19]/5">
+                            <input
+                              type="radio"
+                              name="deduct_mode"
+                              value="full"
+                              checked={deductMode === 'full'}
+                              onChange={() => setDeductMode('full')}
+                              className="w-4 h-4 text-[#8AAA19]"
+                            />
+                            <span className="text-sm font-medium">Descuento 100% al corredor</span>
+                          </label>
+                          <label className="flex items-center gap-2 cursor-pointer p-3 border-2 rounded-lg transition-all hover:bg-gray-50 has-[:checked]:border-[#8AAA19] has-[:checked]:bg-[#8AAA19]/5">
+                            <input
+                              type="radio"
+                              name="deduct_mode"
+                              value="partial"
+                              checked={deductMode === 'partial'}
+                              onChange={() => setDeductMode('partial')}
+                              className="w-4 h-4 text-[#8AAA19]"
+                            />
+                            <span className="text-sm font-medium">Descuento parcial + banco</span>
+                          </label>
+                        </div>
+
+                        {deductMode === 'partial' && (
+                          <div className="mt-3 p-4 bg-blue-50 border-2 border-blue-200 rounded-lg space-y-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  Monto a descontar al corredor <span className="text-red-500">*</span>
+                                </label>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  value={partialDeductAmount}
+                                  onChange={(e) => setPartialDeductAmount(e.target.value)}
+                                  onWheel={(e) => e.currentTarget.blur()}
+                                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+                                  placeholder="0.00"
+                                />
+                              </div>
+                              <div className="flex items-end">
+                                <div className="w-full p-3 bg-white border-2 border-gray-200 rounded-lg">
+                                  <p className="text-xs text-gray-600">Restante a conciliar por banco:</p>
+                                  <p className="text-lg font-bold text-[#010139]">
+                                    ${Math.max(
+                                      0,
+                                      (parseFloat(formData.amount_to_pay || '0') || 0) -
+                                        (parseFloat(partialDeductAmount || '0') || 0),
+                                    ).toFixed(2)}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                            <p className="text-xs text-blue-700">
+                              💡 El monto que descontes al corredor se registrará como adelanto. El restante se conciliará con referencias bancarias.
+                            </p>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="mt-3 p-3 bg-green-50 border-l-4 border-green-500 rounded-r-lg">
+                        <p className="text-sm text-green-800">
+                          ✅ Este pago se descontará de las comisiones de <strong>{brokers.find(b => b.id === selectedBrokerId)?.name}</strong>
+                        </p>
+                        <p className="text-xs text-green-600 mt-1">
+                          Se creará un adelanto por <strong>
+                            ${deductMode === 'partial' 
+                              ? (parseFloat(partialDeductAmount || '0') || 0).toFixed(2)
+                              : amountToPay.toFixed(2)
+                            }
+                          </strong> que se descontará en la próxima quincena
+                        </p>
+                      </div>
+                    </>
                   )}
                 </div>
               )}
 
-              {/* Referencias (solo si NO es descuento a corredor) */}
-              {!isDeductFromBroker && references.map((ref, index) => (
+              {/* Referencias (solo si NO es descuento a corredor O si es descuento PARCIAL) */}
+              {(!isDeductFromBroker || (isDeductFromBroker && deductMode === 'partial')) && references.map((ref, index) => (
                 <div key={index} className="border-2 border-gray-200 rounded-lg p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <h4 className="font-semibold text-gray-700">Referencia {index + 1}</h4>
@@ -1002,6 +1269,29 @@ export default function RegisterPaymentWizardNew({
                     {/* Status display */}
                     {ref.exists_in_bank && ref.status && (
                       <div>
+                        {ref.status === 'blocked_by_pending' && (
+                          <div className="bg-red-100 border-2 border-red-500 rounded-lg p-3 animate-pulse">
+                            <p className="text-red-900 font-bold text-sm flex items-center gap-2">
+                              🚫 REFERENCIA BLOQUEADA - No puedes continuar
+                            </p>
+                            <p className="text-red-700 text-xs mt-2 font-semibold">
+                              {(ref as any).block_reason || 'Esta referencia ya está completamente reservada por otros pagos pendientes'}
+                            </p>
+                            {(ref as any).pending_payments && (ref as any).pending_payments.length > 0 && (
+                              <div className="mt-3 bg-white/50 rounded p-2">
+                                <p className="text-xs font-semibold text-red-800 mb-1">Pagos que la están usando:</p>
+                                {(ref as any).pending_payments.map((p: any, i: number) => (
+                                  <p key={i} className="text-xs text-red-700">
+                                    • {p.client_name}: ${Number(p.amount_to_use).toFixed(2)}
+                                  </p>
+                                ))}
+                              </div>
+                            )}
+                            <p className="text-xs text-red-600 mt-2 italic">
+                              Debes pagar o cancelar esos pagos antes de usar esta referencia.
+                            </p>
+                          </div>
+                        )}
                         {ref.status === 'exhausted' && (
                           <div className="bg-red-50 border-2 border-red-300 rounded-lg p-3">
                             <p className="text-red-800 font-semibold text-sm">
@@ -1103,7 +1393,7 @@ export default function RegisterPaymentWizardNew({
                 </div>
               ))}
 
-              {!isDeductFromBroker && multipleRefs && (
+              {(!isDeductFromBroker || (isDeductFromBroker && deductMode === 'partial')) && multipleRefs && (
                 <button
                   onClick={addReference}
                   className="w-full py-2 border-2 border-dashed border-gray-300 rounded-lg text-gray-600 hover:border-[#8AAA19] hover:text-[#8AAA19] transition font-medium flex items-center justify-center gap-2"
@@ -1114,12 +1404,34 @@ export default function RegisterPaymentWizardNew({
               )}
 
               {/* Resumen de montos */}
-              {!isDeductFromBroker && (
+              {(!isDeductFromBroker || (isDeductFromBroker && deductMode === 'partial')) && (
               <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-gray-700">Monto a Pagar:</span>
-                  <span className="font-bold text-[#010139]">${amountToPay.toFixed(2)}</span>
-                </div>
+                {isDeductFromBroker && deductMode === 'partial' && (
+                  <>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Monto Total:</span>
+                      <span className="font-semibold text-gray-700">${amountToPay.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Descuento a corredor:</span>
+                      <span className="font-semibold text-[#8AAA19]">
+                        -${(parseFloat(partialDeductAmount || '0') || 0).toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between pb-2 border-b">
+                      <span className="text-gray-700 font-medium">A Conciliar con Banco:</span>
+                      <span className="font-bold text-[#010139]">
+                        ${Math.max(0, amountToPay - (parseFloat(partialDeductAmount || '0') || 0)).toFixed(2)}
+                      </span>
+                    </div>
+                  </>
+                )}
+                {!isDeductFromBroker && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-700">Monto a Pagar:</span>
+                    <span className="font-bold text-[#010139]">${amountToPay.toFixed(2)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between">
                   <span className="text-gray-700">Total Cubierto:</span>
                   <span className="font-bold text-blue-600">${totalBankReferences.toFixed(2)}</span>
@@ -1181,6 +1493,18 @@ export default function RegisterPaymentWizardNew({
                     Dividir una sola transferencia en múltiples pagos (ej: una ref para varias pólizas)
                   </label>
                 </div>
+                
+                {/* Mensaje informativo para descuento a corredor con divisiones */}
+                {divideSingle && isDeductFromBroker && (
+                  <div className="ml-7 p-3 bg-[#8AAA19]/10 border-l-4 border-[#8AAA19] rounded-r-lg">
+                    <p className="text-sm text-[#010139] font-semibold">
+                      💰 Adelantos múltiples al corredor {brokers.find(b => b.id === selectedBrokerId)?.name}
+                    </p>
+                    <p className="text-xs text-gray-700 mt-1">
+                      Cada división creará un adelanto independiente al mismo corredor. Los montos NO están limitados por referencias bancarias.
+                    </p>
+                  </div>
+                )}
                 
                 {/* Checkbox: Mismo cliente */}
                 {divideSingle && (

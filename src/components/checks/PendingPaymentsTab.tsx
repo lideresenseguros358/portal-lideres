@@ -25,6 +25,7 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
     action: 'paid' | 'pdf';
   } | null>(null);
   const [editingPayment, setEditingPayment] = useState<any | null>(null);
+  const [brokers, setBrokers] = useState<any[]>([]);
 
   const loadPayments = useCallback(async () => {
     console.log('🔄 [PendingPaymentsTab] Iniciando carga de pagos...');
@@ -54,6 +55,28 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
       console.log('🏁 [PendingPaymentsTab] Carga completada');
     }
   }, []); // No dependencies needed as we only use setters and actions
+
+  // Cargar brokers
+  useEffect(() => {
+    const loadBrokers = async () => {
+      try {
+        const supabase = supabaseClient();
+        const { data, error } = await supabase
+          .from('brokers')
+          .select('id, name')
+          .eq('active', true)
+          .order('name');
+        
+        if (!error && data) {
+          setBrokers(data);
+        }
+      } catch (error) {
+        console.error('Error loading brokers:', error);
+      }
+    };
+    
+    loadBrokers();
+  }, []);
 
   useEffect(() => {
     // Sincronización automática silenciosa en segundo plano
@@ -980,12 +1003,25 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
                   })}
                 </div>
 
-                {/* Status badge */}
+                {/* Status badge y etiquetas especiales */}
                 <div className="flex items-center justify-between">
-                  <div>
+                  <div className="flex flex-wrap items-center gap-2">
                     <StatusBadge payment={payment} />
+
+                    {isDescuentoACorredor(payment) && (() => {
+                      const brokerId = payment.metadata?.broker_id;
+                      const broker = brokers.find(b => b.id === brokerId);
+                      const brokerName = broker?.name;
+                      
+                      return (
+                        <span className="px-2 py-0.5 bg-[#010139]/5 text-[#010139] border border-[#010139]/30 rounded-full text-[11px] font-semibold">
+                          💰 Descuento a corredor{brokerName ? ` – ${brokerName}` : ''}
+                        </span>
+                      );
+                    })()}
+
                     {payment.metadata?.advance_id && (
-                      <span className="ml-2 px-2 py-0.5 bg-[#8AAA19]/10 text-[#8AAA19] border border-[#8AAA19]/40 rounded-full text-xs font-semibold">
+                      <span className="px-2 py-0.5 bg-[#8AAA19]/10 text-[#8AAA19] border border-[#8AAA19]/40 rounded-full text-[11px] font-semibold">
                         Adelanto externo
                       </span>
                     )}
