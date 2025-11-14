@@ -764,7 +764,10 @@ export default function RegisterPaymentWizardNew({
   
   // Calcular monto restante para divisiones
   const totalDivisions = divisions.reduce((sum, div) => sum + (parseFloat(div.amount) || 0), 0);
-  const divisionRemainder = totalBankReferences - totalDivisions;
+  
+  // Si es descuento a corredor, no hay límite de monto en divisiones (cada una crea su adelanto)
+  // Solo mostramos el total de divisiones sin comparar contra referencias
+  const divisionRemainder = isDeductFromBroker ? 0 : (totalBankReferences - totalDivisions);
 
   return (
     <div 
@@ -1835,37 +1838,65 @@ export default function RegisterPaymentWizardNew({
                   </button>
                   
                   <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-gray-700">Total Referencias:</span>
-                      <span className="font-bold text-blue-600">${totalBankReferences.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-700">Total Divisiones:</span>
-                      <span className="font-bold">${totalDivisions.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between border-t pt-2">
-                      <span className="text-gray-700 font-semibold">Monto Restante:</span>
-                      <span className={`font-bold text-lg ${
-                        divisionRemainder === 0 ? 'text-green-600' : 
-                        divisionRemainder > 0 ? 'text-orange-600' : 'text-red-600'
-                      }`}>
-                        ${divisionRemainder.toFixed(2)}
-                      </span>
-                    </div>
-                    {divisionRemainder > 0 && (
-                      <p className="text-sm text-blue-600 text-center">
-                        ℹ️ Quedan ${divisionRemainder.toFixed(2)} sin asignar (opcional)
-                      </p>
-                    )}
-                    {divisionRemainder < 0 && (
-                      <p className="text-sm text-red-600 text-center">
-                        ❌ Has excedido el monto disponible en ${Math.abs(divisionRemainder).toFixed(2)}
-                      </p>
-                    )}
-                    {divisionRemainder === 0 && (
-                      <p className="text-sm text-green-600 text-center">
-                        ✅ Has asignado todo el monto disponible
-                      </p>
+                    {isDeductFromBroker ? (
+                      // Vista para descuento a corredor: sin límite de monto
+                      <>
+                        <div className="flex justify-between items-center">
+                          <span className="text-gray-700">💰 Adelantos a crear:</span>
+                          <span className="font-bold text-[#8AAA19] text-xl">{divisions.length}</span>
+                        </div>
+                        <div className="flex justify-between border-t pt-2">
+                          <span className="text-gray-700 font-semibold">Total en Adelantos:</span>
+                          <span className="font-bold text-lg text-blue-600">
+                            ${totalDivisions.toFixed(2)}
+                          </span>
+                        </div>
+                        <div className="mt-3 p-3 bg-[#8AAA19]/10 border-l-4 border-[#8AAA19] rounded-r">
+                          <p className="text-xs text-[#010139] font-semibold">
+                            ✅ Sin límite de monto
+                          </p>
+                          <p className="text-xs text-gray-700 mt-1">
+                            Cada división creará un adelanto independiente al corredor {brokers.find(b => b.id === selectedBrokerId)?.name}.
+                            No hay restricción de monto ya que no se valida contra referencias bancarias.
+                          </p>
+                        </div>
+                      </>
+                    ) : (
+                      // Vista normal: validar contra referencias
+                      <>
+                        <div className="flex justify-between">
+                          <span className="text-gray-700">Total Referencias:</span>
+                          <span className="font-bold text-blue-600">${totalBankReferences.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-700">Total Divisiones:</span>
+                          <span className="font-bold">${totalDivisions.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between border-t pt-2">
+                          <span className="text-gray-700 font-semibold">Monto Restante:</span>
+                          <span className={`font-bold text-lg ${
+                            divisionRemainder === 0 ? 'text-green-600' : 
+                            divisionRemainder > 0 ? 'text-orange-600' : 'text-red-600'
+                          }`}>
+                            ${divisionRemainder.toFixed(2)}
+                          </span>
+                        </div>
+                        {divisionRemainder > 0 && (
+                          <p className="text-sm text-blue-600 text-center">
+                            ℹ️ Quedan ${divisionRemainder.toFixed(2)} sin asignar (opcional)
+                          </p>
+                        )}
+                        {divisionRemainder < 0 && (
+                          <p className="text-sm text-red-600 text-center">
+                            ❌ Has excedido el monto disponible en ${Math.abs(divisionRemainder).toFixed(2)}
+                          </p>
+                        )}
+                        {divisionRemainder === 0 && (
+                          <p className="text-sm text-green-600 text-center">
+                            ✅ Has asignado todo el monto disponible
+                          </p>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>
