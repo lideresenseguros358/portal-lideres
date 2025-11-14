@@ -1525,38 +1525,43 @@ export default function RegisterPaymentWizardNew({
                   </div>
                 )}
                 
-                <div className="ml-7 text-xs space-y-1">
-                  <p className="text-gray-600">
-                    Tienes <strong className="text-blue-600">${totalBankReferences.toFixed(2)}</strong> disponibles de las referencias. Puedes dividirlos en varios pagos.
-                  </p>
-                  <p className="text-gray-500 italic">
-                    Tip: La primera división se llena automáticamente con los datos del Paso 1.
-                  </p>
-                  {!sameClient && divideSingle && (
-                    <p className="text-amber-600 italic font-medium">
-                      ⚠️ Al dividir entre diferentes clientes, ingresa el nombre en cada división.
+                {/* Ocultar info de disponible cuando es descuento a corredor */}
+                {!isDeductFromBroker && (
+                  <div className="ml-7 text-xs space-y-1">
+                    <p className="text-gray-600">
+                      Tienes <strong className="text-blue-600">${totalBankReferences.toFixed(2)}</strong> disponibles de las referencias. Puedes dividirlos en varios pagos.
                     </p>
-                  )}
-                </div>
+                    <p className="text-gray-500 italic">
+                      Tip: La primera división se llena automáticamente con los datos del Paso 1.
+                    </p>
+                    {!sameClient && divideSingle && (
+                      <p className="text-amber-600 italic font-medium">
+                        ⚠️ Al dividir entre diferentes clientes, ingresa el nombre en cada división.
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
 
               {divideSingle ? (
                 <div className="space-y-4">
-                  {/* Indicador de monto disponible */}
-                  <div className={`p-3 rounded-lg border-2 ${
-                    divisionRemainder === 0 ? 'bg-green-50 border-green-300' :
-                    divisionRemainder > 0 ? 'bg-blue-50 border-blue-300' : 'bg-red-50 border-red-300'
-                  }`}>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-700">Disponible para dividir:</span>
-                      <span className={`text-2xl font-bold ${
-                        divisionRemainder === 0 ? 'text-green-600' :
-                        divisionRemainder > 0 ? 'text-blue-600' : 'text-red-600'
-                      }`}>
-                        ${divisionRemainder.toFixed(2)}
-                      </span>
+                  {/* Indicador de monto disponible - Ocultar cuando es descuento a corredor */}
+                  {!isDeductFromBroker && (
+                    <div className={`p-3 rounded-lg border-2 ${
+                      divisionRemainder === 0 ? 'bg-green-50 border-green-300' :
+                      divisionRemainder > 0 ? 'bg-blue-50 border-blue-300' : 'bg-red-50 border-red-300'
+                    }`}>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-gray-700">Disponible para dividir:</span>
+                        <span className={`text-2xl font-bold ${
+                          divisionRemainder === 0 ? 'text-green-600' :
+                          divisionRemainder > 0 ? 'text-blue-600' : 'text-red-600'
+                        }`}>
+                          ${divisionRemainder.toFixed(2)}
+                        </span>
+                      </div>
                     </div>
-                  </div>
+                  )}
                   
                   {divisions.map((div, index) => (
                     <div key={index} className={`border-2 rounded-lg p-4 space-y-3 ${
