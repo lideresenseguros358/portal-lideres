@@ -95,7 +95,7 @@ const MasterDashboard = async ({ userId }: MasterDashboardProps) => {
             subtitle={`Año ${productionData.year}`}
           />
           <KpiCard
-            title="YTD vs Año pasado"
+            title={`${new Date().getFullYear()} vs ${new Date().getFullYear() - 1}`}
             value={`${productionData.deltaPercent > 0 ? '+' : ''}${productionData.deltaPercent.toFixed(1)}%`}
             subtitle={`${formatCurrency(productionData.totalPMA)} vs ${formatCurrency(productionData.previousTotal)}`}
           />
@@ -110,7 +110,7 @@ const MasterDashboard = async ({ userId }: MasterDashboardProps) => {
         
         {/* Ranking de brokers */}
         <div className="ranking-section mt-6">
-          <h3 className="subsection-title">Top 5 Corredores (YTD)</h3>
+          <h3 className="subsection-title">Top 5 Corredores {new Date().getFullYear()}</h3>
           <div className="ranking-list">
             {brokerRanking.map((broker, index) => {
               const getMedalEmoji = (position: number) => {

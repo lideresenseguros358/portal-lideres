@@ -19,7 +19,7 @@ const AuthShell = ({ children, description = 'Ingrese su usuario y contraseña',
       <header className="auth-header">
         <div className="auth-logo-wrapper">
           <Link href="/">
-            <Image src="/logo.png" alt="Líderes en Seguros" width={120} height={32} priority />
+            <Image src="/logo.png" alt="Líderes en Seguros" width={80} height={16} priority />
           </Link>
         </div>
       </header>
@@ -78,11 +78,13 @@ const AuthShell = ({ children, description = 'Ingrese su usuario y contraseña',
           right: 0;
           z-index: 10;
           background-color: #ffffff;
-          padding: 12px 32px;
+          padding: 12px 24px;
           display: flex;
           justify-content: flex-start;
           align-items: center;
           box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+          width: 100%;
+          margin: 0;
         }
 
         .auth-logo-wrapper {
@@ -166,12 +168,14 @@ const AuthShell = ({ children, description = 'Ingrese su usuario y contraseña',
           z-index: 10;
           background-color: #010139;
           text-align: center;
-          padding: 16px 16px;
+          padding: 14px 16px;
           display: flex;
           flex-direction: column;
           gap: 6px;
           min-height: 60px;
           justify-content: center;
+          width: 100%;
+          margin: 0;
         }
 
         .auth-footer-line {
@@ -179,11 +183,39 @@ const AuthShell = ({ children, description = 'Ingrese su usuario y contraseña',
           color: #f1f2f6;
           font-size: 11px;
           line-height: 1.4;
+          word-wrap: break-word;
+          overflow-wrap: break-word;
+          hyphens: auto;
+          padding: 0 8px;
         }
 
         .auth-footer-line.small {
           color: #dbe1ff;
           font-size: 10px;
+          word-wrap: break-word;
+          overflow-wrap: break-word;
+          padding: 0 8px;
+        }
+
+        @media (max-width: 640px) {
+          .auth-header {
+            padding: 10px 12px;
+          }
+
+          .auth-footer {
+            padding: 12px 12px;
+          }
+
+          .auth-footer-line {
+            font-size: 9px;
+            line-height: 1.3;
+            padding: 0 4px;
+          }
+
+          .auth-footer-line.small {
+            font-size: 8px;
+            padding: 0 4px;
+          }
         }
 
         @media (max-width: 480px) {
@@ -194,7 +226,22 @@ const AuthShell = ({ children, description = 'Ingrese su usuario y contraseña',
           }
 
           .auth-header {
-            padding: 16px;
+            padding: 10px 12px;
+          }
+
+          .auth-footer {
+            padding: 10px 8px;
+          }
+
+          .auth-footer-line {
+            font-size: 8.5px;
+            line-height: 1.3;
+            padding: 0 2px;
+          }
+
+          .auth-footer-line.small {
+            font-size: 7.5px;
+            padding: 0 2px;
           }
         }
       `}</style>

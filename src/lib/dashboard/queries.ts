@@ -340,7 +340,10 @@ export async function getBrokerRanking() {
 
 // Get broker of the month (previous closed month)
 export async function getBrokerOfTheMonth(): Promise<{ brokerName: string; month: string; monthName: string } | null> {
-  const supabase = await getSupabaseServer();
+  // Usar admin para obtener todos los datos sin restricciones de RLS
+  const { getSupabaseAdmin } = await import('@/lib/supabase/admin');
+  const supabase = await getSupabaseAdmin();
+  
   const now = new Date();
   const currentDay = now.getDate();
   const currentMonth = now.getMonth() + 1; // 1-12
@@ -352,7 +355,7 @@ export async function getBrokerOfTheMonth(): Promise<{ brokerName: string; month
   
   if (currentDay === 1) {
     // Verificar si hay datos del mes actual
-    const { data: checkCurrent } = await (supabase as any)
+    const { data: checkCurrent } = await supabase
       .from("production")
       .select("id")
       .eq("year", currentYear)
@@ -367,7 +370,7 @@ export async function getBrokerOfTheMonth(): Promise<{ brokerName: string; month
   
   const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
   
-  const { data } = await (supabase as any)
+  const { data } = await supabase
     .from("production")
     .select(`
       broker_id,
@@ -381,7 +384,10 @@ export async function getBrokerOfTheMonth(): Promise<{ brokerName: string; month
     .eq("year", targetYear)
     .eq("month", targetMonth); // month es INTEGER 1-12
   
-  if (!data || data.length === 0) return null;
+  if (!data || data.length === 0) {
+    console.log('[BROKER OF THE MONTH] No hay datos para el mes', { targetYear, targetMonth });
+    return null;
+  }
   
   // Calcular PMA Neto del mes por broker
   const brokers = data.map((item: any) => ({
@@ -389,6 +395,8 @@ export async function getBrokerOfTheMonth(): Promise<{ brokerName: string; month
     broker_name: item.brokers?.name || 'Sin nombre',
     pma_neto: (parseFloat(item.bruto) || 0) - (parseFloat(item.canceladas) || 0)
   }));
+  
+  console.log('[BROKER OF THE MONTH] Brokers encontrados:', brokers.length);
   
   // Ordenar: descendente por PMA Neto, en empate alfabético
   brokers.sort((a: any, b: any) => {
@@ -399,7 +407,16 @@ export async function getBrokerOfTheMonth(): Promise<{ brokerName: string; month
   });
   
   const winner = brokers[0];
-  if (!winner) return null;
+  if (!winner) {
+    console.log('[BROKER OF THE MONTH] No hay ganador');
+    return null;
+  }
+  
+  console.log('[BROKER OF THE MONTH] Ganador:', { 
+    name: winner.broker_name, 
+    amount: winner.pma_neto,
+    month: monthNames[targetMonth - 1]
+  });
   
   return {
     brokerName: winner.broker_name,

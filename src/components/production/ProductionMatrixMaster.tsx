@@ -2,10 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
-import { FaChevronRight, FaChevronLeft, FaEdit, FaBullseye } from 'react-icons/fa';
+import { FaChevronRight, FaChevronLeft, FaEdit, FaBullseye, FaTable } from 'react-icons/fa';
 import Link from 'next/link';
 import MonthInputModal from './MonthInputModal';
 import MetaPersonalModal from './MetaPersonalModal';
+import ProductionTableModal from './ProductionTableModal';
 import { createUppercaseHandler, uppercaseInputClass } from '@/lib/utils/uppercase';
 
 interface MonthData {
@@ -87,6 +88,8 @@ export default function ProductionMatrixMaster({ year }: ProductionMatrixMasterP
     broker?: BrokerProduction;
   }>({ isOpen: false });
 
+  const [showTableModal, setShowTableModal] = useState(false);
+
   useEffect(() => {
     loadProduction();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -129,12 +132,6 @@ export default function ProductionMatrixMaster({ year }: ProductionMatrixMasterP
 
   const handleMonthSave = async (bruto: number, numPolizas: number, canceladas: number, persistencia: number | null) => {
     if (!monthModal.broker || !monthModal.monthKey) return;
-
-    // Validar que canceladas no sea mayor que bruto
-    if (canceladas > bruto) {
-      toast.error('Las canceladas no pueden ser mayores que la cifra bruta');
-      return;
-    }
 
     // Validar que persistencia esté entre 0 y 100 si está definida
     if (persistencia !== null && (persistencia < 0 || persistencia > 100)) {
@@ -271,15 +268,24 @@ export default function ProductionMatrixMaster({ year }: ProductionMatrixMasterP
 
   return (
     <>
-      {/* Buscador */}
+      {/* Buscador y Botón Ver Cuadro */}
       <div className="bg-white rounded-xl shadow-lg p-4 mb-4">
-        <input
-          type="text"
-          placeholder="🔍 BUSCAR CORREDOR POR NOMBRE O CÓDIGO ASSA..."
-          value={searchTerm}
-          onChange={createUppercaseHandler((e) => setSearchTerm(e.target.value))}
-          className={`w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none text-base ${uppercaseInputClass}`}
-        />
+        <div className="flex flex-col sm:flex-row gap-3">
+          <input
+            type="text"
+            placeholder="🔍 BUSCAR CORREDOR POR NOMBRE O CÓDIGO ASSA..."
+            value={searchTerm}
+            onChange={createUppercaseHandler((e) => setSearchTerm(e.target.value))}
+            className={`flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none text-base ${uppercaseInputClass}`}
+          />
+          <button
+            onClick={() => setShowTableModal(true)}
+            className="px-4 py-3 bg-gradient-to-r from-[#010139] to-[#020252] text-white rounded-lg font-semibold hover:shadow-lg transition-all flex items-center justify-center gap-2 whitespace-nowrap"
+          >
+            <FaTable className="text-sm" />
+            <span className="text-sm sm:text-base">Ver Cuadro</span>
+          </button>
+        </div>
       </div>
 
       {/* Selector de Semestre - Rediseñado Responsive */}
@@ -649,6 +655,13 @@ export default function ProductionMatrixMaster({ year }: ProductionMatrixMasterP
         onSave={handleMetaSave}
         brokerName={metaModal.broker?.broker_name || ''}
         currentMeta={metaModal.broker?.meta_personal || 0}
+      />
+
+      <ProductionTableModal
+        isOpen={showTableModal}
+        onClose={() => setShowTableModal(false)}
+        production={production}
+        year={year}
       />
     </>
   );

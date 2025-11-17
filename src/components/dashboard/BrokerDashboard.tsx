@@ -102,7 +102,7 @@ const BrokerDashboard = async ({ userId }: BrokerDashboardProps) => {
       </div>
 
       <div className="dashboard-section">
-        <h2 className="section-title">Top 5 Corredores (YTD)</h2>
+        <h2 className="section-title">Top 5 Corredores {new Date().getFullYear()}</h2>
         <div className="ranking-list">
           {rankingEntries.length === 0 ? (
             <p className="empty-state">Aún no hay datos disponibles.</p>
@@ -176,7 +176,7 @@ const BrokerDashboard = async ({ userId }: BrokerDashboardProps) => {
       </div>
 
       <div className="dashboard-section">
-        <h2 className="section-title">Producción YTD</h2>
+        <h2 className="section-title">Producción Año en Curso</h2>
         <Link href="/production" className="block">
           <BarYtd current={ytdComparison.current} last={ytdComparison.previous} />
         </Link>

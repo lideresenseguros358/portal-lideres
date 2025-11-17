@@ -137,16 +137,19 @@ export async function PATCH(
       .insert([{
         id: authData.user!.id,
         p_id: authData.user!.id,
-        // Datos personales
-        nombre_completo: userRequest.nombre_completo_titular, // Nombre del titular de cuenta ACH
+        // Datos personales del BROKER
+        name: userRequest.nombre_completo, // Nombre del broker
+        nombre_completo: userRequest.nombre_completo, // Nombre del broker
+        email: userRequest.email, // Email del broker
         national_id: userRequest.cedula, // Cédula del broker
         phone: userRequest.telefono,
         license_no: userRequest.licencia,
         birth_date: userRequest.fecha_nacimiento,
-        // Datos bancarios ACH (campos correctos después de migración)
+        // Datos bancarios ACH
         bank_route: bankRoute, // Código de ruta bancaria
         bank_account_no: userRequest.bank_account_no, // Número de cuenta
         tipo_cuenta: userRequest.tipo_cuenta || '04', // Tipo de cuenta: 03 o 04
+        beneficiary_name: userRequest.nombre_completo_titular, // Nombre del TITULAR de la cuenta (puede ser diferente al broker)
         // Comisión
         percent_default: parseFloat(commission_percent),
         // Campos adicionales
@@ -161,6 +164,20 @@ export async function PATCH(
       return NextResponse.json({ 
         error: `Error al crear broker: ${brokerError.message}` 
       }, { status: 500 });
+    }
+
+    // Vincular broker_id en profiles para completar la relación
+    const { error: linkError } = await supabase
+      .from('profiles')
+      .update({
+        broker_id: authData.user!.id
+      })
+      .eq('id', authData.user!.id);
+
+    if (linkError) {
+      console.error('Error linking broker to profile:', linkError);
+      // No retornamos error porque el broker ya fue creado
+      // El link puede hacerse manualmente después si falla
     }
 
     // Actualizar solicitud

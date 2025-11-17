@@ -294,38 +294,121 @@ export default function ProductionBrokerView({ year, brokerId }: ProductionBroke
       </div>
 
       {/* Proyección y Alerta */}
-      {porcentajeCumplido < 100 && mesesRestantes > 0 && (
-        <div className="bg-gradient-to-r from-orange-50 to-red-50 border-2 border-orange-300 rounded-xl p-6">
-          <div className="flex items-start gap-4">
-            <FaCalendarAlt className="text-3xl text-orange-600 mt-1" />
-            <div className="flex-1">
-              <h3 className="text-lg font-bold text-orange-900 mb-2">
-                📊 Proyección para Cumplir Meta
-              </h3>
-              <p className="text-orange-800 mb-3">
-                Quedan <strong>{mesesRestantes} meses</strong> en el año. 
-                Necesitas un promedio de <strong className="text-xl font-mono">{formatCurrency(promedioNecesario)}</strong> por mes para alcanzar tu meta personal.
-              </p>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-                <div className="bg-white rounded-lg p-3 border border-orange-200">
-                  <p className="text-xs text-gray-600">Falta para meta</p>
-                  <p className="text-lg font-bold text-orange-600 font-mono">{formatCurrency(metaPersonal - netoYTD)}</p>
-                </div>
-                <div className="bg-white rounded-lg p-3 border border-orange-200">
-                  <p className="text-xs text-gray-600">Promedio actual/mes</p>
-                  <p className="text-lg font-bold text-gray-700 font-mono">{formatCurrency(brutoYTD / (12 - mesesRestantes || 1))}</p>
-                </div>
-                <div className="bg-white rounded-lg p-3 border border-orange-200">
-                  <p className="text-xs text-gray-600">Necesitas mejorar</p>
-                  <p className="text-lg font-bold text-red-600 font-mono">
-                    {((promedioNecesario / (brutoYTD / (12 - mesesRestantes || 1)) - 1) * 100).toFixed(0)}%
-                  </p>
+      {porcentajeCumplido < 100 && mesesRestantes > 0 && (() => {
+        const mesesTranscurridos = 12 - mesesRestantes;
+        const promedioActual = mesesTranscurridos > 0 ? brutoYTD / mesesTranscurridos : 0;
+        const porcentajeMejoraNecesaria = promedioActual > 0 ? ((promedioNecesario / promedioActual - 1) * 100) : 0;
+        const proyeccionCierreAnio = promedioActual * 12;
+        const superaMeta = proyeccionCierreAnio >= metaPersonal;
+        
+        return (
+          <div className={`bg-gradient-to-r ${
+            superaMeta 
+              ? 'from-green-50 to-emerald-50 border-green-400' 
+              : 'from-orange-50 to-red-50 border-orange-300'
+          } border-2 rounded-xl p-6`}>
+            <div className="flex items-start gap-4">
+              {superaMeta ? (
+                <FaTrophy className="text-3xl text-green-600 mt-1" />
+              ) : (
+                <FaCalendarAlt className="text-3xl text-orange-600 mt-1" />
+              )}
+              <div className="flex-1">
+                <h3 className={`text-lg font-bold mb-2 ${
+                  superaMeta ? 'text-green-900' : 'text-orange-900'
+                }`}>
+                  {superaMeta ? '🎉 ¡Excelente Ritmo!' : '📊 Proyección para Cumplir Meta'}
+                </h3>
+                
+                {superaMeta ? (
+                  <>
+                    <p className="text-green-800 mb-3 text-base">
+                      ¡Felicidades! Con tu ritmo actual estás <strong>superando tu meta</strong>. 
+                      Quedan <strong>{mesesRestantes} meses</strong> para cerrar el año aún mejor.
+                    </p>
+                    <div className="bg-green-100 border-l-4 border-green-500 p-4 mb-4 rounded">
+                      <p className="text-green-900 font-semibold text-sm mb-1">
+                        🚀 Tu proyección de cierre {year}:
+                      </p>
+                      <p className="text-2xl font-bold text-green-700 font-mono">
+                        {formatCurrency(proyeccionCierreAnio)}
+                      </p>
+                      <p className="text-xs text-green-700 mt-2">
+                        Vas a superar tu meta por <strong>{formatCurrency(proyeccionCierreAnio - metaPersonal)}</strong> ({((proyeccionCierreAnio / metaPersonal - 1) * 100).toFixed(1)}% más)
+                      </p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-orange-800 mb-3">
+                      Quedan <strong>{mesesRestantes} meses</strong> en el año. 
+                      Necesitas un promedio de <strong className="text-xl font-mono">{formatCurrency(promedioNecesario)}</strong> por mes para alcanzar tu meta personal.
+                    </p>
+                    <div className="bg-amber-50 border-l-4 border-amber-500 p-3 mb-4 rounded">
+                      <p className="text-amber-900 font-semibold text-sm">
+                        💪 Mensaje motivacional:
+                      </p>
+                      <p className="text-amber-800 text-sm mt-1 italic">
+                        "Cada día es una nueva oportunidad. Con enfoque y determinación, ¡tu meta está al alcance!"
+                      </p>
+                    </div>
+                  </>
+                )}
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+                  <div className={`bg-white rounded-lg p-3 border ${
+                    superaMeta ? 'border-green-200' : 'border-orange-200'
+                  }`}>
+                    <p className="text-xs text-gray-600">
+                      {superaMeta ? 'Excedente proyectado' : 'Falta para meta'}
+                    </p>
+                    <p className={`text-lg font-bold font-mono ${
+                      superaMeta ? 'text-green-600' : 'text-orange-600'
+                    }`}>
+                      {superaMeta 
+                        ? `+${formatCurrency(proyeccionCierreAnio - metaPersonal)}`
+                        : formatCurrency(metaPersonal - netoYTD)
+                      }
+                    </p>
+                  </div>
+                  <div className={`bg-white rounded-lg p-3 border ${
+                    superaMeta ? 'border-green-200' : 'border-orange-200'
+                  }`}>
+                    <p className="text-xs text-gray-600">
+                      {superaMeta ? 'Tu promedio actual/mes' : 'Promedio actual/mes'}
+                    </p>
+                    <p className={`text-lg font-bold font-mono ${
+                      superaMeta ? 'text-green-700' : 'text-gray-700'
+                    }`}>
+                      {formatCurrency(promedioActual)}
+                    </p>
+                  </div>
+                  <div className={`bg-white rounded-lg p-3 border ${
+                    superaMeta ? 'border-green-200' : 'border-orange-200'
+                  }`}>
+                    <p className="text-xs text-gray-600">
+                      {superaMeta ? '¡Vas superando!' : 'Necesitas mejorar'}
+                    </p>
+                    <p className={`text-lg font-bold font-mono ${
+                      superaMeta ? 'text-green-600' : 'text-red-600'
+                    }`}>
+                      {superaMeta 
+                        ? `${Math.abs(porcentajeMejoraNecesaria).toFixed(0)}%`
+                        : `${porcentajeMejoraNecesaria.toFixed(0)}%`
+                      }
+                    </p>
+                    {superaMeta && (
+                      <p className="text-[10px] text-green-600 mt-1">
+                        ¡Estás {Math.abs(porcentajeMejoraNecesaria).toFixed(0)}% por encima!
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Gráfica: Comparativa Año Actual vs Anterior */}
       <div className="bg-white rounded-xl shadow-lg p-6">

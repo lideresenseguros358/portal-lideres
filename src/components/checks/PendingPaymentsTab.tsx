@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { FaPlus, FaCheckCircle, FaExclamationTriangle, FaFileDownload, FaEdit, FaTrash } from 'react-icons/fa';
 import { actionGetPendingPaymentsNew, actionMarkPaymentsAsPaidNew, actionDeletePendingPayment, actionSyncPendingPaymentsWithAdvances } from '@/app/(app)/checks/actions';
 import { supabaseClient } from '@/lib/supabase/client';
@@ -28,31 +28,41 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
   const [brokers, setBrokers] = useState<any[]>([]);
 
   const loadPayments = useCallback(async () => {
-    console.log('🔄 [PendingPaymentsTab] Iniciando carga de pagos...');
     setLoading(true);
     try {
       const result = await actionGetPendingPaymentsNew({ status: 'pending' });
-      console.log('📦 [PendingPaymentsTab] Resultado de la consulta:', result);
       
       if (result.ok) {
         const paymentsData = result.data || [];
-        console.log(`📊 [PendingPaymentsTab] Pagos cargados: ${paymentsData.length} pagos pendientes`);
-        console.log(`💰 [PendingPaymentsTab] Total a pagar: $${paymentsData.reduce((sum, p) => sum + Number(p.amount_to_pay || 0), 0).toFixed(2)}`);
-        console.log(`💵 [PendingPaymentsTab] Total recibido: $${paymentsData.reduce((sum, p) => sum + Number(p.total_received || 0), 0).toFixed(2)}`);
         
-        // Force state update with new array reference
-        setPayments([...paymentsData]);
-        console.log('✅ [PendingPaymentsTab] Estado actualizado con nuevos pagos');
+        // Filtrar pagos huérfanos (sin referencias y sin metadata especial)
+        const validPayments = paymentsData.filter((p: any) => {
+          // Permitir pagos con referencias
+          if (p.payment_references && p.payment_references.length > 0) return true;
+          
+          // Permitir descuentos a corredor (tienen metadata en notes)
+          if (p.notes) {
+            try {
+              const metadata = typeof p.notes === 'string' ? JSON.parse(p.notes) : p.notes;
+              if (metadata?.is_auto_advance || metadata?.advance_id) return true;
+            } catch (e) {}
+          }
+          
+          // Rechazar pagos sin referencias y sin metadata
+          console.warn('Pago huérfano detectado y filtrado:', p.client_name, p.id);
+          return false;
+        });
+        
+        setPayments(validPayments);
       } else {
-        console.error('❌ [PendingPaymentsTab] Error al cargar pagos:', result.error);
+        console.error('Error al cargar pagos:', result.error);
         toast.error('Error al cargar pagos');
       }
     } catch (error: any) {
-      console.error('❌ [PendingPaymentsTab] Excepción al cargar pagos:', error);
+      console.error('Error inesperado al cargar pagos:', error);
       toast.error('Error inesperado');
     } finally {
       setLoading(false);
-      console.log('🏁 [PendingPaymentsTab] Carga completada');
     }
   }, []); // No dependencies needed as we only use setters and actions
 
@@ -120,40 +130,151 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
     }
   };
 
-  // Agrupar pagos por referencia para mostrar remanente real
+  // Helper para extraer batch_id del notes
+  const getBatchId = (payment: any): string | null => {
+    try {
+      if (!payment.notes) return null;
+      const metadata = typeof payment.notes === 'string' ? JSON.parse(payment.notes) : payment.notes;
+      return metadata?.batch_id || null;
+    } catch {
+      return null;
+    }
+  };
+
+  // Agrupar pagos por batch_id o por referencia
   const groupPaymentsByReference = () => {
-    const groups: { [refNumber: string]: {
+    const groups: { [key: string]: {
       reference_number: string;
       bank_amount: number;
       total_pending: number;
       remaining: number;
       payments: any[];
+      allAreDescuentoCorredor: boolean;
+      isBatch: boolean; // Indica si es un grupo de batch (múltiples divisiones)
+      isMultiRef?: boolean; // Indica si es un pago con múltiples referencias
     }} = {};
 
+    // Primero, agrupar por batch_id si existe
+    const batchGroups = new Map<string, any[]>();
+    const nonBatchPayments: any[] = [];
+
     payments.forEach(payment => {
-      payment.payment_references?.forEach((ref: any) => {
-        const refNum = ref.reference_number;
-        if (!groups[refNum]) {
-          groups[refNum] = {
-            reference_number: refNum,
-            bank_amount: parseFloat(ref.amount || '0'),
-            total_pending: 0,
-            remaining: parseFloat(ref.amount || '0'),
-            payments: []
-          };
+      const batchId = getBatchId(payment);
+      if (batchId) {
+        if (!batchGroups.has(batchId)) {
+          batchGroups.set(batchId, []);
         }
-        
-        // Solo contar el amount_to_use de este pago para esta referencia
-        const amountToUse = parseFloat(ref.amount_to_use || payment.amount_to_pay || '0');
-        groups[refNum].total_pending += amountToUse;
-        groups[refNum].payments.push({ ...payment, ref_amount_to_use: amountToUse });
+        batchGroups.get(batchId)!.push(payment);
+      } else {
+        nonBatchPayments.push(payment);
+      }
+    });
+
+    // Procesar grupos de batch
+    batchGroups.forEach((batchPayments, batchId) => {
+      // Para pagos en batch, agruparlos por sus referencias
+      const batchRefsMap = new Map<string, number>(); // referencia -> monto total banco
+      let totalBatchAmount = 0;
+      let allDescuento = true;
+
+      batchPayments.forEach(payment => {
+        totalBatchAmount += parseFloat(payment.amount_to_pay || '0');
+        if (!isDescuentoACorredor(payment)) {
+          allDescuento = false;
+        }
+        payment.payment_references?.forEach((ref: any) => {
+          const refNum = ref.reference_number;
+          const amount = parseFloat(ref.amount || '0');
+          if (!batchRefsMap.has(refNum)) {
+            batchRefsMap.set(refNum, amount);
+          }
+        });
       });
+
+      // Calcular el total de banco sumando todas las referencias únicas
+      const totalBankAmount = Array.from(batchRefsMap.values()).reduce((sum, amount) => sum + amount, 0);
+
+      // Usar todas las referencias como label
+      const allRefsLabel = Array.from(batchRefsMap.keys()).join(' + ');
+      
+      groups[`BATCH-${batchId}`] = {
+        reference_number: allRefsLabel,
+        bank_amount: totalBankAmount,
+        total_pending: totalBatchAmount,
+        remaining: totalBankAmount - totalBatchAmount,
+        payments: batchPayments,
+        allAreDescuentoCorredor: allDescuento,
+        isBatch: true
+      };
+    });
+
+    // Procesar pagos sin batch
+    nonBatchPayments.forEach(payment => {
+      const refs = payment.payment_references || [];
+      
+      // Si el pago tiene múltiples referencias, tratarlo como un grupo especial
+      if (refs.length > 1) {
+        // Calcular totales de todas las referencias
+        const refsMap = new Map<string, number>();
+        refs.forEach((ref: any) => {
+          const refNum = ref.reference_number;
+          const amount = parseFloat(ref.amount || '0');
+          if (!refsMap.has(refNum)) {
+            refsMap.set(refNum, amount);
+          }
+        });
+        
+        const totalBankAmount = Array.from(refsMap.values()).reduce((sum, amount) => sum + amount, 0);
+        const allRefsLabel = Array.from(refsMap.keys()).join(' + ');
+        const isDescuento = isDescuentoACorredor(payment);
+        const paymentAmount = parseFloat(payment.amount_to_pay || '0');
+        
+        // Crear grupo único para este pago con múltiples referencias
+        const groupKey = `MULTI-${payment.id}`;
+        groups[groupKey] = {
+          reference_number: allRefsLabel,
+          bank_amount: totalBankAmount,
+          total_pending: isDescuento ? 0 : paymentAmount,
+          remaining: totalBankAmount - paymentAmount,
+          payments: [payment],
+          allAreDescuentoCorredor: isDescuento,
+          isBatch: false,
+          isMultiRef: true // Flag para identificar pagos con múltiples referencias
+        };
+      } else {
+        // Lógica original para pagos con una sola referencia
+        refs.forEach((ref: any) => {
+          const refNum = ref.reference_number;
+          if (!groups[refNum]) {
+            groups[refNum] = {
+              reference_number: refNum,
+              bank_amount: parseFloat(ref.amount || '0'),
+              total_pending: 0,
+              remaining: parseFloat(ref.amount || '0'),
+              payments: [],
+              allAreDescuentoCorredor: true,
+              isBatch: false
+            };
+          }
+          
+          const isDescuento = isDescuentoACorredor(payment);
+          if (!isDescuento) {
+            groups[refNum].allAreDescuentoCorredor = false;
+          }
+          
+          const amountToUse = parseFloat(ref.amount_to_use || payment.amount_to_pay || '0');
+          if (!isDescuento) {
+            groups[refNum].total_pending += amountToUse;
+          }
+          groups[refNum].payments.push({ ...payment, ref_amount_to_use: amountToUse });
+        });
+      }
     });
 
     // Calcular remanente real
-    Object.keys(groups).forEach(refNum => {
-      const group = groups[refNum];
-      if (group) {
+    Object.keys(groups).forEach(key => {
+      const group = groups[key];
+      if (group && !group.isBatch) {
         group.remaining = group.bank_amount - group.total_pending;
       }
     });
@@ -161,7 +282,48 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
     return groups;
   };
 
-  const groupedPayments = groupPaymentsByReference();
+  // Función de ordenamiento - memoizada
+  const sortPayments = useCallback((paymentsToSort: any[]) => {
+    return [...paymentsToSort].sort((a, b) => {
+      // 1. Ordenar por estado: conciliados primero (blocked=false primero)
+      const stateA = getPaymentState(a);
+      const stateB = getPaymentState(b);
+      const blockedA = stateA.blocked ? 1 : 0;
+      const blockedB = stateB.blocked ? 1 : 0;
+      
+      if (blockedA !== blockedB) {
+        return blockedA - blockedB;
+      }
+      
+      // 2. Ordenar por fecha: más antiguo primero
+      const dateA = new Date(a.created_at).getTime();
+      const dateB = new Date(b.created_at).getTime();
+      return dateA - dateB;
+    });
+  }, []);
+
+  const groupedPayments = useMemo(() => groupPaymentsByReference(), [payments]);
+  
+  // Ordenar pagos en cada grupo
+  const sortedGroupedPayments = useMemo(() => {
+    const sorted: any = {};
+    Object.keys(groupedPayments).forEach(key => {
+      const group = groupedPayments[key];
+      if (group) {
+        sorted[key] = {
+          ...group,
+          // No ordenar pagos dentro de batch (mantener orden de divisiones)
+          payments: group.isBatch ? group.payments : sortPayments(group.payments)
+        };
+      }
+    });
+    return sorted;
+  }, [groupedPayments, sortPayments]);
+  
+  // Ordenar pagos para vista simple
+  const sortedPayments = useMemo(() => {
+    return sortPayments(payments);
+  }, [payments, sortPayments]);
 
   const handleMarkAsPaid = async (e?: React.MouseEvent) => {
     if (e) {
@@ -843,25 +1005,102 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
 
           {groupByReference ? (
             <div className="space-y-4">
-              {Object.values(groupedPayments).map((group) => (
+              {Object.values(sortedGroupedPayments)
+                .sort((groupA: any, groupB: any) => {
+                  // Ordenar grupos por el estado del primer pago
+                  if (groupA.payments.length === 0) return 1;
+                  if (groupB.payments.length === 0) return -1;
+                  
+                  const firstPaymentA = groupA.payments[0];
+                  const firstPaymentB = groupB.payments[0];
+                  
+                  const stateA = getPaymentState(firstPaymentA);
+                  const stateB = getPaymentState(firstPaymentB);
+                  
+                  const blockedA = stateA.blocked ? 1 : 0;
+                  const blockedB = stateB.blocked ? 1 : 0;
+                  
+                  if (blockedA !== blockedB) return blockedA - blockedB;
+                  
+                  // Si tienen el mismo estado, ordenar por fecha
+                  const dateA = new Date(firstPaymentA.created_at).getTime();
+                  const dateB = new Date(firstPaymentB.created_at).getTime();
+                  return dateA - dateB;
+                })
+                .map((group: any) => (
                 <div key={group.reference_number} className="bg-gray-50 rounded-xl p-4 border-2 border-gray-200">
                   <div className="flex items-center justify-between mb-3 pb-3 border-b-2 border-gray-300">
-                    <div>
-                      <h3 className="font-bold text-lg text-[#010139]">Ref: {group.reference_number}</h3>
-                      <p className="text-sm text-gray-600">Total en Banco: ${group.bank_amount.toFixed(2)}</p>
+                    <div className="flex-1">
+                      {group.isBatch ? (
+                        <>
+                          <h3 className="font-bold text-lg text-[#010139]">
+                            🔗 Pago con {group.payments.length} divisiones
+                          </h3>
+                          <p className="text-sm text-gray-600 mt-1">
+                            Referencias: {group.reference_number}
+                          </p>
+                          {!group.allAreDescuentoCorredor && (
+                            <p className="text-xs text-gray-500 mt-1">
+                              Total en Banco: ${group.bank_amount.toFixed(2)}
+                            </p>
+                          )}
+                        </>
+                      ) : group.isMultiRef ? (
+                        <>
+                          <h3 className="font-bold text-lg text-[#010139]">
+                            📎 Pago con múltiples referencias
+                          </h3>
+                          <p className="text-sm text-gray-600 mt-1">
+                            Referencias: {group.reference_number}
+                          </p>
+                          {!group.allAreDescuentoCorredor && (
+                            <p className="text-xs text-gray-500 mt-1">
+                              Total en Banco: ${group.bank_amount.toFixed(2)}
+                            </p>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <h3 className="font-bold text-lg text-[#010139]">Ref: {group.reference_number}</h3>
+                          {!group.allAreDescuentoCorredor && (
+                            <p className="text-sm text-gray-600">Total en Banco: ${group.bank_amount.toFixed(2)}</p>
+                          )}
+                          {group.allAreDescuentoCorredor && (
+                            <p className="text-sm text-[#010139] font-medium">💰 Descuentos a corredor</p>
+                          )}
+                        </>
+                      )}
                     </div>
-                    <div className="text-right">
-                      <div className="text-sm text-gray-600">Pendientes: ${group.total_pending.toFixed(2)}</div>
-                      <div className={`text-lg font-bold ${
-                        group.remaining >= 0 ? 'text-green-600' : 'text-red-600'
-                      }`}>
-                        Remanente: ${group.remaining.toFixed(2)}
+                    {!group.allAreDescuentoCorredor && (
+                      <div className="text-right flex-shrink-0">
+                        {(group.isBatch || group.isMultiRef) ? (
+                          <div>
+                            <div className="text-sm text-gray-600">Total a Pagar:</div>
+                            <div className="text-xl font-bold text-[#010139]">
+                              ${group.total_pending.toFixed(2)}
+                            </div>
+                            <div className={`text-sm font-semibold mt-1 ${
+                              group.remaining >= 0 ? 'text-green-600' : 'text-red-600'
+                            }`}>
+                              Remanente: ${group.remaining.toFixed(2)}
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="text-sm text-gray-600">Pendientes: ${group.total_pending.toFixed(2)}</div>
+                            <div className={`text-lg font-bold ${
+                              group.remaining >= 0 ? 'text-green-600' : 'text-red-600'
+                            }`}>
+                              Remanente: ${group.remaining.toFixed(2)}
+                            </div>
+                          </>
+                        )}
                       </div>
-                    </div>
+                    )}
                   </div>
                   
                   <div className="space-y-2">
-                    {group.payments.map((payment) => {
+                    {group.payments.map((payment: any, paymentIndex: number) => {
             const paymentState = getPaymentState(payment);
             return (
               <div
@@ -870,8 +1109,16 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
                   selectedIds.has(payment.id)
                     ? 'border-[#8AAA19] shadow-xl'
                     : 'border-gray-100 hover:border-gray-300'
-                }`}
+                } ${group.isBatch ? 'border-l-4 border-l-[#010139]' : ''}`}
               >
+                {/* Indicador de división para batches */}
+                {group.isBatch && (
+                  <div className="mb-3 pb-2 border-b border-gray-200">
+                    <span className="text-xs font-semibold text-[#010139] bg-blue-50 px-2 py-1 rounded">
+                      División {paymentIndex + 1} de {group.payments.length}
+                    </span>
+                  </div>
+                )}
                 {/* Header con checkbox y acciones */}
                 <div className="flex items-start gap-3 mb-4">
                   <input
@@ -1031,8 +1278,8 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
                   </div>
                 </div>
 
-                {/* Total recibido */}
-                {payment.total_received > 0 && (
+                {/* Total recibido - No mostrar para descuentos a corredor */}
+                {!isDescuentoACorredor(payment) && payment.total_received > 0 && (
                   <div className="mt-3 pt-3 border-t border-gray-200">
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-600">Total recibido:</span>
@@ -1057,7 +1304,7 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
             </div>
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {payments.map((payment) => {
+              {sortedPayments.map((payment) => {
                 const paymentState = getPaymentState(payment);
                 return (
                   <div

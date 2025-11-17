@@ -44,12 +44,6 @@ export default function MonthInputModal({
   }, [isOpen, initialBruto, initialNumPolizas, initialCanceladas, initialPersistencia]);
 
   const handleSave = async () => {
-    // Validar que canceladas no sea mayor que bruto
-    if (canceladas > bruto) {
-      setError('Las canceladas no pueden ser mayores que la cifra bruta');
-      return;
-    }
-
     // Validar que persistencia esté entre 0 y 100 si está definida
     if (persistencia !== null && (persistencia < 0 || persistencia > 100)) {
       setError('La persistencia debe estar entre 0% y 100%');
@@ -161,23 +155,18 @@ export default function MonthInputModal({
               onChange={(e) => {
                 const value = e.target.value === '' ? 0 : parseFloat(e.target.value);
                 setCanceladas(value);
-                if (value > bruto) {
-                  setError('Las canceladas no pueden ser mayores que la cifra bruta');
-                } else {
-                  setError('');
-                }
+                setError('');
               }}
               min="0"
               step="0.01"
-              max={bruto}
               className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none font-mono text-lg ${
                 error ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
               }`}
               placeholder="0.00"
               disabled={saving}
             />
-            <p className="text-xs text-gray-500 mt-1">
-              Monto de pólizas canceladas en este mes
+            <p className="text-xs text-red-600 mt-1 font-semibold">
+              ⚠️ Las canceladas se acumulan año tras año y se restan del total bruto acumulado, NO del bruto de este mes
             </p>
           </div>
 
@@ -195,8 +184,6 @@ export default function MonthInputModal({
                 setPersistencia(value);
                 if (value !== null && (value < 0 || value > 100)) {
                   setError('La persistencia debe estar entre 0% y 100%');
-                } else if (canceladas > bruto) {
-                  setError('Las canceladas no pueden ser mayores que la cifra bruta');
                 } else {
                   setError('');
                 }
@@ -236,13 +223,8 @@ export default function MonthInputModal({
                   <span className="font-mono font-bold text-gray-900">${bruto.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-red-700">Canceladas:</span>
-                  <span className="font-mono font-bold text-red-600">-${canceladas.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
-                </div>
-                <div className="h-px bg-gray-300 my-2"></div>
-                <div className="flex justify-between items-center">
-                  <span className="text-[#8AAA19] font-semibold">Neto:</span>
-                  <span className="font-mono font-bold text-[#8AAA19] text-lg">${(bruto - canceladas).toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
+                  <span className="text-red-700">Canceladas (acumulan):</span>
+                  <span className="font-mono font-bold text-red-600">${canceladas.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
                 </div>
                 <div className="flex justify-between items-center mt-3">
                   <span className="text-gray-700">Pólizas:</span>
