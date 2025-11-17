@@ -15,6 +15,7 @@ import ExpedienteManager from '@/components/expediente/ExpedienteManager';
 import InlineSearchBar from './InlineSearchBar';
 import { ClientWithPolicies, InsurerWithCount } from '@/types/db';
 import { actionGetPreliminaryClients } from '@/app/(app)/db/preliminary-actions';
+import { actionLoadMoreClients } from '@/app/(app)/db/actions';
 
 interface DatabaseTabsProps {
   activeTab: string;
@@ -842,7 +843,7 @@ const ClientsListView = ({ clients, onView, onEdit, onDelete, role, selectedClie
 
 export default function DatabaseTabs({
   activeTab, 
-  clients, 
+  clients: initialClients, 
   insurers,
   brokers,
   searchQuery,
@@ -852,14 +853,23 @@ export default function DatabaseTabs({
   const searchParams = useSearchParams();
   const router = useRouter();
   const modal = searchParams.get('modal');
-  const clientToEditId = searchParams.get('editClient');
   const view = searchParams.get('view') || 'clients';
-  const [preliminaryCount, setPreliminaryCount] = useState<number>(0);
-  const [selectedClients, setSelectedClients] = useState<Set<string>>(new Set());
+  const clientId = searchParams.get('client');
+  const policyId = searchParams.get('policy');
+  const editClientId = searchParams.get('editClient');
+  const editPolicyId = searchParams.get('editPolicy');
+  
+  const [showExpedienteModal, setShowExpedienteModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set());
+  const [selectedClients, setSelectedClients] = useState<Set<string>>(new Set());
   const [selectionMode, setSelectionMode] = useState(false);
-  const [filters, setFilters] = useState<FilterOptions>({});
+  const [preliminaryCount, setPreliminaryCount] = useState(0);
   const [showFilters, setShowFilters] = useState(false);
+  const [filters, setFilters] = useState<FilterOptions>({});
+  const [clients, setClients] = useState<ClientWithPolicies[]>(initialClients);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false); // Deshabilitado - ahora carga todos desde el inicio
 
   // Load preliminary count
   useEffect(() => {
@@ -892,7 +902,7 @@ export default function DatabaseTabs({
     return count;
   }, [clients]);
 
-  const clientToEdit = clientToEditId ? clients.find(c => c.id === clientToEditId) : null;
+  const clientToEdit = editClientId ? clients.find(c => c.id === editClientId) : null;
 
   const handleView = (id: string) => router.push(`/db?tab=clients&modal=edit-client&editClient=${id}`, { scroll: false });
   const handleEdit = handleView;
@@ -1347,6 +1357,46 @@ export default function DatabaseTabs({
 
       <div className="tab-content">
         {renderTabContent()}
+        
+        {/* Botón Ver Más */}
+        {view === 'clients' && hasMore && (
+          <div className="mt-6 flex justify-center">
+            <button
+              onClick={async () => {
+                setIsLoadingMore(true);
+                try {
+                  const result = await actionLoadMoreClients(clients.length, 100, searchQuery);
+                  if (result.ok && result.data) {
+                    if (result.data.length < 100) {
+                      setHasMore(false);
+                    }
+                    setClients([...clients, ...result.data]);
+                  } else {
+                    toast.error(result.error || 'Error al cargar más clientes');
+                  }
+                } catch (error) {
+                  toast.error('Error al cargar más clientes');
+                } finally {
+                  setIsLoadingMore(false);
+                }
+              }}
+              disabled={isLoadingMore}
+              className="px-6 py-3 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center gap-2"
+            >
+              {isLoadingMore ? (
+                <>
+                  <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full"></div>
+                  <span>Cargando...</span>
+                </>
+              ) : (
+                <>
+                  <ChevronDown size={20} />
+                  <span>Ver más clientes</span>
+                </>
+              )}
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Export Format Modal */}

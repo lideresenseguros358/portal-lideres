@@ -4,12 +4,71 @@ import { revalidatePath } from 'next/cache';
 import { createClientWithPolicy } from '@/lib/db/clients';
 import { getSupabaseServer } from '@/lib/supabase/server';
 import type { TablesInsert } from '@/lib/supabase/server';
+import type { ClientWithPolicies } from '@/types/db';
 
 export async function actionCreateClientWithPolicy(clientData: unknown, policyData: unknown) {
   try {
     const client = await createClientWithPolicy(clientData, policyData);
     revalidatePath('/(app)/db');
     return { ok: true as const, data: client };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : 'Error desconocido'
+    };
+  }
+}
+
+export async function actionLoadMoreClients(offset: number, limit: number = 100, searchQuery?: string) {
+  try {
+    const supabase = await getSupabaseServer();
+    
+    let query = supabase
+      .from("clients")
+      .select(`
+        *,
+        policies (
+          id,
+          policy_number,
+          insurer_id,
+          ramo,
+          start_date,
+          renewal_date,
+          status,
+          notas,
+          percent_override,
+          insurers (
+            id,
+            name,
+            active
+          )
+        ),
+        brokers (
+          id,
+          name
+        )
+      `)
+      .order("created_at", { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    if (searchQuery) {
+      query = query.or('name.ilike.%' + searchQuery + '%,national_id.ilike.%' + searchQuery + '%,email.ilike.%' + searchQuery + '%');
+    }
+
+    const { data, error } = await query;
+    
+    if (error) {
+      console.error("Error loading more clients:", error);
+      return { ok: false as const, error: error.message };
+    }
+    
+    const clients = (data || []).map((client: any) => ({
+      ...client,
+      policies: client.policies ? [client.policies].flat() : [],
+      brokers: client.brokers || null
+    })) as ClientWithPolicies[];
+    
+    return { ok: true as const, data: clients };
   } catch (error) {
     return {
       ok: false as const,

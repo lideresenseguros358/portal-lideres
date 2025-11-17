@@ -1,0 +1,117 @@
+═══════════════════════════════════════════════════════════════
+  RESUMEN EJECUTIVO - ERRORES DE BULK IMPORT
+═══════════════════════════════════════════════════════════════
+
+📊 ANÁLISIS DE 3,443 REGISTROS INTENTADOS
+
+✅ ERROR SQL CORREGIDO
+──────────────────────
+Error: "column reference policy_number is ambiguous"
+Causa: Alias 'p' usado dos veces en la función SQL
+Solución: Cambiado a 'pol' en línea 120
+Archivo: BULK_IMPORT_CLIENTES.sql ✅ YA CORREGIDO
+
+⚠️ 20 EMAILS DE BROKERS NO ENCONTRADOS
+──────────────────────────────────────
+Los siguientes emails NO existen en la base de datos:
+
+1. ediscastillo@lideresenseguros.com
+2. kathrinaguirre@lideresenseguros.com
+3. angelicaramos@lideresenseguros.com
+4. soniaarenas@lideresenseguros.com
+5. lissethvergara@lideresenseguros.com
+6. ruthmejia@lideresenseguros.com
+7. stheysivejarano@lideresenseguros.com
+8. josemanuel@lideresenseguros.com
+9. ivettemartinez@lideresenseguros.com
+10. itzycandanedo@lideresenseguros.com
+11. elizabetharce@lideresenseguros.com
+12. kattiaberguido@lideresenseguros.com
+13. veronicahenriquez@lideresenseguros.com
+14. leormanhudgson@lideresenseguros.com
+15. luzgonzalez@lideresenseguros.com
+16. keniagonzalez@lideresenseguros.com
+17. hericka@lideresenseguros.com
+18. sebastianachiari@lideresenseguros.com
+19. ricardojimenez@lideresenseguros.com
+20. jazmincamilo@lideresenseguros.com
+
+═══════════════════════════════════════════════════════════════
+  PASOS PARA SOLUCIONAR (EN ORDEN)
+═══════════════════════════════════════════════════════════════
+
+1️⃣ ACTUALIZAR FUNCIÓN SQL EN SUPABASE
+   📁 Archivo: BULK_IMPORT_CLIENTES.sql
+   ⚡ Acción: Copiar TODO el contenido y ejecutar en Supabase SQL Editor
+   ✅ Resultado: Función bulk_import_clients_policies actualizada
+
+2️⃣ VERIFICAR EMAILS DE BROKERS
+   📁 Archivo: VERIFICAR_EMAILS_BROKERS.sql
+   ⚡ Acción: Ejecutar en Supabase SQL Editor
+   📋 Output: Te mostrará:
+      - Lista completa de brokers con sus emails REALES
+      - Cuáles de los 20 emails existen y cuáles NO
+      - Emails similares que podrían ser las versiones correctas
+
+3️⃣ CORREGIR TUS DATOS
+   📊 Opciones:
+   
+   A) RECOMENDADO - Actualizar Excel/CSV:
+      - Ejecuta PASO 2 para ver los emails correctos
+      - Haz Find & Replace de cada email problemático
+      - Regenera el JSON y vuelve a importar
+   
+   B) Crear brokers faltantes en el sistema:
+      - Ve a /brokers en tu app
+      - Crea manualmente cada broker faltante
+      - Asegúrate de usar exactamente el email que está en tus datos
+   
+   C) Usar email genérico temporal:
+      - Crea un broker "SIN ASIGNAR"
+      - Reemplaza todos los emails problemáticos por ese
+      - Después reasigna las pólizas al broker correcto
+
+4️⃣ RE-EJECUTAR IMPORT
+   📁 Archivo: EJECUTAR_IMPORT.sql (con datos corregidos)
+   ⚡ Acción: Ejecutar en Supabase SQL Editor
+   ⏱️ Tiempo: 30-60 segundos para 3,443 registros
+   ✅ Resultado: Cada fila mostrará success=true o mensaje de error
+
+═══════════════════════════════════════════════════════════════
+  ARCHIVOS DISPONIBLES
+═══════════════════════════════════════════════════════════════
+
+✅ BULK_IMPORT_CLIENTES.sql
+   → Función SQL CORREGIDA (ejecutar primero)
+
+🔍 VERIFICAR_EMAILS_BROKERS.sql  
+   → Muestra emails reales de brokers en BD
+
+📝 SOLUCION_ERRORES_IMPORT.md
+   → Guía completa con todas las opciones
+
+📦 EJECUTAR_IMPORT.sql
+   → 3,443 registros listos para importar
+   → REQUIERE emails corregidos primero
+
+═══════════════════════════════════════════════════════════════
+  CONFIRMACIÓN ANTES DE CONTINUAR
+═══════════════════════════════════════════════════════════════
+
+LOS EMAILS EN TUS DATOS ESTÁN ESCRITOS CORRECTAMENTE:
+- ediscastillo@lideresenseguros.com
+- kathrinaguirre@lideresenseguros.com
+- etc.
+
+OPCIONES:
+1. Si estos emails SON los correctos → Crea esos brokers en el sistema
+2. Si estos emails están MAL → Ejecuta VERIFICAR_EMAILS_BROKERS.sql
+                               para ver los correctos y actualiza tus datos
+
+═══════════════════════════════════════════════════════════════
+
+🚀 PRÓXIMO PASO INMEDIATO:
+   Ejecuta VERIFICAR_EMAILS_BROKERS.sql en Supabase para ver
+   qué emails existen realmente en tu base de datos
+
+═══════════════════════════════════════════════════════════════

@@ -117,7 +117,7 @@ BEGIN
       END IF;
       
       -- 3. Verificar si la póliza ya existe
-      IF EXISTS (SELECT 1 FROM policies WHERE policy_number = v_policy_number) THEN
+      IF EXISTS (SELECT 1 FROM policies pol WHERE pol.policy_number = v_policy_number) THEN
         RETURN QUERY SELECT false, row_idx, v_client_name, v_policy_number, 
           'ERROR: Póliza ya existe: ' || v_policy_number, NULL::UUID, NULL::UUID;
         CONTINUE;
@@ -140,8 +140,7 @@ BEGIN
           national_id = COALESCE(clients.national_id, v_national_id),
           email = COALESCE(clients.email, v_email),
           phone = COALESCE(clients.phone, v_phone),
-          broker_id = COALESCE(clients.broker_id, v_broker_id),
-          updated_at = now()
+          broker_id = COALESCE(clients.broker_id, v_broker_id)
         WHERE id = v_existing_client_id;
       ELSE
         -- 6. Crear nuevo cliente
@@ -152,8 +151,7 @@ BEGIN
           phone,
           broker_id,
           active,
-          created_at,
-          updated_at
+          created_at
         ) VALUES (
           v_client_name,
           v_national_id,
@@ -161,7 +159,6 @@ BEGIN
           v_phone,
           v_broker_id,
           true,
-          now(),
           now()
         )
         RETURNING id INTO v_client_id;
@@ -177,8 +174,7 @@ BEGIN
         start_date,
         renewal_date,
         status,
-        created_at,
-        updated_at
+        created_at
       ) VALUES (
         v_client_id,
         v_broker_id,
@@ -188,7 +184,6 @@ BEGIN
         v_start_date,
         v_renewal_date,
         'ACTIVA',
-        now(),
         now()
       )
       RETURNING id INTO v_policy_id;

@@ -41,8 +41,7 @@ async function getClientsWithPolicies(searchQuery?: string): Promise<ClientWithP
         name
       )
     `)
-    .order("created_at", { ascending: false })
-    .limit(100);
+    .order("created_at", { ascending: false });
 
   if (searchQuery) {
     query = query.or('name.ilike.%' + searchQuery + '%,national_id.ilike.%' + searchQuery + '%,email.ilike.%' + searchQuery + '%');
@@ -69,11 +68,13 @@ async function getInsurersWithPolicies(): Promise<InsurerWithCount[]> {
     .from("insurers")
     .select("*")
     .eq("active", true)
-    .order("name");
+    .order("name")
+    .limit(10000);
 
   const { data: policyCounts } = await supabase
     .from("policies")
     .select("insurer_id, id")
+    .limit(100000)
     .returns<{ insurer_id: string; id: string }[]>();
 
   const countsMap = new Map<string, number>();
@@ -106,7 +107,8 @@ export default async function DatabasePage({
     .from('brokers')
     .select('*, profiles!p_id(id, full_name, email)')
     .eq('active', true)
-    .order('name');
+    .order('name')
+    .limit(10000);
 
   const [clients, insurers] = await Promise.all([
     getClientsWithPolicies(searchQuery),
