@@ -398,7 +398,7 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
                           <FaEdit className="text-xs text-white" /> Editar
                         </Button>
                       )}
-                      {status === 'pending' && (
+                      {role === 'master' && status === 'pending' && (
                         <Button
                           size="sm"
                           onClick={() => {

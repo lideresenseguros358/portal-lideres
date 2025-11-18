@@ -69,12 +69,12 @@ export default function DetailTab({ userRole, brokerId }: DetailTabProps) {
 
       if (insurersRes?.ok) {
         const data = await insurersRes.json();
-        setInsurers(data || []);
+        setInsurers(data.insurers || data || []);
       }
 
       if (brokersRes && brokersRes.ok) {
         const data = await brokersRes.json();
-        setBrokers(data || []);
+        setBrokers(data.brokers || data || []);
       }
     } catch (error) {
       toast.error('Error al cargar filtros');
