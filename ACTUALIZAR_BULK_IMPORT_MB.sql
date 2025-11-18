@@ -1,12 +1,12 @@
 -- =====================================================
--- SISTEMA DE BULK IMPORT PARA CLIENTES Y PÓLIZAS
--- Bypass RLS con SECURITY DEFINER
+-- ACTUALIZACIÓN: BÚSQUEDA FLEXIBLE DE ASEGURADORAS
+-- Permite que "MB SEGUROS" encuentre "MB" en la BD
 -- =====================================================
 
--- =====================================================
--- 1. FUNCIÓN PRINCIPAL PARA BULK IMPORT
--- =====================================================
+-- Eliminar función existente
+DROP FUNCTION IF EXISTS bulk_import_clients_policies(JSONB);
 
+-- Recrear función con búsqueda flexible
 CREATE OR REPLACE FUNCTION bulk_import_clients_policies(
   import_data JSONB
 )
@@ -105,7 +105,7 @@ BEGIN
       END IF;
       
       -- 2. Obtener insurer_id desde el nombre
-      -- Primero intenta coincidencia exacta, luego coincidencia parcial
+      -- ✅ BÚSQUEDA MEJORADA: Primero exacta, luego parcial
       SELECT id INTO v_insurer_id
       FROM insurers
       WHERE UPPER(name) = v_insurer_name
@@ -211,127 +211,25 @@ BEGIN
 END;
 $$;
 
--- Comentario de la función
 COMMENT ON FUNCTION bulk_import_clients_policies IS 
 'Función SECURITY DEFINER para importación masiva de clientes y pólizas. 
 Bypass RLS. Solo ejecutar como Master.
-Formato JSON esperado: ver ejemplos en este archivo.';
+ACTUALIZADO: Búsqueda flexible de aseguradoras (permite "MB SEGUROS" → "MB")';
 
 -- =====================================================
--- 2. FUNCIÓN HELPER PARA OBTENER ASEGURADORAS
+-- VERIFICACIÓN
 -- =====================================================
 
-CREATE OR REPLACE FUNCTION get_insurers_for_import()
-RETURNS TABLE(
-  insurer_name TEXT,
-  insurer_id UUID,
-  active BOOLEAN
-)
-SECURITY DEFINER
-SET search_path = public
-LANGUAGE sql
-AS $$
-  SELECT 
-    name as insurer_name,
-    id as insurer_id,
-    active
-  FROM insurers
-  ORDER BY name;
-$$;
+-- Ver cómo está registrada MB en la BD
+SELECT id, name, active 
+FROM insurers 
+WHERE UPPER(name) LIKE '%MB%'
+ORDER BY name;
 
-COMMENT ON FUNCTION get_insurers_for_import IS 
-'Obtener lista de aseguradoras disponibles para el import';
-
--- =====================================================
--- 3. FUNCIÓN HELPER PARA OBTENER BROKERS
--- =====================================================
-
-CREATE OR REPLACE FUNCTION get_brokers_for_import()
-RETURNS TABLE(
-  broker_name TEXT,
-  broker_email TEXT,
-  broker_id UUID,
-  active BOOLEAN
-)
-SECURITY DEFINER
-SET search_path = public
-LANGUAGE sql
-AS $$
-  SELECT 
-    b.name as broker_name,
-    p.email as broker_email,
-    b.id as broker_id,
-    b.active
-  FROM brokers b
-  INNER JOIN profiles p ON b.p_id = p.id
-  WHERE b.active = true
-  ORDER BY b.name;
-$$;
-
-COMMENT ON FUNCTION get_brokers_for_import IS 
-'Obtener lista de brokers disponibles para el import con sus emails';
-
--- =====================================================
--- 4. VERIFICACIÓN Y PERMISOS
--- =====================================================
-
--- Verificar que las funciones se crearon
+-- Verificar que la función se actualizó correctamente
 SELECT 
   proname as function_name,
-  prosecdef as is_security_definer
+  prosecdef as is_security_definer,
+  pg_get_functiondef(oid) as definition
 FROM pg_proc
-WHERE proname IN (
-  'bulk_import_clients_policies',
-  'get_insurers_for_import',
-  'get_brokers_for_import'
-);
-
--- =====================================================
--- 5. EJEMPLO DE USO
--- =====================================================
-
-/*
--- PASO 1: Obtener lista de aseguradoras disponibles
-SELECT * FROM get_insurers_for_import();
-
--- PASO 2: Obtener lista de brokers con sus emails
-SELECT * FROM get_brokers_for_import();
-
--- PASO 3: Ejecutar el bulk import con datos JSON
-SELECT * FROM bulk_import_clients_policies('[
-  {
-    "client_name": "Juan Pérez Gómez",
-    "policy_number": "POL-2024-001",
-    "broker_email": "broker@example.com",
-    "insurer_name": "ASSA",
-    "ramo": "AUTO",
-    "start_date": "2024-01-15",
-    "renewal_date": "2025-01-15",
-    "national_id": "8-123-4567",
-    "email": "juan@example.com",
-    "phone": "6000-0000"
-  },
-  {
-    "client_name": "María González López",
-    "policy_number": "POL-2024-002",
-    "broker_email": "broker@example.com",
-    "insurer_name": "MAPFRE",
-    "ramo": "VIDA",
-    "start_date": "2024-02-01",
-    "renewal_date": "2025-02-01",
-    "national_id": "E-8-123456",
-    "email": "maria@example.com",
-    "phone": "6100-0000"
-  }
-]'::jsonb);
-
--- PASO 4: Verificar resultados
--- La función retorna una tabla con el resultado de cada fila:
--- - success: true/false
--- - row_number: número de fila procesada
--- - client_name: nombre del cliente
--- - policy_number: número de póliza
--- - message: mensaje de éxito o error
--- - client_id: UUID del cliente creado (NULL si error)
--- - policy_id: UUID de la póliza creada (NULL si error)
-*/
+WHERE proname = 'bulk_import_clients_policies';

@@ -44,7 +44,7 @@ async function getClientsWithPolicies(searchQuery?: string): Promise<ClientWithP
     .order("created_at", { ascending: false });
 
   if (searchQuery) {
-    query = query.or('name.ilike.%' + searchQuery + '%,national_id.ilike.%' + searchQuery + '%,email.ilike.%' + searchQuery + '%');
+    query = query.or(`name.ilike.%${searchQuery}%,national_id.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%`);
   }
 
   const { data, error } = await query;

@@ -444,25 +444,54 @@ export default function AdjustmentsTab({ role, brokerId, brokers, onActionSucces
         </div>
       </CardHeader>
       <CardContent className="p-0">
-        {/* Tabs con patrón de Pendientes */}
-        <div className="border-b-2 border-gray-200 px-4 sm:px-6">
-          <div className="flex gap-2 sm:gap-4 overflow-x-auto pb-2 scrollbar-hide">
+        {/* Tabs mejorados con diseño moderno */}
+        <div className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200 px-4 sm:px-6 py-3">
+          <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
             {tabs.map(tab => {
               const Icon = tab.icon;
+              const isActive = activeTab === tab.key;
+              
               return (
                 <button
                   key={tab.key}
                   onClick={() => setActiveTab(tab.key)}
                   className={`
-                    px-4 py-2 rounded-t-lg font-semibold whitespace-nowrap transition-all flex items-center gap-2
-                    ${activeTab === tab.key 
-                      ? 'bg-[#010139] text-white border-b-4 border-[#8AAA19]' 
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    group relative px-5 py-3 rounded-xl font-semibold whitespace-nowrap transition-all duration-300 flex items-center gap-3 min-w-fit
+                    ${isActive
+                      ? 'bg-gradient-to-br from-[#010139] via-[#020270] to-[#010139] text-white shadow-lg shadow-[#010139]/30 scale-105'
+                      : 'bg-white text-gray-700 hover:bg-gradient-to-br hover:from-gray-50 hover:to-white hover:shadow-md border-2 border-gray-200 hover:border-[#8AAA19]/30'
                     }
                   `}
                 >
-                  <Icon className="text-sm" />
-                  {tab.label}
+                  {/* Icono con efecto */}
+                  <div className={`
+                    p-2 rounded-lg transition-all duration-300
+                    ${isActive 
+                      ? 'bg-white/20 shadow-inner' 
+                      : 'bg-gray-100 group-hover:bg-[#8AAA19]/10'
+                    }
+                  `}>
+                    <Icon className={`text-base transition-transform duration-300 ${
+                      isActive ? 'text-white' : 'text-gray-600 group-hover:text-[#8AAA19] group-hover:scale-110'
+                    }`} />
+                  </div>
+                  
+                  {/* Label */}
+                  <span className={`text-sm font-bold ${
+                    isActive ? 'text-white' : 'text-gray-700 group-hover:text-[#010139]'
+                  }`}>
+                    {tab.label}
+                  </span>
+                  
+                  {/* Indicador activo (barra inferior) */}
+                  {isActive && (
+                    <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-3/4 h-1 bg-gradient-to-r from-transparent via-[#8AAA19] to-transparent rounded-t-full shadow-lg shadow-[#8AAA19]/50" />
+                  )}
+                  
+                  {/* Glow effect cuando está activo */}
+                  {isActive && (
+                    <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-[#8AAA19]/0 via-[#8AAA19]/10 to-[#8AAA19]/0 animate-pulse" />
+                  )}
                 </button>
               );
             })}

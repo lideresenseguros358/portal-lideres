@@ -154,65 +154,73 @@ export default function BrokerTotals({ draftFortnightId, onManageAdvances, broke
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Detalle de Comisiones por Corredor</CardTitle>
-      </CardHeader>
-      <CardContent>
+    <div className="w-full">
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
         <Table>
           <TableHeader>
-            <TableRow>
-              <TableHead className="w-10"></TableHead>
-              <TableHead>Descripción</TableHead>
-              <TableHead className="text-right">Bruto</TableHead>
-              <TableHead className="text-right text-red-600">Descuentos</TableHead>
-              <TableHead className="text-right text-[#8AAA19] font-bold">NETO PAGADO</TableHead>
-              <TableHead className="text-center">Acciones</TableHead>
+            <TableRow className="bg-gradient-to-r from-gray-50 to-gray-100 border-b-2 border-gray-200">
+              <TableHead className="w-12"></TableHead>
+              <TableHead className="font-bold text-gray-700">Corredor / Aseguradora</TableHead>
+              <TableHead className="text-right font-bold text-gray-700">Comisión Bruta</TableHead>
+              <TableHead className="text-right font-bold text-red-700">Descuentos</TableHead>
+              <TableHead className="text-right font-bold text-[#8AAA19] text-base">NETO A PAGAR</TableHead>
+              <TableHead className="text-center font-bold text-gray-700">Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {Object.entries(groupedData).map(([brokerId, brokerData]) => (
               <>
-                <TableRow key={brokerId} className={`font-semibold hover:bg-gray-100 ${brokerData.is_retained ? 'bg-red-50' : 'bg-gray-50'}`}>
-                  <TableCell>
-                    <Button variant="ghost" size="sm" onClick={() => toggleBroker(brokerId)}>
-                      {expandedBrokers.has(brokerId) ? <FaChevronDown /> : <FaChevronRight />}
+                <TableRow key={brokerId} className={`font-semibold transition-colors ${brokerData.is_retained ? 'bg-red-50 hover:bg-red-100 border-l-4 border-red-500' : 'bg-blue-50/50 hover:bg-blue-100/50 border-l-4 border-blue-500'}`}>
+                  <TableCell className="py-4">
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={() => toggleBroker(brokerId)}
+                      className="hover:bg-white/50"
+                    >
+                      {expandedBrokers.has(brokerId) ? <FaChevronDown className="text-gray-600" /> : <FaChevronRight className="text-gray-600" />}
                     </Button>
                   </TableCell>
-                  <TableCell className="font-bold text-[#010139]">
-                    {brokerData.broker_name}
-                    {brokerData.is_retained && (
-                      <span className="ml-2 text-xs bg-red-500 text-white px-2 py-1 rounded">RETENIDO</span>
-                    )}
+                  <TableCell className="font-bold text-[#010139] text-base py-4">
+                    <div className="flex items-center gap-2">
+                      <span>{brokerData.broker_name}</span>
+                      {brokerData.is_retained && (
+                        <span className="text-xs bg-red-600 text-white px-2.5 py-1 rounded-full font-semibold shadow-sm">RETENIDO</span>
+                      )}
+                    </div>
                   </TableCell>
-                  <TableCell className="text-right font-mono text-gray-700">
+                  <TableCell className="text-right font-mono text-gray-800 text-base py-4">
                     {brokerData.total_gross.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
                   </TableCell>
-                  <TableCell className="text-right font-mono text-red-600">
+                  <TableCell className="text-right font-mono text-red-700 font-semibold text-base py-4">
                     -{brokerData.total_discounts.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
                   </TableCell>
-                  <TableCell className="text-right font-mono font-bold text-[#8AAA19] text-lg">
+                  <TableCell className="text-right font-mono font-bold text-[#8AAA19] text-lg py-4">
                     {brokerData.total_net.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
                   </TableCell>
-                  <TableCell className="text-center">
-                    <div className="flex justify-center gap-2">
+                  <TableCell className="text-center py-4">
+                    <div className="flex flex-col sm:flex-row justify-center gap-2">
                       <Button 
-                        variant="link" 
+                        variant="outline" 
+                        size="sm"
                         onClick={() => onManageAdvances(brokerId)}
-                        className="text-[#010139]"
+                        className="bg-white hover:bg-[#010139] hover:text-white border-[#010139] text-[#010139] font-medium transition-all"
                       >
-                        Descontar Adelanto
+                        💰 Adelantos
                       </Button>
                       <Button
                         size="sm"
-                        variant={brokerData.is_retained ? "outline" : "ghost"}
+                        variant="outline"
                         onClick={() => handleRetainPayment(brokerId, brokerData.is_retained)}
-                        className={brokerData.is_retained ? 'border-red-500 text-red-600 hover:bg-red-50' : 'hover:bg-red-100 hover:text-red-700'}
+                        className={brokerData.is_retained 
+                          ? 'bg-red-100 border-red-600 text-red-700 hover:bg-red-200 font-medium' 
+                          : 'bg-white border-gray-400 text-gray-700 hover:bg-red-50 hover:border-red-500 hover:text-red-700 font-medium'
+                        }
                       >
                         {brokerData.is_retained ? (
                           <><FaUndo className="mr-1" /> Liberar</>
                         ) : (
-                          <><FaHandHoldingUsd className="mr-1" /> Retener Pago</>
+                          <><FaHandHoldingUsd className="mr-1" /> Retener</>
                         )}
                       </Button>
                     </div>
@@ -221,28 +229,40 @@ export default function BrokerTotals({ draftFortnightId, onManageAdvances, broke
 
                 {expandedBrokers.has(brokerId) && Object.entries(brokerData.insurers).map(([insurerId, insurerData]) => (
                   <>
-                    <TableRow key={insurerId} className="hover:bg-gray-50">
-                      <TableCell></TableCell>
-                      <TableCell className="pl-10">
-                        <Button variant="ghost" size="sm" onClick={() => toggleInsurer(insurerId)} className="mr-2">
-                          {expandedInsurers.has(insurerId) ? <FaChevronDown /> : <FaChevronRight />}
-                        </Button>
-                        {insurerData.insurer_name}
+                    <TableRow key={insurerId} className="bg-white hover:bg-gray-50 transition-colors">
+                      <TableCell className="py-3"></TableCell>
+                      <TableCell className="pl-10 py-3">
+                        <div className="flex items-center gap-2">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => toggleInsurer(insurerId)} 
+                            className="hover:bg-gray-100 p-1"
+                          >
+                            {expandedInsurers.has(insurerId) ? <FaChevronDown size={12} className="text-gray-500" /> : <FaChevronRight size={12} className="text-gray-500" />}
+                          </Button>
+                          <span className="font-semibold text-gray-700">{insurerData.insurer_name}</span>
+                        </div>
                       </TableCell>
-                      <TableCell className="text-right font-mono">{insurerData.total_gross.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</TableCell>
-                      <TableCell></TableCell>
-                      <TableCell></TableCell>
-                      <TableCell></TableCell>
+                      <TableCell className="text-right font-mono text-gray-700 py-3">{insurerData.total_gross.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</TableCell>
+                      <TableCell className="py-3"></TableCell>
+                      <TableCell className="py-3"></TableCell>
+                      <TableCell className="py-3"></TableCell>
                     </TableRow>
 
                     {expandedInsurers.has(insurerId) && insurerData.clients.map((client, index) => (
-                      <TableRow key={`${insurerId}-${index}`} className="hover:bg-gray-50">
-                        <TableCell></TableCell>
-                        <TableCell className="pl-20 text-sm text-gray-600">{client.name}</TableCell>
-                        <TableCell className="text-right text-sm text-gray-600 font-mono">{client.gross.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</TableCell>
-                        <TableCell></TableCell>
-                        <TableCell></TableCell>
-                        <TableCell></TableCell>
+                      <TableRow key={`${insurerId}-${index}`} className="bg-gray-50/50 hover:bg-gray-100/50 transition-colors">
+                        <TableCell className="py-2"></TableCell>
+                        <TableCell className="pl-20 text-sm text-gray-600 py-2">
+                          <span className="inline-flex items-center gap-2">
+                            <span className="w-1.5 h-1.5 bg-gray-400 rounded-full"></span>
+                            {client.name}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-right text-sm text-gray-700 font-mono py-2">{client.gross.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</TableCell>
+                        <TableCell className="py-2"></TableCell>
+                        <TableCell className="py-2"></TableCell>
+                        <TableCell className="py-2"></TableCell>
                       </TableRow>
                     ))}
                   </>
@@ -251,7 +271,7 @@ export default function BrokerTotals({ draftFortnightId, onManageAdvances, broke
             ))}
           </TableBody>
         </Table>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }

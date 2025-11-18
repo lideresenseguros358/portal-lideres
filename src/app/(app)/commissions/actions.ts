@@ -112,19 +112,36 @@ export async function actionUploadImport(formData: FormData) {
     
     console.log('[SERVER] Saved total_amount:', importRecord.total_amount, 'for import:', importRecord.id);
 
-    // 2. Buscar pólizas existentes para identificar broker
+    // 2. Buscar pólizas existentes para identificar broker y porcentaje
     const policyNumbers = rows.map(r => r.policy_number).filter(Boolean) as string[];
     const { data: existingPolicies } = await supabase
       .from('policies')
-      .select('policy_number, broker_id, client_id, clients(national_id)')
+      .select(`
+        policy_number, 
+        broker_id, 
+        client_id, 
+        percent_override,
+        clients(national_id),
+        brokers!inner(percent_default)
+      `)
       .in('policy_number', policyNumbers.length > 0 ? policyNumbers : ['__NONE__']);
 
-    const policyMap = new Map<string, { broker_id: string | null; client_id: string; national_id: string | null }>();
+    const policyMap = new Map<string, { 
+      broker_id: string | null; 
+      client_id: string; 
+      national_id: string | null;
+      percent: number;
+    }>();
+    
     (existingPolicies || []).forEach((p: any) => {
+      // Prioridad: percent_override > percent_default > 100
+      const percent = p.percent_override ?? p.brokers?.percent_default ?? 100;
+      
       policyMap.set(p.policy_number, {
         broker_id: p.broker_id,
         client_id: p.client_id,
         national_id: p.clients?.national_id || null,
+        percent: percent,
       });
     });
 
@@ -137,11 +154,18 @@ export async function actionUploadImport(formData: FormData) {
       
       // Si existe póliza con broker identificado, va a comm_items
       if (policyData && policyData.broker_id) {
+        // CALCULAR comisión del broker aplicando el porcentaje
+        const commissionRaw = row.commission_amount || 0;
+        const percent = policyData.percent;
+        const grossAmount = commissionRaw * (percent / 100);
+        
+        console.log(`[CALC] Policy ${row.policy_number}: Raw=${commissionRaw}, Percent=${percent}%, Gross=${grossAmount}`);
+        
         itemsToInsert.push({
           import_id: importRecord.id,
           insurer_id: parsed.insurer_id,
           policy_number: row.policy_number || 'UNKNOWN',
-          gross_amount: row.commission_amount || 0,
+          gross_amount: grossAmount,  // ← Aplicado el porcentaje
           insured_name: row.client_name || 'UNKNOWN',
           raw_row: row.raw_row,
           broker_id: policyData.broker_id,
@@ -1410,6 +1434,81 @@ export async function actionDeleteAdvanceRecurrence(id: string) {
     return {
       ok: false as const,
       error: error instanceof Error ? error.message : 'Error desconocido',
+    };
+  }
+}
+
+/**
+ * Eliminar un adelanto con validación de historial
+ * - Solo permite eliminar si NO tiene historial (advance_logs)
+ * - Si es recurrente, solo elimina el adelanto pero mantiene el historial en deudas saldadas
+ */
+export async function actionDeleteAdvance(advanceId: string) {
+  try {
+    const supabase = getSupabaseAdmin();
+    
+    // 1. Verificar si el adelanto existe
+    const { data: advance, error: fetchError } = await supabase
+      .from('advances')
+      .select('id, is_recurring, recurrence_id, status, brokers(name)')
+      .eq('id', advanceId)
+      .single();
+    
+    if (fetchError || !advance) {
+      return {
+        ok: false as const,
+        error: 'Adelanto no encontrado',
+      };
+    }
+    
+    // 2. Verificar si tiene historial de pagos
+    const { data: logs, error: logsError } = await supabase
+      .from('advance_logs')
+      .select('id')
+      .eq('advance_id', advanceId)
+      .limit(1);
+    
+    if (logsError) {
+      return {
+        ok: false as const,
+        error: 'Error al verificar historial de pagos',
+      };
+    }
+    
+    // 3. Si tiene historial, no se puede eliminar
+    if (logs && logs.length > 0) {
+      return {
+        ok: false as const,
+        error: 'No se puede eliminar: Este adelanto tiene historial de pagos. Para mantener integridad de los registros, no se permite eliminar deudas con historial.',
+      };
+    }
+    
+    // 4. Si es recurrente pero no tiene historial, eliminar solo el adelanto
+    // (la recurrencia se mantiene para futuras generaciones)
+    const { error: deleteError } = await supabase
+      .from('advances')
+      .delete()
+      .eq('id', advanceId);
+    
+    if (deleteError) {
+      return {
+        ok: false as const,
+        error: `Error al eliminar adelanto: ${deleteError.message}`,
+      };
+    }
+    
+    revalidatePath('/(app)/commissions');
+    return { 
+      ok: true as const,
+      message: advance.is_recurring 
+        ? 'Adelanto recurrente eliminado. La configuración de recurrencia se mantiene activa.'
+        : 'Adelanto eliminado exitosamente',
+    };
+  } catch (error) {
+    console.error('[actionDeleteAdvance] Error:', error);
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : 'Error desconocido al eliminar adelanto',
     };
   }
 }

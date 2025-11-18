@@ -36,6 +36,8 @@ export default function ExpedienteManager({
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [previewDoc, setPreviewDoc] = useState<{ url: string; name: string; type: string } | null>(null);
+  const [loadingPreview, setLoadingPreview] = useState(false);
 
   // Upload form state
   const [uploadFile, setUploadFile] = useState<File | null>(null);
@@ -137,11 +139,40 @@ export default function ExpedienteManager({
     }
   };
 
+  const handlePreview = async (doc: ExpedienteDocument) => {
+    setLoadingPreview(true);
+    try {
+      const result = await getExpedienteDocumentUrl(doc.file_path);
+      if (result.ok && result.url) {
+        setPreviewDoc({
+          url: result.url,
+          name: doc.file_name,
+          type: doc.mime_type || ''
+        });
+      } else {
+        toast.error('Error al obtener URL del documento');
+      }
+    } catch (error) {
+      console.error('Error previewing document:', error);
+      toast.error('Error al previsualizar documento');
+    } finally {
+      setLoadingPreview(false);
+    }
+  };
+
   const handleDownload = async (doc: ExpedienteDocument) => {
     try {
       const result = await getExpedienteDocumentUrl(doc.file_path);
       if (result.ok && result.url) {
-        window.open(result.url, '_blank');
+        // Crear elemento link para forzar descarga
+        const link = document.createElement('a');
+        link.href = result.url;
+        link.download = doc.file_name;
+        link.target = '_blank';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        toast.success('Descargando documento...');
       } else {
         toast.error('Error al obtener URL del documento');
       }
@@ -264,11 +295,19 @@ export default function ExpedienteManager({
                 </div>
                 <div className="flex flex-col sm:flex-row items-center gap-1 flex-shrink-0">
                   <button
-                    onClick={() => handleDownload(doc)}
-                    className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-all"
-                    title="Previsualizar/Descargar"
+                    onClick={() => handlePreview(doc)}
+                    disabled={loadingPreview}
+                    className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-all disabled:opacity-50"
+                    title="Previsualizar"
                   >
                     <FaEye size={14} />
+                  </button>
+                  <button
+                    onClick={() => handleDownload(doc)}
+                    className="p-1.5 text-green-600 hover:bg-green-50 rounded transition-all"
+                    title="Descargar"
+                  >
+                    <FaDownload size={14} />
                   </button>
                   {!readOnly && (
                     <button
@@ -345,11 +384,19 @@ export default function ExpedienteManager({
               </div>
               <div className="flex flex-col sm:flex-row items-center gap-1 flex-shrink-0">
                 <button
-                  onClick={() => handleDownload(doc)}
-                  className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-all"
-                  title="Previsualizar/Descargar"
+                  onClick={() => handlePreview(doc)}
+                  disabled={loadingPreview}
+                  className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-all disabled:opacity-50"
+                  title="Previsualizar"
                 >
                   <FaEye size={14} />
+                </button>
+                <button
+                  onClick={() => handleDownload(doc)}
+                  className="p-1.5 text-green-600 hover:bg-green-50 rounded transition-all"
+                  title="Descargar"
+                >
+                  <FaDownload size={14} />
                 </button>
                 {!readOnly && (
                   <button
@@ -364,6 +411,79 @@ export default function ExpedienteManager({
             </div>
           ))}
       </div>
+
+      {/* Preview Modal */}
+      {previewDoc && (
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden border-2 border-gray-200 flex flex-col">
+            {/* Header */}
+            <div className="sticky top-0 bg-gradient-to-r from-[#010139] to-[#020270] px-5 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-white/10 rounded-lg">
+                  <FaEye size={20} className="text-white" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white">Previsualización</h3>
+                  <p className="text-xs text-white/80 truncate max-w-md">{previewDoc.name}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <a
+                  href={previewDoc.url}
+                  download={previewDoc.name}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-2 hover:bg-white/10 rounded-lg transition-all text-white flex items-center gap-2 text-sm font-semibold"
+                  title="Descargar"
+                >
+                  <FaDownload size={16} />
+                  <span className="hidden sm:inline">Descargar</span>
+                </a>
+                <button
+                  onClick={() => setPreviewDoc(null)}
+                  className="p-2 hover:bg-white/10 rounded-lg transition-all"
+                >
+                  <FaTimes size={18} className="text-white" />
+                </button>
+              </div>
+            </div>
+
+            {/* Preview Content */}
+            <div className="flex-1 overflow-auto bg-gray-100 p-4">
+              {previewDoc.type.includes('pdf') ? (
+                <iframe
+                  src={previewDoc.url}
+                  className="w-full h-full min-h-[600px] rounded-lg bg-white"
+                  title={previewDoc.name}
+                />
+              ) : previewDoc.type.includes('image') ? (
+                <div className="flex items-center justify-center h-full">
+                  <img
+                    src={previewDoc.url}
+                    alt={previewDoc.name}
+                    className="max-w-full max-h-full object-contain rounded-lg shadow-lg"
+                  />
+                </div>
+              ) : (
+                <div className="flex flex-col items-center justify-center h-full gap-4">
+                  <FaFile size={64} className="text-gray-400" />
+                  <p className="text-gray-600">No se puede previsualizar este tipo de archivo</p>
+                  <a
+                    href={previewDoc.url}
+                    download={previewDoc.name}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="px-6 py-3 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg hover:shadow-lg transition-all font-semibold flex items-center gap-2"
+                  >
+                    <FaDownload size={16} />
+                    Descargar Archivo
+                  </a>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Upload Modal - Rediseñado con branding corporativo */}
       {showUploadModal && (

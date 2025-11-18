@@ -161,26 +161,43 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const [isDiscarding, setIsDiscarding] = useState(false);
   
+  // State para totales de brokers
+  const [brokerCommissionsTotal, setBrokerCommissionsTotal] = useState(0);
+
+  // Cargar total de comisiones de brokers
+  const loadBrokerCommissionsTotal = useCallback(async () => {
+    if (!draftFortnight) {
+      setBrokerCommissionsTotal(0);
+      return;
+    }
+    
+    const { data: items } = await supabaseClient()
+      .from('comm_items')
+      .select('gross_amount, import_id, comm_imports!inner(period_label)')
+      .eq('comm_imports.period_label', draftFortnight.id);
+    
+    const total = (items || []).reduce((sum, item) => sum + Math.abs(item.gross_amount), 0);
+    setBrokerCommissionsTotal(total);
+  }, [draftFortnight]);
+
   // Calculate office total
   const officeTotal = useCallback(() => {
     const totalImported = importedReports.reduce((sum, r) => sum + r.total_amount, 0);
-    // Here we would also add ASSA codes total
-    // const assaCodesTotal = ... 
-    // For now, just using imported total
-    const brokerCommissions = 0; // This should come from BrokerTotals data
+    const brokerCommissions = brokerCommissionsTotal;
     return {
       totalImported,
       brokerCommissions,
       officeProfit: totalImported - brokerCommissions,
       percentage: totalImported > 0 ? ((totalImported - brokerCommissions) / totalImported * 100) : 0
     };
-  }, [importedReports]);
+  }, [importedReports, brokerCommissionsTotal]);
 
   useEffect(() => {
     if (draftFortnight) {
       loadImportedReports();
+      loadBrokerCommissionsTotal();
     }
-  }, [draftFortnight, loadImportedReports]);
+  }, [draftFortnight, loadImportedReports, loadBrokerCommissionsTotal]);
 
   const handleToggleNotify = async () => {
     if (!draftFortnight) return;
@@ -418,6 +435,7 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
               draftFortnightId={draftFortnight.id}
               onImport={() => {
                 loadImportedReports();
+                loadBrokerCommissionsTotal();
                 forceRecalculate();
               }}
             />

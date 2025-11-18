@@ -1,12 +1,11 @@
 -- =====================================================
--- TRIGGERS PARA ACTUALIZACIÓN AUTOMÁTICA DE CLIENTS/POLICIES
+-- FIX: Remover updated_at de triggers de policies
 -- =====================================================
--- Cuando se procesan comisiones, actualiza automáticamente:
--- 1. clients.broker_id si el cliente no tiene corredor asignado
--- 2. policies.broker_id si la póliza no tiene corredor asignado
+-- PROBLEMA: La tabla policies NO tiene columna updated_at
+-- El trigger intenta actualizar updated_at causando error 42703
 -- =====================================================
 
--- Función: Actualizar broker_id en clients y policies desde comm_items
+-- Función corregida: Sin updated_at en policies
 CREATE OR REPLACE FUNCTION update_clients_policies_from_commissions()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -32,13 +31,13 @@ BEGIN
   -- Si encontramos la póliza
   IF v_policy_id IS NOT NULL THEN
     
-    -- 1. Actualizar broker_id en policies si no tiene uno asignado
+    -- 1. Actualizar broker_id en policies (SIN updated_at)
     UPDATE policies
     SET broker_id = v_broker_id
     WHERE id = v_policy_id
       AND (broker_id IS NULL OR broker_id != v_broker_id);
 
-    -- 2. Actualizar broker_id en clients si no tiene uno asignado
+    -- 2. Actualizar broker_id en clients (CON updated_at porque clients SÍ tiene esa columna)
     IF v_client_id IS NOT NULL THEN
       UPDATE clients
       SET broker_id = v_broker_id,
@@ -53,18 +52,8 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Trigger: Ejecutar después de INSERT en comm_items
-DROP TRIGGER IF EXISTS trg_update_clients_policies_from_comm ON comm_items;
-CREATE TRIGGER trg_update_clients_policies_from_comm
-  AFTER INSERT ON comm_items
-  FOR EACH ROW
-  EXECUTE FUNCTION update_clients_policies_from_commissions();
-
 -- =====================================================
--- FUNCIÓN BATCH: Actualizar todos los clientes/pólizas existentes
--- =====================================================
--- Esta función se puede ejecutar manualmente para actualizar
--- todos los registros históricos basándose en las comisiones
+-- Función batch corregida también
 -- =====================================================
 
 CREATE OR REPLACE FUNCTION batch_update_clients_policies_from_commissions()
@@ -77,9 +66,8 @@ DECLARE
   v_updated_policies INT := 0;
   v_updated_clients INT := 0;
   v_errors TEXT[] := ARRAY[]::TEXT[];
-  v_record RECORD;
 BEGIN
-  -- Actualizar pólizas sin broker asignado
+  -- Actualizar pólizas sin broker asignado (SIN updated_at)
   WITH updates AS (
     UPDATE policies p
     SET broker_id = ci.broker_id
@@ -97,7 +85,7 @@ BEGIN
   )
   SELECT COUNT(*) INTO v_updated_policies FROM updates;
 
-  -- Actualizar clientes sin broker asignado
+  -- Actualizar clientes sin broker asignado (CON updated_at)
   WITH updates AS (
     UPDATE clients c
     SET broker_id = p.broker_id,
@@ -115,28 +103,40 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- =====================================================
--- COMENTARIOS Y DOCUMENTACIÓN
+-- VERIFICACIÓN
 -- =====================================================
-COMMENT ON FUNCTION update_clients_policies_from_commissions() IS 
-'Trigger function: Actualiza automáticamente broker_id en clients y policies cuando se inserta un comm_item con broker asignado';
 
-COMMENT ON FUNCTION batch_update_clients_policies_from_commissions() IS 
-'Función manual: Actualiza todos los clients/policies existentes basándose en el historial de comm_items. Retorna conteo de registros actualizados';
+-- Ver estructura de policies (debe tener created_at pero NO updated_at)
+SELECT column_name, data_type, is_nullable
+FROM information_schema.columns
+WHERE table_name = 'policies'
+  AND table_schema = 'public'
+ORDER BY ordinal_position;
+
+-- Ver estructura de clients (debe tener updated_at)
+SELECT column_name, data_type, is_nullable
+FROM information_schema.columns
+WHERE table_name = 'clients'
+  AND table_schema = 'public'
+  AND column_name IN ('created_at', 'updated_at')
+ORDER BY ordinal_position;
 
 -- =====================================================
--- ÍNDICES PARA OPTIMIZACIÓN
+-- RESUMEN
 -- =====================================================
-CREATE INDEX IF NOT EXISTS idx_comm_items_policy_number_broker 
-  ON comm_items(policy_number, broker_id) 
-  WHERE broker_id IS NOT NULL;
 
-CREATE INDEX IF NOT EXISTS idx_policies_policy_number 
-  ON policies(policy_number);
+/*
+✅ TRIGGER CORREGIDO: update_clients_policies_from_commissions()
+✅ FUNCIÓN BATCH CORREGIDA: batch_update_clients_policies_from_commissions()
 
-CREATE INDEX IF NOT EXISTS idx_policies_broker_id 
-  ON policies(broker_id) 
-  WHERE broker_id IS NOT NULL;
+CAMBIOS:
+- policies: Ya NO intenta actualizar updated_at (no existe)
+- clients: SÍ actualiza updated_at (existe)
 
-CREATE INDEX IF NOT EXISTS idx_clients_broker_id 
-  ON clients(broker_id) 
-  WHERE broker_id IS NOT NULL;
+EJECUTAR EN SUPABASE SQL EDITOR:
+1. Copiar todo este archivo
+2. Pegar en SQL Editor
+3. Run (F5)
+4. Verificar queries al final muestran columnas correctas
+5. Probar import de nueva quincena nuevamente
+*/

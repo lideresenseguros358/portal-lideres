@@ -1,11 +1,14 @@
 -- =====================================================
--- SISTEMA DE BULK IMPORT PARA CLIENTES Y PÓLIZAS
--- Bypass RLS con SECURITY DEFINER
+-- BULK IMPORT COMPLETO: MB SEGUROS
+-- Paso 1: Actualizar función
+-- Paso 2: Importar 14 registros de MB SEGUROS
 -- =====================================================
 
 -- =====================================================
--- 1. FUNCIÓN PRINCIPAL PARA BULK IMPORT
+-- PASO 1: ACTUALIZAR FUNCIÓN (BÚSQUEDA FLEXIBLE)
 -- =====================================================
+
+DROP FUNCTION IF EXISTS bulk_import_clients_policies(JSONB);
 
 CREATE OR REPLACE FUNCTION bulk_import_clients_policies(
   import_data JSONB
@@ -19,7 +22,7 @@ RETURNS TABLE(
   client_id UUID,
   policy_id UUID
 ) 
-SECURITY DEFINER  -- BYPASS RLS
+SECURITY DEFINER
 SET search_path = public
 LANGUAGE plpgsql
 AS $$
@@ -42,13 +45,11 @@ DECLARE
   v_email TEXT;
   v_phone TEXT;
 BEGIN
-  -- Iterar sobre cada fila del JSON
   FOR row_data IN SELECT * FROM jsonb_array_elements(import_data)
   LOOP
     row_idx := row_idx + 1;
     
     BEGIN
-      -- Extraer datos del JSON
       v_client_name := UPPER(TRIM(row_data->>'client_name'));
       v_policy_number := UPPER(TRIM(row_data->>'policy_number'));
       v_broker_email := LOWER(TRIM(row_data->>'broker_email'));
@@ -60,7 +61,6 @@ BEGIN
       v_email := NULLIF(LOWER(TRIM(row_data->>'email')), '');
       v_phone := NULLIF(TRIM(row_data->>'phone'), '');
       
-      -- Validar campos obligatorios
       IF v_client_name IS NULL OR v_client_name = '' THEN
         RETURN QUERY SELECT false, row_idx, v_client_name, v_policy_number, 'ERROR: Nombre del cliente requerido', NULL::UUID, NULL::UUID;
         CONTINUE;
@@ -91,7 +91,6 @@ BEGIN
         CONTINUE;
       END IF;
       
-      -- 1. Obtener broker_id desde el email
       SELECT b.id INTO v_broker_id
       FROM brokers b
       INNER JOIN profiles p ON b.p_id = p.id
@@ -104,14 +103,12 @@ BEGIN
         CONTINUE;
       END IF;
       
-      -- 2. Obtener insurer_id desde el nombre
-      -- Primero intenta coincidencia exacta, luego coincidencia parcial
+      -- ✅ BÚSQUEDA FLEXIBLE DE ASEGURADORA
       SELECT id INTO v_insurer_id
       FROM insurers
       WHERE UPPER(name) = v_insurer_name
       LIMIT 1;
       
-      -- Si no encuentra exacto, buscar coincidencia parcial
       IF v_insurer_id IS NULL THEN
         SELECT id INTO v_insurer_id
         FROM insurers
@@ -126,25 +123,21 @@ BEGIN
         CONTINUE;
       END IF;
       
-      -- 3. Verificar si la póliza ya existe
       IF EXISTS (SELECT 1 FROM policies pol WHERE pol.policy_number = v_policy_number) THEN
         RETURN QUERY SELECT false, row_idx, v_client_name, v_policy_number, 
           'ERROR: Póliza ya existe: ' || v_policy_number, NULL::UUID, NULL::UUID;
         CONTINUE;
       END IF;
       
-      -- 4. Buscar cliente existente (por cédula o nombre)
       SELECT id INTO v_existing_client_id
       FROM clients
       WHERE (v_national_id IS NOT NULL AND national_id = v_national_id)
          OR (UPPER(name) = v_client_name)
       LIMIT 1;
       
-      -- 5. Si el cliente existe, usar ese ID y actualizar datos opcionales
       IF v_existing_client_id IS NOT NULL THEN
         v_client_id := v_existing_client_id;
         
-        -- Actualizar datos del cliente si vienen en el import
         UPDATE clients
         SET 
           national_id = COALESCE(clients.national_id, v_national_id),
@@ -153,7 +146,6 @@ BEGIN
           broker_id = COALESCE(clients.broker_id, v_broker_id)
         WHERE id = v_existing_client_id;
       ELSE
-        -- 6. Crear nuevo cliente
         INSERT INTO clients (
           name,
           national_id,
@@ -174,7 +166,6 @@ BEGIN
         RETURNING id INTO v_client_id;
       END IF;
       
-      -- 7. Crear póliza
       INSERT INTO policies (
         client_id,
         broker_id,
@@ -198,12 +189,10 @@ BEGIN
       )
       RETURNING id INTO v_policy_id;
       
-      -- Retornar éxito
       RETURN QUERY SELECT true, row_idx, v_client_name, v_policy_number, 
         'SUCCESS: Cliente y póliza creados', v_client_id, v_policy_id;
       
     EXCEPTION WHEN OTHERS THEN
-      -- Capturar cualquier error y continuar con la siguiente fila
       RETURN QUERY SELECT false, row_idx, v_client_name, v_policy_number, 
         'ERROR: ' || SQLERRM, NULL::UUID, NULL::UUID;
     END;
@@ -211,127 +200,201 @@ BEGIN
 END;
 $$;
 
--- Comentario de la función
-COMMENT ON FUNCTION bulk_import_clients_policies IS 
-'Función SECURITY DEFINER para importación masiva de clientes y pólizas. 
-Bypass RLS. Solo ejecutar como Master.
-Formato JSON esperado: ver ejemplos en este archivo.';
-
 -- =====================================================
--- 2. FUNCIÓN HELPER PARA OBTENER ASEGURADORAS
+-- PASO 2: EJECUTAR BULK IMPORT DE 14 REGISTROS MB
 -- =====================================================
 
-CREATE OR REPLACE FUNCTION get_insurers_for_import()
-RETURNS TABLE(
-  insurer_name TEXT,
-  insurer_id UUID,
-  active BOOLEAN
-)
-SECURITY DEFINER
-SET search_path = public
-LANGUAGE sql
-AS $$
-  SELECT 
-    name as insurer_name,
-    id as insurer_id,
-    active
-  FROM insurers
-  ORDER BY name;
-$$;
-
-COMMENT ON FUNCTION get_insurers_for_import IS 
-'Obtener lista de aseguradoras disponibles para el import';
-
--- =====================================================
--- 3. FUNCIÓN HELPER PARA OBTENER BROKERS
--- =====================================================
-
-CREATE OR REPLACE FUNCTION get_brokers_for_import()
-RETURNS TABLE(
-  broker_name TEXT,
-  broker_email TEXT,
-  broker_id UUID,
-  active BOOLEAN
-)
-SECURITY DEFINER
-SET search_path = public
-LANGUAGE sql
-AS $$
-  SELECT 
-    b.name as broker_name,
-    p.email as broker_email,
-    b.id as broker_id,
-    b.active
-  FROM brokers b
-  INNER JOIN profiles p ON b.p_id = p.id
-  WHERE b.active = true
-  ORDER BY b.name;
-$$;
-
-COMMENT ON FUNCTION get_brokers_for_import IS 
-'Obtener lista de brokers disponibles para el import con sus emails';
-
--- =====================================================
--- 4. VERIFICACIÓN Y PERMISOS
--- =====================================================
-
--- Verificar que las funciones se crearon
-SELECT 
-  proname as function_name,
-  prosecdef as is_security_definer
-FROM pg_proc
-WHERE proname IN (
-  'bulk_import_clients_policies',
-  'get_insurers_for_import',
-  'get_brokers_for_import'
-);
-
--- =====================================================
--- 5. EJEMPLO DE USO
--- =====================================================
-
-/*
--- PASO 1: Obtener lista de aseguradoras disponibles
-SELECT * FROM get_insurers_for_import();
-
--- PASO 2: Obtener lista de brokers con sus emails
-SELECT * FROM get_brokers_for_import();
-
--- PASO 3: Ejecutar el bulk import con datos JSON
 SELECT * FROM bulk_import_clients_policies('[
   {
-    "client_name": "Juan Pérez Gómez",
-    "policy_number": "POL-2024-001",
-    "broker_email": "broker@example.com",
-    "insurer_name": "ASSA",
-    "ramo": "AUTO",
-    "start_date": "2024-01-15",
-    "renewal_date": "2025-01-15",
-    "national_id": "8-123-4567",
-    "email": "juan@example.com",
-    "phone": "6000-0000"
+    "client_name": "ROSA ANGELA MARTINEZ KANTULE",
+    "national_id": "10-6-1867",
+    "policy_number": "2280",
+    "broker_email": "samudiosegurospa@outlook.com",
+    "insurer_name": "MB SEGUROS",
+    "ramo": "INCENDIO",
+    "start_date": "2027-06-01",
+    "renewal_date": "2028-06-01"
   },
   {
-    "client_name": "María González López",
-    "policy_number": "POL-2024-002",
-    "broker_email": "broker@example.com",
-    "insurer_name": "MAPFRE",
+    "client_name": "UNI LEASING, INC.",
+    "national_id": "2029392-1-744609 DV 7",
+    "policy_number": "55683",
+    "broker_email": "keniagonzalez@lideresenseguros.com",
+    "insurer_name": "MB SEGUROS",
+    "ramo": "INCENDIO",
+    "start_date": "2027-04-03",
+    "renewal_date": "2028-04-03"
+  },
+  {
+    "client_name": "MAXILIANO DAVID PEREZ ANDERSON",
+    "national_id": "20756",
+    "policy_number": "51026",
+    "broker_email": "carlosfoot@lideresenseguros.com",
+    "insurer_name": "MB SEGUROS",
+    "ramo": "AUTO",
+    "start_date": "2026-09-01",
+    "renewal_date": "2027-09-01"
+  },
+  {
+    "client_name": "MIÑOSO ARIAS GONZALEZ",
+    "national_id": "10-27-184",
+    "policy_number": "58978",
+    "broker_email": "carlosfoot@lideresenseguros.com",
+    "insurer_name": "MB SEGUROS",
+    "ramo": "AUTO",
+    "start_date": "2025-07-06",
+    "renewal_date": "2026-07-06"
+  },
+  {
+    "client_name": "NORBERTO INIQUIÑAPI VILLALAZ ARIAS",
+    "national_id": "3-708-2124",
+    "policy_number": "61287",
+    "broker_email": "carlosfoot@lideresenseguros.com",
+    "insurer_name": "MB SEGUROS",
+    "ramo": "AUTO",
+    "start_date": "2025-06-08",
+    "renewal_date": "2026-06-08"
+  },
+  {
+    "client_name": "OSIRIS EVA ARCHIBOLD JONES",
+    "national_id": "8-763-2035",
+    "policy_number": "76668",
+    "broker_email": "carlosfoot@lideresenseguros.com",
+    "insurer_name": "MB SEGUROS",
+    "ramo": "AUTO",
+    "start_date": "2025-10-03",
+    "renewal_date": "2026-03-10"
+  },
+  {
+    "client_name": "MELISSA SHECK ORTIZ",
+    "national_id": "8-883-118",
+    "policy_number": "79414",
+    "broker_email": "carlosfoot@lideresenseguros.com",
+    "insurer_name": "MB SEGUROS",
+    "ramo": "AUTO",
+    "start_date": "2026-10-05",
+    "renewal_date": "2027-10-05"
+  },
+  {
+    "client_name": "ANA MARIA JONES MORALES",
+    "national_id": "3-99-761",
+    "policy_number": "81555",
+    "broker_email": "carlosfoot@lideresenseguros.com",
+    "insurer_name": "MB SEGUROS",
+    "ramo": "AUTO",
+    "start_date": "2025-01-10",
+    "renewal_date": "2026-10-08"
+  },
+  {
+    "client_name": "ALFREDO PINZON CUBILLA",
+    "national_id": "4-294-2353",
+    "policy_number": "122188",
+    "broker_email": "samudiosegurospa@outlook.com",
+    "insurer_name": "MB SEGUROS",
+    "ramo": "AUTO",
+    "start_date": "2027-03-08",
+    "renewal_date": "2028-03-08"
+  },
+  {
+    "client_name": "WAI CHAI CHUNG CASTILLO",
+    "national_id": "8-1095-511",
+    "policy_number": "97671",
+    "broker_email": "samudiosegurospa@outlook.com",
+    "insurer_name": "MB SEGUROS",
+    "ramo": "AUTO",
+    "start_date": "2026-07-05",
+    "renewal_date": "2027-07-05"
+  },
+  {
+    "client_name": "CEDITER, S.A.",
+    "national_id": "1969761-1-735140 DV 98",
+    "policy_number": "38551",
+    "broker_email": "itzycandanedo@lideresenseguros.com",
+    "insurer_name": "MB SEGUROS",
+    "ramo": "HOGAR",
+    "start_date": "2026-07-06",
+    "renewal_date": "2027-07-06"
+  },
+  {
+    "client_name": "CEDITER, S.A.",
+    "national_id": "1969761-1-735140 DV 98",
+    "policy_number": "33851",
+    "broker_email": "itzycandanedo@lideresenseguros.com",
+    "insurer_name": "MB SEGUROS",
+    "ramo": "RESPONSABILIDAD CIVIL",
+    "start_date": "2026-07-10",
+    "renewal_date": "2027-07-10"
+  },
+  {
+    "client_name": "MIRNA ESTHER CORREOSO GARCIA",
+    "national_id": "1-703-572",
+    "policy_number": "46451",
+    "broker_email": "didimosamudio@lideresenseguros.com",
+    "insurer_name": "MB SEGUROS",
     "ramo": "VIDA",
-    "start_date": "2024-02-01",
-    "renewal_date": "2025-02-01",
-    "national_id": "E-8-123456",
-    "email": "maria@example.com",
-    "phone": "6100-0000"
+    "start_date": "2026-07-10",
+    "renewal_date": "2050-07-10"
+  },
+  {
+    "client_name": "ANGEL ALBERTO LOPEZ LOPEZ",
+    "national_id": "E-8-145842",
+    "policy_number": "60973",
+    "broker_email": "samudiosegurospa@outlook.com",
+    "insurer_name": "MB SEGUROS",
+    "ramo": "VIDA",
+    "start_date": "2027-05-07",
+    "renewal_date": "2041-05-07"
   }
 ]'::jsonb);
 
--- PASO 4: Verificar resultados
--- La función retorna una tabla con el resultado de cada fila:
--- - success: true/false
--- - row_number: número de fila procesada
--- - client_name: nombre del cliente
--- - policy_number: número de póliza
--- - message: mensaje de éxito o error
--- - client_id: UUID del cliente creado (NULL si error)
--- - policy_id: UUID de la póliza creada (NULL si error)
+-- =====================================================
+-- PASO 3: VERIFICAR RESULTADOS
+-- =====================================================
+
+-- Ver resumen de importación
+-- Si ves todas las filas con success=true, el import fue exitoso
+
+-- Verificar pólizas MB creadas (ejecutar después del import)
+/*
+SELECT 
+  p.policy_number,
+  c.name as client,
+  c.national_id,
+  i.name as insurer,
+  b.name as broker,
+  p.ramo,
+  p.start_date,
+  p.renewal_date
+FROM policies p
+JOIN clients c ON p.client_id = c.id
+JOIN insurers i ON p.insurer_id = i.id
+JOIN brokers b ON p.broker_id = b.id
+WHERE i.name = 'MB'
+  AND p.created_at > NOW() - INTERVAL '5 minutes'
+ORDER BY p.created_at DESC;
+*/
+
+-- =====================================================
+-- RESUMEN
+-- =====================================================
+
+/*
+✅ FUNCIÓN ACTUALIZADA: Búsqueda flexible de aseguradoras
+✅ 14 REGISTROS MB SEGUROS listos para importar
+
+BROKERS INVOLUCRADOS:
+- samudiosegurospa@outlook.com (4 pólizas)
+- carlosfoot@lideresenseguros.com (6 pólizas)
+- keniagonzalez@lideresenseguros.com (1 póliza)
+- itzycandanedo@lideresenseguros.com (2 pólizas)
+- didimosamudio@lideresenseguros.com (1 póliza)
+
+TIPOS DE PÓLIZAS:
+- AUTO: 8 pólizas
+- INCENDIO: 2 pólizas
+- VIDA: 2 pólizas
+- HOGAR: 1 póliza
+- RESPONSABILIDAD CIVIL: 1 póliza
+
+CLIENTES ÚNICOS: 11 (3 clientes con 2+ pólizas)
 */

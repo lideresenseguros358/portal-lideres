@@ -71,19 +71,27 @@ export default function BrokerYTDTab({ brokerId }: Props) {
 
   return (
     <div className="space-y-6">
-      {/* Header Card */}
-      <Card className="shadow-lg border-2 border-gray-100">
-        <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      {/* Header Card - Mejorado */}
+      <Card className="shadow-xl border-t-4 border-t-[#8AAA19] overflow-hidden">
+        <CardHeader className="bg-gradient-to-br from-[#010139] via-[#020270] to-[#010139] text-white relative">
+          {/* Background pattern */}
+          <div className="absolute inset-0 opacity-10">
+            <div className="absolute inset-0 bg-gradient-to-r from-[#8AAA19]/20 to-transparent" />
+          </div>
+          <div className="relative z-10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
               <div className="flex items-center gap-3 mb-2">
-                <FaChartLine className="text-[#010139] text-xl" />
-                <h2 className="text-xl sm:text-2xl font-bold text-[#010139]">ACUMULADO ANUAL</h2>
+                <div className="p-3 bg-white/20 rounded-xl shadow-lg">
+                  <FaChartLine className="text-white text-2xl" />
+                </div>
+                <div>
+                  <h2 className="text-2xl sm:text-3xl font-bold text-white">ACUMULADO ANUAL</h2>
+                  <p className="text-sm text-white/80">Análisis detallado de tus comisiones</p>
+                </div>
               </div>
-              <p className="text-sm text-gray-600">Análisis de comisiones por aseguradora y tendencias mensuales</p>
             </div>
             <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
-              <SelectTrigger className="w-full sm:w-28 border-[#010139]/20 bg-white">
+              <SelectTrigger className="w-full sm:w-32 border-2 border-white/30 bg-white/10 text-white hover:bg-white/20 transition-all">
                 <SelectValue placeholder="Año" />
               </SelectTrigger>
               <SelectContent>
@@ -96,72 +104,93 @@ export default function BrokerYTDTab({ brokerId }: Props) {
         </CardHeader>
       </Card>
 
-      {/* Summary Cards */}
+      {/* Summary Cards - Mejorados */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="shadow-lg border-l-4 border-l-[#010139]">
+        <Card className="shadow-xl border-l-4 border-l-[#010139] hover:shadow-2xl transition-all duration-300 hover:scale-105 bg-gradient-to-br from-white to-blue-50/30">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-gray-600">Total Anual (Bruto)</CardTitle>
+            <CardTitle className="text-sm font-bold text-gray-700 flex items-center gap-2">
+              <FaDollarSign className="text-[#010139]" />
+              Total Anual (Bruto)
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold text-[#010139] font-mono">
+            <p className="text-3xl font-bold text-[#010139] font-mono">
               {formatCurrency(totalCurrent)}
             </p>
-            <p className="text-xs text-gray-500 mt-1">Año {year}</p>
+            <p className="text-xs text-gray-600 mt-2 font-semibold">Año {year}</p>
           </CardContent>
         </Card>
         
-        <Card className="shadow-lg border-l-4 border-l-[#8AAA19]">
+        <Card className="shadow-xl border-l-4 border-l-[#8AAA19] hover:shadow-2xl transition-all duration-300 hover:scale-105 bg-gradient-to-br from-white to-green-50/30">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-gray-600">Crecimiento</CardTitle>
+            <CardTitle className="text-sm font-bold text-gray-700 flex items-center gap-2">
+              <FaArrowUp className="text-[#8AAA19]" />
+              Crecimiento
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center gap-2">
-              {Number(growthPercentage) > 0 ? (
-                <FaArrowUp className="text-green-500" />
-              ) : (
-                <FaArrowDown className="text-red-500" />
-              )}
-              <p className={`text-2xl font-bold ${Number(growthPercentage) > 0 ? 'text-green-600' : 'text-red-600'}`}>
+            <div className="flex items-center gap-3">
+              <div className={`p-2 rounded-lg ${
+                Number(growthPercentage) > 0 ? 'bg-green-100' : 'bg-red-100'
+              }`}>
+                {Number(growthPercentage) > 0 ? (
+                  <FaArrowUp className="text-green-600 text-xl" />
+                ) : (
+                  <FaArrowDown className="text-red-600 text-xl" />
+                )}
+              </div>
+              <p className={`text-3xl font-bold ${
+                Number(growthPercentage) > 0 ? 'text-green-600' : 'text-red-600'
+              }`}>
                 {Math.abs(Number(growthPercentage))}%
               </p>
             </div>
-            <p className="text-xs text-gray-500 mt-1">vs Año {year - 1}</p>
+            <p className="text-xs text-gray-600 mt-2 font-semibold">vs Año {year - 1}</p>
           </CardContent>
         </Card>
         
-        <Card className="shadow-lg border-l-4 border-l-blue-500">
+        <Card className="shadow-xl border-l-4 border-l-blue-500 hover:shadow-2xl transition-all duration-300 hover:scale-105 bg-gradient-to-br from-white to-blue-50/30">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-gray-600">Promedio Mensual</CardTitle>
+            <CardTitle className="text-sm font-bold text-gray-700 flex items-center gap-2">
+              <FaChartLine className="text-blue-500" />
+              Promedio Mensual
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold text-blue-600 font-mono">
+            <p className="text-3xl font-bold text-blue-600 font-mono">
               {formatCurrency(totalCurrent / monthlyData.length)}
             </p>
-            <p className="text-xs text-gray-500 mt-1">Basado en {monthlyData.length} meses</p>
+            <p className="text-xs text-gray-600 mt-2 font-semibold">Basado en {monthlyData.length} meses</p>
           </CardContent>
         </Card>
         
-        <Card className="shadow-lg border-l-4 border-l-purple-500">
+        <Card className="shadow-xl border-l-4 border-l-purple-500 hover:shadow-2xl transition-all duration-300 hover:scale-105 bg-gradient-to-br from-white to-purple-50/30">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-gray-600">Mejor Mes</CardTitle>
+            <CardTitle className="text-sm font-bold text-gray-700 flex items-center gap-2">
+              <FaDollarSign className="text-purple-500" />
+              Mejor Mes
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold text-purple-600 font-mono">
+            <p className="text-3xl font-bold text-purple-600 font-mono">
               {formatCurrency(Math.max(...monthlyData.map(m => m.current)))}
             </p>
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs text-gray-600 mt-2 font-semibold">
               {monthlyData.find(m => m.current === Math.max(...monthlyData.map(m => m.current)))?.month} {year}
             </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Monthly Comparison Chart */}
-      <Card className="shadow-lg border-2 border-gray-100">
-        <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100">
-          <CardTitle className="text-lg font-bold text-[#010139]">Comparación Mensual (Bruto)</CardTitle>
+      {/* Monthly Comparison Chart - Mejorado */}
+      <Card className="shadow-xl border-2 border-[#010139]/20 overflow-hidden bg-white">
+        <CardHeader className="bg-gradient-to-r from-[#010139] via-[#020270] to-[#010139] border-b-4 border-[#8AAA19]">
+          <CardTitle className="text-lg font-bold text-white flex items-center gap-2">
+            <FaChartLine className="text-[#8AAA19]" />
+            Comparación Mensual (Bruto)
+          </CardTitle>
         </CardHeader>
-        <CardContent className="p-4 sm:p-6">
+        <CardContent className="p-6 sm:p-8 bg-gradient-to-br from-white to-gray-50">
           {/* Desktop */}
           <div className="hidden md:block">
             <ResponsiveContainer width="100%" height={300}>
@@ -195,14 +224,17 @@ export default function BrokerYTDTab({ brokerId }: Props) {
         </CardContent>
       </Card>
 
-      {/* Insurers Distribution */}
+      {/* Insurers Distribution - Mejorado */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Pie Chart */}
-        <Card className="shadow-lg border-2 border-gray-100">
-          <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100">
-            <CardTitle className="text-lg font-bold text-[#010139]">Distribución por Aseguradora</CardTitle>
+        <Card className="shadow-xl border-2 border-[#8AAA19]/30 overflow-hidden bg-white">
+          <CardHeader className="bg-gradient-to-r from-[#8AAA19] to-[#6a8a14] border-b-2 border-[#010139]/10">
+            <CardTitle className="text-lg font-bold text-white flex items-center gap-2">
+              <FaChartLine className="text-white" />
+              Distribución por Aseguradora
+            </CardTitle>
           </CardHeader>
-          <CardContent className="p-4 sm:p-6">
+          <CardContent className="p-6 sm:p-8 bg-gradient-to-br from-white to-green-50/20">
             <div className="overflow-hidden">
               <ResponsiveContainer width="100%" height={300}>
                 <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
@@ -232,25 +264,36 @@ export default function BrokerYTDTab({ brokerId }: Props) {
         </Card>
 
         {/* Growth by Insurer */}
-        <Card className="shadow-lg border-2 border-gray-100">
-          <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100">
-            <CardTitle className="text-lg font-bold text-[#010139]">Crecimiento por Aseguradora</CardTitle>
+        <Card className="shadow-xl border-2 border-[#010139]/30 overflow-hidden bg-white">
+          <CardHeader className="bg-gradient-to-r from-[#010139] via-[#020270] to-[#010139] border-b-2 border-[#8AAA19]">
+            <CardTitle className="text-lg font-bold text-white flex items-center gap-2">
+              <FaArrowUp className="text-[#8AAA19]" />
+              Crecimiento por Aseguradora
+            </CardTitle>
           </CardHeader>
-          <CardContent className="p-4 sm:p-6">
+          <CardContent className="p-6 sm:p-8 bg-gradient-to-br from-white to-blue-50/20">
             <div className="space-y-3">
               {insurerData.map((insurer, index) => (
-                <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                <div key={index} className={`flex items-center justify-between p-4 bg-white rounded-xl hover:bg-gradient-to-r hover:from-gray-50 hover:to-white transition-all shadow-sm hover:shadow-md border-l-4 ${
+                  insurer.growth > 0 ? 'border-l-[#8AAA19]' : 'border-l-red-500'
+                }`}>
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-gray-700 truncate">{insurer.name}</p>
-                    <p className="text-sm font-mono text-gray-600">{formatCurrency(insurer.value)}</p>
+                    <p className="font-bold text-gray-800 truncate">{insurer.name}</p>
+                    <p className="text-base font-mono text-gray-700 font-semibold">{formatCurrency(insurer.value)}</p>
                   </div>
-                  <div className="flex items-center gap-2 ml-4">
-                    {insurer.growth > 0 ? (
-                      <FaArrowUp className="text-[#8AAA19] text-xs" />
-                    ) : (
-                      <FaArrowDown className="text-red-500 text-xs" />
-                    )}
-                    <span className={`font-bold ${insurer.growth > 0 ? 'text-[#8AAA19]' : 'text-red-600'}`}>
+                  <div className="flex items-center gap-3 ml-4">
+                    <div className={`p-2 rounded-lg ${
+                      insurer.growth > 0 ? 'bg-green-100' : 'bg-red-100'
+                    }`}>
+                      {insurer.growth > 0 ? (
+                        <FaArrowUp className="text-[#8AAA19] text-sm" />
+                      ) : (
+                        <FaArrowDown className="text-red-500 text-sm" />
+                      )}
+                    </div>
+                    <span className={`text-xl font-bold ${
+                      insurer.growth > 0 ? 'text-[#8AAA19]' : 'text-red-600'
+                    }`}>
                       {Math.abs(insurer.growth)}%
                     </span>
                   </div>
@@ -261,12 +304,15 @@ export default function BrokerYTDTab({ brokerId }: Props) {
         </Card>
       </div>
 
-      {/* Growth Trend Chart */}
-      <Card className="shadow-lg border-2 border-gray-100">
-        <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100">
-          <CardTitle className="text-lg font-bold text-[#010139]">Tendencia de Crecimiento</CardTitle>
+      {/* Growth Trend Chart - Mejorado */}
+      <Card className="shadow-xl border-2 border-[#8AAA19]/30 overflow-hidden bg-white">
+        <CardHeader className="bg-gradient-to-r from-[#8AAA19] to-[#6a8a14] border-b-2 border-[#010139]/10">
+          <CardTitle className="text-lg font-bold text-white flex items-center gap-2">
+            <FaChartLine className="text-white" />
+            Tendencia de Crecimiento
+          </CardTitle>
         </CardHeader>
-        <CardContent className="p-4 sm:p-6">
+        <CardContent className="p-6 sm:p-8 bg-gradient-to-br from-white to-green-50/20">
           <div className="overflow-x-auto md:overflow-visible">
             <div style={{ minWidth: '300px' }}>
               <ResponsiveContainer width="100%" height={250}>

@@ -1033,8 +1033,11 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
                     <div className="flex-1">
                       {group.isBatch ? (
                         <>
-                          <h3 className="font-bold text-lg text-[#010139]">
-                            🔗 Pago con {group.payments.length} divisiones
+                          <h3 className="font-bold text-lg text-[#010139] flex items-center gap-2">
+                            🔗 Pago dividido en {group.payments.length} partes
+                            {group.allAreDescuentoCorredor && (
+                              <span className="text-sm font-normal text-[#8AAA19]">(Descuentos a corredor)</span>
+                            )}
                           </h3>
                           <p className="text-sm text-gray-600 mt-1">
                             Referencias: {group.reference_number}
@@ -1042,6 +1045,11 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
                           {!group.allAreDescuentoCorredor && (
                             <p className="text-xs text-gray-500 mt-1">
                               Total en Banco: ${group.bank_amount.toFixed(2)}
+                            </p>
+                          )}
+                          {group.allAreDescuentoCorredor && (
+                            <p className="text-xs font-medium text-blue-700 mt-1 bg-blue-50 inline-block px-2 py-0.5 rounded">
+                              💡 Cada división tiene su propio ID de adelanto
                             </p>
                           )}
                         </>
@@ -1111,14 +1119,36 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
                     : 'border-gray-100 hover:border-gray-300'
                 } ${group.isBatch ? 'border-l-4 border-l-[#010139]' : ''}`}
               >
-                {/* Indicador de división para batches */}
-                {group.isBatch && (
-                  <div className="mb-3 pb-2 border-b border-gray-200">
-                    <span className="text-xs font-semibold text-[#010139] bg-blue-50 px-2 py-1 rounded">
-                      División {paymentIndex + 1} de {group.payments.length}
-                    </span>
-                  </div>
-                )}
+                {/* Indicador de división para batches - Mejorado */}
+                {group.isBatch && (() => {
+                  const advanceId = payment.metadata?.advance_id;
+                  const paymentAmount = parseFloat(payment.amount_to_pay || '0');
+                  const totalBatchAmount = group.payments.reduce((sum: number, p: any) => sum + parseFloat(p.amount_to_pay || '0'), 0);
+                  const percentage = totalBatchAmount > 0 ? ((paymentAmount / totalBatchAmount) * 100).toFixed(0) : '0';
+                  
+                  return (
+                    <div className="mb-3 pb-3 border-b-2 border-gray-200 bg-gradient-to-r from-blue-50 to-white p-3 rounded-lg -mx-3">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold text-[#010139] bg-white px-3 py-1.5 rounded-lg shadow-sm border border-gray-200">
+                            🔸 División {paymentIndex + 1} de {group.payments.length}
+                          </span>
+                          <span className="text-xs font-semibold text-blue-700 bg-blue-100 px-2 py-1 rounded">
+                            {percentage}% del total
+                          </span>
+                        </div>
+                        {advanceId && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] text-gray-500 font-medium">ID Adelanto:</span>
+                            <span className="text-xs font-bold font-mono text-[#8AAA19] bg-white px-2 py-1 rounded border border-[#8AAA19]/30">
+                              {advanceId.slice(0, 12)}...
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
                 {/* Header con checkbox y acciones */}
                 <div className="flex items-start gap-3 mb-4">
                   <input
@@ -1259,19 +1289,27 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
                       const brokerId = payment.metadata?.broker_id;
                       const broker = brokers.find(b => b.id === brokerId);
                       const brokerName = broker?.name;
+                      const advanceId = payment.metadata?.advance_id;
+                      const batchId = getBatchId(payment);
                       
                       return (
-                        <span className="px-2 py-0.5 bg-[#010139]/5 text-[#010139] border border-[#010139]/30 rounded-full text-[11px] font-semibold">
-                          💰 Descuento a corredor{brokerName ? ` – ${brokerName}` : ''}
-                        </span>
+                        <>
+                          <span className="px-2 py-0.5 bg-[#010139]/5 text-[#010139] border border-[#010139]/30 rounded-full text-[11px] font-semibold">
+                            💰 Descuento a corredor{brokerName ? ` – ${brokerName}` : ''}
+                          </span>
+                          {advanceId && (
+                            <span className="px-2 py-0.5 bg-[#8AAA19]/10 text-[#8AAA19] border border-[#8AAA19]/40 rounded-full text-[11px] font-semibold font-mono">
+                              🆔 Adelanto: {advanceId.slice(0, 8)}...
+                            </span>
+                          )}
+                          {batchId && (
+                            <span className="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-300 rounded-full text-[11px] font-semibold">
+                              🔗 División del pago
+                            </span>
+                          )}
+                        </>
                       );
                     })()}
-
-                    {payment.metadata?.advance_id && (
-                      <span className="px-2 py-0.5 bg-[#8AAA19]/10 text-[#8AAA19] border border-[#8AAA19]/40 rounded-full text-[11px] font-semibold">
-                        Adelanto externo
-                      </span>
-                    )}
                   </div>
                   <div className="text-xs text-gray-500">
                     {new Date(payment.created_at).toLocaleDateString('es-PA')}

@@ -153,40 +153,63 @@ export default function BrokerPendingTab({ brokerId }: Props) {
 
   return (
     <div className="space-y-6">
-      {/* Header Card */}
-      <Card className="shadow-lg border-2 border-gray-100">
-        <CardContent className="p-4 sm:p-6">
-          <div className="flex items-center gap-3 mb-2">
-            <FaClipboardList className="text-[#010139] text-xl" />
-            <h2 className="text-xl sm:text-2xl font-bold text-[#010139]">AJUSTES Y PENDIENTES</h2>
+      {/* Header Card - Mejorado */}
+      <Card className="shadow-xl border-t-4 border-t-[#8AAA19] overflow-hidden">
+        <CardContent className="p-6 sm:p-8 bg-gradient-to-br from-[#010139] via-[#020270] to-[#010139] relative">
+          {/* Background pattern */}
+          <div className="absolute inset-0 opacity-10">
+            <div className="absolute inset-0 bg-gradient-to-r from-[#8AAA19]/20 to-transparent" />
           </div>
-          <p className="text-sm text-gray-600">
-            Gestiona tus solicitudes de ajustes y revisa pendientes sin identificar
-          </p>
+          <div className="relative z-10 flex items-center gap-4">
+            <div className="p-3 bg-white/20 rounded-xl shadow-lg">
+              <FaClipboardList className="text-white text-2xl" />
+            </div>
+            <div>
+              <h2 className="text-2xl sm:text-3xl font-bold text-white">AJUSTES Y PENDIENTES</h2>
+              <p className="text-sm text-white/80">
+                Gestiona tus solicitudes de ajustes y revisa pendientes sin identificar
+              </p>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
+      {/* Tabs con estilo mejorado */}
       <Tabs defaultValue="pending" className="w-full">
-        <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3 gap-2">
-          <TabsTrigger value="pending" className="flex items-center justify-center gap-2">
-            <span>Pendientes sin Identificar</span>
-            {pendingItems.length > 0 && (
-              <Badge variant="warning" className="ml-1">{pendingItems.length}</Badge>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="requests" className="flex items-center justify-center gap-2">
-            <span>Mis Solicitudes</span>
-            {myRequests.length > 0 && (
-              <Badge variant="info" className="ml-1">{myRequests.length}</Badge>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="paid" className="flex items-center justify-center gap-2">
-            <span>Ajustes Pagados</span>
-            {paidAdjustments.length > 0 && (
-              <Badge variant="success" className="ml-1">{paidAdjustments.length}</Badge>
-            )}
-          </TabsTrigger>
-        </TabsList>
+        <div className="bg-gradient-to-r from-gray-50 to-gray-100 rounded-xl p-3 shadow-sm">
+          <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3 gap-3 bg-transparent">
+            <TabsTrigger 
+              value="pending" 
+              className="flex items-center justify-center gap-2 data-[state=active]:bg-gradient-to-br data-[state=active]:from-[#010139] data-[state=active]:via-[#020270] data-[state=active]:to-[#010139] data-[state=active]:text-white data-[state=active]:shadow-lg bg-white rounded-xl py-3 transition-all duration-300 hover:shadow-md"
+            >
+              <FaClipboardList className="text-sm" />
+              <span className="font-semibold">Sin Identificar</span>
+              {pendingItems.length > 0 && (
+                <Badge className="ml-1 bg-orange-500 text-white">{pendingItems.length}</Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger 
+              value="requests" 
+              className="flex items-center justify-center gap-2 data-[state=active]:bg-gradient-to-br data-[state=active]:from-[#010139] data-[state=active]:via-[#020270] data-[state=active]:to-[#010139] data-[state=active]:text-white data-[state=active]:shadow-lg bg-white rounded-xl py-3 transition-all duration-300 hover:shadow-md"
+            >
+              <FaClock className="text-sm" />
+              <span className="font-semibold">Mis Solicitudes</span>
+              {myRequests.length > 0 && (
+                <Badge className="ml-1 bg-blue-500 text-white">{myRequests.length}</Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger 
+              value="paid" 
+              className="flex items-center justify-center gap-2 data-[state=active]:bg-gradient-to-br data-[state=active]:from-[#010139] data-[state=active]:via-[#020270] data-[state=active]:to-[#010139] data-[state=active]:text-white data-[state=active]:shadow-lg bg-white rounded-xl py-3 transition-all duration-300 hover:shadow-md"
+            >
+              <FaCheckCircle className="text-sm" />
+              <span className="font-semibold">Pagados</span>
+              {paidAdjustments.length > 0 && (
+                <Badge className="ml-1 bg-green-500 text-white">{paidAdjustments.length}</Badge>
+              )}
+            </TabsTrigger>
+          </TabsList>
+        </div>
         
         {/* TAB 1: PENDIENTES SIN IDENTIFICAR */}
         <TabsContent value="pending" className="mt-6 space-y-4">
