@@ -72,7 +72,7 @@ const AuthShell = ({ children, description = 'Ingrese su usuario y contraseña',
         }
 
         .auth-header {
-          position: sticky;
+          position: fixed;
           top: 0;
           left: 0;
           right: 0;
@@ -100,7 +100,8 @@ const AuthShell = ({ children, description = 'Ingrese su usuario y contraseña',
           display: flex;
           align-items: center;
           justify-content: center;
-          padding: 32px 16px 48px;
+          padding: 80px 16px 90px;
+          min-height: calc(100vh - 60px);
         }
 
         .auth-card {
@@ -161,18 +162,18 @@ const AuthShell = ({ children, description = 'Ingrese su usuario y contraseña',
         }
 
         .auth-footer {
-          position: sticky;
+          position: fixed;
           bottom: 0;
           left: 0;
           right: 0;
           z-index: 10;
           background-color: #010139;
           text-align: center;
-          padding: 14px 16px;
+          padding: 12px 16px;
           display: flex;
           flex-direction: column;
-          gap: 6px;
-          min-height: 60px;
+          gap: 4px;
+          min-height: auto;
           justify-content: center;
           width: 100%;
           margin: 0;
@@ -181,20 +182,22 @@ const AuthShell = ({ children, description = 'Ingrese su usuario y contraseña',
         .auth-footer-line {
           margin: 0;
           color: #f1f2f6;
-          font-size: 11px;
-          line-height: 1.4;
+          font-size: 0.6875rem;
+          line-height: 1.35;
           word-wrap: break-word;
           overflow-wrap: break-word;
           hyphens: auto;
-          padding: 0 8px;
+          padding: 0 12px;
+          max-width: 100%;
         }
 
         .auth-footer-line.small {
           color: #dbe1ff;
-          font-size: 10px;
+          font-size: 0.625rem;
           word-wrap: break-word;
           overflow-wrap: break-word;
-          padding: 0 8px;
+          padding: 0 12px;
+          line-height: 1.3;
         }
 
         @media (max-width: 640px) {
@@ -202,19 +205,25 @@ const AuthShell = ({ children, description = 'Ingrese su usuario y contraseña',
             padding: 10px 12px;
           }
 
+          .auth-main {
+            padding: 70px 12px 80px;
+          }
+
           .auth-footer {
-            padding: 12px 12px;
+            padding: 10px 8px;
+            gap: 3px;
           }
 
           .auth-footer-line {
-            font-size: 9px;
+            font-size: 0.5625rem;
             line-height: 1.3;
-            padding: 0 4px;
+            padding: 0 8px;
           }
 
           .auth-footer-line.small {
-            font-size: 8px;
-            padding: 0 4px;
+            font-size: 0.5rem;
+            padding: 0 8px;
+            line-height: 1.25;
           }
         }
 
@@ -226,22 +235,50 @@ const AuthShell = ({ children, description = 'Ingrese su usuario y contraseña',
           }
 
           .auth-header {
-            padding: 10px 12px;
+            padding: 8px 10px;
+          }
+
+          .auth-main {
+            padding: 65px 10px 75px;
           }
 
           .auth-footer {
-            padding: 10px 8px;
+            padding: 8px 6px;
+            gap: 2px;
           }
 
           .auth-footer-line {
-            font-size: 8.5px;
-            line-height: 1.3;
-            padding: 0 2px;
+            font-size: 0.5rem;
+            line-height: 1.25;
+            padding: 0 6px;
           }
 
           .auth-footer-line.small {
-            font-size: 7.5px;
-            padding: 0 2px;
+            font-size: 0.4375rem;
+            padding: 0 6px;
+            line-height: 1.2;
+          }
+        }
+        
+        @media (max-width: 360px) {
+          .auth-main {
+            padding: 60px 8px 70px;
+          }
+
+          .auth-footer {
+            padding: 6px 4px;
+          }
+
+          .auth-footer-line {
+            font-size: 0.4375rem;
+            line-height: 1.2;
+            padding: 0 4px;
+          }
+
+          .auth-footer-line.small {
+            font-size: 0.375rem;
+            padding: 0 4px;
+            line-height: 1.15;
           }
         }
       `}</style>

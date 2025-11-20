@@ -139,8 +139,8 @@ export default async function DatabasePage({
   }, 0);
 
   return (
-    <div>
-      <div className="max-w-7xl mx-auto">
+    <div className="overflow-x-hidden max-w-full">
+      <div className="max-w-7xl mx-auto overflow-x-hidden">
         
         {/* Header */}
         <div className="mb-8">

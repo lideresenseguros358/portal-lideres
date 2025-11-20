@@ -78,8 +78,65 @@ export default function LoginPage() {
         )}
 
         <button type="submit" className="auth-primary-button" disabled={loading}>
-          {loading ? "Ingresando..." : "Ingresar"}
+          {loading ? (
+            <span className="button-content">
+              <svg className="spinner" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle 
+                  cx="12" 
+                  cy="12" 
+                  r="10" 
+                  stroke="currentColor" 
+                  strokeWidth="3" 
+                  strokeLinecap="round"
+                  opacity="0.25"
+                />
+                <circle 
+                  cx="12" 
+                  cy="12" 
+                  r="10" 
+                  stroke="currentColor" 
+                  strokeWidth="3" 
+                  strokeLinecap="round"
+                  strokeDasharray="63"
+                  strokeDashoffset="50"
+                  className="spinner-circle"
+                />
+              </svg>
+              <span>Ingresando...</span>
+            </span>
+          ) : (
+            "Ingresar"
+          )}
         </button>
+        
+        <style jsx>{`
+          .button-content {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+          }
+          
+          .spinner {
+            width: 20px;
+            height: 20px;
+            flex-shrink: 0;
+          }
+          
+          .spinner-circle {
+            animation: spin 0.8s linear infinite;
+            transform-origin: center;
+          }
+          
+          @keyframes spin {
+            from {
+              transform: rotate(0deg);
+            }
+            to {
+              transform: rotate(360deg);
+            }
+          }
+        `}</style>
 
         <div className="auth-inline-links">
           <Link href="/forgot">Olvidé contraseña</Link>

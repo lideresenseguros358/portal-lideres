@@ -3,6 +3,8 @@
   font-family: 'Inter', system-ui, sans-serif;
   background: #e6e6e6;
   color: #202223;
+  overflow-x: hidden;
+  max-width: 100vw;
 }
 
 .header {
@@ -149,6 +151,8 @@
 .content {
   padding: 32px;
   min-height: calc(100vh - 72px);
+  overflow-x: hidden;
+  max-width: 100%;
 }
 
 @media (max-width: 768px) {

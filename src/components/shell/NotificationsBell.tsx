@@ -174,6 +174,37 @@ const NotificationsBell = ({ profileId, role, brokerId }: NotificationsBellProps
     [profileId, showErrorToast, supabase]
   );
   
+  const handleMarkAllRead = useCallback(
+    async () => {
+      try {
+        const now = new Date().toISOString();
+        const unreadNotifications = notifications.filter(n => !n.read_at);
+        
+        if (unreadNotifications.length === 0) {
+          setToast({ type: "success", message: "No hay notificaciones sin leer" });
+          return;
+        }
+        
+        // Marcar todas como leídas
+        const upsertPromises = unreadNotifications.map(notif => 
+          supabase.from("notification_reads").upsert({
+            notification_id: notif.id,
+            profile_id: profileId,
+            read_at: now,
+          })
+        );
+        
+        await Promise.all(upsertPromises);
+        await loadNotifications();
+        setToast({ type: "success", message: "Todas marcadas como leídas" });
+      } catch (err) {
+        console.error("mark all read error", err);
+        showErrorToast("No se pudieron marcar todas como leídas");
+      }
+    },
+    [notifications, profileId, showErrorToast, supabase, loadNotifications]
+  );
+  
   const handleDeleteAll = useCallback(
     async () => {
       try {
@@ -283,6 +314,7 @@ const NotificationsBell = ({ profileId, role, brokerId }: NotificationsBellProps
         onMarkRead={handleMarkRead}
         onDelete={handleDelete}
         onDeleteAll={handleDeleteAll}
+        onMarkAllRead={handleMarkAllRead}
       />
 
       {toast ? (

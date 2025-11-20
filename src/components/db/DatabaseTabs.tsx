@@ -48,6 +48,11 @@ const formatDate = (value?: string | null) => {
   return parsed.toLocaleDateString('es-PA');
 };
 
+const capitalizeText = (text?: string | null) => {
+  if (!text) return '';
+  return text.toLowerCase().replace(/(^|\s)\w/g, (match) => match.toUpperCase());
+};
+
 const getPoliciesCount = (client: ClientWithPolicies) => client.policies?.length ?? 0;
 
 const getPrimaryInsurerName = (client: ClientWithPolicies) => {
@@ -591,7 +596,7 @@ const ClientsListView = ({ clients, onView, onEdit, onDelete, role, selectedClie
                       aria-expanded={isExpanded}
                       onClick={() => toggleClient(client.id)}
                     >
-                      <span className="ct-name">{client.name}</span>
+                      <span className="ct-name">{capitalizeText(client.name)}</span>
                       {isExpanded ? (
                         <ChevronUp size={18} className="ct-chevron" />
                       ) : (
@@ -1447,8 +1452,7 @@ export default function DatabaseTabs({
         
         :global(.clients-wrapper) {
           width: 100%;
-          overflow-x: auto;
-          -webkit-overflow-scrolling: touch;
+          overflow-x: hidden;
           position: relative;
         }
         
@@ -1461,35 +1465,30 @@ export default function DatabaseTabs({
           overflow: visible !important;
         }
         
-        /* Indicador visual de scroll en mobile */
+        /* Permitir scroll solo en mobile si es necesario */
         @media (max-width: 768px) {
-          :global(.clients-wrapper)::after {
-            content: '';
-            position: sticky;
-            right: 0;
-            top: 0;
-            bottom: 0;
-            width: 30px;
-            background: linear-gradient(to left, rgba(255,255,255,0.9), transparent);
-            pointer-events: none;
+          :global(.clients-wrapper) {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
           }
         }
 
         :global(.clients-table) {
           width: 100%;
           border-collapse: collapse;
-          min-width: 900px;
+          table-layout: fixed;
         }
         
         @media (max-width: 768px) {
           :global(.clients-table) {
-            min-width: 100%;
-            table-layout: fixed;
+            min-width: 700px;
+            table-layout: auto;
           }
         }
         
         @media (max-width: 480px) {
           :global(.clients-table) {
+            min-width: 600px;
             table-layout: auto;
           }
         }
@@ -1517,17 +1516,17 @@ export default function DatabaseTabs({
             width: 50px !important;
           }
           
-          /* Cliente - Más espacio ahora */
+          /* Cliente - Ajustado para dar espacio a corredor */
           :global(.ct-th-name),
           :global(.ct-td-name) {
-            width: 35% !important;
-            min-width: 280px !important;
+            width: 28% !important;
+            min-width: 240px !important;
           }
           
           :global(.with-selection .ct-th-name),
           :global(.with-selection .ct-td-name) {
-            width: 32% !important;
-            min-width: 260px !important;
+            width: 26% !important;
+            min-width: 220px !important;
           }
           
           /* Cédula - Más espacio */
@@ -1538,11 +1537,11 @@ export default function DatabaseTabs({
             max-width: 180px !important;
           }
           
-          /* Correo - Más espacio */
+          /* Correo */
           :global(.ct-th-correo),
           :global(.ct-td-correo) {
-            width: 20% !important;
-            min-width: 200px !important;
+            width: 18% !important;
+            min-width: 180px !important;
           }
           
           /* Celular */
@@ -1562,8 +1561,11 @@ export default function DatabaseTabs({
           
           /* Corredor - Más espacio */
           :global(.ct-th-corredor),
-          :global(.ct-name) {
-            max-width: none;
+          :global(.ct-td-corredor) {
+            width: 15% !important;
+            min-width: 180px !important;
+            white-space: normal !important;
+            word-wrap: break-word !important;
           }
         }
 
@@ -1595,10 +1597,11 @@ export default function DatabaseTabs({
             text-overflow: ellipsis;
           }
           
-          /* Excepción: la columna del nombre puede hacer wrap */
-          :global(.ct-td-name) {
+          /* Excepción: la columna del nombre y corredor pueden hacer wrap */
+          :global(.ct-td-name),
+          :global(.ct-td-corredor) {
             white-space: normal !important;
-            overflow: visible !important;
+            word-wrap: break-word !important;
           }
         }
         
@@ -1636,10 +1639,10 @@ export default function DatabaseTabs({
           text-align: left;
         }
         :global(.ct-name) {
-          font-weight: 600;
+          font-weight: 400;
           color: #111827;
           flex: 1 1 auto;
-          text-align: left;
+          overflow: hidden;
         }
         
         @media (min-width: 769px) {
@@ -1746,7 +1749,8 @@ export default function DatabaseTabs({
 
         :global(.pol-main) {
           flex: 1;
-          min-width: 0; /* Permite que el flex item se encoja */
+          min-width: 0;
+          max-width: 100%;
         }
         :global(.pol-number) {
           font-weight: 700;
@@ -1759,8 +1763,8 @@ export default function DatabaseTabs({
           display: flex;
           align-items: center;
           flex-wrap: wrap;
-          gap: 12px;
-          font-size: 0.875rem;
+          gap: 16px;
+          font-size: 0.9375rem;
           color: #374151;
           line-height: 1.6;
         }
@@ -1855,10 +1859,10 @@ export default function DatabaseTabs({
           
           :global(.ct-name) {
             font-size: 0.9375rem;
-            font-weight: 600;
+            font-weight: 400;
             line-height: 1.35;
+            max-width: 200px;
           }
-          
           /* Distribución en tablet: Nombre, Cédula, Acciones */
           :global(.ct-th-name),
           :global(.ct-td-name) {
@@ -1916,10 +1920,10 @@ export default function DatabaseTabs({
           
           :global(.ct-name) {
             font-size: 0.875rem;
-            font-weight: 600;
+            font-weight: 400;
             line-height: 1.4;
+            max-width: none;
           }
-          
           /* Distribución optimizada en mobile */
           :global(.ct-th-name),
           :global(.ct-td-name) {
@@ -1954,8 +1958,8 @@ export default function DatabaseTabs({
             font-size: 0.8125rem;
           }
           :global(.pol-meta) {
-            font-size: 0.6875rem;
-            gap: 4px;
+            font-size: 0.8125rem;
+            gap: 8px;
           }
           :global(.pol-meta span) {
             white-space: nowrap;
@@ -1975,6 +1979,7 @@ export default function DatabaseTabs({
         @media (max-width: 360px) {
           :global(.ct-name) {
             font-size: 0.8125rem;
+            font-weight: 400;
             line-height: 1.3;
           }
           

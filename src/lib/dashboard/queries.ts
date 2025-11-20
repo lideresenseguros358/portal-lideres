@@ -44,7 +44,7 @@ const MONTH_NAMES = [
 ];
 
 // Mock data para visualización cuando no hay data real
-const MOCK_DATA_ENABLED = true;
+const MOCK_DATA_ENABLED = false;
 
 function generateMockRanking(): RankingEntry[] {
   const names = ['Juan Pérez', 'María González', 'Carlos Rodríguez', 'Ana Martínez', 'Luis Sánchez'];

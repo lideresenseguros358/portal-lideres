@@ -16,6 +16,7 @@ interface NotificationsModalProps {
   onMarkRead: (notificationId: string) => Promise<void>;
   onDelete: (notificationId: string) => Promise<void>;
   onDeleteAll: () => Promise<void>;
+  onMarkAllRead: () => Promise<void>;
 }
 
 const NotificationsModal = ({
@@ -25,6 +26,7 @@ const NotificationsModal = ({
   onMarkRead,
   onDelete,
   onDeleteAll,
+  onMarkAllRead,
 }: NotificationsModalProps) => {
   if (!open) return null;
 
@@ -65,20 +67,32 @@ const NotificationsModal = ({
             <h2>Notificaciones</h2>
             <div className="header-actions">
               {notifications.length > 0 && (
-                <button 
-                  type="button" 
-                  className="delete-all-btn"
-                  onClick={async () => {
-                    if (confirm('¿Eliminar todas las notificaciones?')) {
-                      await onDeleteAll();
-                    }
-                  }}
-                  aria-label="Eliminar todas"
-                >
-                  🗑️ Eliminar todo
-                </button>
+                <>
+                  <button 
+                    type="button" 
+                    className="action-btn mark-all-btn"
+                    onClick={onMarkAllRead}
+                    aria-label="Marcar todas como leídas"
+                    title="Marcar todas como leídas"
+                  >
+                    ✓
+                  </button>
+                  <button 
+                    type="button" 
+                    className="action-btn delete-all-btn"
+                    onClick={async () => {
+                      if (confirm('¿Eliminar todas las notificaciones?')) {
+                        await onDeleteAll();
+                      }
+                    }}
+                    aria-label="Eliminar todas"
+                    title="Eliminar todas"
+                  >
+                    🗑️
+                  </button>
+                </>
               )}
-              <button type="button" onClick={onClose} aria-label="Cerrar">
+              <button type="button" className="close-btn" onClick={onClose} aria-label="Cerrar">
                 ×
               </button>
             </div>
@@ -137,12 +151,22 @@ const NotificationsModal = ({
                       <td data-label="Estado:">{notification.read_at ? "Leída" : "No leída"}</td>
                       <td className="actions">
                         {!notification.read_at ? (
-                          <button type="button" onClick={() => onMarkRead(notification.id)}>
-                            Marcar leído
+                          <button 
+                            type="button" 
+                            className="action-btn-small mark-read-btn"
+                            onClick={() => onMarkRead(notification.id)}
+                            title="Marcar como leída"
+                          >
+                            ✓
                           </button>
                         ) : null}
-                        <button type="button" onClick={() => onDelete(notification.id)}>
-                          Borrar
+                        <button 
+                          type="button" 
+                          className="action-btn-small delete-btn"
+                          onClick={() => onDelete(notification.id)}
+                          title="Eliminar"
+                        >
+                          🗑️
                         </button>
                       </td>
                     </tr>
@@ -202,21 +226,56 @@ const NotificationsModal = ({
           gap: 12px;
         }
         
-        .delete-all-btn {
-          background: rgba(255, 255, 255, 0.15);
+        .action-btn {
+          background: rgba(255, 255, 255, 0.1);
           color: #ffffff;
-          border: 1px solid rgba(255, 255, 255, 0.3);
-          border-radius: 8px;
-          padding: 8px 16px;
+          border: 1px solid rgba(255, 255, 255, 0.2);
+          border-radius: 6px;
+          padding: 6px 10px;
           cursor: pointer;
-          font-size: 14px;
+          font-size: 16px;
           font-weight: 600;
           transition: all 0.2s ease;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          min-width: 36px;
+          height: 36px;
+        }
+        
+        .action-btn:hover {
+          background: rgba(255, 255, 255, 0.2);
+          transform: translateY(-1px);
+        }
+        
+        .mark-all-btn:hover {
+          background: rgba(138, 170, 25, 0.9);
+          border-color: #8AAA19;
         }
         
         .delete-all-btn:hover {
-          background: rgba(239, 68, 68, 0.8);
+          background: rgba(239, 68, 68, 0.9);
           border-color: #EF4444;
+        }
+        
+        .close-btn {
+          background: transparent;
+          border: none;
+          color: #ffffff;
+          font-size: 28px;
+          cursor: pointer;
+          line-height: 1;
+          padding: 0;
+          width: 32px;
+          height: 32px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          transition: transform 0.2s ease;
+        }
+        
+        .close-btn:hover {
+          transform: scale(1.1);
         }
 
         header h2 {
@@ -225,14 +284,6 @@ const NotificationsModal = ({
           font-weight: 700;
         }
 
-        header button {
-          background: transparent;
-          border: none;
-          color: #ffffff;
-          font-size: 26px;
-          cursor: pointer;
-          line-height: 1;
-        }
 
         .notifications-modal__body {
           padding: 24px;
@@ -271,23 +322,52 @@ const NotificationsModal = ({
 
         td.actions {
           display: flex;
-          gap: 8px;
+          gap: 6px;
+          align-items: center;
         }
 
-        td.actions button {
-          background: #010139;
-          color: #ffffff;
-          border: none;
-          border-radius: 10px;
-          padding: 8px 12px;
+        .action-btn-small {
+          background: rgba(1, 1, 57, 0.08);
+          color: #010139;
+          border: 1px solid rgba(1, 1, 57, 0.15);
+          border-radius: 6px;
+          padding: 6px 10px;
           cursor: pointer;
-          font-size: 13px;
-          transition: transform 0.2s ease, background 0.2s ease;
+          font-size: 14px;
+          font-weight: 600;
+          transition: all 0.2s ease;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          min-width: 32px;
+          height: 32px;
         }
 
-        td.actions button:hover {
-          background: #8aaa19;
+        .action-btn-small:hover {
           transform: translateY(-1px);
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+        
+        .mark-read-btn {
+          background: rgba(138, 170, 25, 0.1);
+          color: #8AAA19;
+          border-color: rgba(138, 170, 25, 0.3);
+        }
+        
+        .mark-read-btn:hover {
+          background: #8AAA19;
+          color: white;
+          border-color: #8AAA19;
+        }
+        
+        .delete-btn {
+          background: rgba(239, 68, 68, 0.1);
+          border-color: rgba(239, 68, 68, 0.3);
+        }
+        
+        .delete-btn:hover {
+          background: #EF4444;
+          border-color: #EF4444;
         }
 
         .type-badge {
@@ -322,18 +402,19 @@ const NotificationsModal = ({
           }
           
           .header-content {
-            flex-direction: column;
+            flex-wrap: wrap;
             gap: 12px;
-            align-items: flex-start;
           }
           
           .header-actions {
-            align-self: flex-end;
+            flex-shrink: 0;
           }
           
-          .delete-all-btn {
-            font-size: 12px;
-            padding: 6px 12px;
+          .action-btn {
+            min-width: 32px;
+            height: 32px;
+            padding: 4px 8px;
+            font-size: 14px;
           }
 
           table {
