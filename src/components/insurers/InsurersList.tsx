@@ -207,10 +207,10 @@ export default function InsurersList({ initialInsurers }: InsurersListProps) {
                 {/* Card Front - Logo protagonista */}
                 <div 
                   className="absolute inset-0 flex flex-col p-4 bg-white rounded-2xl"
-                  style={{ backfaceVisibility: 'hidden' }}
+                  style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}
                 >
                   {/* Badge de estado en esquina */}
-                  <div className="absolute top-3 right-3 z-10">
+                  <div className="absolute top-3 right-3">
                     <span className={`px-2.5 py-1 rounded-full text-xs font-medium shadow-sm ${
                       insurer.active 
                         ? 'bg-green-100 text-green-700' 
@@ -260,6 +260,7 @@ export default function InsurersList({ initialInsurers }: InsurersListProps) {
                   className="absolute inset-0 flex flex-col p-6 bg-white rounded-2xl"
                   style={{ 
                     backfaceVisibility: 'hidden',
+                    WebkitBackfaceVisibility: 'hidden',
                     transform: 'rotateY(180deg)'
                   }}
                 >

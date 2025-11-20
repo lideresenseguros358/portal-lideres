@@ -491,7 +491,10 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
               {totals.pendingTotal.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
             </p>
             <p className="text-sm text-gray-500 mt-2">
-              {Object.keys(groupedData).length} corredores con adelantos
+              {role === 'master' 
+                ? `${Object.keys(groupedData).length} corredores con adelantos`
+                : `${allAdvances.filter(a => a.status === 'pending').length} adelantos activos`
+              }
             </p>
           </CardContent>
         </Card>

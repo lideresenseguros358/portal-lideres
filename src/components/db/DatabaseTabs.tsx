@@ -260,7 +260,7 @@ const exportToPDF = async (clients: ClientWithPolicies[], role: string) => {
       autoTable(doc, {
         head: [headers],
         body: tableData,
-        startY: 35,
+        startY: 38,  // Más espacio después del header
         theme: 'striped',
         headStyles: {
           fillColor: [1, 1, 57],
@@ -305,7 +305,7 @@ const exportToPDF = async (clients: ClientWithPolicies[], role: string) => {
           9: { cellWidth: 18, halign: 'center' }, // Estado
           10: { cellWidth: 35 }  // Notas
         },
-        margin: { left: 10, right: 10 },
+        margin: { top: 38, bottom: 25, left: 10, right: 10 },  // Márgenes top y bottom para evitar header/footer
         didDrawPage: function(data: any) {
           // Agregar header en cada página nueva
           if (data.pageNumber > 1) {
@@ -871,6 +871,11 @@ export default function DatabaseTabs({
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false); // Deshabilitado - ahora carga todos desde el inicio
 
+  // Sincronizar estado local cuando cambian los clientes desde el servidor (por búsqueda)
+  useEffect(() => {
+    setClients(initialClients);
+  }, [initialClients, searchQuery]);
+
   // Load preliminary count
   useEffect(() => {
     const loadCount = async () => {
@@ -904,8 +909,8 @@ export default function DatabaseTabs({
 
   const clientToEdit = editClientId ? clients.find(c => c.id === editClientId) : null;
 
-  const handleView = (id: string) => router.push(`/db?tab=clients&modal=edit-client&editClient=${id}`, { scroll: false });
-  const handleEdit = handleView;
+  const handleView = (id: string) => router.push(`/db?tab=clients&modal=view-client&editClient=${id}`, { scroll: false });
+  const handleEdit = (id: string) => router.push(`/db?tab=clients&modal=edit-client&editClient=${id}`, { scroll: false });
   const handleDelete = (id: string) => {
     if (confirm('¿Estás seguro de eliminar este cliente y todas sus pólizas?')) {
       // TODO: Implementar eliminación de cliente
@@ -1087,6 +1092,11 @@ export default function DatabaseTabs({
           role={role}
           userEmail={userEmail}
         />
+      )}
+      {modal === 'view-client' && clientToEdit && (
+        <Modal title="Ver Detalles del Cliente" onClose={() => router.push('/db?tab=clients')}>
+          <ClientForm client={clientToEdit} onClose={() => router.push('/db?tab=clients', { scroll: false })} readOnly={true} />
+        </Modal>
       )}
       {modal === 'edit-client' && clientToEdit && (
         <Modal title="Editar Cliente" onClose={() => router.push('/db?tab=clients')}>

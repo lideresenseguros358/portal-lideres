@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { FaDownload } from 'react-icons/fa';
 import { actionToggleNotify, actionPayFortnight } from '@/app/(app)/commissions/actions';
+import { useConfirmDialog } from '@/hooks/useConfirmDialog';
+import ConfirmDialog from '@/components/shared/ConfirmDialog';
 
 interface Props {
   draftFortnightId: string;
@@ -11,6 +13,7 @@ interface Props {
 }
 
 export default function PaymentActions({ draftFortnightId, initialNotifyState, onRecalculate }: Props) {
+  const { dialogState, closeDialog, confirm, alert: showAlert, success, error } = useConfirmDialog();
   const [notifyBrokers, setNotifyBrokers] = useState(initialNotifyState);
   const [paying, setPaying] = useState(false);
 
@@ -20,12 +23,13 @@ export default function PaymentActions({ draftFortnightId, initialNotifyState, o
     if (result.ok) {
       setNotifyBrokers(newValue);
     } else {
-      alert(`Error: ${(result as any).error || 'Error desconocido'}`);
+      await showAlert(`Error: ${(result as any).error || 'Error desconocido'}`, 'Error', 'error');
     }
   };
 
   const handlePayFortnight = async () => {
-    if (!confirm('¿Cerrarás la quincena y se generará el CSV para Banco General. ¿Continuar?')) {
+    const confirmed = await confirm('¿Cerrarás la quincena y se generará el CSV para Banco General. ¿Continuar?', 'Confirmar cierre de quincena');
+    if (!confirmed) {
       return;
     }
 
@@ -42,10 +46,10 @@ export default function PaymentActions({ draftFortnightId, initialNotifyState, o
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
       
-      alert(`Quincena cerrada exitosamente. ${result.data.brokers_paid} brokers pagados por $${result.data.total_paid.toFixed(2)}`)
+      await success(`Quincena cerrada exitosamente.\n${result.data.brokers_paid} brokers pagados por $${result.data.total_paid.toFixed(2)}`, 'Éxito');
       window.location.reload();
     } else {
-      alert(`Error: ${result.ok ? 'No se pudo generar CSV' : (result as any).error}`);
+      await showAlert(`Error: ${result.ok ? 'No se pudo generar CSV' : (result as any).error}`, 'Error al cerrar quincena', 'error');
     }
     setPaying(false);
   };
@@ -114,6 +118,17 @@ export default function PaymentActions({ draftFortnightId, initialNotifyState, o
         }
         .btn-recalculate:hover { background: #e0e0e0; }
       `}</style>
+      
+      <ConfirmDialog
+        isOpen={dialogState.isOpen}
+        onClose={() => closeDialog(false)}
+        onConfirm={() => closeDialog(true)}
+        title={dialogState.title}
+        message={dialogState.message}
+        type={dialogState.type}
+        confirmText={dialogState.confirmText}
+        cancelText={dialogState.cancelText}
+      />
     </div>
   );
 }

@@ -20,8 +20,8 @@ function getResendClient(): Resend {
 
 // Configuración por defecto
 export const EMAIL_CONFIG = {
-  from: process.env.RESEND_FROM_EMAIL || 'Portal Líderes <no-reply@lideres.com>',
-  replyTo: process.env.RESEND_REPLY_TO || 'soporte@lideres.com',
+  from: process.env.RESEND_FROM_EMAIL || 'Líderes en Seguros <contacto@lideresenseguros.com>',
+  replyTo: process.env.RESEND_REPLY_TO || 'contacto@lideresenseguros.com',
   
   // URLs base para links y assets
   baseUrl: process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000',

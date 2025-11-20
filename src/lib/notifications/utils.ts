@@ -5,7 +5,7 @@
 
 import crypto from 'crypto';
 
-export type NotificationType = 'renewal' | 'case_digest' | 'commission' | 'delinquency' | 'download' | 'guide' | 'carnet_renewal' | 'other';
+export type NotificationType = 'renewal' | 'case_digest' | 'commission' | 'delinquency' | 'download' | 'guide' | 'carnet_renewal' | 'agenda_event' | 'other';
 
 export type NotificationTarget = 'MASTER' | 'BROKER' | 'ALL';
 
@@ -75,6 +75,10 @@ export function getDeepLink(
     case 'carnet_renewal':
       // Link a cuenta del broker
       return `${baseUrl}/account`;
+    
+    case 'agenda_event':
+      // Link a agenda con evento específico
+      return `${baseUrl}/agenda${params.event_id ? `?event=${params.event_id}` : ''}`;
     
     default:
       return baseUrl;

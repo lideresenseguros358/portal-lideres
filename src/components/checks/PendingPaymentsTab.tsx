@@ -172,40 +172,61 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
 
     // Procesar grupos de batch
     batchGroups.forEach((batchPayments, batchId) => {
-      // Para pagos en batch, agruparlos por sus referencias
-      const batchRefsMap = new Map<string, number>(); // referencia -> monto total banco
-      let totalBatchAmount = 0;
+      // Verificar si todos son descuentos a corredor
       let allDescuento = true;
-
       batchPayments.forEach(payment => {
-        totalBatchAmount += parseFloat(payment.amount_to_pay || '0');
         if (!isDescuentoACorredor(payment)) {
           allDescuento = false;
         }
-        payment.payment_references?.forEach((ref: any) => {
-          const refNum = ref.reference_number;
-          const amount = parseFloat(ref.amount || '0');
-          if (!batchRefsMap.has(refNum)) {
-            batchRefsMap.set(refNum, amount);
-          }
-        });
       });
 
-      // Calcular el total de banco sumando todas las referencias únicas
-      const totalBankAmount = Array.from(batchRefsMap.values()).reduce((sum, amount) => sum + amount, 0);
+      // Si es un batch de descuentos a corredor, NO agrupar - mostrar cada uno por separado
+      if (allDescuento) {
+        batchPayments.forEach((payment, idx) => {
+          const refs = payment.payment_references || [];
+          const refNum = refs[0]?.reference_number || `ADELANTO-${idx}`;
+          const amount = parseFloat(payment.amount_to_pay || '0');
+          
+          // Crear grupo individual para cada adelanto
+          groups[`ADELANTO-${payment.id}`] = {
+            reference_number: refNum,
+            bank_amount: amount,
+            total_pending: 0, // No se cuenta en pending porque es descuento
+            remaining: 0,
+            payments: [payment],
+            allAreDescuentoCorredor: true,
+            isBatch: true // Mantener flag de batch para la UI
+          };
+        });
+      } else {
+        // Lógica original para batches normales (NO descuento a corredor)
+        const batchRefsMap = new Map<string, number>();
+        let totalBatchAmount = 0;
 
-      // Usar todas las referencias como label
-      const allRefsLabel = Array.from(batchRefsMap.keys()).join(' + ');
-      
-      groups[`BATCH-${batchId}`] = {
-        reference_number: allRefsLabel,
-        bank_amount: totalBankAmount,
-        total_pending: totalBatchAmount,
-        remaining: totalBankAmount - totalBatchAmount,
-        payments: batchPayments,
-        allAreDescuentoCorredor: allDescuento,
-        isBatch: true
-      };
+        batchPayments.forEach(payment => {
+          totalBatchAmount += parseFloat(payment.amount_to_pay || '0');
+          payment.payment_references?.forEach((ref: any) => {
+            const refNum = ref.reference_number;
+            const amount = parseFloat(ref.amount || '0');
+            if (!batchRefsMap.has(refNum)) {
+              batchRefsMap.set(refNum, amount);
+            }
+          });
+        });
+
+        const totalBankAmount = Array.from(batchRefsMap.values()).reduce((sum, amount) => sum + amount, 0);
+        const allRefsLabel = Array.from(batchRefsMap.keys()).join(' + ');
+        
+        groups[`BATCH-${batchId}`] = {
+          reference_number: allRefsLabel,
+          bank_amount: totalBankAmount,
+          total_pending: totalBatchAmount,
+          remaining: totalBankAmount - totalBatchAmount,
+          payments: batchPayments,
+          allAreDescuentoCorredor: false,
+          isBatch: true
+        };
+      }
     });
 
     // Procesar pagos sin batch
@@ -893,16 +914,31 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
               ${(() => {
                 // Deduplicar referencias para no sumar la misma transferencia múltiples veces
                 const uniqueReferences = new Map<string, number>();
+                let totalDescuentosCorredor = 0;
+                
                 payments.forEach(p => {
-                  p.payment_references?.forEach((ref: any) => {
-                    const refNum = ref.reference_number;
-                    const amount = Number(ref.amount || 0);
-                    if (!uniqueReferences.has(refNum) && amount > 0) {
-                      uniqueReferences.set(refNum, amount);
+                  const esDescuento = isDescuentoACorredor(p);
+                  
+                  if (esDescuento) {
+                    // Para descuentos a corredor, solo sumar si está conciliado (adelanto pagado)
+                    if (p.can_be_paid) {
+                      totalDescuentosCorredor += Number(p.amount_to_pay || 0);
                     }
-                  });
+                  } else {
+                    // Para pagos normales, solo sumar referencias conciliadas
+                    p.payment_references?.forEach((ref: any) => {
+                      const refNum = ref.reference_number;
+                      const amount = Number(ref.amount || 0);
+                      // Solo sumar si está conciliada (exists_in_bank)
+                      if (!uniqueReferences.has(refNum) && amount > 0 && ref.exists_in_bank) {
+                        uniqueReferences.set(refNum, amount);
+                      }
+                    });
+                  }
                 });
-                const total = Array.from(uniqueReferences.values()).reduce((sum, amount) => sum + amount, 0);
+                
+                const totalReferencias = Array.from(uniqueReferences.values()).reduce((sum, amount) => sum + amount, 0);
+                const total = totalReferencias + totalDescuentosCorredor;
                 return total.toFixed(2);
               })()}
             </p>
@@ -1031,27 +1067,25 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
                 <div key={group.reference_number} className="bg-gray-50 rounded-xl p-4 border-2 border-gray-200">
                   <div className="flex items-center justify-between mb-3 pb-3 border-b-2 border-gray-300">
                     <div className="flex-1">
-                      {group.isBatch ? (
+                      {group.isBatch && !group.allAreDescuentoCorredor ? (
                         <>
                           <h3 className="font-bold text-lg text-[#010139] flex items-center gap-2">
                             🔗 Pago dividido en {group.payments.length} partes
-                            {group.allAreDescuentoCorredor && (
-                              <span className="text-sm font-normal text-[#8AAA19]">(Descuentos a corredor)</span>
-                            )}
                           </h3>
                           <p className="text-sm text-gray-600 mt-1">
                             Referencias: {group.reference_number}
                           </p>
-                          {!group.allAreDescuentoCorredor && (
-                            <p className="text-xs text-gray-500 mt-1">
-                              Total en Banco: ${group.bank_amount.toFixed(2)}
-                            </p>
-                          )}
-                          {group.allAreDescuentoCorredor && (
-                            <p className="text-xs font-medium text-blue-700 mt-1 bg-blue-50 inline-block px-2 py-0.5 rounded">
-                              💡 Cada división tiene su propio ID de adelanto
-                            </p>
-                          )}
+                          <p className="text-xs text-gray-500 mt-1">
+                            Total en Banco: ${group.bank_amount.toFixed(2)}
+                          </p>
+                        </>
+                      ) : group.isBatch && group.allAreDescuentoCorredor ? (
+                        <>
+                          <h3 className="font-bold text-lg text-[#010139]">Ref: {group.reference_number}</h3>
+                          <p className="text-sm text-[#010139] font-medium mt-1">💰 Adelanto a corredor</p>
+                          <p className="text-xs text-gray-600 mt-1">
+                            Monto: ${group.bank_amount.toFixed(2)}
+                          </p>
                         </>
                       ) : group.isMultiRef ? (
                         <>
@@ -1119,36 +1153,14 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
                     : 'border-gray-100 hover:border-gray-300'
                 } ${group.isBatch ? 'border-l-4 border-l-[#010139]' : ''}`}
               >
-                {/* Indicador de división para batches - Mejorado */}
-                {group.isBatch && (() => {
-                  const advanceId = payment.metadata?.advance_id;
-                  const paymentAmount = parseFloat(payment.amount_to_pay || '0');
-                  const totalBatchAmount = group.payments.reduce((sum: number, p: any) => sum + parseFloat(p.amount_to_pay || '0'), 0);
-                  const percentage = totalBatchAmount > 0 ? ((paymentAmount / totalBatchAmount) * 100).toFixed(0) : '0';
-                  
-                  return (
-                    <div className="mb-3 pb-3 border-b-2 border-gray-200 bg-gradient-to-r from-blue-50 to-white p-3 rounded-lg -mx-3">
-                      <div className="flex items-center justify-between flex-wrap gap-2">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold text-[#010139] bg-white px-3 py-1.5 rounded-lg shadow-sm border border-gray-200">
-                            🔸 División {paymentIndex + 1} de {group.payments.length}
-                          </span>
-                          <span className="text-xs font-semibold text-blue-700 bg-blue-100 px-2 py-1 rounded">
-                            {percentage}% del total
-                          </span>
-                        </div>
-                        {advanceId && (
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] text-gray-500 font-medium">ID Adelanto:</span>
-                            <span className="text-xs font-bold font-mono text-[#8AAA19] bg-white px-2 py-1 rounded border border-[#8AAA19]/30">
-                              {advanceId.slice(0, 12)}...
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })()}
+                {/* Indicador de división para batches normales (no descuento a corredor) */}
+                {group.isBatch && !group.allAreDescuentoCorredor && (
+                  <div className="mb-3 pb-3 border-b-2 border-gray-200 bg-gradient-to-r from-blue-50 to-white p-3 rounded-lg -mx-3">
+                    <span className="text-xs font-bold text-[#010139] bg-white px-3 py-1.5 rounded-lg shadow-sm border border-gray-200">
+                      🔸 División {paymentIndex + 1} de {group.payments.length}
+                    </span>
+                  </div>
+                )}
                 {/* Header con checkbox y acciones */}
                 <div className="flex items-start gap-3 mb-4">
                   <input
@@ -1273,7 +1285,7 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
                           <span className="text-sm font-mono font-semibold">{ref.reference_number}</span>
                         </div>
                         <span className="text-sm font-semibold">
-                          ${Number(ref.amount).toFixed(2)}
+                          ${Number(payment.amount_to_pay).toFixed(2)}
                         </span>
                       </div>
                     );
@@ -1286,28 +1298,18 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
                     <StatusBadge payment={payment} />
 
                     {isDescuentoACorredor(payment) && (() => {
-                      const brokerId = payment.metadata?.broker_id;
+                      // Parsear notes correctamente
+                      const metadata = typeof payment.notes === 'string' 
+                        ? JSON.parse(payment.notes) 
+                        : payment.notes;
+                      const brokerId = metadata?.broker_id;
                       const broker = brokers.find(b => b.id === brokerId);
                       const brokerName = broker?.name;
-                      const advanceId = payment.metadata?.advance_id;
-                      const batchId = getBatchId(payment);
                       
                       return (
-                        <>
-                          <span className="px-2 py-0.5 bg-[#010139]/5 text-[#010139] border border-[#010139]/30 rounded-full text-[11px] font-semibold">
-                            💰 Descuento a corredor{brokerName ? ` – ${brokerName}` : ''}
-                          </span>
-                          {advanceId && (
-                            <span className="px-2 py-0.5 bg-[#8AAA19]/10 text-[#8AAA19] border border-[#8AAA19]/40 rounded-full text-[11px] font-semibold font-mono">
-                              🆔 Adelanto: {advanceId.slice(0, 8)}...
-                            </span>
-                          )}
-                          {batchId && (
-                            <span className="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-300 rounded-full text-[11px] font-semibold">
-                              🔗 División del pago
-                            </span>
-                          )}
-                        </>
+                        <span className="px-2 py-0.5 bg-[#010139]/5 text-[#010139] border border-[#010139]/30 rounded-full text-[11px] font-semibold">
+                          💰 Descuento a corredor{brokerName ? ` – ${brokerName}` : ''}
+                        </span>
                       );
                     })()}
                   </div>

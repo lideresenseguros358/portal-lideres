@@ -349,7 +349,8 @@ export default function ExpedienteManager({
                     title="Subir cédula/pasaporte del cliente"
                   >
                     <FaIdCard size={12} />
-                    <span>Incluir Cédula</span>
+                    <span className="sm:hidden">Incluir</span>
+                    <span className="hidden sm:inline">Incluir Cédula</span>
                   </button>
                 )}
               </div>
@@ -414,8 +415,8 @@ export default function ExpedienteManager({
 
       {/* Preview Modal */}
       {previewDoc && (
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[60] p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden border-2 border-gray-200 flex flex-col">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[60] p-4 overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden border-2 border-gray-200 flex flex-col my-4 sm:my-8">
             {/* Header */}
             <div className="sticky top-0 bg-gradient-to-r from-[#010139] to-[#020270] px-5 py-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -487,8 +488,8 @@ export default function ExpedienteManager({
 
       {/* Upload Modal - Rediseñado con branding corporativo */}
       {showUploadModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto border-2 border-gray-200">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto border-2 border-gray-200 my-4 sm:my-8">
             {/* Header con gradiente corporativo */}
             <div className="sticky top-0 bg-gradient-to-r from-[#010139] to-[#020270] px-5 py-4 flex items-center justify-between rounded-t-xl">
               <div className="flex items-center gap-3">

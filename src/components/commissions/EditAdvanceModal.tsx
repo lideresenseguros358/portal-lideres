@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { actionUpdateAdvance, actionDeleteAdvance } from '@/app/(app)/commissions/actions';
+import { actionUpdateAdvance, actionDeleteAdvance, actionCheckAdvanceHasHistory } from '@/app/(app)/commissions/actions';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -43,6 +43,7 @@ interface Props {
 export function EditAdvanceModal({ advance, onClose, onSuccess }: Props) {
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [hasPaymentHistory, setHasPaymentHistory] = useState<boolean>(false);
   
   const form = useForm<EditAdvanceForm>({
     resolver: zodResolver(EditAdvanceSchema),
@@ -58,6 +59,15 @@ export function EditAdvanceModal({ advance, onClose, onSuccess }: Props) {
         amount: advance.amount,
         reason: advance.reason || '',
       });
+      
+      // Verificar si el adelanto tiene historial de pagos
+      const checkHistory = async () => {
+        const result = await actionCheckAdvanceHasHistory(advance.id);
+        if (result.ok) {
+          setHasPaymentHistory(result.hasHistory);
+        }
+      };
+      checkHistory();
     }
   }, [advance, form]);
 
@@ -102,9 +112,9 @@ export function EditAdvanceModal({ advance, onClose, onSuccess }: Props) {
 
   return (
     <Dialog open={!!advance} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[500px] max-h-[90vh] p-0 gap-0 flex flex-col">
+      <DialogContent className="sm:max-w-[500px] max-h-[90vh] my-4 sm:my-8 p-0 gap-0 flex flex-col">
         {/* Header con gradiente corporativo */}
-        <DialogHeader className="bg-gradient-to-r from-[#010139] to-[#020270] text-white p-6 pb-8 flex-shrink-0">
+        <DialogHeader className="bg-gradient-to-r from-[#010139] to-[#020270] text-white p-6 pb-8 flex-shrink-0 rounded-t-lg">
           <div className="flex items-center gap-3 mb-2">
             <div className="p-3 bg-white/10 rounded-lg">
               <FaMoneyBillWave className="text-2xl" />
@@ -196,29 +206,59 @@ export function EditAdvanceModal({ advance, onClose, onSuccess }: Props) {
             </div>
 
             {/* Footer con botones */}
-            <DialogFooter className="gap-3 sm:gap-2 pt-4 border-t border-gray-200 flex-shrink-0 px-6 pb-6">
-              <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+            <div className="pt-6 px-6 pb-6 border-t border-gray-200">
+              <div className="w-full space-y-4">
+                {/* Botones */}
+                <div className="flex flex-col sm:flex-row gap-3 justify-center items-center">
                 {/* Botón Eliminar - Solo visible si no se está confirmando */}
                 {!showDeleteConfirm ? (
-                  <Button 
-                    type="button" 
-                    variant="outline" 
-                    onClick={() => setShowDeleteConfirm(true)} 
-                    disabled={form.formState.isSubmitting || isDeleting}
-                    className="border-2 border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400 transition-colors order-1 sm:order-1"
-                  >
-                    <FaTrash className="mr-2" />
-                    Eliminar Deuda
-                  </Button>
+                  <>
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      onClick={() => setShowDeleteConfirm(true)} 
+                      disabled={form.formState.isSubmitting || isDeleting}
+                      className="w-full sm:w-auto border-2 border-red-400 text-red-700 hover:bg-red-50 hover:border-red-500 font-semibold transition-all"
+                    >
+                      <FaTrash className="mr-2" />
+                      Eliminar
+                    </Button>
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      onClick={onClose} 
+                      disabled={form.formState.isSubmitting || isDeleting}
+                      className="w-full sm:w-auto border-2 border-gray-300 hover:bg-gray-100 transition-colors"
+                    >
+                      Cancelar
+                    </Button>
+                    <Button 
+                      type="submit" 
+                      disabled={form.formState.isSubmitting || isDeleting}
+                      className="w-full sm:w-auto bg-gradient-to-r from-[#8AAA19] to-[#6d8814] hover:from-[#6d8814] hover:to-[#8AAA19] text-white shadow-lg transition-all duration-200"
+                    >
+                      {form.formState.isSubmitting ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                          Guardando...
+                        </>
+                      ) : (
+                        <>
+                          <FaMoneyBillWave className="mr-2" />
+                          Guardar
+                        </>
+                      )}
+                    </Button>
+                  </>
                 ) : (
                   /* Confirmación de eliminación */
-                  <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto order-1">
+                  <>
                     <Button 
                       type="button" 
                       variant="outline" 
                       onClick={() => setShowDeleteConfirm(false)} 
                       disabled={isDeleting}
-                      className="border-2 border-gray-300 hover:bg-gray-100"
+                      className="w-full sm:w-auto border-2 border-gray-300 hover:bg-gray-100"
                     >
                       Cancelar
                     </Button>
@@ -226,7 +266,7 @@ export function EditAdvanceModal({ advance, onClose, onSuccess }: Props) {
                       type="button" 
                       onClick={handleDelete}
                       disabled={isDeleting}
-                      className="bg-red-600 hover:bg-red-700 text-white"
+                      className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white"
                     >
                       {isDeleting ? (
                         <>
@@ -240,60 +280,31 @@ export function EditAdvanceModal({ advance, onClose, onSuccess }: Props) {
                         </>
                       )}
                     </Button>
-                  </div>
-                )}
-                
-                {/* Botones principales - Solo si no está confirmando eliminación */}
-                {!showDeleteConfirm && (
-                  <>
-                    <Button 
-                      type="button" 
-                      variant="outline" 
-                      onClick={onClose} 
-                      disabled={form.formState.isSubmitting || isDeleting}
-                      className="border-2 border-gray-300 hover:bg-gray-100 transition-colors order-2"
-                    >
-                      Cancelar
-                    </Button>
-                    <Button 
-                      type="submit" 
-                      disabled={form.formState.isSubmitting || isDeleting}
-                      className="bg-gradient-to-r from-[#8AAA19] to-[#6d8814] hover:from-[#6d8814] hover:to-[#8AAA19] text-white shadow-lg transition-all duration-200 order-3"
-                    >
-                      {form.formState.isSubmitting ? (
-                        <>
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                          Actualizando...
-                        </>
-                      ) : (
-                        <>
-                          <FaMoneyBillWave className="mr-2" />
-                          Guardar Cambios
-                        </>
-                      )}
-                    </Button>
                   </>
                 )}
-              </div>
-              
-              {/* Mensaje de confirmación */}
-              {showDeleteConfirm && (
-                <div className="w-full p-3 bg-red-50 border-2 border-red-200 rounded-lg">
-                  <div className="flex items-start gap-2">
-                    <FaExclamationTriangle className="text-red-600 mt-0.5 flex-shrink-0" />
-                    <div className="text-xs text-red-800">
-                      <p className="font-bold mb-1">¿Eliminar esta deuda?</p>
-                      <p>
-                        {advance?.is_recurring 
-                          ? 'Se eliminará este adelanto recurrente pero la configuración se mantendrá activa. '
-                          : 'Se eliminará permanentemente. '}
-                        Solo se puede eliminar si NO tiene historial de pagos.
-                      </p>
+                </div>
+                
+                {/* Mensaje de confirmación - Debajo de los botones y centrado */}
+                {showDeleteConfirm && (
+                  <div className="w-full p-4 bg-red-50 border-l-4 border-red-500 rounded-lg shadow-sm">
+                    <div className="flex items-start gap-3 justify-center text-center sm:text-left sm:justify-start">
+                      <FaExclamationTriangle className="text-red-600 text-2xl flex-shrink-0" />
+                      <div className="flex-1">
+                        <p className="font-bold text-red-900 mb-2 text-base">¿Eliminar esta deuda?</p>
+                        <p className="text-sm text-red-800 leading-relaxed">
+                          {advance?.is_recurring 
+                            ? 'Se eliminará este adelanto recurrente Y se desactivará la configuración automática. '
+                            : 'Se eliminará permanentemente. '}
+                          {hasPaymentHistory 
+                            ? 'Como tiene historial de pagos, se moverá a "Deudas Saldadas".'
+                            : 'Como NO tiene historial de pagos, se eliminará por completo.'}
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
-            </DialogFooter>
+                )}
+              </div>
+            </div>
           </form>
         </Form>
       </DialogContent>

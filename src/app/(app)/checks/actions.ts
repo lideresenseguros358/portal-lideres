@@ -673,6 +673,8 @@ export async function actionCreatePendingPayment(payment: {
             total_divisions: payment.divisions!.length, // Total de divisiones en el grupo
           };
           
+          let divAdvanceId: string | undefined;
+          
           // Si es descuento a corredor con divisiones, crear adelanto para esta división
           if (isBrokerDeduction) {
             try {
@@ -698,13 +700,15 @@ export async function actionCreatePendingPayment(payment: {
                 throw divAdvanceError;
               }
               
+              divAdvanceId = newDivAdvance.id;
+              
               // Guardar advance_id en metadata de esta división
-              divMetadata.advance_id = newDivAdvance.id;
+              divMetadata.advance_id = divAdvanceId;
               divMetadata.is_auto_advance = true;
               divMetadata.broker_id = payment.deduction_broker_id;
               divMetadata.source = 'broker_deduction';
               
-              console.log(`✅ Adelanto de división creado: ID ${newDivAdvance.id}`);
+              console.log(`✅ Adelanto de división creado: ID ${divAdvanceId}`);
             } catch (error: any) {
               console.error('❌ Error al crear adelanto de división:', error);
               throw error;
@@ -775,15 +779,43 @@ export async function actionCreatePendingPayment(payment: {
     const allReferencesToInsert: TablesInsert<'payment_references'>[] = [];
     
     for (const pendingPayment of pendingPayments) {
-      const referencesToInsert = payment.references.map((ref) => ({
-        payment_id: pendingPayment.id,
-        reference_number: ref.reference_number,
-        date: ref.date,
-        amount: ref.amount, // Monto total de la transferencia bancaria
-        amount_to_use: ref.amount_to_use, // Monto específico que se usará de esta referencia
-        exists_in_bank: skipBankValidation ? false : bankRefMap.has(ref.reference_number) // false para descuento a corredor
-      }));
-      allReferencesToInsert.push(...referencesToInsert);
+      // Si es descuento a corredor con divisiones, crear referencia única por adelanto
+      if (isBrokerDeduction && hasDivisions) {
+        // Extraer advance_id del metadata del pago
+        const paymentMetadata = typeof pendingPayment.notes === 'string' 
+          ? JSON.parse(pendingPayment.notes) 
+          : pendingPayment.notes;
+        const advanceId = paymentMetadata?.advance_id;
+        
+        if (advanceId) {
+          // Crear referencia única basada en el advance_id
+          const uniqueRef = `ADELANTO-${advanceId.slice(0, 8)}`;
+          const divAmount = Number(pendingPayment.amount_to_pay) || 0;
+          const refDate = new Date().toISOString().split('T')[0] as string;
+          
+          allReferencesToInsert.push({
+            payment_id: pendingPayment.id,
+            reference_number: uniqueRef,
+            date: refDate,
+            amount: divAmount,
+            amount_to_use: divAmount,
+            exists_in_bank: false // false para descuento a corredor
+          });
+          
+          console.log(`📝 Referencia única creada: ${uniqueRef} para adelanto ${advanceId}`);
+        }
+      } else {
+        // Lógica original para pagos normales o descuentos sin división
+        const referencesToInsert = payment.references.map((ref) => ({
+          payment_id: pendingPayment.id,
+          reference_number: ref.reference_number,
+          date: ref.date,
+          amount: ref.amount, // Monto total de la transferencia bancaria
+          amount_to_use: ref.amount_to_use, // Monto específico que se usará de esta referencia
+          exists_in_bank: skipBankValidation ? false : bankRefMap.has(ref.reference_number) // false para descuento a corredor
+        }));
+        allReferencesToInsert.push(...referencesToInsert);
+      }
     }
 
     const { error: refsError } = await supabase
@@ -2195,16 +2227,43 @@ export async function actionDeletePendingPayment(paymentId: string) {
       }
     }
 
-    // Si el pago estaba ligado a un adelanto, marcarlo como CANCELLED para que deje de contar en saldos activos
+    // Si el pago estaba ligado a un adelanto, eliminarlo o cancelarlo según tenga historial
     if (advanceIdToCancel) {
-      console.log(`🧹 Cancelando adelanto ligado al pago eliminado ${paymentId} (adelanto ${advanceIdToCancel})...`);
-      const { error: cancelAdvanceError } = await supabase
-        .from('advances')
-        .update({ status: 'CANCELLED' } satisfies TablesUpdate<'advances'>)
-        .eq('id', advanceIdToCancel);
+      console.log(`🧹 Procesando adelanto ligado al pago eliminado ${paymentId} (adelanto ${advanceIdToCancel})...`);
+      
+      // Verificar si el adelanto tiene historial de pagos
+      const { data: advanceLogs } = await supabase
+        .from('advance_logs')
+        .select('id')
+        .eq('advance_id', advanceIdToCancel)
+        .limit(1);
+      
+      const hasHistory = advanceLogs && advanceLogs.length > 0;
+      
+      if (hasHistory) {
+        // Si tiene historial, solo cancelarlo
+        const { error: cancelAdvanceError } = await supabase
+          .from('advances')
+          .update({ status: 'CANCELLED' } satisfies TablesUpdate<'advances'>)
+          .eq('id', advanceIdToCancel);
 
-      if (cancelAdvanceError) {
-        console.error('❌ Error cancelando adelanto ligado al eliminar pago:', cancelAdvanceError);
+        if (cancelAdvanceError) {
+          console.error('❌ Error cancelando adelanto con historial:', cancelAdvanceError);
+        } else {
+          console.log('✅ Adelanto cancelado (tiene historial)');
+        }
+      } else {
+        // Si NO tiene historial, eliminarlo completamente
+        const { error: deleteAdvanceError } = await supabase
+          .from('advances')
+          .delete()
+          .eq('id', advanceIdToCancel);
+
+        if (deleteAdvanceError) {
+          console.error('❌ Error eliminando adelanto sin historial:', deleteAdvanceError);
+        } else {
+          console.log('✅ Adelanto eliminado completamente (sin historial)');
+        }
       }
     }
     

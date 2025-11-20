@@ -92,8 +92,8 @@ export default function SearchModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black bg-opacity-50 p-4 pt-20 overflow-y-auto">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4 overflow-y-auto">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] sm:max-h-[85vh] my-4 sm:my-8 animate-fade-in overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-[#010139] to-[#020250]">
           <div className="flex items-center gap-3 text-white">

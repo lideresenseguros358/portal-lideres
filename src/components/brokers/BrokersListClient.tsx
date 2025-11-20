@@ -1,13 +1,14 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { FaSearch, FaFileExport, FaUserPlus, FaEye, FaClipboardList, FaTable } from 'react-icons/fa';
+import { FaSearch, FaFileExport, FaUserPlus, FaEye, FaClipboardList, FaTable, FaBell } from 'react-icons/fa';
 import { toast } from 'sonner';
 import Link from 'next/link';
-import { actionGetBrokers, actionExportBrokers, actionBulkUpdateBrokers } from '@/app/(app)/brokers/actions';
+import { actionGetBrokers, actionExportBrokers, actionBulkUpdateBrokers, actionToggleBrokerRenewalNotifications } from '@/app/(app)/brokers/actions';
 import { OFICINA_EMAIL } from '@/lib/constants/brokers';
 import { createUppercaseHandler, uppercaseInputClass } from '@/lib/utils/uppercase';
 import BrokersBulkEditModal from './BrokersBulkEditModal';
+import { supabaseClient } from '@/lib/supabase/client';
 
 export default function BrokersListClient() {
   const [loading, setLoading] = useState(true);
@@ -15,6 +16,7 @@ export default function BrokersListClient() {
   const [search, setSearch] = useState('');
   const [selectedBrokers, setSelectedBrokers] = useState<string[]>([]);
   const [showBulkEdit, setShowBulkEdit] = useState(false);
+  const [userRole, setUserRole] = useState<'master' | 'broker' | null>(null);
 
   const loadBrokers = useCallback(async () => {
     setLoading(true);
@@ -31,6 +33,22 @@ export default function BrokersListClient() {
   useEffect(() => {
     loadBrokers();
   }, [loadBrokers]);
+
+  useEffect(() => {
+    // Obtener rol del usuario
+    const getUserRole = async () => {
+      const { data: { user } } = await supabaseClient().auth.getUser();
+      if (user) {
+        const { data: profile } = await supabaseClient()
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .single();
+        setUserRole(profile?.role as 'master' | 'broker' || null);
+      }
+    };
+    getUserRole();
+  }, []);
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -97,6 +115,17 @@ export default function BrokersListClient() {
     } else {
       toast.error(result.error);
       throw new Error(result.error);
+    }
+  };
+
+  const handleToggleNotifications = async (brokerId: string, currentValue: boolean) => {
+    const result = await actionToggleBrokerRenewalNotifications(brokerId, !currentValue);
+    
+    if (result.ok) {
+      toast.success(result.message);
+      await loadBrokers();
+    } else {
+      toast.error(result.error);
     }
   };
 
@@ -277,6 +306,40 @@ export default function BrokersListClient() {
                             <span className="font-semibold text-[#8AAA19]">
                               {(broker.percent_default * 100).toFixed(0)}% default
                             </span>
+                          </>
+                        )}
+                        
+                        {/* Toggle Notificaciones (Solo para Master) */}
+                        {userRole === 'master' && (
+                          <>
+                            <span className="text-gray-400">•</span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleToggleNotifications(broker.id, (broker.profiles as any)?.notify_broker_renewals || false);
+                              }}
+                              className={`
+                                flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold transition-all
+                                ${(broker.profiles as any)?.notify_broker_renewals
+                                  ? 'bg-[#8AAA19] text-white hover:bg-[#7a9917]'
+                                  : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                }
+                              `}
+                              title={
+                                (broker.profiles as any)?.notify_broker_renewals
+                                  ? 'Master recibe notificaciones de renovación de este broker'
+                                  : 'Click para recibir notificaciones de renovación de este broker'
+                              }
+                            >
+                              <FaBell className={
+                                (broker.profiles as any)?.notify_broker_renewals
+                                  ? 'text-white'
+                                  : 'text-gray-700'
+                              } />
+                              <span>
+                                {(broker.profiles as any)?.notify_broker_renewals ? 'Notif ON' : 'Notif OFF'}
+                              </span>
+                            </button>
                           </>
                         )}
                       </div>

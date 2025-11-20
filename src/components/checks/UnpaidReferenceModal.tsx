@@ -24,8 +24,8 @@ export default function UnpaidReferenceModal({
   const actionIcon = action === 'paid' ? '💰' : '📄';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4 animate-fadeIn">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4 overflow-y-auto animate-fadeIn">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-auto my-4 sm:my-8">
         {/* Header */}
         <div className="bg-gradient-to-r from-red-600 to-red-700 text-white p-6 rounded-t-2xl">
           <div className="flex items-start justify-between">

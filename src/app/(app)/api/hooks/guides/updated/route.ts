@@ -59,12 +59,12 @@ export async function POST(request: NextRequest) {
           continue;
         }
 
-        // Crear notificación
+        // Crear notificación (SOLO CAMPANITA - NO EMAIL)
         const notification = await createNotification({
           type: 'guide',
           target: 'ALL',
-          title: 'Guías actualizadas',
-          body: `${section}: ${title}`,
+          title: `📚 Guías Actualizadas`,
+          body: `Se actualizó: ${title} en ${section}`,
           brokerId: profile.role === 'broker' ? profile.id : undefined,
           meta: {
             cta_url: deepLink,
@@ -74,33 +74,14 @@ export async function POST(request: NextRequest) {
           }
         });
 
-        if (!notification.success) {
-          console.error('Error creando notificación:', notification.error);
-          results.errors++;
-          continue;
-        }
-
-        // Enviar email
-        const emailData = {
-          userName: profile.full_name || 'Usuario',
-          guideTitle: title,
-          section,
-          deepLink
-        };
-
-        const emailResult = await sendNotificationEmail({
-          type: 'guide',
-          to: profile.email,
-          data: emailData,
-          notificationId: notification.notificationId
-        });
-
-        if (emailResult.success) {
+        if (notification.success) {
           results.sent++;
         } else {
-          console.error('Error enviando email:', emailResult.error);
+          console.error('Error creando notificación:', notification.error);
           results.errors++;
         }
+        
+        // NO se envía email para guías según especificación
       } catch (error) {
         console.error(`Error procesando usuario ${profile.id}:`, error);
         results.errors++;

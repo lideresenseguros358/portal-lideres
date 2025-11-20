@@ -15,6 +15,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 import { FaPlusCircle, FaCalculator, FaChevronDown, FaChevronRight, FaMoneyBillWave, FaDollarSign, FaExclamationCircle, FaExclamationTriangle, FaFileDownload, FaTrash, FaChartPie, FaCheckCircle, FaFileImport, FaUsers, FaCircle, FaCheck, FaMoneyCheckAlt } from 'react-icons/fa';
 import { toast } from 'sonner';
+import { useConfirmDialog } from '@/hooks/useConfirmDialog';
+import ConfirmDialog from '@/components/shared/ConfirmDialog';
 
 const months = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -49,6 +51,7 @@ interface Props {
 }
 
 export default function NewFortnightTab({ role, brokerId, draftFortnight: initialDraft, insurers, brokers, onFortnightCreated }: Props) {
+  const { dialogState, closeDialog, confirm } = useConfirmDialog();
   const [draftFortnight, setDraftFortnight] = useState(initialDraft);
   const [importedReports, setImportedReports] = useState<CommImportWithDetails[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -126,7 +129,8 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
   }, [loadImportedReports]);
 
   const handleDeleteImport = async (importId: string) => {
-    if (!confirm('¿Está seguro de que desea eliminar esta importación? Todos sus items asociados serán borrados.')) return;
+    const confirmed = await confirm('¿Está seguro de que desea eliminar esta importación? Todos sus items asociados serán borrados.', 'Confirmar eliminación');
+    if (!confirmed) return;
     
     try {
       console.log('Eliminando reporte:', importId);
@@ -665,6 +669,17 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      
+      <ConfirmDialog
+        isOpen={dialogState.isOpen}
+        onClose={() => closeDialog(false)}
+        onConfirm={() => closeDialog(true)}
+        title={dialogState.title}
+        message={dialogState.message}
+        type={dialogState.type}
+        confirmText={dialogState.confirmText}
+        cancelText={dialogState.cancelText}
+      />
     </div>
   );
 }

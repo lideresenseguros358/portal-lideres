@@ -235,31 +235,78 @@ export function YTDTab({ role, brokerId }: Props) {
               Distribución por Aseguradora
             </CardTitle>
           </CardHeader>
-          <CardContent className="p-6 sm:p-8 bg-gradient-to-br from-white to-green-50/20">
-            <div className="overflow-hidden">
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+          <CardContent className="p-4 sm:p-6 md:p-8 bg-gradient-to-br from-white to-green-50/20">
+            <div className="w-full">
+              <ResponsiveContainer width="100%" height={320}>
+                <PieChart>
                   <Pie
                     data={pieData}
                     cx="50%"
                     cy="50%"
-                    labelLine={false}
+                    labelLine={{
+                      stroke: '#94a3b8',
+                      strokeWidth: 1.5,
+                    }}
                     label={(entry: any) => {
                       const percentage = (Number(entry.value) / totalCurrent * 100).toFixed(1);
-                      const name = entry.name.length > 12 ? entry.name.substring(0, 12) + '...' : entry.name;
-                      return `${name}: ${percentage}%`;
+                      // Versión mobile: solo porcentaje
+                      if (window.innerWidth < 640) {
+                        return `${percentage}%`;
+                      }
+                      // Versión desktop: nombre truncado + porcentaje
+                      const name = entry.name.length > 10 ? entry.name.substring(0, 10) + '...' : entry.name;
+                      return `${name}\n${percentage}%`;
                     }}
-                    outerRadius={80}
-                    fill="#8884d8"
+                    outerRadius={window.innerWidth < 640 ? 65 : 85}
+                    innerRadius={window.innerWidth < 640 ? 25 : 35}
+                    paddingAngle={3}
                     dataKey="value"
+                    animationBegin={0}
+                    animationDuration={800}
+                    animationEasing="ease-out"
                   >
                     {pieData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      <Cell 
+                        key={`cell-${index}`} 
+                        fill={COLORS[index % COLORS.length]}
+                        stroke="#fff"
+                        strokeWidth={2}
+                        style={{
+                          filter: 'drop-shadow(0px 2px 4px rgba(0, 0, 0, 0.1))',
+                          cursor: 'pointer',
+                          transition: 'all 0.3s ease',
+                        }}
+                      />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(value: any) => formatCurrency(value)} contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }} />
+                  <Tooltip 
+                    formatter={(value: any) => formatCurrency(value)}
+                    contentStyle={{ 
+                      borderRadius: '12px', 
+                      border: '2px solid #8AAA19',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                      padding: '12px',
+                      backgroundColor: 'rgba(255, 255, 255, 0.98)'
+                    }}
+                    itemStyle={{
+                      color: '#010139',
+                      fontWeight: 600
+                    }}
+                  />
                 </PieChart>
               </ResponsiveContainer>
+            </div>
+            {/* Leyenda personalizada para mobile */}
+            <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-2 sm:hidden">
+              {pieData.slice(0, 6).map((entry, index) => (
+                <div key={`legend-${index}`} className="flex items-center gap-2 text-xs">
+                  <div 
+                    className="w-3 h-3 rounded-sm flex-shrink-0" 
+                    style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                  />
+                  <span className="truncate font-medium text-gray-700">{entry.name}</span>
+                </div>
+              ))}
             </div>
           </CardContent>
         </Card>

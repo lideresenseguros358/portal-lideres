@@ -73,12 +73,12 @@ export async function POST(request: NextRequest) {
           continue;
         }
 
-        // Crear notificación
+        // Crear notificación (SOLO CAMPANITA - NO EMAIL)
         const notification = await createNotification({
           type: 'download',
           target: 'ALL',
-          title: `Descargas actualizadas en ${insurer.name}`,
-          body: `Documento actualizado: ${doc_name}`,
+          title: `📥 Nuevo Documento Disponible`,
+          body: `Se actualizó: ${doc_name} en ${insurer.name}`,
           brokerId: profile.role === 'broker' ? profile.id : undefined,
           meta: {
             cta_url: deepLink,
@@ -89,33 +89,14 @@ export async function POST(request: NextRequest) {
           }
         });
 
-        if (!notification.success) {
-          console.error('Error creando notificación:', notification.error);
-          results.errors++;
-          continue;
-        }
-
-        // Enviar email
-        const emailData = {
-          userName: profile.full_name || 'Usuario',
-          insurerName: insurer.name,
-          docName: doc_name,
-          deepLink
-        };
-
-        const emailResult = await sendNotificationEmail({
-          type: 'download',
-          to: profile.email,
-          data: emailData,
-          notificationId: notification.notificationId
-        });
-
-        if (emailResult.success) {
+        if (notification.success) {
           results.sent++;
         } else {
-          console.error('Error enviando email:', emailResult.error);
+          console.error('Error creando notificación:', notification.error);
           results.errors++;
         }
+        
+        // NO se envía email para descargas según especificación
       } catch (error) {
         console.error(`Error procesando usuario ${profile.id}:`, error);
         results.errors++;

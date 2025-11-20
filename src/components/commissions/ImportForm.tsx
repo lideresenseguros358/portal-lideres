@@ -1,8 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { FaUpload } from 'react-icons/fa';
 import { actionUploadImport } from '@/app/(app)/commissions/actions';
+import { useRouter } from 'next/navigation';
+import { useConfirmDialog } from '@/hooks/useConfirmDialog';
+import ConfirmDialog from '@/components/shared/ConfirmDialog';
 
 interface Props {
   insurers: { id: string; name: string }[];
@@ -11,6 +14,8 @@ interface Props {
 }
 
 export default function ImportForm({ insurers, draftFortnightId, onImport }: Props) {
+  const router = useRouter();
+  const { dialogState, closeDialog, alert: showAlert, success } = useConfirmDialog();
   const [selectedInsurer, setSelectedInsurer] = useState('');
   const [totalAmount, setTotalAmount] = useState('');
   const [file, setFile] = useState<File | null>(null);
@@ -26,19 +31,19 @@ export default function ImportForm({ insurers, draftFortnightId, onImport }: Pro
     console.log('Fortnight ID:', draftFortnightId);
     
     if (!file) {
-      alert('Por favor seleccione un archivo');
+      await showAlert('Por favor seleccione un archivo', 'Falta archivo');
       return;
     }
     if (!selectedInsurer) {
-      alert('Por favor seleccione una aseguradora');
+      await showAlert('Por favor seleccione una aseguradora', 'Falta aseguradora');
       return;
     }
     if (!totalAmount) {
-      alert('Por favor ingrese el monto total');
+      await showAlert('Por favor ingrese el monto total', 'Falta monto');
       return;
     }
     if (!draftFortnightId) {
-      alert('Error: No hay quincena en borrador');
+      await showAlert('Error: No hay quincena en borrador', 'Error');
       console.error('Missing draftFortnightId');
       return;
     }
@@ -59,7 +64,7 @@ export default function ImportForm({ insurers, draftFortnightId, onImport }: Pro
       const result = await actionUploadImport(formData);
       
       if (result.ok) {
-        alert('Importación exitosa');
+        await success('Importación exitosa', 'Éxito');
         setFile(null);
         setSelectedInsurer('');
         setTotalAmount('');
@@ -67,11 +72,11 @@ export default function ImportForm({ insurers, draftFortnightId, onImport }: Pro
         onImport();
       } else {
         console.error('Import error:', result.error);
-        alert(`Error: ${result.error}`);
+        await showAlert(`Error: ${result.error}`, 'Error en importación', 'error');
       }
     } catch (err) {
       console.error('Unexpected error:', err);
-      alert(`Error inesperado: ${err instanceof Error ? err.message : String(err)}`);
+      await showAlert(`Error inesperado: ${err instanceof Error ? err.message : String(err)}`, 'Error', 'error');
     } finally {
       setUploading(false);
     }
@@ -245,6 +250,17 @@ export default function ImportForm({ insurers, draftFortnightId, onImport }: Pro
           cursor: not-allowed;
         }
       `}</style>
+      
+      <ConfirmDialog
+        isOpen={dialogState.isOpen}
+        onClose={() => closeDialog(false)}
+        onConfirm={() => closeDialog(true)}
+        title={dialogState.title}
+        message={dialogState.message}
+        type={dialogState.type}
+        confirmText={dialogState.confirmText}
+        cancelText={dialogState.cancelText}
+      />
     </div>
   );
 }

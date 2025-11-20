@@ -120,28 +120,43 @@ const MasterDashboard = async ({ userId }: MasterDashboardProps) => {
                 return null;
               };
               const medal = getMedalEmoji(index + 1);
+              const isTopThree = index < 3;
               
               return (
                 <Link href="/production" key={broker.brokerId} className="ranking-item-link">
-                  <div className="ranking-item">
+                  <div className={`ranking-item ${isTopThree ? `ranking-top-${index + 1}` : ''}`}>
                     <div className="ranking-medal-container">
                       {medal ? (
-                        <span className="ranking-medal">{medal}</span>
+                        <span className="ranking-medal ranking-medal-animated">{medal}</span>
                       ) : (
                         <span className="ranking-position">{index + 1}</span>
                       )}
                     </div>
-                    <span className="ranking-name">{broker.brokerName}</span>
+                    <div className="flex-1">
+                      <span className="ranking-name">{broker.brokerName}</span>
+                      {isTopThree && (
+                        <div className="ranking-production-hint">
+                          {formatCurrency(broker.total)}
+                        </div>
+                      )}
+                    </div>
+                    {isTopThree && <div className="ranking-glow"></div>}
                   </div>
                 </Link>
               );
             })}
           </div>
           {brokerOfTheMonth && (
-            <div className="broker-of-month">
-              <p className="broker-of-month-text">
-                🏆 <strong>Corredor del mes de {brokerOfTheMonth.monthName}:</strong> {brokerOfTheMonth.brokerName}
-              </p>
+            <div className="broker-of-month-card">
+              <div className="broker-of-month-trophy">🏆</div>
+              <div className="broker-of-month-content">
+                <div className="broker-of-month-title">
+                  Corredor del mes de {brokerOfTheMonth.monthName}
+                </div>
+                <div className="broker-of-month-name">
+                  {brokerOfTheMonth.brokerName}
+                </div>
+              </div>
             </div>
           )}
           <Link href="/production" className="view-more">Ver ranking completo →</Link>
@@ -371,6 +386,16 @@ const MasterDashboard = async ({ userId }: MasterDashboardProps) => {
           line-height: 1;
         }
         
+        .ranking-medal-animated {
+          display: inline-block;
+          animation: medalPulse 2s ease-in-out infinite;
+        }
+        
+        @keyframes medalPulse {
+          0%, 100% { transform: scale(1); }
+          50% { transform: scale(1.1); }
+        }
+        
         .ranking-position {
           font-size: 20px;
           font-weight: bold;
@@ -380,25 +405,132 @@ const MasterDashboard = async ({ userId }: MasterDashboardProps) => {
         }
         
         .ranking-name {
-          flex: 1;
           font-weight: 600;
           color: #010139;
-          text-align: center;
         }
         
-        .broker-of-month {
-          margin-top: 16px;
-          padding: 12px 16px;
-          background: linear-gradient(135deg, #fff9e6 0%, #fff4d6 100%);
-          border-radius: 8px;
-          border: 2px solid #ffd700;
+        .ranking-production-hint {
+          font-size: 11px;
+          color: #8AAA19;
+          font-weight: 600;
+          margin-top: 2px;
         }
         
-        .broker-of-month-text {
-          text-align: center;
+        .ranking-glow {
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          border-radius: 12px;
+          pointer-events: none;
+          opacity: 0;
+          transition: opacity 0.3s ease;
+        }
+        
+        .ranking-top-1 {
+          position: relative;
+          background: linear-gradient(135deg, #fff9e6 0%, #fffbf0 100%);
+          border-left: 4px solid #FFD700;
+          box-shadow: 0 2px 12px rgba(255, 215, 0, 0.15);
+        }
+        
+        .ranking-top-1:hover .ranking-glow {
+          opacity: 1;
+          background: radial-gradient(circle at center, rgba(255, 215, 0, 0.1) 0%, transparent 70%);
+        }
+        
+        .ranking-top-2 {
+          position: relative;
+          background: linear-gradient(135deg, #f5f5f5 0%, #fafafa 100%);
+          border-left: 4px solid #C0C0C0;
+          box-shadow: 0 2px 10px rgba(192, 192, 192, 0.15);
+        }
+        
+        .ranking-top-2:hover .ranking-glow {
+          opacity: 1;
+          background: radial-gradient(circle at center, rgba(192, 192, 192, 0.1) 0%, transparent 70%);
+        }
+        
+        .ranking-top-3 {
+          position: relative;
+          background: linear-gradient(135deg, #fff5f0 0%, #fffaf5 100%);
+          border-left: 4px solid #CD7F32;
+          box-shadow: 0 2px 10px rgba(205, 127, 50, 0.15);
+        }
+        
+        .ranking-top-3:hover .ranking-glow {
+          opacity: 1;
+          background: radial-gradient(circle at center, rgba(205, 127, 50, 0.1) 0%, transparent 70%);
+        }
+        
+        .broker-of-month-card {
+          margin-top: 20px;
+          padding: 20px;
+          background: linear-gradient(135deg, #FFF9E6 0%, #FFE4B5 50%, #FFD700 100%);
+          border-radius: 16px;
+          border: 3px solid #FFD700;
+          box-shadow: 0 8px 24px rgba(255, 215, 0, 0.3);
+          display: flex;
+          align-items: center;
+          gap: 16px;
+          position: relative;
+          overflow: hidden;
+        }
+        
+        .broker-of-month-card::before {
+          content: '';
+          position: absolute;
+          top: -50%;
+          left: -50%;
+          width: 200%;
+          height: 200%;
+          background: linear-gradient(
+            45deg,
+            transparent 30%,
+            rgba(255, 255, 255, 0.3) 50%,
+            transparent 70%
+          );
+          animation: shimmer 3s infinite;
+        }
+        
+        @keyframes shimmer {
+          0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
+          100% { transform: translateX(100%) translateY(100%) rotate(45deg); }
+        }
+        
+        .broker-of-month-trophy {
+          font-size: 48px;
+          line-height: 1;
+          animation: trophyBounce 1.5s ease-in-out infinite;
+          filter: drop-shadow(0 4px 8px rgba(255, 215, 0, 0.5));
+          z-index: 1;
+        }
+        
+        @keyframes trophyBounce {
+          0%, 100% { transform: translateY(0) rotate(-5deg); }
+          50% { transform: translateY(-10px) rotate(5deg); }
+        }
+        
+        .broker-of-month-content {
+          flex: 1;
+          z-index: 1;
+        }
+        
+        .broker-of-month-title {
+          font-size: 13px;
+          font-weight: 700;
           color: #010139;
-          font-size: 14px;
-          margin: 0;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          margin-bottom: 4px;
+        }
+        
+        .broker-of-month-name {
+          font-size: 20px;
+          font-weight: 800;
+          color: #010139;
+          text-shadow: 1px 1px 2px rgba(255, 215, 0, 0.3);
         }
         
         .view-more {

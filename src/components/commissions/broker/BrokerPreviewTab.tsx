@@ -292,7 +292,7 @@ export default function BrokerPreviewTab({ brokerId }: Props) {
       </Card>
 
       {noData && (
-        <Card className="shadow-lg border-2 border-dashed border-gray-300">
+        <Card className="bg-white shadow-lg border-2 border-dashed border-gray-300">
           <CardContent className="text-center py-12 sm:py-20">
             <div className="mb-4">
               <FaHistory className="text-5xl sm:text-6xl text-gray-300 mx-auto" />

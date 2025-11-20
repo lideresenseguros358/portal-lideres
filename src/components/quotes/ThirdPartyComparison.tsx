@@ -314,8 +314,8 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
 
       {/* Installments Modal */}
       {showInstallmentsModal && selectedPlan && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto my-4 sm:my-8">
             <div className="p-6">
               <div className="flex items-start gap-3 mb-6">
                 <FaInfoCircle className="text-blue-500 flex-shrink-0 mt-1" size={24} />

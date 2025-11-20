@@ -285,10 +285,22 @@ export function MasterClaimsView() {
 
   return (
     <div className="space-y-6">
+      {/* Header Section */}
+      <div className="bg-gradient-to-r from-blue-50 to-white rounded-xl p-4 sm:p-6 border-l-4 border-[#010139] shadow-md">
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <h2 className="text-xl sm:text-2xl font-bold text-[#010139] mb-2">👥 Ajustes Identificados</h2>
+            <p className="text-sm sm:text-base text-gray-700 mb-3">
+              Ajustes que los corredores han marcado como suyos y están pendientes de aprobación.
+            </p>
+          </div>
+        </div>
+      </div>
+
       {/* Instrucciones */}
-      <Card className="bg-gradient-to-r from-blue-50 to-white border-l-4 border-[#010139]">
+      <Card className="bg-gradient-to-r from-blue-50 to-white border-l-4 border-[#8AAA19] shadow-md">
         <CardContent className="p-4">
-          <h3 className="font-bold text-[#010139] mb-2">📋 Flujo de Ajustes Reportados</h3>
+          <h3 className="font-bold text-[#010139] mb-2">📋 Flujo de Aprobación y Pago</h3>
           <ol className="text-sm text-gray-700 space-y-1 list-decimal list-inside">
             <li>Selecciona los reportes de corredores que marcaron como "Mío"</li>
             <li>Haz clic en "Aceptar Seleccionados" y elige "Pagar Ya"</li>

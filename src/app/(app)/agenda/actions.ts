@@ -187,6 +187,95 @@ export async function actionCreateEvent(payload: {
       await supabase.from('event_audience').insert(audienceRecords);
     }
 
+    // Notificar brokers (AMBAS: email + campanita)
+    try {
+      const { createNotification } = await import('@/lib/notifications/create');
+      const { sendNotificationEmail } = await import('@/lib/notifications/send-email');
+      
+      const eventDate = new Date(payload.start_at).toISOString().split('T')[0];
+      const eventTime = payload.is_all_day ? undefined : new Date(payload.start_at).toLocaleTimeString('es-PA', { hour: '2-digit', minute: '2-digit' });
+      const isForAllBrokers = payload.audience === 'ALL';
+      
+      // Obtener lista de brokers a notificar
+      let brokersToNotify: any[] = [];
+      
+      if (isForAllBrokers) {
+        // Notificar a TODOS los brokers
+        const { data: allBrokers } = await supabase
+          .from('brokers')
+          .select('id, name, p_id')
+          .eq('active', true);
+        
+        brokersToNotify = allBrokers || [];
+      } else if (payload.selected_brokers && payload.selected_brokers.length > 0) {
+        // Notificar solo a brokers seleccionados
+        const { data: selectedBrokers } = await supabase
+          .from('brokers')
+          .select('id, name, p_id')
+          .in('id', payload.selected_brokers);
+        
+        brokersToNotify = selectedBrokers || [];
+      }
+      
+      // Enviar notificación a cada broker
+      for (const broker of brokersToNotify) {
+        try {
+          const notificationData = {
+            type: 'agenda_event' as const,
+            target: isForAllBrokers ? 'ALL' as const : 'BROKER' as const,
+            title: `📅 Nuevo Evento: ${payload.title}`,
+            body: `${payload.title} - ${eventDate}${eventTime ? ` a las ${eventTime}` : ''}`,
+            brokerId: broker.p_id,
+            meta: {
+              event_id: event.id,
+              event_title: payload.title,
+              event_date: eventDate,
+              event_time: eventTime,
+              modality: payload.modality,
+            },
+            entityId: `agenda-${event.id}-${broker.id}`,
+          };
+          
+          // Crear notificación
+          const notifResult = await createNotification(notificationData);
+          
+          // Enviar email
+          if (notifResult.success && !notifResult.isDuplicate) {
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('email')
+              .eq('id', broker.p_id)
+              .single();
+            
+            if (profile?.email) {
+              await sendNotificationEmail({
+                type: 'agenda_event',
+                to: profile.email,
+                data: {
+                  brokerName: broker.name || 'Broker',
+                  eventTitle: payload.title,
+                  eventDescription: payload.details,
+                  eventDate,
+                  eventTime,
+                  eventLocation: payload.location_name,
+                  eventType: 'new',
+                  assignedBrokers: isForAllBrokers ? undefined : brokersToNotify.map(b => b.name),
+                  isForAllBrokers,
+                },
+                notificationId: notifResult.notificationId,
+              });
+            }
+          }
+        } catch (brokerNotifError) {
+          console.error(`[actionCreateEvent] Error notificando a broker ${broker.id}:`, brokerNotifError);
+          // No fallar si la notificación falla
+        }
+      }
+    } catch (notifError) {
+      console.error('[actionCreateEvent] Error en sistema de notificaciones:', notifError);
+      // No fallar si las notificaciones fallan
+    }
+
     revalidatePath('/agenda');
     
     return { ok: true, data: event, message: 'Evento creado exitosamente' };
@@ -217,6 +306,15 @@ export async function actionUpdateEvent(params: {
 }) {
   try {
     const supabase = await getSupabaseServer();
+
+    // Obtener evento actual para verificar si cambió la fecha
+    const { data: currentEvent } = await supabase
+      .from('events')
+      .select('*')
+      .eq('id', params.id)
+      .single();
+    
+    const dateChanged = params.payload.start_at && currentEvent && params.payload.start_at !== currentEvent.start_at;
 
     // Update event
     const { error } = await supabase
@@ -251,15 +349,99 @@ export async function actionUpdateEvent(params: {
       await supabase.from('event_audience').delete().eq('event_id', params.id);
     }
 
-    // Send notification
-    try {
-      await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/notifications/agenda/event-updated`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ event_id: params.id }),
-      });
-    } catch (notifError) {
-      console.error('Error sending event update notification:', notifError);
+    // Notificar SOLO si cambió la fecha (AMBAS: email + campanita)
+    if (dateChanged) {
+      try {
+        const { createNotification } = await import('@/lib/notifications/create');
+        const { sendNotificationEmail } = await import('@/lib/notifications/send-email');
+        
+        const title = params.payload.title || currentEvent.title;
+        const startAt = params.payload.start_at || currentEvent.start_at;
+        const isAllDay = params.payload.is_all_day ?? currentEvent.is_all_day;
+        const details = params.payload.details || currentEvent.details;
+        const locationName = params.payload.location_name !== undefined ? params.payload.location_name : currentEvent.location_name;
+        const audience = params.payload.audience || currentEvent.audience;
+        
+        const eventDate = new Date(startAt).toISOString().split('T')[0];
+        const eventTime = isAllDay ? undefined : new Date(startAt).toLocaleTimeString('es-PA', { hour: '2-digit', minute: '2-digit' });
+        const isForAllBrokers = audience === 'ALL';
+        
+        // Obtener lista de brokers a notificar
+        let brokersToNotify: any[] = [];
+        
+        if (isForAllBrokers) {
+          const { data: allBrokers } = await supabase
+            .from('brokers')
+            .select('id, name, p_id')
+            .eq('active', true);
+          
+          brokersToNotify = allBrokers || [];
+        } else {
+          const brokerIds = params.payload.selected_brokers || [];
+          if (brokerIds.length > 0) {
+            const { data: selectedBrokers } = await supabase
+              .from('brokers')
+              .select('id, name, p_id')
+              .in('id', brokerIds);
+            
+            brokersToNotify = selectedBrokers || [];
+          }
+        }
+        
+        // Enviar notificación a cada broker
+        for (const broker of brokersToNotify) {
+          try {
+            const notificationData = {
+              type: 'agenda_event' as const,
+              target: isForAllBrokers ? 'ALL' as const : 'BROKER' as const,
+              title: `🔄 Evento Reprogramado: ${title}`,
+              body: `${title} - Nueva fecha: ${eventDate}${eventTime ? ` a las ${eventTime}` : ''}`,
+              brokerId: broker.p_id,
+              meta: {
+                event_id: params.id,
+                event_title: title,
+                event_date: eventDate,
+                event_time: eventTime,
+                date_changed: true,
+              },
+              entityId: `agenda-update-${params.id}-${broker.id}-${eventDate}`,
+            };
+            
+            const notifResult = await createNotification(notificationData);
+            
+            if (notifResult.success && !notifResult.isDuplicate) {
+              const { data: profile } = await supabase
+                .from('profiles')
+                .select('email')
+                .eq('id', broker.p_id)
+                .single();
+              
+              if (profile?.email) {
+                await sendNotificationEmail({
+                  type: 'agenda_event',
+                  to: profile.email,
+                  data: {
+                    brokerName: broker.name || 'Broker',
+                    eventTitle: title,
+                    eventDescription: details,
+                    eventDate,
+                    eventTime,
+                    eventLocation: locationName,
+                    eventType: 'updated',
+                    assignedBrokers: isForAllBrokers ? undefined : brokersToNotify.map(b => b.name),
+                    isForAllBrokers,
+                  },
+                  notificationId: notifResult.notificationId,
+                });
+              }
+            }
+          } catch (brokerNotifError) {
+            console.error(`[actionUpdateEvent] Error notificando a broker ${broker.id}:`, brokerNotifError);
+          }
+        }
+      } catch (notifError) {
+        console.error('[actionUpdateEvent] Error en sistema de notificaciones:', notifError);
+      }
     }
 
     revalidatePath('/agenda');

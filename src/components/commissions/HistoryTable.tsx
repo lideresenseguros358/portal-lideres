@@ -21,7 +21,7 @@ export function HistoryTable({ data }: HistoryTableProps) {
   const [selectedBroker, setSelectedBroker] = useState<BrokerData | null>(null);
   if (data.length === 0) {
     return (
-      <div className="rounded-md border border-dashed p-8 text-center">
+      <div className="bg-white rounded-md border border-dashed p-8 text-center">
         <p className="text-muted-foreground">No hay quincenas pagadas para el período seleccionado.</p>
       </div>
     );

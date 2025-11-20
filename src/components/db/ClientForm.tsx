@@ -19,9 +19,10 @@ type PolicyWithInsurer = ClientWithPolicies['policies'][0];
 interface ClientFormProps {
   client: ClientWithPolicies | null;
   onClose: () => void;
+  readOnly?: boolean; // Modo solo lectura
 }
 
-export default function ClientForm({ client, onClose }: ClientFormProps) {
+export default function ClientForm({ client, onClose, readOnly = false }: ClientFormProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const editPolicyId = searchParams.get('editPolicy');
@@ -160,7 +161,7 @@ export default function ClientForm({ client, onClose }: ClientFormProps) {
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="p-4 sm:p-6 space-y-4 sm:space-y-6 overflow-y-auto flex-1">
+        <form onSubmit={readOnly ? (e) => e.preventDefault() : handleSubmit} className="p-4 sm:p-6 space-y-4 sm:space-y-6 overflow-y-auto flex-1">
           {error && (
             <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
               {error}
@@ -168,6 +169,7 @@ export default function ClientForm({ client, onClose }: ClientFormProps) {
           )}
 
           {/* Datos del Cliente */}
+          <fieldset disabled={readOnly}>
           <div className="space-y-4">
             <h3 className="text-lg font-bold text-[#010139] border-b-2 border-[#8AAA19] pb-2">
               👤 Información del Cliente
@@ -375,14 +377,16 @@ export default function ClientForm({ client, onClose }: ClientFormProps) {
               )}
             </button>
           </div>
+          </fieldset>
         </form>
       </div>
       
       {/* Policy Form Modal - Renderizado por separado */}
       {showPolicyForm && client && (
         <PolicyForm
-          clientId={client.id}
+          clientId={(client as any).id}
           policy={editingPolicy}
+          readOnly={readOnly}
           onClose={() => {
             setShowPolicyForm(false);
             setEditingPolicy(null);
@@ -420,6 +424,7 @@ interface PolicyFormProps {
   policy: PolicyRow | null;
   onClose: () => void;
   onSave: (policy: PolicyRow) => void;
+  readOnly?: boolean;
 }
 
 type PolicyFormState = {
@@ -433,7 +438,7 @@ type PolicyFormState = {
   notas: string;
 };
 
-function PolicyForm({ clientId, policy, onClose, onSave }: PolicyFormProps) {
+function PolicyForm({ clientId, policy, onClose, onSave, readOnly = false }: PolicyFormProps) {
   const [formData, setFormData] = useState<PolicyFormState>({
     policy_number: policy?.policy_number || "",
     ramo: policy?.ramo || "",
@@ -617,12 +622,13 @@ function PolicyForm({ clientId, policy, onClose, onSave }: PolicyFormProps) {
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-4 sm:p-5 space-y-4 sm:space-y-5 overflow-y-auto flex-1">
+        <form onSubmit={readOnly ? (e) => e.preventDefault() : handleSubmit} className="p-4 sm:p-5 space-y-4 sm:space-y-5 overflow-y-auto flex-1">
           {error && (
             <div className="p-3 bg-red-100 border border-red-400 text-red-700 rounded">
               {error}
             </div>
           )}
+          <fieldset disabled={readOnly}>
             <div>
               <label className="block text-sm font-bold text-[#010139] mb-2">
                 📝 Número de Póliza *
@@ -791,26 +797,29 @@ function PolicyForm({ clientId, policy, onClose, onSave }: PolicyFormProps) {
               onClick={onClose}
               className="px-6 py-3 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-all font-semibold text-sm"
             >
-              Cancelar
+              {readOnly ? 'Cerrar' : 'Cancelar'}
             </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="px-6 py-3 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg hover:shadow-lg hover:scale-[1.02] transition-all font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center gap-2"
-            >
-              {loading ? (
-                <>
-                  <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
-                  <span>Guardando...</span>
-                </>
-              ) : (
-                <>
-                  <FaPlus size={14} />
-                  <span>{policy ? "Guardar Cambios" : "Crear Póliza"}</span>
-                </>
-              )}
-            </button>
+            {!readOnly && (
+              <button
+                type="submit"
+                disabled={loading}
+                className="px-6 py-3 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg hover:shadow-lg hover:scale-[1.02] transition-all font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center gap-2"
+              >
+                {loading ? (
+                  <>
+                    <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
+                    <span>Guardando...</span>
+                  </>
+                ) : (
+                  <>
+                    <FaPlus size={14} />
+                    <span>{policy ? "Guardar Cambios" : "Crear Póliza"}</span>
+                  </>
+                )}
+              </button>
+            )}
           </div>
+          </fieldset>
         </form>
       </div>
     </div>

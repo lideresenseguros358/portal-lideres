@@ -110,8 +110,8 @@ export default function BrokersBulkEditModal({ isOpen, onClose, brokers, onSave 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] max-h-[90vh] flex flex-col">
+    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 overflow-y-auto">
+      <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] max-h-[90vh] flex flex-col my-4 sm:my-8">
         {/* Header */}
         <div className="p-6 border-b border-gray-200 flex items-center justify-between">
           <div className="flex items-center gap-3">

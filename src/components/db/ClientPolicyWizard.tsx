@@ -417,7 +417,7 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-start sm:items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white rounded-xl max-w-2xl w-full my-8 shadow-2xl flex flex-col max-h-[90vh]">
+      <div className="bg-white rounded-xl max-w-2xl w-full my-4 sm:my-8 shadow-2xl flex flex-col max-h-[90vh]">
         {/* Header */}
         <div className="bg-gradient-to-r from-[#010139] to-[#020270] text-white px-4 py-3 sm:p-6 flex items-center justify-between rounded-t-xl flex-shrink-0">
           <h2 className="text-base sm:text-2xl font-bold">Nuevo Cliente y Póliza</h2>

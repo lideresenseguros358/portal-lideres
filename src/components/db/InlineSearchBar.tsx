@@ -85,9 +85,11 @@ export default function InlineSearchBar({ initialQuery = '' }: InlineSearchBarPr
   };
 
   const handleSuggestionClick = (suggestion: SearchSuggestion) => {
-    setSearchQuery(suggestion.name);
-    router.push(`/db?tab=clients&search=${encodeURIComponent(suggestion.name)}`);
+    const searchTerm = suggestion.national_id || suggestion.name;
+    setSearchQuery(searchTerm);
     setShowSuggestions(false);
+    // Forzar búsqueda inmediata
+    router.push(`/db?tab=clients&search=${encodeURIComponent(searchTerm)}`);
   };
 
   const handleClear = () => {
@@ -117,7 +119,7 @@ export default function InlineSearchBar({ initialQuery = '' }: InlineSearchBarPr
             onChange={(e) => handleInputChange(e.target.value)}
             onFocus={() => setShowSuggestions(true)}
             className="w-full pl-12 pr-24 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-[#8AAA19] transition-all text-gray-700 placeholder-gray-400"
-            placeholder="Buscar por nombre, cédula o email..."
+            placeholder="Buscar por nombre, cédula, email o notas..."
           />
 
           {/* Clear & Search Buttons */}

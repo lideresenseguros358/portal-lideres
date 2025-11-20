@@ -1440,8 +1440,8 @@ export async function actionDeleteAdvanceRecurrence(id: string) {
 
 /**
  * Eliminar un adelanto con validación de historial
- * - Solo permite eliminar si NO tiene historial (advance_logs)
- * - Si es recurrente, solo elimina el adelanto pero mantiene el historial en deudas saldadas
+ * - Si NO tiene historial: ELIMINA completamente el adelanto
+ * - Si SÍ tiene historial: Cambia status a PAID para que aparezca en "Deudas Saldadas"
  */
 export async function actionDeleteAdvance(advanceId: string) {
   try {
@@ -1450,7 +1450,7 @@ export async function actionDeleteAdvance(advanceId: string) {
     // 1. Verificar si el adelanto existe
     const { data: advance, error: fetchError } = await supabase
       .from('advances')
-      .select('id, is_recurring, recurrence_id, status, brokers(name)')
+      .select('id, is_recurring, recurrence_id, status, amount, brokers(name)')
       .eq('id', advanceId)
       .single();
     
@@ -1464,9 +1464,8 @@ export async function actionDeleteAdvance(advanceId: string) {
     // 2. Verificar si tiene historial de pagos
     const { data: logs, error: logsError } = await supabase
       .from('advance_logs')
-      .select('id')
-      .eq('advance_id', advanceId)
-      .limit(1);
+      .select('id, amount')
+      .eq('advance_id', advanceId);
     
     if (logsError) {
       return {
@@ -1475,40 +1474,142 @@ export async function actionDeleteAdvance(advanceId: string) {
       };
     }
     
-    // 3. Si tiene historial, no se puede eliminar
-    if (logs && logs.length > 0) {
-      return {
-        ok: false as const,
-        error: 'No se puede eliminar: Este adelanto tiene historial de pagos. Para mantener integridad de los registros, no se permite eliminar deudas con historial.',
+    const hasPaymentHistory = logs && logs.length > 0;
+    
+    // 2.5. Si es adelanto recurrente, desactivar la configuración para que no se creen más
+    if (advance.is_recurring && advance.recurrence_id) {
+      console.log(`🔄 Desactivando configuración recurrente ${advance.recurrence_id} del adelanto ${advanceId}`);
+      const { error: deactivateError } = await supabase
+        .from('advance_recurrences')
+        .update({ is_active: false })
+        .eq('id', advance.recurrence_id);
+      
+      if (deactivateError) {
+        console.error('Error desactivando recurrencia:', deactivateError);
+        // No retornar error, continuar con la eliminación del adelanto
+      } else {
+        console.log('✅ Configuración recurrente desactivada');
+      }
+    }
+    
+    // 3. Si NO tiene historial: ELIMINAR completamente
+    if (!hasPaymentHistory) {
+      // Primero, buscar y eliminar pagos pendientes asociados a este adelanto
+      const { data: pendingPayments } = await supabase
+        .from('pending_payments')
+        .select('id, notes')
+        .ilike('notes', `%${advanceId}%`);
+      
+      if (pendingPayments && pendingPayments.length > 0) {
+        console.log(`🧹 Eliminando ${pendingPayments.length} pago(s) pendiente(s) asociado(s) al adelanto ${advanceId}`);
+        
+        // Verificar que realmente contienen el advance_id en los metadata
+        const validPaymentIds: string[] = [];
+        pendingPayments.forEach(p => {
+          try {
+            const metadata = typeof p.notes === 'string' ? JSON.parse(p.notes) : p.notes;
+            if (metadata?.advance_id === advanceId) {
+              validPaymentIds.push(p.id);
+            }
+          } catch (e) {
+            // Ignorar si no se puede parsear
+          }
+        });
+        
+        if (validPaymentIds.length > 0) {
+          // Eliminar referencias primero
+          await supabase
+            .from('payment_references')
+            .delete()
+            .in('payment_id', validPaymentIds);
+          
+          // Eliminar pagos pendientes
+          const { error: deletePaymentsError } = await supabase
+            .from('pending_payments')
+            .delete()
+            .in('id', validPaymentIds);
+          
+          if (deletePaymentsError) {
+            console.error('Error eliminando pagos pendientes asociados:', deletePaymentsError);
+          }
+        }
+      }
+      
+      // Ahora eliminar el adelanto
+      const { error: deleteError } = await supabase
+        .from('advances')
+        .delete()
+        .eq('id', advanceId);
+      
+      if (deleteError) {
+        return {
+          ok: false as const,
+          error: `Error al eliminar adelanto: ${deleteError.message}`,
+        };
+      }
+      
+      revalidatePath('/(app)/commissions');
+      return { 
+        ok: true as const,
+        message: 'Adelanto eliminado completamente (sin historial de pagos)',
       };
     }
     
-    // 4. Si es recurrente pero no tiene historial, eliminar solo el adelanto
-    // (la recurrencia se mantiene para futuras generaciones)
-    const { error: deleteError } = await supabase
+    // 4. Si SÍ tiene historial: Cambiar status a PAID
+    // Esto lo mueve de "Deudas Activas" a "Deudas Saldadas"
+    const { error: updateError } = await supabase
       .from('advances')
-      .delete()
+      .update({ status: 'PAID' })
       .eq('id', advanceId);
     
-    if (deleteError) {
+    if (updateError) {
       return {
         ok: false as const,
-        error: `Error al eliminar adelanto: ${deleteError.message}`,
+        error: `Error al marcar como saldado: ${updateError.message}`,
       };
     }
     
     revalidatePath('/(app)/commissions');
     return { 
       ok: true as const,
-      message: advance.is_recurring 
-        ? 'Adelanto recurrente eliminado. La configuración de recurrencia se mantiene activa.'
-        : 'Adelanto eliminado exitosamente',
+      message: 'Adelanto movido a "Deudas Saldadas" (tiene historial de pagos)',
     };
   } catch (error) {
     console.error('[actionDeleteAdvance] Error:', error);
     return {
       ok: false as const,
       error: error instanceof Error ? error.message : 'Error desconocido al eliminar adelanto',
+    };
+  }
+}
+
+export async function actionCheckAdvanceHasHistory(advanceId: string) {
+  try {
+    const supabase = getSupabaseAdmin();
+    
+    const { data: logs, error } = await supabase
+      .from('advance_logs')
+      .select('id')
+      .eq('advance_id', advanceId)
+      .limit(1);
+    
+    if (error) {
+      return {
+        ok: false as const,
+        error: 'Error al verificar historial',
+        hasHistory: false,
+      };
+    }
+    
+    return {
+      ok: true as const,
+      hasHistory: logs && logs.length > 0,
+    };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : 'Error desconocido',
+      hasHistory: false,
     };
   }
 }
@@ -2545,6 +2646,73 @@ export async function actionPayFortnight(fortnight_id: string) {
       }
     }
     
+    // 7. Notificar brokers que reciben pago (AMBAS: email + campanita)
+    // Solo notificar a brokers que:
+    // - NO tienen descuento del 100% (net_amount > 0)
+    // - NO están retenidos
+    const brokersToNotify = brokerTotals.filter(bt => 
+      bt.net_amount > 0 && !bt.is_retained
+    );
+    
+    if (brokersToNotify.length > 0) {
+      const periodLabel = formatFortnightLabel(fortnight.period_start, fortnight.period_end);
+      
+      for (const bt of brokersToNotify) {
+        try {
+          const { createNotification } = await import('@/lib/notifications/create');
+          const { sendNotificationEmail } = await import('@/lib/notifications/send-email');
+          
+          const notificationData = {
+            type: 'commission' as const,
+            target: 'BROKER' as const,
+            title: `💵 Comisiones Pagadas - ${periodLabel}`,
+            body: `Se han procesado los pagos de la quincena ${periodLabel}. Monto neto: $${bt.net_amount.toFixed(2)}`,
+            brokerId: bt.broker_id,
+            meta: {
+              fortnight_id,
+              period_label: periodLabel,
+              gross_amount: bt.gross_amount,
+              net_amount: bt.net_amount,
+              discount_amount: bt.gross_amount - bt.net_amount,
+            },
+            entityId: `${fortnight_id}-${bt.broker_id}`,
+          };
+          
+          // Crear notificación en BD
+          const notifResult = await createNotification(notificationData);
+          
+          // Enviar email
+          if (notifResult.success && !notifResult.isDuplicate) {
+            // Obtener email del broker
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('email')
+              .eq('id', (bt.brokers as any)?.p_id)
+              .single();
+            
+            if (profile?.email) {
+              await sendNotificationEmail({
+                type: 'commission',
+                to: profile.email,
+                data: {
+                  brokerName: (bt.brokers as any)?.name || 'Broker',
+                  periodLabel,
+                  grossAmount: bt.gross_amount,
+                  netAmount: bt.net_amount,
+                  discountAmount: bt.gross_amount - bt.net_amount,
+                  fortnightId: fortnight_id,
+                },
+                notificationId: notifResult.notificationId,
+              });
+            }
+          }
+        } catch (notifError) {
+          console.error('[actionPayFortnight] Error enviando notificación:', notifError);
+          // No fallar si la notificación falla
+        }
+      }
+    }
+    
     revalidatePath('/(app)/commissions');
     return { 
       ok: true as const, 
@@ -2552,6 +2720,7 @@ export async function actionPayFortnight(fortnight_id: string) {
         csv: csvContent,
         brokers_paid: filteredTotals.length,
         total_paid: filteredTotals.reduce((s, r) => s + r.net_amount, 0),
+        brokers_notified: brokersToNotify.length,
       } 
     };
   } catch (error) {

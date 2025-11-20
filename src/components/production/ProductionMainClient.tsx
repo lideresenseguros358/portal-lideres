@@ -62,8 +62,8 @@ export default function ProductionMainClient({ userId, role, brokerId, brokers }
         </div>
 
         {/* Tabs */}
-        <div className="mt-6 border-b-2 border-gray-200">
-          <div className="flex gap-2 sm:gap-4 overflow-x-auto pb-2 scrollbar-hide">
+        <div className="mt-6 bg-gray-50 rounded-xl p-3 sm:p-4">
+          <div className="flex gap-2 overflow-x-auto scrollbar-hide">
             {tabs.map(tab => {
               const Icon = tab.icon;
               return (
@@ -71,10 +71,10 @@ export default function ProductionMainClient({ userId, role, brokerId, brokers }
                   key={tab.key}
                   onClick={() => setActiveTab(tab.key)}
                   className={`
-                    px-4 py-2 rounded-t-lg font-semibold whitespace-nowrap transition-all flex items-center gap-2
+                    px-4 py-2.5 rounded-lg font-semibold whitespace-nowrap transition-all duration-200 flex items-center gap-2 min-w-fit
                     ${activeTab === tab.key 
-                      ? 'bg-[#010139] text-white border-b-4 border-[#8AAA19]' 
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      ? 'bg-[#010139] text-white shadow-md' 
+                      : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200 hover:border-gray-300'
                     }
                   `}
                 >

@@ -218,12 +218,112 @@ export async function actionImportDelinquency(payload: {
       return { ok: false, error: 'Error al insertar datos: ' + insertError.message };
     }
     
+    // Notificar brokers afectados (AMBAS: email + campanita)
+    // Agrupar registros por broker
+    const brokerRecordsMap = new Map<string, typeof recordsToInsert>();
+    
+    for (const record of recordsToInsert) {
+      if (record.broker_id) {
+        if (!brokerRecordsMap.has(record.broker_id)) {
+          brokerRecordsMap.set(record.broker_id, []);
+        }
+        brokerRecordsMap.get(record.broker_id)!.push(record);
+      }
+    }
+    
+    // Obtener nombre de aseguradora
+    const { data: insurer } = await supabase
+      .from('insurers')
+      .select('name')
+      .eq('id', payload.insurerId)
+      .single();
+    
+    const insurerName = insurer?.name || 'Aseguradora';
+    
+    if (brokerRecordsMap.size > 0) {
+      for (const [brokerId, brokerRecords] of brokerRecordsMap.entries()) {
+        try {
+          const { createNotification } = await import('@/lib/notifications/create');
+          const { sendNotificationEmail } = await import('@/lib/notifications/send-email');
+          
+          // Calcular deuda total del broker
+          const totalDebt = brokerRecords.reduce((sum, r) => sum + r.total_debt, 0);
+          
+          const notificationData = {
+            type: 'delinquency' as const,
+            target: 'BROKER' as const,
+            title: `⚠️ Nuevos Reportes de Morosidad - ${insurerName}`,
+            body: `Se cargaron ${brokerRecords.length} reportes de morosidad que afectan a tus clientes. Total en mora: $${totalDebt.toFixed(2)}`,
+            brokerId,
+            meta: {
+              insurer_id: payload.insurerId,
+              insurer_name: insurerName,
+              cutoff_date: payload.cutoffDate,
+              records_count: brokerRecords.length,
+              total_debt: totalDebt,
+              policies: brokerRecords.map(r => r.policy_number),
+            },
+            entityId: `${payload.insurerId}-${payload.cutoffDate}-${brokerId}`,
+          };
+          
+          // Crear notificación en BD
+          const notifResult = await createNotification(notificationData);
+          
+          // Enviar email
+          if (notifResult.success && !notifResult.isDuplicate) {
+            // Obtener info del broker
+            const { data: broker } = await supabase
+              .from('brokers')
+              .select('name, p_id')
+              .eq('id', brokerId)
+              .single();
+            
+            if (broker?.p_id) {
+              const { data: profile } = await supabase
+                .from('profiles')
+                .select('email')
+                .eq('id', broker.p_id)
+                .single();
+              
+              if (profile?.email) {
+                await sendNotificationEmail({
+                  type: 'delinquency',
+                  to: profile.email,
+                  data: {
+                    brokerName: broker.name || 'Broker',
+                    insurerName,
+                    cutoffDate: payload.cutoffDate,
+                    recordsCount: brokerRecords.length,
+                    totalDebt,
+                    records: brokerRecords.map(r => ({
+                      policyNumber: r.policy_number,
+                      clientName: r.client_name,
+                      totalDebt: r.total_debt,
+                      daysOverdue: r.bucket_90_plus > 0 ? '90+' : 
+                                   r.bucket_61_90 > 0 ? '61-90' :
+                                   r.bucket_31_60 > 0 ? '31-60' :
+                                   r.bucket_1_30 > 0 ? '1-30' : 'Actual',
+                    })),
+                  },
+                  notificationId: notifResult.notificationId,
+                });
+              }
+            }
+          }
+        } catch (notifError) {
+          console.error('[actionImportDelinquency] Error enviando notificación:', notifError);
+          // No fallar si la notificación falla
+        }
+      }
+    }
+    
     revalidatePath('/delinquency');
     
     return { 
       ok: true, 
       message: 'Import realizado correctamente sin errores',
-      count: recordsToInsert.length 
+      count: recordsToInsert.length,
+      brokers_notified: brokerRecordsMap.size,
     };
   } catch (error: any) {
     return { ok: false, error: error.message };

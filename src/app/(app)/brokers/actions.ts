@@ -376,6 +376,69 @@ export async function actionToggleBrokerActive(brokerId: string, active: boolean
 }
 
 // =====================================================
+// TOGGLE RENEWAL NOTIFICATIONS (Master receives broker notifications)
+// =====================================================
+
+export async function actionToggleBrokerRenewalNotifications(brokerId: string, notify: boolean) {
+  try {
+    const supabaseServer = await getSupabaseServer();
+    const { data: { user } } = await supabaseServer.auth.getUser();
+    
+    if (!user) {
+      return { ok: false as const, error: 'No autenticado' };
+    }
+
+    // Check if user is master
+    const { data: profile } = await supabaseServer
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
+    if (profile?.role !== 'master') {
+      return { ok: false as const, error: 'Solo Master puede cambiar notificaciones' };
+    }
+
+    const supabase = await getSupabaseAdmin();
+
+    // Get broker's profile ID
+    const { data: broker } = await supabase
+      .from('brokers')
+      .select('p_id')
+      .eq('id', brokerId)
+      .single();
+
+    if (!broker?.p_id) {
+      return { ok: false as const, error: 'Broker no encontrado' };
+    }
+
+    // Update profile notify_broker_renewals
+    const { error } = await supabase
+      .from('profiles')
+      .update({ notify_broker_renewals: notify })
+      .eq('id', broker.p_id);
+
+    if (error) {
+      console.error('Error updating notify_broker_renewals:', error);
+      return { ok: false as const, error: error.message };
+    }
+
+    revalidatePath('/brokers');
+    revalidatePath(`/brokers/${brokerId}`);
+
+    return { 
+      ok: true as const, 
+      message: notify 
+        ? 'Recibirás notificaciones de renovación de este broker' 
+        : 'Ya no recibirás notificaciones de renovación de este broker'
+    };
+  } catch (error: any) {
+    console.error('Error in actionToggleBrokerRenewalNotifications:', error);
+    return { ok: false as const, error: error.message };
+  }
+}
+
+// =====================================================
 // DELETE BROKER (Move portfolio to Oficina)
 // =====================================================
 

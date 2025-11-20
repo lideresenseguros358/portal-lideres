@@ -12,6 +12,7 @@ import { getDelinquencyUpdateEmailContent } from '@/lib/email/templates/Delinque
 import { getDownloadUpdateEmailContent } from '@/lib/email/templates/DownloadUpdateEmailTemplate';
 import { getGuideUpdateEmailContent } from '@/lib/email/templates/GuideUpdateEmailTemplate';
 import { getCarnetRenewalEmailContent } from '@/lib/email/templates/CarnetRenewalEmailTemplate';
+import { getAgendaEventEmailContent } from '@/lib/email/templates/AgendaEventEmailTemplate';
 import type { NotificationType } from './utils';
 
 export interface SendNotificationEmailParams {
@@ -65,6 +66,10 @@ export async function sendNotificationEmail(
       
       case 'carnet_renewal':
         emailContent = getCarnetRenewalEmailContent(params.data);
+        break;
+      
+      case 'agenda_event':
+        emailContent = getAgendaEventEmailContent(params.data);
         break;
       
       default:
