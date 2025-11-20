@@ -36,9 +36,15 @@ export function PayAdvanceModal({ isOpen, onClose, onSuccess, brokerId, brokerNa
   const [paymentType, setPaymentType] = useState<'cash' | 'transfer'>('transfer');
   const [loading, setLoading] = useState(false);
   
+  // Get today's date in YYYY-MM-DD format
+  const getTodayDate = () => {
+    const today = new Date();
+    return today.toISOString().split('T')[0];
+  };
+  
   // Transfer fields
   const [referenceNumber, setReferenceNumber] = useState('');
-  const [transferDate, setTransferDate] = useState('');
+  const [transferDate, setTransferDate] = useState(getTodayDate());
   
   // Reference validation
   const [validatingRef, setValidatingRef] = useState(false);
@@ -51,7 +57,7 @@ export function PayAdvanceModal({ isOpen, onClose, onSuccess, brokerId, brokerNa
   } | null>(null);
   
   // Cash fields
-  const [cashDate, setCashDate] = useState('');
+  const [cashDate, setCashDate] = useState(getTodayDate());
   
   // Selected advances with amounts
   const [advancePayments, setAdvancePayments] = useState<AdvancePayment[]>([]);
@@ -61,8 +67,8 @@ export function PayAdvanceModal({ isOpen, onClose, onSuccess, brokerId, brokerNa
 
   const resetForm = () => {
     setReferenceNumber('');
-    setTransferDate('');
-    setCashDate('');
+    setTransferDate(getTodayDate());
+    setCashDate(getTodayDate());
     setAdvancePayments([]);
     setPaymentType('transfer');
     setRefValidation(null);
@@ -146,6 +152,16 @@ export function PayAdvanceModal({ isOpen, onClose, onSuccess, brokerId, brokerNa
     } else {
       setAdvancePayments([...advancePayments, { advanceId, amount: numAmount, reason }]);
     }
+  };
+
+  const handlePayAll = () => {
+    const newPayments: AdvancePayment[] = pendingAdvances.map(advance => ({
+      advanceId: advance.id,
+      amount: advance.amount,
+      reason: advance.reason || 'Sin motivo'
+    }));
+    setAdvancePayments(newPayments);
+    toast.success('Montos completos asignados a todos los adelantos');
   };
 
   const handleSubmit = async () => {
@@ -299,7 +315,19 @@ export function PayAdvanceModal({ isOpen, onClose, onSuccess, brokerId, brokerNa
             </div>
 
             <div className="space-y-3">
-              <Label className="text-sm font-semibold">Distribución del Pago</Label>
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-semibold">Distribución del Pago</Label>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={handlePayAll}
+                  disabled={!refValidation?.exists}
+                  className="text-xs hover:bg-[#8AAA19] hover:text-white"
+                >
+                  💰 Pagar Todo
+                </Button>
+              </div>
               <div className="border rounded-lg overflow-hidden">
                 <div className="bg-gray-50 px-3 py-2 border-b grid grid-cols-12 gap-2 text-xs font-semibold text-gray-700">
                   <div className="col-span-6">Motivo del Adelanto</div>
@@ -320,6 +348,7 @@ export function PayAdvanceModal({ isOpen, onClose, onSuccess, brokerId, brokerNa
                             max={refValidation?.remainingAmount ? Math.min(advance.amount, refValidation.remainingAmount) : advance.amount}
                             value={currentPayment?.amount || ''}
                             onChange={(e) => handleAdvanceAmountChange(advance.id, e.target.value, advance.reason || 'Sin motivo')}
+                            onWheel={(e) => e.currentTarget.blur()}
                             placeholder="0.00"
                             className="text-right text-sm"
                             disabled={!refValidation?.exists}
@@ -352,7 +381,18 @@ export function PayAdvanceModal({ isOpen, onClose, onSuccess, brokerId, brokerNa
             </div>
 
             <div className="space-y-3">
-              <Label className="text-sm font-semibold">Distribución del Pago</Label>
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-semibold">Distribución del Pago</Label>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={handlePayAll}
+                  className="text-xs hover:bg-[#8AAA19] hover:text-white"
+                >
+                  💰 Pagar Todo
+                </Button>
+              </div>
               <div className="border rounded-lg overflow-hidden">
                 <div className="bg-gray-50 px-3 py-2 border-b grid grid-cols-12 gap-2 text-xs font-semibold text-gray-700">
                   <div className="col-span-6">Motivo del Adelanto</div>
@@ -373,6 +413,7 @@ export function PayAdvanceModal({ isOpen, onClose, onSuccess, brokerId, brokerNa
                             max={advance.amount}
                             value={currentPayment?.amount || ''}
                             onChange={(e) => handleAdvanceAmountChange(advance.id, e.target.value, advance.reason || 'Sin motivo')}
+                            onWheel={(e) => e.currentTarget.blur()}
                             placeholder="0.00"
                             className="text-right text-sm"
                           />

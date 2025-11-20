@@ -713,24 +713,31 @@ export async function actionGetAdvances(brokerId?: string, year?: number) {
       if (paidAdvances.length > 0) {
         const paidIds = paidAdvances.map(a => a.id);
         
-        // Obtener suma de pagos por adelanto
+        // Obtener suma de pagos y fecha del último pago por adelanto
         const { data: logs } = await supabase
           .from('advance_logs')
-          .select('advance_id, amount')
+          .select('advance_id, amount, created_at')
           .in('advance_id', paidIds);
         
         if (logs) {
           // Agrupar por advance_id
           const paymentsByAdvance = logs.reduce((acc: any, log: any) => {
-            if (!acc[log.advance_id]) acc[log.advance_id] = 0;
-            acc[log.advance_id] += Number(log.amount) || 0;
+            if (!acc[log.advance_id]) {
+              acc[log.advance_id] = { total: 0, lastDate: log.created_at };
+            }
+            acc[log.advance_id].total += Number(log.amount) || 0;
+            // Actualizar última fecha si es más reciente
+            if (new Date(log.created_at) > new Date(acc[log.advance_id].lastDate)) {
+              acc[log.advance_id].lastDate = log.created_at;
+            }
             return acc;
           }, {});
           
-          // Agregar total_paid a cada adelanto
+          // Agregar total_paid y last_payment_date a cada adelanto
           dataWithTotalPaid = data.map((adv: any) => ({
             ...adv,
-            total_paid: adv.status === 'PAID' ? (paymentsByAdvance[adv.id] || 0) : undefined
+            total_paid: adv.status === 'PAID' ? (paymentsByAdvance[adv.id]?.total || 0) : undefined,
+            last_payment_date: adv.status === 'PAID' ? (paymentsByAdvance[adv.id]?.lastDate || null) : undefined
           }));
           
           console.log('[actionGetAdvances] Added total_paid to', paidAdvances.length, 'paid advances');

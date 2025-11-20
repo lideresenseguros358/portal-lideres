@@ -27,6 +27,7 @@ interface Advance {
   is_recurring?: boolean;
   recurrence_id?: string | null;
   total_paid?: number; // Total pagado desde advance_logs
+  last_payment_date?: string | null; // Fecha del último pago desde advance_logs
 }
 
 interface GroupedAdvances {
@@ -172,6 +173,13 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
     setExpandedBrokers(newSet);
   };
 
+  const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
+  const toggleDate = (date: string) => {
+    const newSet = new Set(expandedDates);
+    newSet.has(date) ? newSet.delete(date) : newSet.add(date);
+    setExpandedDates(newSet);
+  };
+
   const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i);
 
   const renderTable = (status: 'pending' | 'paid') => {
@@ -199,6 +207,228 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
       );
     }
 
+    // Para deudas saldadas, agrupar por fecha de pago
+    if (status === 'paid') {
+      // Recolectar todos los adelantos pagados
+      const allPaidAdvances: Advance[] = [];
+      Object.values(groupedData).forEach(brokerData => {
+        brokerData.advances.filter(a => a.status === 'paid').forEach(adv => {
+          allPaidAdvances.push(adv);
+        });
+      });
+
+      // Agrupar por fecha de pago
+      const byDate: Record<string, { advances: Advance[], total: number }> = {};
+      allPaidAdvances.forEach(adv => {
+        const dateKey = adv.last_payment_date 
+          ? new Date(adv.last_payment_date).toLocaleDateString('es-PA')
+          : 'Sin fecha';
+        
+        if (!byDate[dateKey]) {
+          byDate[dateKey] = { advances: [], total: 0 };
+        }
+        byDate[dateKey].advances.push(adv);
+        byDate[dateKey].total += (adv.total_paid || 0);
+      });
+
+      // Ordenar por fecha (más reciente primero)
+      const sortedDates = Object.keys(byDate).sort((a, b) => {
+        if (a === 'Sin fecha') return 1;
+        if (b === 'Sin fecha') return -1;
+        const dateA = new Date(a.split('/').reverse().join('-'));
+        const dateB = new Date(b.split('/').reverse().join('-'));
+        return dateB.getTime() - dateA.getTime();
+      });
+
+      return (
+        <div className="advances-table-wrapper">
+          {/* Tabla para desktop - Agrupada por fecha */}
+          <div className="hidden md:block">
+            <Table>
+              <TableHeader>
+                <TableRow className="border-b-2 border-gray-200 bg-gray-50">
+                  <TableHead className="w-10 advances-th-expand"></TableHead>
+                  <TableHead className="text-gray-700 font-semibold advances-th-broker">Fecha / Corredor / Motivo</TableHead>
+                  <TableHead className="text-right text-gray-700 font-semibold advances-th-amount">Monto</TableHead>
+                  <TableHead className="text-center text-gray-700 font-semibold advances-th-actions">Acciones</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {sortedDates.map(dateKey => {
+                  const dateGroup = byDate[dateKey];
+                  if (!dateGroup) return null;
+                  
+                  const isExpanded = expandedDates.has(dateKey);
+                  
+                  return (
+                    <React.Fragment key={`date-${dateKey}`}>
+                      {/* Fila de agrupación por fecha */}
+                      <TableRow
+                        onClick={() => toggleDate(dateKey)}
+                        className="cursor-pointer bg-gradient-to-r from-blue-50 to-blue-100 hover:from-blue-100 hover:to-blue-150 font-semibold transition-colors border-b-2 border-blue-200"
+                      >
+                        <TableCell>
+                          {isExpanded ? (
+                            <FaChevronDown className="text-[#010139]" />
+                          ) : (
+                            <FaChevronRight className="text-gray-400" />
+                          )}
+                        </TableCell>
+                        <TableCell className="font-bold text-[#010139]">
+                          📅 {dateKey}
+                        </TableCell>
+                        <TableCell className="text-right font-bold text-[#8AAA19] font-mono">
+                          {dateGroup.total.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                        </TableCell>
+                        <TableCell className="text-center text-gray-600">
+                          {dateGroup.advances.length} adelanto{dateGroup.advances.length !== 1 ? 's' : ''}
+                        </TableCell>
+                      </TableRow>
+
+                      {/* Adelantos de esta fecha */}
+                      {isExpanded && dateGroup.advances.map(advance => (
+                        <TableRow
+                          key={advance.id}
+                          className="hover:bg-gray-50 transition-colors"
+                        >
+                          <TableCell></TableCell>
+                          <TableCell className="pl-12 text-gray-600">
+                            <div className="flex flex-col gap-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-semibold text-[#010139]">
+                                  {advance.brokers?.name || 'Sin corredor'}
+                                </span>
+                                {advance.is_recurring && (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-800 border border-purple-300">
+                                    🔁 RECURRENTE
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-sm">{advance.reason || 'Sin motivo especificado'}</span>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-gray-700">
+                            {(advance.total_paid || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <div className="flex items-center justify-center gap-2">
+                              {role === 'master' && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setEditingAdvance(advance);
+                                  }}
+                                  className="hover:bg-[#010139] hover:text-white"
+                                  title="Editar adelanto"
+                                >
+                                  <FaEdit className="text-sm" />
+                                </Button>
+                              )}
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => setSelectedAdvanceId(advance.id)}
+                                className="hover:bg-[#8AAA19] hover:text-white"
+                                title="Ver historial"
+                              >
+                                <FaHistory className="text-sm" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </React.Fragment>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+
+          {/* Cards para mobile - Agrupada por fecha */}
+          <div className="md:hidden space-y-3">
+            {sortedDates.map(dateKey => {
+              const dateGroup = byDate[dateKey];
+              if (!dateGroup) return null;
+              
+              const isExpanded = expandedDates.has(dateKey);
+              
+              return (
+                <div key={`mobile-date-${dateKey}`} className="space-y-2">
+                  {/* Header de fecha */}
+                  <div
+                    onClick={() => toggleDate(dateKey)}
+                    className="bg-gradient-to-r from-blue-500 to-blue-600 text-white p-3 rounded-lg cursor-pointer"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        {isExpanded ? <FaChevronDown /> : <FaChevronRight />}
+                        <span className="font-bold">📅 {dateKey}</span>
+                      </div>
+                      <span className="font-bold text-white">
+                        {dateGroup.total.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                      </span>
+                    </div>
+                    <div className="text-xs text-white/80 mt-1">
+                      {dateGroup.advances.length} adelanto{dateGroup.advances.length !== 1 ? 's' : ''}
+                    </div>
+                  </div>
+
+                  {/* Adelantos de esta fecha */}
+                  {isExpanded && dateGroup.advances.map(advance => (
+                    <div key={`mobile-${advance.id}`} className="bg-white border-2 border-gray-200 rounded-lg p-3 space-y-2 ml-4">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-[#010139] mb-1">
+                            {advance.brokers?.name || 'Sin corredor'}
+                          </p>
+                          <p className="font-semibold text-gray-700 text-sm">
+                            {advance.reason || 'Sin motivo especificado'}
+                          </p>
+                          {advance.is_recurring && (
+                            <span className="inline-block mt-1 text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-semibold">
+                              ♻️ Recurrente
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <p className="font-bold text-[#8AAA19] font-mono text-base">
+                            {(advance.total_paid || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                          </p>
+                        </div>
+                      </div>
+                      
+                      <div className="flex items-center gap-2 pt-2 border-t border-gray-200">
+                        {role === 'master' && (
+                          <Button
+                            size="sm"
+                            onClick={() => setEditingAdvance(advance)}
+                            className="flex-1 bg-[#010139] hover:bg-[#020270] text-white text-xs"
+                          >
+                            <FaEdit className="text-xs text-white" /> Editar
+                          </Button>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setSelectedAdvanceId(advance.id)}
+                          className="flex-1 text-xs"
+                        >
+                          <FaHistory className="text-xs" /> Historial
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+
+    // Renderizar tabla de pendientes (status === 'pending')
     return (
       <div className="advances-table-wrapper">
         {/* Tabla para desktop */}
@@ -235,38 +465,31 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
                   </TableCell>
                   <TableCell className="font-bold text-[#010139]">{brokerData.broker_name}</TableCell>
                   <TableCell className="text-right font-bold text-[#8AAA19] font-mono">
-                    {status === 'pending' 
-                      ? brokerData.total_pending.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
-                      : brokerData.total_paid.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
-                    }
+                    {brokerData.total_pending.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
                   </TableCell>
                   <TableCell className="text-center text-gray-600">
                     {advancesToShow.length} adelantos
                   </TableCell>
                   <TableCell className="text-center">
-                    {status === 'pending' ? (
-                      <Button 
-                        size="sm" 
-                        variant="ghost"
-                        className="hover:bg-[#010139] hover:text-white"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const pendingAdv = brokerData.advances
-                            .filter(a => a.status === 'pending')
-                            .map(a => ({ id: a.id, amount: a.amount, reason: a.reason }));
-                          setPaymentModal({
-                            isOpen: true,
-                            brokerId: bId,
-                            brokerName: brokerData.broker_name,
-                            pendingAdvances: pendingAdv,
-                          });
-                        }}
-                      >
-                        Pago Externo
-                      </Button>
-                    ) : (
-                      <span className="text-sm text-gray-500">Saldado</span>
-                    )}
+                    <Button 
+                      size="sm" 
+                      variant="ghost"
+                      className="hover:bg-[#010139] hover:text-white"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const pendingAdv = brokerData.advances
+                          .filter(a => a.status === 'pending')
+                          .map(a => ({ id: a.id, amount: a.amount, reason: a.reason }));
+                        setPaymentModal({
+                          isOpen: true,
+                          brokerId: bId,
+                          brokerName: brokerData.broker_name,
+                          pendingAdvances: pendingAdv,
+                        });
+                      }}
+                    >
+                      Pago Externo
+                    </Button>
                   </TableCell>
                 </TableRow>
               )}
@@ -287,10 +510,7 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
                     </div>
                   </TableCell>
                   <TableCell className="text-right font-mono text-gray-700">
-                    {status === 'pending'
-                      ? advance.amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
-                      : (advance.total_paid || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' })
-                    }
+                    {advance.amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
                   </TableCell>
                   <TableCell className="text-center text-gray-500 text-sm">
                     {new Date(advance.created_at).toLocaleDateString('es-PA')}
@@ -350,10 +570,7 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
                         <span className="font-bold">{brokerData.broker_name}</span>
                       </div>
                       <span className="font-bold text-[#8AAA19]">
-                        {status === 'pending' 
-                          ? brokerData.total_pending.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
-                          : brokerData.total_paid.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
-                        }
+                        {brokerData.total_pending.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
                       </span>
                     </div>
                     <div className="text-xs text-white/80 mt-1">
@@ -377,10 +594,7 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
                       </div>
                       <div className="text-right flex-shrink-0">
                         <p className="font-bold text-[#8AAA19] font-mono text-base">
-                          {status === 'pending'
-                            ? advance.amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })
-                            : (advance.total_paid || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' })
-                          }
+                          {advance.amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
                         </p>
                         <p className="text-xs text-gray-500 mt-0.5">
                           {new Date(advance.created_at).toLocaleDateString('es-PA')}
@@ -398,7 +612,7 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
                           <FaEdit className="text-xs text-white" /> Editar
                         </Button>
                       )}
-                      {role === 'master' && status === 'pending' && (
+                      {role === 'master' && (
                         <Button
                           size="sm"
                           onClick={() => {
