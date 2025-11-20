@@ -129,11 +129,6 @@ const BrokerDashboard = async ({ userId }: BrokerDashboardProps) => {
                     </div>
                     <div className="flex-1">
                       <span className="ranking-name">{entry.brokerName || "Sin nombre"}</span>
-                      {isTopThree && (
-                        <div className="ranking-production-hint">
-                          {formatCurrency(entry.total || 0)}
-                        </div>
-                      )}
                     </div>
                     {isTopThree && <div className="ranking-glow"></div>}
                   </div>
@@ -315,13 +310,7 @@ const BrokerDashboard = async ({ userId }: BrokerDashboardProps) => {
         .ranking-name {
           font-weight: 600;
           color: #010139;
-        }
-        
-        .ranking-production-hint {
-          font-size: 11px;
-          color: #8AAA19;
-          font-weight: 600;
-          margin-top: 2px;
+          text-align: center;
         }
         
         .ranking-glow {
