@@ -15,6 +15,7 @@ interface NotificationsModalProps {
   notifications: NotificationRow[];
   onMarkRead: (notificationId: string) => Promise<void>;
   onDelete: (notificationId: string) => Promise<void>;
+  onDeleteAll: () => Promise<void>;
 }
 
 const NotificationsModal = ({
@@ -23,6 +24,7 @@ const NotificationsModal = ({
   notifications,
   onMarkRead,
   onDelete,
+  onDeleteAll,
 }: NotificationsModalProps) => {
   if (!open) return null;
 
@@ -59,10 +61,28 @@ const NotificationsModal = ({
 
       <div className="notifications-modal__card">
         <header>
-          <h2>Notificaciones</h2>
-          <button type="button" onClick={onClose} aria-label="Cerrar">
-            ×
-          </button>
+          <div className="header-content">
+            <h2>Notificaciones</h2>
+            <div className="header-actions">
+              {notifications.length > 0 && (
+                <button 
+                  type="button" 
+                  className="delete-all-btn"
+                  onClick={async () => {
+                    if (confirm('¿Eliminar todas las notificaciones?')) {
+                      await onDeleteAll();
+                    }
+                  }}
+                  aria-label="Eliminar todas"
+                >
+                  🗑️ Eliminar todo
+                </button>
+              )}
+              <button type="button" onClick={onClose} aria-label="Cerrar">
+                ×
+              </button>
+            </div>
+          </div>
         </header>
 
         <div className="notifications-modal__body">
@@ -91,7 +111,7 @@ const NotificationsModal = ({
                   
                   return (
                     <tr key={notification.id} className={notification.read_at ? "read" : "unread"}>
-                      <td>
+                      <td data-label="Tipo:">
                         <span 
                           className="type-badge"
                           style={{ backgroundColor: getTypeBadge(notification.notification_type) }}
@@ -99,7 +119,7 @@ const NotificationsModal = ({
                           {getTypeIcon(notification.notification_type)}
                         </span>
                       </td>
-                      <td>
+                      <td data-label="Título:">
                         {ctaUrl ? (
                           <a href={ctaUrl} className="notification-link">
                             {notification.title}
@@ -108,13 +128,13 @@ const NotificationsModal = ({
                           notification.title
                         )}
                       </td>
-                      <td>{notification.body}</td>
-                      <td>
+                      <td data-label="Mensaje:">{notification.body}</td>
+                      <td data-label="Fecha:">
                         {format(new Date(notification.created_at), "PPpp", {
                           locale: es,
                         })}
                       </td>
-                      <td>{notification.read_at ? "Leída" : "No leída"}</td>
+                      <td data-label="Estado:">{notification.read_at ? "Leída" : "No leída"}</td>
                       <td className="actions">
                         {!notification.read_at ? (
                           <button type="button" onClick={() => onMarkRead(notification.id)}>
@@ -165,12 +185,38 @@ const NotificationsModal = ({
         }
 
         header {
+          background: #010139;
+          color: #ffffff;
+          padding: 20px 26px;
+        }
+        
+        .header-content {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          padding: 20px 26px;
-          background: #010139;
+        }
+        
+        .header-actions {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+        
+        .delete-all-btn {
+          background: rgba(255, 255, 255, 0.15);
           color: #ffffff;
+          border: 1px solid rgba(255, 255, 255, 0.3);
+          border-radius: 8px;
+          padding: 8px 16px;
+          cursor: pointer;
+          font-size: 14px;
+          font-weight: 600;
+          transition: all 0.2s ease;
+        }
+        
+        .delete-all-btn:hover {
+          background: rgba(239, 68, 68, 0.8);
+          border-color: #EF4444;
         }
 
         header h2 {
@@ -190,7 +236,8 @@ const NotificationsModal = ({
 
         .notifications-modal__body {
           padding: 24px;
-          overflow: auto;
+          overflow-y: auto;
+          overflow-x: hidden;
         }
 
         table {
@@ -198,6 +245,7 @@ const NotificationsModal = ({
           border-collapse: collapse;
           font-size: 14px;
           color: #23262f;
+          table-layout: fixed;
         }
 
         th,
@@ -272,10 +320,74 @@ const NotificationsModal = ({
           .notifications-modal__body {
             padding: 12px;
           }
+          
+          .header-content {
+            flex-direction: column;
+            gap: 12px;
+            align-items: flex-start;
+          }
+          
+          .header-actions {
+            align-self: flex-end;
+          }
+          
+          .delete-all-btn {
+            font-size: 12px;
+            padding: 6px 12px;
+          }
 
-          td,
-          th {
-            padding: 10px;
+          table {
+            display: block;
+            width: 100%;
+          }
+          
+          thead {
+            display: none;
+          }
+          
+          tbody {
+            display: block;
+            width: 100%;
+          }
+          
+          tr {
+            display: block;
+            margin-bottom: 16px;
+            border: 1px solid rgba(1, 1, 57, 0.12);
+            border-radius: 12px;
+            padding: 12px;
+            background: #fff;
+          }
+          
+          tr.unread {
+            background: rgba(138, 170, 25, 0.08);
+            border-color: #8AAA19;
+          }
+          
+          td {
+            display: block;
+            text-align: left;
+            padding: 6px 0;
+            border: none;
+          }
+          
+          td:before {
+            content: attr(data-label);
+            font-weight: 700;
+            color: #010139;
+            margin-right: 8px;
+          }
+          
+          td.actions {
+            flex-direction: row;
+            justify-content: flex-start;
+            padding-top: 12px;
+            margin-top: 8px;
+            border-top: 1px solid rgba(1, 1, 57, 0.08);
+          }
+          
+          td.empty {
+            text-align: center;
           }
         }
       `}</style>

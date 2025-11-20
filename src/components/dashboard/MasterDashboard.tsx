@@ -2,6 +2,7 @@ import Link from "next/link";
 
 import KpiCard from "./KpiCard";
 import BarYtd from "./BarYtd";
+import ImportantDatesSection from "./ImportantDatesSection";
 import {
   getFortnightStatus,
   getNetCommissions,
@@ -14,10 +15,12 @@ import {
   getOperationsData,
   getFinanceData,
 } from "@/lib/dashboard/queries";
+import { getImportantDates } from "@/lib/important-dates";
 import { getSupabaseServer, type Tables } from "@/lib/supabase/server";
 import type { DashboardRole } from "@/lib/dashboard/types";
 
 const ROLE: DashboardRole = "master";
+const isMaster = true; // Dashboard de Master
 
 const formatCurrency = (value: number) =>
   new Intl.NumberFormat("es-PA", {
@@ -57,7 +60,8 @@ const MasterDashboard = async ({ userId }: MasterDashboardProps) => {
     brokerRanking,
     brokerOfTheMonth,
     operationsData,
-    financeData
+    financeData,
+    importantDates
   ] = await Promise.all([
     profilePromise,
     getFortnightStatus(userId, ROLE),
@@ -70,6 +74,7 @@ const MasterDashboard = async ({ userId }: MasterDashboardProps) => {
     getBrokerOfTheMonth(),
     getOperationsData(),
     getFinanceData(),
+    getImportantDates(),
   ]);
 
   const profileName = profileResult.data?.full_name ?? "Equipo LISSA";
@@ -108,10 +113,12 @@ const MasterDashboard = async ({ userId }: MasterDashboardProps) => {
           </Link>
         </div>
         
-        {/* Ranking de brokers */}
-        <div className="ranking-section mt-6">
-          <h3 className="subsection-title">Top 5 Corredores {new Date().getFullYear()}</h3>
-          <div className="ranking-list">
+        {/* Ranking de brokers y estadísticas */}
+        <div className="ranking-stats-grid mt-6">
+          {/* Top 5 Corredores */}
+          <div className="ranking-section">
+            <h3 className="subsection-title">Top 5 Corredores {new Date().getFullYear()}</h3>
+            <div className="ranking-list">
             {brokerRanking.map((broker, index) => {
               const getMedalEmoji = (position: number) => {
                 if (position === 1) return '🥇';
@@ -132,30 +139,60 @@ const MasterDashboard = async ({ userId }: MasterDashboardProps) => {
                         <span className="ranking-position">{index + 1}</span>
                       )}
                     </div>
-                    <div className="flex-1">
+                    <div className="ranking-name-container">
                       <span className="ranking-name">{broker.brokerName}</span>
+                    </div>
+                    <div className="ranking-change">
+                      {broker.positionChange === 'up' && broker.positionDiff ? (
+                        <span className="change-up" title={`Subió ${broker.positionDiff} posición${broker.positionDiff > 1 ? 'es' : ''}`}>
+                          ↑{broker.positionDiff}
+                        </span>
+                      ) : broker.positionChange === 'down' && broker.positionDiff ? (
+                        <span className="change-down" title={`Bajó ${broker.positionDiff} posición${broker.positionDiff > 1 ? 'es' : ''}`}>
+                          ↓{broker.positionDiff}
+                        </span>
+                      ) : broker.positionChange === 'new' ? (
+                        <span className="change-new" title="Nuevo en el ranking">
+                          NUEVO
+                        </span>
+                      ) : (
+                        <span className="change-same" title="Mantuvo su posición">–</span>
+                      )}
                     </div>
                     {isTopThree && <div className="ranking-glow"></div>}
                   </div>
                 </Link>
               );
             })}
-          </div>
-          {brokerOfTheMonth && (
-            <div className="broker-of-month-card">
-              <div className="broker-of-month-trophy">🏆</div>
-              <div className="broker-of-month-content">
-                <div className="broker-of-month-title">
-                  Corredor del mes de {brokerOfTheMonth.monthName}
-                </div>
-                <div className="broker-of-month-name">
-                  {brokerOfTheMonth.brokerName}
+            </div>
+            
+            {/* Corredor del mes */}
+            {brokerOfTheMonth && (
+              <div className="broker-of-month-card">
+                <div className="broker-of-month-trophy">🏆</div>
+                <div className="broker-of-month-content">
+                  <div className="broker-of-month-title">
+                    Corredor del mes de {brokerOfTheMonth.monthName}
+                  </div>
+                  <div className="broker-of-month-name">
+                    {brokerOfTheMonth.brokerName}
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
+          </div>
+          
+          {/* Fechas importantes del mes */}
+          {importantDates && (
+            <ImportantDatesSection 
+              initialDates={importantDates} 
+              isMaster={isMaster} 
+            />
           )}
-          <Link href="/production" className="view-more">Ver ranking completo →</Link>
         </div>
+        
+        {/* Link a producción */}
+        <Link href="/production" className="view-more">Ver producción →</Link>
       </div>
 
       {/* Bloque 2 - Operaciones */}
@@ -315,8 +352,13 @@ const MasterDashboard = async ({ userId }: MasterDashboardProps) => {
           font-size: 18px;
           font-weight: 600;
           color: #010139;
-          margin-bottom: 16px;
+          margin-bottom: 12px;
+        }
+        
+        .ranking-section .subsection-title {
           text-align: center;
+          margin-bottom: 16px;
+          flex-shrink: 0;
         }
         
         .kpi-grid {
@@ -334,18 +376,27 @@ const MasterDashboard = async ({ userId }: MasterDashboardProps) => {
           background: #f6f6ff;
           border-radius: 12px;
           padding: 20px;
+          display: flex;
+          flex-direction: column;
+          height: 100%;
+          min-height: 600px;
         }
+        
         
         .ranking-list {
           display: flex;
           flex-direction: column;
-          gap: 12px;
+          gap: 10px;
+          flex: 1;
+          min-height: 0;
+          justify-content: space-between;
         }
         
         .ranking-item-link {
           text-decoration: none;
           color: inherit;
-          display: block;
+          display: flex;
+          flex: 1;
           transition: transform 0.2s;
         }
         
@@ -353,15 +404,30 @@ const MasterDashboard = async ({ userId }: MasterDashboardProps) => {
           transform: translateX(4px);
         }
         
+        .ranking-stats-grid {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 24px;
+        }
+        
+        @media (min-width: 1024px) {
+          .ranking-stats-grid {
+            grid-template-columns: 1fr 1fr;
+          }
+        }
+        
         .ranking-item {
           display: flex;
           align-items: center;
+          justify-content: flex-start;
           gap: 12px;
-          padding: 12px 16px;
+          padding: 14px 20px;
           background: white;
           border-radius: 8px;
           border: 2px solid transparent;
           transition: border-color 0.2s, box-shadow 0.2s;
+          width: 100%;
+          min-height: 60px;
         }
         
         .ranking-item-link:hover .ranking-item {
@@ -372,8 +438,9 @@ const MasterDashboard = async ({ userId }: MasterDashboardProps) => {
         .ranking-medal-container {
           display: flex;
           align-items: center;
-          justify-content: center;
-          width: 40px;
+          justify-content: flex-start;
+          min-width: 40px;
+          flex-shrink: 0;
         }
         
         .ranking-medal {
@@ -399,10 +466,56 @@ const MasterDashboard = async ({ userId }: MasterDashboardProps) => {
           text-align: center;
         }
         
+        .ranking-name-container {
+          flex: 1;
+          display: flex;
+          align-items: center;
+          justify-content: flex-start;
+        }
+        
         .ranking-name {
           font-weight: 600;
           color: #010139;
-          text-align: center;
+          text-align: left;
+        }
+        
+        .ranking-change {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 14px;
+          font-weight: 700;
+          flex-shrink: 0;
+          min-width: 60px;
+        }
+        
+        .change-up {
+          color: #22c55e;
+          display: flex;
+          align-items: center;
+          gap: 2px;
+        }
+        
+        .change-down {
+          color: #ef4444;
+          display: flex;
+          align-items: center;
+          gap: 2px;
+        }
+        
+        .change-same {
+          color: #64748b;
+          font-size: 18px;
+        }
+        
+        .change-new {
+          color: #8AAA19;
+          font-size: 10px;
+          font-weight: 800;
+          padding: 2px 6px;
+          border-radius: 4px;
+          background: rgba(138, 170, 25, 0.1);
+          border: 1px solid #8AAA19;
         }
         
         .ranking-glow {
@@ -453,18 +566,138 @@ const MasterDashboard = async ({ userId }: MasterDashboardProps) => {
           background: radial-gradient(circle at center, rgba(205, 127, 50, 0.1) 0%, transparent 70%);
         }
         
-        .broker-of-month-card {
-          margin-top: 20px;
+        .dates-section {
+          display: flex;
+          flex-direction: column;
+          height: 100%;
+          min-height: 600px;
+        }
+        
+        .dates-card {
+          background: #f6f6ff;
+          border-radius: 12px;
           padding: 20px;
-          background: linear-gradient(135deg, #FFF9E6 0%, #FFE4B5 50%, #FFD700 100%);
-          border-radius: 16px;
-          border: 3px solid #FFD700;
-          box-shadow: 0 8px 24px rgba(255, 215, 0, 0.3);
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          position: relative;
+          height: 100%;
+          flex: 1;
+        }
+        
+        .dates-card-title {
+          font-size: 18px;
+          font-weight: 700;
+          color: #010139;
+          margin: 0 0 16px 0;
+          padding-bottom: 12px;
+          border-bottom: 2px solid #e0e0f0;
+          text-align: center;
+          flex-shrink: 0;
+        }
+        
+        .date-item {
           display: flex;
           align-items: center;
-          gap: 16px;
+          gap: 12px;
+          padding: 14px;
+          background: white;
+          border-radius: 8px;
+          border-left: 3px solid #8aaa19;
+          flex: 1;
+          min-height: 56px;
+        }
+        
+        .date-icon {
+          font-size: 24px;
+          flex-shrink: 0;
+        }
+        
+        .date-content {
+          flex: 1;
+        }
+        
+        .date-label {
+          font-size: 13px;
+          font-weight: 600;
+          color: #010139;
+          margin-bottom: 2px;
+        }
+        
+        .date-value {
+          font-size: 14px;
+          color: #8aaa19;
+          font-weight: 600;
+        }
+        
+        .news-item {
+          display: flex;
+          align-items: flex-start;
+          gap: 12px;
+          padding: 16px;
+          background: #fff9e6;
+          border-radius: 8px;
+          border-left: 3px solid #FFD700;
+          margin-top: 8px;
+          flex: 1.5;
+          min-height: 80px;
+        }
+        
+        .news-icon {
+          font-size: 24px;
+          flex-shrink: 0;
+        }
+        
+        .news-content {
+          flex: 1;
+        }
+        
+        .news-label {
+          font-size: 14px;
+          font-weight: 700;
+          color: #010139;
+          margin-bottom: 6px;
+        }
+        
+        .news-text {
+          font-size: 14px;
+          color: #666;
+          line-height: 1.5;
+        }
+        
+        .edit-dates-btn {
+          margin-top: auto;
+          padding: 12px 16px;
+          background: #8aaa19;
+          color: white;
+          border: none;
+          border-radius: 6px;
+          font-size: 14px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: background 0.2s;
+          flex-shrink: 0;
+        }
+        
+        .edit-dates-btn:hover {
+          background: #6d8814;
+        }
+        
+        .broker-of-month-card {
           position: relative;
+          display: flex;
+          align-items: center;
+          justify-content: flex-start;
+          gap: 12px;
+          padding: 16px 20px;
+          margin-top: 20px;
+          background: linear-gradient(135deg, #FFF9E6 0%, #FFE4B5 50%, #FFD700 100%);
+          border: 3px solid #FFD700;
+          border-radius: 12px;
+          box-shadow: 0 4px 15px rgba(255, 215, 0, 0.3);
           overflow: hidden;
+          min-height: 80px;
+          flex-shrink: 0;
         }
         
         .broker-of-month-card::before {
@@ -489,11 +722,12 @@ const MasterDashboard = async ({ userId }: MasterDashboardProps) => {
         }
         
         .broker-of-month-trophy {
-          font-size: 48px;
+          font-size: 42px;
           line-height: 1;
-          animation: trophyBounce 1.5s ease-in-out infinite;
+          animation: trophyBounce 2s ease-in-out infinite;
           filter: drop-shadow(0 4px 8px rgba(255, 215, 0, 0.5));
           z-index: 1;
+          flex-shrink: 0;
         }
         
         @keyframes trophyBounce {
@@ -504,6 +738,7 @@ const MasterDashboard = async ({ userId }: MasterDashboardProps) => {
         .broker-of-month-content {
           flex: 1;
           z-index: 1;
+          text-align: left;
         }
         
         .broker-of-month-title {
@@ -516,7 +751,7 @@ const MasterDashboard = async ({ userId }: MasterDashboardProps) => {
         }
         
         .broker-of-month-name {
-          font-size: 20px;
+          font-size: 17px;
           font-weight: 800;
           color: #010139;
           text-shadow: 1px 1px 2px rgba(255, 215, 0, 0.3);
@@ -525,7 +760,7 @@ const MasterDashboard = async ({ userId }: MasterDashboardProps) => {
         .view-more {
           display: block;
           text-align: right;
-          margin-top: 16px;
+          margin-top: 24px;
           color: #8aaa19;
           font-weight: 600;
           text-decoration: none;

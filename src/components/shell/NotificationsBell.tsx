@@ -12,9 +12,11 @@ type NotificationRead = Database["public"]["Tables"]["notification_reads"]["Row"
 
 interface NotificationsBellProps {
   profileId: string;
+  role: 'master' | 'broker' | null;
+  brokerId: string | null;
 }
 
-const NotificationsBell = ({ profileId }: NotificationsBellProps) => {
+const NotificationsBell = ({ profileId, role, brokerId }: NotificationsBellProps) => {
   const router = useRouter();
   const supabase = useMemo(() => supabaseClient(), []);
   const [notifications, setNotifications] = useState<NotificationRow[]>([]);
@@ -47,10 +49,27 @@ const NotificationsBell = ({ profileId }: NotificationsBellProps) => {
       if (notificationsError) throw notificationsError;
       if (readsError) throw readsError;
 
+      // FILTRAR notificaciones según rol
+      let filteredNotifications = notificationsData ?? [];
+      
+      if (role === 'master') {
+        // Master solo ve: target='MASTER' o target='ALL'
+        filteredNotifications = filteredNotifications.filter(
+          notif => notif.target === 'MASTER' || notif.target === 'ALL'
+        );
+      } else if (role === 'broker' && brokerId) {
+        // Broker solo ve: (target='BROKER' y broker_id=suyo) o target='ALL'
+        filteredNotifications = filteredNotifications.filter(
+          notif => 
+            notif.target === 'ALL' || 
+            (notif.target === 'BROKER' && notif.broker_id === profileId)
+        );
+      }
+
       const readsMap = new Map<string, NotificationRead["read_at"]>(
         (readsData ?? []).map((read) => [read.notification_id, read.read_at])
       );
-      const mapped: NotificationRow[] = (notificationsData ?? []).map((item) => ({
+      const mapped: NotificationRow[] = filteredNotifications.map((item) => ({
         ...item,
         read_at: readsMap.get(item.id) ?? null,
       }));
@@ -65,7 +84,7 @@ const NotificationsBell = ({ profileId }: NotificationsBellProps) => {
     } finally {
       setLoading(false);
     }
-  }, [profileId, supabase]);
+  }, [profileId, role, brokerId, supabase]);
 
   useEffect(() => {
     void loadNotifications();
@@ -133,15 +152,53 @@ const NotificationsBell = ({ profileId }: NotificationsBellProps) => {
   const handleDelete = useCallback(
     async (notificationId: string) => {
       try {
-        const { error: deleteError } = await supabase.from("notifications").delete().eq("id", notificationId);
-        if (deleteError) throw deleteError;
-        await loadNotifications();
+        // Marcar como leída
+        const { error: upsertError } = await supabase
+          .from("notification_reads")
+          .upsert({
+            notification_id: notificationId,
+            profile_id: profileId,
+            read_at: new Date().toISOString(),
+          });
+        
+        if (upsertError) throw upsertError;
+        
+        // Remover del estado local (simula eliminación)
+        setNotifications(prev => prev.filter(n => n.id !== notificationId));
+        setToast({ type: "success", message: "Notificación eliminada" });
       } catch (err) {
         console.error("delete notification error", err);
         showErrorToast("No se pudo borrar la notificación");
       }
     },
-    [loadNotifications, showErrorToast, supabase]
+    [profileId, showErrorToast, supabase]
+  );
+  
+  const handleDeleteAll = useCallback(
+    async () => {
+      try {
+        const now = new Date().toISOString();
+        
+        // Marcar todas como leídas
+        const upsertPromises = notifications.map(notif => 
+          supabase.from("notification_reads").upsert({
+            notification_id: notif.id,
+            profile_id: profileId,
+            read_at: now,
+          })
+        );
+        
+        await Promise.all(upsertPromises);
+        
+        // Limpiar estado local (simula eliminación)
+        setNotifications([]);
+        setToast({ type: "success", message: "Todas las notificaciones eliminadas" });
+      } catch (err) {
+        console.error("delete all notifications error", err);
+        showErrorToast("No se pudieron eliminar todas las notificaciones");
+      }
+    },
+    [notifications, profileId, showErrorToast, supabase]
   );
 
   const latestFive = notifications.slice(0, 5);
@@ -225,6 +282,7 @@ const NotificationsBell = ({ profileId }: NotificationsBellProps) => {
         notifications={notifications}
         onMarkRead={handleMarkRead}
         onDelete={handleDelete}
+        onDeleteAll={handleDeleteAll}
       />
 
       {toast ? (

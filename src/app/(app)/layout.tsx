@@ -74,7 +74,7 @@ export default async function AppLayout({
           {/* Right Actions */}
           <div className="header-actions">
             {/* Notifications Bell */}
-            <NotificationsBell profileId={user.id} />
+            <NotificationsBell profileId={user.id} role={profile.role} brokerId={profile.broker_id} />
             
             {/* User Menu */}
             <AccountMenu displayName={displayName} role={role} avatarUrl={profile.avatar_url} />

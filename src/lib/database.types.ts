@@ -2004,6 +2004,62 @@ export type Database = {
           },
         ]
       }
+      important_dates: {
+        Row: {
+          apadea_date1: number | null
+          apadea_date2: number | null
+          cierre_mes_day: number | null
+          created_at: string | null
+          id: string
+          month: number
+          news_active: boolean | null
+          news_text: string | null
+          updated_at: string | null
+          updated_by: string | null
+          via_regular_day: number | null
+          vida_con_cancelacion_day: number | null
+          year: number
+        }
+        Insert: {
+          apadea_date1?: number | null
+          apadea_date2?: number | null
+          cierre_mes_day?: number | null
+          created_at?: string | null
+          id?: string
+          month: number
+          news_active?: boolean | null
+          news_text?: string | null
+          updated_at?: string | null
+          updated_by?: string | null
+          via_regular_day?: number | null
+          vida_con_cancelacion_day?: number | null
+          year: number
+        }
+        Update: {
+          apadea_date1?: number | null
+          apadea_date2?: number | null
+          cierre_mes_day?: number | null
+          created_at?: string | null
+          id?: string
+          month?: number
+          news_active?: boolean | null
+          news_text?: string | null
+          updated_at?: string | null
+          updated_by?: string | null
+          via_regular_day?: number | null
+          vida_con_cancelacion_day?: number | null
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "important_dates_updated_by_fkey"
+            columns: ["updated_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       guide_file_links: {
         Row: {
           created_at: string

@@ -44,6 +44,8 @@ export interface RankingEntry {
   brokerName: string;
   position: number;
   total?: number;
+  positionChange?: 'up' | 'down' | 'same' | 'new';
+  positionDiff?: number;
 }
 
 export interface RankingResult {

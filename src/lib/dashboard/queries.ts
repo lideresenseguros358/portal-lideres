@@ -281,26 +281,44 @@ export async function getBrokerRanking() {
   const { getSupabaseAdmin } = await import('@/lib/supabase/admin');
   const supabase = await getSupabaseAdmin();
   
-  // Obtener datos de production del año actual
+  const now = new Date();
+  const actualMonth = now.getMonth() + 1; // 1-12 (mes actual)
+  const currentYear = now.getFullYear();
+  
+  // Usar el último mes CERRADO (no el actual que puede no tener datos)
+  const closedMonth = actualMonth === 1 ? 12 : actualMonth - 1; // Mes cerrado anterior
+  const previousClosedMonth = closedMonth === 1 ? 12 : closedMonth - 1; // Mes anterior al cerrado
+  
+  console.log('[RANKING MONTHS]', { 
+    actualMonth, 
+    closedMonth, 
+    previousClosedMonth 
+  });
+  
+  // Obtener datos de production del año actual (hasta mes actual)
   const { data, error } = await (supabase as any)
     .from("production")
     .select(`
       broker_id,
       bruto,
       canceladas,
+      month,
       brokers!production_broker_id_fkey (
         id,
         name
       )
     `)
-    .eq("year", CURRENT_YEAR);
+    .eq("year", CURRENT_YEAR)
+    .lte("month", closedMonth); // Hasta el mes cerrado
   
   console.log('[MASTER RANKING DEBUG]', { dataLength: data?.length, error });
   
   if (!data || data.length === 0) return [];
   
-  // Calcular PMA Neto (YTD) por broker
-  const totalsMap = new Map<string, { name: string; total: number }>();
+  // YTD hasta el mes cerrado actual (enero-octubre)
+  const ytdCurrentClosedMap = new Map<string, { name: string; total: number }>();
+  // YTD hasta el mes cerrado anterior (enero-septiembre)
+  const ytdPreviousClosedMap = new Map<string, { name: string; total: number }>();
   
   data.forEach((item: any) => {
     const brokerId = item.broker_id;
@@ -308,32 +326,126 @@ export async function getBrokerRanking() {
     const bruto = parseFloat(item.bruto) || 0;
     const canceladas = parseFloat(item.canceladas) || 0;
     const neto = bruto - canceladas;
+    const month = item.month;
     
-    if (!totalsMap.has(brokerId)) {
-      totalsMap.set(brokerId, { name: brokerName, total: 0 });
+    // YTD acumulado hasta mes cerrado actual (enero-octubre)
+    if (month <= closedMonth) {
+      if (!ytdCurrentClosedMap.has(brokerId)) {
+        ytdCurrentClosedMap.set(brokerId, { name: brokerName, total: 0 });
+      }
+      const broker = ytdCurrentClosedMap.get(brokerId)!;
+      broker.total += neto;
     }
     
-    const broker = totalsMap.get(brokerId)!;
-    broker.total += neto;
+    // YTD acumulado hasta mes cerrado anterior (enero-septiembre)
+    if (month <= previousClosedMonth) {
+      if (!ytdPreviousClosedMap.has(brokerId)) {
+        ytdPreviousClosedMap.set(brokerId, { name: brokerName, total: 0 });
+      }
+      const prevBroker = ytdPreviousClosedMap.get(brokerId)!;
+      prevBroker.total += neto;
+    }
   });
   
-  // Convertir a array y ordenar
-  const rows = Array.from(totalsMap.entries()).map(([id, data]) => ({
+  // Convertir a array y ordenar - YTD hasta mes cerrado actual (enero-octubre)
+  const ytdCurrentClosedRows = Array.from(ytdCurrentClosedMap.entries()).map(([id, data]) => ({
     brokerId: id,
     brokerName: data.name,
     total: data.total,
   }));
   
-  // Ordenar: descendente por total, en empate alfabético
-  rows.sort((a, b) => {
+  ytdCurrentClosedRows.sort((a, b) => {
     if (b.total !== a.total) {
       return b.total - a.total;
     }
     return a.brokerName.localeCompare(b.brokerName);
   });
   
-  const top5 = rows.slice(0, 5);
-  console.log('[MASTER RANKING RESULT]', { totalBrokers: rows.length, top5Count: top5.length });
+  // Convertir a array y ordenar - YTD hasta mes cerrado anterior (enero-septiembre)
+  const ytdPreviousClosedRows = Array.from(ytdPreviousClosedMap.entries()).map(([id, data]) => ({
+    brokerId: id,
+    brokerName: data.name,
+    total: data.total,
+  }));
+  
+  ytdPreviousClosedRows.sort((a, b) => {
+    if (b.total !== a.total) {
+      return b.total - a.total;
+    }
+    return a.brokerName.localeCompare(b.brokerName);
+  });
+  
+  // Crear mapas de posiciones YTD
+  const ytdCurrentClosedPositions = new Map<string, number>();
+  ytdCurrentClosedRows.forEach((broker, index) => {
+    ytdCurrentClosedPositions.set(broker.brokerId, index + 1);
+  });
+  
+  const ytdPreviousClosedPositions = new Map<string, number>();
+  ytdPreviousClosedRows.forEach((broker, index) => {
+    ytdPreviousClosedPositions.set(broker.brokerId, index + 1);
+  });
+  
+  // Top 5 basado en YTD actual con indicador de cambio vs YTD anterior
+  const top5 = ytdCurrentClosedRows.slice(0, 5).map((broker, currentIndex) => {
+    const currentYtdPosition = ytdCurrentClosedPositions.get(broker.brokerId);
+    const previousYtdPosition = ytdPreviousClosedPositions.get(broker.brokerId);
+    
+    let positionChange: 'up' | 'down' | 'same' | 'new' = 'same';
+    let positionDiff = 0;
+    
+    if (previousYtdPosition === undefined) {
+      // No estaba en el ranking YTD anterior - es nuevo
+      positionChange = 'new';
+      positionDiff = 0;
+    } else if (currentYtdPosition === undefined) {
+      // No está en el ranking actual (raro, pero por si acaso)
+      positionChange = 'same';
+      positionDiff = 0;
+    } else {
+      // Comparar posiciones YTD: anterior vs actual
+      positionDiff = previousYtdPosition - currentYtdPosition;
+      if (positionDiff > 0) {
+        positionChange = 'up'; // Subió en el ranking YTD
+      } else if (positionDiff < 0) {
+        positionChange = 'down'; // Bajó en el ranking YTD
+      } else {
+        positionChange = 'same'; // Se mantuvo
+      }
+    }
+    
+    return {
+      brokerId: broker.brokerId,
+      brokerName: broker.brokerName,
+      total: broker.total,
+      positionChange,
+      positionDiff: Math.abs(positionDiff),
+    };
+  });
+  
+  console.log('[MASTER RANKING RESULT]', { 
+    actualMonth,
+    closedMonth, 
+    previousClosedMonth,
+    ytdCurrentClosed: `enero-${closedMonth}`,
+    ytdPreviousClosed: `enero-${previousClosedMonth}`,
+    brokersYtdCurrent: ytdCurrentClosedRows.length,
+    brokersYtdPrevious: ytdPreviousClosedRows.length,
+    top5Count: top5.length, 
+    top5WithPositions: top5.map(b => ({
+      name: b.brokerName,
+      ytdCurrentPos: ytdCurrentClosedPositions.get(b.brokerId),
+      ytdPreviousPos: ytdPreviousClosedPositions.get(b.brokerId),
+      change: b.positionChange,
+      diff: b.positionDiff
+    }))
+  });
+  
+  // Log adicional para debug
+  console.log('[YTD POSITIONS]', {
+    ytdCurrentTop10: Array.from(ytdCurrentClosedPositions.entries()).slice(0, 10),
+    ytdPreviousTop10: Array.from(ytdPreviousClosedPositions.entries()).slice(0, 10)
+  });
   
   return top5;
 }
@@ -700,13 +812,21 @@ export async function getRankingTop5(userId: string): Promise<RankingResult> {
   // Usar admin para obtener todos los datos sin restricciones de RLS
   const { getSupabaseAdmin } = await import('@/lib/supabase/admin');
   const supabase = await getSupabaseAdmin();
+  
+  const now = new Date();
+  const actualMonth = now.getMonth() + 1; // 1-12
+  
+  // Usar el último mes CERRADO (no el actual que puede no tener datos)
+  const closedMonth = actualMonth === 1 ? 12 : actualMonth - 1;
+  const previousClosedMonth = closedMonth === 1 ? 12 : closedMonth - 1;
 
   const { data, error } = await supabase
     .from("production")
-    .select("broker_id, bruto, canceladas")
+    .select("broker_id, bruto, canceladas, month")
     .eq("year", CURRENT_YEAR)
+    .lte("month", closedMonth)
     .limit(FETCH_LIMIT)
-    .returns<{ broker_id: string | null; bruto: number | string | null; canceladas: number | string | null }[]>();
+    .returns<{ broker_id: string | null; bruto: number | string | null; canceladas: number | string | null; month: number }[]>();
   
   console.log('[RANKING DEBUG]', { dataLength: data?.length, error });
 
@@ -723,16 +843,30 @@ export async function getRankingTop5(userId: string): Promise<RankingResult> {
     return { entries: [], currentBrokerId: brokerId ?? undefined };
   }
 
-  const totalsMap = new Map<string, number>();
-  data.forEach((item: { broker_id: string | null; bruto: number | string | null; canceladas: number | string | null }) => {
+  // YTD hasta mes cerrado actual
+  const ytdCurrentClosedMap = new Map<string, number>();
+  // YTD hasta mes cerrado anterior
+  const ytdPreviousClosedMap = new Map<string, number>();
+  
+  data.forEach((item: { broker_id: string | null; bruto: number | string | null; canceladas: number | string | null; month: number }) => {
     if (!item.broker_id) return;
     const bruto = toNumber(item.bruto);
     const canceladas = toNumber(item.canceladas);
     const neto = bruto - canceladas;
-    totalsMap.set(item.broker_id, (totalsMap.get(item.broker_id) ?? 0) + neto);
+    const month = item.month;
+    
+    // YTD acumulado hasta mes cerrado actual
+    if (month <= closedMonth) {
+      ytdCurrentClosedMap.set(item.broker_id, (ytdCurrentClosedMap.get(item.broker_id) ?? 0) + neto);
+    }
+    
+    // YTD acumulado hasta mes cerrado anterior
+    if (month <= previousClosedMonth) {
+      ytdPreviousClosedMap.set(item.broker_id, (ytdPreviousClosedMap.get(item.broker_id) ?? 0) + neto);
+    }
   });
 
-  const rows = Array.from(totalsMap.entries()).map(([id, total]) => ({ broker_id: id, total }));
+  const rows = Array.from(ytdCurrentClosedMap.entries()).map(([id, total]) => ({ broker_id: id, total }));
   const brokerIds = rows.map((item) => item.broker_id);
 
   const { data: brokerInfo } = await supabase
@@ -776,12 +910,57 @@ export async function getRankingTop5(userId: string): Promise<RankingResult> {
     });
   }
 
-  const entries: RankingEntry[] = ranking.slice(0, 5).map((item, index) => ({
-    brokerId: item.brokerId,
-    brokerName: item.brokerName,
-    position: index + 1,
-    // No incluir total - solo nombres públicos
-  }));
+  // Ranking YTD hasta mes cerrado anterior
+  const ytdPreviousClosedRows = Array.from(ytdPreviousClosedMap.entries()).map(([id, total]) => ({ broker_id: id, total }));
+  ytdPreviousClosedRows.sort((a, b) => b.total - a.total);
+  
+  // Crear mapas de posiciones YTD
+  const ytdCurrentClosedPositions = new Map<string, number>();
+  ranking.forEach((broker, index) => {
+    ytdCurrentClosedPositions.set(broker.brokerId, index + 1);
+  });
+  
+  const ytdPreviousClosedPositions = new Map<string, number>();
+  ytdPreviousClosedRows.forEach((broker, index) => {
+    ytdPreviousClosedPositions.set(broker.broker_id, index + 1);
+  });
+  
+  const entries: RankingEntry[] = ranking.slice(0, 5).map((item, index) => {
+    const currentYtdPosition = ytdCurrentClosedPositions.get(item.brokerId);
+    const previousYtdPosition = ytdPreviousClosedPositions.get(item.brokerId);
+    
+    let positionChange: 'up' | 'down' | 'same' | 'new' = 'same';
+    let positionDiff = 0;
+    
+    if (previousYtdPosition === undefined) {
+      // No estaba en el ranking YTD anterior - es nuevo
+      positionChange = 'new';
+      positionDiff = 0;
+    } else if (currentYtdPosition === undefined) {
+      // No está en el ranking actual
+      positionChange = 'same';
+      positionDiff = 0;
+    } else {
+      // Comparar posiciones YTD
+      positionDiff = previousYtdPosition - currentYtdPosition;
+      if (positionDiff > 0) {
+        positionChange = 'up';
+      } else if (positionDiff < 0) {
+        positionChange = 'down';
+      } else {
+        positionChange = 'same';
+      }
+    }
+    
+    return {
+      brokerId: item.brokerId,
+      brokerName: item.brokerName,
+      position: Number(index + 1), // asegurar que position sea number
+      positionChange,
+      positionDiff: Math.abs(positionDiff),
+      // No incluir total - solo nombres públicos
+    };
+  });
 
   let currentPosition: number | undefined;
   let currentTotal: number | undefined;
@@ -803,6 +982,22 @@ export async function getRankingTop5(userId: string): Promise<RankingResult> {
     }
   }
 
+  console.log('[BROKER RANKING TOP5 RESULT]', { 
+    actualMonth,
+    closedMonth, 
+    previousClosedMonth,
+    ytdCurrentClosed: `enero-${closedMonth}`,
+    ytdPreviousClosed: `enero-${previousClosedMonth}`,
+    entriesCount: entries.length, 
+    entriesWithPositions: entries.map(e => ({
+      name: e.brokerName,
+      ytdCurrentPos: ytdCurrentClosedPositions.get(e.brokerId),
+      ytdPreviousPos: ytdPreviousClosedPositions.get(e.brokerId),
+      change: e.positionChange,
+      diff: e.positionDiff
+    }))
+  });
+  
   return {
     entries,
     currentBrokerId: brokerId ?? undefined,
@@ -856,8 +1051,9 @@ export async function getContestProgress(userId: string): Promise<ContestProgres
   const role = profile?.role ?? "broker";
 
   const now = new Date();
-  const currentYear = now.getFullYear();
+  const CURRENT_YEAR = now.getFullYear();
   const currentMonth = now.getMonth() + 1; // 1-12
+  const currentYear = now.getFullYear();
 
   // Obtener configuración de contests
   const { data: assaConfigData, error: assaError } = await supabase
