@@ -182,12 +182,12 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
 
       // Si es un batch de descuentos a corredor, NO agrupar - mostrar cada uno por separado
       if (allDescuento) {
-        batchPayments.forEach((payment, idx) => {
+        batchPayments.forEach((payment) => {
           const refs = payment.payment_references || [];
-          const refNum = refs[0]?.reference_number || `ADELANTO-${idx}`;
+          const refNum = refs[0]?.reference_number || `ADELANTO-${payment.id}`;
           const amount = parseFloat(payment.amount_to_pay || '0');
           
-          // Crear grupo individual para cada adelanto
+          // Crear grupo individual para cada adelanto usando payment.id único
           groups[`ADELANTO-${payment.id}`] = {
             reference_number: refNum,
             bank_amount: amount,
@@ -394,10 +394,8 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
         toast.success('✅ ' + result.message);
         setSelectedIds(new Set());
         
-        // Recargar inmediatamente los pagos para actualizar contadores
-        await loadPayments();
-        
         // Notificar al padre para refrescar ambas pestañas (historial y pendientes)
+        // El useEffect (líneas 91-103) se encargará de recargar los pagos automáticamente
         if (onPaymentPaid) {
           onPaymentPaid();
         }
@@ -1041,8 +1039,8 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
 
           {groupByReference ? (
             <div className="space-y-4">
-              {Object.values(sortedGroupedPayments)
-                .sort((groupA: any, groupB: any) => {
+              {Object.entries(sortedGroupedPayments)
+                .sort(([keyA, groupA]: [string, any], [keyB, groupB]: [string, any]) => {
                   // Ordenar grupos por el estado del primer pago
                   if (groupA.payments.length === 0) return 1;
                   if (groupB.payments.length === 0) return -1;
@@ -1063,8 +1061,8 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
                   const dateB = new Date(firstPaymentB.created_at).getTime();
                   return dateA - dateB;
                 })
-                .map((group: any) => (
-                <div key={group.reference_number} className="bg-gray-50 rounded-xl p-4 border-2 border-gray-200">
+                .map(([groupKey, group]: [string, any]) => (
+                <div key={groupKey} className="bg-gray-50 rounded-xl p-4 border-2 border-gray-200">
                   <div className="flex items-center justify-between mb-3 pb-3 border-b-2 border-gray-300">
                     <div className="flex-1">
                       {group.isBatch && !group.allAreDescuentoCorredor ? (

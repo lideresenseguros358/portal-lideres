@@ -1053,17 +1053,20 @@ export async function actionGetPendingPaymentsNew(filters?: {
 
 // Mark payments as paid - new flow
 export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
+  console.log('🚀 [actionMarkPaymentsAsPaidNew] INICIANDO con paymentIds:', paymentIds);
   try {
     const supabaseServer = await getSupabaseServer();
     const { data: userData } = await supabaseServer.auth.getUser();
 
     if (!userData || !userData.user) {
+      console.log('❌ [actionMarkPaymentsAsPaidNew] Usuario no autenticado');
       return { ok: false, error: 'Usuario no autenticado' };
     }
 
     const supabase = await getSupabaseAdmin();
     
     // Get payment details
+    console.log('📥 [actionMarkPaymentsAsPaidNew] Obteniendo pagos de BD...');
     const { data: rawPayments, error: fetchError } = await supabase
       .from('pending_payments')
       .select(`
@@ -1072,7 +1075,11 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
       `)
       .in('id', paymentIds);
     
-    if (fetchError) throw fetchError;
+    if (fetchError) {
+      console.error('❌ [actionMarkPaymentsAsPaidNew] Error al obtener pagos:', fetchError);
+      throw fetchError;
+    }
+    console.log('✅ [actionMarkPaymentsAsPaidNew] Pagos obtenidos:', rawPayments?.length || 0);
 
     const payments = (rawPayments || []).map((payment: any) => {
       let metadata: { advance_id?: string | null; source?: string | null; notes?: string | null } | null = null;
@@ -1106,15 +1113,26 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
     });
 
     if (!payments || payments.length === 0) {
+      console.log('⚠️ [actionMarkPaymentsAsPaidNew] No se encontraron pagos para procesar');
       return {
         ok: false as const,
         error: 'No se encontraron pagos para procesar.'
       };
     }
 
+    console.log('🔍 [actionMarkPaymentsAsPaidNew] Verificando pagos procesados:', payments.map((p: any) => ({
+      id: p.id,
+      client: p.client_name,
+      status: p.status,
+      amount: p.amount_to_pay,
+      hasRefs: (p.payment_references || []).length,
+      notes: p.notes ? 'presente' : 'ausente'
+    })));
+
     const alreadyPaid = payments.filter((payment: any) => payment.status === 'paid');
     if (alreadyPaid.length > 0) {
       const labels = alreadyPaid.map((p: any) => `"${p.client_name}"`).join(', ');
+      console.log('⚠️ [actionMarkPaymentsAsPaidNew] Pagos ya marcados como pagados:', labels);
       return {
         ok: false as const,
         error: `Los pagos ${labels} ya fueron marcados como pagados previamente.`
@@ -1123,6 +1141,7 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
 
     const paymentIdsToProcess = payments.map((payment: any) => payment.id);
 
+    console.log('🔎 [actionMarkPaymentsAsPaidNew] Verificando payment_details existentes...');
     const { data: existingDetails, error: existingDetailsError } = await supabase
       .from('payment_details')
       .select('payment_id, bank_transfer_id')
@@ -1136,6 +1155,7 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
         existingDetailKeys.add(`${detail.payment_id}:${detail.bank_transfer_id}`);
       }
     });
+    console.log('✅ [actionMarkPaymentsAsPaidNew] Payment_details existentes:', existingDetailKeys.size);
 
     const referenceNumbers = Array.from(
       new Set<string>(
@@ -1147,9 +1167,12 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
       )
     );
 
+    console.log('📋 [actionMarkPaymentsAsPaidNew] Referencias a validar:', referenceNumbers);
+
     const transferMap = new Map<string, any>();
 
     if (referenceNumbers.length > 0) {
+      console.log('🔍 [actionMarkPaymentsAsPaidNew] Buscando referencias en bank_transfers...');
       const { data: transfersData, error: transfersError } = await supabase
         .from('bank_transfers')
         .select('*')
@@ -1161,55 +1184,41 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
         const key = String(transfer.reference_number);
         transferMap.set(key, transfer);
       });
+      
+      console.log('✅ [actionMarkPaymentsAsPaidNew] Transferencias encontradas en BD:', transferMap.size);
+      console.log('📊 [actionMarkPaymentsAsPaidNew] Referencias encontradas:', Array.from(transferMap.keys()));
+    } else {
+      console.log('⚠️ [actionMarkPaymentsAsPaidNew] No hay referencias para validar');
     }
 
     // Validar referencias solo para pagos normales (no descuentos a corredor)
-    const invalidReferences = payments
-      .filter((payment: any) => {
-        // Excluir descuentos a corredor de la validación
-        if (payment.notes) {
-          try {
-            let metadata: any = null;
-            if (typeof payment.notes === 'object' && payment.notes !== null) {
-              metadata = payment.notes;
-            } else if (typeof payment.notes === 'string') {
-              metadata = JSON.parse(payment.notes);
-            }
-            
-            if (metadata) {
-              const hasAutoFlag = metadata.is_auto_advance === true;
-              const hasAdvanceIdDirect = !!metadata.advance_id;
-              const hasAdvanceIdInNotes = metadata.notes && typeof metadata.notes === 'string' && 
-                                         metadata.notes.includes('Adelanto ID:');
-              if (hasAutoFlag || hasAdvanceIdDirect || hasAdvanceIdInNotes) {
-                return false; // Excluir de validación
-              }
-            }
-          } catch (e) {
-            // Si no se puede parsear, incluir en validación
-          }
-        }
-        return true; // Incluir en validación
-      })
-      .flatMap((payment: any) =>
-        (payment.payment_references || [])
-          .filter((ref: any) => !transferMap.has(String(ref.reference_number)))
-          .map((ref: any) => ref.reference_number)
-      );
-
-    if (invalidReferences.length > 0) {
-      const labels = invalidReferences.map((ref: string) => `"${ref}"`).join(', ');
-      return {
-        ok: false as const,
-        error: `Las referencias ${labels} no existen en el historial de banco.`
-      };
-    }
-
-    // For each payment, update bank transfers and create payment details
-    for (const payment of payments || []) {
+    console.log('🔍 [actionMarkPaymentsAsPaidNew] Validando referencias (excluyendo descuentos a corredor)...');
+    
+    const paymentsToValidate = payments.filter((payment: any) => {
+      // Detectar descuentos a corredor de MÚLTIPLES formas
       const refs = payment.payment_references || [];
-      // Verificar si es descuento a corredor: tiene is_auto_advance, advance_id o "Adelanto ID:" en notes
-      let isDescuentoCorredor = false;
+      
+      // MÉTODO 1: Por patrón de referencia (DESCUENTO-*, DESC-*)
+      const hasDescuentoReference = refs.some((ref: any) => {
+        const refNum = String(ref.reference_number || '');
+        return refNum.startsWith('DESCUENTO-') || refNum.startsWith('DESC-');
+      });
+      
+      if (hasDescuentoReference) {
+        console.log('🔖 [actionMarkPaymentsAsPaidNew] Pago', payment.client_name, 'excluido (referencia DESCUENTO-*)');
+        return false;
+      }
+      
+      // MÉTODO 2: Por texto en notes (incluso si no es JSON válido)
+      if (payment.notes && typeof payment.notes === 'string') {
+        const notesStr = payment.notes.toLowerCase();
+        if (notesStr.includes('adelanto id:') || notesStr.includes('adelannto') || notesStr.includes('adelantoo')) {
+          console.log('🔖 [actionMarkPaymentsAsPaidNew] Pago', payment.client_name, 'excluido (texto adelanto en notes)');
+          return false;
+        }
+      }
+      
+      // MÉTODO 3: Por metadata JSON (si es válido)
       if (payment.notes) {
         try {
           let metadata: any = null;
@@ -1224,11 +1233,111 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
             const hasAdvanceIdDirect = !!metadata.advance_id;
             const hasAdvanceIdInNotes = metadata.notes && typeof metadata.notes === 'string' && 
                                        metadata.notes.includes('Adelanto ID:');
-            isDescuentoCorredor = hasAutoFlag || hasAdvanceIdDirect || hasAdvanceIdInNotes;
+            if (hasAutoFlag || hasAdvanceIdDirect || hasAdvanceIdInNotes) {
+              console.log('🔖 [actionMarkPaymentsAsPaidNew] Pago', payment.client_name, 'excluido (metadata JSON adelanto)');
+              return false;
+            }
           }
         } catch (e) {
-          // Si no se puede parsear, no es descuento a corredor
+          // Si falla el parse, ya lo validamos con MÉTODO 2
         }
+      }
+      
+      return true; // Incluir en validación
+    });
+    
+    console.log('📊 [actionMarkPaymentsAsPaidNew] Pagos a validar:', paymentsToValidate.length, 'de', payments.length);
+    
+    const invalidReferences = paymentsToValidate
+      .flatMap((payment: any) =>
+        (payment.payment_references || [])
+          .filter((ref: any) => {
+            const refNum = String(ref.reference_number);
+            // Excluir también referencias que claramente son descuentos
+            if (refNum.startsWith('DESCUENTO-') || refNum.startsWith('DESC-')) {
+              console.log('🔖 [actionMarkPaymentsAsPaidNew] Referencia', refNum, 'excluida de validación (patrón descuento)');
+              return false;
+            }
+            return !transferMap.has(refNum);
+          })
+          .map((ref: any) => ref.reference_number)
+      );
+
+    if (invalidReferences.length > 0) {
+      const labels = invalidReferences.map((ref: string) => `"${ref}"`).join(', ');
+      console.error('❌ [actionMarkPaymentsAsPaidNew] Referencias inválidas encontradas:', invalidReferences);
+      console.error('❌ [actionMarkPaymentsAsPaidNew] BLOQUEANDO PROCESO - Referencias no existen en banco');
+      return {
+        ok: false as const,
+        error: `Las referencias ${labels} no existen en el historial de banco.`
+      };
+    }
+    
+    console.log('✅ [actionMarkPaymentsAsPaidNew] Todas las referencias son válidas, continuando...');
+
+    // For each payment, update bank transfers and create payment details
+    console.log('🔄 [actionMarkPaymentsAsPaidNew] Iniciando procesamiento de', payments.length, 'pago(s)...');
+    for (const payment of payments || []) {
+      console.log('\n💰 [actionMarkPaymentsAsPaidNew] Procesando pago:', {
+        id: payment.id,
+        client: payment.client_name,
+        amount: payment.amount_to_pay,
+        policy: payment.policy_number
+      });
+      
+      const refs = payment.payment_references || [];
+      console.log('📄 [actionMarkPaymentsAsPaidNew] Referencias encontradas:', refs.length);
+      
+      // Detectar descuento a corredor (MISMA LÓGICA que en validación)
+      let isDescuentoCorredor = false;
+      
+      // MÉTODO 1: Por patrón de referencia (MÁS CONFIABLE)
+      const hasDescuentoReference = refs.some((ref: any) => {
+        const refNum = String(ref.reference_number || '');
+        return refNum.startsWith('DESCUENTO-') || refNum.startsWith('DESC-');
+      });
+      
+      if (hasDescuentoReference) {
+        isDescuentoCorredor = true;
+        console.log('🔖 [actionMarkPaymentsAsPaidNew] DESCUENTO A CORREDOR detectado (patrón referencia)');
+      }
+      
+      // MÉTODO 2: Por texto en notes (incluso si no es JSON válido)
+      if (!isDescuentoCorredor && payment.notes && typeof payment.notes === 'string') {
+        const notesStr = payment.notes.toLowerCase();
+        if (notesStr.includes('adelanto id:') || notesStr.includes('adelannto') || notesStr.includes('adelantoo')) {
+          isDescuentoCorredor = true;
+          console.log('🔖 [actionMarkPaymentsAsPaidNew] DESCUENTO A CORREDOR detectado (texto en notes)');
+        }
+      }
+      
+      // MÉTODO 3: Por metadata JSON (si es válido)
+      if (!isDescuentoCorredor && payment.notes) {
+        try {
+          let metadata: any = null;
+          if (typeof payment.notes === 'object' && payment.notes !== null) {
+            metadata = payment.notes;
+          } else if (typeof payment.notes === 'string') {
+            metadata = JSON.parse(payment.notes);
+          }
+          
+          if (metadata) {
+            const hasAutoFlag = metadata.is_auto_advance === true;
+            const hasAdvanceIdDirect = !!metadata.advance_id;
+            const hasAdvanceIdInNotes = metadata.notes && typeof metadata.notes === 'string' && 
+                                       metadata.notes.includes('Adelanto ID:');
+            if (hasAutoFlag || hasAdvanceIdDirect || hasAdvanceIdInNotes) {
+              isDescuentoCorredor = true;
+              console.log('🔖 [actionMarkPaymentsAsPaidNew] DESCUENTO A CORREDOR detectado (metadata JSON)');
+            }
+          }
+        } catch (e) {
+          // Si falla el parse, ya lo validamos con MÉTODO 2
+        }
+      }
+      
+      if (!isDescuentoCorredor) {
+        console.log('💳 [actionMarkPaymentsAsPaidNew] Pago NORMAL detectado');
       }
 
       // Skip can_be_paid check for DESCUENTO A CORREDOR
@@ -1243,19 +1352,34 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
 
       // Solo procesar referencias normales si NO es descuento a corredor
       if (!isDescuentoCorredor) {
+        console.log('📊 [actionMarkPaymentsAsPaidNew] Procesando', refs.length, 'referencia(s) normal(es)...');
+        
         for (const ref of refs) {
         const referenceNumber = String(ref.reference_number);
+        console.log('🔑 [actionMarkPaymentsAsPaidNew] Buscando referencia:', referenceNumber);
+        console.log('📝 [actionMarkPaymentsAsPaidNew] Datos completos del ref:', ref);
+        
         const transfer = transferMap.get(referenceNumber);
 
         if (!transfer) {
+          console.error('❌ [actionMarkPaymentsAsPaidNew] Referencia no encontrada en transferMap:', referenceNumber);
           return {
             ok: false as const,
             error: `La referencia "${referenceNumber}" no existe en el historial de banco.`
           };
         }
+        
+        console.log('✅ [actionMarkPaymentsAsPaidNew] Transfer encontrado:', {
+          ref: referenceNumber,
+          amount: transfer.amount,
+          used: transfer.used_amount,
+          remaining: transfer.remaining_amount,
+          status: transfer.status
+        });
 
         const detailKey = `${payment.id}:${transfer.id}`;
         if (existingDetailKeys.has(detailKey)) {
+          console.error('❌ [actionMarkPaymentsAsPaidNew] Pago ya conciliado:', detailKey);
           return {
             ok: false as const,
             error: `El pago "${payment.client_name}" ya fue conciliado con la referencia ${referenceNumber}.`
@@ -1263,7 +1387,10 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
         }
 
         const amountToUse = Number(ref.amount_to_use) || 0;
+        console.log('💵 [actionMarkPaymentsAsPaidNew] Monto a usar:', amountToUse);
+        
         if (amountToUse <= 0) {
+          console.log('⚠️ [actionMarkPaymentsAsPaidNew] Monto 0 o negativo, saltando...');
           continue;
         }
 
@@ -1272,20 +1399,39 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
         const transferRemaining = transfer.remaining_amount !== null && transfer.remaining_amount !== undefined
           ? Number(transfer.remaining_amount)
           : Math.max(transferAmount - transferUsed, 0);
+        
+        console.log('📊 [actionMarkPaymentsAsPaidNew] Validando saldo:', {
+          total: transferAmount,
+          usado: transferUsed,
+          disponible: transferRemaining,
+          aUsar: amountToUse,
+          tolerance: AMOUNT_TOLERANCE
+        });
 
         if (amountToUse > transferRemaining + AMOUNT_TOLERANCE) {
+          console.error('❌ [actionMarkPaymentsAsPaidNew] Saldo insuficiente!');
           return {
             ok: false as const,
             error: `La referencia ${referenceNumber} no tiene saldo suficiente (disponible ${transferRemaining.toFixed(2)}).`
           };
         }
+        
+        console.log('✅ [actionMarkPaymentsAsPaidNew] Saldo suficiente, continuando...');
 
         const previous = transferMap.get(referenceNumber) || transfer;
         const previousUsed = Number(previous.used_amount || 0);
         const newUsedAmount = previousUsed + amountToUse;
         const newRemainingAmount = Math.max(transferAmount - newUsedAmount, 0);
         const newStatus = determineTransferStatus(transferAmount, newUsedAmount, newRemainingAmount);
+        
+        console.log('📊 [actionMarkPaymentsAsPaidNew] Cálculos de actualización:', {
+          previousUsed,
+          newUsedAmount,
+          newRemainingAmount,
+          newStatus
+        });
 
+        console.log('💾 [actionMarkPaymentsAsPaidNew] Insertando payment_details...');
         const { error: detailError } = await supabase
           .from('payment_details')
           .insert([{
@@ -1299,9 +1445,14 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
             paid_at: paidAt,
           }] satisfies TablesInsert<'payment_details'>[]);
 
-        if (detailError) throw detailError;
+        if (detailError) {
+          console.error('❌ [actionMarkPaymentsAsPaidNew] Error insertando payment_details:', detailError);
+          throw detailError;
+        }
+        console.log('✅ [actionMarkPaymentsAsPaidNew] Payment_details insertado');
 
         // remaining_amount y status son columnas generadas, solo actualizar used_amount
+        console.log('🔄 [actionMarkPaymentsAsPaidNew] Actualizando bank_transfers...');
         const { error: transferUpdateError } = await supabase
           .from('bank_transfers')
           .update({
@@ -1309,7 +1460,12 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
           } satisfies TablesUpdate<'bank_transfers'>)
           .eq('id', transfer.id);
 
-        if (transferUpdateError) throw transferUpdateError;
+        if (transferUpdateError) {
+          console.error('❌ [actionMarkPaymentsAsPaidNew] Error actualizando bank_transfers:', transferUpdateError);
+          throw transferUpdateError;
+        }
+        
+        console.log('✅ [actionMarkPaymentsAsPaidNew] Bank_transfers actualizado');
 
         transferMap.set(referenceNumber, {
           ...transfer,
@@ -1317,6 +1473,9 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
           remaining_amount: newRemainingAmount,
           status: newStatus,
         });
+        
+        console.log('💾 [actionMarkPaymentsAsPaidNew] TransferMap actualizado en memoria');
+        console.log('✅ [actionMarkPaymentsAsPaidNew] Referencia procesada completamente\n');
 
         existingDetailKeys.add(detailKey);
         }
@@ -1324,6 +1483,8 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
 
       // Special handling for DESCUENTO A CORREDOR
       if (isDescuentoCorredor) {
+        console.log('🎯 [actionMarkPaymentsAsPaidNew] Iniciando proceso especial para DESCUENTO A CORREDOR');
+        
         // Extraer advance_id usando la misma lógica de sincronización
         let advanceId: string | null = null;
         try {
@@ -1341,17 +1502,21 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
               // 2. Texto dentro de metadata.notes
               if (metadata.advance_id) {
                 advanceId = metadata.advance_id;
+                console.log('✅ [actionMarkPaymentsAsPaidNew] Advance ID encontrado (directo):', advanceId);
               } else if (metadata.notes && typeof metadata.notes === 'string') {
                 const match = metadata.notes.match(/Adelanto ID:\s*([a-f0-9-]+)/i);
                 if (match && match[1]) {
                   advanceId = match[1];
+                  console.log('✅ [actionMarkPaymentsAsPaidNew] Advance ID encontrado (regex):', advanceId);
                 }
               }
             }
           }
         } catch (e) {
-          console.error('Error parsing notes for advance_id:', e);
+          console.error('❌ [actionMarkPaymentsAsPaidNew] Error parsing notes for advance_id:', e);
         }
+        
+        console.log('🔑 [actionMarkPaymentsAsPaidNew] Advance ID final:', advanceId || 'NO ENCONTRADO');
         
         // Obtener información del adelanto y broker
         let brokerName = 'CORREDOR';
@@ -1404,15 +1569,28 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
           transaction_code: advanceId ? `ADV-${advanceId.substring(0, 8)}` : 'DESCUENTO',
         };
         
+        console.log('📝 [actionMarkPaymentsAsPaidNew] Payload para bank_transfers:', transferPayload);
+        console.log('💾 [actionMarkPaymentsAsPaidNew] Insertando transferencia sintética en banco...');
+        
         const { data: newTransfer, error: transferError} = await supabase
           .from('bank_transfers')
           .insert([transferPayload])
           .select()
           .single();
 
-        if (transferError) throw transferError;
+        if (transferError) {
+          console.error('❌ [actionMarkPaymentsAsPaidNew] Error al insertar transferencia:', transferError);
+          throw transferError;
+        }
+        
+        console.log('✅ [actionMarkPaymentsAsPaidNew] Transferencia creada exitosamente:', {
+          id: newTransfer.id,
+          reference: newTransfer.reference_number,
+          amount: newTransfer.amount
+        });
 
         // Create payment_details linking to this transfer
+        console.log('🔗 [actionMarkPaymentsAsPaidNew] Creando payment_details para vincular...');
         const { error: detailError } = await supabase
           .from('payment_details')
           .insert([{
@@ -1426,9 +1604,15 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
             paid_at: paidAt,
           }] satisfies TablesInsert<'payment_details'>[]);
 
-        if (detailError) throw detailError;
+        if (detailError) {
+          console.error('❌ [actionMarkPaymentsAsPaidNew] Error al crear payment_details:', detailError);
+          throw detailError;
+        }
+        
+        console.log('✅ [actionMarkPaymentsAsPaidNew] Payment_details creado exitosamente');
       }
 
+      console.log('🔄 [actionMarkPaymentsAsPaidNew] Actualizando status a "paid"...');
       const { error: paymentUpdateError } = await supabase
         .from('pending_payments')
         .update({
@@ -1438,7 +1622,12 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
         } satisfies TablesUpdate<'pending_payments'>)
         .eq('id', payment.id);
 
-      if (paymentUpdateError) throw paymentUpdateError;
+      if (paymentUpdateError) {
+        console.error('❌ [actionMarkPaymentsAsPaidNew] Error al actualizar status:', paymentUpdateError);
+        throw paymentUpdateError;
+      }
+      
+      console.log('✅ [actionMarkPaymentsAsPaidNew] Status actualizado a "paid"');
 
       if (payment.metadata?.source === 'advance_external' && payment.metadata?.advance_id) {
         const amount = Number(payment.amount_to_pay) || 0;
@@ -1455,34 +1644,52 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
         }
       }
 
+      console.log('🧹 [actionMarkPaymentsAsPaidNew] Limpiando payment_details...');
       const { error: detailCleanupError } = await supabase
         .from('payment_details')
         .update({ payment_id: null } satisfies TablesUpdate<'payment_details'>)
         .eq('payment_id', payment.id);
 
-      if (detailCleanupError) throw detailCleanupError;
+      if (detailCleanupError) {
+        console.error('❌ [actionMarkPaymentsAsPaidNew] Error limpiando payment_details:', detailCleanupError);
+        throw detailCleanupError;
+      }
 
+      console.log('🧹 [actionMarkPaymentsAsPaidNew] Eliminando payment_references...');
       const { error: referencesDeleteError } = await supabase
         .from('payment_references')
         .delete()
         .eq('payment_id', payment.id);
 
-      if (referencesDeleteError) throw referencesDeleteError;
+      if (referencesDeleteError) {
+        console.error('❌ [actionMarkPaymentsAsPaidNew] Error eliminando referencias:', referencesDeleteError);
+        throw referencesDeleteError;
+      }
 
+      console.log('🗑️ [actionMarkPaymentsAsPaidNew] Eliminando pending_payment...');
       const { error: paymentDeleteError } = await supabase
         .from('pending_payments')
         .delete()
         .eq('id', payment.id);
 
-      if (paymentDeleteError) throw paymentDeleteError;
+      if (paymentDeleteError) {
+        console.error('❌ [actionMarkPaymentsAsPaidNew] Error eliminando pago:', paymentDeleteError);
+        throw paymentDeleteError;
+      }
+      
+      console.log('✅ [actionMarkPaymentsAsPaidNew] Pago completamente procesado y eliminado');
     }
+    
+    console.log('🎉 [actionMarkPaymentsAsPaidNew] PROCESO COMPLETADO EXITOSAMENTE');
+    console.log('📊 [actionMarkPaymentsAsPaidNew] Total procesado:', paymentIds.length, 'pago(s)');
     
     return {
       ok: true,
       message: `${paymentIds.length} pago(s) marcado(s) como pagado(s)`
     };
   } catch (error: any) {
-    console.error('Error marking payments as paid:', error);
+    console.error('💥 [actionMarkPaymentsAsPaidNew] ERROR FATAL:', error);
+    console.error('💥 [actionMarkPaymentsAsPaidNew] Stack trace:', error.stack);
     return { ok: false, error: error.message };
   }
 }
