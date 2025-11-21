@@ -35,13 +35,41 @@ const capitalizeText = (text: string) => {
 };
 
 export function BrokerDetailSection({ fortnightId, fortnightLabel, brokers, role }: Props) {
-  const [expandedBrokers, setExpandedBrokers] = useState<Set<string>>(new Set());
+  // Para brokers, auto-expandir todo
+  const [expandedBrokers, setExpandedBrokers] = useState<Set<string>>(role === 'broker' ? new Set(brokers.map(b => b.broker_id)) : new Set());
   const [expandedInsurers, setExpandedInsurers] = useState<Set<string>>(new Set());
   const [brokerDetails, setBrokerDetails] = useState<Map<string, any>>(new Map());
   const [loadingBroker, setLoadingBroker] = useState<string | null>(null);
   const [showDownloadModal, setShowDownloadModal] = useState<{ brokerId: string; brokerName: string } | null>(null);
 
+  // Auto-cargar detalles para brokers al montar
+  useEffect(() => {
+    if (role === 'broker' && brokers.length > 0) {
+      const loadBrokerDetails = async () => {
+        for (const broker of brokers) {
+          if (!brokerDetails.has(broker.broker_id)) {
+            setLoadingBroker(broker.broker_id);
+            const result = await actionGetBrokerCommissionDetails(fortnightId, broker.broker_id);
+            
+            if (result.ok && result.data && result.data.length > 0) {
+              setBrokerDetails(prev => {
+                const newDetails = new Map(prev);
+                newDetails.set(broker.broker_id, result.data[0]);
+                return newDetails;
+              });
+            }
+            setLoadingBroker(null);
+          }
+        }
+      };
+      loadBrokerDetails();
+    }
+  }, [role, brokers, fortnightId]);
+
   const toggleBroker = async (brokerId: string) => {
+    // No permitir colapsar para brokers
+    if (role === 'broker') return;
+    
     const newExpanded = new Set(expandedBrokers);
     
     if (newExpanded.has(brokerId)) {
@@ -51,22 +79,15 @@ export function BrokerDetailSection({ fortnightId, fortnightLabel, brokers, role
       
       // Load details if not already loaded
       if (!brokerDetails.has(brokerId)) {
-        console.log('Expandiendo broker:', brokerId, 'Fortnight:', fortnightId);
         setLoadingBroker(brokerId);
         const result = await actionGetBrokerCommissionDetails(fortnightId, brokerId);
-        console.log('Detalles recibidos:', result);
         
         if (result.ok && result.data && result.data.length > 0) {
           const newDetails = new Map(brokerDetails);
           newDetails.set(brokerId, result.data[0]);
           setBrokerDetails(newDetails);
-          console.log('Detalles guardados:', result.data[0]);
-        } else {
-          console.error('Error cargando detalles:', result);
         }
         setLoadingBroker(null);
-      } else {
-        console.log('Detalles ya cargados:', brokerDetails.get(brokerId));
       }
     }
     
@@ -146,28 +167,30 @@ export function BrokerDetailSection({ fortnightId, fortnightLabel, brokers, role
 
           return (
             <Card key={broker.broker_id} className="border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
-              <div className="p-4">
+              <div className="p-3 sm:p-4">
                 {/* Broker Header */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3 flex-1 cursor-pointer" onClick={() => toggleBroker(broker.broker_id)}>
-                    {isExpanded ? (
-                      <FaChevronDown className="text-[#8AAA19] text-sm transition-transform" />
-                    ) : (
-                      <FaChevronRight className="text-gray-400 text-sm transition-transform" />
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 sm:gap-3 flex-1 w-full" onClick={() => toggleBroker(broker.broker_id)} style={{ cursor: role === 'broker' ? 'default' : 'pointer' }}>
+                    {role === 'master' && (
+                      isExpanded ? (
+                        <FaChevronDown className="text-[#8AAA19] text-sm transition-transform" />
+                      ) : (
+                        <FaChevronRight className="text-gray-400 text-sm transition-transform" />
+                      )
                     )}
-                    <div className="flex-1">
-                      <h4 className="font-semibold text-[#010139]">{capitalizeText(broker.broker_name)}</h4>
-                      <div className="flex gap-4 mt-1 text-sm">
-                        <span className="text-gray-600">
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-semibold text-[#010139] text-sm sm:text-base truncate">{capitalizeText(broker.broker_name)}</h4>
+                      <div className="flex flex-wrap gap-2 sm:gap-4 mt-1 text-xs sm:text-sm">
+                        <span className="text-gray-600 whitespace-nowrap">
                           Bruto: <span className="font-mono font-medium">{formatCurrency(broker.gross_amount)}</span>
                         </span>
                         {broker.discounts_json?.total > 0 && (
-                          <span className="text-red-600">
+                          <span className="text-red-600 whitespace-nowrap">
                             Desc: <span className="font-mono">-{formatCurrency(broker.discounts_json.total)}</span>
                           </span>
                         )}
-                        <span className="text-[#8AAA19] font-bold">
-                          Neto: <span className="font-mono text-base">{formatCurrency(broker.net_amount)}</span>
+                        <span className="text-[#8AAA19] font-bold whitespace-nowrap">
+                          Neto: <span className="font-mono text-sm sm:text-base">{formatCurrency(broker.net_amount)}</span>
                         </span>
                       </div>
                     </div>
@@ -181,16 +204,16 @@ export function BrokerDetailSection({ fortnightId, fortnightLabel, brokers, role
                       e.stopPropagation();
                       setShowDownloadModal({ brokerId: broker.broker_id, brokerName: broker.broker_name });
                     }}
-                    className="hover:bg-[#8AAA19]/10 hover:text-[#8AAA19] transition-colors"
+                    className="hover:bg-[#8AAA19]/10 hover:text-[#8AAA19] transition-colors text-xs sm:text-sm w-full sm:w-auto"
                   >
                     <FaDownload className="mr-2 h-3 w-3" />
-                    Descargar
+                    Descargar Mi Reporte
                   </Button>
                 </div>
 
                 {/* Expanded Content */}
                 {isExpanded && (
-                  <div className="mt-4 pl-7">
+                  <div className="mt-4 pl-0 sm:pl-7">
                     {isLoading ? (
                       <div className="text-center py-8 text-gray-500">
                         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#8AAA19] mx-auto mb-2"></div>
@@ -206,20 +229,20 @@ export function BrokerDetailSection({ fortnightId, fortnightLabel, brokers, role
                           return (
                             <Card key={insurerKey} className="bg-gray-50 border border-gray-200">
                               <div 
-                                className="p-3 cursor-pointer hover:bg-gray-100 transition-colors flex items-center justify-between"
+                                className="p-2 sm:p-3 cursor-pointer hover:bg-gray-100 transition-colors flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2"
                                 onClick={() => toggleInsurer(insurerKey)}
                               >
-                                <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-2 w-full sm:w-auto">
                                   {isInsurerExpanded ? (
                                     <FaChevronDown className="text-[#010139] text-xs" />
                                   ) : (
                                     <FaChevronRight className="text-gray-400 text-xs" />
                                   )}
-                                  <span className="font-medium text-[#010139]">{insurer.insurer_name}</span>
+                                  <span className="font-medium text-[#010139] text-sm sm:text-base truncate">{insurer.insurer_name}</span>
                                 </div>
-                                <div className="text-sm">
+                                <div className="text-xs sm:text-sm pl-5 sm:pl-0">
                                   <span className="text-gray-600">{insurer.policies.length} póliza{insurer.policies.length !== 1 ? 's' : ''}</span>
-                                  <span className="ml-3 font-mono font-semibold text-[#010139]">
+                                  <span className="ml-2 sm:ml-3 font-mono font-semibold text-[#010139]">
                                     {formatCurrency(insurer.total_gross)}
                                   </span>
                                 </div>
@@ -227,31 +250,33 @@ export function BrokerDetailSection({ fortnightId, fortnightLabel, brokers, role
 
                               {/* Policies */}
                               {isInsurerExpanded && (
-                                <CardContent className="p-3 pt-0">
-                                  <Table>
-                                    <TableHeader>
-                                      <TableRow className="bg-white">
-                                        <TableHead className="text-xs">Póliza</TableHead>
-                                        <TableHead className="text-xs">Cliente</TableHead>
-                                        <TableHead className="text-xs text-right">Bruto</TableHead>
-                                        <TableHead className="text-xs text-center">%</TableHead>
-                                        <TableHead className="text-xs text-right">Neto</TableHead>
-                                      </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                      {insurer.policies.map((policy: any, pIdx: number) => (
-                                        <TableRow key={pIdx} className="text-sm hover:bg-white">
-                                          <TableCell className="font-mono text-xs">{policy.policy_number}</TableCell>
-                                          <TableCell className="text-xs">{policy.insured_name}</TableCell>
-                                          <TableCell className="text-right font-mono text-xs">{formatCurrency(policy.gross_amount)}</TableCell>
-                                          <TableCell className="text-center text-xs">{(policy.percentage * 100).toFixed(0)}%</TableCell>
-                                          <TableCell className="text-right font-mono text-xs font-semibold text-[#8AAA19]">
-                                            {formatCurrency(policy.net_amount)}
-                                          </TableCell>
+                                <CardContent className="p-2 sm:p-3 pt-0">
+                                  <div className="overflow-x-auto">
+                                    <Table>
+                                      <TableHeader>
+                                        <TableRow className="bg-white">
+                                          <TableHead className="text-xs min-w-[80px]">Póliza</TableHead>
+                                          <TableHead className="text-xs min-w-[120px]">Cliente</TableHead>
+                                          <TableHead className="text-xs text-right min-w-[70px]">Bruto</TableHead>
+                                          <TableHead className="text-xs text-center min-w-[40px]">%</TableHead>
+                                          <TableHead className="text-xs text-right min-w-[70px]">Neto</TableHead>
                                         </TableRow>
-                                      ))}
-                                    </TableBody>
-                                  </Table>
+                                      </TableHeader>
+                                      <TableBody>
+                                        {insurer.policies.map((policy: any, pIdx: number) => (
+                                          <TableRow key={pIdx} className="text-sm hover:bg-white">
+                                            <TableCell className="font-mono text-xs">{policy.policy_number}</TableCell>
+                                            <TableCell className="text-xs truncate max-w-[150px]" title={policy.insured_name}>{policy.insured_name}</TableCell>
+                                            <TableCell className="text-right font-mono text-xs">{formatCurrency(policy.gross_amount)}</TableCell>
+                                            <TableCell className="text-center text-xs">{(policy.percentage * 100).toFixed(0)}%</TableCell>
+                                            <TableCell className="text-right font-mono text-xs font-semibold text-[#8AAA19]">
+                                              {formatCurrency(policy.net_amount)}
+                                            </TableCell>
+                                          </TableRow>
+                                        ))}
+                                      </TableBody>
+                                    </Table>
+                                  </div>
                                 </CardContent>
                               )}
                             </Card>

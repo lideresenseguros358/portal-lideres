@@ -205,15 +205,42 @@ export async function getAnnualNet(userId: string, role: DashboardRole): Promise
   const supabase = await getSupabaseServer();
   const brokerId = role === "broker" ? await resolveBrokerId(userId) : null;
 
+  // Para brokers: suma de comisiones brutas del año
+  if (role === "broker" && brokerId) {
+    const yearStart = `${CURRENT_YEAR}-01-01T00:00:00.000Z`;
+    const yearEnd = `${CURRENT_YEAR}-12-31T23:59:59.999Z`;
+    
+    const { data, error } = await supabase
+      .from("comm_items")
+      .select("gross_amount")
+      .eq("broker_id", brokerId)
+      .gte("created_at", yearStart)
+      .lte("created_at", yearEnd)
+      .limit(FETCH_LIMIT)
+      .returns<{ gross_amount: number | string | null }[]>();
+    
+    if (error || !data) {
+      return { value: 0 };
+    }
+    
+    const value = data.reduce((acc: number, item) => {
+      return acc + toNumber(item.gross_amount);
+    }, 0);
+    
+    // Si no hay datos reales, usar mock
+    if (MOCK_DATA_ENABLED && value === 0) {
+      return { value: 52340.75 };
+    }
+    
+    return { value };
+  }
+
+  // Para master: suma de producción total (PMA)
   let query = supabase
     .from("production")
     .select("bruto, canceladas")
     .eq("year", CURRENT_YEAR)
     .limit(FETCH_LIMIT);
-
-  if (brokerId) {
-    query = query.eq("broker_id", brokerId);
-  }
 
   const { data, error } = await query.returns<{ bruto: number | string | null; canceladas: number | string | null }[]>();
   if (error || !data) {

@@ -550,7 +550,8 @@ const ClientsListView = ({ clients, onView, onEdit, onDelete, role, selectedClie
 
   return (
     <div className={`clients-wrapper ${selectionMode ? 'with-selection' : ''}`}>
-      <table className="clients-table">
+      {/* Vista Desktop: Tabla */}
+      <table className="clients-table hidden md:table">
         <thead>
           <tr className="ct-head">
             {selectionMode && (
@@ -842,6 +843,308 @@ const ClientsListView = ({ clients, onView, onEdit, onDelete, role, selectedClie
           })}
         </tbody>
       </table>
+
+      {/* Vista Mobile: Cards */}
+      <div className="md:hidden space-y-3">
+        {selectionMode && (
+          <div className="bg-gray-50 p-3 rounded-lg flex items-center gap-3 mb-4">
+            <input
+              type="checkbox"
+              checked={allSelected}
+              onChange={onSelectAll}
+              className="w-5 h-5 text-[#8AAA19] rounded focus:ring-[#8AAA19] cursor-pointer"
+            />
+            <span className="text-sm font-medium text-gray-700">
+              {selectedClients.size === clients.length ? 'Deseleccionar todos' : 'Seleccionar todos'}
+            </span>
+          </div>
+        )}
+        {items.map(({ client, nationalId, email, phone, brokerName }) => {
+          const isExpanded = expandedClients.has(client.id);
+          const isSelected = selectedClients.has(client.id);
+          return (
+            <div key={client.id} className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+              {/* Card Header */}
+              <div className="p-4 bg-gradient-to-r from-gray-50 to-white">
+                <div className="flex items-start gap-3">
+                  {selectionMode && (
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => onToggleClient(client.id)}
+                      className="w-5 h-5 mt-1 text-[#8AAA19] rounded focus:ring-[#8AAA19] cursor-pointer flex-shrink-0"
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <button
+                      className="w-full text-left group"
+                      onClick={() => toggleClient(client.id)}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <h3 className="text-base font-semibold text-[#010139] truncate group-hover:text-[#8AAA19] transition-colors">
+                          {capitalizeText(client.name)}
+                        </h3>
+                        {isExpanded ? (
+                          <ChevronUp size={20} className="text-[#8AAA19] flex-shrink-0" />
+                        ) : (
+                          <ChevronDown size={20} className="text-gray-400 flex-shrink-0" />
+                        )}
+                      </div>
+                    </button>
+                    
+                    {/* Info Grid */}
+                    <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+                      <div>
+                        <span className="text-gray-500 text-xs block">Cédula</span>
+                        <span className="text-gray-900 font-medium">{nationalId}</span>
+                      </div>
+                      <div>
+                        <span className="text-gray-500 text-xs block">Pólizas</span>
+                        <span className="text-[#010139] font-semibold">{client.policies?.length || 0}</span>
+                      </div>
+                      {email !== '—' && (
+                        <div className="col-span-2">
+                          <span className="text-gray-500 text-xs block">Email</span>
+                          <span className="text-gray-900 text-xs truncate block">{email}</span>
+                        </div>
+                      )}
+                      {phone !== '—' && (
+                        <div>
+                          <span className="text-gray-500 text-xs block">Teléfono</span>
+                          <span className="text-gray-900">{phone}</span>
+                        </div>
+                      )}
+                      {role === 'master' && brokerName !== '—' && (
+                        <div>
+                          <span className="text-gray-500 text-xs block">Corredor</span>
+                          <span className="text-gray-900 truncate block text-xs">{brokerName}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Acciones */}
+                <div className="mt-3 pt-3 border-t border-gray-100 flex gap-2">
+                  <button
+                    onClick={() => toggleClient(client.id)}
+                    className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-white border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    {isExpanded ? (
+                      <><ChevronUp size={16} /> Ocultar Pólizas</>
+                    ) : (
+                      <><ChevronDown size={16} /> Ver Pólizas</>
+                    )}
+                  </button>
+                  <div className="relative">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOpenMenuClient(openMenuClient === client.id ? null : client.id);
+                      }}
+                      className="p-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      <MoreVertical size={20} className="text-gray-600" />
+                    </button>
+                    {openMenuClient === client.id && (
+                      <>
+                        <div 
+                          className="fixed inset-0 z-[100]" 
+                          onClick={() => setOpenMenuClient(null)}
+                        />
+                        <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-[101]">
+                          <button
+                            onClick={() => {
+                              onView(client.id);
+                              setOpenMenuClient(null);
+                            }}
+                            className="w-full text-left px-4 py-2.5 hover:bg-gray-50 flex items-center gap-3 text-sm text-gray-700"
+                          >
+                            <Eye size={16} className="text-[#010139]" />
+                            Ver Detalles
+                          </button>
+                          <button
+                            onClick={() => {
+                              onEdit(client.id);
+                              setOpenMenuClient(null);
+                            }}
+                            className="w-full text-left px-4 py-2.5 hover:bg-gray-50 flex items-center gap-3 text-sm text-gray-700"
+                          >
+                            <Edit3 size={16} className="text-[#8AAA19]" />
+                            Editar Cliente
+                          </button>
+                          <div className="border-t border-gray-100 my-1"></div>
+                          <button
+                            onClick={() => {
+                              onDelete(client.id);
+                              setOpenMenuClient(null);
+                            }}
+                            className="w-full text-left px-4 py-2.5 hover:bg-red-50 flex items-center gap-3 text-sm text-red-600"
+                          >
+                            <Trash2 size={16} />
+                            Eliminar Cliente
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Expanded: Pólizas */}
+              {isExpanded && (
+                <div className="p-4 bg-white border-t border-gray-200">
+                  <h4 className="text-sm font-semibold text-gray-700 mb-3">Pólizas ({client.policies?.length || 0})</h4>
+                  {client.policies?.length ? (
+                    <div className="space-y-3">
+                      {client.policies.map((policy) => (
+                        <div key={policy.id} className="bg-gray-50 rounded-lg p-3 border border-gray-200">
+                          <div className="flex items-start justify-between gap-2 mb-2">
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-medium text-[#010139] truncate">📋 {policy.policy_number || 'Sin número'}</div>
+                              <div className="text-xs text-gray-600 mt-1">{policy.insurers?.name?.toUpperCase?.() || '—'}</div>
+                            </div>
+                            <div className="relative">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setOpenMenuPolicy(openMenuPolicy === policy.id ? null : policy.id);
+                                }}
+                                className="p-1.5 hover:bg-gray-200 rounded transition-colors"
+                              >
+                                <MoreVertical size={16} className="text-gray-600" />
+                              </button>
+                              {openMenuPolicy === policy.id && (
+                                <>
+                                  <div 
+                                    className="fixed inset-0 z-[100]" 
+                                    onClick={() => setOpenMenuPolicy(null)}
+                                  />
+                                  <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-[101]">
+                                    <button
+                                      onClick={() => {
+                                        onViewPolicy(policy.id);
+                                        setOpenMenuPolicy(null);
+                                      }}
+                                      className="w-full text-left px-3 py-2 hover:bg-gray-50 flex items-center gap-2 text-xs text-gray-700"
+                                    >
+                                      <Eye size={14} />
+                                      Ver Detalles
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        onEditPolicy(policy.id);
+                                        setOpenMenuPolicy(null);
+                                      }}
+                                      className="w-full text-left px-3 py-2 hover:bg-gray-50 flex items-center gap-2 text-xs text-gray-700"
+                                    >
+                                      <Edit3 size={14} />
+                                      Editar
+                                    </button>
+                                    {role === 'master' && (
+                                      <>
+                                        <div className="border-t border-gray-100 my-1"></div>
+                                        <button
+                                          onClick={() => {
+                                            onDeletePolicy(policy.id, policy.policy_number || 'Sin número');
+                                            setOpenMenuPolicy(null);
+                                          }}
+                                          className="w-full text-left px-3 py-2 hover:bg-red-50 flex items-center gap-2 text-xs text-red-600"
+                                        >
+                                          <Trash2 size={14} />
+                                          Eliminar
+                                        </button>
+                                      </>
+                                    )}
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2 text-xs mt-2">
+                            <div>
+                              <span className="text-gray-500">Ramo:</span>
+                              <span className="ml-1 text-gray-900">{policy.ramo || '—'}</span>
+                            </div>
+                            <div>
+                              <span className="text-gray-500">Estado:</span>
+                              <span className={`ml-1 font-semibold ${
+                                policy.status === 'ACTIVA' ? 'text-green-600' : 
+                                policy.status === 'VENCIDA' ? 'text-red-600' : 
+                                'text-gray-600'
+                              }`}>
+                                {policy.status || '—'}
+                              </span>
+                            </div>
+                            <div className="col-span-2">
+                              <span className="text-gray-500">Renovación:</span>
+                              <span className="ml-1 text-gray-900">{formatDate(policy.renewal_date)}</span>
+                            </div>
+                          </div>
+                          {policy.notas && (
+                            <div className="mt-2 p-2 bg-white rounded border border-gray-200">
+                              <span className="text-xs text-gray-500 block mb-1">💬 Notas:</span>
+                              <span className="text-xs text-gray-700">{policy.notas}</span>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-gray-500 text-center py-4">Este cliente no tiene pólizas registradas</p>
+                  )}
+
+                  {/* Expediente Section */}
+                  <div className="mt-4 pt-4 border-t border-gray-200">
+                    <button
+                      onClick={() => {
+                        setExpandedExpedientes(prev => {
+                          const next = new Set(prev);
+                          if (next.has(client.id)) {
+                            next.delete(client.id);
+                          } else {
+                            next.add(client.id);
+                          }
+                          return next;
+                        });
+                      }}
+                      className="w-full flex items-center justify-between p-3 bg-gradient-to-r from-gray-50 to-gray-100 hover:from-gray-100 hover:to-gray-200 rounded-lg border border-gray-200 transition-all"
+                    >
+                      <div className="flex items-center gap-2">
+                        <FolderOpen size={16} className="text-[#8AAA19]" />
+                        <span className="text-sm font-semibold text-[#010139]">
+                          Expediente
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          ({client.policies?.length || 0})
+                        </span>
+                      </div>
+                      {expandedExpedientes.has(client.id) ? (
+                        <ChevronUp size={16} className="text-gray-600" />
+                      ) : (
+                        <ChevronDown size={16} className="text-gray-600" />
+                      )}
+                    </button>
+                    
+                    {expandedExpedientes.has(client.id) && (
+                      <div className="mt-3 p-3 bg-white rounded-lg border border-gray-200">
+                        <ExpedienteManager
+                          clientId={(client as any).id}
+                          showClientDocs={true}
+                          showPolicyDocs={false}
+                          showOtros={true}
+                          readOnly={role !== 'master'}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 };

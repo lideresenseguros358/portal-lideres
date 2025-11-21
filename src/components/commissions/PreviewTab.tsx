@@ -367,36 +367,39 @@ export function PreviewTab({ role, brokerId }: Props) {
       {dataToDisplay.map(fortnight => (
         <Card key={fortnight.id} className="overflow-hidden shadow-lg border-2 border-gray-100">
           <CardHeader 
-            className="flex-row items-center justify-between p-4 bg-gradient-to-r from-gray-50 to-gray-100 cursor-pointer hover:from-gray-100 hover:to-gray-150 transition-all duration-200"
+            className="flex-col sm:flex-row items-start sm:items-center justify-between p-3 sm:p-4 bg-gradient-to-r from-gray-50 to-gray-100 cursor-pointer hover:from-gray-100 hover:to-gray-150 transition-all duration-200 gap-3"
             onClick={() => toggleExpand(fortnight.id)}
           >
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
               {expandedItems.has(fortnight.id) ? (
-                <FaChevronDown className="text-[#010139] transition-transform" />
+                <FaChevronDown className="text-[#010139] transition-transform text-lg sm:text-xl" />
               ) : (
-                <FaChevronRight className="text-gray-400 transition-transform" />
+                <FaChevronRight className="text-gray-400 transition-transform text-lg sm:text-xl" />
               )}
-              <div>
-                <CardTitle className="text-xl font-bold text-[#010139]">{fortnight.label}</CardTitle>
-                <p className="text-sm text-gray-600 mt-1">
-                  Total Neto Pagado: <span className="font-bold text-[#8AAA19]">
+              <div className="flex-1">
+                <CardTitle className="text-lg sm:text-xl font-bold text-[#010139]">{fortnight.label}</CardTitle>
+                <p className="text-xs sm:text-sm text-gray-600 mt-1">
+                  Total Neto: <span className="font-bold text-[#8AAA19]">
                     {formatCurrency(fortnight.brokers.reduce((sum: number, b: any) => sum + b.net_amount, 0))}
                   </span>
                 </p>
               </div>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              className="bg-white border-[#8AAA19]/20 hover:bg-[#8AAA19] hover:text-white transition-colors"
-              onClick={(event) => {
-                event.stopPropagation();
-                setShowCompleteDownloadModal({ fortnightId: fortnight.id, fortnightLabel: fortnight.label });
-              }}
-            >
-              <FaDownload className="mr-2 h-3 w-3" />
-              Descargar Reporte
-            </Button>
+            {role === 'master' && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="bg-white border-[#8AAA19]/20 hover:bg-[#8AAA19] hover:text-white transition-colors text-xs sm:text-sm px-2 sm:px-3 py-1 sm:py-2"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setShowCompleteDownloadModal({ fortnightId: fortnight.id, fortnightLabel: fortnight.label });
+                }}
+              >
+                <FaDownload className="mr-1 sm:mr-2 h-3 w-3" />
+                <span className="hidden sm:inline">Descargar Reporte (Todos)</span>
+                <span className="sm:hidden">Descargar</span>
+              </Button>
+            )}
           </CardHeader>
           {expandedItems.has(fortnight.id) && (
             <CardContent className="p-6 bg-white">

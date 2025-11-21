@@ -35,34 +35,62 @@ export function HistoryTable({ data }: HistoryTableProps) {
         onClose={() => setSelectedBroker(null)}
         brokerData={selectedBroker}
       />
-      <div className="space-y-8">
+      <div className="space-y-6 sm:space-y-8">
       {data.map((fortnight) => (
-        <div key={fortnight.id} className="rounded-md border">
-          <h3 className="text-lg font-semibold p-4 bg-muted/50">{fortnight.label}</h3>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Corredor</TableHead>
-                <TableHead className="text-right">Neto</TableHead>
-                <TableHead className="text-right">Bruto</TableHead>
-                <TableHead className="text-right">Descuentos</TableHead>
-                <TableHead className="text-center">Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {fortnight.brokers.map((broker) => (
-                <TableRow key={broker.broker_id}>
-                  <TableCell className="font-medium">{broker.broker_name}</TableCell>
-                  <TableCell className="text-right font-bold">{broker.net_amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</TableCell>
-                  <TableCell className="text-right">{broker.gross_amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</TableCell>
-                  <TableCell className="text-right">{broker.discounts.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</TableCell>
-                  <TableCell className="text-center">
-                    <Button variant="outline" size="sm" onClick={() => setSelectedBroker(broker)}>Ver detalle</Button>
-                  </TableCell>
+        <div key={fortnight.id} className="rounded-lg border border-gray-200 bg-white shadow-sm overflow-hidden">
+          <div className="px-4 py-3 sm:p-4 bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
+            <h3 className="text-base sm:text-lg font-bold text-[#010139]">{fortnight.label}</h3>
+          </div>
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-gray-50">
+                  <TableHead className="min-w-[150px]">
+                    <span className="text-xs sm:text-sm font-semibold">Corredor</span>
+                  </TableHead>
+                  <TableHead className="text-right min-w-[100px]">
+                    <span className="text-xs sm:text-sm font-semibold">Neto</span>
+                  </TableHead>
+                  <TableHead className="text-right min-w-[100px]">
+                    <span className="text-xs sm:text-sm font-semibold">Bruto</span>
+                  </TableHead>
+                  <TableHead className="text-right min-w-[100px]">
+                    <span className="text-xs sm:text-sm font-semibold">Descuentos</span>
+                  </TableHead>
+                  <TableHead className="text-center min-w-[120px]">
+                    <span className="text-xs sm:text-sm font-semibold">Acciones</span>
+                  </TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {fortnight.brokers.map((broker) => (
+                  <TableRow key={broker.broker_id} className="hover:bg-gray-50 transition-colors">
+                    <TableCell className="font-medium text-xs sm:text-sm">{broker.broker_name}</TableCell>
+                    <TableCell className="text-right font-bold text-[#8AAA19] text-xs sm:text-sm font-mono">
+                      {broker.net_amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                    </TableCell>
+                    <TableCell className="text-right text-gray-700 text-xs sm:text-sm font-mono">
+                      {broker.gross_amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                    </TableCell>
+                    <TableCell className="text-right text-red-600 text-xs sm:text-sm font-mono">
+                      {broker.discounts.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => setSelectedBroker(broker)}
+                        className="text-xs sm:text-sm px-2 sm:px-3 py-1 sm:py-2 whitespace-nowrap border-[#010139]/20 hover:bg-[#010139] hover:text-white transition-colors"
+                      >
+                        <span className="hidden sm:inline">Ver detalle</span>
+                        <span className="sm:hidden">Ver</span>
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         </div>
       ))}
     </div>

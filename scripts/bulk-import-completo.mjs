@@ -29,14 +29,15 @@ if (!supabaseUrl || !supabaseKey) {
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// Normalizar texto: quitar acentos y ñ
+// Normalizar texto: quitar acentos, ñ, y convertir guiones en espacios
 function normalizar(texto) {
   if (!texto) return '';
   return texto
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '') // Quitar acentos
     .replace(/ñ/g, 'n')
-    .replace(/Ñ/g, 'N');
+    .replace(/Ñ/g, 'N')
+    .replace(/-/g, ' ');              // Guiones → espacios
 }
 
 async function limpiarDatos() {
@@ -60,9 +61,10 @@ async function getCatalogos() {
     insurerMap.set(ins.name.toUpperCase(), ins.id);
   });
   
-  const { data: brokers } = await supabase.from('brokers').select('id, email, name, assa_code');
+  const { data: brokers } = await supabase.from('brokers').select('id, email, name, assa_code, percent_default');
   const brokerMap = new Map();
   const brokerByAssaCode = new Map();
+  const brokerPercents = new Map();
   let lissaBrokerId = null;
   
   (brokers || []).forEach(b => {
@@ -76,16 +78,18 @@ async function getCatalogos() {
     if (b.assa_code) {
       brokerByAssaCode.set(b.assa_code.trim(), b.id);
     }
+    // Guardar percent_default
+    brokerPercents.set(b.id, b.percent_default || 1.0);
   });
   
   console.log(`✅ ${insurerMap.size} aseguradoras, ${brokerMap.size} brokers`);
   console.log(`✅ LISSA broker ID: ${lissaBrokerId}\n`);
   console.log('Aseguradoras disponibles:', Array.from(new Set(insurers?.map(i => i.name))).slice(0, 10));
   
-  return { insurerMap, brokerMap, brokerByAssaCode, lissaBrokerId };
+  return { insurerMap, brokerMap, brokerByAssaCode, brokerPercents, lissaBrokerId };
 }
 
-async function importarReportes(insurerMap) {
+async function importarReportes(insurerMap, fortnightId) {
   console.log('\n📊 IMPORTANDO REPORTES DE ASEGURADORAS...\n');
   
   const csvPath = path.join(process.cwd(), 'public', 'total_reportes_por_aseguradora.csv');
@@ -126,7 +130,7 @@ async function importarReportes(insurerMap) {
       .from('comm_imports')
       .insert({
         insurer_id: insurerId,
-        period_label: 'Q1 - Nov. 2025',
+        period_label: fortnightId,
         total_amount: amount
       });
     
@@ -139,9 +143,19 @@ async function importarReportes(insurerMap) {
   }
   
   console.log(`\n✅ Reportes importados: ${imported}/${records.length}\n`);
+  
+  // Calcular total de reportes
+  let totalReportes = 0;
+  for (const record of records) {
+    const amount = parseFloat(record[1] || 0);
+    if (amount) totalReportes += amount;
+  }
+  console.log(`💰 Total sum reportes: $${totalReportes.toFixed(2)}\n`);
+  
+  return totalReportes;
 }
 
-async function importarComisiones(insurerMap, brokerMap) {
+async function importarComisiones(insurerMap, brokerMap, brokerPercents) {
   console.log('\n💰 IMPORTANDO COMISIONES DE PÓLIZAS...\n');
   
   const csvPath = path.join(process.cwd(), 'public', 'plantilla_comisiones_quincena.csv');
@@ -185,13 +199,17 @@ async function importarComisiones(insurerMap, brokerMap) {
   for (const record of records) {
     try {
       const policyNumber = (record.policy_number || '').trim();
-      const clientName = normalizar(record.client_name || '');
+      const clientNameRaw = (record.client_name || '').trim();
+      const clientNameNormalized = normalizar(clientNameRaw).toUpperCase();
       const insurerNameOriginal = (record.insurer_name || '').trim();
       const insurerName = insurerNameOriginal.toUpperCase();
       const brokerEmail = (record.broker_email || '').toLowerCase().trim();
-      const amount = parseFloat(record.commission_amount || 0);
+      const policyType = (record.policy_type || '').trim().toUpperCase();
+      const commissionRaw = parseFloat(record.commission_amount || 0);
+      const startDate = record.start_date || null;
+      const renewalDate = record.renewal_date || null;
       
-      if (!policyNumber || !amount) {
+      if (!policyNumber || !commissionRaw) {
         errors++;
         continue;
       }
@@ -210,38 +228,16 @@ async function importarComisiones(insurerMap, brokerMap) {
       
       const brokerId = brokerEmail ? brokerMap.get(brokerEmail) : null;
       
-      if (brokerId) {
-        // Con broker → comm_items
-        const { error } = await supabase
-          .from('comm_items')
-          .insert({
-            import_id: importRecord.id,
-            broker_id: brokerId,
-            policy_number: policyNumber,
-            insured_name: clientName,
-            insurer_id: insurerId,
-            gross_amount: amount
-          });
-        
-        if (error) {
-          console.error(`❌ comm_items: ${policyNumber}`, error.message);
-          errors++;
-        } else {
-          withBroker++;
-          if (withBroker % 100 === 0) {
-            console.log(`✅ Con broker: ${withBroker}...`);
-          }
-        }
-      } else {
+      if (!brokerId) {
         // Sin broker → pending_items
         const { error } = await supabase
           .from('pending_items')
           .insert({
             import_id: importRecord.id,
             policy_number: policyNumber,
-            insured_name: clientName,
+            insured_name: clientNameNormalized,
             insurer_id: insurerId,
-            commission_raw: amount,
+            commission_raw: commissionRaw,
             status: 'open'
           });
         
@@ -254,8 +250,140 @@ async function importarComisiones(insurerMap, brokerMap) {
             console.log(`⏳ Pendientes: ${pending}...`);
           }
         }
+        continue;
+      }
+      
+      // CREAR/ACTUALIZAR CLIENTE (NORMALIZADO)
+      const { data: existingClient } = await supabase
+        .from('clients')
+        .select('id')
+        .eq('name', clientNameNormalized)
+        .eq('broker_id', brokerId)
+        .single();
+      
+      let clientId = existingClient?.id;
+      
+      if (!clientId) {
+        const { data: newClient, error: clientError } = await supabase
+          .from('clients')
+          .insert({
+            name: clientNameNormalized,
+            broker_id: brokerId
+          })
+          .select('id')
+          .single();
+        
+        if (!clientError && newClient) {
+          clientId = newClient.id;
+        }
+      } else {
+        // Actualizar nombre si tiene caracteres especiales
+        if (clientNameRaw !== clientNameNormalized) {
+          await supabase
+            .from('clients')
+            .update({ name: clientNameNormalized })
+            .eq('id', clientId);
+        }
+      }
+      
+      if (!clientId) {
+        console.error(`❌ No se pudo crear/obtener cliente para ${policyNumber}`);
+        errors++;
+        continue;
+      }
+      
+      // CREAR/ACTUALIZAR PÓLIZA
+      const { data: existingPolicy } = await supabase
+        .from('policies')
+        .select('id, percent_override')
+        .eq('policy_number', policyNumber)
+        .single();
+      
+      let policyId = existingPolicy?.id;
+      let percentOverride = existingPolicy?.percent_override;
+      
+      // DETERMINAR PORCENTAJE
+      let percentToUse = 1.0;
+      
+      // Si es VIDA + ASSA → 100%
+      if (policyType === 'VIDA' && insurerName === 'ASSA') {
+        percentToUse = 1.0;
+        percentOverride = 1.0;
+      } else if (percentOverride != null) {
+        percentToUse = percentOverride;
+      } else {
+        percentToUse = brokerPercents.get(brokerId) || 1.0;
+      }
+      
+      if (!policyId) {
+        // Crear nueva póliza
+        const policyPayload = {
+          policy_number: policyNumber,
+          broker_id: brokerId,
+          client_id: clientId,
+          insurer_id: insurerId,
+          ramo: policyType || null,
+          start_date: startDate,
+          renewal_date: renewalDate,
+          status: 'active'
+        };
+        
+        // Solo agregar percent_override si es VIDA ASSA
+        if (policyType === 'VIDA' && insurerName === 'ASSA') {
+          policyPayload.percent_override = 1.0;
+        }
+        
+        const { data: newPolicy, error: policyError } = await supabase
+          .from('policies')
+          .insert(policyPayload)
+          .select('id')
+          .single();
+        
+        if (!policyError && newPolicy) {
+          policyId = newPolicy.id;
+        }
+      } else {
+        // Actualizar póliza existente si es VIDA ASSA
+        if (policyType === 'VIDA' && insurerName === 'ASSA' && percentOverride !== 1.0) {
+          await supabase
+            .from('policies')
+            .update({ percent_override: 1.0 })
+            .eq('id', policyId);
+        }
+      }
+      
+      if (!policyId) {
+        console.error(`❌ No se pudo crear/obtener póliza ${policyNumber}`);
+        errors++;
+        continue;
+      }
+      
+      // CALCULAR COMISIÓN
+      const grossAmount = commissionRaw * percentToUse;
+      
+      // Insertar comm_item
+      const { error } = await supabase
+        .from('comm_items')
+        .insert({
+          import_id: importRecord.id,
+          broker_id: brokerId,
+          policy_number: policyNumber,
+          insured_name: clientNameNormalized,
+          insurer_id: insurerId,
+          gross_amount: grossAmount
+        });
+      
+      if (error) {
+        console.error(`❌ comm_items: ${policyNumber}`, error.message);
+        errors++;
+      } else {
+        withBroker++;
+        if (withBroker % 100 === 0) {
+          console.log(`✅ Con broker: ${withBroker} (${(percentToUse * 100).toFixed(0)}% aplicado)...`);
+        }
       }
     } catch (err) {
+      console.error(`❌ Exception:`, err.message);
       errors++;
     }
   }
@@ -376,23 +504,24 @@ async function importarCodigosASSA(insurerMap, brokerByAssaCode, lissaBrokerId) 
           }
         }
       } else {
-        // Sin broker asignado → pending
+        // Sin broker asignado → LISSA (ganancia oficina)
         const { error } = await supabase
-          .from('pending_items')
+          .from('comm_items')
           .insert({
             import_id: importRecord.id,
+            broker_id: lissaBrokerId,
             policy_number: code,
-            insured_name: `Código ASSA: ${code}`,
+            insured_name: `Código ASSA Huérfano: ${code}`,
             insurer_id: assaId,
-            commission_raw: amount,
-            status: 'open'
+            gross_amount: amount  // 100%
           });
         
         if (error) {
-          console.error(`❌ pending ${code}:`, error.message);
+          console.error(`❌ huérfano ${code}:`, error.message);
           errors++;
         } else {
           huerfanos++;
+          console.log(`🏢 Código huérfano a LISSA: ${code} ($${amount.toFixed(2)})`);
         }
       }
     } catch (err) {
@@ -402,47 +531,27 @@ async function importarCodigosASSA(insurerMap, brokerByAssaCode, lissaBrokerId) 
   }
   
   console.log(`\n✅ Códigos asignados a brokers: ${imported}`);
-  console.log(`⏳ Huérfanos (sin broker): ${huerfanos}`);
+  console.log(`🏢 Códigos huérfanos a LISSA (ganancia oficina): ${huerfanos}`);
   console.log(`🚫 Excluidos: ${skipped}`);
   console.log(`❌ Errores: ${errors}\n`);
 }
 
-async function crearQuincenaYCalcularTotales() {
-  console.log('\n📅 CREANDO QUINCENA Y CALCULANDO TOTALES...\n');
+async function actualizarItemsYCalcularTotales(fortnightId, totalReportes) {
+  console.log('\n📊 CALCULANDO TOTALES...\n');
   
-  // 1. Crear quincena cerrada (Q1 Nov 2025: 1-15 Nov)
-  const { data: fortnight, error: fortnightError } = await supabase
-    .from('fortnights')
-    .insert({
-      period_start: '2025-11-01',
-      period_end: '2025-11-15',
-      status: 'PAID',
-      notify_brokers: false
-    })
-    .select()
-    .single();
+  // 1. Actualizar pending_items con fortnight_id
+  const { error: updatePendingError } = await supabase
+    .from('pending_items')
+    .update({ fortnight_id: fortnightId })
+    .is('fortnight_id', null);
   
-  if (fortnightError) {
-    console.error('❌ Error creando quincena:', fortnightError);
-    return null;
+  if (updatePendingError) {
+    console.error('❌ Error actualizando pending_items:', updatePendingError);
+  } else {
+    console.log('✅ pending_items actualizados con fortnight_id');
   }
   
-  console.log(`✅ Quincena creada: ${fortnight.id}`);
-  
-  // 2. Actualizar todos los comm_imports para usar el fortnight_id
-  const { error: updateError } = await supabase
-    .from('comm_imports')
-    .update({ period_label: fortnight.id })
-    .neq('id', '00000000-0000-0000-0000-000000000000');
-  
-  if (updateError) {
-    console.error('❌ Error actualizando imports:', updateError);
-    return null;
-  }
-  
-  console.log('✅ Imports actualizados con fortnight_id');
-  
-  // 3. Obtener todos los comm_items con broker y calcular totales
+  // 2. Obtener todos los comm_items con broker y calcular totales
   const { data: items, error: itemsError } = await supabase
     .from('comm_items')
     .select('broker_id, gross_amount')
@@ -453,22 +562,27 @@ async function crearQuincenaYCalcularTotales() {
     return null;
   }
   
-  // 4. Agrupar por broker
+  // 3. Agrupar por broker
   const brokerTotals = {};
+  let totalCommItems = 0;
+  
   (items || []).forEach(item => {
     const brokerId = item.broker_id;
+    const amount = Number(item.gross_amount) || 0;
+    
     if (!brokerTotals[brokerId]) {
       brokerTotals[brokerId] = { gross: 0, count: 0 };
     }
-    brokerTotals[brokerId].gross += Number(item.gross_amount) || 0;
+    brokerTotals[brokerId].gross += amount;
     brokerTotals[brokerId].count += 1;
+    totalCommItems += amount;
   });
   
   console.log(`\n✅ Calculados totales para ${Object.keys(brokerTotals).length} brokers`);
   
-  // 5. Insertar totales
+  // 4. Insertar totales
   const totalsToInsert = Object.entries(brokerTotals).map(([brokerId, totals]) => ({
-    fortnight_id: fortnight.id,
+    fortnight_id: fortnightId,
     broker_id: brokerId,
     gross_amount: totals.gross,
     net_amount: totals.gross,
@@ -485,17 +599,22 @@ async function crearQuincenaYCalcularTotales() {
   }
   
   console.log(`✅ Totales por broker insertados: ${totalsToInsert.length}`);
-  console.log('\n📊 Detalle por broker:');
   
-  // Mostrar resumen
-  for (const [brokerId, totals] of Object.entries(brokerTotals).slice(0, 5)) {
-    console.log(`   - ${brokerId.substring(0, 8)}...: $${totals.gross.toFixed(2)} (${totals.count} items)`);
-  }
-  if (Object.keys(brokerTotals).length > 5) {
-    console.log(`   ... y ${Object.keys(brokerTotals).length - 5} brokers más`);
-  }
+  // VERIFICACIÓN DE TOTALES Y GANANCIA OFICINA
+  console.log(`\n💰 VERIFICACIÓN DE TOTALES:`);
+  console.log(`   Total reportes aseguradoras:  $${(totalReportes || 0).toFixed(2)}`);
+  console.log(`   Total brokers (con %):        $${totalCommItems.toFixed(2)}`);
   
-  return fortnight;
+  const gananciaOficina = (totalReportes || 0) - totalCommItems;
+  console.log(`   🏢 Ganancia Oficina:           $${gananciaOficina.toFixed(2)}`);
+  
+  // Obtener total de LISSA para verificar
+  const lissaBrokerId = 'd681a368-ac31-49a9-84cc-1e28b63c2d47';
+  const lissaTotal = brokerTotals[lissaBrokerId]?.gross || 0;
+  console.log(`   ✅ LISSA (códigos huérfanos):   $${lissaTotal.toFixed(2)}`);
+  console.log(`   ℹ️  Diferencia por %:           $${(gananciaOficina - lissaTotal).toFixed(2)}\n`);
+  
+  return { brokerTotals, totalCommItems, totalReportes, gananciaOficina };
 }
 
 async function main() {
@@ -505,14 +624,37 @@ async function main() {
   try {
     await limpiarDatos();
     
-    const { insurerMap, brokerMap, brokerByAssaCode, lissaBrokerId } = await getCatalogos();
+    const { insurerMap, brokerMap, brokerByAssaCode, brokerPercents, lissaBrokerId } = await getCatalogos();
     
-    await importarReportes(insurerMap);
-    await importarComisiones(insurerMap, brokerMap);
+    // CREAR QUINCENA PRIMERO
+    console.log('\n📅 CREANDO QUINCENA...\n');
+    const { data: fortnight, error: fortnightError } = await supabase
+      .from('fortnights')
+      .insert({
+        period_start: '2025-11-01',
+        period_end: '2025-11-15',
+        status: 'PAID',
+        notify_brokers: false
+      })
+      .select()
+      .single();
+    
+    if (fortnightError) {
+      console.error('❌ Error creando quincena:', fortnightError);
+      throw fortnightError;
+    }
+    
+    console.log(`✅ Quincena creada: ${fortnight.id}`);
+    console.log(`   Período: ${fortnight.period_start} a ${fortnight.period_end}`);
+    console.log(`   Estado: ${fortnight.status}\n`);
+    
+    // Importar todo con fortnight_id
+    const totalReportes = await importarReportes(insurerMap, fortnight.id);
+    await importarComisiones(insurerMap, brokerMap, brokerPercents);
     await importarCodigosASSA(insurerMap, brokerByAssaCode, lissaBrokerId);
     
-    // CREAR QUINCENA Y CALCULAR TOTALES
-    const fortnight = await crearQuincenaYCalcularTotales();
+    // ACTUALIZAR ITEMS Y CALCULAR TOTALES
+    const totalsResult = await actualizarItemsYCalcularTotales(fortnight.id, totalReportes);
     
     console.log('='.repeat(60));
     console.log('✅ IMPORTACIÓN COMPLETADA\n');
