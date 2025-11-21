@@ -4276,21 +4276,19 @@ export async function actionGetBrokerCommissionDetails(fortnightId: string, brok
   try {
     const supabase = getSupabaseAdmin();
     
-    // Get import_id for this fortnight
-    const { data: imports, error: importError } = await supabase
-      .from('comm_imports')
-      .select('id')
-      .eq('period_label', fortnightId);
+    // Get fortnight dates
+    const { data: fortnight, error: fError } = await supabase
+      .from('fortnights')
+      .select('period_start, period_end')
+      .eq('id', fortnightId)
+      .single();
 
-    if (importError) throw importError;
-
-    if (!imports || imports.length === 0) {
+    if (fError) throw fError;
+    if (!fortnight) {
       return { ok: true as const, data: [] };
     }
 
-    const importIds = imports.map(i => i.id);
-
-    // Get all comm_items for these imports with broker, insurer and client info
+    // Get all comm_items for this fortnight date range
     let query = supabase
       .from('comm_items')
       .select(`
@@ -4305,7 +4303,8 @@ export async function actionGetBrokerCommissionDetails(fortnightId: string, brok
         brokers ( id, name, email, percent_default ),
         insurers ( id, name )
       `)
-      .in('import_id', importIds)
+      .gte('created_at', fortnight.period_start)
+      .lte('created_at', fortnight.period_end)
       .not('broker_id', 'is', null);
 
     if (brokerId) {

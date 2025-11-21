@@ -29,7 +29,7 @@ if (!supabaseUrl || !supabaseKey) {
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// Normalizar texto: quitar acentos, ñ, y convertir guiones en espacios
+// Normalizar texto: quitar acentos, ñ, convertir guiones en espacios, y limpiar caracteres especiales
 function normalizar(texto) {
   if (!texto) return '';
   return texto
@@ -37,7 +37,10 @@ function normalizar(texto) {
     .replace(/[\u0300-\u036f]/g, '') // Quitar acentos
     .replace(/ñ/g, 'n')
     .replace(/Ñ/g, 'N')
-    .replace(/-/g, ' ');              // Guiones → espacios
+    .replace(/-/g, ' ')              // Guiones → espacios
+    .replace(/[^a-zA-Z0-9 ]/g, '')   // Eliminar caracteres especiales
+    .replace(/\s+/g, ' ')            // Múltiples espacios → uno solo
+    .trim();
 }
 
 async function limpiarDatos() {
@@ -361,7 +364,7 @@ async function importarComisiones(insurerMap, brokerMap, brokerPercents) {
       // CALCULAR COMISIÓN
       const grossAmount = commissionRaw * percentToUse;
       
-      // Insertar comm_item
+      // Insertar comm_item con created_at de la quincena
       const { error } = await supabase
         .from('comm_items')
         .insert({
@@ -370,7 +373,8 @@ async function importarComisiones(insurerMap, brokerMap, brokerPercents) {
           policy_number: policyNumber,
           insured_name: clientNameNormalized,
           insurer_id: insurerId,
-          gross_amount: grossAmount
+          gross_amount: grossAmount,
+          created_at: '2025-11-15T23:59:59.000Z'
         });
       
       if (error) {
@@ -491,7 +495,8 @@ async function importarCodigosASSA(insurerMap, brokerByAssaCode, lissaBrokerId) 
             policy_number: code,
             insured_name: `Código ASSA: ${code}`,
             insurer_id: assaId,
-            gross_amount: amount  // 100% del monto
+            gross_amount: amount,  // 100% del monto
+            created_at: '2025-11-15T23:59:59.000Z'
           });
         
         if (error) {
@@ -513,7 +518,8 @@ async function importarCodigosASSA(insurerMap, brokerByAssaCode, lissaBrokerId) 
             policy_number: code,
             insured_name: `Código ASSA Huérfano: ${code}`,
             insurer_id: assaId,
-            gross_amount: amount  // 100%
+            gross_amount: amount,  // 100%
+            created_at: '2025-11-15T23:59:59.000Z'
           });
         
         if (error) {
