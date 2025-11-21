@@ -2689,6 +2689,7 @@ export async function actionGetClosedFortnights(year: number, month: number, for
         fortnight_number: fortnightNum,
         total_imported,
         total_paid_net,
+        total_paid_gross: brokerTotals.reduce((sum: number, bt: any) => sum + (Number(bt.gross_amount) || 0), 0),
         total_office_profit,
         totalsByInsurer: Object.entries(totalsByInsurer).map(([name, total]) => ({ 
           name, 
@@ -4091,12 +4092,12 @@ export async function actionConfirmAdjustmentsPaid(claimIds: string[]) {
 
         // Crear notificación
         await supabase.from('notifications').insert({
-          user_id: brokerId,
-          type: 'adjustment_paid',
+          broker_id: brokerId,
+          notification_type: 'commission',
           title: 'Ajustes Pagados - Acción Requerida',
-          message: `Se han pagado ${brokerClaims.length} ajuste(s) con ${clientCount} cliente(s). Por favor completa la información en Base de Datos Preliminar.`,
-          link: '/db?tab=preliminary',
-          read: false,
+          body: `Se han pagado ${brokerClaims.length} ajuste(s) con ${clientCount} cliente(s). Por favor completa la información en Base de Datos Preliminar.`,
+          target: '/db?tab=preliminary',
+          meta: { link: '/db?tab=preliminary', read: false }
         });
       }
     }

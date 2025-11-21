@@ -144,7 +144,7 @@ export async function POST(request: NextRequest) {
 
 function parseCSV(text: string): CSVRow[] {
   const lines = text.trim().split('\n');
-  const headers = lines[0].split(',');
+  const headers = lines[0]?.split(',') || [];
   
   return lines.slice(1).map(line => {
     const values = line.split(',');
@@ -273,7 +273,7 @@ async function processRow(
     // Crear nueva póliza
     const policyInsert: TablesInsert<'policies'> = {
       policy_number: row.policy_number,
-      client_id: clientId,
+      client_id: clientId!,
       broker_id: brokerId || allBrokers[0]?.id || '',
       insurer_id: insurer.id,
       start_date: parseDate(row.start_date) || null,
