@@ -4,25 +4,24 @@ import { useState, useEffect, useCallback } from 'react';
 import {
   actionGetPendingItems,
   actionClaimPendingItem,
-  actionMarkPendingAsPayNow,
-  actionMarkPendingAsNextFortnight,
+  actionAutoAssignOldPendingItems,
 } from '@/app/(app)/commissions/actions';
 import { toast } from 'sonner';
-import { FaChevronDown, FaChevronRight, FaCalendarAlt, FaExclamationTriangle, FaFileDownload, FaHistory, FaHandHoldingUsd } from 'react-icons/fa';
+import {
+  FaChevronDown,
+  FaChevronRight,
+  FaCalendarAlt,
+  FaExclamationTriangle,
+  FaHistory,
+  FaHandHoldingUsd,
+  FaUserCheck,
+  FaCheckCircle,
+} from 'react-icons/fa';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AssignBrokerDropdown } from './AssignBrokerDropdown';
 import { RetainedTab } from './RetainedTab';
 import { MasterClaimsView } from './MasterClaimsView';
-// Tabs removed - using button pattern instead
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 
 interface Props {
   role: string;
@@ -33,7 +32,6 @@ interface Props {
   onPendingCountChange?: (count: number) => void;
 }
 
-// Group items by policy_number
 type PendingItemDetail = {
   id: string;
   insured_name: string | null;
@@ -64,7 +62,6 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
     const result = await actionGetPendingItems();
 
     if (result.ok) {
-      // Agrupar por póliza primero, luego por cliente
       const policyGroups = new Map<string, Map<string, PendingGroup>>();
       
       (result.data || []).forEach((item: any) => {
@@ -95,7 +92,7 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
           group.insurer_names.push(item.insurers.name);
         }
         
-        group.total_amount += Math.abs(Number(item.gross_amount) || 0);
+        group.total_amount += (Number(item.gross_amount) || 0);
         group.items.push({
           id: item.id,
           insured_name: item.insured_name || null,
@@ -114,7 +111,6 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
         }
       });
       
-      // Aplanar los grupos anidados manteniendo el orden
       const grouped: PendingGroup[] = [];
       policyGroups.forEach((clientGroups) => {
         clientGroups.forEach((group) => {
@@ -136,8 +132,6 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
 
   useEffect(() => {
     loadPendingItems();
-    
-    // Auto-actualizar cada 30 segundos
     const interval = setInterval(() => {
       loadPendingItems();
     }, 30000);
@@ -145,116 +139,114 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
     return () => clearInterval(interval);
   }, [loadPendingItems]);
 
-  // Update pending count when items change
   useEffect(() => {
     if (onPendingCountChange && !isShortcut && role === 'master') {
       onPendingCountChange(pendingGroups.length);
     }
   }, [pendingGroups, onPendingCountChange, isShortcut, role]);
 
+  // Auto-assign old items (>90 days) to office
+  useEffect(() => {
+    const checkAndAutoAssignOldItems = async () => {
+      if (role !== 'master' || isShortcut) return;
+      
+      const oldItemsExist = pendingGroups.some(g => {
+        const daysDiff = Math.floor((Date.now() - new Date(g.oldest_date).getTime()) / (1000 * 60 * 60 * 24));
+        return daysDiff >= 90 && g.status === 'open';
+      });
+
+      if (oldItemsExist) {
+        const result = await actionAutoAssignOldPendingItems();
+        if (result.ok && result.data.assigned > 0) {
+          toast.success(`${result.data.assigned} comisión(es) antigua(s) asignada(s) automáticamente a Oficina`);
+          await loadPendingItems();
+          onActionSuccess && onActionSuccess();
+        }
+      }
+    };
+
+    // Run check on mount and when groups change
+    const timer = setTimeout(checkAndAutoAssignOldItems, 1000);
+    return () => clearTimeout(timer);
+  }, [pendingGroups, role, isShortcut, onActionSuccess, loadPendingItems]);
+
   if (loading) {
-    return <div className="p-8 text-center text-gray-500">Cargando pendientes...</div>;
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#010139]"></div>
+        <span className="ml-3 text-gray-600">Cargando...</span>
+      </div>
+    );
   }
   
-  // Check for items older than 90 days
   const oldItems = pendingGroups.filter(group => {
     const daysDiff = Math.floor((Date.now() - new Date(group.oldest_date).getTime()) / (1000 * 60 * 60 * 24));
     return daysDiff >= 90 && group.status === 'open';
   });
 
-  const handleAssignToOffice = async () => {
-    if (oldItems.length === 0) return;
-    
-    // TODO: Implement actual assignment to office
-    toast.success(`${oldItems.length} grupos asignados a Oficina automáticamente`);
-    
-    // Remove old items from pending
-    onActionSuccess && onActionSuccess();
-    setShowOldItemsWarning(false);
-  };
-
   return (
-    <div className="space-y-6">
-      {/* Header Section */}
-      <div className="bg-gradient-to-r from-blue-50 to-white rounded-xl p-4 sm:p-6 border-l-4 border-[#010139] shadow-md">
-        <div className="flex items-start justify-between">
+    <div className="space-y-4">
+      {/* Header - Mobile First */}
+      <div className="bg-white rounded-lg p-4 border-l-4 border-[#010139] shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex-1">
-            <h2 className="text-xl sm:text-2xl font-bold text-[#010139] mb-2">💼 Ajustes Sin Identificar</h2>
-            <p className="text-sm sm:text-base text-gray-700 mb-3">
-              Comisiones pendientes de asignar a corredor. Se actualizan automáticamente cada 30 segundos.
+            <div className="flex items-center gap-2 mb-2">
+              <h2 className="text-lg sm:text-xl font-semibold text-[#010139]">Comisiones Sin Identificar</h2>
+              {loading && (
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#010139]"></div>
+              )}
+            </div>
+            <p className="text-sm text-gray-600">
+              {pendingGroups.length} {pendingGroups.length === 1 ? 'póliza pendiente' : 'pólizas pendientes'} de asignar
             </p>
-            <div className="bg-amber-50 border-l-4 border-amber-500 p-3 rounded-r-lg">
-              <p className="text-sm text-amber-800 font-medium">
-                ⚠️ <strong>Nota:</strong> Los montos mostrados son valores brutos sin ningún porcentaje de comisión aplicado hasta que se asignen a un corredor.
-              </p>
-            </div>
           </div>
-          {loading && (
-            <div className="flex items-center gap-2 text-sm text-gray-600 ml-4">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#010139]"></div>
-              <span className="hidden sm:inline">Actualizando...</span>
-            </div>
-          )}
+          <div className="flex items-center gap-2 text-xs bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+            <FaExclamationTriangle className="text-amber-600 flex-shrink-0" />
+            <span className="text-amber-800 font-medium">Montos brutos</span>
+          </div>
         </div>
       </div>
 
-      {/* Mostrar alerta si hay items > 90 días */}
+      {/* Alerta items antiguos */}
       {showOldItemsWarning && (
-        <div className="bg-gradient-to-r from-orange-50 to-red-50 border-2 border-orange-300 rounded-2xl p-4 sm:p-6 shadow-lg">
+        <div className="bg-orange-50 border-l-4 border-orange-500 rounded-lg p-4">
           <div className="flex items-start gap-3">
-            <div className="flex-shrink-0">
-              <div className="p-2 bg-orange-500 rounded-lg">
-                <FaExclamationTriangle className="text-white" size={20} />
-              </div>
-            </div>
+            <FaExclamationTriangle className="text-orange-600 flex-shrink-0 mt-0.5" />
             <div className="flex-1">
-              <p className="font-bold text-[#010139] text-lg">Pendientes Antiguos Detectados</p>
-              <p className="text-gray-700 mt-1">
-                Hay <span className="font-semibold text-orange-600">{oldItems.length} grupos</span> con items mayores a 90 días.
-                Considera reasignarlos a la oficina o procesarlos pronto.
+              <p className="font-semibold text-gray-900">Pendientes Antiguos</p>
+              <p className="text-sm text-gray-700 mt-1">
+                {oldItems.length} póliza{oldItems.length !== 1 ? 's' : ''} con más de 90 días
               </p>
             </div>
           </div>
         </div>
       )}
 
-      {/* Tabla de Ajustes - Responsive */}
-      <div className="bg-white rounded-xl shadow-lg border-2 border-gray-100 overflow-hidden">
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-gradient-to-r from-gray-50 to-gray-100">
-                <TableHead className="w-12"></TableHead>
-                <TableHead className="font-bold text-[#010139]">N° Póliza</TableHead>
-                <TableHead className="font-bold text-[#010139]">Aseguradora</TableHead>
-                <TableHead className="font-bold text-[#010139]">Cliente</TableHead>
-                <TableHead className="text-right font-bold text-[#010139]">Total Bruto</TableHead>
-                <TableHead className="text-center font-bold text-[#010139]">Estado</TableHead>
-                <TableHead className="text-center font-bold text-[#010139]">Acciones</TableHead>
-              </TableRow>
-            </TableHeader>
-          <TableBody>
-            {pendingGroups.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={7} className="text-center h-24">
-                  No hay items pendientes de asignación.
-                </TableCell>
-              </TableRow>
-            ) : (
-              pendingGroups.map((group) => {
-                const groupKey = `${group.policy_number}-${group.client_name}`;
-                const isExpanded = expandedGroups.has(groupKey);
-                const hasMultipleItems = group.items.length > 1;
-
-                return (
-                  <>
-                    <TableRow key={`${group.policy_number}-${group.client_name}`} className="hover:bg-gray-50 transition-colors">
-                      <TableCell className="w-12">
+      {/* Lista de Ajustes - Mobile First */}
+      <div className="space-y-3">
+        {pendingGroups.length === 0 ? (
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
+            <FaCheckCircle className="text-5xl text-gray-300 mx-auto mb-4" />
+            <p className="text-gray-600 font-medium">No hay comisiones pendientes</p>
+            <p className="text-sm text-gray-500 mt-1">Todas las comisiones están asignadas</p>
+          </div>
+        ) : (
+          pendingGroups.map((group) => {
+            const groupKey = `${group.policy_number}-${group.client_name}`;
+            const isExpanded = expandedGroups.has(groupKey);
+            const hasMultipleItems = group.items.length > 1;
+            
+            return (
+              <Card key={groupKey} className="shadow-sm hover:shadow-md transition-all border border-gray-200">
+                <CardContent className="p-4">
+                  {/* Main Card Content */}
+                  <div className="flex flex-col sm:flex-row sm:items-start gap-4">
+                    {/* Left Section - Policy Info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start gap-3">
+                        {/* Expand Button */}
                         {hasMultipleItems && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="p-0 h-6 w-6 hover:bg-[#010139] hover:text-white transition-colors"
+                          <button
                             onClick={() => {
                               const newExpanded = new Set(expandedGroups);
                               if (isExpanded) {
@@ -264,208 +256,148 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
                               }
                               setExpandedGroups(newExpanded);
                             }}
+                            className="flex-shrink-0 mt-1 p-1.5 hover:bg-gray-100 rounded transition-colors"
                           >
-                            {isExpanded ? <FaChevronDown size={12} /> : <FaChevronRight size={12} />}
-                          </Button>
+                            {isExpanded ? (
+                              <FaChevronDown className="text-[#010139]" size={14} />
+                            ) : (
+                              <FaChevronRight className="text-gray-400" size={14} />
+                            )}
+                          </button>
                         )}
-                      </TableCell>
-                      <TableCell className="font-bold text-[#010139] whitespace-nowrap">
-                        <div className="flex items-center gap-2">
-                          <span className="text-lg">📝</span>
-                          {group.policy_number}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col gap-1">
-                          {group.insurer_names.length > 0 && (
-                            <span className="font-semibold text-gray-700">
-                              {group.insurer_names.join(', ')}
+                        
+                        {/* Info */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="font-semibold text-[#010139] text-base">
+                              {group.policy_number}
                             </span>
-                          )}
-                          {group.items.length > 1 && (
-                            <span className="text-xs text-gray-500">{group.items.length} registros</span>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <span className="font-semibold text-[#010139]">
-                          {group.client_name}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex flex-col items-end">
-                          <span className="font-bold text-lg text-gray-900 font-mono">
-                            {group.total_amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
-                          </span>
-                          <span className="text-xs text-amber-600 font-medium">Sin % aplicado</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <span
-                          className={`inline-flex items-center px-3 py-1.5 rounded-full text-xs font-bold shadow-sm ${
-                            group.status === 'open'
-                              ? 'bg-amber-100 text-amber-800 border border-amber-300'
-                              : group.status === 'claimed'
-                              ? 'bg-blue-100 text-blue-800 border border-blue-300'
-                              : 'bg-gray-100 text-gray-700 border border-gray-300'
-                          }`}
-                        >
-                          {group.status === 'open' ? '⏳ Pendiente' : group.status === 'claimed' ? '👤 Solicitado' : group.status.replace('_', ' ')}
-                        </span>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        {role === 'master' ? (
-                          <div className="flex flex-col gap-2 items-center">
-                            <AssignBrokerDropdown
-                              itemGroup={{
-                                policy_number: group.policy_number,
-                                items: group.items.map(item => ({ id: item.id })),
-                              }}
-                              brokers={brokers}
-                              onSuccess={() => {
-                                loadPendingItems();
-                                onActionSuccess && onActionSuccess();
-                              }}
-                            />
-                            <div className="flex gap-1">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                disabled={group.status !== 'open'}
-                                className="text-xs bg-green-50 hover:bg-green-100 text-green-700 border-green-300"
-                                onClick={async () => {
-                                  const result = await actionMarkPendingAsPayNow({
-                                    policy_number: group.policy_number,
-                                    item_ids: group.items.map(item => item.id),
-                                  });
-                                  if (result.ok) {
-                                    toast.success('Items marcados como pago inmediato.');
-                                    await loadPendingItems();
-                                    onActionSuccess && onActionSuccess();
-                                  } else {
-                                    toast.error('No se pudo marcar como pago ahora.', { description: result.error });
-                                  }
-                                }}
-                              >
-                                💵 Ahora
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                disabled={group.status !== 'open'}
-                                className="text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 border-blue-300"
-                                onClick={async () => {
-                                  const result = await actionMarkPendingAsNextFortnight({
-                                    policy_number: group.policy_number,
-                                    item_ids: group.items.map(item => item.id),
-                                  });
-                                  if (result.ok) {
-                                    toast.success('Items enviados a próxima quincena.');
-                                    await loadPendingItems();
-                                    onActionSuccess && onActionSuccess();
-                                  } else {
-                                    toast.error('No se pudo enviar a próxima quincena.', { description: result.error });
-                                  }
-                                }}
-                              >
-                                📅 Próxima
-                              </Button>
-                            </div>
+                            {hasMultipleItems && (
+                              <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
+                                {group.items.length} items
+                              </span>
+                            )}
                           </div>
+                          
+                          <p className="text-sm text-gray-900 font-medium truncate">
+                            {group.client_name}
+                          </p>
+                          
+                          <div className="flex flex-wrap items-center gap-2 mt-2">
+                            {group.insurer_names.map((insurer, idx) => (
+                              <span key={idx} className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded">
+                                {insurer}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Right Section - Amount & Actions */}
+                    <div className="flex flex-col sm:items-end gap-3">
+                      {/* Amount */}
+                      <div className="text-left sm:text-right">
+                        <div className="text-xl font-bold text-gray-900">
+                          {group.total_amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                        </div>
+                        <div className="flex items-center gap-1 mt-1">
+                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                            group.status === 'open'
+                              ? 'bg-amber-100 text-amber-700'
+                              : group.status === 'claimed'
+                              ? 'bg-blue-100 text-blue-700'
+                              : 'bg-gray-100 text-gray-700'
+                          }`}>
+                            {group.status === 'open' ? 'Pendiente' : group.status === 'claimed' ? 'Solicitado' : group.status}
+                          </span>
+                        </div>
+                      </div>
+                      
+                      {/* Actions */}
+                      <div className="flex flex-wrap gap-2">
+                        {role === 'master' ? (
+                          <AssignBrokerDropdown
+                            itemGroup={{
+                              policy_number: group.policy_number,
+                              items: group.items.map(item => ({ id: item.id })),
+                            }}
+                            brokers={brokers}
+                            onSuccess={() => {
+                              loadPendingItems();
+                              onActionSuccess && onActionSuccess();
+                            }}
+                          />
                         ) : (
                           <Button
-                            variant="outline"
+                            variant="default"
                             size="sm"
                             disabled={group.status !== 'open'}
-                            className="bg-gradient-to-r from-[#010139] to-[#020270] text-white hover:from-[#020270] hover:to-[#010139] border-0 shadow-md font-semibold"
+                            className="bg-gradient-to-r from-[#8AAA19] to-[#7a9617] text-white hover:from-[#7a9617] hover:to-[#6b8514] border-0 shadow-md font-semibold"
                             onClick={async () => {
                               const result = await actionClaimPendingItem(group.items.map((i) => i.id));
                               if (result.ok) {
-                                toast.success('Ajuste marcado como tuyo exitosamente.');
+                                toast.success('Ajuste marcado como tuyo');
                                 await loadPendingItems();
                                 onActionSuccess && onActionSuccess();
                               } else {
-                                toast.error('Error al marcar ajuste.', { description: result.error });
+                                toast.error('Error', { description: result.error });
                               }
                             }}
                           >
-                            👋 Marcar como Mío
+                            <FaUserCheck className="mr-2" size={14} />
+                            Marcar Mío
                           </Button>
                         )}
-                      </TableCell>
-                    </TableRow>
-                    {isExpanded && hasMultipleItems && (
-                      <TableRow>
-                        <TableCell colSpan={7} className="bg-gradient-to-r from-blue-50 to-gray-50 p-0 border-l-4 border-[#8AAA19]">
-                          <div className="px-4 py-3">
-                            <div className="mb-2">
-                              <h4 className="text-sm font-bold text-[#010139]">📊 Detalle de Items ({group.items.length})</h4>
-                            </div>
-                            <div className="overflow-x-auto">
-                              <Table>
-                                <TableHeader>
-                                  <TableRow className="bg-white border-b-2 border-gray-200">
-                                    <TableHead className="text-xs font-bold text-[#010139]">Item ID</TableHead>
-                                    <TableHead className="text-xs font-bold text-[#010139]">Cliente</TableHead>
-                                    <TableHead className="text-xs font-bold text-[#010139]">Aseguradora</TableHead>
-                                    <TableHead className="text-xs text-right font-bold text-[#010139]">Monto</TableHead>
-                                    <TableHead className="text-xs font-bold text-[#010139]">Fecha</TableHead>
-                                  </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                  {group.items.map((item) => (
-                                    <TableRow key={item.id} className="border-0 hover:bg-white/80 transition-colors">
-                                      <TableCell className="text-xs font-mono py-2 text-gray-700">{item.id.substring(0, 8)}...</TableCell>
-                                      <TableCell className="text-xs py-2 font-medium">{item.insured_name || 'N/A'}</TableCell>
-                                      <TableCell className="text-xs py-2">{item.insurer_name || 'N/A'}</TableCell>
-                                      <TableCell className="text-xs py-2 text-right font-bold font-mono">
-                                        {item.gross_amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
-                                      </TableCell>
-                                      <TableCell className="text-xs py-2 text-gray-600">
-                                        {new Date(item.created_at).toLocaleDateString('es-PA')}
-                                      </TableCell>
-                                    </TableRow>
-                                  ))}
-                                </TableBody>
-                              </Table>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Expanded Details */}
+                  {isExpanded && hasMultipleItems && (
+                    <div className="mt-4 pt-4 border-t border-gray-200">
+                      <p className="text-sm font-semibold text-gray-700 mb-3">
+                        Detalle de Items ({group.items.length})
+                      </p>
+                      <div className="space-y-2">
+                        {group.items.map((item) => (
+                          <div key={item.id} className="bg-gray-50 rounded-lg p-3 text-sm">
+                            <div className="flex justify-between items-start gap-4">
+                              <div className="flex-1">
+                                <p className="font-medium text-gray-900">{item.insured_name || 'N/A'}</p>
+                                <p className="text-gray-600 text-xs mt-1">{item.insurer_name || 'N/A'}</p>
+                              </div>
+                              <div className="text-right">
+                                <p className="font-semibold text-gray-900">
+                                  {item.gross_amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                                </p>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  {new Date(item.created_at).toLocaleDateString('es-PA')}
+                                </p>
+                              </div>
                             </div>
                           </div>
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </>
-                );
-              })
-            )}
-          </TableBody>
-        </Table>
-        </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })
+        )}
       </div>
     </div>
   );
 };
-// Vista de ajustes pagados (historial)
+
+// Vista de ajustes pagados
 const PaidAdjustmentsView = () => {
   return (
     <div className="space-y-6">
-      {/* Header Section */}
-      <div className="bg-gradient-to-r from-green-50 to-white rounded-xl p-4 sm:p-6 border-l-4 border-[#8AAA19] shadow-md">
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <h2 className="text-xl sm:text-2xl font-bold text-[#010139] mb-2">✅ Ajustes Pagados</h2>
-            <p className="text-sm sm:text-base text-gray-700">
-              Historial de ajustes que ya fueron pagados a los corredores.
-            </p>
-          </div>
-        </div>
-      </div>
-      
-      {/* Empty State */}
-      <div className="bg-white rounded-xl shadow-lg border-2 border-gray-100 p-12 text-center">
-        <div className="mb-4">
-          <FaHistory className="text-6xl text-gray-300 mx-auto" />
-        </div>
-        <h3 className="text-xl font-semibold text-gray-600 mb-2">
+      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
+        <FaHistory className="text-5xl text-gray-300 mx-auto mb-4" />
+        <h3 className="text-xl font-semibold text-gray-700 mb-2">
           Historial de Ajustes Pagados
         </h3>
         <p className="text-gray-500">
@@ -484,7 +416,6 @@ export default function AdjustmentsTab({ role, brokerId, brokers, onActionSucces
     onActionSuccess?.();
   };
 
-  // Configuración de tabs por rol
   const masterTabs = [
     { key: 'pending' as const, label: 'Sin identificar', icon: FaExclamationTriangle },
     { key: 'requests' as const, label: 'Identificados', icon: FaCalendarAlt },
@@ -494,15 +425,15 @@ export default function AdjustmentsTab({ role, brokerId, brokers, onActionSucces
 
   const brokerTabs = [
     { key: 'pending' as const, label: 'Sin identificar', icon: FaExclamationTriangle },
-    { key: 'requests' as const, label: 'Ajustes Reportados', icon: FaCalendarAlt },
+    { key: 'requests' as const, label: 'Reportados', icon: FaCalendarAlt },
     { key: 'paid' as const, label: 'Pagados', icon: FaHistory },
   ];
 
   const tabs = role === 'master' ? masterTabs : brokerTabs;
 
   return (
-    <Card className="bg-white shadow-xl">
-      <CardHeader className="bg-gradient-to-r from-[#010139] to-[#020270] text-white rounded-t-lg">
+    <Card className="bg-white shadow-lg">
+      <CardHeader className="bg-gradient-to-r from-[#010139] to-[#020270] text-white">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-white/20 rounded-lg">
             <FaHistory className="text-white" size={20} />
@@ -511,9 +442,9 @@ export default function AdjustmentsTab({ role, brokerId, brokers, onActionSucces
         </div>
       </CardHeader>
       <CardContent className="p-0">
-        {/* Tabs simplificados y elegantes */}
-        <div className="bg-gray-50 border-b border-gray-200 px-4 sm:px-6 py-4">
-          <div className="flex gap-2 overflow-x-auto scrollbar-hide">
+        {/* Tabs */}
+        <div className="bg-gray-50 border-b border-gray-200 px-4 py-4">
+          <div className="flex gap-2 overflow-x-auto">
             {tabs.map(tab => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.key;
@@ -523,14 +454,14 @@ export default function AdjustmentsTab({ role, brokerId, brokers, onActionSucces
                   key={tab.key}
                   onClick={() => setActiveTab(tab.key)}
                   className={`
-                    px-4 py-2.5 rounded-lg font-semibold whitespace-nowrap transition-all duration-200 flex items-center gap-2 min-w-fit
+                    px-4 py-2.5 rounded-lg font-medium whitespace-nowrap transition-all flex items-center gap-2
                     ${isActive
                       ? 'bg-[#010139] text-white shadow-md'
-                      : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200 hover:border-gray-300'
+                      : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200'
                     }
                   `}
                 >
-                  <Icon className={`text-sm ${isActive ? 'text-white' : 'text-gray-600'}`} />
+                  <Icon className="text-sm" />
                   <span className="text-sm">{tab.label}</span>
                 </button>
               );
@@ -539,7 +470,7 @@ export default function AdjustmentsTab({ role, brokerId, brokers, onActionSucces
         </div>
 
         {/* Tab Content */}
-        <div className="p-4 sm:p-6 space-y-6">
+        <div className="p-4 sm:p-6">
           {activeTab === 'pending' && (
             <PendingItemsView
               role={role}
@@ -550,15 +481,9 @@ export default function AdjustmentsTab({ role, brokerId, brokers, onActionSucces
               isShortcut={isShortcut}
             />
           )}
-          {activeTab === 'requests' && (
-            <MasterClaimsView />
-          )}
-          {activeTab === 'retained' && role === 'master' && (
-            <RetainedTab />
-          )}
-          {activeTab === 'paid' && (
-            <PaidAdjustmentsView />
-          )}
+          {activeTab === 'requests' && <MasterClaimsView />}
+          {activeTab === 'retained' && role === 'master' && <RetainedTab />}
+          {activeTab === 'paid' && <PaidAdjustmentsView />}
         </div>
       </CardContent>
     </Card>

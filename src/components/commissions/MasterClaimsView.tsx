@@ -286,27 +286,31 @@ export function MasterClaimsView() {
   return (
     <div className="space-y-6">
       {/* Header Section */}
-      <div className="bg-gradient-to-r from-blue-50 to-white rounded-xl p-4 sm:p-6 border-l-4 border-[#010139] shadow-md">
+      <div className="bg-white rounded-lg p-4 border-l-4 border-[#010139] shadow-sm">
         <div className="flex items-start justify-between">
           <div className="flex-1">
-            <h2 className="text-xl sm:text-2xl font-bold text-[#010139] mb-2">👥 Ajustes Identificados</h2>
-            <p className="text-sm sm:text-base text-gray-700 mb-3">
-              Ajustes que los corredores han marcado como suyos y están pendientes de aprobación.
+            <h2 className="text-lg sm:text-xl font-semibold text-[#010139] mb-2">Ajustes Identificados</h2>
+            <p className="text-sm text-gray-600">
+              {groupedReports.length} {groupedReports.length === 1 ? 'reporte pendiente' : 'reportes pendientes'} de aprobación
             </p>
           </div>
         </div>
       </div>
 
       {/* Instrucciones */}
-      <Card className="bg-gradient-to-r from-blue-50 to-white border-l-4 border-[#8AAA19] shadow-md">
+      <Card className="bg-blue-50 border-l-4 border-blue-500 shadow-sm">
         <CardContent className="p-4">
-          <h3 className="font-bold text-[#010139] mb-2">📋 Flujo de Aprobación y Pago</h3>
-          <ol className="text-sm text-gray-700 space-y-1 list-decimal list-inside">
-            <li>Selecciona los reportes de corredores que marcaron como "Mío"</li>
-            <li>Haz clic en "Aceptar Seleccionados" y elige "Pagar Ya"</li>
-            <li>Descarga el archivo ACH (formato oficial Banco General)</li>
-            <li>Carga el archivo en Banca en Línea Comercial y realiza las transferencias</li>
-            <li>Regresa y haz clic en "Confirmar Pagado"</li>
+          <h3 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
+            <FaMoneyBillWave className="text-blue-600" />
+            Flujo de Aprobación y Pago
+          </h3>
+          <ol className="text-sm text-gray-700 space-y-2 list-decimal list-inside">
+            <li>Selecciona los reportes de corredores que deseas aprobar</li>
+            <li>Click en "Aceptar Seleccionados" y elige "Pagar Ya" o "Próxima Quincena"</li>
+            <li><strong>Si elegiste "Pagar Ya":</strong> Descarga el archivo ACH (Banco General)</li>
+            <li>Realiza las transferencias en Banca en Línea Comercial</li>
+            <li>Click en "Confirmar Pagado" - Esto registrará los clientes en preliminar de BD</li>
+            <li>Los brokers recibirán notificación para completar información de clientes</li>
           </ol>
         </CardContent>
       </Card>
@@ -341,14 +345,14 @@ export function MasterClaimsView() {
                   <DropdownMenuTrigger asChild>
                     <Button
                       disabled={processing}
-                      className="bg-[#8AAA19] hover:bg-[#010139] text-white"
+                      className="bg-gradient-to-r from-[#8AAA19] to-[#7a9617] text-white hover:from-[#7a9617] hover:to-[#6b8514] border-0 shadow-md font-semibold"
                     >
                       <FaCheckCircle className="mr-2" size={14} />
                       Aceptar Seleccionados
                       <FaChevronDown className="ml-2" size={12} />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent>
+                  <DropdownMenuContent className="bg-white border border-gray-200 shadow-lg">
                     <DropdownMenuItem onClick={() => handleApprove('now')}>
                       <FaMoneyBillWave className="mr-2" />
                       Pagar Ya
@@ -391,16 +395,16 @@ export function MasterClaimsView() {
                 <Button
                   onClick={handleGenerateACH}
                   disabled={processing}
-                  className="bg-[#010139] hover:bg-[#020270] text-white"
+                  className="bg-gradient-to-r from-[#010139] to-[#020270] text-white hover:from-[#020270] hover:to-[#010139] border-0 shadow-md font-semibold"
                   title="Exportar ajustes en formato ACH Banco General"
                 >
                   <FaFileDownload className="mr-2" />
-                  Descargar Banco General (ACH)
+                  Descargar ACH
                 </Button>
                 <Button
                   onClick={handleConfirmPaid}
                   disabled={processing}
-                  className="bg-green-600 hover:bg-green-700 text-white"
+                  className="bg-gradient-to-r from-green-600 to-green-700 text-white hover:from-green-700 hover:to-green-800 border-0 shadow-md font-semibold"
                 >
                   <FaCheckCircle className="mr-2" />
                   Confirmar Pagado

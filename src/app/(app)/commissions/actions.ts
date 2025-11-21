@@ -610,6 +610,36 @@ export async function actionGetYTDCommissions(year: number, brokerId?: string | 
   }
 }
 
+/**
+ * Get available years from comm_items
+ */
+export async function actionGetAvailableYears() {
+  const supabase = await getSupabaseAdmin();
+  try {
+    const { data, error } = await supabase
+      .from('comm_items')
+      .select('created_at');
+
+    if (error) throw error;
+
+    if (!data || data.length === 0) {
+      return { ok: true as const, years: [new Date().getFullYear()] };
+    }
+
+    const years = Array.from(
+      new Set(data.map(item => new Date(item.created_at).getFullYear()))
+    ).sort((a, b) => b - a);
+
+    return { ok: true as const, years };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : 'Error desconocido',
+      years: [new Date().getFullYear()]
+    };
+  }
+}
+
 export async function actionGetAllAdvances() {
   const supabase = await getSupabaseAdmin();
   try {
@@ -629,8 +659,10 @@ export async function actionGetAllAdvances() {
 
 // Get total paid advances by summing advance_logs
 export async function actionGetPaidAdvancesTotal(brokerId?: string, year?: number) {
-  const supabase = await getSupabaseAdmin();
   try {
+    const supabase = await getSupabaseAdmin();
+    
+    // First get all paid advances IDs
     let advancesQuery = supabase
       .from('advances')
       .select('id, created_at')
@@ -648,21 +680,28 @@ export async function actionGetPaidAdvancesTotal(brokerId?: string, year?: numbe
 
     const { data: paidAdvances, error: advancesError } = await advancesQuery;
 
-    if (advancesError) throw advancesError;
+    if (advancesError) {
+      console.error('[actionGetPaidAdvancesTotal] Error fetching paid advances:', advancesError);
+      throw advancesError;
+    }
 
     if (!paidAdvances || paidAdvances.length === 0) {
+      console.log('[actionGetPaidAdvancesTotal] No paid advances found');
       return { ok: true as const, total: 0 };
     }
 
-    // Get sum of payments from advance_logs for these advances
-    const advanceIds = paidAdvances.map(a => a.id);
-    
+    const paidIds = paidAdvances.map(a => a.id);
+
+    // Then get sum from advance_logs
     const { data: logs, error: logsError } = await supabase
       .from('advance_logs')
       .select('amount')
-      .in('advance_id', advanceIds);
+      .in('advance_id', paidIds);
 
-    if (logsError) throw logsError;
+    if (logsError) {
+      console.error('[actionGetPaidAdvancesTotal] Error fetching logs:', logsError);
+      throw logsError;
+    }
 
     const total = (logs || []).reduce((sum, log) => sum + (Number(log.amount) || 0), 0);
     
@@ -672,6 +711,468 @@ export async function actionGetPaidAdvancesTotal(brokerId?: string, year?: numbe
   } catch (error) {
     console.error('[actionGetPaidAdvancesTotal] Exception:', error);
     return { ok: false as const, error: String(error), total: 0 };
+  }
+}
+
+// Limpiar duplicados de adelantos recurrentes (mantener solo el más reciente)
+export async function actionCleanupDuplicateRecurring() {
+  try {
+    const supabase = await getSupabaseAdmin();
+    
+    console.log('[actionCleanupDuplicateRecurring] Buscando duplicados...');
+    
+    // Obtener todos los adelantos recurrentes
+    const { data: allRecurring, error } = await supabase
+      .from('advances')
+      .select('id, recurrence_id, created_at, status, amount, reason')
+      .not('recurrence_id', 'is', null)
+      .order('created_at', { ascending: false }); // Más recientes primero
+    
+    if (error) throw error;
+    
+    if (!allRecurring || allRecurring.length === 0) {
+      return { ok: true as const, message: 'No hay adelantos recurrentes', deleted: 0 };
+    }
+    
+    console.log(`Total adelantos recurrentes: ${allRecurring.length}`);
+    
+    // Agrupar por recurrence_id
+    const grouped: Record<string, any[]> = {};
+    allRecurring.forEach(adv => {
+      const recId = (adv as any).recurrence_id;
+      if (!grouped[recId]) grouped[recId] = [];
+      grouped[recId].push(adv);
+    });
+    
+    let deleted = 0;
+    const details: any[] = [];
+    
+    // Para cada grupo con más de 1 adelanto
+    for (const [recId, advances] of Object.entries(grouped)) {
+      if (advances.length > 1) {
+        console.log(`\n📦 Recurrence ID ${recId.substring(0, 8)}: ${advances.length} adelantos`);
+        
+        // Mantener el más reciente (primero en el array), eliminar todos los demás
+        const toKeep = advances[0];
+        const toDelete = advances.slice(1);
+        
+        console.log(`  ✅ Mantener: ${(toKeep as any).id.substring(0, 8)} - ${(toKeep as any).reason} - Status: ${(toKeep as any).status}`);
+        
+        for (const dup of toDelete) {
+          console.log(`  ❌ Eliminar: ${(dup as any).id.substring(0, 8)} - ${(dup as any).reason} - Status: ${(dup as any).status}`);
+          
+          const { error: delError } = await supabase
+            .from('advances')
+            .delete()
+            .eq('id', (dup as any).id);
+          
+          if (delError) {
+            console.error(`  Error eliminando ${(dup as any).id.substring(0, 8)}:`, delError);
+          } else {
+            deleted++;
+            details.push({
+              deleted_id: (dup as any).id.substring(0, 8),
+              reason: (dup as any).reason,
+              status: (dup as any).status
+            });
+          }
+        }
+      }
+    }
+    
+    console.log(`\n✅ Limpieza completada: ${deleted} duplicados eliminados`);
+    
+    revalidatePath('/(app)/commissions');
+    
+    return {
+      ok: true as const,
+      message: `${deleted} duplicados eliminados`,
+      deleted,
+      details
+    };
+  } catch (error) {
+    console.error('[actionCleanupDuplicateRecurring] Exception:', error);
+    return { ok: false as const, error: String(error), deleted: 0 };
+  }
+}
+
+// Recrear adelantos recurrentes faltantes desde las configuraciones activas
+export async function actionRecreateRecurringAdvances() {
+  try {
+    const supabase = await getSupabaseAdmin();
+    
+    console.log('[actionRecreateRecurringAdvances] Buscando configuraciones activas...');
+    
+    // Obtener todas las recurrencias activas
+    const { data: recurrences, error: recError } = await supabase
+      .from('advance_recurrences')
+      .select('*, brokers(name)')
+      .eq('is_active', true);
+    
+    if (recError) throw recError;
+    
+    if (!recurrences || recurrences.length === 0) {
+      return { ok: true as const, message: 'No hay recurrencias activas', created: 0 };
+    }
+    
+    console.log('Recurrencias activas encontradas:', recurrences.length);
+    
+    let created = 0;
+    
+    for (const rec of recurrences) {
+      // Verificar si ya existe un adelanto con esta recurrence_id
+      const { data: existing } = await supabase
+        .from('advances')
+        .select('id')
+        .eq('recurrence_id', (rec as any).id)
+        .eq('status', 'PENDING')
+        .single();
+      
+      if (!existing) {
+        // No existe, crear adelanto
+        console.log(`Creando adelanto recurrente: ${(rec as any).reason} para ${(rec as any).brokers?.name}`);
+        
+        const { error: insertError } = await supabase
+          .from('advances')
+          .insert({
+            broker_id: (rec as any).broker_id,
+            amount: (rec as any).amount,
+            status: 'PENDING',
+            reason: (rec as any).reason,
+            is_recurring: true,
+            recurrence_id: (rec as any).id,
+            created_at: new Date().toISOString()
+          });
+        
+        if (insertError) {
+          console.error(`Error creando adelanto para ${(rec as any).reason}:`, insertError);
+        } else {
+          console.log(`✅ Adelanto creado exitosamente`);
+          created++;
+        }
+      } else {
+        console.log(`Adelanto ya existe para: ${(rec as any).reason}`);
+      }
+    }
+    
+    revalidatePath('/(app)/commissions');
+    
+    return {
+      ok: true as const,
+      message: `${created} adelantos recurrentes creados`,
+      created
+    };
+  } catch (error) {
+    console.error('[actionRecreateRecurringAdvances] Exception:', error);
+    return { ok: false as const, error: String(error), created: 0 };
+  }
+}
+
+// Limpiar adelantos recurrentes duplicados y mal configurados
+export async function actionCleanupRecurringAdvances() {
+  try {
+    const supabase = await getSupabaseAdmin();
+    
+    console.log('[actionCleanupRecurringAdvances] Iniciando limpieza...');
+    
+    // 1. Encontrar adelantos recurrentes con mismo recurrence_id
+    const { data: allRecurring, error: fetchError } = await supabase
+      .from('advances')
+      .select('id, recurrence_id, created_at, amount, status, reason, is_recurring, brokers(name)')
+      .not('recurrence_id', 'is', null)
+      .order('created_at', { ascending: true });
+    
+    if (fetchError) throw fetchError;
+    
+    if (!allRecurring || allRecurring.length === 0) {
+      return { ok: true as const, message: 'No hay adelantos recurrentes', cleaned: 0 };
+    }
+    
+    console.log('Total adelantos recurrentes encontrados:', allRecurring.length);
+    
+    // Agrupar por recurrence_id
+    const grouped: Record<string, any[]> = {};
+    allRecurring.forEach(adv => {
+      const recId = (adv as any).recurrence_id;
+      if (!grouped[recId]) grouped[recId] = [];
+      grouped[recId].push(adv);
+    });
+    
+    let toDelete: string[] = [];
+    let toReset: string[] = [];
+    
+    // Procesar cada grupo
+    for (const [recId, advances] of Object.entries(grouped)) {
+      console.log(`\nRecurrence ID: ${recId.substring(0, 8)}`);
+      console.log(`  Adelantos en grupo: ${advances.length}`);
+      
+      if (advances.length > 1) {
+        // DUPLICADOS: Mantener el primero (más antiguo), eliminar el resto
+        console.log('  ⚠️ DUPLICADOS DETECTADOS');
+        
+        // Ordenar por created_at
+        advances.sort((a, b) => new Date((a as any).created_at).getTime() - new Date((b as any).created_at).getTime());
+        
+        const toKeep = advances[0];
+        const duplicates = advances.slice(1);
+        
+        console.log(`  ✅ Mantener: ${(toKeep as any).id.substring(0, 8)} (${(toKeep as any).reason})`);
+        
+        duplicates.forEach(dup => {
+          console.log(`  ❌ Eliminar: ${(dup as any).id.substring(0, 8)} - Status: ${(dup as any).status} - Monto: ${(dup as any).amount}`);
+          toDelete.push((dup as any).id);
+        });
+        
+        // Si el que vamos a mantener está PAID, resetearlo
+        if ((toKeep as any).status === 'PAID' || (toKeep as any).amount === 0) {
+          console.log(`  🔄 Resetear adelanto principal`);
+          toReset.push((toKeep as any).id);
+        }
+      } else {
+        // Solo uno, verificar si necesita reseteo
+        const adv = advances[0];
+        if ((adv as any).status === 'PAID' || (adv as any).amount === 0) {
+          console.log(`  🔄 Resetear: ${(adv as any).id.substring(0, 8)} (${(adv as any).reason})`);
+          toReset.push((adv as any).id);
+        }
+      }
+    }
+    
+    console.log('\n=== RESUMEN ===');
+    console.log(`Adelantos a eliminar: ${toDelete.length}`);
+    console.log(`Adelantos a resetear: ${toReset.length}`);
+    
+    // Ejecutar eliminaciones
+    if (toDelete.length > 0) {
+      const { error: deleteError } = await supabase
+        .from('advances')
+        .delete()
+        .in('id', toDelete);
+      
+      if (deleteError) {
+        console.error('Error al eliminar duplicados:', deleteError);
+        throw deleteError;
+      }
+      console.log(`✅ ${toDelete.length} duplicados eliminados`);
+    }
+    
+    // Ejecutar reseteos
+    for (const advId of toReset) {
+      // Obtener configuración de recurrencia
+      const { data: adv } = await supabase
+        .from('advances')
+        .select('recurrence_id')
+        .eq('id', advId)
+        .single();
+      
+      if (adv && (adv as any).recurrence_id) {
+        const { data: rec } = await supabase
+          .from('advance_recurrences')
+          .select('amount')
+          .eq('id', (adv as any).recurrence_id)
+          .single();
+        
+        if (rec && (rec as any).amount) {
+          const { error: updateError } = await supabase
+            .from('advances')
+            .update({
+              amount: (rec as any).amount,
+              status: 'PENDING',
+              is_recurring: true
+            })
+            .eq('id', advId);
+          
+          if (updateError) {
+            console.error(`Error al resetear ${advId.substring(0, 8)}:`, updateError);
+          } else {
+            console.log(`✅ Reseteado ${advId.substring(0, 8)} a $${(rec as any).amount}`);
+          }
+        }
+      }
+    }
+    
+    revalidatePath('/(app)/commissions');
+    
+    return { 
+      ok: true as const, 
+      message: 'Limpieza completada',
+      deleted: toDelete.length,
+      reset: toReset.length
+    };
+  } catch (error) {
+    console.error('[actionCleanupRecurringAdvances] Exception:', error);
+    return { ok: false as const, error: String(error), deleted: 0, reset: 0 };
+  }
+}
+
+// Buscar adelantos recurrentes marcados incorrectamente como PAID
+export async function actionFindMismarkedRecurringAdvances() {
+  try {
+    const supabase = await getSupabaseAdmin();
+    
+    console.log('[actionFindMismarkedRecurringAdvances] Buscando adelantos recurrentes marcados como PAID...');
+    
+    const { data: advances, error } = await supabase
+      .from('advances')
+      .select('id, reason, amount, status, is_recurring, recurrence_id, brokers(id, name)')
+      .eq('status', 'PAID')
+      .not('recurrence_id', 'is', null);
+    
+    if (error) {
+      console.error('Error:', error);
+      throw error;
+    }
+    
+    console.log('Adelantos recurrentes marcados como PAID:', advances?.length || 0);
+    
+    if (advances && advances.length > 0) {
+      advances.forEach(adv => {
+        console.log('  -', {
+          id: (adv as any).id.substring(0, 8),
+          reason: (adv as any).reason,
+          amount: (adv as any).amount,
+          status: (adv as any).status,
+          is_recurring: (adv as any).is_recurring,
+          broker: (adv as any).brokers?.name,
+          recurrence_id: (adv as any).recurrence_id?.substring(0, 8)
+        });
+      });
+    }
+    
+    return { ok: true as const, data: advances || [] };
+  } catch (error) {
+    console.error('[actionFindMismarkedRecurringAdvances] Exception:', error);
+    return { ok: false as const, error: String(error), data: [] };
+  }
+}
+
+// Recuperar adelantos recurrentes que se marcaron como PAID incorrectamente
+export async function actionRecoverRecurringAdvance(advanceId: string) {
+  try {
+    const supabase = await getSupabaseAdmin();
+    
+    console.log('[actionRecoverRecurringAdvance] Recuperando adelanto:', advanceId);
+    
+    // Obtener el adelanto
+    const { data: advance, error: advanceError } = await supabase
+      .from('advances')
+      .select('id, amount, status, recurrence_id, is_recurring, reason')
+      .eq('id', advanceId)
+      .single();
+    
+    if (advanceError) {
+      console.error('Error al obtener adelanto:', advanceError);
+      throw advanceError;
+    }
+    
+    if (!advance) {
+      return { ok: false as const, error: 'Adelanto no encontrado' };
+    }
+    
+    console.log('Adelanto encontrado:', advance);
+    
+    // Verificar que tenga recurrence_id
+    if (!(advance as any).recurrence_id) {
+      return { ok: false as const, error: 'El adelanto no tiene recurrence_id configurado' };
+    }
+    
+    // Obtener la configuración de recurrencia
+    const { data: recurrence, error: recError } = await supabase
+      .from('advance_recurrences')
+      .select('amount, is_active')
+      .eq('id', (advance as any).recurrence_id)
+      .single();
+    
+    if (recError) {
+      console.error('Error al obtener recurrencia:', recError);
+      throw recError;
+    }
+    
+    if (!recurrence) {
+      return { ok: false as const, error: 'No se encontró la configuración de recurrencia' };
+    }
+    
+    console.log('Recurrencia encontrada, monto original:', recurrence.amount);
+    console.log('Reseteando adelanto recurrente a monto original...');
+    
+    // Resetear el adelanto
+    const { error: updateError } = await supabase
+      .from('advances')
+      .update({
+        amount: recurrence.amount,
+        status: 'PENDING',
+        is_recurring: true
+      })
+      .eq('id', advanceId);
+    
+    if (updateError) {
+      console.error('Error al resetear adelanto:', updateError);
+      throw updateError;
+    }
+    
+    console.log('✅ Adelanto recurrente recuperado exitosamente');
+    console.log('   - Monto reseteado a:', recurrence.amount);
+    console.log('   - Status: PENDING');
+    console.log('   - is_recurring: true');
+    
+    revalidatePath('/(app)/commissions');
+    
+    return { ok: true as const };
+  } catch (error) {
+    console.error('[actionRecoverRecurringAdvance] Exception:', error);
+    return { ok: false as const, error: String(error) };
+  }
+}
+
+export async function actionGetAdvanceLogs(brokerId?: string, year?: number) {
+  try {
+    const supabase = await getSupabaseAdmin();
+    
+    // Obtener todos los advance_logs con info del adelanto y broker
+    let logsQuery = supabase
+      .from('advance_logs')
+      .select(`
+        id,
+        advance_id,
+        amount,
+        payment_type,
+        created_at,
+        advances!inner (
+          id,
+          reason,
+          broker_id,
+          is_recurring,
+          brokers (
+            id,
+            name
+          )
+        )
+      `)
+      .order('created_at', { ascending: false });
+
+    if (brokerId) {
+      logsQuery = logsQuery.eq('advances.broker_id', brokerId);
+    }
+
+    if (year) {
+      const startDate = `${year}-01-01`;
+      const endDate = `${year}-12-31`;
+      logsQuery = logsQuery.gte('created_at', startDate).lte('created_at', endDate);
+    }
+
+    const { data: logs, error } = await logsQuery;
+
+    if (error) {
+      console.error('[actionGetAdvanceLogs] Error:', error);
+      throw error;
+    }
+
+    console.log('[actionGetAdvanceLogs] Loaded logs:', logs?.length || 0);
+    
+    return { ok: true as const, data: logs || [] };
+  } catch (error) {
+    console.error('[actionGetAdvanceLogs] Exception:', error);
+    return { ok: false as const, error: String(error), data: [] };
   }
 }
 
@@ -705,49 +1206,94 @@ export async function actionGetAdvances(brokerId?: string, year?: number) {
     
     console.log('[actionGetAdvances] Loaded advances:', data?.length || 0);
     
-    // Para adelantos pagados, obtener el total pagado desde advance_logs
-    let dataWithTotalPaid = data || [];
+    // Para todos los adelantos, obtener el total pagado desde advance_logs
+    let dataWithExtras = data || [];
     if (data && data.length > 0) {
-      const paidAdvances = data.filter(a => a.status === 'PAID');
+      const allIds = data.map(a => a.id);
       
-      if (paidAdvances.length > 0) {
-        const paidIds = paidAdvances.map(a => a.id);
-        
-        // Obtener suma de pagos y fecha del último pago por adelanto
-        const { data: logs } = await supabase
-          .from('advance_logs')
-          .select('advance_id, amount, created_at')
-          .in('advance_id', paidIds);
-        
-        if (logs) {
-          // Agrupar por advance_id
-          const paymentsByAdvance = logs.reduce((acc: any, log: any) => {
-            if (!acc[log.advance_id]) {
-              acc[log.advance_id] = { total: 0, lastDate: log.created_at };
+      // Obtener suma de pagos y fecha del último pago por adelanto
+      const { data: logs } = await supabase
+        .from('advance_logs')
+        .select('advance_id, amount, created_at')
+        .in('advance_id', allIds);
+      
+      // Obtener pending_payments asociados (descuentos a corredor)
+      const { data: pendingPayments } = await supabase
+        .from('pending_payments')
+        .select('id, notes, policy_number, client_name, insurer_name')
+        .in('status', ['pending', 'processing']);
+      
+      // Mapear pending_payments por advance_id
+      const paymentDetailsByAdvance: Record<string, any> = {};
+      if (pendingPayments) {
+        for (const payment of pendingPayments) {
+          try {
+            const metadata = typeof payment.notes === 'string' ? JSON.parse(payment.notes) : payment.notes;
+            if (metadata?.advance_id) {
+              paymentDetailsByAdvance[metadata.advance_id] = {
+                policy_number: payment.policy_number,
+                client_name: payment.client_name,
+                insurer_name: payment.insurer_name,
+              };
             }
-            acc[log.advance_id].total += Number(log.amount) || 0;
-            // Actualizar última fecha si es más reciente
-            if (new Date(log.created_at) > new Date(acc[log.advance_id].lastDate)) {
-              acc[log.advance_id].lastDate = log.created_at;
-            }
-            return acc;
-          }, {});
-          
-          // Agregar total_paid y last_payment_date a cada adelanto
-          dataWithTotalPaid = data.map((adv: any) => ({
-            ...adv,
-            total_paid: adv.status === 'PAID' ? (paymentsByAdvance[adv.id]?.total || 0) : undefined,
-            last_payment_date: adv.status === 'PAID' ? (paymentsByAdvance[adv.id]?.lastDate || null) : undefined
-          }));
-          
-          console.log('[actionGetAdvances] Added total_paid to', paidAdvances.length, 'paid advances');
+          } catch (e) {
+            // Ignorar si no se puede parsear
+          }
         }
       }
+      
+      // Agrupar logs por advance_id - ESTRICTO por día
+      const paymentsByAdvance: Record<string, { total: number, lastDate: string }> = {};
+      if (logs) {
+        logs.forEach((log: any) => {
+          if (!paymentsByAdvance[log.advance_id]) {
+            // Extraer ESTRICTAMENTE solo YYYY-MM-DD (primeros 10 caracteres)
+            // Ignorar completamente hora y zona horaria
+            const dateOnly = String(log.created_at).substring(0, 10);
+            paymentsByAdvance[log.advance_id] = { total: 0, lastDate: dateOnly };
+          }
+          const current = paymentsByAdvance[log.advance_id];
+          if (current) {
+            current.total += Number(log.amount) || 0;
+            // Actualizar última fecha si es más reciente (comparación string YYYY-MM-DD)
+            const logDateOnly = String(log.created_at).substring(0, 10);
+            if (logDateOnly > current.lastDate) {
+              current.lastDate = logDateOnly;
+            }
+          }
+        });
+      }
+      
+      console.log('[actionGetAdvances] Payment dates (sample):', 
+        Object.values(paymentsByAdvance).slice(0, 3).map(p => p.lastDate)
+      );
+      
+      // Agregar total_paid, last_payment_date y payment_details a cada adelanto
+      dataWithExtras = data.map((adv: any) => ({
+        ...adv,
+        total_paid: paymentsByAdvance[adv.id]?.total || 0,
+        last_payment_date: paymentsByAdvance[adv.id]?.lastDate || null,
+        payment_details: paymentDetailsByAdvance[adv.id] || null,
+      }));
+      
+      console.log('[actionGetAdvances] Added payment history to', Object.keys(paymentsByAdvance).length, 'advances');
+      console.log('[actionGetAdvances] Added payment details to', Object.keys(paymentDetailsByAdvance).length, 'advances');
+      console.log('[actionGetAdvances] Sample with payments:', dataWithExtras
+        .filter((a: any) => a.total_paid > 0)
+        .slice(0, 3)
+        .map((a: any) => ({
+          id: a.id.substring(0, 8),
+          status: a.status,
+          is_recurring: a.is_recurring,
+          total_paid: a.total_paid,
+          last_payment_date: a.last_payment_date
+        }))
+      );
     }
     
     // Debug: contar por status
-    if (dataWithTotalPaid) {
-      const statusCounts = dataWithTotalPaid.reduce((acc: any, adv: any) => {
+    if (dataWithExtras) {
+      const statusCounts = dataWithExtras.reduce((acc: any, adv: any) => {
         const status = adv.status?.toLowerCase() || 'unknown';
         acc[status] = (acc[status] || 0) + 1;
         return acc;
@@ -755,7 +1301,7 @@ export async function actionGetAdvances(brokerId?: string, year?: number) {
       console.log('[actionGetAdvances] Status counts:', statusCounts);
       
       // Calcular totales por status
-      const totals = dataWithTotalPaid.reduce((acc: any, adv: any) => {
+      const totals = dataWithExtras.reduce((acc: any, adv: any) => {
         const status = adv.status?.toLowerCase() || 'unknown';
         if (!acc[status]) acc[status] = 0;
         if (status === 'paid') {
@@ -768,7 +1314,7 @@ export async function actionGetAdvances(brokerId?: string, year?: number) {
       console.log('[actionGetAdvances] Totals by status:', totals);
     }
     
-    return { ok: true as const, data: dataWithTotalPaid };
+    return { ok: true as const, data: dataWithExtras };
   } catch (error) {
     console.error('[actionGetAdvances] Exception:', error);
     return { ok: false as const, error: String(error) };
@@ -796,12 +1342,22 @@ export async function actionApplyAdvancePayment(payload: {
 
     const { data: advance, error: advanceError } = await supabase
       .from('advances')
-      .select('id, amount, status, broker_id')
+      .select('id, amount, status, broker_id, is_recurring, recurrence_id, reason')
       .eq('id', advance_id)
       .single();
 
     if (advanceError) throw advanceError;
     if (!advance) throw new Error('Adelanto no encontrado');
+    
+    console.log('[actionApplyAdvancePayment] Adelanto a pagar:', {
+      id: advance_id.substring(0, 8),
+      amount: (advance as any).amount,
+      status: (advance as any).status,
+      is_recurring: (advance as any).is_recurring,
+      recurrence_id: (advance as any).recurrence_id,
+      reason: (advance as any).reason,
+      payment_amount: amount
+    });
 
     // Validar que el monto no exceda el saldo del adelanto
     if (amount > (advance as any).amount) {
@@ -918,15 +1474,28 @@ export async function actionApplyAdvancePayment(payload: {
     }
 
     // Para efectivo u otros pagos, aplicar directamente
+    // IMPORTANTE: Usar fecha LOCAL para evitar cambio de día por zona horaria
+    const now = new Date();
+    const localYear = now.getFullYear();
+    const localMonth = String(now.getMonth() + 1).padStart(2, '0');
+    const localDay = String(now.getDate()).padStart(2, '0');
+    const localHours = String(now.getHours()).padStart(2, '0');
+    const localMinutes = String(now.getMinutes()).padStart(2, '0');
+    const localSeconds = String(now.getSeconds()).padStart(2, '0');
+    
+    // Formato: YYYY-MM-DD HH:MM:SS (sin zona horaria, fecha local pura)
+    const localTimestamp = `${localYear}-${localMonth}-${localDay} ${localHours}:${localMinutes}:${localSeconds}`;
+    
     const logPayload: AdvanceLogIns = {
       advance_id,
       amount,
       payment_type,
       fortnight_id: fortnight_id || null,
       applied_by: applied_by || null,
+      created_at: localTimestamp as any, // Forzar fecha local
     };
     
-    console.log('[actionApplyAdvancePayment] Creating advance log:', logPayload);
+    console.log('[actionApplyAdvancePayment] Creating advance log with LOCAL timestamp:', localTimestamp);
     
     const { data: logData, error: logError } = await supabase
       .from('advance_logs')
@@ -941,7 +1510,70 @@ export async function actionApplyAdvancePayment(payload: {
     console.log('[actionApplyAdvancePayment] Advance log created successfully:', logData);
 
     const newAmount = (Number((advance as any).amount) || 0) - amount;
-    const newStatus = newAmount <= 0 ? 'PAID' : 'PARTIAL';
+    const isFullyPaid = newAmount <= 0;
+    
+    // ADELANTOS RECURRENTES: cuando se pagan completamente, resetear al monto original
+    if (isFullyPaid && (advance as any).is_recurring && (advance as any).recurrence_id) {
+      console.log('🔄 Adelanto recurrente pagado completamente - Reseteando a monto original');
+      console.log('   - Advance ID:', advance_id);
+      console.log('   - Recurrence ID:', (advance as any).recurrence_id);
+      console.log('   - Current amount:', (advance as any).amount);
+      console.log('   - Payment amount:', amount);
+      console.log('   - New amount would be:', newAmount);
+      
+      // Obtener el monto original de la recurrencia
+      const { data: recurrence, error: recurrenceError } = await supabase
+        .from('advance_recurrences')
+        .select('amount, is_active')
+        .eq('id', (advance as any).recurrence_id)
+        .single();
+      
+      if (recurrenceError) {
+        console.error('❌ Error al obtener recurrencia:', recurrenceError);
+        throw recurrenceError;
+      }
+      
+      if (recurrence) {
+        console.log('   - Recurrence amount:', recurrence.amount);
+        console.log('   - Recurrence is_active:', recurrence.is_active);
+        
+        // Resetear a monto original y mantener como PENDING
+        const { error: updateError } = await supabase.from('advances').update({
+          amount: recurrence.amount,
+          status: 'PENDING',
+        } satisfies TablesUpdate<'advances'>).eq('id', advance_id);
+        
+        if (updateError) {
+          console.error('❌ Error al resetear adelanto:', updateError);
+          throw updateError;
+        }
+        
+        console.log('✅ Adelanto recurrente reseteado - permanece en Deudas Activas con historial');
+        console.log('   - Resetted to amount:', recurrence.amount);
+        
+        revalidatePath('/(app)/commissions');
+        return { ok: true as const };
+      } else {
+        console.error('❌ No se encontró configuración de recurrencia');
+      }
+    }
+    
+    // ADELANTOS RECURRENTES PARCIALMENTE PAGADOS: mantener como PARTIAL
+    if (!isFullyPaid && (advance as any).is_recurring) {
+      const { error: updateError } = await supabase.from('advances').update({
+        amount: newAmount,
+        status: 'PARTIAL',
+      } satisfies TablesUpdate<'advances'>).eq('id', advance_id);
+      
+      if (updateError) throw updateError;
+      console.log('✅ Adelanto recurrente parcialmente pagado - status PARTIAL');
+      
+      revalidatePath('/(app)/commissions');
+      return { ok: true as const };
+    }
+    
+    // ADELANTOS NO RECURRENTES: comportamiento normal
+    const newStatus = isFullyPaid ? 'PAID' : 'PARTIAL';
 
     const { error: updateError } = await supabase.from('advances').update({
       amount: newAmount,
@@ -950,7 +1582,7 @@ export async function actionApplyAdvancePayment(payload: {
 
     if (updateError) throw updateError;
 
-    // Si el adelanto está saldado, habilitar pending_payment relacionado para que pueda ser marcado como pagado
+    // Si el adelanto está saldado (no recurrente), habilitar pending_payment relacionado
     if (newStatus === 'PAID') {
       
       // Buscar todos los pagos pendientes para filtrar los descuentos a corredor
@@ -1483,23 +2115,32 @@ export async function actionDeleteAdvance(advanceId: string) {
     
     const hasPaymentHistory = logs && logs.length > 0;
     
-    // 2.5. Si es adelanto recurrente, desactivar la configuración para que no se creen más
+    // 2.5. ADELANTOS RECURRENTES: Simplemente eliminar
+    // El sistema NO los recreará automáticamente porque sync-recurrences verifica si ya existe
     if (advance.is_recurring && advance.recurrence_id) {
-      console.log(`🔄 Desactivando configuración recurrente ${advance.recurrence_id} del adelanto ${advanceId}`);
-      const { error: deactivateError } = await supabase
-        .from('advance_recurrences')
-        .update({ is_active: false })
-        .eq('id', advance.recurrence_id);
+      console.log(`🗑️ Adelanto recurrente ${advanceId}: eliminando`);
       
-      if (deactivateError) {
-        console.error('Error desactivando recurrencia:', deactivateError);
-        // No retornar error, continuar con la eliminación del adelanto
-      } else {
-        console.log('✅ Configuración recurrente desactivada');
+      const { error: deleteError } = await supabase
+        .from('advances')
+        .delete()
+        .eq('id', advanceId);
+      
+      if (deleteError) {
+        console.error('Error eliminando adelanto recurrente:', deleteError);
+        return {
+          ok: false as const,
+          error: 'Error al eliminar adelanto recurrente',
+        };
       }
+      
+      revalidatePath('/(app)/commissions');
+      return { 
+        ok: true as const,
+        message: 'Adelanto recurrente eliminado',
+      };
     }
     
-    // 3. Si NO tiene historial: ELIMINAR completamente
+    // 3. Si NO tiene historial: ELIMINAR completamente (solo para NO recurrentes)
     if (!hasPaymentHistory) {
       // Primero, buscar y eliminar pagos pendientes asociados a este adelanto
       const { data: pendingPayments } = await supabase
@@ -1810,15 +2451,42 @@ export async function actionApplyRetainedToAdvance(payload: {
 export async function actionGetAdvanceHistory(advanceId: string) {
   try {
     const supabase = getSupabaseAdmin();
-    const { data, error } = await supabase
+    
+    // Obtener información del adelanto
+    const { data: advance, error: advError } = await supabase
+      .from('advances')
+      .select('*, advance_recurrences(amount)')
+      .eq('id', advanceId)
+      .single();
+    
+    if (advError) throw advError;
+    
+    // Obtener logs de pagos
+    const { data: logs, error } = await supabase
       .from('advance_logs')
       .select('*, fortnights(period_start, period_end)')
       .eq('advance_id', advanceId)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: true }); // Ordenar ASC para calcular deudas
 
     if (error) throw error;
 
-    return { ok: true as const, data };
+    // Calcular monto inicial
+    const initialAmount = (advance as any).is_recurring && (advance as any).advance_recurrences
+      ? (advance as any).advance_recurrences.amount
+      : (advance as any).amount + (logs || []).reduce((sum: number, log: any) => sum + Number(log.amount), 0);
+
+    return { 
+      ok: true as const, 
+      data: logs,
+      advance: {
+        id: (advance as any).id,
+        reason: (advance as any).reason,
+        initial_amount: initialAmount,
+        current_amount: (advance as any).amount,
+        status: (advance as any).status,
+        is_recurring: (advance as any).is_recurring
+      }
+    };
   } catch (error) {
     return {
       ok: false as const,
@@ -1924,8 +2592,10 @@ export async function actionDeleteImport(importId: string) {
 export async function actionGetClosedFortnights(year: number, month: number, fortnight?: number, brokerId?: string | null) {
   try {
     const supabase = getSupabaseAdmin();
-    const startDate = new Date(year, month - 1, 1).toISOString();
-    const endDate = new Date(year, month, 0, 23, 59, 59).toISOString();
+    // Usar Date.UTC para generar fechas en UTC correctamente
+    const startDate = new Date(Date.UTC(year, month - 1, 1)).toISOString().split('T')[0];
+    const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    const endDate = new Date(Date.UTC(year, month - 1, lastDay)).toISOString().split('T')[0];
 
     let query = supabase
       .from('fortnights')
@@ -1934,17 +2604,18 @@ export async function actionGetClosedFortnights(year: number, month: number, for
         fortnight_broker_totals (
           *,
           brokers ( name )
-        ),
-        comm_imports ( * )
+        )
       `)
       .eq('status', 'PAID')
       .gte('period_start', startDate)
       .lte('period_end', endDate);
 
     if (fortnight === 1) {
-      query = query.lte('period_start', new Date(year, month - 1, 15).toISOString());
+      const q1End = new Date(Date.UTC(year, month - 1, 15)).toISOString().split('T')[0];
+      query = query.lte('period_start', q1End);
     } else if (fortnight === 2) {
-      query = query.gte('period_start', new Date(year, month - 1, 16).toISOString());
+      const q2Start = new Date(Date.UTC(year, month - 1, 16)).toISOString().split('T')[0];
+      query = query.gte('period_start', q2Start);
     }
 
     const { data: fortnights, error: fError } = await query.order('period_start', { ascending: false });
@@ -1960,6 +2631,15 @@ export async function actionGetClosedFortnights(year: number, month: number, for
 
     if (itemsError) throw itemsError;
 
+    // Get comm_imports para totales de aseguradoras
+    const { data: commImports, error: importsError } = await supabase
+      .from('comm_imports')
+      .select('total_amount, insurer_id, insurers(name)');
+
+    if (importsError) {
+      console.error('Error loading comm_imports:', importsError);
+    }
+
     const formattedData = (fortnights || []).map((f: any) => {
       const brokerTotals = f.fortnight_broker_totals || [];
       const fortnightStart = new Date(f.period_start);
@@ -1971,11 +2651,20 @@ export async function actionGetClosedFortnights(year: number, month: number, for
         return itemDate >= fortnightStart && itemDate <= fortnightEnd;
       });
 
-      const total_imported = commItems.reduce((sum, item) => sum + (Number(item.gross_amount) || 0), 0);
-      const total_paid_gross = brokerTotals.reduce((sum: number, bt: any) => sum + (Number(bt.gross_amount) || 0), 0);
-      const total_office_profit = total_imported - total_paid_gross;
+      // Totales simples
+      const total_imported = (commImports || []).reduce((sum, imp) => sum + (Number(imp.total_amount) || 0), 0);
+      const total_paid_net = brokerTotals.reduce((sum: number, bt: any) => sum + (Number(bt.net_amount) || 0), 0);
+      const total_office_profit = total_imported - total_paid_net;
 
-      const totalsByInsurer = commItems.reduce((acc, item) => {
+      // Calcular totales por aseguradora
+      const totalsByInsurer = (commImports || []).reduce((acc, imp) => {
+        if (!imp.insurers) return acc;
+        const insurerName = imp.insurers.name || 'Desconocido';
+        acc[insurerName] = (acc[insurerName] || 0) + (Number(imp.total_amount) || 0);
+        return acc;
+      }, {} as Record<string, number>);
+
+      const paidByInsurer = commItems.reduce((acc, item) => {
         if (!item.insurers) return acc;
         const insurerName = item.insurers.name || 'Desconocido';
         acc[insurerName] = (acc[insurerName] || 0) + (Number(item.gross_amount) || 0);
@@ -1990,13 +2679,23 @@ export async function actionGetClosedFortnights(year: number, month: number, for
         return null;
       }
 
+      // Determinar quincena correctamente según el día de inicio
+      const startDay = fortnightStart.getUTCDate();
+      const fortnightNum = startDay <= 15 ? 1 : 2;
+      
       return {
         id: f.id,
-        label: `Q${fortnightStart.getDate() <= 15 ? 1 : 2} - ${fortnightStart.toLocaleString('es-PA', { month: 'short', timeZone: 'UTC' })}. ${fortnightStart.getUTCFullYear()}`,
+        label: `Q${fortnightNum} - ${fortnightStart.toLocaleString('es-PA', { month: 'short', timeZone: 'UTC' })}. ${fortnightStart.getUTCFullYear()}`,
+        fortnight_number: fortnightNum,
         total_imported,
-        total_paid_gross,
+        total_paid_net,
         total_office_profit,
-        totalsByInsurer: Object.entries(totalsByInsurer).map(([name, total]) => ({ name, total })).sort((a, b) => b.total - a.total),
+        totalsByInsurer: Object.entries(totalsByInsurer).map(([name, total]) => ({ 
+          name, 
+          total, 
+          paid: paidByInsurer[name] || 0,
+          office_total: total - (paidByInsurer[name] || 0)
+        })).sort((a, b) => b.total - a.total),
         brokers: filteredBrokers.map((bt: any) => ({
           broker_id: bt.broker_id,
           broker_name: bt.brokers?.name || 'N/A',
@@ -2047,10 +2746,11 @@ export async function actionGetLastClosedFortnight() {
 // Get pending items (sin broker asignado)
 export async function actionGetPendingItems() {
   try {
-    console.log('[actionGetPendingItems] Fetching pending_items...');
+    console.log('[actionGetPendingItems] Fetching pending items...');
     const supabase = getSupabaseAdmin();
 
-    const { data, error } = await supabase
+    // 1. Buscar en pending_items (tabla antigua)
+    const { data: pendingData, error: pendingError } = await supabase
       .from('pending_items')
       .select(`
         id,
@@ -2064,12 +2764,30 @@ export async function actionGetPendingItems() {
       .eq('status', 'open')
       .order('created_at', { ascending: true });
 
-    if (error) {
-      console.error('[actionGetPendingItems] Error:', error);
-      throw error;
+    if (pendingError) {
+      console.error('[actionGetPendingItems] Error pending_items:', pendingError);
     }
 
-    const formattedData = (data || []).map(item => ({
+    // 2. Buscar en comm_items sin broker_id (comisiones sin identificar del bulk upload)
+    const { data: commData, error: commError } = await supabase
+      .from('comm_items')
+      .select(`
+        id,
+        insured_name,
+        policy_number,
+        gross_amount,
+        created_at,
+        insurers ( name )
+      `)
+      .is('broker_id', null)
+      .order('created_at', { ascending: true });
+
+    if (commError) {
+      console.error('[actionGetPendingItems] Error comm_items:', commError);
+    }
+
+    // 3. Combinar ambos resultados
+    const formattedPending = (pendingData || []).map(item => ({
       id: item.id,
       policy_number: item.policy_number,
       insured_name: item.insured_name,
@@ -2077,10 +2795,30 @@ export async function actionGetPendingItems() {
       created_at: item.created_at,
       status: item.status,
       insurers: item.insurers,
+      source: 'pending_items' as const,
     }));
 
-    console.log('[actionGetPendingItems] Found', formattedData.length, 'pending items');
-    return { ok: true as const, data: formattedData };
+    const formattedComm = (commData || []).map(item => ({
+      id: item.id,
+      policy_number: item.policy_number,
+      insured_name: item.insured_name,
+      gross_amount: Number(item.gross_amount) || 0,
+      created_at: item.created_at,
+      status: 'open' as const,
+      insurers: item.insurers,
+      source: 'comm_items' as const,
+    }));
+
+    const allPending = [...formattedPending, ...formattedComm]
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+
+    console.log('[actionGetPendingItems] Found:', {
+      pending_items: formattedPending.length,
+      comm_items: formattedComm.length,
+      total: allPending.length
+    });
+
+    return { ok: true as const, data: allPending };
   } catch (error) {
     console.error('[actionGetPendingItems] Exception:', error);
     return {
@@ -2143,6 +2881,67 @@ export async function actionClaimPendingItem(itemIds: string[]) {
 
     revalidatePath('/(app)/commissions');
     return { ok: true as const };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : 'Error desconocido',
+    };
+  }
+}
+
+// Auto-assign old pending items to office broker
+export async function actionAutoAssignOldPendingItems() {
+  try {
+    const supabase = getSupabaseAdmin();
+    
+    // Find office broker by email
+    const { data: officeBroker, error: brokerError } = await supabase
+      .from('brokers')
+      .select('id')
+      .eq('email', 'contacto@lideresenseguros.com')
+      .single();
+
+    if (brokerError || !officeBroker) {
+      return { ok: false as const, error: 'No se encontró el broker de oficina' };
+    }
+
+    // Find pending items older than 90 days
+    const ninetyDaysAgo = new Date();
+    ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+
+    const { data: oldItems, error: itemsError } = await supabase
+      .from('pending_items')
+      .select('id, policy_number')
+      .eq('status', 'open')
+      .is('assigned_broker_id', null)
+      .lt('created_at', ninetyDaysAgo.toISOString());
+
+    if (itemsError) throw itemsError;
+
+    if (!oldItems || oldItems.length === 0) {
+      return { ok: true as const, data: { assigned: 0 } };
+    }
+
+    // Group by policy for better assignment
+    const itemIds = oldItems.map(item => item.id);
+
+    // Assign to office broker
+    const { error: updateError } = await supabase
+      .from('pending_items')
+      .update({ assigned_broker_id: officeBroker.id })
+      .in('id', itemIds);
+
+    if (updateError) throw updateError;
+
+    // Migrate to comm_items
+    const migrateResult = await actionMigratePendingToCommItems(itemIds);
+    
+    if (!migrateResult.ok) {
+      console.error('Error al migrar items antiguos:', migrateResult.error);
+    }
+
+    revalidatePath('/(app)/commissions');
+    return { ok: true as const, data: { assigned: itemIds.length } };
   } catch (error) {
     return {
       ok: false as const,
@@ -3212,23 +4011,102 @@ export async function actionGetAdjustmentsCSVData(claimIds: string[]) {
 
 /**
  * Confirmar pago de ajustes
- * Marca como pagados
+ * Marca como pagados y registra en preliminar de base de datos
  */
 export async function actionConfirmAdjustmentsPaid(claimIds: string[]) {
   try {
     const supabase = getSupabaseAdmin();
 
+    // Confirmar pago usando RPC
     const { error } = await supabase.rpc('confirm_claims_paid', {
       p_claim_ids: claimIds,
     });
 
     if (error) throw error;
 
+    // Obtener información de los claims pagados para crear preliminares
+    const { data: paidClaims, error: claimsError } = await supabase
+      .from('comm_item_claims')
+      .select(`
+        id,
+        broker_id,
+        comm_items (
+          id,
+          policy_number,
+          insured_name,
+          gross_amount,
+          insurer_id
+        )
+      `)
+      .in('id', claimIds);
+
+    if (claimsError) {
+      console.error('Error fetching paid claims:', claimsError);
+    }
+
+    // Crear registros preliminares para cada cliente único
+    if (paidClaims && paidClaims.length > 0) {
+      const preliminaryRecords: any[] = [];
+      const uniqueClients = new Map<string, any>();
+
+      paidClaims.forEach((claim: any) => {
+        const item = claim.comm_items;
+        if (!item) return;
+
+        // Usar policy_number como clave única para evitar duplicados
+        const key = `${item.policy_number}-${claim.broker_id}`;
+        
+        if (!uniqueClients.has(key)) {
+          uniqueClients.set(key, {
+            client_name: item.insured_name || '',
+            policy_number: item.policy_number || '',
+            insurer_id: item.insurer_id || null,
+            broker_id: claim.broker_id,
+            renewal_date: null, // Broker debe completar
+            migrated: false,
+            source: 'adjustments_paid',
+            notes: 'Cliente registrado desde ajuste pagado. Por favor complete la información faltante.',
+          });
+        }
+      });
+
+      // Insertar registros preliminares
+      if (uniqueClients.size > 0) {
+        const { error: insertError } = await supabase
+          .from('temp_client_import')
+          .insert(Array.from(uniqueClients.values()));
+
+        if (insertError) {
+          console.error('Error creating preliminary records:', insertError);
+          // No fallar la operación completa si esto falla
+        }
+      }
+
+      // Crear notificaciones para los brokers
+      const brokerIds = Array.from(new Set(paidClaims.map((c: any) => c.broker_id)));
+      
+      for (const brokerId of brokerIds) {
+        const brokerClaims = paidClaims.filter((c: any) => c.broker_id === brokerId);
+        const clientCount = new Set(brokerClaims.map((c: any) => c.comm_items?.policy_number)).size;
+
+        // Crear notificación
+        await supabase.from('notifications').insert({
+          user_id: brokerId,
+          type: 'adjustment_paid',
+          title: 'Ajustes Pagados - Acción Requerida',
+          message: `Se han pagado ${brokerClaims.length} ajuste(s) con ${clientCount} cliente(s). Por favor completa la información en Base de Datos Preliminar.`,
+          link: '/db?tab=preliminary',
+          read: false,
+        });
+      }
+    }
+
     revalidatePath('/(app)/commissions');
+    revalidatePath('/(app)/db');
 
     return { 
       ok: true as const,
-      message: `${claimIds.length} ajuste(s) confirmado(s) como pagado(s)`
+      message: `${claimIds.length} ajuste(s) confirmado(s) como pagado(s) y registrados en preliminar`
     };
   } catch (error) {
     return {
@@ -3326,6 +4204,188 @@ export async function actionGetCurrentBroker() {
     return {
       ok: false as const,
       error: error instanceof Error ? error.message : 'Error al obtener broker',
+    };
+  }
+}
+
+/**
+ * Get available periods (years, months, fortnights) that have closed fortnights
+ */
+export async function actionGetAvailablePeriods() {
+  try {
+    const supabase = getSupabaseAdmin();
+    
+    // Obtener todas las quincenas cerradas
+    const { data: fortnights, error } = await supabase
+      .from('fortnights')
+      .select('period_start, period_end')
+      .eq('status', 'PAID')
+      .order('period_start', { ascending: false });
+
+    if (error) throw error;
+
+    if (!fortnights || fortnights.length === 0) {
+      return {
+        ok: true as const,
+        data: {
+          years: [],
+          months: [],
+          fortnights: []
+        }
+      };
+    }
+
+    // Extraer años, meses y quincenas únicas
+    const yearsSet = new Set<number>();
+    const monthsSet = new Set<string>(); // formato: "YYYY-MM"
+    const fortnightsSet = new Set<string>(); // formato: "YYYY-MM-Q"
+
+    fortnights.forEach(f => {
+      const startDate = new Date(f.period_start);
+      const year = startDate.getUTCFullYear();
+      const month = startDate.getUTCMonth() + 1;
+      const day = startDate.getUTCDate();
+      const fortnight = day <= 15 ? '1' : '2';
+
+      yearsSet.add(year);
+      monthsSet.add(`${year}-${month}`);
+      fortnightsSet.add(`${year}-${month}-${fortnight}`);
+    });
+
+    return {
+      ok: true as const,
+      data: {
+        years: Array.from(yearsSet).sort((a, b) => b - a),
+        months: Array.from(monthsSet).sort().reverse(),
+        fortnights: Array.from(fortnightsSet).sort().reverse()
+      }
+    };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : 'Error al obtener períodos disponibles',
+    };
+  }
+}
+
+/**
+ * Get detailed broker commissions with policies grouped by insurer
+ */
+export async function actionGetBrokerCommissionDetails(fortnightId: string, brokerId?: string) {
+  try {
+    const supabase = getSupabaseAdmin();
+    
+    // Get import_id for this fortnight
+    const { data: imports, error: importError } = await supabase
+      .from('comm_imports')
+      .select('id')
+      .eq('period_label', fortnightId);
+
+    if (importError) throw importError;
+
+    if (!imports || imports.length === 0) {
+      return { ok: true as const, data: [] };
+    }
+
+    const importIds = imports.map(i => i.id);
+
+    // Get all comm_items for these imports with broker, insurer and client info
+    let query = supabase
+      .from('comm_items')
+      .select(`
+        id,
+        policy_number,
+        insured_name,
+        gross_amount,
+        broker_id,
+        insurer_id,
+        created_at,
+        raw_row,
+        brokers ( id, name, email, percent_default ),
+        insurers ( id, name )
+      `)
+      .in('import_id', importIds)
+      .not('broker_id', 'is', null);
+
+    if (brokerId) {
+      query = query.eq('broker_id', brokerId);
+    }
+
+    const { data: commItems, error: ciError } = await query;
+
+    if (ciError) throw ciError;
+
+    // Group by broker
+    const brokerMap = new Map<string, any>();
+
+    (commItems || []).forEach((item: any) => {
+      if (!item.brokers) return;
+
+      const bId = item.broker_id;
+      if (!brokerMap.has(bId)) {
+        brokerMap.set(bId, {
+          broker_id: bId,
+          broker_name: item.brokers.name,
+          broker_email: item.brokers.email,
+          percent_default: item.brokers.percent_default,
+          insurers: new Map<string, any>(),
+          total_gross: 0,
+          total_net: 0,
+        });
+      }
+
+      const broker = brokerMap.get(bId);
+      const insurerId = item.insurer_id;
+      const insurerName = item.insurers?.name || 'Desconocido';
+
+      if (!broker.insurers.has(insurerId)) {
+        broker.insurers.set(insurerId, {
+          insurer_id: insurerId,
+          insurer_name: insurerName,
+          policies: [],
+          total_gross: 0,
+        });
+      }
+
+      const insurer = broker.insurers.get(insurerId);
+      const grossAmount = Number(item.gross_amount) || 0;
+      const percentage = item.raw_row?.percentage_applied || item.brokers.percent_default || 0;
+      const netAmount = grossAmount * percentage;
+
+      insurer.policies.push({
+        policy_number: item.policy_number,
+        insured_name: item.insured_name,
+        gross_amount: grossAmount,
+        percentage: percentage,
+        net_amount: netAmount,
+      });
+
+      insurer.total_gross += grossAmount;
+      broker.total_gross += grossAmount;
+      broker.total_net += netAmount;
+    });
+
+    // Format response
+    const result = Array.from(brokerMap.values()).map(broker => ({
+      broker_id: broker.broker_id,
+      broker_name: broker.broker_name,
+      broker_email: broker.broker_email,
+      percent_default: broker.percent_default,
+      total_gross: broker.total_gross,
+      total_net: broker.total_net,
+      insurers: Array.from(broker.insurers.values()).map((ins: any) => ({
+        insurer_id: ins.insurer_id,
+        insurer_name: ins.insurer_name,
+        total_gross: ins.total_gross,
+        policies: ins.policies.sort((a: any, b: any) => b.gross_amount - a.gross_amount),
+      })).sort((a: any, b: any) => b.total_gross - a.total_gross),
+    })).sort((a, b) => b.total_net - a.total_net);
+
+    return { ok: true as const, data: result };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : 'Error al obtener detalles de comisiones',
     };
   }
 }

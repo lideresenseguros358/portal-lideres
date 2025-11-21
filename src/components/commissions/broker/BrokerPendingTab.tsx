@@ -86,8 +86,8 @@ export default function BrokerPendingTab({ brokerId }: Props) {
   // Calcular totales de items seleccionados
   const selectionTotals = useMemo(() => {
     const selected = pendingItems.filter(item => selectedItems.has(item.id));
-    const totalRaw = selected.reduce((sum, item) => sum + Math.abs(item.gross_amount), 0);
-    const totalBroker = totalRaw * (brokerPercent / 100);
+    const totalRaw = selected.reduce((sum, item) => sum + (Number(item.gross_amount) || 0), 0);
+    const totalBroker = Math.abs(totalRaw) * (brokerPercent / 100);
 
     return {
       count: selected.length,
@@ -227,7 +227,7 @@ export default function BrokerPendingTab({ brokerId }: Props) {
                       <div>
                         <p className="text-gray-600">Monto Crudo</p>
                         <p className="font-mono font-semibold text-gray-700">
-                          {formatMoney(selectionTotals.totalRaw)}
+                          {formatMoney(Math.abs(selectionTotals.totalRaw))}
                         </p>
                       </div>
                       <div>
@@ -257,7 +257,7 @@ export default function BrokerPendingTab({ brokerId }: Props) {
                     <Button
                       onClick={handleSubmitReport}
                       disabled={submitting}
-                      className="bg-[#010139] hover:bg-[#8AAA19] text-white"
+                      className="bg-gradient-to-r from-[#8AAA19] to-[#7a9617] text-white hover:from-[#7a9617] hover:to-[#6b8514] border-0 shadow-md font-semibold"
                       size="sm"
                     >
                       <FaPaperPlane className="mr-2" size={12} />
@@ -318,8 +318,8 @@ export default function BrokerPendingTab({ brokerId }: Props) {
                       <TableBody>
                         {pendingItems.map((item) => {
                           const isSelected = selectedItems.has(item.id);
-                          const rawAmount = Math.abs(item.gross_amount);
-                          const brokerAmount = rawAmount * (brokerPercent / 100);
+                          const rawAmount = Number(item.gross_amount) || 0;
+                          const brokerAmount = Math.abs(rawAmount) * (brokerPercent / 100);
 
                           return (
                             <TableRow 
@@ -336,7 +336,7 @@ export default function BrokerPendingTab({ brokerId }: Props) {
                               <TableCell className="font-medium text-gray-700">{item.policy_number}</TableCell>
                               <TableCell className="text-gray-600">{item.insured_name}</TableCell>
                               <TableCell className="text-right font-mono text-gray-600">
-                                {formatMoney(rawAmount)}
+                                {formatMoney(Math.abs(rawAmount))}
                               </TableCell>
                               <TableCell className="text-right font-mono font-semibold text-[#8AAA19]">
                                 {isSelected ? formatMoney(brokerAmount) : '—'}

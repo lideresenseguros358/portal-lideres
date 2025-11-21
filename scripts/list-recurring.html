@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Ver Adelantos Recurrentes</title>
+  <style>
+    body { font-family: monospace; padding: 20px; }
+    table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+    th { background-color: #4CAF50; color: white; }
+    tr:nth-child(even) { background-color: #f2f2f2; }
+    .duplicate { background-color: #ffcccc !important; }
+    button { margin: 5px; padding: 10px; cursor: pointer; }
+    .info { background: #e3f2fd; padding: 10px; margin: 10px 0; border-radius: 5px; }
+  </style>
+</head>
+<body>
+  <h1>🔍 Adelantos Recurrentes</h1>
+  <div class="info">
+    <strong>Instrucciones:</strong> Esta página muestra todos los adelantos recurrentes. Los duplicados están marcados en rojo.
+  </div>
+  
+  <button onclick="loadData()">🔄 Recargar Datos</button>
+  <button onclick="cleanupDuplicates()">🧹 Limpiar Duplicados</button>
+  
+  <div id="summary"></div>
+  <div id="results"></div>
+
+  <script>
+    async function loadData() {
+      try {
+        const response = await fetch('http://localhost:3001/api/supabase/execute', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            query: `
+              SELECT 
+                a.id,
+                a.recurrence_id,
+                a.reason,
+                a.amount,
+                a.status,
+                a.is_recurring,
+                a.created_at,
+                b.name as broker_name,
+                ar.amount as recurrence_amount
+              FROM advances a
+              LEFT JOIN brokers b ON a.broker_id = b.id
+              LEFT JOIN advance_recurrences ar ON a.recurrence_id = ar.id
+              WHERE a.recurrence_id IS NOT NULL
+              ORDER BY a.recurrence_id, a.created_at DESC
+            `
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (!result.data || result.data.length === 0) {
+          document.getElementById('results').innerHTML = '<p>No hay adelantos recurrentes.</p>';
+          return;
+        }
+        
+        // Agrupar por recurrence_id
+        const grouped = {};
+        result.data.forEach(row => {
+          if (!grouped[row.recurrence_id]) {
+            grouped[row.recurrence_id] = [];
+          }
+          grouped[row.recurrence_id].push(row);
+        });
+        
+        // Contar duplicados
+        let duplicateCount = 0;
+        Object.values(grouped).forEach(group => {
+          if (group.length > 1) duplicateCount += (group.length - 1);
+        });
+        
+        document.getElementById('summary').innerHTML = `
+          <div class="info">
+            <strong>Total adelantos recurrentes:</strong> ${result.data.length}<br>
+            <strong>Grupos con duplicados:</strong> ${Object.values(grouped).filter(g => g.length > 1).length}<br>
+            <strong>Duplicados a eliminar:</strong> ${duplicateCount}
+          </div>
+        `;
+        
+        // Crear tabla
+        let html = '<table><thead><tr>';
+        html += '<th>ID</th><th>Recurrence ID</th><th>Broker</th><th>Razón</th>';
+        html += '<th>Monto</th><th>Status</th><th>Fecha Creación</th><th>Acción</th>';
+        html += '</tr></thead><tbody>';
+        
+        Object.entries(grouped).forEach(([recId, group]) => {
+          group.forEach((row, index) => {
+            const isDuplicate = group.length > 1 && index > 0;
+            html += `<tr class="${isDuplicate ? 'duplicate' : ''}">`;
+            html += `<td>${row.id.substring(0, 8)}</td>`;
+            html += `<td>${row.recurrence_id.substring(0, 8)}</td>`;
+            html += `<td>${row.broker_name}</td>`;
+            html += `<td>${row.reason}</td>`;
+            html += `<td>$${row.amount}</td>`;
+            html += `<td>${row.status}</td>`;
+            html += `<td>${new Date(row.created_at).toLocaleString()}</td>`;
+            html += `<td><button onclick="deleteAdvance('${row.id}')">❌ Eliminar</button></td>`;
+            html += '</tr>';
+          });
+        });
+        
+        html += '</tbody></table>';
+        document.getElementById('results').innerHTML = html;
+        
+      } catch (error) {
+        console.error('Error:', error);
+        alert('Error cargando datos: ' + error.message);
+      }
+    }
+    
+    async function deleteAdvance(id) {
+      if (!confirm(`¿Eliminar adelanto ${id.substring(0, 8)}?`)) return;
+      
+      try {
+        const response = await fetch('http://localhost:3001/api/supabase/execute', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            query: `DELETE FROM advances WHERE id = '${id}'`
+          })
+        });
+        
+        alert('Adelanto eliminado');
+        loadData();
+      } catch (error) {
+        console.error('Error:', error);
+        alert('Error eliminando: ' + error.message);
+      }
+    }
+    
+    async function cleanupDuplicates() {
+      try {
+        const response = await fetch('http://localhost:3001/commissions/recover-recurring?action=cleanup-duplicates');
+        const result = await response.json();
+        
+        alert(`Limpieza completada:\\n${result.deleted} duplicados eliminados`);
+        loadData();
+      } catch (error) {
+        console.error('Error:', error);
+        alert('Error en limpieza: ' + error.message);
+      }
+    }
+    
+    // Cargar datos al inicio
+    loadData();
+  </script>
+</body>
+</html>

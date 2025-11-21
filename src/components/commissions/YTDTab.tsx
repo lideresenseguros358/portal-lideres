@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { FaChartLine, FaArrowUp, FaArrowDown, FaDollarSign } from 'react-icons/fa';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
-import { actionGetYTDCommissions } from '@/app/(app)/commissions/actions';
+import { actionGetYTDCommissions, actionGetAvailableYears } from '@/app/(app)/commissions/actions';
 
 interface Props {
   role: string;
@@ -21,6 +21,17 @@ export function YTDTab({ role, brokerId }: Props) {
   const [year, setYear] = useState(new Date().getFullYear());
   const [ytdData, setYtdData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [availableYears, setAvailableYears] = useState<number[]>([new Date().getFullYear()]);
+
+  useEffect(() => {
+    const loadAvailableYears = async () => {
+      const result = await actionGetAvailableYears();
+      if (result.ok && result.years) {
+        setAvailableYears(result.years);
+      }
+    };
+    loadAvailableYears();
+  }, []);
 
   useEffect(() => {
     const loadYTD = async () => {
@@ -38,31 +49,42 @@ export function YTDTab({ role, brokerId }: Props) {
     loadYTD();
   }, [year, role, brokerId]);
 
-  // Mock data for demonstration
-  const monthlyData = [
-    { month: 'Ene', current: 5000, previous: 4500 },
-    { month: 'Feb', current: 5500, previous: 4800 },
-    { month: 'Mar', current: 6000, previous: 5200 },
-    { month: 'Abr', current: 5800, previous: 5500 },
-    { month: 'May', current: 6500, previous: 5800 },
-    { month: 'Jun', current: 7000, previous: 6200 },
-    { month: 'Jul', current: 6800, previous: 6500 },
-    { month: 'Ago', current: 7200, previous: 6800 },
-    { month: 'Sep', current: 7500, previous: 7000 },
-    { month: 'Oct', current: 3800, previous: 3500 },
-  ];
+  // Preparar datos mensuales reales
+  const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+  
+  const monthlyData = monthNames.map((month, index) => {
+    const monthNum = index + 1;
+    const currentMonth = ytdData?.currentYear?.byMonth?.[monthNum] || 0;
+    const previousMonth = ytdData?.previousYear?.byMonth?.[monthNum] || 0;
+    return {
+      month,
+      current: currentMonth,
+      previous: previousMonth
+    };
+  });
 
-  const insurerData = [
-    { name: 'ASSA', value: 35000, growth: 15 },
-    { name: 'ANCON', value: 28000, growth: 8 },
-    { name: 'IS Internacional', value: 22000, growth: 12 },
-    { name: 'Aseguradora General', value: 18000, growth: -5 },
-    { name: 'MAPFRE', value: 15000, growth: 10 },
-  ];
+  // Preparar datos por aseguradora reales
+  const insurerData = ytdData?.currentYear?.byInsurer ? 
+    Object.entries(ytdData.currentYear.byInsurer)
+      .map(([name, value]: [string, any]) => {
+        const currentValue = Number(value) || 0;
+        const previousValue = Number(ytdData?.previousYear?.byInsurer?.[name]) || 0;
+        const growth = previousValue > 0 ? ((currentValue - previousValue) / previousValue * 100) : 0;
+        return {
+          name,
+          value: currentValue,
+          growth: Number(growth.toFixed(1))
+        };
+      })
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 5)
+    : [];
 
   const totalCurrent = monthlyData.reduce((sum, m) => sum + m.current, 0);
   const totalPrevious = monthlyData.reduce((sum, m) => sum + m.previous, 0);
-  const growthPercentage = ((totalCurrent - totalPrevious) / totalPrevious * 100).toFixed(1);
+  const growthPercentage = totalPrevious > 0 
+    ? ((totalCurrent - totalPrevious) / totalPrevious * 100).toFixed(1)
+    : totalCurrent > 0 ? '100.0' : '0.0';
 
   // Prepare data for pie chart
   const pieData = insurerData.map(insurer => ({
@@ -96,7 +118,7 @@ export function YTDTab({ role, brokerId }: Props) {
                 <SelectValue placeholder="Año" />
               </SelectTrigger>
               <SelectContent>
-                {[2024, 2023, 2022].map(y => (
+                {availableYears.map(y => (
                   <SelectItem key={y} value={String(y)}>{y}</SelectItem>
                 ))}
               </SelectContent>

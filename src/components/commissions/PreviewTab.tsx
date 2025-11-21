@@ -1,16 +1,16 @@
 'use client';
 
 import { useState, useEffect, useTransition, useMemo, MouseEvent } from 'react';
-import { jsPDF } from 'jspdf';
-import * as XLSX from 'xlsx';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { FaChevronDown, FaChevronRight, FaFilePdf, FaFileExcel, FaHistory, FaExclamationTriangle } from 'react-icons/fa';
-import { actionGetClosedFortnights, actionGetLastClosedFortnight } from '@/app/(app)/commissions/actions';
+import { FaChevronDown, FaChevronRight, FaDownload, FaHistory, FaExclamationTriangle } from 'react-icons/fa';
+import { actionGetClosedFortnights, actionGetLastClosedFortnight, actionGetAvailablePeriods, actionGetBrokerCommissionDetails } from '@/app/(app)/commissions/actions';
 import { toast } from 'sonner';
+import { BrokerDetailSection } from './BrokerDetailSection';
+import { exportCompleteReportToPDF, exportCompleteReportToExcel } from '@/lib/commission-export-utils';
 
 // Types from spec
 interface BrokerData {
@@ -25,9 +25,9 @@ interface FortnightData {
   id: string;
   label: string;
   total_imported: number;
-  total_paid_gross: number;
+  total_paid_net: number;
   total_office_profit: number;
-  totalsByInsurer: Array<{ name: string; total: number; isLifeInsurance?: boolean }>;
+  totalsByInsurer: Array<{ name: string; total: number; paid: number; office_total: number }>;
   brokers: BrokerData[];
 }
 
@@ -54,6 +54,8 @@ const formatCurrency = (amount: number) => {
   }).format(amount);
 };
 
+// Los reportes reales ahora vienen de la BD (comm_imports)
+
 export function PreviewTab({ role, brokerId }: Props) {
   const [isPending, startTransition] = useTransition();
   const [fortnights, setFortnights] = useState<FortnightData[]>([]);
@@ -62,30 +64,12 @@ export function PreviewTab({ role, brokerId }: Props) {
   const [selectedFortnight, setSelectedFortnight] = useState<'all' | '1' | '2'>('all');
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const [initialFiltersApplied, setInitialFiltersApplied] = useState(false);
+  const [availableYears, setAvailableYears] = useState<number[]>([]);
+  const [availableMonths, setAvailableMonths] = useState<{year: number, month: number}[]>([]);
+  const [availableFortnights, setAvailableFortnights] = useState<{year: number, month: number, fortnight: string}[]>([]);
+  const [showCompleteDownloadModal, setShowCompleteDownloadModal] = useState<{fortnightId: string, fortnightLabel: string} | null>(null);
 
-  // Function to generate insurer reports with office calculations
-  const generateInsurerReports = (fortnight: FortnightData) => {
-    // Mock data for now - should be calculated from actual data
-    return fortnight.totalsByInsurer.map(insurer => {
-      // Mock broker commissions - in real implementation, calculate from fortnight.brokers
-      const brokerCommissions = insurer.total * 0.7; // Mock: 70% goes to brokers
-      const officeTotal = insurer.total - brokerCommissions;
-      const officePercentage = (officeTotal / insurer.total) * 100;
-      
-      // Mock life insurance detection - should come from backend
-      const isLifeInsurance = insurer.name ? insurer.name.toLowerCase().includes('vida') : false;
-
-      return {
-        id: insurer.name,
-        name: insurer.name,
-        reportAmount: insurer.total,
-        brokerCommissions,
-        officeTotal,
-        officePercentage,
-        isLifeInsurance
-      };
-    });
-  };
+  // Los reportes por aseguradora ya vienen calculados desde el backend
 
   useEffect(() => {
     if (!initialFiltersApplied) return;
@@ -115,6 +99,45 @@ export function PreviewTab({ role, brokerId }: Props) {
     if (initialFiltersApplied) return;
     const applyLastFortnight = async () => {
       try {
+        // Cargar períodos disponibles
+        const periodsResult = await actionGetAvailablePeriods();
+        if (periodsResult.ok && periodsResult.data) {
+          const { years, months, fortnights } = periodsResult.data;
+          
+          // Procesar años disponibles
+          setAvailableYears(years);
+          
+          // Procesar meses disponibles
+          const monthsList: { year: number; month: number }[] = [];
+          months.forEach(m => {
+            const parts = m.split('-');
+            if (parts.length === 2) {
+              const year = parseInt(parts[0] || '', 10);
+              const month = parseInt(parts[1] || '', 10);
+              if (!isNaN(year) && !isNaN(month)) {
+                monthsList.push({ year, month });
+              }
+            }
+          });
+          setAvailableMonths(monthsList);
+          
+          // Procesar quincenas disponibles
+          const fortnightsList: { year: number; month: number; fortnight: string }[] = [];
+          fortnights.forEach(f => {
+            const parts = f.split('-');
+            if (parts.length === 3) {
+              const year = parseInt(parts[0] || '', 10);
+              const month = parseInt(parts[1] || '', 10);
+              const fortnight = parts[2] || '';
+              if (!isNaN(year) && !isNaN(month) && fortnight) {
+                fortnightsList.push({ year, month, fortnight });
+              }
+            }
+          });
+          setAvailableFortnights(fortnightsList);
+        }
+        
+        // Obtener última quincena cerrada
         const result = await actionGetLastClosedFortnight();
         if (result.ok && result.data) {
           const endDate = new Date(result.data);
@@ -141,114 +164,59 @@ export function PreviewTab({ role, brokerId }: Props) {
     setExpandedItems(newSet);
   };
 
-  const sanitizeLabel = (label: string) =>
-    label
-      .toLowerCase()
-      .replace(/[^a-z0-9áéíóúñ\s-]/gi, '')
-      .replace(/\s+/g, '_');
-
-  const handleDownloadPdf = (event: MouseEvent<HTMLButtonElement>, fortnight: FortnightData) => {
-    event.stopPropagation();
+  const handleCompleteDownload = async (fortnightId: string, fortnightLabel: string, format: 'pdf' | 'xlsx') => {
     try {
-      const doc = new jsPDF();
-      const safeLabel = sanitizeLabel(fortnight.label);
+      console.log('Iniciando descarga completa:', fortnightId, format);
+      
+      const result = await actionGetBrokerCommissionDetails(fortnightId);
+      console.log('Resultado de carga de detalles:', result);
+      
+      if (!result.ok || !result.data) {
+        console.error('Error cargando detalles:', result);
+        toast.error('No se pudieron cargar los detalles de las comisiones');
+        return;
+      }
 
-      doc.setFontSize(16);
-      doc.text(`Resumen ${fortnight.label}`, 14, 20);
-      doc.setFontSize(12);
-      doc.text(`Total Reportado: ${formatCurrency(fortnight.total_imported)}`, 14, 30);
-      doc.text(`Total Pagado (Bruto): ${formatCurrency(fortnight.total_paid_gross)}`, 14, 38);
-      doc.text(`Ganancia Oficina: ${formatCurrency(fortnight.total_office_profit)}`, 14, 46);
+      const fortnight = fortnights.find(f => f.id === fortnightId);
+      if (!fortnight) {
+        console.error('Fortnight no encontrada:', fortnightId);
+        toast.error('No se encontró la quincena');
+        return;
+      }
 
-      let cursorY = 58;
-      doc.setFont('helvetica', 'bold');
-      doc.text('Detalle por Corredor', 14, cursorY);
-      doc.setFont('helvetica', 'normal');
-      cursorY += 8;
+      const totals = {
+        total_imported: fortnight.total_imported,
+        total_paid_net: fortnight.total_paid_net,
+        total_office_profit: fortnight.total_office_profit,
+      };
 
-      fortnight.brokers.forEach((broker) => {
-        if (cursorY > 270) {
-          doc.addPage();
-          cursorY = 20;
-        }
-        const discountTotal = broker.discounts_json?.total ?? 0;
-        doc.text(
-          `${broker.broker_name}: Neto ${formatCurrency(broker.net_amount)} | Bruto ${formatCurrency(broker.gross_amount)} | Descuentos ${formatCurrency(discountTotal)}`,
-          14,
-          cursorY
-        );
-        cursorY += 8;
+      console.log('Datos a exportar:', {
+        brokers: result.data.length,
+        format,
+        totals
       });
 
-      doc.addPage();
-      doc.setFont('helvetica', 'bold');
-      doc.text('Detalle por Aseguradora', 14, 20);
-      doc.setFont('helvetica', 'normal');
-      let insurerCursorY = 30;
-      fortnight.totalsByInsurer.forEach((insurer) => {
-        if (insurerCursorY > 270) {
-          doc.addPage();
-          insurerCursorY = 20;
-        }
-        doc.text(`${insurer.name}: ${formatCurrency(insurer.total)}`, 14, insurerCursorY);
-        insurerCursorY += 8;
-      });
+      if (format === 'pdf') {
+        exportCompleteReportToPDF(result.data, fortnightLabel, totals);
+      } else {
+        exportCompleteReportToExcel(result.data, fortnightLabel, totals);
+      }
 
-      doc.save(`quincena_${safeLabel}.pdf`);
-      toast.success('PDF generado correctamente');
+      toast.success(`Reporte ${format.toUpperCase()} generado correctamente`);
+      setShowCompleteDownloadModal(null);
     } catch (error) {
-      console.error(error);
-      toast.error('No se pudo generar el PDF');
-    }
-  };
-
-  const handleDownloadExcel = (event: MouseEvent<HTMLButtonElement>, fortnight: FortnightData) => {
-    event.stopPropagation();
-    try {
-      const safeLabel = sanitizeLabel(fortnight.label);
-      const workbook = XLSX.utils.book_new();
-
-      const summarySheet = XLSX.utils.aoa_to_sheet([
-        ['Quincena', fortnight.label],
-        ['Total Reportado', fortnight.total_imported],
-        ['Total Pagado (Bruto)', fortnight.total_paid_gross],
-        ['Ganancia Oficina', fortnight.total_office_profit],
-      ]);
-      XLSX.utils.book_append_sheet(workbook, summarySheet, 'Resumen');
-
-      const brokersSheet = XLSX.utils.json_to_sheet(
-        fortnight.brokers.map((broker) => ({
-          Corredor: broker.broker_name,
-          NetoPagado: broker.net_amount,
-          Bruto: broker.gross_amount,
-          Descuentos: broker.discounts_json?.total ?? 0,
-        }))
-      );
-      XLSX.utils.book_append_sheet(workbook, brokersSheet, 'Corredores');
-
-      const insurersSheet = XLSX.utils.json_to_sheet(
-        fortnight.totalsByInsurer.map((insurer) => ({
-          Aseguradora: insurer.name,
-          TotalReporte: insurer.total,
-        }))
-      );
-      XLSX.utils.book_append_sheet(workbook, insurersSheet, 'Aseguradoras');
-
-      XLSX.writeFile(workbook, `quincena_${safeLabel}.xlsx`);
-      toast.success('Excel generado correctamente');
-    } catch (error) {
-      console.error(error);
-      toast.error('No se pudo generar el Excel');
+      console.error('Error en handleCompleteDownload:', error);
+      toast.error('No se pudo generar el reporte');
     }
   };
 
   const summary = useMemo(() => {
     return fortnights.reduce((acc, f) => {
       acc.totalImported += f.total_imported;
-      acc.totalPaidGross += f.total_paid_gross;
+      acc.totalPaidNet += f.total_paid_net;
       acc.totalOfficeProfit += f.total_office_profit;
       return acc;
-    }, { totalImported: 0, totalPaidGross: 0, totalOfficeProfit: 0 });
+    }, { totalImported: 0, totalPaidNet: 0, totalOfficeProfit: 0 });
   }, [fortnights]);
 
   const dataToDisplay = useMemo(() => {
@@ -283,9 +251,13 @@ export function PreviewTab({ role, brokerId }: Props) {
                   <SelectValue placeholder="Año" />
                 </SelectTrigger>
                 <SelectContent>
-                  {years.map(year => (
-                    <SelectItem key={year} value={String(year)}>{year}</SelectItem>
-                  ))}
+                  {availableYears.length > 0 ? (
+                    availableYears.map(year => (
+                      <SelectItem key={year} value={String(year)}>{year}</SelectItem>
+                    ))
+                  ) : (
+                    <SelectItem value={String(currentYear)} disabled>Sin datos</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -297,11 +269,23 @@ export function PreviewTab({ role, brokerId }: Props) {
                   <SelectValue placeholder="Mes" />
                 </SelectTrigger>
                 <SelectContent>
-                  {months.map(month => (
-                    <SelectItem key={month.value} value={String(month.value)}>
-                      {month.label.toUpperCase()}
-                    </SelectItem>
-                  ))}
+                  {availableMonths.filter(m => m.year === selectedYear).length > 0 ? (
+                    availableMonths
+                      .filter(m => m.year === selectedYear)
+                      .map(m => {
+                        const monthObj = months.find(month => month.value === m.month);
+                        // Primera letra mayúscula, resto minúsculas
+                        const monthLabel = monthObj?.label || '';
+                        const formattedMonth = monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1).toLowerCase();
+                        return (
+                          <SelectItem key={m.month} value={String(m.month)}>
+                            {formattedMonth}
+                          </SelectItem>
+                        );
+                      })
+                  ) : (
+                    <SelectItem value="0" disabled>Sin datos</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -312,13 +296,26 @@ export function PreviewTab({ role, brokerId }: Props) {
                 value={selectedFortnight}
                 onValueChange={(value) => setSelectedFortnight(value as 'all' | '1' | '2')}
               >
-                <SelectTrigger className="w-full sm:w-36 border-[#010139]/20 bg-white">
+                <SelectTrigger className="w-full sm:w-48 border-[#010139]/20 bg-white">
                   <SelectValue placeholder="Quincena" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">AMBAS</SelectItem>
-                  <SelectItem value="1">PRIMERA (Q1)</SelectItem>
-                  <SelectItem value="2">SEGUNDA (Q2)</SelectItem>
+                  {availableFortnights.filter(f => f.year === selectedYear && f.month === selectedMonth).length > 0 ? (
+                    <>
+                      {availableFortnights.filter(f => f.year === selectedYear && f.month === selectedMonth).length > 1 && (
+                        <SelectItem value="all">AMBAS</SelectItem>
+                      )}
+                      {availableFortnights
+                        .filter(f => f.year === selectedYear && f.month === selectedMonth)
+                        .map(f => (
+                          <SelectItem key={f.fortnight} value={f.fortnight}>
+                            {f.fortnight === '1' ? 'Primera (Q1)' : 'Segunda (Q2)'}
+                          </SelectItem>
+                        ))}
+                    </>
+                  ) : (
+                    <SelectItem value="none" disabled>Sin datos</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -336,7 +333,7 @@ export function PreviewTab({ role, brokerId }: Props) {
       {/* Summary Cards - Solo para MASTER */}
       {role === 'master' && dataToDisplay.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card className="shadow-lg border-l-4 border-l-[#010139]">
+          <Card className="shadow-lg border-l-4 border-l-[#010139] bg-gradient-to-br from-[#010139]/5 to-white">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm text-gray-600">Total Comisiones Importadas</CardTitle>
             </CardHeader>
@@ -345,22 +342,22 @@ export function PreviewTab({ role, brokerId }: Props) {
               <p className="text-xs text-gray-500 mt-1">De reportes de aseguradoras</p>
             </CardContent>
           </Card>
-          <Card className="shadow-lg border-l-4 border-l-[#8AAA19]">
+          <Card className="shadow-lg border-l-4 border-l-[#8AAA19] bg-gradient-to-br from-[#8AAA19]/5 to-white">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm text-gray-600">Total Pagado a Corredores</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-bold text-[#010139]">{formatCurrency(summary.totalPaidGross)}</p>
-              <p className="text-xs text-gray-500 mt-1">Monto bruto antes de descuentos</p>
+              <p className="text-2xl font-bold text-[#010139]">{formatCurrency(summary.totalPaidNet)}</p>
+              <p className="text-xs text-gray-500 mt-1">Monto neto pagado</p>
             </CardContent>
           </Card>
-          <Card className="shadow-lg border-l-4 border-l-green-500">
+          <Card className="shadow-lg border-l-4 border-l-green-500 bg-gradient-to-br from-green-50 to-white">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm text-gray-600">Ganancia Oficina</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-2xl font-bold text-[#8AAA19]">{formatCurrency(summary.totalOfficeProfit)}</p>
-              <p className="text-xs text-gray-500 mt-1">Diferencia entre importado y pagado</p>
+              <p className="text-xs text-gray-500 mt-1">Margen neto de comisiones</p>
             </CardContent>
           </Card>
         </div>
@@ -388,26 +385,18 @@ export function PreviewTab({ role, brokerId }: Props) {
                 </p>
               </div>
             </div>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className="bg-white border-[#010139]/20 hover:bg-[#010139] hover:text-white transition-colors"
-                onClick={(event) => handleDownloadPdf(event, fortnight)}
-              >
-                <FaFilePdf className="mr-2 h-3 w-3" />
-                PDF
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="bg-white border-[#8AAA19]/20 hover:bg-[#8AAA19] hover:text-white transition-colors"
-                onClick={(event) => handleDownloadExcel(event, fortnight)}
-              >
-                <FaFileExcel className="mr-2 h-3 w-3" />
-                Excel
-              </Button>
-            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="bg-white border-[#8AAA19]/20 hover:bg-[#8AAA19] hover:text-white transition-colors"
+              onClick={(event) => {
+                event.stopPropagation();
+                setShowCompleteDownloadModal({ fortnightId: fortnight.id, fortnightLabel: fortnight.label });
+              }}
+            >
+              <FaDownload className="mr-2 h-3 w-3" />
+              Descargar Reporte
+            </Button>
           </CardHeader>
           {expandedItems.has(fortnight.id) && (
             <CardContent className="p-6 bg-white">
@@ -425,196 +414,48 @@ export function PreviewTab({ role, brokerId }: Props) {
                           <TableRow className="bg-gray-50">
                             <TableHead>Aseguradora</TableHead>
                             <TableHead className="text-right">Total Reporte</TableHead>
-                            <TableHead className="text-right">Comisiones Corredores</TableHead>
+                            <TableHead className="text-right">Pagado a Corredores</TableHead>
                             <TableHead className="text-right">Total Oficina</TableHead>
                             <TableHead className="text-center">% Oficina</TableHead>
-                            <TableHead className="text-center">Tipo</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {generateInsurerReports(fortnight).map((report, idx) => (
-                            <TableRow key={idx}>
-                              <TableCell className="font-medium">{report.name}</TableCell>
-                              <TableCell className="text-right font-mono">
-                                {formatCurrency(report.reportAmount)}
-                              </TableCell>
-                              <TableCell className="text-right font-mono text-gray-600">
-                                {formatCurrency(report.brokerCommissions)}
-                              </TableCell>
-                              <TableCell className="text-right font-mono font-bold text-[#8AAA19]">
-                                {formatCurrency(report.officeTotal)}
-                              </TableCell>
-                              <TableCell className="text-center">
-                                <Badge 
-                                  variant={report.officePercentage <= 20 ? 'danger' : 'success'}
-                                >
-                                  {report.officePercentage.toFixed(1)}%
-                                  {report.officePercentage <= 20 && (
-                                    <FaExclamationTriangle className="inline ml-1" size={10} />
-                                  )}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="text-center">
-                                {report.isLifeInsurance ? (
-                                  <Badge variant="outline-blue">Vida</Badge>
-                                ) : (
-                                  <Badge variant="secondary">Ramos Gen.</Badge>
-                                )}
-                              </TableCell>
-                            </TableRow>
-                          ))}
+                          {fortnight.totalsByInsurer.map((insurer, idx) => {
+                            const officePercentage = insurer.total > 0 ? (insurer.office_total / insurer.total) * 100 : 0;
+                            return (
+                              <TableRow key={idx}>
+                                <TableCell className="font-medium">{insurer.name}</TableCell>
+                                <TableCell className="text-right font-mono">
+                                  {formatCurrency(insurer.total)}
+                                </TableCell>
+                                <TableCell className="text-right font-mono text-gray-600">
+                                  {formatCurrency(insurer.paid)}
+                                </TableCell>
+                                <TableCell className="text-right font-mono font-bold text-[#8AAA19]">
+                                  {formatCurrency(insurer.office_total)}
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  <Badge variant={officePercentage >= 20 ? 'success' : 'danger'}>
+                                    {officePercentage.toFixed(1)}%
+                                    {officePercentage < 20 && (
+                                      <FaExclamationTriangle className="inline ml-1" size={10} />
+                                    )}
+                                  </Badge>
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
                           {/* Totals Row */}
                           <TableRow className="bg-gray-100 font-bold">
                             <TableCell>TOTALES</TableCell>
                             <TableCell className="text-right font-mono">
-                              {formatCurrency(
-                                generateInsurerReports(fortnight).reduce((sum, r) => sum + r.reportAmount, 0)
-                              )}
+                              {formatCurrency(fortnight.totalsByInsurer.reduce((sum, i) => sum + i.total, 0))}
                             </TableCell>
                             <TableCell className="text-right font-mono">
-                              {formatCurrency(
-                                generateInsurerReports(fortnight).reduce((sum, r) => sum + r.brokerCommissions, 0)
-                              )}
+                              {formatCurrency(fortnight.totalsByInsurer.reduce((sum, i) => sum + i.paid, 0))}
                             </TableCell>
                             <TableCell className="text-right font-mono text-[#8AAA19]">
-                              {formatCurrency(
-                                generateInsurerReports(fortnight).reduce((sum, r) => sum + r.officeTotal, 0)
-                              )}
-                            </TableCell>
-                            <TableCell colSpan={2}></TableCell>
-                          </TableRow>
-                          {/* Total Vida and Total Ramos Generales */}
-                          <TableRow className="bg-blue-50">
-                            <TableCell colSpan={3} className="text-right font-bold">Total Vida:</TableCell>
-                            <TableCell className="text-right font-mono font-bold text-blue-600">
-                              {formatCurrency(
-                                generateInsurerReports(fortnight)
-                                  .filter(r => r.isLifeInsurance)
-                                  .reduce((sum, r) => sum + r.officeTotal, 0)
-                              )}
-                            </TableCell>
-                            <TableCell colSpan={2}></TableCell>
-                          </TableRow>
-                          <TableRow className="bg-orange-50">
-                            <TableCell colSpan={3} className="text-right font-bold">Total Ramos Generales:</TableCell>
-                            <TableCell className="text-right font-mono font-bold text-orange-600">
-                              {formatCurrency(
-                                generateInsurerReports(fortnight)
-                                  .filter(r => !r.isLifeInsurance)
-                                  .reduce((sum, r) => sum + r.officeTotal, 0)
-                              )}
-                            </TableCell>
-                            <TableCell colSpan={2}></TableCell>
-                          </TableRow>
-                        </TableBody>
-                      </Table>
-                    </CardContent>
-                  </Card>
-                </div>
-              )}
-              
-              {/* Existing content */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Totales por Aseguradora */}
-                <div className="lg:col-span-1">
-                  <div className="mb-3 flex items-center gap-2">
-                    <div className="w-1 h-5 bg-[#010139] rounded"></div>
-                    <h4 className="font-bold text-gray-800">Totales por Aseguradora</h4>
-                  </div>
-                  <Card className="shadow-inner border-gray-200">
-                    <CardContent className="p-3 overflow-x-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow className="border-b border-gray-200">
-                            <TableHead className="text-gray-700 font-semibold">Aseguradora</TableHead>
-                            <TableHead className="text-right text-gray-700 font-semibold">Monto</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {fortnight.totalsByInsurer.map((insurer: any) => (
-                            <TableRow key={insurer.name} className="hover:bg-gray-50 transition-colors">
-                              <TableCell className="font-medium text-gray-700">{insurer.name}</TableCell>
-                              <TableCell className="text-right font-mono text-[#010139] font-semibold">
-                                {formatCurrency(insurer.total)}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                          <TableRow className="border-t-2 border-gray-300 bg-gray-50">
-                            <TableCell className="font-bold">TOTAL</TableCell>
-                            <TableCell className="text-right font-mono font-bold text-[#010139]">
-                              {formatCurrency(fortnight.total_imported)}
-                            </TableCell>
-                          </TableRow>
-                        </TableBody>
-                      </Table>
-                    </CardContent>
-                  </Card>
-                </div>
-                
-                {/* Consolidado por Corredor */}
-                <div className="lg:col-span-2">
-                  <div className="mb-3 flex items-center gap-2">
-                    <div className="w-1 h-5 bg-[#8AAA19] rounded"></div>
-                    <h4 className="font-bold text-gray-800">Consolidado por Corredor</h4>
-                    <span className="ml-auto text-sm text-gray-600">
-                      Neto como número principal (según esquema)
-                    </span>
-                  </div>
-                  <Card className="shadow-inner border-gray-200">
-                    <CardContent className="p-3 overflow-x-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow className="border-b-2 border-gray-200 bg-gray-50">
-                            <TableHead className="text-gray-700 font-semibold">Corredor</TableHead>
-                            <TableHead className="text-right text-[#8AAA19] font-bold">NETO PAGADO</TableHead>
-                            <TableHead className="text-right text-gray-700 font-semibold">Bruto</TableHead>
-                            <TableHead className="text-right text-gray-700 font-semibold">Descuentos</TableHead>
-                            <TableHead className="text-center text-gray-700 font-semibold">Acciones</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {fortnight.brokers.map((broker: any) => (
-                            <TableRow key={broker.broker_id} className="hover:bg-gray-50 transition-colors">
-                              <TableCell className="font-medium text-gray-700">{broker.broker_name}</TableCell>
-                              <TableCell className="text-right font-bold text-[#8AAA19] text-lg font-mono">
-                                {formatCurrency(broker.net_amount)}
-                              </TableCell>
-                              <TableCell className="text-right font-mono text-gray-600">
-                                {formatCurrency(broker.gross_amount)}
-                              </TableCell>
-                              <TableCell className="text-right text-red-600 font-mono">
-                                -{formatCurrency(broker.discounts_json?.total || 0)}
-                              </TableCell>
-                              <TableCell className="text-center">
-                                <div className="flex justify-center gap-1">
-                                  <Button 
-                                    variant="ghost" 
-                                    size="icon"
-                                    className="hover:bg-red-50 hover:text-red-700 transition-colors"
-                                  >
-                                    <FaFilePdf className="h-4 w-4" />
-                                  </Button>
-                                  <Button 
-                                    variant="ghost" 
-                                    size="icon"
-                                    className="hover:bg-green-50 hover:text-green-700 transition-colors"
-                                  >
-                                    <FaFileExcel className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                          <TableRow className="border-t-2 border-gray-300 bg-gray-50">
-                            <TableCell className="font-bold">TOTALES</TableCell>
-                            <TableCell className="text-right font-bold text-[#8AAA19] text-lg font-mono">
-                              {formatCurrency(fortnight.brokers.reduce((sum: number, b: any) => sum + b.net_amount, 0))}
-                            </TableCell>
-                            <TableCell className="text-right font-mono font-bold text-gray-700">
-                              {formatCurrency(fortnight.total_paid_gross)}
-                            </TableCell>
-                            <TableCell className="text-right text-red-600 font-mono font-bold">
-                              -{formatCurrency(fortnight.brokers.reduce((sum: number, b: any) => sum + (b.discounts_json?.total || 0), 0))}
+                              {formatCurrency(fortnight.totalsByInsurer.reduce((sum, i) => sum + i.office_total, 0))}
                             </TableCell>
                             <TableCell></TableCell>
                           </TableRow>
@@ -623,7 +464,15 @@ export function PreviewTab({ role, brokerId }: Props) {
                     </CardContent>
                   </Card>
                 </div>
-              </div>
+              )}
+              
+              {/* Brokers Detail Section */}
+              <BrokerDetailSection
+                fortnightId={fortnight.id}
+                fortnightLabel={fortnight.label}
+                brokers={fortnight.brokers}
+                role={role}
+              />
             </CardContent>
           )}
         </Card>
@@ -644,6 +493,48 @@ export function PreviewTab({ role, brokerId }: Props) {
             </p>
           </CardContent>
         </Card>
+      )}
+
+      {/* Download Modal */}
+      {showCompleteDownloadModal && (
+        <div 
+          className="fixed inset-0 flex items-center justify-center z-50" 
+          style={{ backgroundColor: 'rgba(0, 0, 0, 0.7)' }}
+          onClick={() => setShowCompleteDownloadModal(null)}
+        >
+          <Card className="w-full max-w-sm m-4 bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <CardContent className="p-6">
+              <h3 className="text-lg font-bold text-[#010139] mb-2">Descargar Reporte Completo</h3>
+              <p className="text-sm text-gray-600 mb-4">
+                {showCompleteDownloadModal.fortnightLabel}
+              </p>
+              <p className="text-xs text-gray-500 mb-4">
+                Incluye todos los brokers con sus aseguradoras, clientes y comisiones detalladas
+              </p>
+              <div className="flex gap-3">
+                <Button
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+                  onClick={() => handleCompleteDownload(showCompleteDownloadModal.fortnightId, showCompleteDownloadModal.fortnightLabel, 'pdf')}
+                >
+                  PDF
+                </Button>
+                <Button
+                  className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                  onClick={() => handleCompleteDownload(showCompleteDownloadModal.fortnightId, showCompleteDownloadModal.fortnightLabel, 'xlsx')}
+                >
+                  Excel
+                </Button>
+              </div>
+              <Button
+                variant="ghost"
+                className="w-full mt-3"
+                onClick={() => setShowCompleteDownloadModal(null)}
+              >
+                Cancelar
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
       )}
     </div>
   );

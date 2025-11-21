@@ -36,10 +36,24 @@ export function PayAdvanceModal({ isOpen, onClose, onSuccess, brokerId, brokerNa
   const [paymentType, setPaymentType] = useState<'cash' | 'transfer'>('transfer');
   const [loading, setLoading] = useState(false);
   
-  // Get today's date in YYYY-MM-DD format
+  // Determinar quincena actual (Panamá timezone UTC-5)
+  const getCurrentQuincena = () => {
+    const now = new Date();
+    // Ajustar a zona horaria de Panamá (UTC-5)
+    const panamaDate = new Date(now.getTime() - (5 * 60 * 60 * 1000));
+    const day = panamaDate.getUTCDate();
+    return day >= 16 ? 'Q1' : 'Q2';
+  };
+  
+  // Get today's date in YYYY-MM-DD format (Panamá timezone UTC-5)
   const getTodayDate = () => {
-    const today = new Date();
-    return today.toISOString().split('T')[0];
+    const now = new Date();
+    // Ajustar a zona horaria de Panamá (UTC-5)
+    const panamaDate = new Date(now.getTime() - (5 * 60 * 60 * 1000));
+    const year = panamaDate.getUTCFullYear();
+    const month = String(panamaDate.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(panamaDate.getUTCDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   };
   
   // Transfer fields
@@ -245,8 +259,13 @@ export function PayAdvanceModal({ isOpen, onClose, onSuccess, brokerId, brokerNa
       <DialogContent className="max-w-4xl w-[95vw] sm:w-full max-h-[95vh] sm:max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold text-[#010139]">Registrar Pago Externo</DialogTitle>
-          <DialogDescription>
-            Corredor: <span className="font-semibold">{brokerName}</span> | Total adeudado: <span className="font-semibold text-[#010139]">${totalPending.toFixed(2)}</span>
+          <DialogDescription className="space-y-1">
+            <div>
+              Corredor: <span className="font-semibold">{brokerName}</span> | Total adeudado: <span className="font-semibold text-[#010139]">${totalPending.toFixed(2)}</span>
+            </div>
+            <div className="inline-flex items-center px-2 py-1 rounded bg-purple-100 text-purple-800 text-xs font-semibold">
+              📅 Quincena Actual: {getCurrentQuincena()} {getCurrentQuincena() === 'Q1' ? '(16-31)' : '(01-15)'}
+            </div>
           </DialogDescription>
         </DialogHeader>
 

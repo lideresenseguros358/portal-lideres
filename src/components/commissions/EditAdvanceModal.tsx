@@ -293,11 +293,11 @@ export function EditAdvanceModal({ advance, onClose, onSuccess }: Props) {
                         <p className="font-bold text-red-900 mb-2 text-base">¿Eliminar esta deuda?</p>
                         <p className="text-sm text-red-800 leading-relaxed">
                           {advance?.is_recurring 
-                            ? 'Se eliminará este adelanto recurrente Y se desactivará la configuración automática. '
+                            ? 'Este adelanto recurrente se reseteará a su monto original y permanecerá activo con su historial de pagos. '
                             : 'Se eliminará permanentemente. '}
-                          {hasPaymentHistory 
+                          {!advance?.is_recurring && hasPaymentHistory 
                             ? 'Como tiene historial de pagos, se moverá a "Deudas Saldadas".'
-                            : 'Como NO tiene historial de pagos, se eliminará por completo.'}
+                            : !advance?.is_recurring ? 'Como NO tiene historial de pagos, se eliminará por completo.' : ''}
                         </p>
                       </div>
                     </div>
