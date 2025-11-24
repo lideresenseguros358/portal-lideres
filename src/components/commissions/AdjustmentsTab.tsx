@@ -67,6 +67,7 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
   const [selectedBroker, setSelectedBroker] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [brokerPercent, setBrokerPercent] = useState<number>(0);
+  const [selectedBrokerName, setSelectedBrokerName] = useState<string>('');
 
   const loadPendingItems = useCallback(async () => {
     setLoading(true);
@@ -154,7 +155,7 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
     }
 
     setLoading(false);
-  }, []);
+  }, [role, brokerId]);
 
   useEffect(() => {
     loadPendingItems();
@@ -197,6 +198,7 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
   }, [pendingGroups, role, isShortcut, onActionSuccess, loadPendingItems]);
 
   const handleSubmitReport = async () => {
+    console.log('[handleSubmitReport] Iniciando...');
     if (selectedItems.size === 0) {
       toast.error('Selecciona al menos un ajuste');
       return;
@@ -205,11 +207,14 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
     setSubmitting(true);
     try {
       const itemIds = Array.from(selectedItems);
+      console.log('[handleSubmitReport] Items seleccionados:', itemIds);
       let result;
 
       if (role === 'broker') {
         // Broker: enviar reporte de ajustes agrupado
+        console.log('[handleSubmitReport] Broker: creando reporte de ajustes...');
         result = await actionCreateAdjustmentReport(itemIds, '');
+        console.log('[handleSubmitReport] Resultado:', result);
       } else {
         // Master: asignar items al broker seleccionado
         if (!selectedBroker) {
@@ -231,6 +236,7 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
         setSelectionMode(false);
         setSelectedItems(new Set());
         setSelectedBroker(null);
+        setSelectedBrokerName('');
         await loadPendingItems();
         onActionSuccess && onActionSuccess();
       } else {
@@ -248,18 +254,22 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
     setSelectionMode(false);
     setSelectedItems(new Set());
     setSelectedBroker(null);
+    setSelectedBrokerName('');
   };
 
   const handleClaimItem = async (itemIds: string[]) => {
+    console.log('[handleClaimItem] Marcando como mío:', itemIds);
     const result = await actionClaimPendingItem(itemIds);
+    console.log('[handleClaimItem] Resultado:', result);
     if (result.ok) {
-      toast.success('Items asignados correctamente');
+      toast.success('Items marcados como tuyos');
       // Activar modo selección y seleccionar estos items
       setSelectionMode(true);
       setSelectedItems(new Set(itemIds));
+      console.log('[handleClaimItem] Recargando pending items...');
       await loadPendingItems();
     } else {
-      toast.error('Error al asignar items', { description: result.error });
+      toast.error('Error al marcar items', { description: result.error });
     }
   };
 
@@ -288,7 +298,7 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
               {selectedItems.size} ajuste(s) seleccionado(s)
             </p>
             <p className="text-sm text-gray-600">
-              {role === 'broker' ? 'Creando reporte de ajustes' : `Asignando a: ${selectedBroker || 'broker'}`}
+              {role === 'broker' ? 'Creando reporte de ajustes' : `Asignando a: ${selectedBrokerName || 'Seleccionar broker'}`}
             </p>
           </div>
           <div className="flex gap-2">
@@ -461,8 +471,10 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
                               onSuccess={(brokerId) => {
                                 if (brokerId) {
                                   // Activar modo selección para seguir asignando al mismo broker
+                                  const broker = brokers.find(b => b.id === brokerId);
                                   setSelectionMode(true);
                                   setSelectedBroker(brokerId);
+                                  setSelectedBrokerName(broker?.name || 'broker');
                                   const itemIds = group.items.map(i => i.id);
                                   setSelectedItems(new Set(itemIds));
                                 }

@@ -2904,30 +2904,35 @@ export async function actionGetDraftDetails(fortnightId: string) {
   }
 }
 
-// Claim pending items
+// Claim pending items - Marcar como "Mío" para ajustes
+// Solo asigna el broker, NO migra a comm_items (los ajustes van por flujo de adjustment_reports)
 export async function actionClaimPendingItem(itemIds: string[]) {
   try {
+    console.log('[actionClaimPendingItem] Marcando items como del broker:', itemIds);
     const { userId, brokerId } = await getAuthContext();
     if (!brokerId) throw new Error('User is not a broker.');
 
     const supabase = getSupabaseAdmin();
 
-    // Actualizar pending_items para asignar al broker
-    const { error } = await supabase
+    // Solo actualizar assigned_broker_id - NO cambiar status, NO migrar a comm_items
+    // Los pending_items permanecen en status 'open' hasta que se envía el reporte de ajustes
+    const { data, error } = await supabase
       .from('pending_items')
       .update({
         assigned_broker_id: brokerId,
         assigned_at: new Date().toISOString(),
-        status: 'assigned'
       })
       .in('id', itemIds)
-      .eq('status', 'open'); // Solo asignar items que estén abiertos
+      .eq('status', 'open')
+      .select('id');
 
     if (error) throw error;
+    console.log('[actionClaimPendingItem] Items marcados:', data?.length);
 
     revalidatePath('/(app)/commissions');
-    return { ok: true as const };
+    return { ok: true as const, data: { updated: data?.length || 0 } };
   } catch (error) {
+    console.error('[actionClaimPendingItem] Error:', error);
     return {
       ok: false as const,
       error: error instanceof Error ? error.message : 'Error desconocido',

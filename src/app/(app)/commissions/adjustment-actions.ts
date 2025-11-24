@@ -42,7 +42,9 @@ export async function actionCreateAdjustmentReport(
   notes: string
 ) {
   try {
+    console.log('[actionCreateAdjustmentReport] Iniciando con items:', itemIds);
     const { brokerId, userId } = await getAuthContext();
+    console.log('[actionCreateAdjustmentReport] BrokerId:', brokerId);
     if (!brokerId) {
       return { ok: false, error: 'No se encontró información del broker' };
     }
@@ -50,10 +52,12 @@ export async function actionCreateAdjustmentReport(
     const supabase = await getSupabaseServer();
 
     // Obtener los pending items seleccionados
+    console.log('[actionCreateAdjustmentReport] Buscando pending items...');
     const { data: pendingItems, error: itemsError } = await supabase
       .from('pending_items')
       .select('*')
       .in('id', itemIds);
+    console.log('[actionCreateAdjustmentReport] Pending items encontrados:', pendingItems?.length);
 
     if (itemsError || !pendingItems || pendingItems.length === 0) {
       return { ok: false, error: 'No se encontraron items pendientes' };
@@ -95,6 +99,7 @@ export async function actionCreateAdjustmentReport(
     });
 
     // Crear el reporte
+    console.log('[actionCreateAdjustmentReport] Creando reporte con total:', totalBrokerCommission);
     const { data: report, error: reportError } = await supabase
       .from('adjustment_reports')
       .insert({
@@ -105,6 +110,7 @@ export async function actionCreateAdjustmentReport(
       })
       .select()
       .single();
+    console.log('[actionCreateAdjustmentReport] Reporte creado:', report?.id);
 
     if (reportError || !report) {
       console.error('Error creating report:', reportError);
@@ -116,10 +122,12 @@ export async function actionCreateAdjustmentReport(
       ...item,
       report_id: report.id
     }));
+    console.log('[actionCreateAdjustmentReport] Insertando items del reporte:', itemsToInsert.length);
 
     const { error: itemsInsertError } = await supabase
       .from('adjustment_report_items')
       .insert(itemsToInsert);
+    console.log('[actionCreateAdjustmentReport] Items insertados correctamente');
 
     if (itemsInsertError) {
       console.error('Error inserting report items:', itemsInsertError);
@@ -129,10 +137,16 @@ export async function actionCreateAdjustmentReport(
     }
 
     // Actualizar status de pending_items a 'in_review'
-    await supabase
+    console.log('[actionCreateAdjustmentReport] Actualizando status de pending_items a in_review...');
+    const { error: updateError } = await supabase
       .from('pending_items')
       .update({ status: 'in_review' })
       .in('id', itemIds);
+    if (updateError) {
+      console.error('[actionCreateAdjustmentReport] Error actualizando status:', updateError);
+    } else {
+      console.log('[actionCreateAdjustmentReport] Status actualizado correctamente');
+    }
 
     // Enviar notificación a Master
     try {
