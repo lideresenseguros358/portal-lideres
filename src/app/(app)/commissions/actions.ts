@@ -2912,14 +2912,16 @@ export async function actionClaimPendingItem(itemIds: string[]) {
 
     const supabase = getSupabaseAdmin();
 
-    // Create a claim record for each item
-    const claimsToInsert = itemIds.map(itemId => ({
-      comm_item_id: itemId,
-      broker_id: brokerId,
-      status: 'pending',
-    }));
-
-    const { error } = await supabase.from('comm_item_claims').insert(claimsToInsert);
+    // Actualizar pending_items para asignar al broker
+    const { error } = await supabase
+      .from('pending_items')
+      .update({
+        assigned_broker_id: brokerId,
+        assigned_at: new Date().toISOString(),
+        status: 'assigned'
+      })
+      .in('id', itemIds)
+      .eq('status', 'open'); // Solo asignar items que estén abiertos
 
     if (error) throw error;
 

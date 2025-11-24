@@ -66,9 +66,25 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [selectedBroker, setSelectedBroker] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [brokerPercent, setBrokerPercent] = useState<number>(0);
 
   const loadPendingItems = useCallback(async () => {
     setLoading(true);
+    
+    // Cargar porcentaje del broker si es broker
+    if (role === 'broker' && brokerId) {
+      const { supabaseClient } = await import('@/lib/supabase/client');
+      const supabase = supabaseClient();
+      const { data: brokerData } = await supabase
+        .from('brokers')
+        .select('percent_default')
+        .eq('id', brokerId)
+        .single();
+      if (brokerData) {
+        setBrokerPercent(brokerData.percent_default || 0);
+      }
+    }
+    
     const result = await actionGetPendingItems();
 
     if (result.ok) {
@@ -234,6 +250,19 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
     setSelectedBroker(null);
   };
 
+  const handleClaimItem = async (itemIds: string[]) => {
+    const result = await actionClaimPendingItem(itemIds);
+    if (result.ok) {
+      toast.success('Items asignados correctamente');
+      // Activar modo selección y seleccionar estos items
+      setSelectionMode(true);
+      setSelectedItems(new Set(itemIds));
+      await loadPendingItems();
+    } else {
+      toast.error('Error al asignar items', { description: result.error });
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -252,37 +281,37 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
     <div className="space-y-4">
       {/* Barra de selección múltiple - Sticky */}
       {selectionMode && (
-        <div className="sticky top-0 z-[100] bg-gradient-to-r from-green-50 to-white border-2 border-[#8AAA19] rounded-lg p-4 shadow-lg">
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <div>
-              <p className="font-bold text-[#010139]">
-                {selectedItems.size} ajuste(s) seleccionado(s)
-              </p>
-              <p className="text-sm text-gray-600">
-                {role === 'broker' ? 'Creando reporte de ajustes' : `Asignando a: ${selectedBroker || 'broker'}`}
-              </p>
-            </div>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleCancelSelection}
-                className="border-red-500 text-red-600 hover:bg-red-50"
-              >
-                Cancelar
-              </Button>
-              <Button
-                size="sm"
-                onClick={handleSubmitReport}
-                disabled={submitting || selectedItems.size === 0}
-                className="bg-gradient-to-r from-[#8AAA19] to-[#7a9617] text-white font-semibold"
-              >
-                <FaPaperPlane className="mr-2" size={12} />
-                {submitting ? 'Enviando...' : 'Enviar'}
-              </Button>
-            </div>
+        <div className="sticky top-[60px] sm:top-[72px] z-[100] bg-gradient-to-r from-green-50 to-white border-2 border-[#8AAA19] rounded-lg p-3 sm:p-4 shadow-lg">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div>
+            <p className="font-bold text-[#010139]">
+              {selectedItems.size} ajuste(s) seleccionado(s)
+            </p>
+            <p className="text-sm text-gray-600">
+              {role === 'broker' ? 'Creando reporte de ajustes' : `Asignando a: ${selectedBroker || 'broker'}`}
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleCancelSelection}
+              className="border-red-500 text-red-600 hover:bg-red-50"
+            >
+              Cancelar
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleSubmitReport}
+              disabled={submitting || selectedItems.size === 0}
+              className="bg-gradient-to-r from-[#8AAA19] to-[#7a9617] text-white font-semibold"
+            >
+              <FaPaperPlane className="mr-2" size={12} />
+              {submitting ? 'Enviando...' : 'Enviar'}
+            </Button>
           </div>
         </div>
+      </div>
       )}
 
       {/* Header - Mobile First */}
@@ -341,7 +370,7 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
                   {/* Main Card Content */}
                   <div className="flex flex-col sm:flex-row sm:items-start gap-4">
                     {/* Left Section - Policy Info */}
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1">
                       <div className="flex items-start gap-3">
                         {/* Expand Button */}
                         {hasMultipleItems && (
@@ -400,6 +429,12 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
                         <div className="text-xl font-bold text-gray-900">
                           {group.total_amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
                         </div>
+                        {role === 'broker' && brokerPercent > 0 && (
+                          <div className="text-sm text-[#8AAA19] font-semibold mt-1">
+                            Tu comisión: {(group.total_amount * (brokerPercent / 100)).toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                            <span className="text-xs text-gray-600 ml-1">({brokerPercent}%)</span>
+                          </div>
+                        )}
                         <div className="flex items-center gap-1 mt-1">
                           <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
                             group.status === 'open'
@@ -456,17 +491,10 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
                         ) : (
                           !selectionMode ? (
                             <Button
-                              variant="default"
                               size="sm"
                               disabled={group.status !== 'open'}
                               className="bg-gradient-to-r from-[#8AAA19] to-[#7a9617] text-white hover:from-[#7a9617] hover:to-[#6b8514] border-0 shadow-md font-semibold"
-                              onClick={() => {
-                                // Activar modo selección
-                                setSelectionMode(true);
-                                // Seleccionar estos items automáticamente
-                                const itemIds = group.items.map(i => i.id);
-                                setSelectedItems(new Set(itemIds));
-                              }}
+                              onClick={() => handleClaimItem(group.items.map(i => i.id))}
                             >
                               <FaUserCheck className="mr-2" size={14} />
                               Marcar Mío

@@ -319,7 +319,7 @@ export default function BrokerPreviewTab({ brokerId }: Props) {
                 <SelectContent>
                   {monthOptions.map(option => (
                     <SelectItem key={option.value} value={String(option.value)}>
-                      {option.label.toUpperCase()}
+                      {option.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -332,13 +332,13 @@ export default function BrokerPreviewTab({ brokerId }: Props) {
                 value={selectedFortnight}
                 onValueChange={value => setSelectedFortnight(value as 'all' | '1' | '2')}
               >
-                <SelectTrigger className="w-full sm:w-36 border-[#010139]/20 bg-white">
+                <SelectTrigger className="w-full sm:w-48 border-[#010139]/20 bg-white">
                   <SelectValue placeholder="Quincena" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">AMBAS</SelectItem>
-                  <SelectItem value="1">PRIMERA (Q1)</SelectItem>
-                  <SelectItem value="2">SEGUNDA (Q2)</SelectItem>
+                  <SelectItem value="all">Ambas</SelectItem>
+                  <SelectItem value="1">Primera (Q1)</SelectItem>
+                  <SelectItem value="2">Segunda (Q2)</SelectItem>
                 </SelectContent>
               </Select>
             </div>

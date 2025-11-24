@@ -96,6 +96,71 @@ export function exportBrokerToPDF(
   
   yPos += 10;
 
+  // AJUSTES - Si existen
+  if ((broker as any).adjustments && (broker as any).adjustments.total > 0) {
+    if (yPos > 250) {
+      doc.addPage();
+      yPos = 20;
+    }
+
+    doc.setFillColor(255, 193, 7); // amber
+    doc.rect(14, yPos, pageWidth - 28, 8, 'F');
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('⚠️ AJUSTES', 16, yPos + 5.5);
+    doc.text(formatCurrency((broker as any).adjustments.total), pageWidth - 16, yPos + 5.5, { align: 'right' });
+    yPos += 10;
+
+    (broker as any).adjustments.insurers.forEach((adjInsurer: any) => {
+      if (yPos > 250) {
+        doc.addPage();
+        yPos = 20;
+      }
+
+      // Título de aseguradora de ajustes
+      const tableWidth = 165;
+      const leftMargin = (pageWidth - tableWidth) / 2;
+      doc.setFillColor(251, 191, 36); // amber
+      doc.rect(leftMargin, yPos, tableWidth, 7, 'F');
+      doc.setTextColor(120, 53, 15);
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`${adjInsurer.insurer_name} (Ajustes)`, leftMargin + 2, yPos + 5);
+      doc.text(formatCurrency(adjInsurer.total), leftMargin + tableWidth - 2, yPos + 5, { align: 'right' });
+      yPos += 7;
+
+      const adjTableData = adjInsurer.items.map((item: any) => [
+        item.policy_number,
+        item.insured_name.substring(0, 35),
+        formatCurrency(item.commission_raw),
+        `${item.percentage}%`,
+        formatCurrency(item.broker_commission),
+      ]);
+
+      autoTable(doc, {
+        startY: yPos,
+        head: [['Póliza', 'Cliente', 'Prima', '%', 'Comisión']],
+        body: adjTableData,
+        theme: 'grid',
+        styles: { fontSize: 8, cellPadding: 2 },
+        headStyles: { fillColor: [245, 158, 11], textColor: [255, 255, 255], fontSize: 8 },
+        columnStyles: {
+          0: { cellWidth: 30 },
+          1: { cellWidth: 70 },
+          2: { cellWidth: 25, halign: 'right' },
+          3: { cellWidth: 15, halign: 'center' },
+          4: { cellWidth: 25, halign: 'right' },
+        },
+        margin: { left: leftMargin, right: leftMargin },
+      });
+
+      yPos = (doc as any).lastAutoTable.finalY + 5;
+    });
+
+    yPos += 5;
+  }
+
   // Insurers and Policies
   broker.insurers.forEach((insurer, insurerIdx) => {
     // Check if we need a new page
@@ -178,7 +243,48 @@ export function exportBrokerToPDF(
   doc.setFont('helvetica', 'bold');
   doc.text(formatCurrency(broker.total_net), pageWidth - 14, yPos, { align: 'right' });
 
-  if (discounts && discounts.total > 0) {
+  // ADELANTOS DESCONTADOS
+  if ((broker as any).discounts_json?.adelantos && (broker as any).discounts_json.adelantos.length > 0) {
+    yPos += 8;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.text('ADELANTOS DESCONTADOS:', 14, yPos);
+    
+    (broker as any).discounts_json.adelantos.forEach((adelanto: any) => {
+      yPos += 6;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      doc.text(`- ${adelanto.description}:`, 20, yPos);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...[220, 38, 38]); // red
+      doc.text(formatCurrency(adelanto.amount), pageWidth - 14, yPos, { align: 'right' });
+      doc.setTextColor(0, 0, 0);
+    });
+
+    yPos += 8;
+    doc.setLineWidth(0.3);
+    doc.line(14, yPos, pageWidth - 14, yPos);
+    yPos += 6;
+    
+    const totalDescuentos = (broker as any).discounts_json.total || 0;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.text('Total Descuentos:', 14, yPos);
+    doc.setTextColor(...[220, 38, 38]);
+    doc.text(formatCurrency(totalDescuentos), pageWidth - 14, yPos, { align: 'right' });
+    doc.setTextColor(0, 0, 0);
+
+    yPos += 8;
+    doc.setLineWidth(0.5);
+    doc.line(14, yPos, pageWidth - 14, yPos);
+    yPos += 6;
+    
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(12);
+    doc.text('TOTAL NETO A PAGAR:', 14, yPos);
+    doc.setTextColor(...secondaryColor);
+    doc.text(formatCurrency(broker.total_net - totalDescuentos), pageWidth - 14, yPos, { align: 'right' });
+  } else if (discounts && discounts.total > 0) {
     yPos += 8;
     doc.setFont('helvetica', 'bold');
     doc.text('DESCUENTOS:', 14, yPos);
@@ -244,6 +350,28 @@ export function exportBrokerToExcel(
   data.push(['Porcentaje Base:', `${(broker.percent_default * 100).toFixed(0)}%`]);
   data.push([]);
 
+  // AJUSTES - Si existen
+  if ((broker as any).adjustments && (broker as any).adjustments.total > 0) {
+    data.push(['⚠️ AJUSTES', '', '', '', formatCurrency((broker as any).adjustments.total)]);
+    data.push([]);
+
+    (broker as any).adjustments.insurers.forEach((adjInsurer: any) => {
+      data.push([`${adjInsurer.insurer_name} (Ajustes)`, '', '', '', formatCurrency(adjInsurer.total)]);
+      data.push(['Póliza', 'Cliente', 'Prima', '%', 'Comisión']);
+      
+      adjInsurer.items.forEach((item: any) => {
+        data.push([
+          item.policy_number,
+          item.insured_name,
+          item.commission_raw,
+          `${item.percentage}%`,
+          item.broker_commission,
+        ]);
+      });
+      data.push([]);
+    });
+  }
+
   // Insurers and policies
   broker.insurers.forEach((insurer) => {
     data.push([insurer.insurer_name, '', '', '', formatCurrency(insurer.total_gross)]);
@@ -262,19 +390,30 @@ export function exportBrokerToExcel(
     data.push([]);
   });
 
-  // Summary
   data.push(['RESUMEN']);
   data.push(['Total Bruto:', '', '', '', broker.total_gross]);
   data.push(['Total Neto (sin descuentos):', '', '', '', broker.total_net]);
 
-  if (discounts && discounts.total > 0) {
+  // Adelantos descontados
+  if ((broker as any).discounts_json?.adelantos && (broker as any).discounts_json.adelantos.length > 0) {
     data.push([]);
-    data.push(['DESCUENTOS:']);
-    discounts.details.forEach(d => {
-      data.push([`- ${d.reason}:`, '', '', '', -d.amount]);
+    data.push(['ADELANTOS DESCONTADOS']);
+    (broker as any).discounts_json.adelantos.forEach((adelanto: any) => {
+      data.push([adelanto.description, '', '', '', adelanto.amount]);
     });
     data.push([]);
-    data.push(['TOTAL NETO A PAGAR:', '', '', '', broker.total_net - discounts.total]);
+    const totalDescuentos = (broker as any).discounts_json.total || 0;
+    data.push(['TOTAL DESCUENTOS', '', '', '', totalDescuentos]);
+    data.push(['TOTAL NETO A PAGAR', '', '', '', broker.total_net - totalDescuentos]);
+  } else if (discounts && discounts.total > 0) {
+    data.push([]);
+    data.push(['DESCUENTOS']);
+    discounts.details.forEach(d => {
+      data.push([d.reason, '', '', '', d.amount]);
+    });
+    data.push([]);
+    data.push(['TOTAL DESCUENTOS', '', '', '', discounts.total]);
+    data.push(['TOTAL NETO A PAGAR', '', '', '', broker.total_net - discounts.total]);
   }
 
   const worksheet = XLSX.utils.aoa_to_sheet(data);
