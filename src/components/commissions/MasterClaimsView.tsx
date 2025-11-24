@@ -21,12 +21,12 @@ import {
 import { toast } from 'sonner';
 import { ClaimsReportCard } from './ClaimsReportCard';
 import {
-  actionGetClaimsReports,
   actionApproveClaimsReports,
   actionRejectClaimsReports,
   actionGetAdjustmentsCSVData,
   actionConfirmAdjustmentsPaid,
 } from '@/app/(app)/commissions/actions';
+import { actionGetAdjustmentReports } from '@/app/(app)/commissions/adjustment-actions';
 import { formatCurrency as formatMoney, groupClaimsByBroker } from '@/lib/commissions/adjustments-utils';
 import { generateAdjustmentsACH, getAdjustmentsACHFilename, downloadAdjustmentsACH } from '@/lib/commissions/adjustments-ach';
 
@@ -44,7 +44,7 @@ export function MasterClaimsView() {
   const loadData = async () => {
     setLoading(true);
     try {
-      const result = await actionGetClaimsReports('pending');
+      const result = await actionGetAdjustmentReports('pending');
       if (result.ok) {
         setClaims(result.data || []);
       }

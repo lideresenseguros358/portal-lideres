@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { FaFileExcel, FaFilePdf, FaHistory } from 'react-icons/fa';
+import { FaFileExcel, FaFilePdf, FaHistory, FaChevronDown, FaChevronRight } from 'react-icons/fa';
 import { actionGetClosedFortnights, actionGetLastClosedFortnight } from '@/app/(app)/commissions/actions';
 import { jsPDF } from 'jspdf';
 import * as XLSX from 'xlsx';
@@ -20,6 +20,13 @@ interface DiscountDetail {
   amount: number;
 }
 
+interface InsurerTotal {
+  name: string;
+  total: number;
+  paid: number;
+  office_total: number;
+}
+
 interface BrokerEntry {
   broker_id: string;
   broker_name: string;
@@ -31,10 +38,7 @@ interface BrokerEntry {
 interface FortnightData {
   id: string;
   label: string;
-  total_imported: number;
-  total_paid_gross: number;
-  total_office_profit: number;
-  totalsByInsurer: Array<{ name: string; total: number }>;
+  totalsByInsurer: InsurerTotal[];
   brokers: BrokerEntry[];
 }
 
@@ -74,6 +78,7 @@ export default function BrokerPreviewTab({ brokerId }: Props) {
   const [fortnights, setFortnights] = useState<FortnightData[]>([]);
   const [loading, setLoading] = useState(true);
   const [initialFiltersApplied, setInitialFiltersApplied] = useState(false);
+  const [expandedInsurers, setExpandedInsurers] = useState<Record<string, Set<string>>>({});
 
   const loadFortnights = useCallback(async () => {
     if (!initialFiltersApplied) return;
@@ -126,6 +131,23 @@ export default function BrokerPreviewTab({ brokerId }: Props) {
   const filteredFortnights = useMemo(() => {
     return fortnights.filter(fortnight => fortnight.brokers && fortnight.brokers.length > 0);
   }, [fortnights]);
+
+  const toggleInsurer = (fortnightId: string, insurerName: string) => {
+    setExpandedInsurers(prev => {
+      const newExpanded = { ...prev };
+      if (!newExpanded[fortnightId]) {
+        newExpanded[fortnightId] = new Set();
+      }
+      const insurerSet = new Set(newExpanded[fortnightId]);
+      if (insurerSet.has(insurerName)) {
+        insurerSet.delete(insurerName);
+      } else {
+        insurerSet.add(insurerName);
+      }
+      newExpanded[fortnightId] = insurerSet;
+      return newExpanded;
+    });
+  };
 
   const handleDownloadPdf = (
     event: MouseEvent<HTMLButtonElement>,
@@ -345,7 +367,8 @@ export default function BrokerPreviewTab({ brokerId }: Props) {
               </div>
             </CardHeader>
 
-            <CardContent className="space-y-4 p-6">
+            <CardContent className="space-y-6 p-6">
+              {/* Resumen de Montos */}
               <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                 <Card className="shadow-inner">
                   <CardContent className="p-4">
@@ -369,43 +392,46 @@ export default function BrokerPreviewTab({ brokerId }: Props) {
                 </Card>
               </div>
 
+              {/* Totales por Aseguradora */}
               <div>
-                <h4 className="mb-2 flex items-center gap-2 text-sm font-semibold text-gray-700">
-                  Detalle del Corredor
+                <h4 className="mb-3 text-base font-bold text-[#010139] flex items-center gap-2">
+                  <span>Totales por Aseguradora</span>
                 </h4>
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-gray-50">
-                      <TableHead>Concepto</TableHead>
-                      <TableHead className="text-right">Monto</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    <TableRow>
-                      <TableCell>Bruto</TableCell>
-                      <TableCell className="text-right font-mono">{formatCurrency(brokerEntry.gross_amount)}</TableCell>
-                    </TableRow>
-                    <TableRow>
-                      <TableCell>Descuentos</TableCell>
-                      <TableCell className="text-right font-mono text-red-600">
-                        {formatCurrency(brokerEntry.discounts_json?.total ?? 0)}
-                      </TableCell>
-                    </TableRow>
-                    <TableRow className="bg-gray-100 font-bold">
-                      <TableCell>Neto Pagado</TableCell>
-                      <TableCell className="text-right font-mono text-[#8AAA19]">
-                        {formatCurrency(brokerEntry.net_amount)}
-                      </TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
+                <div className="space-y-2">
+                  {fortnight.totalsByInsurer && fortnight.totalsByInsurer.length > 0 ? (
+                    fortnight.totalsByInsurer.map((insurer) => {
+                      const isExpanded = expandedInsurers[fortnight.id]?.has(insurer.name);
+                      return (
+                        <Card key={insurer.name} className="border-2 border-gray-100">
+                          <div
+                            className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50 transition-colors"
+                            onClick={() => toggleInsurer(fortnight.id, insurer.name)}
+                          >
+                            <div className="flex items-center gap-3 flex-1">
+                              {isExpanded ? (
+                                <FaChevronDown className="text-gray-400 flex-shrink-0" />
+                              ) : (
+                                <FaChevronRight className="text-gray-400 flex-shrink-0" />
+                              )}
+                              <div className="flex-1">
+                                <p className="font-semibold text-[#010139]">{insurer.name}</p>
+                                <p className="text-sm text-gray-600">Tu comisión: {formatCurrency(insurer.paid)}</p>
+                              </div>
+                            </div>
+                          </div>
+                        </Card>
+                      );
+                    })
+                  ) : (
+                    <p className="text-sm text-gray-500">No hay datos por aseguradora</p>
+                  )}
+                </div>
               </div>
 
-              <div>
-                <h4 className="mb-2 text-sm font-semibold text-gray-700">Detalle de Descuentos</h4>
-                {discountDetails.length === 0 ? (
-                  <p className="text-sm text-gray-500">No hay descuentos aplicados en esta quincena.</p>
-                ) : (
+              {/* Detalle de Descuentos */}
+              {discountDetails.length > 0 && (
+                <div>
+                  <h4 className="mb-3 text-base font-bold text-[#010139]">Detalle de Descuentos</h4>
                   <Table>
                     <TableHeader>
                       <TableRow className="bg-gray-50">
@@ -422,8 +448,8 @@ export default function BrokerPreviewTab({ brokerId }: Props) {
                       ))}
                     </TableBody>
                   </Table>
-                )}
-              </div>
+                </div>
+              )}
             </CardContent>
           </Card>
         );

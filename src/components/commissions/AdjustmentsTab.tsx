@@ -5,9 +5,9 @@ import {
   actionGetPendingItems,
   actionClaimPendingItem,
   actionAutoAssignOldPendingItems,
-  actionSubmitClaimsReport,
   actionResolvePendingGroups,
 } from '@/app/(app)/commissions/actions';
+import { actionCreateAdjustmentReport } from '@/app/(app)/commissions/adjustment-actions';
 import { toast } from 'sonner';
 import {
   FaChevronDown,
@@ -24,7 +24,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AssignBrokerDropdown } from './AssignBrokerDropdown';
 import { RetainedTab } from './RetainedTab';
-import { MasterClaimsView } from './MasterClaimsView';
+import MasterAdjustmentReportReview from './MasterAdjustmentReportReview';
+import { actionGetAdjustmentReports, actionApproveAdjustmentReport, actionRejectAdjustmentReport, actionEditAdjustmentReport } from '@/app/(app)/commissions/adjustment-actions';
 
 interface Props {
   role: string;
@@ -191,8 +192,8 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
       let result;
 
       if (role === 'broker') {
-        // Broker: enviar reporte de ajustes
-        result = await actionSubmitClaimsReport(itemIds);
+        // Broker: enviar reporte de ajustes agrupado
+        result = await actionCreateAdjustmentReport(itemIds, '');
       } else {
         // Master: asignar items al broker seleccionado
         if (!selectedBroker) {
@@ -251,7 +252,7 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
     <div className="space-y-4">
       {/* Barra de selección múltiple - Sticky */}
       {selectionMode && (
-        <div className="sticky top-0 z-10 bg-gradient-to-r from-green-50 to-white border-2 border-[#8AAA19] rounded-lg p-4 shadow-lg">
+        <div className="sticky top-0 z-[100] bg-gradient-to-r from-green-50 to-white border-2 border-[#8AAA19] rounded-lg p-4 shadow-lg">
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
             <div>
               <p className="font-bold text-[#010139]">
@@ -553,10 +554,51 @@ const PaidAdjustmentsView = () => {
 // Main Component
 export default function AdjustmentsTab({ role, brokerId, brokers, onActionSuccess, onPendingCountChange, isShortcut }: Props) {
   const [activeTab, setActiveTab] = useState<'pending' | 'requests' | 'paid' | 'retained'>('pending');
+  const [reports, setReports] = useState<any[]>([]);
+  const [loadingReports, setLoadingReports] = useState(false);
 
   const handleSuccess = () => {
     onActionSuccess?.();
+    loadReports();
   };
+
+  const loadReports = async () => {
+    if (activeTab !== 'requests') return;
+    setLoadingReports(true);
+    const result = await actionGetAdjustmentReports('pending');
+    if (result.ok) {
+      setReports(result.data || []);
+    }
+    setLoadingReports(false);
+  };
+
+  const handleApprove = async (reportId: string, paymentMode: 'immediate' | 'next_fortnight', adminNotes: string) => {
+    const result = await actionApproveAdjustmentReport(reportId, paymentMode, adminNotes);
+    if (result.ok) {
+      await loadReports();
+      onActionSuccess?.();
+    }
+  };
+
+  const handleReject = async (reportId: string, reason: string) => {
+    const result = await actionRejectAdjustmentReport(reportId, reason);
+    if (result.ok) {
+      await loadReports();
+      onActionSuccess?.();
+    }
+  };
+
+  const handleEdit = async (reportId: string, itemIds: string[]) => {
+    // TODO: implementar edición
+    await loadReports();
+  };
+
+  useEffect(() => {
+    if (activeTab === 'requests') {
+      loadReports();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab]);
 
   const masterTabs = [
     { key: 'pending' as const, label: 'Sin identificar', icon: FaExclamationTriangle },
@@ -623,7 +665,22 @@ export default function AdjustmentsTab({ role, brokerId, brokers, onActionSucces
               isShortcut={isShortcut}
             />
           )}
-          {activeTab === 'requests' && <MasterClaimsView />}
+          {activeTab === 'requests' && (
+            loadingReports ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#010139]"></div>
+                <span className="ml-3 text-gray-600">Cargando reportes...</span>
+              </div>
+            ) : (
+              <MasterAdjustmentReportReview
+                reports={reports}
+                onApprove={handleApprove}
+                onReject={handleReject}
+                onEdit={handleEdit}
+                onReload={loadReports}
+              />
+            )
+          )}
           {activeTab === 'retained' && role === 'master' && <RetainedTab />}
           {activeTab === 'paid' && <PaidAdjustmentsView />}
         </div>
