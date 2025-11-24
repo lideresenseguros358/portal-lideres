@@ -613,7 +613,7 @@ const ClientsListView = ({ clients, onView, onEdit, onDelete, role, selectedClie
                   </td>
                   {role === 'master' && <td className="ct-td ct-td-corredor">{brokerName}</td>}
                   <td className="ct-td ct-td-acciones">
-                    <div className="relative flex justify-center">
+                    <div className="relative overflow-visible flex justify-center">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -720,12 +720,12 @@ const ClientsListView = ({ clients, onView, onEdit, onDelete, role, selectedClie
                                   </div>
                                   {policy.notas && (
                                     <div className="pol-notas">
-                                      <span className="pol-notas-label">💬 Notas:</span>
+                                      <span className="pol-notas-label"> Notas:</span>
                                       <span className="pol-notas-text">{policy.notas}</span>
                                     </div>
                                   )}
                                 </div>
-                                <div className="pol-actions relative">
+                                <div className="pol-actions relative overflow-visible">
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
@@ -1005,7 +1005,7 @@ const ClientsListView = ({ clients, onView, onEdit, onDelete, role, selectedClie
                               <div className="text-sm font-medium text-[#010139] truncate">📋 {policy.policy_number || 'Sin número'}</div>
                               <div className="text-xs text-gray-600 mt-1">{policy.insurers?.name?.toUpperCase?.() || '—'}</div>
                             </div>
-                            <div className="relative">
+                            <div className="relative overflow-visible">
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();

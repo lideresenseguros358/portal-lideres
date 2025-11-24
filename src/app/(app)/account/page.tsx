@@ -140,8 +140,10 @@ export default function AccountPage() {
       // Reload profile to reflect changes
       await loadProfile();
       
-      // Refresh to update navbar and other components
-      router.refresh();
+      // Redirigir al dashboard después de guardar
+      setTimeout(() => {
+        router.push('/dashboard');
+      }, 1500);
     } catch (err: any) {
       console.error('❌ Error en handleUpdateProfile:', err);
       setError(err.message || "Error al actualizar el perfil");
@@ -187,7 +189,11 @@ export default function AccountPage() {
       
       // Reload profile to reflect changes
       await loadProfile();
-      router.refresh();
+      
+      // Redirigir al dashboard después de cambiar contraseña
+      setTimeout(() => {
+        router.push('/dashboard');
+      }, 1500);
     } catch (err: any) {
       setError(err.message || "Error al actualizar la contraseña");
     } finally {
@@ -321,7 +327,11 @@ export default function AccountPage() {
       setSuccess("✅ Foto de perfil actualizada correctamente");
       
       await loadProfile();
-      router.refresh();
+      
+      // Redirigir al dashboard después de subir foto
+      setTimeout(() => {
+        router.push('/dashboard');
+      }, 1500);
       
       console.log('✅ Proceso completo exitoso');
     } catch (err: any) {
@@ -398,7 +408,11 @@ export default function AccountPage() {
       setSuccess("✅ Foto de perfil eliminada correctamente");
       
       await loadProfile();
-      router.refresh();
+      
+      // Redirigir al dashboard después de eliminar foto
+      setTimeout(() => {
+        router.push('/dashboard');
+      }, 1500);
       
       console.log('✅ Eliminación completa exitosa');
     } catch (err: any) {

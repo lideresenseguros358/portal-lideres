@@ -326,18 +326,20 @@ export default function ExpedienteManager({
             return (
               <div
                 key={reqType}
-                className="flex items-center gap-2 p-2.5 sm:p-3 bg-amber-50 border border-amber-300 rounded-lg"
+                className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 p-2.5 sm:p-3 bg-amber-50 border border-amber-300 rounded-lg"
               >
-                <div className="text-lg sm:text-xl flex-shrink-0 text-amber-600">
-                  <FaFile />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-amber-900 text-xs sm:text-sm">
-                    {getDocumentTypeLabel(reqType, null)}
-                  </p>
-                  <p className="text-xs text-amber-700 font-medium mt-0.5">
-                    ⚠️ Falta
-                  </p>
+                <div className="flex items-center gap-2 flex-1 min-w-0">
+                  <div className="text-lg sm:text-xl flex-shrink-0 text-amber-600">
+                    <FaFile />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-semibold text-amber-900 text-xs sm:text-sm">
+                      {getDocumentTypeLabel(reqType, null)}
+                    </p>
+                    <p className="text-xs text-amber-700 font-medium mt-0.5">
+                      ⚠️ Falta
+                    </p>
+                  </div>
                 </div>
                 {!readOnly && (
                   <button
@@ -345,12 +347,11 @@ export default function ExpedienteManager({
                       setUploadDocType(reqType);
                       setShowUploadModal(true);
                     }}
-                    className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3 py-2 bg-[#010139] text-white rounded-lg hover:bg-[#020270] transition-all text-xs font-semibold shadow-md hover:shadow-lg"
+                    className="flex-shrink-0 flex items-center justify-center gap-1.5 px-3 py-2 bg-[#010139] text-white rounded-lg hover:bg-[#020270] transition-all text-xs font-semibold shadow-md hover:shadow-lg"
                     title="Subir cédula/pasaporte del cliente"
                   >
                     <FaIdCard size={12} />
-                    <span className="sm:hidden">Incluir</span>
-                    <span className="hidden sm:inline">Incluir Cédula</span>
+                    <span>Incluir Cédula</span>
                   </button>
                 )}
               </div>
@@ -491,9 +492,12 @@ export default function ExpedienteManager({
       {showUploadModal && (
         <div 
           className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto"
-          onClick={() => {
-            setShowUploadModal(false);
-            resetUploadForm();
+          onClick={(e) => {
+            // Solo cerrar si se hace click en el overlay, no en el contenido
+            if (e.target === e.currentTarget) {
+              setShowUploadModal(false);
+              resetUploadForm();
+            }
           }}
         >
           <div 
