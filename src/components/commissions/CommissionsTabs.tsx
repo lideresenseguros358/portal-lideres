@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { FaEye, FaPlus, FaDollarSign, FaExclamationTriangle, FaChartLine, FaCircle } from 'react-icons/fa';
 import { PreviewTab } from './PreviewTab';
+import BrokerPreviewTab from './broker/BrokerPreviewTab';
 import AdjustmentsTab from './AdjustmentsTab';
 import { YTDTab } from './YTDTab';
 import { AdvancesTab } from './AdvancesTab';
@@ -124,7 +125,11 @@ export default function CommissionsTabs({ initialData }: { initialData: InitialD
       {/* Tab Content */}
       <div className="transition-all duration-300">
         {activeTab === 'preview' && (
-          <PreviewTab role={role} brokerId={brokerId || undefined} />
+          role === 'broker' && brokerId ? (
+            <BrokerPreviewTab brokerId={brokerId} />
+          ) : (
+            <PreviewTab role={role} brokerId={brokerId || undefined} />
+          )
         )}
         {activeTab === 'new-fortnight' && (
           <NewFortnightTab 
