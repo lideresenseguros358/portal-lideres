@@ -5,6 +5,8 @@ import {
   actionGetPendingItems,
   actionClaimPendingItem,
   actionAutoAssignOldPendingItems,
+  actionSubmitClaimsReport,
+  actionResolvePendingGroups,
 } from '@/app/(app)/commissions/actions';
 import { toast } from 'sonner';
 import {
@@ -186,20 +188,40 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
     setSubmitting(true);
     try {
       const itemIds = Array.from(selectedItems);
-      const result = await actionClaimPendingItem(itemIds);
+      let result;
+
+      if (role === 'broker') {
+        // Broker: enviar reporte de ajustes
+        result = await actionSubmitClaimsReport(itemIds);
+      } else {
+        // Master: asignar items al broker seleccionado
+        if (!selectedBroker) {
+          toast.error('Debe seleccionar un corredor');
+          setSubmitting(false);
+          return;
+        }
+        
+        // Asignar todos los items al broker
+        result = await actionResolvePendingGroups({
+          broker_id: selectedBroker,
+          policy_number: 'MULTIPLE',
+          item_ids: itemIds,
+        });
+      }
       
       if (result.ok) {
-        toast.success('Reporte enviado exitosamente');
+        toast.success(role === 'broker' ? 'Reporte enviado exitosamente' : 'Items asignados exitosamente');
         setSelectionMode(false);
         setSelectedItems(new Set());
+        setSelectedBroker(null);
         await loadPendingItems();
         onActionSuccess && onActionSuccess();
       } else {
-        toast.error('Error al enviar reporte', { description: result.error });
+        toast.error('Error al procesar', { description: result.error });
       }
     } catch (error) {
       console.error('Error submitting report:', error);
-      toast.error('Error al enviar reporte');
+      toast.error('Error al procesar');
     } finally {
       setSubmitting(false);
     }
@@ -227,9 +249,9 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
 
   return (
     <div className="space-y-4">
-      {/* Barra de selección múltiple */}
+      {/* Barra de selección múltiple - Sticky */}
       {selectionMode && (
-        <div className="bg-gradient-to-r from-green-50 to-white border-2 border-[#8AAA19] rounded-lg p-4">
+        <div className="sticky top-0 z-10 bg-gradient-to-r from-green-50 to-white border-2 border-[#8AAA19] rounded-lg p-4 shadow-lg">
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
             <div>
               <p className="font-bold text-[#010139]">
@@ -255,7 +277,7 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
                 className="bg-gradient-to-r from-[#8AAA19] to-[#7a9617] text-white font-semibold"
               >
                 <FaPaperPlane className="mr-2" size={12} />
-                {submitting ? 'Enviando...' : `Enviar Reporte (${selectedItems.size})`}
+                {submitting ? 'Enviando...' : 'Enviar'}
               </Button>
             </div>
           </div>
