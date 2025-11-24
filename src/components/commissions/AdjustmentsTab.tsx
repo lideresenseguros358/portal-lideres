@@ -3,9 +3,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   actionGetPendingItems,
-  actionClaimPendingItem,
-  actionAutoAssignOldPendingItems,
   actionResolvePendingGroups,
+  actionClaimPendingItem,
+  actionMarkItemsAsMine,
+  actionAutoAssignOldPendingItems,
 } from '@/app/(app)/commissions/actions';
 import { actionCreateAdjustmentReport } from '@/app/(app)/commissions/adjustment-actions';
 import { toast } from 'sonner';
@@ -211,9 +212,9 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
       let result;
 
       if (role === 'broker') {
-        // Broker: enviar reporte de ajustes agrupado
-        console.log('[handleSubmitReport] Broker: creando reporte de ajustes...');
-        result = await actionCreateAdjustmentReport(itemIds, '');
+        // Broker: Migrar a comm_items Y crear claims
+        console.log('[handleSubmitReport] Broker: migrando y creando claims...');
+        result = await actionClaimPendingItem(itemIds);
         console.log('[handleSubmitReport] Resultado:', result);
       } else {
         // Master: asignar items al broker seleccionado
@@ -232,7 +233,8 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
       }
       
       if (result.ok) {
-        toast.success(role === 'broker' ? 'Reporte enviado exitosamente' : 'Items asignados exitosamente');
+        toast.success(role === 'broker' ? 'Reporte de ajustes enviado - Aparecerá en Identificados' : 'Items asignados exitosamente');
+        // Limpiar selección
         setSelectionMode(false);
         setSelectedItems(new Set());
         setSelectedBroker(null);
@@ -258,15 +260,16 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
   };
 
   const handleClaimItem = async (itemIds: string[]) => {
-    console.log('[handleClaimItem] Marcando como mío:', itemIds);
-    const result = await actionClaimPendingItem(itemIds);
-    console.log('[handleClaimItem] Resultado:', result);
+    console.log('[handleClaimItem] Marcando como mío y activando selección:', itemIds);
+    // Marcar items como del broker - SOLO asignar, NO migrar
+    const result = await actionMarkItemsAsMine(itemIds);
+    
     if (result.ok) {
-      toast.success('Items marcados como tuyos');
-      // Activar modo selección y seleccionar estos items
+      toast.success('Items marcados como tuyos - Ahora selecciona todos los que quieras enviar en el reporte');
+      // Activar modo selección
       setSelectionMode(true);
+      // Pre-seleccionar los items que acaba de marcar
       setSelectedItems(new Set(itemIds));
-      console.log('[handleClaimItem] Recargando pending items...');
       await loadPendingItems();
     } else {
       toast.error('Error al marcar items', { description: result.error });
@@ -287,19 +290,46 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
     return daysDiff >= 90 && group.status === 'open';
   });
 
+  // Calcular total seleccionado
+  const selectedTotal = Array.from(selectedItems).reduce((sum, itemId) => {
+    const group = pendingGroups.find(g => g.items.some(i => i.id === itemId));
+    if (group) {
+      const item = group.items.find(i => i.id === itemId);
+      return sum + (item?.gross_amount || 0);
+    }
+    return sum;
+  }, 0);
+
+  const selectedBrokerCommission = role === 'broker' && brokerPercent > 0 
+    ? selectedTotal * (brokerPercent / 100)
+    : 0;
+
   return (
     <div className="space-y-4">
-      {/* Barra de selección múltiple - Sticky */}
-      {selectionMode && (
+      {/* Barra sticky - Visible en modo selección */}
+      {selectionMode && selectedItems.size > 0 && (
         <div className="sticky top-[60px] sm:top-[72px] z-[100] bg-gradient-to-r from-green-50 to-white border-2 border-[#8AAA19] rounded-lg p-3 sm:p-4 shadow-lg">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <div>
+          <div className="flex-1">
             <p className="font-bold text-[#010139]">
               {selectedItems.size} ajuste(s) seleccionado(s)
             </p>
-            <p className="text-sm text-gray-600">
-              {role === 'broker' ? 'Creando reporte de ajustes' : `Asignando a: ${selectedBrokerName || 'Seleccionar broker'}`}
-            </p>
+            {role === 'broker' ? (
+              <div>
+                <p className="text-sm text-gray-600">
+                  Total bruto: {selectedTotal.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                </p>
+                {brokerPercent > 0 && (
+                  <p className="text-sm font-semibold text-[#8AAA19]">
+                    Tu comisión ({brokerPercent}%): {selectedBrokerCommission.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-600">
+                {selectedBroker ? `Asignando a: ${selectedBrokerName}` : 'Seleccionar broker'}
+              </p>
+            )}
           </div>
           <div className="flex gap-2">
             <Button
@@ -317,7 +347,7 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
               className="bg-gradient-to-r from-[#8AAA19] to-[#7a9617] text-white font-semibold"
             >
               <FaPaperPlane className="mr-2" size={12} />
-              {submitting ? 'Enviando...' : 'Enviar'}
+              {submitting ? 'Enviando...' : (role === 'broker' ? 'Enviar Reporte' : 'Enviar')}
             </Button>
           </div>
         </div>
@@ -470,13 +500,10 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
                               brokers={brokers}
                               onSuccess={(brokerId) => {
                                 if (brokerId) {
-                                  // Activar modo selección para seguir asignando al mismo broker
-                                  const broker = brokers.find(b => b.id === brokerId);
-                                  setSelectionMode(true);
-                                  setSelectedBroker(brokerId);
-                                  setSelectedBrokerName(broker?.name || 'broker');
-                                  const itemIds = group.items.map(i => i.id);
-                                  setSelectedItems(new Set(itemIds));
+                                  // Recargar items - se asignó y migró a comm_items
+                                  toast.success('Items asignados exitosamente');
+                                  loadPendingItems();
+                                  onActionSuccess && onActionSuccess();
                                 }
                               }}
                             />

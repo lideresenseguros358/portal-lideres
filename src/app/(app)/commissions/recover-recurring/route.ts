@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { actionCleanupDuplicateRecurring, actionRecreateRecurringAdvances, actionCleanupRecurringAdvances, actionFindMismarkedRecurringAdvances, actionRecoverRecurringAdvance } from '../actions';
+import { actionCleanupDuplicateRecurring, actionFindMismarkedRecurringAdvances, actionRecoverRecurringAdvance } from '../actions';
 
 export async function GET(request: NextRequest) {
   try {
@@ -37,14 +37,6 @@ export async function GET(request: NextRequest) {
     } else if (action === 'cleanup-duplicates') {
       // Limpiar duplicados de recurrentes (mantener solo el más reciente)
       const result = await actionCleanupDuplicateRecurring();
-      return NextResponse.json(result);
-    } else if (action === 'recreate') {
-      // Recrear adelantos recurrentes faltantes
-      const result = await actionRecreateRecurringAdvances();
-      return NextResponse.json(result);
-    } else if (action === 'cleanup') {
-      // Limpieza automática de duplicados y reseteos
-      const result = await actionCleanupRecurringAdvances();
       return NextResponse.json(result);
     } else {
       // Por defecto: buscar adelantos mal marcados

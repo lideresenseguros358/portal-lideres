@@ -17,6 +17,7 @@ export const ResolvePendingSchema = z.object({
   policy_number: z.string().min(1, 'Número de póliza requerido'),
   broker_id: z.string().uuid('ID de broker inválido'),
   item_ids: z.array(z.string().uuid()).optional(),
+  skip_migration: z.boolean().optional(), // Para "Marcar Mío" sin migrar
 });
 
 export const AdvanceSchema = z.object({

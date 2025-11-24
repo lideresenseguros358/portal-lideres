@@ -777,160 +777,6 @@ export async function actionCleanupDuplicateRecurring() {
       return { ok: true as const, message: 'No hay adelantos recurrentes', deleted: 0 };
     }
     
-    console.log(`Total adelantos recurrentes: ${allRecurring.length}`);
-    
-    // Agrupar por recurrence_id
-    const grouped: Record<string, any[]> = {};
-    allRecurring.forEach(adv => {
-      const recId = (adv as any).recurrence_id;
-      if (!grouped[recId]) grouped[recId] = [];
-      grouped[recId].push(adv);
-    });
-    
-    let deleted = 0;
-    const details: any[] = [];
-    
-    // Para cada grupo con más de 1 adelanto
-    for (const [recId, advances] of Object.entries(grouped)) {
-      if (advances.length > 1) {
-        console.log(`\n📦 Recurrence ID ${recId.substring(0, 8)}: ${advances.length} adelantos`);
-        
-        // Mantener el más reciente (primero en el array), eliminar todos los demás
-        const toKeep = advances[0];
-        const toDelete = advances.slice(1);
-        
-        console.log(`  ✅ Mantener: ${(toKeep as any).id.substring(0, 8)} - ${(toKeep as any).reason} - Status: ${(toKeep as any).status}`);
-        
-        for (const dup of toDelete) {
-          console.log(`  ❌ Eliminar: ${(dup as any).id.substring(0, 8)} - ${(dup as any).reason} - Status: ${(dup as any).status}`);
-          
-          const { error: delError } = await supabase
-            .from('advances')
-            .delete()
-            .eq('id', (dup as any).id);
-          
-          if (delError) {
-            console.error(`  Error eliminando ${(dup as any).id.substring(0, 8)}:`, delError);
-          } else {
-            deleted++;
-            details.push({
-              deleted_id: (dup as any).id.substring(0, 8),
-              reason: (dup as any).reason,
-              status: (dup as any).status
-            });
-          }
-        }
-      }
-    }
-    
-    console.log(`\n✅ Limpieza completada: ${deleted} duplicados eliminados`);
-    
-    revalidatePath('/(app)/commissions');
-    
-    return {
-      ok: true as const,
-      message: `${deleted} duplicados eliminados`,
-      deleted,
-      details
-    };
-  } catch (error) {
-    console.error('[actionCleanupDuplicateRecurring] Exception:', error);
-    return { ok: false as const, error: String(error), deleted: 0 };
-  }
-}
-
-// Recrear adelantos recurrentes faltantes desde las configuraciones activas
-export async function actionRecreateRecurringAdvances() {
-  try {
-    const supabase = await getSupabaseAdmin();
-    
-    console.log('[actionRecreateRecurringAdvances] Buscando configuraciones activas...');
-    
-    // Obtener todas las recurrencias activas
-    const { data: recurrences, error: recError } = await supabase
-      .from('advance_recurrences')
-      .select('*, brokers(name)')
-      .eq('is_active', true);
-    
-    if (recError) throw recError;
-    
-    if (!recurrences || recurrences.length === 0) {
-      return { ok: true as const, message: 'No hay recurrencias activas', created: 0 };
-    }
-    
-    console.log('Recurrencias activas encontradas:', recurrences.length);
-    
-    let created = 0;
-    
-    for (const rec of recurrences) {
-      // Verificar si ya existe un adelanto con esta recurrence_id
-      const { data: existing } = await supabase
-        .from('advances')
-        .select('id')
-        .eq('recurrence_id', (rec as any).id)
-        .eq('status', 'PENDING')
-        .single();
-      
-      if (!existing) {
-        // No existe, crear adelanto
-        console.log(`Creando adelanto recurrente: ${(rec as any).reason} para ${(rec as any).brokers?.name}`);
-        
-        const { error: insertError } = await supabase
-          .from('advances')
-          .insert({
-            broker_id: (rec as any).broker_id,
-            amount: (rec as any).amount,
-            status: 'PENDING',
-            reason: (rec as any).reason,
-            is_recurring: true,
-            recurrence_id: (rec as any).id,
-            created_at: new Date().toISOString()
-          });
-        
-        if (insertError) {
-          console.error(`Error creando adelanto para ${(rec as any).reason}:`, insertError);
-        } else {
-          console.log(`✅ Adelanto creado exitosamente`);
-          created++;
-        }
-      } else {
-        console.log(`Adelanto ya existe para: ${(rec as any).reason}`);
-      }
-    }
-    
-    revalidatePath('/(app)/commissions');
-    
-    return {
-      ok: true as const,
-      message: `${created} adelantos recurrentes creados`,
-      created
-    };
-  } catch (error) {
-    console.error('[actionRecreateRecurringAdvances] Exception:', error);
-    return { ok: false as const, error: String(error), created: 0 };
-  }
-}
-
-// Limpiar adelantos recurrentes duplicados y mal configurados
-export async function actionCleanupRecurringAdvances() {
-  try {
-    const supabase = await getSupabaseAdmin();
-    
-    console.log('[actionCleanupRecurringAdvances] Iniciando limpieza...');
-    
-    // 1. Encontrar adelantos recurrentes con mismo recurrence_id
-    const { data: allRecurring, error: fetchError } = await supabase
-      .from('advances')
-      .select('id, recurrence_id, created_at, amount, status, reason, is_recurring, brokers(name)')
-      .not('recurrence_id', 'is', null)
-      .order('created_at', { ascending: true });
-    
-    if (fetchError) throw fetchError;
-    
-    if (!allRecurring || allRecurring.length === 0) {
-      return { ok: true as const, message: 'No hay adelantos recurrentes', cleaned: 0 };
-    }
-    
     console.log('Total adelantos recurrentes encontrados:', allRecurring.length);
     
     // Agrupar por recurrence_id
@@ -941,30 +787,26 @@ export async function actionCleanupRecurringAdvances() {
       grouped[recId].push(adv);
     });
     
-    let toDelete: string[] = [];
-    let toReset: string[] = [];
+    let deleted = 0;
+    const toDelete: string[] = [];
+    const toReset: string[] = [];
+    const details: any[] = [];
     
-    // Procesar cada grupo
+    // Para cada grupo con más de 1 adelanto
     for (const [recId, advances] of Object.entries(grouped)) {
-      console.log(`\nRecurrence ID: ${recId.substring(0, 8)}`);
-      console.log(`  Adelantos en grupo: ${advances.length}`);
-      
       if (advances.length > 1) {
-        // DUPLICADOS: Mantener el primero (más antiguo), eliminar el resto
-        console.log('  ⚠️ DUPLICADOS DETECTADOS');
+        console.log(`\n📦 Recurrence ID ${recId.substring(0, 8)}: ${advances.length} adelantos`);
         
-        // Ordenar por created_at
-        advances.sort((a, b) => new Date((a as any).created_at).getTime() - new Date((b as any).created_at).getTime());
-        
+        // Mantener el más reciente (primero en el array), eliminar todos los demás
         const toKeep = advances[0];
         const duplicates = advances.slice(1);
         
         console.log(`  ✅ Mantener: ${(toKeep as any).id.substring(0, 8)} (${(toKeep as any).reason})`);
         
-        duplicates.forEach(dup => {
+        for (const dup of duplicates) {
           console.log(`  ❌ Eliminar: ${(dup as any).id.substring(0, 8)} - Status: ${(dup as any).status} - Monto: ${(dup as any).amount}`);
           toDelete.push((dup as any).id);
-        });
+        }
         
         // Si el que vamos a mantener está PAID, resetearlo
         if ((toKeep as any).status === 'PAID' || (toKeep as any).amount === 0) {
@@ -1043,7 +885,7 @@ export async function actionCleanupRecurringAdvances() {
       reset: toReset.length
     };
   } catch (error) {
-    console.error('[actionCleanupRecurringAdvances] Exception:', error);
+    console.error('[actionCleanupDuplicateRecurring] Exception:', error);
     return { ok: false as const, error: String(error), deleted: 0, reset: 0 };
   }
 }
@@ -1809,8 +1651,8 @@ export async function actionResolvePendingGroups(payload: unknown) {
 
     if (error) throw error;
 
-    if (data && data.length > 0) {
-      // Migrar automáticamente a comm_items
+    // Migrar automáticamente a comm_items (según flujo documentado)
+    if (data && data.length > 0 && !parsed.skip_migration) {
       const migrateResult = await actionMigratePendingToCommItems(
         data.map(item => item.id)
       );
@@ -2904,33 +2746,77 @@ export async function actionGetDraftDetails(fortnightId: string) {
   }
 }
 
-// Claim pending items - Marcar como "Mío" para ajustes
-// Solo asigna el broker, NO migra a comm_items (los ajustes van por flujo de adjustment_reports)
-export async function actionClaimPendingItem(itemIds: string[]) {
+// Marcar items como míos - SOLO asignar broker_id, NO migrar
+export async function actionMarkItemsAsMine(itemIds: string[]) {
   try {
-    console.log('[actionClaimPendingItem] Marcando items como del broker:', itemIds);
+    console.log('[actionMarkItemsAsMine] Asignando broker a items:', itemIds);
     const { userId, brokerId } = await getAuthContext();
     if (!brokerId) throw new Error('User is not a broker.');
 
     const supabase = getSupabaseAdmin();
 
-    // Solo actualizar assigned_broker_id - NO cambiar status, NO migrar a comm_items
-    // Los pending_items permanecen en status 'open' hasta que se envía el reporte de ajustes
-    const { data, error } = await supabase
+    // SOLO actualizar assigned_broker_id - mantener status 'open'
+    const { error } = await supabase
       .from('pending_items')
       .update({
         assigned_broker_id: brokerId,
         assigned_at: new Date().toISOString(),
       })
       .in('id', itemIds)
-      .eq('status', 'open')
-      .select('id');
+      .eq('status', 'open');
 
     if (error) throw error;
-    console.log('[actionClaimPendingItem] Items marcados:', data?.length);
 
     revalidatePath('/(app)/commissions');
-    return { ok: true as const, data: { updated: data?.length || 0 } };
+    return { ok: true as const };
+  } catch (error) {
+    console.error('[actionMarkItemsAsMine] Error:', error);
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : 'Error desconocido',
+    };
+  }
+}
+
+// Enviar reporte de ajustes - Migrar a comm_items Y crear claims
+export async function actionClaimPendingItem(pendingItemIds: string[]) {
+  try {
+    console.log('[actionClaimPendingItem] Migrando y creando claims para items:', pendingItemIds);
+    const { userId, brokerId } = await getAuthContext();
+    if (!brokerId) throw new Error('User is not a broker.');
+
+    const supabase = getSupabaseAdmin();
+
+    // 1. Migrar pending_items a comm_items
+    const migrateResult = await actionMigratePendingToCommItems(pendingItemIds);
+    
+    if (!migrateResult.ok || !migrateResult.data?.commItemIds) {
+      throw new Error(migrateResult.error || 'Error al migrar items');
+    }
+
+    const commItemIds = migrateResult.data.commItemIds;
+    console.log('[actionClaimPendingItem] Items migrados a comm_items:', commItemIds);
+
+    // 2. Crear registros en comm_item_claims (según documento)
+    const claimsToInsert = commItemIds.map(commItemId => ({
+      comm_item_id: commItemId,
+      broker_id: brokerId,
+      status: 'pending',
+    }));
+
+    const { error: claimsError } = await supabase
+      .from('comm_item_claims')
+      .insert(claimsToInsert);
+
+    if (claimsError) {
+      console.error('[actionClaimPendingItem] Error creando claims:', claimsError);
+      throw claimsError;
+    }
+
+    console.log('[actionClaimPendingItem] Claims creados exitosamente:', claimsToInsert.length);
+
+    revalidatePath('/(app)/commissions');
+    return { ok: true as const, data: { claims: claimsToInsert.length } };
   } catch (error) {
     console.error('[actionClaimPendingItem] Error:', error);
     return {
@@ -3711,6 +3597,8 @@ export async function actionMigratePendingToCommItems(pending_item_ids: string[]
       return { ok: false as const, error: 'No hay items para migrar' };
     }
     
+    const commItemIds: string[] = [];
+    
     for (const item of pendingItems) {
       const { data: broker } = await supabase
         .from('brokers')
@@ -3723,7 +3611,7 @@ export async function actionMigratePendingToCommItems(pending_item_ids: string[]
       const percent = (broker as any).percent_default || 100;
       const grossAmount = item.commission_raw * (percent / 100);
       
-      const { error: insertError } = await supabase
+      const { data: newCommItem, error: insertError } = await supabase
         .from('comm_items')
         .insert([{
           import_id: item.import_id!,
@@ -3733,12 +3621,17 @@ export async function actionMigratePendingToCommItems(pending_item_ids: string[]
           gross_amount: grossAmount,
           insured_name: item.insured_name,
           raw_row: null,
-        } satisfies CommItemIns]);
+        } satisfies CommItemIns])
+        .select('id')
+        .single();
       
-      if (insertError) {
+      if (insertError || !newCommItem) {
         console.error('Error inserting comm_item:', insertError);
         continue;
       }
+      
+      // Guardar el ID del comm_item creado
+      commItemIds.push(newCommItem.id);
       
       await supabase
         .from('pending_items')
@@ -3747,7 +3640,7 @@ export async function actionMigratePendingToCommItems(pending_item_ids: string[]
     }
     
     revalidatePath('/(app)/commissions');
-    return { ok: true as const, data: { migrated: pendingItems.length } };
+    return { ok: true as const, data: { migrated: pendingItems.length, commItemIds } };
   } catch (error) {
     return {
       ok: false as const,
