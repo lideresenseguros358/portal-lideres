@@ -16,7 +16,7 @@ import { FaSearch } from 'react-icons/fa';
 interface Props {
   itemGroup: { policy_number: string; items: { id: string }[] };
   brokers: { id: string; name: string }[];
-  onSuccess: () => void;
+  onSuccess: (brokerId?: string) => void;
 }
 
 export function AssignBrokerDropdown({ itemGroup, brokers, onSuccess }: Props) {
@@ -45,7 +45,7 @@ export function AssignBrokerDropdown({ itemGroup, brokers, onSuccess }: Props) {
 
     if (result.ok) {
       toast.success(`Asignado a corredor exitosamente.`);
-      onSuccess();
+      onSuccess(brokerId);
     } else {
       toast.error('Error al asignar.', { description: result.error });
     }

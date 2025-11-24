@@ -597,8 +597,14 @@ function PolicyForm({ clientId, policy, onClose, onSave, readOnly = false }: Pol
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[110] p-2 sm:p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[95vh] sm:max-h-[90vh] flex flex-col my-2 border-2 border-gray-200">
+    <div 
+      className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[110] p-2 sm:p-4"
+      onClick={onClose}
+    >
+      <div 
+        className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[95vh] sm:max-h-[90vh] flex flex-col my-2 border-2 border-gray-200"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header con gradiente corporativo */}
         <div className="bg-gradient-to-r from-[#010139] to-[#020270] px-4 sm:px-5 py-3 sm:py-4 flex items-center justify-between rounded-t-xl flex-shrink-0">
           <div className="flex items-center gap-3">

@@ -3,7 +3,7 @@ import { es } from "date-fns/locale";
 
 import type { Database } from "@/lib/database.types";
 
-export type NotificationType = 'renewal' | 'case_digest' | 'commission' | 'delinquency' | 'download' | 'guide' | 'carnet_renewal' | 'other';
+export type NotificationType = 'renewal' | 'case_digest' | 'commission' | 'delinquency' | 'download' | 'guide' | 'carnet_renewal' | 'agenda_event' | 'other';
 
 export type NotificationRow = Database["public"]["Tables"]["notifications"]["Row"] & {
   read_at: string | null;
@@ -39,6 +39,7 @@ const NotificationsModal = ({
       case 'download': return '📥';
       case 'guide': return '📚';
       case 'carnet_renewal': return '🎫';
+      case 'agenda_event': return '📅';
       default: return '📝';
     }
   };
@@ -51,7 +52,8 @@ const NotificationsModal = ({
       delinquency: '#FF9800',
       download: '#9C27B0',
       guide: '#00BCD4',
-      carnet_renewal: '#EF4444',
+      carnet_renewal: '#9C27B0',
+      agenda_event: '#FF5722',
       other: '#757575'
     };
     return colors[type || 'other'];

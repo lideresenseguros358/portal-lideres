@@ -319,7 +319,10 @@ export default function BrokerPendingTab({ brokerId }: Props) {
                         {pendingItems.map((item) => {
                           const isSelected = selectedItems.has(item.id);
                           const rawAmount = Number(item.gross_amount) || 0;
-                          const brokerAmount = Math.abs(rawAmount) * (brokerPercent / 100);
+                          // Usar net_amount si está disponible, sino calcular con porcentaje
+                          const brokerAmount = item.net_amount 
+                            ? Math.abs(Number(item.net_amount) || 0)
+                            : Math.abs(rawAmount) * (brokerPercent / 100);
 
                           return (
                             <TableRow 
@@ -409,7 +412,7 @@ export default function BrokerPendingTab({ brokerId }: Props) {
                               {item?.insured_name || '—'}
                             </TableCell>
                             <TableCell className="text-right font-mono text-[#010139] font-semibold">
-                              {item ? formatMoney(Math.abs(item.gross_amount)) : '—'}
+                              {item ? formatMoney(item.net_amount ? Math.abs(item.net_amount) : Math.abs(item.gross_amount)) : '—'}
                             </TableCell>
                             <TableCell>
                               {claim.status === 'pending' && (
@@ -477,7 +480,7 @@ export default function BrokerPendingTab({ brokerId }: Props) {
                               {item?.insured_name || '—'}
                             </TableCell>
                             <TableCell className="text-right font-mono text-[#8AAA19] font-bold text-lg">
-                              {item ? formatMoney(Math.abs(item.gross_amount)) : '—'}
+                              {item ? formatMoney(item.net_amount ? Math.abs(item.net_amount) : Math.abs(item.gross_amount)) : '—'}
                             </TableCell>
                             <TableCell className="text-gray-600 text-sm">
                               {claim.paid_date ? new Date(claim.paid_date).toLocaleDateString('es-PA') : '—'}

@@ -459,6 +459,7 @@ export default function ExpedienteManager({
                 />
               ) : previewDoc.type.includes('image') ? (
                 <div className="flex items-center justify-center h-full">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={previewDoc.url}
                     alt={previewDoc.name}
@@ -488,8 +489,17 @@ export default function ExpedienteManager({
 
       {/* Upload Modal - Rediseñado con branding corporativo */}
       {showUploadModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto">
-          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto border-2 border-gray-200 my-4 sm:my-8">
+        <div 
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto"
+          onClick={() => {
+            setShowUploadModal(false);
+            resetUploadForm();
+          }}
+        >
+          <div 
+            className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto border-2 border-gray-200 my-4 sm:my-8"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Header con gradiente corporativo */}
             <div className="sticky top-0 bg-gradient-to-r from-[#010139] to-[#020270] px-5 py-4 flex items-center justify-between rounded-t-xl">
               <div className="flex items-center gap-3">

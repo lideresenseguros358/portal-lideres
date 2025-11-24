@@ -39,7 +39,7 @@ export function useConfirmDialog() {
       dialogState.resolve(confirmed);
     }
     setDialogState((prev) => ({ ...prev, isOpen: false }));
-  }, [dialogState.resolve]);
+  }, [dialogState]);
 
   // Helpers específicos
   const confirm = useCallback(

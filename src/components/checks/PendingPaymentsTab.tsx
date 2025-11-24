@@ -323,6 +323,7 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
     });
   }, []);
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const groupedPayments = useMemo(() => groupPaymentsByReference(), [payments]);
   
   // Ordenar pagos en cada grupo

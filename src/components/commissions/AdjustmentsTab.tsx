@@ -16,6 +16,7 @@ import {
   FaHandHoldingUsd,
   FaUserCheck,
   FaCheckCircle,
+  FaPaperPlane,
 } from 'react-icons/fa';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -56,6 +57,12 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
   const [loading, setLoading] = useState(true);
   const [showOldItemsWarning, setShowOldItemsWarning] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  
+  // Modo selección múltiple
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+  const [selectedBroker, setSelectedBroker] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const loadPendingItems = useCallback(async () => {
     setLoading(true);
@@ -170,6 +177,40 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
     return () => clearTimeout(timer);
   }, [pendingGroups, role, isShortcut, onActionSuccess, loadPendingItems]);
 
+  const handleSubmitReport = async () => {
+    if (selectedItems.size === 0) {
+      toast.error('Selecciona al menos un ajuste');
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const itemIds = Array.from(selectedItems);
+      const result = await actionClaimPendingItem(itemIds);
+      
+      if (result.ok) {
+        toast.success('Reporte enviado exitosamente');
+        setSelectionMode(false);
+        setSelectedItems(new Set());
+        await loadPendingItems();
+        onActionSuccess && onActionSuccess();
+      } else {
+        toast.error('Error al enviar reporte', { description: result.error });
+      }
+    } catch (error) {
+      console.error('Error submitting report:', error);
+      toast.error('Error al enviar reporte');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleCancelSelection = () => {
+    setSelectionMode(false);
+    setSelectedItems(new Set());
+    setSelectedBroker(null);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -186,6 +227,41 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
 
   return (
     <div className="space-y-4">
+      {/* Barra de selección múltiple */}
+      {selectionMode && (
+        <div className="bg-gradient-to-r from-green-50 to-white border-2 border-[#8AAA19] rounded-lg p-4">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div>
+              <p className="font-bold text-[#010139]">
+                {selectedItems.size} ajuste(s) seleccionado(s)
+              </p>
+              <p className="text-sm text-gray-600">
+                {role === 'broker' ? 'Creando reporte de ajustes' : `Asignando a: ${selectedBroker || 'broker'}`}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleCancelSelection}
+                className="border-red-500 text-red-600 hover:bg-red-50"
+              >
+                Cancelar
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleSubmitReport}
+                disabled={submitting || selectedItems.size === 0}
+                className="bg-gradient-to-r from-[#8AAA19] to-[#7a9617] text-white font-semibold"
+              >
+                <FaPaperPlane className="mr-2" size={12} />
+                {submitting ? 'Enviando...' : `Enviar Reporte (${selectedItems.size})`}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header - Mobile First */}
       <div className="bg-white rounded-lg p-4 border-l-4 border-[#010139] shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -317,37 +393,81 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
                       {/* Actions */}
                       <div className="flex flex-wrap gap-2">
                         {role === 'master' ? (
-                          <AssignBrokerDropdown
-                            itemGroup={{
-                              policy_number: group.policy_number,
-                              items: group.items.map(item => ({ id: item.id })),
-                            }}
-                            brokers={brokers}
-                            onSuccess={() => {
-                              loadPendingItems();
-                              onActionSuccess && onActionSuccess();
-                            }}
-                          />
+                          !selectionMode ? (
+                            <AssignBrokerDropdown
+                              itemGroup={{
+                                policy_number: group.policy_number,
+                                items: group.items.map(item => ({ id: item.id })),
+                              }}
+                              brokers={brokers}
+                              onSuccess={(brokerId) => {
+                                if (brokerId) {
+                                  // Activar modo selección para seguir asignando al mismo broker
+                                  setSelectionMode(true);
+                                  setSelectedBroker(brokerId);
+                                  const itemIds = group.items.map(i => i.id);
+                                  setSelectedItems(new Set(itemIds));
+                                }
+                              }}
+                            />
+                          ) : selectedBroker ? (
+                            <input
+                              type="checkbox"
+                              checked={group.items.every(i => selectedItems.has(i.id))}
+                              onChange={() => {
+                                const itemIds = group.items.map(i => i.id);
+                                setSelectedItems(prev => {
+                                  const next = new Set(prev);
+                                  const allSelected = itemIds.every(id => next.has(id));
+                                  if (allSelected) {
+                                    itemIds.forEach(id => next.delete(id));
+                                  } else {
+                                    itemIds.forEach(id => next.add(id));
+                                  }
+                                  return next;
+                                });
+                              }}
+                              className="w-5 h-5 rounded border-gray-300"
+                            />
+                          ) : null
                         ) : (
-                          <Button
-                            variant="default"
-                            size="sm"
-                            disabled={group.status !== 'open'}
-                            className="bg-gradient-to-r from-[#8AAA19] to-[#7a9617] text-white hover:from-[#7a9617] hover:to-[#6b8514] border-0 shadow-md font-semibold"
-                            onClick={async () => {
-                              const result = await actionClaimPendingItem(group.items.map((i) => i.id));
-                              if (result.ok) {
-                                toast.success('Ajuste marcado como tuyo');
-                                await loadPendingItems();
-                                onActionSuccess && onActionSuccess();
-                              } else {
-                                toast.error('Error', { description: result.error });
-                              }
-                            }}
-                          >
-                            <FaUserCheck className="mr-2" size={14} />
-                            Marcar Mío
-                          </Button>
+                          !selectionMode ? (
+                            <Button
+                              variant="default"
+                              size="sm"
+                              disabled={group.status !== 'open'}
+                              className="bg-gradient-to-r from-[#8AAA19] to-[#7a9617] text-white hover:from-[#7a9617] hover:to-[#6b8514] border-0 shadow-md font-semibold"
+                              onClick={() => {
+                                // Activar modo selección
+                                setSelectionMode(true);
+                                // Seleccionar estos items automáticamente
+                                const itemIds = group.items.map(i => i.id);
+                                setSelectedItems(new Set(itemIds));
+                              }}
+                            >
+                              <FaUserCheck className="mr-2" size={14} />
+                              Marcar Mío
+                            </Button>
+                          ) : (
+                            <input
+                              type="checkbox"
+                              checked={group.items.every(i => selectedItems.has(i.id))}
+                              onChange={() => {
+                                const itemIds = group.items.map(i => i.id);
+                                setSelectedItems(prev => {
+                                  const next = new Set(prev);
+                                  const allSelected = itemIds.every(id => next.has(id));
+                                  if (allSelected) {
+                                    itemIds.forEach(id => next.delete(id));
+                                  } else {
+                                    itemIds.forEach(id => next.add(id));
+                                  }
+                                  return next;
+                                });
+                              }}
+                              className="w-5 h-5 rounded border-gray-300"
+                            />
+                          )
                         )}
                       </div>
                     </div>

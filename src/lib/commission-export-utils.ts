@@ -131,7 +131,7 @@ export function exportBrokerToPDF(
 
     autoTable(doc, {
       startY: yPos,
-      head: [['Póliza', 'Cliente', 'Bruto', '%', 'Neto']],
+      head: [['Póliza', 'Cliente', 'Prima', '%', 'Comisión']],
       body: tableData,
       theme: 'grid',
       styles: { fontSize: 8, cellPadding: 2 },
@@ -247,7 +247,7 @@ export function exportBrokerToExcel(
   // Insurers and policies
   broker.insurers.forEach((insurer) => {
     data.push([insurer.insurer_name, '', '', '', formatCurrency(insurer.total_gross)]);
-    data.push(['Póliza', 'Cliente', 'Bruto', '%', 'Neto']);
+    data.push(['Póliza', 'Cliente', 'Prima', '%', 'Comisión']);
     
     insurer.policies.forEach(policy => {
       data.push([
@@ -300,6 +300,17 @@ export function exportCompleteReportToPDF(
   fortnightLabel: string,
   totals: { total_imported: number; total_paid_net: number; total_office_profit: number }
 ) {
+  console.log('[PDF Export] Iniciando generación:', {
+    brokersCount: brokers.length,
+    label: fortnightLabel,
+    totals
+  });
+
+  if (!brokers || brokers.length === 0) {
+    console.error('[PDF Export] No hay brokers para exportar');
+    throw new Error('No hay brokers para exportar');
+  }
+
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.width;
   const primaryColor: [number, number, number] = [1, 1, 57];
@@ -364,28 +375,37 @@ export function exportCompleteReportToPDF(
   
   yPos += 8;
 
-  const brokersTableData = brokers.map(b => [
-    capitalizeText(b.broker_name),
-    formatCurrency(b.total_gross),
-    formatCurrency(b.total_net),
-  ]);
+  const brokersTableData = brokers.map((b: any) => {
+    const bruto = b.total_net; // Comisión con porcentaje aplicado
+    const discountsTotal = b.discounts_json?.total || 0;
+    const neto = bruto - discountsTotal; // Total a pagar
+    
+    return [
+      capitalizeText(b.broker_name),
+      formatCurrency(bruto),
+      formatCurrency(discountsTotal),
+      formatCurrency(neto)
+    ];
+  });
 
-  const brokerTableWidth = 190; // 100+45+45
-  const brokerTableMargin = (pageWidth - brokerTableWidth) / 2;
+  // Calcular ancho total y centrar la tabla
+  const tableWidth = 165; // Total: 90 + 25 + 25 + 25
+  const marginHorizontal = (pageWidth - tableWidth) / 2;
 
   autoTable(doc, {
     startY: yPos,
-    head: [['Corredor', 'Bruto', 'Neto']],
+    head: [['Corredor', 'Bruto', 'Desc.', 'Neto']],
     body: brokersTableData,
     theme: 'striped',
-    styles: { fontSize: 9, cellPadding: 3 },
-    headStyles: { fillColor: primaryColor },
+    styles: { fontSize: 9, cellPadding: 3, halign: 'left' },
+    headStyles: { fillColor: primaryColor, fontSize: 9, halign: 'center' },
     columnStyles: {
-      0: { cellWidth: 100 },
-      1: { halign: 'right', cellWidth: 45 },
-      2: { halign: 'right', cellWidth: 45 },
+      0: { cellWidth: 90 },  // Corredor
+      1: { halign: 'right', cellWidth: 25 },  // Bruto
+      2: { halign: 'right', cellWidth: 25 },  // Desc.
+      3: { halign: 'right', cellWidth: 25 },  // Neto
     },
-    margin: { left: brokerTableMargin, right: brokerTableMargin },
+    margin: { left: marginHorizontal, right: marginHorizontal },
   });
 
   // Detail pages for each broker
@@ -448,7 +468,7 @@ export function exportCompleteReportToPDF(
 
       autoTable(doc, {
         startY: yPos,
-        head: [['Póliza', 'Cliente', 'Bruto', '%', 'Neto']],
+        head: [['Póliza', 'Cliente', 'Prima', '%', 'Comisión']],
         body: tableData,
         theme: 'grid',
         styles: { fontSize: 7, cellPadding: 1.5 },
@@ -467,7 +487,7 @@ export function exportCompleteReportToPDF(
     });
 
     // Broker summary
-    if (yPos > 250) {
+    if (yPos > 230) {
       doc.addPage();
       yPos = 20;
     }
@@ -481,13 +501,70 @@ export function exportCompleteReportToPDF(
     doc.setTextColor(0, 0, 0);
     doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
-    doc.text('Total Bruto:', 14, yPos);
-    doc.text(formatCurrency(broker.total_gross), pageWidth - 14, yPos, { align: 'right' });
     
+    // Bruto (comisión con porcentaje aplicado)
+    const bruto = (broker as any).total_net;
+    doc.text('Total Bruto:', 14, yPos);
+    doc.text(formatCurrency(bruto), pageWidth - 14, yPos, { align: 'right' });
+    
+    // Descuentos detallados
+    const brokerDiscounts = (broker as any).discounts_json;
+    const hasDiscounts = brokerDiscounts && brokerDiscounts.adelantos && brokerDiscounts.adelantos.length > 0;
+    
+    if (hasDiscounts) {
+      yPos += 8;
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(220, 38, 38);
+      doc.text('DESCUENTOS APLICADOS:', 14, yPos);
+      
+      brokerDiscounts.adelantos.forEach((desc: any) => {
+        yPos += 6;
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        doc.setTextColor(0, 0, 0);
+        doc.text(`• ${desc.description || 'Adelanto'}`, 20, yPos);
+        doc.setTextColor(220, 38, 38);
+        doc.text(formatCurrency(desc.amount), pageWidth - 14, yPos, { align: 'right' });
+      });
+      
+      yPos += 8;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.setTextColor(0, 0, 0);
+      doc.text('Total Descuentos:', 14, yPos);
+      doc.setTextColor(220, 38, 38);
+      doc.text(formatCurrency(brokerDiscounts.total || 0), pageWidth - 14, yPos, { align: 'right' });
+    } else {
+      yPos += 6;
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(9);
+      doc.text('Descuentos:', 14, yPos);
+      doc.text(formatCurrency(0), pageWidth - 14, yPos, { align: 'right' });
+    }
+    
+    yPos += 8;
+    doc.setLineWidth(0.3);
+    doc.setDrawColor(0, 0, 0);
+    doc.line(14, yPos, pageWidth - 14, yPos);
     yPos += 6;
-    doc.text('Total Neto:', 14, yPos);
+    
+    // Total Neto (a pagar)
+    const neto = bruto - (brokerDiscounts?.total || 0);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    doc.setTextColor(0, 0, 0);
+    doc.text('TOTAL NETO:', 14, yPos);
     doc.setTextColor(...secondaryColor);
-    doc.text(formatCurrency(broker.total_net), pageWidth - 14, yPos, { align: 'right' });
+    doc.text(formatCurrency(neto), pageWidth - 14, yPos, { align: 'right' });
+    
+    // Retención
+    if ((broker as any).is_retained) {
+      yPos += 8;
+      doc.setFontSize(9);
+      doc.setTextColor(220, 38, 38);
+      doc.setFont('helvetica', 'bold');
+      doc.text('⚠️ RETENCIÓN APLICADA - PENDIENTE DE PAGO', pageWidth / 2, yPos, { align: 'center' });
+    }
   });
 
   // Footer on all pages
@@ -515,6 +592,17 @@ export function exportCompleteReportToExcel(
   fortnightLabel: string,
   totals: { total_imported: number; total_paid_net: number; total_office_profit: number }
 ) {
+  console.log('[Excel Export] Iniciando generación:', {
+    brokersCount: brokers.length,
+    label: fortnightLabel,
+    totals
+  });
+
+  if (!brokers || brokers.length === 0) {
+    console.error('[Excel Export] No hay brokers para exportar');
+    throw new Error('No hay brokers para exportar');
+  }
+
   const workbook = XLSX.utils.book_new();
 
   // Summary sheet
@@ -529,35 +617,48 @@ export function exportCompleteReportToExcel(
     ['Ganancia Oficina:', totals.total_office_profit],
     [],
     ['RESUMEN POR CORREDOR'],
-    ['Corredor', 'Email', 'Bruto', 'Neto'],
+    ['Corredor', 'Email', 'Bruto', 'Descuentos', 'Neto'],
   ];
 
-  brokers.forEach(b => {
+  brokers.forEach((b: any) => {
+    const bruto = b.total_net; // Comisión con porcentaje aplicado
+    const discountsTotal = b.discounts_json?.total || 0;
+    const neto = bruto - discountsTotal; // Total a pagar
+    
     summaryData.push([
       capitalizeText(b.broker_name),
       b.broker_email,
-      b.total_gross,
-      b.total_net,
+      bruto,
+      discountsTotal,
+      neto
     ]);
   });
 
   const summarySheet = XLSX.utils.aoa_to_sheet(summaryData);
-  summarySheet['!cols'] = [{ wch: 40 }, { wch: 30 }, { wch: 15 }, { wch: 15 }];
+  summarySheet['!cols'] = [
+    { wch: 30 }, // Corredor
+    { wch: 25 }, // Email
+    { wch: 15 }, // Bruto
+    { wch: 15 }, // Descuentos
+    { wch: 15 }  // Neto
+  ];
   XLSX.utils.book_append_sheet(workbook, summarySheet, 'Resumen');
 
   // Individual sheets for each broker
-  brokers.forEach((broker, idx) => {
+  brokers.forEach((broker: any, idx) => {
     const brokerData: any[] = [];
     brokerData.push([capitalizeText(broker.broker_name)]);
     brokerData.push(['Email:', broker.broker_email]);
     brokerData.push(['Período:', fortnightLabel]);
+    brokerData.push(['Porcentaje:', `${(broker.percent_default * 100).toFixed(0)}%`]);
     brokerData.push([]);
 
-    broker.insurers.forEach((insurer) => {
+    broker.insurers.forEach((insurer: any) => {
+      // Total aseguradora = suma de comisiones calculadas (neto de cada cliente)
       brokerData.push([insurer.insurer_name, '', '', '', formatCurrency(insurer.total_gross)]);
-      brokerData.push(['Póliza', 'Cliente', 'Bruto', '%', 'Neto']);
+      brokerData.push(['Póliza', 'Cliente', 'Bruto', '%', 'Comisión']);
       
-      insurer.policies.forEach(policy => {
+      insurer.policies.forEach((policy: any) => {
         brokerData.push([
           policy.policy_number,
           policy.insured_name,
@@ -570,8 +671,35 @@ export function exportCompleteReportToExcel(
       brokerData.push([]);
     });
 
-    brokerData.push(['Total Bruto:', '', '', '', broker.total_gross]);
-    brokerData.push(['Total Neto:', '', '', '', broker.total_net]);
+    brokerData.push(['RESUMEN']);
+    
+    const bruto = broker.total_net; // Comisión con porcentaje aplicado
+    brokerData.push(['Total Bruto:', '', '', '', bruto]);
+    
+    // Descuentos detallados
+    const discounts = broker.discounts_json;
+    const hasDiscounts = discounts && discounts.adelantos && discounts.adelantos.length > 0;
+    
+    if (hasDiscounts) {
+      brokerData.push([]);
+      brokerData.push(['DESCUENTOS APLICADOS:']);
+      discounts.adelantos.forEach((desc: any) => {
+        brokerData.push([`• ${desc.description || 'Adelanto'}`, '', '', '', desc.amount]);
+      });
+      brokerData.push([]);
+      brokerData.push(['Total Descuentos:', '', '', '', discounts.total || 0]);
+    } else {
+      brokerData.push(['Descuentos:', '', '', '', 0]);
+    }
+    
+    brokerData.push([]);
+    const neto = bruto - (discounts?.total || 0);
+    brokerData.push(['TOTAL NETO:', '', '', '', neto]);
+    
+    if (broker.is_retained) {
+      brokerData.push([]);
+      brokerData.push(['⚠️ RETENCIÓN APLICADA - PENDIENTE DE PAGO']);
+    }
 
     const brokerSheet = XLSX.utils.aoa_to_sheet(brokerData);
     brokerSheet['!cols'] = [{ wch: 20 }, { wch: 40 }, { wch: 15 }, { wch: 10 }, { wch: 15 }];
@@ -581,5 +709,8 @@ export function exportCompleteReportToExcel(
     XLSX.utils.book_append_sheet(workbook, brokerSheet, sheetName);
   });
 
-  XLSX.writeFile(workbook, `reporte_completo_${fortnightLabel.replace(/\s+/g, '_')}.xlsx`);
+  const filename = `reporte_completo_${fortnightLabel.replace(/\s+/g, '_')}.xlsx`;
+  console.log('[Excel Export] Guardando archivo:', filename);
+  XLSX.writeFile(workbook, filename);
+  console.log('[Excel Export] Archivo generado exitosamente');
 }

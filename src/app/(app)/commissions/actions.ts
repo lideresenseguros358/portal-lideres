@@ -543,82 +543,125 @@ export async function actionCreateDraftFortnight(payload: unknown) {
 }
 
 /**
- * Get Year-to-Date gross commissions, aggregated by broker and insurer
+ * Get Year-to-Date commissions from closed fortnights, aggregated by month and insurer
  */
 export async function actionGetYTDCommissions(year: number, brokerId?: string | null, includePreviousYear?: boolean) {
   const supabase = await getSupabaseAdmin();
 
-  const currentYearStartDate = `${year}-01-01T00:00:00.000Z`;
-  const currentYearEndDate = `${year}-12-31T23:59:59.999Z`;
+  const currentYearStartDate = `${year}-01-01`;
+  const currentYearEndDate = `${year}-12-31`;
 
   const previousYear = year - 1;
-  const previousYearStartDate = `${previousYear}-01-01T00:00:00.000Z`;
-  const previousYearEndDate = `${previousYear}-12-31T23:59:59.999Z`;
+  const previousYearStartDate = `${previousYear}-01-01`;
+  const previousYearEndDate = `${previousYear}-12-31`;
 
   try {
-    let query = supabase
-      .from('comm_items')
-      .select(`
-        gross_amount,
-        created_at,
-        brokers (id, name),
-        insurers (id, name)
-      `)
-      .gte('created_at', includePreviousYear ? previousYearStartDate : currentYearStartDate)
-      .lte('created_at', currentYearEndDate);
+    // Obtener quincenas cerradas del año actual (y anterior si se solicita)
+    let fortnightsQuery = supabase
+      .from('fortnights')
+      .select('id, period_start, period_end, status')
+      .eq('status', 'PAID')
+      .gte('period_end', includePreviousYear ? previousYearStartDate : currentYearStartDate)
+      .lte('period_end', currentYearEndDate)
+      .order('period_end', { ascending: true });
 
-    if (brokerId) {
-      query = query.eq('broker_id', brokerId);
+    const { data: fortnights, error: fortnightsError } = await fortnightsQuery;
+
+    if (fortnightsError) throw new Error(fortnightsError.message);
+    if (!fortnights || fortnights.length === 0) {
+      // Si no hay quincenas, retornar estructura vacía
+      return {
+        ok: true as const,
+        data: {
+          currentYear: { byMonth: {}, byInsurer: {}, total: 0 },
+          previousYear: { byMonth: {}, byInsurer: {}, total: 0 }
+        }
+      };
     }
 
-    const { data, error } = await query.returns<
-      (Pick<CommItemRow, 'gross_amount' | 'created_at'> & {
-        brokers: Pick<Tables<'brokers'>, 'id' | 'name'> | null;
-        insurers: Pick<Tables<'insurers'>, 'id' | 'name'> | null;
-      })[]
-    >();
+    // Obtener detalles de todas las quincenas
+    const fortnightIds = fortnights.map(f => f.id);
+    
+    let detailsQuery = supabase
+      .from('fortnight_details')
+      .select(`
+        fortnight_id,
+        commission_calculated,
+        brokers (id, name),
+        insurers (id, name),
+        fortnights!inner (period_end)
+      `)
+      .in('fortnight_id', fortnightIds);
 
-    if (error) throw new Error(error.message);
+    if (brokerId) {
+      detailsQuery = detailsQuery.eq('broker_id', brokerId);
+    }
 
-    const aggregated = (data || [])
-      .filter(item => item.brokers && item.insurers)
-      .reduce((acc, item) => {
-        const itemYear = new Date(item.created_at!).getFullYear();
-        const broker = item.brokers!;
-        const insurer = item.insurers!;
-        const key = `${broker.id}-${insurer.id}-${itemYear}`;
+    const { data: details, error: detailsError } = await detailsQuery as any;
 
-        if (!acc[key]) {
-          acc[key] = {
-            broker_id: broker.id,
-            broker_name: broker.name || 'N/A',
-            insurer_name: insurer.name,
-            year: itemYear,
-            total_gross: 0,
-          };
-        }
-        acc[key].total_gross += Number(item.gross_amount) || 0; // Convert unknown to number
-        return acc;
-      }, {} as Record<string, { broker_id: string; broker_name: string; insurer_name: string; year: number; total_gross: number }>);
+    if (detailsError) throw new Error(detailsError.message);
 
-    return { ok: true as const, data: Object.values(aggregated) };
+    // Agrupar por año, mes y aseguradora
+    const currentYearData: any = { byMonth: {}, byInsurer: {}, total: 0 };
+    const previousYearData: any = { byMonth: {}, byInsurer: {}, total: 0 };
+
+    (details || []).forEach((detail: any) => {
+      const periodEnd = detail.fortnights?.period_end;
+      if (!periodEnd) return;
+
+      const date = new Date(periodEnd);
+      const itemYear = date.getFullYear();
+      const month = date.getMonth() + 1; // 1-12
+      const insurerName = detail.insurers?.name || 'Sin Aseguradora';
+      const commission = Number(detail.commission_calculated) || 0;
+
+      const targetData = itemYear === year ? currentYearData : previousYearData;
+
+      // Agregar por mes
+      if (!targetData.byMonth[month]) {
+        targetData.byMonth[month] = 0;
+      }
+      targetData.byMonth[month] += commission;
+
+      // Agregar por aseguradora
+      if (!targetData.byInsurer[insurerName]) {
+        targetData.byInsurer[insurerName] = 0;
+      }
+      targetData.byInsurer[insurerName] += commission;
+
+      // Total
+      targetData.total += commission;
+    });
+
+    return {
+      ok: true as const,
+      data: {
+        currentYear: currentYearData,
+        previousYear: includePreviousYear ? previousYearData : { byMonth: {}, byInsurer: {}, total: 0 }
+      }
+    };
   } catch (error) {
     return {
       ok: false as const,
       error: error instanceof Error ? error.message : 'Error desconocido',
+      data: {
+        currentYear: { byMonth: {}, byInsurer: {}, total: 0 },
+        previousYear: { byMonth: {}, byInsurer: {}, total: 0 }
+      }
     };
   }
 }
 
 /**
- * Get available years from comm_items
+ * Get available years from closed fortnights
  */
 export async function actionGetAvailableYears() {
   const supabase = await getSupabaseAdmin();
   try {
     const { data, error } = await supabase
-      .from('comm_items')
-      .select('created_at');
+      .from('fortnights')
+      .select('period_end')
+      .eq('status', 'PAID');
 
     if (error) throw error;
 
@@ -627,7 +670,7 @@ export async function actionGetAvailableYears() {
     }
 
     const years = Array.from(
-      new Set(data.map(item => new Date(item.created_at).getFullYear()))
+      new Set(data.map(item => new Date(item.period_end).getFullYear()))
     ).sort((a, b) => b - a);
 
     return { ok: true as const, years };
@@ -3359,7 +3402,111 @@ export async function actionPayFortnight(fortnight_id: string) {
     
     if (updateError) throw updateError;
     
-    // 6. Marcar adelantos como aplicados (crear logs)
+    // 6.1 NUEVO: Guardar detalle completo en fortnight_details
+    console.log('[actionPayFortnight] Guardando detalle en fortnight_details...');
+    
+    const { data: commItems, error: itemsError } = await supabase
+      .from('comm_items')
+      .select(`
+        id,
+        broker_id,
+        policy_number,
+        insured_name,
+        insurer_id,
+        gross_amount,
+        import_id,
+        policies!left (
+          id,
+          percent_override,
+          ramo,
+          client_id
+        ),
+        brokers!inner (
+          id,
+          percent_default
+        )
+      `)
+      .eq('fortnight_id', fortnight_id);
+    
+    if (itemsError) {
+      console.error('[actionPayFortnight] Error obteniendo comm_items:', itemsError);
+      throw itemsError;
+    }
+    
+    if (commItems && commItems.length > 0) {
+      const detailsToInsert = commItems.map((item: any) => {
+        // Determinar porcentaje aplicado
+        const percentApplied = item.policies?.percent_override ?? 
+                              item.brokers?.percent_default ?? 
+                              1.0;
+        
+        // Calcular commission_raw (reverso del cálculo)
+        const commissionRaw = item.gross_amount / percentApplied;
+        
+        // Detectar si es código ASSA
+        const isAssaCode = item.policy_number?.startsWith('PJ750') || false;
+        
+        return {
+          fortnight_id: fortnight_id,
+          broker_id: item.broker_id,
+          insurer_id: item.insurer_id,
+          policy_id: item.policies?.id || null,
+          client_id: item.policies?.client_id || null,
+          policy_number: item.policy_number,
+          client_name: item.insured_name || 'Sin nombre',
+          ramo: item.policies?.ramo || null,
+          commission_raw: commissionRaw,
+          percent_applied: percentApplied,
+          commission_calculated: item.gross_amount,
+          is_assa_code: isAssaCode,
+          assa_code: isAssaCode ? item.policy_number : null,
+          source_import_id: item.import_id
+        };
+      });
+      
+      const { error: detailsError } = await (supabase as any)
+        .from('fortnight_details')
+        .insert(detailsToInsert);
+      
+      if (detailsError) {
+        console.error('[actionPayFortnight] Error guardando fortnight_details:', detailsError);
+        throw detailsError;
+      }
+      
+      console.log(`[actionPayFortnight] ✅ ${detailsToInsert.length} detalles guardados en fortnight_details`);
+    } else {
+      console.log('[actionPayFortnight] ⚠️ No hay comm_items para guardar en fortnight_details');
+    }
+    
+    // 6.5 NUEVO: Marcar reportes de ajustes como pagados
+    console.log('[actionPayFortnight] Marcando reportes de ajustes...');
+    const { data: adjustmentReports, error: adjError } = await supabase
+      .from('adjustment_reports')
+      .select('id')
+      .eq('fortnight_id', fortnight_id)
+      .eq('status', 'approved')
+      .eq('payment_mode', 'next_fortnight');
+    
+    if (adjustmentReports && adjustmentReports.length > 0) {
+      const reportIds = adjustmentReports.map((r: any) => r.id);
+      const { error: updateAdjError } = await supabase
+        .from('adjustment_reports')
+        .update({
+          status: 'paid',
+          paid_date: new Date().toISOString()
+        })
+        .in('id', reportIds);
+      
+      if (updateAdjError) {
+        console.error('[actionPayFortnight] Error actualizando adjustment_reports:', updateAdjError);
+      } else {
+        console.log(`[actionPayFortnight] ✅ ${reportIds.length} reportes de ajustes marcados como pagados`);
+      }
+    } else {
+      console.log('[actionPayFortnight] ⚠️ No hay reportes de ajustes pendientes');
+    }
+    
+    // 7. Marcar adelantos como aplicados (crear logs)
     for (const bt of brokerTotals) {
       const discounts = bt.discounts_json as any;
       if (!discounts?.adelantos || !Array.isArray(discounts.adelantos) || discounts.adelantos.length === 0) {
@@ -3453,7 +3600,7 @@ export async function actionPayFortnight(fortnight_id: string) {
       }
     }
     
-    // 7. Notificar brokers que reciben pago (AMBAS: email + campanita)
+    // 8. Notificar brokers que reciben pago (AMBAS: email + campanita)
     // Solo notificar a brokers que:
     // - NO tienen descuento del 100% (net_amount > 0)
     // - NO están retenidos

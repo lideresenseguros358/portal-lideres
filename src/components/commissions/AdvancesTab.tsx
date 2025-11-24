@@ -157,7 +157,7 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [role, brokerId, year, syncRecurrences]);
+  }, [role, brokerId, year]);
 
   useEffect(() => {
     loadAdvances();

@@ -11,6 +11,7 @@ import { actionGetClosedFortnights, actionGetLastClosedFortnight, actionGetAvail
 import { toast } from 'sonner';
 import { BrokerDetailSection } from './BrokerDetailSection';
 import { exportCompleteReportToPDF, exportCompleteReportToExcel } from '@/lib/commission-export-utils';
+import FortnightDetailView from './FortnightDetailView';
 
 // Types from spec
 interface BrokerData {
@@ -166,20 +167,31 @@ export function PreviewTab({ role, brokerId }: Props) {
 
   const handleCompleteDownload = async (fortnightId: string, fortnightLabel: string, format: 'pdf' | 'xlsx') => {
     try {
-      console.log('Iniciando descarga completa:', fortnightId, format);
+      console.log('[Download] Iniciando descarga completa:', { fortnightId, format, label: fortnightLabel });
       
-      const result = await actionGetBrokerCommissionDetails(fortnightId);
-      console.log('Resultado de carga de detalles:', result);
+      toast.info('Cargando detalles de comisiones...');
+      
+      // Usar API endpoint en lugar de action para obtener datos desde fortnight_details
+      const response = await fetch(`/api/commissions/fortnight-export?fortnight_id=${fortnightId}`);
+      const result = await response.json();
+      
+      console.log('[Download] Resultado API:', { ok: result.ok, dataLength: result.data?.length });
       
       if (!result.ok || !result.data) {
-        console.error('Error cargando detalles:', result);
+        console.error('[Download] Error cargando detalles:', result);
         toast.error('No se pudieron cargar los detalles de las comisiones');
+        return;
+      }
+
+      if (result.data.length === 0) {
+        console.warn('[Download] No hay brokers para exportar');
+        toast.warning('No hay datos de brokers para exportar');
         return;
       }
 
       const fortnight = fortnights.find(f => f.id === fortnightId);
       if (!fortnight) {
-        console.error('Fortnight no encontrada:', fortnightId);
+        console.error('[Download] Fortnight no encontrada:', fortnightId);
         toast.error('No se encontró la quincena');
         return;
       }
@@ -190,23 +202,53 @@ export function PreviewTab({ role, brokerId }: Props) {
         total_office_profit: fortnight.total_office_profit,
       };
 
-      console.log('Datos a exportar:', {
-        brokers: result.data.length,
-        format,
+      // Validar estructura de datos
+      const brokersWithData = result.data.filter((b: any) => {
+        const hasValidData = b.broker_name && b.insurers && b.insurers.length > 0;
+        if (!hasValidData) {
+          console.warn('[Download] Broker sin datos válidos:', b.broker_name);
+        }
+        return hasValidData;
+      });
+
+      if (brokersWithData.length === 0) {
+        console.error('[Download] No hay brokers con datos válidos');
+        toast.error('No hay datos para exportar en esta quincena');
+        return;
+      }
+
+      console.log('[Download] Datos preparados:', {
+        brokersTotal: result.data.length,
+        brokersConDatos: brokersWithData.length,
+        brokers: brokersWithData.map((b: any) => ({ 
+          name: b.broker_name,
+          email: b.broker_email,
+          insurers: b.insurers?.length || 0,
+          policiesCount: b.insurers?.reduce((sum: number, i: any) => sum + (i.policies?.length || 0), 0) || 0,
+          total_gross: b.total_gross,
+          total_net: b.total_net
+        })),
         totals
       });
 
-      if (format === 'pdf') {
-        exportCompleteReportToPDF(result.data, fortnightLabel, totals);
-      } else {
-        exportCompleteReportToExcel(result.data, fortnightLabel, totals);
-      }
+      toast.info(`Generando reporte ${format.toUpperCase()}...`);
 
-      toast.success(`Reporte ${format.toUpperCase()} generado correctamente`);
-      setShowCompleteDownloadModal(null);
+      try {
+        if (format === 'pdf') {
+          exportCompleteReportToPDF(brokersWithData, fortnightLabel, totals);
+        } else {
+          exportCompleteReportToExcel(brokersWithData, fortnightLabel, totals);
+        }
+        console.log('[Download] Reporte generado exitosamente');
+        toast.success(`Reporte ${format.toUpperCase()} generado correctamente`);
+        setShowCompleteDownloadModal(null);
+      } catch (exportError) {
+        console.error('[Download] Error al generar archivo:', exportError);
+        throw exportError;
+      }
     } catch (error) {
-      console.error('Error en handleCompleteDownload:', error);
-      toast.error('No se pudo generar el reporte');
+      console.error('[Download] Error crítico:', error);
+      toast.error(`No se pudo generar el reporte: ${error instanceof Error ? error.message : 'Error desconocido'}`);
     }
   };
 
@@ -389,92 +431,27 @@ export function PreviewTab({ role, brokerId }: Props) {
               <Button
                 variant="outline"
                 size="sm"
-                className="bg-white border-[#8AAA19]/20 hover:bg-[#8AAA19] hover:text-white transition-colors text-xs sm:text-sm px-2 sm:px-3 py-1 sm:py-2"
+                className="bg-white border-[#8AAA19]/20 hover:bg-[#8AAA19] hover:text-white transition-colors px-3 py-1"
                 onClick={(event) => {
                   event.stopPropagation();
                   setShowCompleteDownloadModal({ fortnightId: fortnight.id, fortnightLabel: fortnight.label });
                 }}
               >
-                <FaDownload className="mr-1 sm:mr-2 h-3 w-3" />
-                <span className="hidden sm:inline">Descargar Reporte (Todos)</span>
-                <span className="sm:hidden">Descargar</span>
+                <FaDownload className="mr-2 h-3 w-3" />
+                Descargar
               </Button>
             )}
           </CardHeader>
           {expandedItems.has(fortnight.id) && (
-            <CardContent className="p-6 bg-white">
-              {/* Total Oficina by Insurer Section - Only for MASTER */}
-              {role === 'master' && (
-                <div className="mb-6">
-                  <div className="mb-4 flex items-center gap-2">
-                    <div className="w-1 h-5 bg-[#010139] rounded"></div>
-                    <h3 className="text-lg font-bold text-[#010139]">Total Oficina por Aseguradora</h3>
-                  </div>
-                  <Card className="shadow-inner border-gray-200">
-                    <CardContent className="p-4 overflow-x-auto">
-                      <Table>
-                        <TableHeader>
-                          <TableRow className="bg-gray-50">
-                            <TableHead>Aseguradora</TableHead>
-                            <TableHead className="text-right">Total Reporte</TableHead>
-                            <TableHead className="text-right">Pagado a Corredores</TableHead>
-                            <TableHead className="text-right">Total Oficina</TableHead>
-                            <TableHead className="text-center">% Oficina</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {fortnight.totalsByInsurer.map((insurer, idx) => {
-                            const officePercentage = insurer.total > 0 ? (insurer.office_total / insurer.total) * 100 : 0;
-                            return (
-                              <TableRow key={idx}>
-                                <TableCell className="font-medium">{insurer.name}</TableCell>
-                                <TableCell className="text-right font-mono">
-                                  {formatCurrency(insurer.total)}
-                                </TableCell>
-                                <TableCell className="text-right font-mono text-gray-600">
-                                  {formatCurrency(insurer.paid)}
-                                </TableCell>
-                                <TableCell className="text-right font-mono font-bold text-[#8AAA19]">
-                                  {formatCurrency(insurer.office_total)}
-                                </TableCell>
-                                <TableCell className="text-center">
-                                  <Badge variant={officePercentage >= 20 ? 'success' : 'danger'}>
-                                    {officePercentage.toFixed(1)}%
-                                    {officePercentage < 20 && (
-                                      <FaExclamationTriangle className="inline ml-1" size={10} />
-                                    )}
-                                  </Badge>
-                                </TableCell>
-                              </TableRow>
-                            );
-                          })}
-                          {/* Totals Row */}
-                          <TableRow className="bg-gray-100 font-bold">
-                            <TableCell>TOTALES</TableCell>
-                            <TableCell className="text-right font-mono">
-                              {formatCurrency(fortnight.totalsByInsurer.reduce((sum, i) => sum + i.total, 0))}
-                            </TableCell>
-                            <TableCell className="text-right font-mono">
-                              {formatCurrency(fortnight.totalsByInsurer.reduce((sum, i) => sum + i.paid, 0))}
-                            </TableCell>
-                            <TableCell className="text-right font-mono text-[#8AAA19]">
-                              {formatCurrency(fortnight.totalsByInsurer.reduce((sum, i) => sum + i.office_total, 0))}
-                            </TableCell>
-                            <TableCell></TableCell>
-                          </TableRow>
-                        </TableBody>
-                      </Table>
-                    </CardContent>
-                  </Card>
-                </div>
-              )}
-              
-              {/* Brokers Detail Section */}
-              <BrokerDetailSection
+            <CardContent className="p-0 bg-white">
+              {/* Vista Detallada de Historial */}
+              <FortnightDetailView
                 fortnightId={fortnight.id}
-                fortnightLabel={fortnight.label}
-                brokers={fortnight.brokers}
-                role={role}
+                fortnightData={{
+                  period_start: '', // Se obtiene internamente en el componente
+                  period_end: '',
+                  status: 'PAID'
+                }}
               />
             </CardContent>
           )}

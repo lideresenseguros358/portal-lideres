@@ -13,7 +13,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { FaChevronDown, FaChevronRight, FaHandHoldingUsd, FaUndo } from 'react-icons/fa';
+import { FaChevronDown, FaChevronRight, FaHandHoldingUsd, FaUndo, FaMinus } from 'react-icons/fa';
+import DiscountModal from './DiscountModal';
 
 // Types
 interface CommItem {
@@ -54,6 +55,11 @@ export default function BrokerTotals({ draftFortnightId, onManageAdvances, broke
   const [expandedBrokers, setExpandedBrokers] = useState<Set<string>>(new Set());
   const [expandedInsurers, setExpandedInsurers] = useState<Set<string>>(new Set());
   const [brokerDiscounts, setBrokerDiscounts] = useState<Record<string, number>>({});
+  const [discountModalData, setDiscountModalData] = useState<{
+    brokerId: string;
+    brokerName: string;
+    grossAmount: number;
+  } | null>(null);
 
   useEffect(() => {
     const loadDetails = async () => {
@@ -223,6 +229,20 @@ export default function BrokerTotals({ draftFortnightId, onManageAdvances, broke
                           <><FaHandHoldingUsd className="mr-1" /> Retener</>
                         )}
                       </Button>
+                      {!brokerData.is_retained && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setDiscountModalData({
+                            brokerId,
+                            brokerName: brokerData.broker_name,
+                            grossAmount: brokerData.total_gross
+                          })}
+                          className="bg-white border-orange-400 text-orange-700 hover:bg-orange-50 hover:border-orange-500 font-medium"
+                        >
+                          <FaMinus className="mr-1" /> Descontar
+                        </Button>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>
@@ -272,6 +292,23 @@ export default function BrokerTotals({ draftFortnightId, onManageAdvances, broke
           </TableBody>
         </Table>
       </div>
+
+      {/* Modal de Descuentos */}
+      {discountModalData && (
+        <DiscountModal
+          isOpen={true}
+          onClose={() => setDiscountModalData(null)}
+          brokerId={discountModalData.brokerId}
+          brokerName={discountModalData.brokerName}
+          fortnightId={draftFortnightId}
+          grossAmount={discountModalData.grossAmount}
+          onSuccess={() => {
+            setDiscountModalData(null);
+            // Recargar datos
+            onRetentionChange();
+          }}
+        />
+      )}
     </div>
   );
 }

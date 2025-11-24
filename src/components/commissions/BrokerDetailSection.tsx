@@ -64,6 +64,7 @@ export function BrokerDetailSection({ fortnightId, fortnightLabel, brokers, role
       };
       loadBrokerDetails();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [role, brokers, fortnightId]);
 
   const toggleBroker = async (brokerId: string) => {

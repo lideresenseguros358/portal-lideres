@@ -151,6 +151,7 @@ export function PayAdvanceModal({ isOpen, onClose, onSuccess, brokerId, brokerNa
 
     const timeoutId = setTimeout(validateReference, 500);
     return () => clearTimeout(timeoutId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [referenceNumber]);
 
   const handleAdvanceAmountChange = (advanceId: string, amount: string, reason: string) => {

@@ -83,6 +83,135 @@ export type Database = {
         }
         Relationships: []
       }
+      adjustment_report_items: {
+        Row: {
+          broker_commission: number
+          commission_raw: number
+          created_at: string
+          id: string
+          pending_item_id: string
+          report_id: string
+        }
+        Insert: {
+          broker_commission: number
+          commission_raw: number
+          created_at?: string
+          id?: string
+          pending_item_id: string
+          report_id: string
+        }
+        Update: {
+          broker_commission?: number
+          commission_raw?: number
+          created_at?: string
+          id?: string
+          pending_item_id?: string
+          report_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "adjustment_report_items_pending_item_id_fkey"
+            columns: ["pending_item_id"]
+            isOneToOne: false
+            referencedRelation: "pending_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "adjustment_report_items_report_id_fkey"
+            columns: ["report_id"]
+            isOneToOne: false
+            referencedRelation: "adjustment_reports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      adjustment_reports: {
+        Row: {
+          admin_notes: string | null
+          broker_id: string
+          broker_notes: string | null
+          created_at: string
+          fortnight_id: string | null
+          id: string
+          paid_date: string | null
+          payment_mode: string | null
+          rejected_reason: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          total_amount: number
+          updated_at: string
+        }
+        Insert: {
+          admin_notes?: string | null
+          broker_id: string
+          broker_notes?: string | null
+          created_at?: string
+          fortnight_id?: string | null
+          id?: string
+          paid_date?: string | null
+          payment_mode?: string | null
+          rejected_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          total_amount?: number
+          updated_at?: string
+        }
+        Update: {
+          admin_notes?: string | null
+          broker_id?: string
+          broker_notes?: string | null
+          created_at?: string
+          fortnight_id?: string | null
+          id?: string
+          paid_date?: string | null
+          payment_mode?: string | null
+          rejected_reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          total_amount?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "adjustment_reports_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "adjustment_reports_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_ach_validation"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "adjustment_reports_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_ach_info"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "adjustment_reports_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_bank_info"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "adjustment_reports_fortnight_id_fkey"
+            columns: ["fortnight_id"]
+            isOneToOne: false
+            referencedRelation: "fortnights"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       advance_logs: {
         Row: {
           advance_id: string
@@ -1058,6 +1187,27 @@ export type Database = {
           },
         ]
       }
+      clients_backup_names: {
+        Row: {
+          backup_date: string | null
+          created_at: string | null
+          id: string | null
+          name: string | null
+        }
+        Insert: {
+          backup_date?: string | null
+          created_at?: string | null
+          id?: string | null
+          name?: string | null
+        }
+        Update: {
+          backup_date?: string | null
+          created_at?: string | null
+          id?: string | null
+          name?: string | null
+        }
+        Relationships: []
+      }
       comm_imports: {
         Row: {
           created_at: string
@@ -1966,6 +2116,127 @@ export type Database = {
           },
         ]
       }
+      fortnight_details: {
+        Row: {
+          assa_code: string | null
+          broker_id: string
+          client_id: string | null
+          client_name: string
+          commission_calculated: number
+          commission_raw: number
+          created_at: string | null
+          fortnight_id: string
+          id: string
+          insurer_id: string
+          is_assa_code: boolean | null
+          percent_applied: number
+          policy_id: string | null
+          policy_number: string
+          ramo: string | null
+          source_import_id: string | null
+        }
+        Insert: {
+          assa_code?: string | null
+          broker_id: string
+          client_id?: string | null
+          client_name: string
+          commission_calculated: number
+          commission_raw: number
+          created_at?: string | null
+          fortnight_id: string
+          id?: string
+          insurer_id: string
+          is_assa_code?: boolean | null
+          percent_applied: number
+          policy_id?: string | null
+          policy_number: string
+          ramo?: string | null
+          source_import_id?: string | null
+        }
+        Update: {
+          assa_code?: string | null
+          broker_id?: string
+          client_id?: string | null
+          client_name?: string
+          commission_calculated?: number
+          commission_raw?: number
+          created_at?: string | null
+          fortnight_id?: string
+          id?: string
+          insurer_id?: string
+          is_assa_code?: boolean | null
+          percent_applied?: number
+          policy_id?: string | null
+          policy_number?: string
+          ramo?: string | null
+          source_import_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fortnight_details_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fortnight_details_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_ach_validation"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fortnight_details_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_ach_info"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fortnight_details_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_bank_info"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fortnight_details_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fortnight_details_fortnight_id_fkey"
+            columns: ["fortnight_id"]
+            isOneToOne: false
+            referencedRelation: "fortnights"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fortnight_details_insurer_id_fkey"
+            columns: ["insurer_id"]
+            isOneToOne: false
+            referencedRelation: "insurers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fortnight_details_policy_id_fkey"
+            columns: ["policy_id"]
+            isOneToOne: false
+            referencedRelation: "policies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fortnight_details_source_import_id_fkey"
+            columns: ["source_import_id"]
+            isOneToOne: false
+            referencedRelation: "comm_imports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fortnights: {
         Row: {
           created_at: string
@@ -1998,62 +2269,6 @@ export type Database = {
           {
             foreignKeyName: "fortnights_created_by_fkey"
             columns: ["created_by"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      important_dates: {
-        Row: {
-          apadea_date1: number | null
-          apadea_date2: number | null
-          cierre_mes_day: number | null
-          created_at: string | null
-          id: string
-          month: number
-          news_active: boolean | null
-          news_text: string | null
-          updated_at: string | null
-          updated_by: string | null
-          via_regular_day: number | null
-          vida_con_cancelacion_day: number | null
-          year: number
-        }
-        Insert: {
-          apadea_date1?: number | null
-          apadea_date2?: number | null
-          cierre_mes_day?: number | null
-          created_at?: string | null
-          id?: string
-          month: number
-          news_active?: boolean | null
-          news_text?: string | null
-          updated_at?: string | null
-          updated_by?: string | null
-          via_regular_day?: number | null
-          vida_con_cancelacion_day?: number | null
-          year: number
-        }
-        Update: {
-          apadea_date1?: number | null
-          apadea_date2?: number | null
-          cierre_mes_day?: number | null
-          created_at?: string | null
-          id?: string
-          month?: number
-          news_active?: boolean | null
-          news_text?: string | null
-          updated_at?: string | null
-          updated_by?: string | null
-          via_regular_day?: number | null
-          vida_con_cancelacion_day?: number | null
-          year?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "important_dates_updated_by_fkey"
-            columns: ["updated_by"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -2164,6 +2379,54 @@ export type Database = {
           id?: string
           name?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      important_dates: {
+        Row: {
+          apadea_date1: number | null
+          apadea_date2: number | null
+          cierre_mes_day: number | null
+          created_at: string | null
+          id: string
+          month: number
+          news_active: boolean | null
+          news_text: string | null
+          updated_at: string | null
+          updated_by: string | null
+          via_regular_day: number | null
+          vida_con_cancelacion_day: number | null
+          year: number
+        }
+        Insert: {
+          apadea_date1?: number | null
+          apadea_date2?: number | null
+          cierre_mes_day?: number | null
+          created_at?: string | null
+          id?: string
+          month: number
+          news_active?: boolean | null
+          news_text?: string | null
+          updated_at?: string | null
+          updated_by?: string | null
+          via_regular_day?: number | null
+          vida_con_cancelacion_day?: number | null
+          year: number
+        }
+        Update: {
+          apadea_date1?: number | null
+          apadea_date2?: number | null
+          cierre_mes_day?: number | null
+          created_at?: string | null
+          id?: string
+          month?: number
+          news_active?: boolean | null
+          news_text?: string | null
+          updated_at?: string | null
+          updated_by?: string | null
+          via_regular_day?: number | null
+          vida_con_cancelacion_day?: number | null
+          year?: number
         }
         Relationships: []
       }
@@ -3661,6 +3924,103 @@ export type Database = {
           },
         ]
       }
+      fortnight_details_full: {
+        Row: {
+          assa_code: string | null
+          broker_email: string | null
+          broker_id: string | null
+          broker_name: string | null
+          client_email: string | null
+          client_id: string | null
+          client_name: string | null
+          client_national_id: string | null
+          commission_calculated: number | null
+          commission_raw: number | null
+          created_at: string | null
+          fortnight_id: string | null
+          fortnight_status:
+            | Database["public"]["Enums"]["fortnight_status_enum"]
+            | null
+          id: string | null
+          import_period_label: string | null
+          import_total_amount: number | null
+          insurer_id: string | null
+          insurer_name: string | null
+          is_assa_code: boolean | null
+          percent_applied: number | null
+          period_end: string | null
+          period_start: string | null
+          policy_id: string | null
+          policy_number: string | null
+          ramo: string | null
+          source_import_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fortnight_details_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fortnight_details_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_ach_validation"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fortnight_details_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_ach_info"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fortnight_details_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_bank_info"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fortnight_details_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fortnight_details_fortnight_id_fkey"
+            columns: ["fortnight_id"]
+            isOneToOne: false
+            referencedRelation: "fortnights"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fortnight_details_insurer_id_fkey"
+            columns: ["insurer_id"]
+            isOneToOne: false
+            referencedRelation: "insurers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fortnight_details_policy_id_fkey"
+            columns: ["policy_id"]
+            isOneToOne: false
+            referencedRelation: "policies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fortnight_details_source_import_id_fkey"
+            columns: ["source_import_id"]
+            isOneToOne: false
+            referencedRelation: "comm_imports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       v_claims_full: {
         Row: {
           account_type: string | null
@@ -3782,12 +4142,16 @@ export type Database = {
       }
       assign_pending_to_office_after_3m: { Args: never; Returns: number }
       auto_trash_expired_cases: { Args: never; Returns: number }
-      batch_update_clients_policies_from_commissions: {
-        Args: never
+      bulk_import_clients_policies: {
+        Args: { import_data: Json }
         Returns: {
-          errors: string[]
-          updated_clients: number
-          updated_policies: number
+          client_id: string
+          client_name: string
+          message: string
+          policy_id: string
+          policy_number: string
+          row_number: number
+          success: boolean
         }[]
       }
       clean_expired_is_tokens: { Args: never; Returns: undefined }
@@ -3819,6 +4183,15 @@ export type Database = {
         Args: { p_broker_id: string }
         Returns: string
       }
+      get_brokers_for_import: {
+        Args: never
+        Returns: {
+          active: boolean
+          broker_email: string
+          broker_id: string
+          broker_name: string
+        }[]
+      }
       get_claims_reports_grouped: {
         Args: never
         Returns: {
@@ -3830,6 +4203,25 @@ export type Database = {
           status: string
           total_broker_amount: number
           total_raw_amount: number
+        }[]
+      }
+      get_fortnight_summary: {
+        Args: { p_fortnight_id: string }
+        Returns: {
+          total_assa_codes: number
+          total_brokers: number
+          total_by_insurer: Json
+          total_commission_calculated: number
+          total_commission_raw: number
+          total_policies: number
+        }[]
+      }
+      get_insurers_for_import: {
+        Args: never
+        Returns: {
+          active: boolean
+          insurer_id: string
+          insurer_name: string
         }[]
       }
       get_missing_fields: { Args: { temp_id: string }; Returns: string[] }
@@ -3870,6 +4262,7 @@ export type Database = {
         Args: { temp_id: string }
         Returns: undefined
       }
+      normalize_name: { Args: { text_input: string }; Returns: string }
       profile_sync_from_auth: {
         Args: { p_user_id: string }
         Returns: undefined
@@ -3961,6 +4354,7 @@ export type Database = {
         | "guide"
         | "other"
         | "carnet_renewal"
+        | "agenda_event"
       policy_status_enum: "ACTIVA" | "CANCELADA" | "VENCIDA"
       porcents: "1" | "0.94" | "0.82" | "0.8" | "0.7" | "0.6" | "0.5" | "0"
       role_enum: "master" | "broker"
@@ -4150,6 +4544,7 @@ export const Constants = {
         "guide",
         "other",
         "carnet_renewal",
+        "agenda_event",
       ],
       policy_status_enum: ["ACTIVA", "CANCELADA", "VENCIDA"],
       porcents: ["1", "0.94", "0.82", "0.8", "0.7", "0.6", "0.5", "0"],

@@ -167,6 +167,60 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
   
   // State para totales de brokers
   const [brokerCommissionsTotal, setBrokerCommissionsTotal] = useState(0);
+  
+  // State para totales por ramo
+  const [ramosTotals, setRamosTotals] = useState({ vida: 0, generales: 0 });
+
+  // Cargar totales por ramo
+  const loadRamosTotals = useCallback(async () => {
+    if (!draftFortnight) {
+      setRamosTotals({ vida: 0, generales: 0 });
+      return;
+    }
+    
+    try {
+      // Obtener imports con is_life_insurance
+      const { data: imports, error: importsError } = await supabaseClient()
+        .from('comm_imports')
+        .select('id, total_amount, is_life_insurance')
+        .eq('period_label', draftFortnight.id);
+      
+      if (importsError) {
+        console.error('Error loading imports:', importsError);
+        return;
+      }
+      
+      let vida = 0;
+      let generales = 0;
+      
+      // Para cada import, calcular ganancia de oficina
+      for (const imp of imports || []) {
+        // Obtener comisiones desde fortnight_details (datos procesados)
+        const { data: details } = await supabaseClient()
+          .from('fortnight_details')
+          .select('commission_calculated')
+          .eq('source_import_id', imp.id);
+        
+        const totalComisionesBrokers = (details || []).reduce((sum, detail) => {
+          return sum + Math.abs(Number(detail.commission_calculated) || 0);
+        }, 0);
+        
+        const totalReporte = Math.abs(Number(imp.total_amount) || 0);
+        const gananciaOficina = totalReporte - totalComisionesBrokers;
+        
+        // Clasificar según is_life_insurance
+        if (imp.is_life_insurance) {
+          vida += gananciaOficina;
+        } else {
+          generales += gananciaOficina;
+        }
+      }
+      
+      setRamosTotals({ vida, generales });
+    } catch (error) {
+      console.error('Error calculating ramos totals:', error);
+    }
+  }, [draftFortnight]);
 
   // Cargar total de comisiones de brokers
   const loadBrokerCommissionsTotal = useCallback(async () => {
@@ -200,8 +254,9 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
     if (draftFortnight) {
       loadImportedReports();
       loadBrokerCommissionsTotal();
+      loadRamosTotals();
     }
-  }, [draftFortnight, loadImportedReports, loadBrokerCommissionsTotal]);
+  }, [draftFortnight, loadImportedReports, loadBrokerCommissionsTotal, loadRamosTotals]);
 
   const handleToggleNotify = async () => {
     if (!draftFortnight) return;
@@ -522,16 +577,16 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
             <div className="p-6 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl border-l-4 border-blue-500">
               <p className="text-sm text-blue-700 font-semibold mb-2">VIDA</p>
               <p className="text-3xl font-bold text-blue-900">
-                $0.00
+                ${ramosTotals.vida.toLocaleString('en-US', { minimumFractionDigits: 2 })}
               </p>
               <p className="text-xs text-blue-600 mt-1">Seguros de vida</p>
             </div>
             <div className="p-6 bg-gradient-to-br from-green-50 to-green-100 rounded-xl border-l-4 border-green-500">
               <p className="text-sm text-green-700 font-semibold mb-2">RAMOS GENERALES</p>
               <p className="text-3xl font-bold text-green-900">
-                ${office.totalImported.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                ${ramosTotals.generales.toLocaleString('en-US', { minimumFractionDigits: 2 })}
               </p>
-              <p className="text-xs text-green-600 mt-1">Otros seguros</p>
+              <p className="text-xs text-green-600 mt-1">Otros seguros (auto, hogar, etc.)</p>
             </div>
           </div>
         </CardContent>

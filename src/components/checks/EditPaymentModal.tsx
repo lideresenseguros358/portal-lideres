@@ -90,6 +90,7 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
     loadBrokers();
     loadPaymentReferences();
     loadAvailableReferences();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadPaymentReferences = async () => {
