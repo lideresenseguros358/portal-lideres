@@ -153,7 +153,7 @@ export default function MiniCalendarAgenda({ events }: MiniCalendarAgendaProps) 
       </div>
 
       {/* Calendar Grid */}
-      <div className="grid grid-cols-7 gap-1 px-5 flex-1 overflow-hidden">
+      <div className="grid grid-cols-7 gap-1 px-5 pb-2 flex-1 overflow-hidden">
         {DAYS_LABELS.map((label) => (
           <span key={label} className="text-center text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-[#8a8a8a] pb-1">
             {label}

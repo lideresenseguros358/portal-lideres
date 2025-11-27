@@ -10,7 +10,8 @@ import {
   FaDownload, 
   FaBook, 
   FaCalendarAlt,
-  FaUndo 
+  FaUndo,
+  FaClipboardList
 } from 'react-icons/fa';
 import { toast } from 'sonner';
 import GeneralTab from './tabs/GeneralTab';
@@ -21,12 +22,13 @@ import CasesTab from './tabs/CasesTab';
 import DownloadsTab from './tabs/DownloadsTab';
 import GuidesTab from './tabs/GuidesTab';
 import AgendaTab from './tabs/AgendaTab';
+import RequirementsTab from './tabs/RequirementsTab';
 
 interface ConfigMainClientProps {
   userId: string;
 }
 
-type TabKey = 'general' | 'insurers' | 'commissions' | 'delinquency' | 'cases' | 'downloads' | 'guides' | 'agenda';
+type TabKey = 'general' | 'insurers' | 'commissions' | 'delinquency' | 'cases' | 'requirements' | 'downloads' | 'guides' | 'agenda';
 
 const TABS = [
   { key: 'general' as TabKey, label: 'Generales', icon: FaCog },
@@ -34,6 +36,7 @@ const TABS = [
   { key: 'commissions' as TabKey, label: 'Comisiones', icon: FaDollarSign },
   { key: 'delinquency' as TabKey, label: 'Morosidad', icon: FaExclamationTriangle },
   { key: 'cases' as TabKey, label: 'Trámites', icon: FaFileAlt },
+  { key: 'requirements' as TabKey, label: 'Requisitos', icon: FaClipboardList },
   { key: 'downloads' as TabKey, label: 'Descargas', icon: FaDownload },
   { key: 'guides' as TabKey, label: 'Guías', icon: FaBook },
   { key: 'agenda' as TabKey, label: 'Agenda', icon: FaCalendarAlt },
@@ -132,6 +135,7 @@ export default function ConfigMainClient({ userId }: ConfigMainClientProps) {
         {activeTab === 'commissions' && <CommissionsTab userId={userId} />}
         {activeTab === 'delinquency' && <DelinquencyTab userId={userId} />}
         {activeTab === 'cases' && <CasesTab userId={userId} />}
+        {activeTab === 'requirements' && <RequirementsTab />}
         {activeTab === 'downloads' && <DownloadsTab userId={userId} />}
         {activeTab === 'guides' && <GuidesTab userId={userId} />}
         {activeTab === 'agenda' && <AgendaTab userId={userId} />}

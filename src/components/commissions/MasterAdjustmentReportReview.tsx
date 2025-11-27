@@ -45,7 +45,7 @@ interface AdjustmentItem {
 
 interface Props {
   reports: AdjustmentReport[];
-  onApprove: (reportId: string, paymentMode: 'immediate' | 'next_fortnight', adminNotes: string) => Promise<void>;
+  onApprove: (reportId: string, adminNotes: string) => Promise<void>;
   onReject: (reportId: string, reason: string) => Promise<void>;
   onEdit: (reportId: string, itemIds: string[]) => Promise<void>;
   onReload: () => void;
@@ -87,11 +87,10 @@ export default function MasterAdjustmentReportReview({
 
     setProcessing(true);
     try {
-      await onApprove(reviewingReport.id, paymentMode, adminNotes);
-      toast.success('Reporte aprobado exitosamente');
+      await onApprove(reviewingReport.id, adminNotes);
+      toast.success('Reporte aprobado - Ahora selecciona reportes aprobados para decidir método de pago');
       setReviewingReport(null);
       setAdminNotes('');
-      setPaymentMode('next_fortnight');
       onReload();
     } catch (error) {
       console.error('Error approving report:', error);
@@ -204,9 +203,9 @@ export default function MasterAdjustmentReportReview({
     setBatchApproving(true);
     try {
       for (const reportId of selectedReports) {
-        await onApprove(reportId, batchPaymentMode, '');
+        await onApprove(reportId, ''); // Solo aprobar, sin decidir método de pago aún
       }
-      toast.success(`${selectedReports.size} reporte(s) aprobado(s)`);
+      toast.success(`${selectedReports.size} reporte(s) aprobado(s) - Ahora selecciona reportes aprobados para decidir método de pago`);
       setSelectedReports(new Set());
       onReload();
     } catch (error) {

@@ -260,14 +260,14 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
             <button
               onClick={handleToggleActive}
               className={`
-                px-6 py-3 rounded-lg font-semibold transition-all flex items-center gap-2
+                px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg font-semibold text-xs sm:text-sm transition-all flex items-center gap-2
                 ${broker.active
                   ? 'bg-green-100 text-green-800 border-2 border-green-300 hover:bg-green-200'
                   : 'bg-red-100 text-red-800 border-2 border-red-300 hover:bg-red-200'
                 }
               `}
             >
-              {broker.active ? <FaCheckCircle /> : <FaTimesCircle />}
+              {broker.active ? <FaCheckCircle size={14} /> : <FaTimesCircle size={14} />}
               <span className="hidden sm:inline">{broker.active ? 'Activo' : 'Inactivo'}</span>
             </button>
           )}
@@ -700,15 +700,15 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
           </div>
 
           {/* Action Buttons */}
-          <div className="bg-white rounded-xl shadow-lg border-2 border-gray-100 p-6">
-            <div className="flex flex-wrap gap-3">
+          <div className="bg-white rounded-xl shadow-lg border-2 border-gray-100 p-4 sm:p-6">
+            <div className="flex flex-col sm:flex-row flex-wrap gap-2 sm:gap-3">
               {!isEditing ? (
                 <>
                   <button
                     onClick={() => setIsEditing(true)}
-                    className="flex-1 px-6 py-3 bg-gradient-to-r from-[#010139] to-[#020270] text-white rounded-lg hover:shadow-lg transition-all font-semibold flex items-center justify-center gap-2"
+                    className="flex-1 px-4 sm:px-5 py-2 sm:py-2.5 bg-gradient-to-r from-[#010139] to-[#020270] text-white rounded-lg hover:shadow-lg transition-all font-semibold text-xs sm:text-sm flex items-center justify-center gap-2"
                   >
-                    <FaEdit />
+                    <FaEdit size={14} />
                     Editar
                   </button>
                   {!isOficina && (
@@ -716,15 +716,15 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
                       <button
                         onClick={handleForcePasswordChange}
                         disabled={saving}
-                        className="flex-1 px-6 py-3 bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-all font-semibold flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="flex-1 px-4 sm:px-5 py-2 sm:py-2.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg transition-all font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
-                        🔑 Forzar Cambio Contraseña
+                        🔑 <span className="hidden sm:inline">Forzar Cambio Contraseña</span><span className="sm:hidden">Cambiar Clave</span>
                       </button>
                       <button
                         onClick={handleDelete}
-                        className="flex-1 px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-all font-semibold flex items-center justify-center gap-2"
+                        className="flex-1 px-4 sm:px-5 py-2 sm:py-2.5 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-all font-semibold text-xs sm:text-sm flex items-center justify-center gap-2"
                       >
-                        <FaTrash />
+                        <FaTrash size={14} />
                         Eliminar
                       </button>
                     </>
@@ -735,9 +735,9 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
                   <button
                     onClick={handleSave}
                     disabled={saving}
-                    className="flex-1 px-6 py-3 bg-[#8AAA19] hover:bg-[#7a9916] text-white rounded-lg transition-all font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
+                    className="flex-1 px-4 sm:px-5 py-2 sm:py-2.5 bg-[#8AAA19] hover:bg-[#7a9916] text-white rounded-lg transition-all font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 disabled:opacity-50"
                   >
-                    <FaSave />
+                    <FaSave size={14} />
                     {saving ? 'Guardando...' : 'Guardar'}
                   </button>
                   <button
@@ -746,9 +746,9 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
                       loadBroker();
                     }}
                     disabled={saving}
-                    className="flex-1 px-6 py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-all font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
+                    className="flex-1 px-4 sm:px-5 py-2 sm:py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-all font-semibold text-xs sm:text-sm flex items-center justify-center gap-2 disabled:opacity-50"
                   >
-                    <FaTimes />
+                    <FaTimes size={14} />
                     Cancelar
                   </button>
                 </>

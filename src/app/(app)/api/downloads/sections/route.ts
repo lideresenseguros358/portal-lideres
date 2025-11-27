@@ -15,12 +15,13 @@ export async function GET(request: NextRequest) {
     const scope = searchParams.get('scope');
     const policyType = searchParams.get('policy_type');
     const insurerId = searchParams.get('insurer_id');
+    const withFiles = searchParams.get('with_files') === 'true';
 
     let query = supabase
       .from('download_sections')
       .select(`
         *,
-        download_files (id, is_new, marked_new_until)
+        ${withFiles ? 'download_files (id, name, file_url, section_id, is_new, marked_new_until)' : 'download_files (id, is_new, marked_new_until)'}
       `)
       .order('display_order');
 
@@ -32,7 +33,35 @@ export async function GET(request: NextRequest) {
 
     if (error) throw error;
 
-    // Procesar counts
+    // Si se pidieron archivos completos, incluir info de aseguradora
+    if (withFiles) {
+      const sectionsWithInsurers = await Promise.all(sections?.map(async (section) => {
+        let insurerName = 'N/A';
+        if (section.insurer_id) {
+          const { data: insurer } = await supabase
+            .from('insurers')
+            .select('name')
+            .eq('id', section.insurer_id)
+            .single();
+          insurerName = insurer?.name || 'N/A';
+        }
+        
+        return {
+          id: section.id,
+          name: section.name,
+          insurer_id: section.insurer_id,
+          insurer_name: insurerName,
+          files: section.download_files || []
+        };
+      }) || []);
+
+      return NextResponse.json({ 
+        success: true, 
+        sections: sectionsWithInsurers 
+      });
+    }
+
+    // Procesar counts para respuesta normal
     const now = new Date();
     const sectionsWithCounts = sections?.map(section => {
       const files = section.download_files || [];

@@ -10,9 +10,11 @@ import {
   FaChevronDown, 
   FaChevronRight, 
   FaDownload, 
-  FaCheckCircle 
+  FaCheckCircle,
+  FaHandHoldingUsd,
+  FaExclamationTriangle
 } from 'react-icons/fa';
-import { actionGetClosedFortnights, actionGetLastClosedFortnight } from '@/app/(app)/commissions/actions';
+import { actionGetClosedFortnights, actionGetLastClosedFortnight, actionGetRetentionStatus } from '@/app/(app)/commissions/actions';
 import { exportBrokerToPDF, exportBrokerToExcel } from '@/lib/commission-export-utils';
 import { toast } from 'sonner';
 
@@ -124,6 +126,7 @@ export default function BrokerPreviewTab({ brokerId }: Props) {
   const [expandedInsurers, setExpandedInsurers] = useState<Set<string>>(new Set());
   const [fortnightDetails, setFortnightDetails] = useState<Record<string, BrokerDetail | null>>({});
   const [loadingDetails, setLoadingDetails] = useState<Record<string, boolean>>({});
+  const [retentionStatus, setRetentionStatus] = useState<Record<string, any>>({});
   const [downloadModal, setDownloadModal] = useState<{
     fortnightId: string;
     label: string;
@@ -204,13 +207,20 @@ export default function BrokerPreviewTab({ brokerId }: Props) {
     }
   };
 
-  const toggleFortnight = (fortnightId: string) => {
+  const toggleFortnight = async (fortnightId: string) => {
     const newExpanded = new Set(expandedFortnights);
     if (newExpanded.has(fortnightId)) {
       newExpanded.delete(fortnightId);
     } else {
       newExpanded.add(fortnightId);
       loadFortnightDetails(fortnightId);
+      // Cargar estado de retención
+      if (!retentionStatus[fortnightId]) {
+        const result = await actionGetRetentionStatus(brokerId, fortnightId);
+        if (result.ok) {
+          setRetentionStatus(prev => ({ ...prev, [fortnightId]: result.data }));
+        }
+      }
     }
     setExpandedFortnights(newExpanded);
   };
@@ -423,32 +433,113 @@ export default function BrokerPreviewTab({ brokerId }: Props) {
                   </div>
                 ) : details ? (
                   <div className="p-6 space-y-6">
-                    {/* Resumen de Montos */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <Card className="shadow-inner">
-                        <CardContent className="p-4">
-                          <p className="text-sm text-gray-600">Bruto</p>
-                          <p className="text-2xl font-bold text-[#010139]">{formatCurrency(details.gross_amount)}</p>
-                        </CardContent>
-                      </Card>
-                      <Card className="shadow-inner">
-                        <CardContent className="p-4">
-                          <p className="text-sm text-gray-600">Descuentos</p>
-                          <p className="text-2xl font-bold text-red-600">
-                            {formatCurrency(details.discounts_json?.total || 0)}
-                          </p>
-                        </CardContent>
-                      </Card>
-                      <Card className="shadow-inner">
-                        <CardContent className="p-4">
-                          <p className="text-sm text-gray-600">Neto Pagado</p>
-                          <p className="text-2xl font-bold text-[#8AAA19]">{formatCurrency(details.net_amount)}</p>
-                        </CardContent>
-                      </Card>
-                    </div>
+                    {/* Mensajes de Retención */}
+                    {(() => {
+                      const retention = retentionStatus[fortnight.id];
+                      if (retention) {
+                        // Si la retención fue pagada en OTRA quincena
+                        if (retention.status === 'paid' && retention.applied_fortnight_id) {
+                          const paidFortnight = retention.applied_fortnight;
+                          return (
+                            <div className="p-4 bg-blue-50 border-l-4 border-blue-500 rounded-lg">
+                              <div className="flex items-start gap-3">
+                                <FaCheckCircle className="text-blue-600 flex-shrink-0 mt-1" size={20} />
+                                <div className="flex-1">
+                                  <h4 className="font-bold text-blue-800 text-sm sm:text-base mb-2">
+                                    Comisión Retenida - Liberada
+                                  </h4>
+                                  <p className="text-xs sm:text-sm text-blue-700 leading-relaxed">
+                                    Esta comisión fue <strong>retenida</strong> en esta quincena pero posteriormente fue <strong>liberada y pagada</strong>.
+                                  </p>
+                                  {paidFortnight && (
+                                    <p className="text-xs sm:text-sm text-blue-700 mt-2 font-semibold">
+                                      📍 Busca el detalle completo en la quincena: <strong>
+                                        {new Date(paidFortnight.period_start).toLocaleDateString('es-PA')} - {new Date(paidFortnight.period_end).toLocaleDateString('es-PA')}
+                                      </strong> (Quincena #{paidFortnight.fortnight_number})
+                                    </p>
+                                  )}
+                                  <p className="text-xs text-blue-600 mt-2">
+                                    💰 Monto liberado: <strong>{formatCurrency(retention.net_amount)}</strong>
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        }
+                        
+                        // Si la retención está pendiente o asociada a quincena pero no pagada aún
+                        if (retention.status === 'pending' || retention.status === 'associated_to_fortnight') {
+                          return (
+                            <div className="p-4 bg-red-50 border-l-4 border-red-500 rounded-lg">
+                              <div className="flex items-start gap-3">
+                                <FaHandHoldingUsd className="text-red-600 flex-shrink-0 mt-1" size={20} />
+                                <div className="flex-1">
+                                  <h4 className="font-bold text-red-800 text-sm sm:text-base mb-2 flex items-center gap-2">
+                                    <FaExclamationTriangle size={16} />
+                                    Este Pago Fue Retenido
+                                  </h4>
+                                  <p className="text-xs sm:text-sm text-red-700 leading-relaxed">
+                                    Esta comisión ha sido <strong>retenida temporalmente</strong> y <strong>NO ha sido depositada</strong>.
+                                  </p>
+                                  <p className="text-xs sm:text-sm text-red-700 mt-2">
+                                    Por favor <strong>contacta a un administrador</strong> para solventar el estatus de tu pago y conocer los detalles de la retención.
+                                  </p>
+                                  {retention.status === 'associated_to_fortnight' && retention.applied_fortnight && (
+                                    <p className="text-xs text-red-600 mt-2 font-semibold">
+                                      📅 Programado para liberarse en: <strong>
+                                        {new Date(retention.applied_fortnight.period_start).toLocaleDateString('es-PA')} - {new Date(retention.applied_fortnight.period_end).toLocaleDateString('es-PA')}
+                                      </strong>
+                                    </p>
+                                  )}
+                                  <p className="text-xs text-red-600 mt-2">
+                                    💵 Monto retenido: <strong>{formatCurrency(retention.net_amount)}</strong>
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        }
+                      }
+                      return null;
+                    })()}
 
-                    {/* Aseguradoras con Pólizas */}
-                    <div>
+                    {/* Solo mostrar detalle si NO fue pagado en otra quincena */}
+                    {(() => {
+                      const retention = retentionStatus[fortnight.id];
+                      // Si fue pagado en otra quincena, NO mostrar detalle
+                      if (retention && retention.status === 'paid' && retention.applied_fortnight_id) {
+                        return null;
+                      }
+                      
+                      // Mostrar detalle completo
+                      return (
+                        <>
+                          {/* Resumen de Montos */}
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <Card className="shadow-inner">
+                              <CardContent className="p-4">
+                                <p className="text-sm text-gray-600">Bruto</p>
+                                <p className="text-2xl font-bold text-[#010139]">{formatCurrency(details.gross_amount)}</p>
+                              </CardContent>
+                            </Card>
+                            <Card className="shadow-inner">
+                              <CardContent className="p-4">
+                                <p className="text-sm text-gray-600">Descuentos</p>
+                                <p className="text-2xl font-bold text-red-600">
+                                  {formatCurrency(details.discounts_json?.total || 0)}
+                                </p>
+                              </CardContent>
+                            </Card>
+                            <Card className="shadow-inner">
+                              <CardContent className="p-4">
+                                <p className="text-sm text-gray-600">Neto Pagado</p>
+                                <p className="text-2xl font-bold text-[#8AAA19]">{formatCurrency(details.net_amount)}</p>
+                              </CardContent>
+                            </Card>
+                          </div>
+
+                          {/* Aseguradoras con Pólizas */}
+                          <div>
                       <h4 className="mb-3 text-base font-bold text-[#010139]">Detalle por Aseguradora</h4>
                       <div className="space-y-3">
                         {details.insurers.map((insurer) => {
@@ -569,30 +660,33 @@ export default function BrokerPreviewTab({ brokerId }: Props) {
                       </div>
                     )}
 
-                    {/* Adelantos Descontados */}
-                    {details.discounts_json?.adelantos && details.discounts_json.adelantos.length > 0 && (
-                      <div>
-                        <h4 className="mb-3 text-base font-bold text-[#010139]">Adelantos Descontados</h4>
-                        <Table>
-                          <TableHeader>
-                            <TableRow className="bg-gray-50">
-                              <TableHead>Descripción</TableHead>
-                              <TableHead className="text-right">Monto</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {details.discounts_json.adelantos.map((adelanto, index) => (
-                              <TableRow key={index}>
-                                <TableCell>{adelanto.description}</TableCell>
-                                <TableCell className="text-right font-mono text-red-600">
-                                  {formatCurrency(adelanto.amount)}
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    )}
+                          {/* Adelantos Descontados */}
+                          {details.discounts_json?.adelantos && details.discounts_json.adelantos.length > 0 && (
+                            <div>
+                              <h4 className="mb-3 text-base font-bold text-[#010139]">Adelantos Descontados</h4>
+                              <Table>
+                                <TableHeader>
+                                  <TableRow className="bg-gray-50">
+                                    <TableHead>Descripción</TableHead>
+                                    <TableHead className="text-right">Monto</TableHead>
+                                  </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                  {details.discounts_json.adelantos.map((adelanto, index) => (
+                                    <TableRow key={index}>
+                                      <TableCell>{adelanto.description}</TableCell>
+                                      <TableCell className="text-right font-mono text-red-600">
+                                        {formatCurrency(adelanto.amount)}
+                                      </TableCell>
+                                    </TableRow>
+                                  ))}
+                                </TableBody>
+                              </Table>
+                            </div>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                 ) : (
                   <div className="text-center py-8 text-gray-500">

@@ -271,7 +271,6 @@ export default function CasesMainClient({ userProfile, brokers, insurers }: Case
                     ? 'bg-[#010139] text-white shadow-md' 
                     : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200 hover:border-gray-300'
                   }
-                  ${tab.priority ? 'ring-2 ring-[#8AAA19] ring-offset-2' : ''}
                 `}
               >
                 {tab.label}

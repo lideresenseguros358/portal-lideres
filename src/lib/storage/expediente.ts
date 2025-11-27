@@ -26,6 +26,7 @@ export interface ExpedienteDocument {
 
 const BUCKET_NAME = 'expediente';
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+const MAX_DOCUMENTS_PER_POLICY = 5; // Máximo de documentos por póliza
 const ALLOWED_MIME_TYPES = [
   'application/pdf',
   'image/jpeg',
@@ -120,6 +121,26 @@ export async function uploadExpedienteDocument(
     }
     
     // "otros" can be for client or policy, no validation needed
+
+    // Check document limit for policy documents
+    if (policyId) {
+      const { data: existingDocs, error: countError } = await supabase
+        .from('expediente_documents')
+        .select('id')
+        .eq('policy_id', policyId);
+      
+      if (countError) {
+        console.error('Error checking document count:', countError);
+        return { ok: false, error: 'Error al verificar cantidad de documentos' };
+      }
+      
+      if (existingDocs && existingDocs.length >= MAX_DOCUMENTS_PER_POLICY) {
+        return {
+          ok: false,
+          error: `Esta póliza ya tiene el máximo de ${MAX_DOCUMENTS_PER_POLICY} documentos permitidos. Elimina algún documento existente para subir uno nuevo.`,
+        };
+      }
+    }
 
     // Generate file path
     const filePath = generateFilePath(clientId, policyId, documentType, file.name);
@@ -371,3 +392,37 @@ export async function updateDocumentNotes(
     return { ok: false, error: error.message || 'Error inesperado' };
   }
 }
+
+/**
+ * Get document count for a policy
+ */
+export async function getPolicyDocumentCount(
+  policyId: string
+): Promise<{ ok: boolean; count?: number; remaining?: number; error?: string }> {
+  try {
+    const supabase = supabaseClient();
+
+    const { data, error } = await supabase
+      .from('expediente_documents')
+      .select('id')
+      .eq('policy_id', policyId);
+
+    if (error) {
+      console.error('Error counting policy documents:', error);
+      return { ok: false, error: error.message };
+    }
+
+    const count = data?.length || 0;
+    const remaining = Math.max(0, MAX_DOCUMENTS_PER_POLICY - count);
+
+    return { ok: true, count, remaining };
+  } catch (error: any) {
+    console.error('Unexpected error counting documents:', error);
+    return { ok: false, error: error.message || 'Error inesperado' };
+  }
+}
+
+/**
+ * Export constants for UI usage
+ */
+export { MAX_DOCUMENTS_PER_POLICY, MAX_FILE_SIZE, ALLOWED_MIME_TYPES };

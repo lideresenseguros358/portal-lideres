@@ -26,6 +26,18 @@ const formatCurrency = (value: number) =>
     maximumFractionDigits: 2,
   }).format(value ?? 0);
 
+// Función para formatear nombre: solo primer nombre, capitalizado
+const formatFirstName = (fullName: string | null | undefined): string => {
+  if (!fullName) return "Corredor";
+  
+  // Tomar solo la parte antes del primer espacio
+  const firstName = fullName.trim().split(" ")[0];
+  if (!firstName) return "Corredor";
+  
+  // Capitalizar: primera letra mayúscula, resto minúsculas
+  return firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase();
+};
+
 interface BrokerDashboardProps {
   userId: string;
 }
@@ -51,7 +63,7 @@ const BrokerDashboard = async ({ userId }: BrokerDashboardProps) => {
       getImportantDates(),
     ]);
 
-  const profileName = profileResult.data?.full_name ?? "Corredor";
+  const profileName = formatFirstName(profileResult.data?.full_name);
   const brokerId = profileResult.data?.broker_id ?? null;
   const ranking: RankingResult = rankingData;
   const contests: ContestProgress[] = contestData;
@@ -71,8 +83,8 @@ const BrokerDashboard = async ({ userId }: BrokerDashboardProps) => {
   return (
     <div className="broker-dashboard">
       <div className="dashboard-header">
-        <h1 className="dashboard-title">Bienvenido de vuelta, {profileName}</h1>
-        <p className="dashboard-subtitle">Tu panel de control personal</p>
+        <h1 className="dashboard-title">¡Hola {profileName}! 👋</h1>
+        <p className="dashboard-subtitle">Nos alegra verte hoy. Aquí está tu resumen de actividad</p>
       </div>
 
       <div className="dashboard-section">

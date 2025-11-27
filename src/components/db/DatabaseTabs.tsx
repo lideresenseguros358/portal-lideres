@@ -507,6 +507,7 @@ const ClientsListView = ({ clients, onView, onEdit, onDelete, role, selectedClie
   const [openMenuClient, setOpenMenuClient] = useState<string | null>(null);
   const [openMenuPolicy, setOpenMenuPolicy] = useState<string | null>(null);
   const [expandedExpedientes, setExpandedExpedientes] = useState<Set<string>>(new Set());
+  const [expedienteModalOpen, setExpedienteModalOpen] = useState<Record<string, boolean>>({});
 
   const toggleClient = (clientId: string) => {
     setExpandedClients((prev) => {
@@ -811,9 +812,6 @@ const ClientsListView = ({ clients, onView, onEdit, onDelete, role, selectedClie
                               <span className="text-sm font-bold text-[#010139]">
                                 Expediente del Cliente
                               </span>
-                              <span className="text-xs text-gray-500">
-                                ({client.policies?.length || 0} documento(s))
-                              </span>
                             </div>
                             {expandedExpedientes.has(client.id) ? (
                               <ChevronUp size={18} className="text-gray-600" />
@@ -825,11 +823,16 @@ const ClientsListView = ({ clients, onView, onEdit, onDelete, role, selectedClie
                           {expandedExpedientes.has(client.id) && (
                             <div className="mt-3 p-4 bg-white rounded-lg border border-gray-200">
                               <ExpedienteManager
+                                key={`expediente-${(client as any).id}`}
                                 clientId={(client as any).id}
                                 showClientDocs={true}
                                 showPolicyDocs={false}
                                 showOtros={true}
                                 readOnly={role !== 'master'}
+                                externalModalOpen={expedienteModalOpen[(client as any).id]}
+                                onExternalModalChange={(open) => {
+                                  setExpedienteModalOpen(prev => ({ ...prev, [(client as any).id]: open }));
+                                }}
                               />
                             </div>
                           )}
@@ -937,8 +940,18 @@ const ClientsListView = ({ clients, onView, onEdit, onDelete, role, selectedClie
                       <><ChevronDown size={16} /> Ver Pólizas</>
                     )}
                   </button>
-                  <div className="relative">
+                  <div>
                     <button
+                      ref={(el) => {
+                        if (el && openMenuClient === client.id) {
+                          const rect = el.getBoundingClientRect();
+                          const menu = document.getElementById(`menu-client-${client.id}`);
+                          if (menu) {
+                            menu.style.top = `${rect.bottom + 4}px`;
+                            menu.style.right = `${window.innerWidth - rect.right}px`;
+                          }
+                        }
+                      }}
                       onClick={(e) => {
                         e.stopPropagation();
                         setOpenMenuClient(openMenuClient === client.id ? null : client.id);
@@ -953,7 +966,7 @@ const ClientsListView = ({ clients, onView, onEdit, onDelete, role, selectedClie
                           className="fixed inset-0 z-[100]" 
                           onClick={() => setOpenMenuClient(null)}
                         />
-                        <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-[101]">
+                        <div id={`menu-client-${client.id}`} className="fixed w-48 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-[101]">
                           <button
                             onClick={() => {
                               onView(client.id);
@@ -1116,9 +1129,6 @@ const ClientsListView = ({ clients, onView, onEdit, onDelete, role, selectedClie
                         <span className="text-sm font-semibold text-[#010139]">
                           Expediente
                         </span>
-                        <span className="text-xs text-gray-500">
-                          ({client.policies?.length || 0})
-                        </span>
                       </div>
                       {expandedExpedientes.has(client.id) ? (
                         <ChevronUp size={16} className="text-gray-600" />
@@ -1130,11 +1140,16 @@ const ClientsListView = ({ clients, onView, onEdit, onDelete, role, selectedClie
                     {expandedExpedientes.has(client.id) && (
                       <div className="mt-3 p-3 bg-white rounded-lg border border-gray-200">
                         <ExpedienteManager
+                          key={`expediente-grid-${(client as any).id}`}
                           clientId={(client as any).id}
                           showClientDocs={true}
                           showPolicyDocs={false}
                           showOtros={true}
                           readOnly={role !== 'master'}
+                          externalModalOpen={expedienteModalOpen[(client as any).id]}
+                          onExternalModalChange={(open) => {
+                            setExpedienteModalOpen(prev => ({ ...prev, [(client as any).id]: open }));
+                          }}
                         />
                       </div>
                     )}
@@ -1169,6 +1184,7 @@ export default function DatabaseTabs({
   
   const [showExpedienteModal, setShowExpedienteModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
+  const [expedienteUploadModalOpen, setExpedienteUploadModalOpen] = useState(false);
   const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set());
   const [selectedClients, setSelectedClients] = useState<Set<string>>(new Set());
   const [selectionMode, setSelectionMode] = useState(false);
@@ -1263,42 +1279,7 @@ export default function DatabaseTabs({
     }
   };
 
-  const handleToggleClient = (clientId: string) => {
-    setSelectedClients((prev) => {
-      const next = new Set(prev);
-      if (next.has(clientId)) {
-        next.delete(clientId);
-      } else {
-        next.add(clientId);
-      }
-      return next;
-    });
-  };
-
-  const handleSelectAll = () => {
-    if (selectedClients.size === clients.length) {
-      setSelectedClients(new Set());
-    } else {
-      setSelectedClients(new Set(clients.map(c => c.id)));
-    }
-  };
-
-  const handleExportFormat = async (format: 'pdf' | 'excel') => {
-    const clientsToExport = selectedClients.size > 0 
-      ? clients.filter(c => selectedClients.has(c.id))
-      : clients;
-    
-    if (format === 'pdf') {
-      await exportToPDF(clientsToExport, role);
-    } else {
-      await exportToExcel(clientsToExport, role);
-    }
-    
-    setShowExportModal(false);
-    setSelectedClients(new Set());
-  };
-
-  // Aplicar filtros a los clientes
+  // Aplicar filtros a los clientes (ANTES de las funciones que lo usan)
   const filteredClients = useMemo(() => {
     let filtered = [...clients];
 
@@ -1331,7 +1312,44 @@ export default function DatabaseTabs({
     }
 
     return filtered;
-  }, [clients, filters, role]);
+  }, [clients, filters, role, searchQuery]);
+
+  const handleToggleClient = (clientId: string) => {
+    setSelectedClients((prev) => {
+      const next = new Set(prev);
+      if (next.has(clientId)) {
+        next.delete(clientId);
+      } else {
+        next.add(clientId);
+      }
+      return next;
+    });
+  };
+
+  // Seleccionar todos RESPETANDO LOS FILTROS
+  const handleSelectAll = () => {
+    if (selectedClients.size === filteredClients.length) {
+      setSelectedClients(new Set());
+    } else {
+      setSelectedClients(new Set(filteredClients.map(c => c.id)));
+    }
+  };
+
+  // Exportar RESPETANDO LOS FILTROS Y LA SELECCIÓN
+  const handleExportFormat = async (format: 'pdf' | 'excel') => {
+    const clientsToExport = selectedClients.size > 0 
+      ? filteredClients.filter(c => selectedClients.has(c.id))
+      : filteredClients;
+    
+    if (format === 'pdf') {
+      await exportToPDF(clientsToExport, role);
+    } else {
+      await exportToExcel(clientsToExport, role);
+    }
+    
+    setShowExportModal(false);
+    setSelectedClients(new Set());
+  };
 
   // Obtener opciones únicas para filtros
   const filterOptions = useMemo(() => {
@@ -1408,7 +1426,25 @@ export default function DatabaseTabs({
       )}
       {modal === 'edit-client' && clientToEdit && (
         <Modal title="Editar Cliente" onClose={() => router.push('/db?tab=clients')}>
-          <ClientForm client={clientToEdit} onClose={() => router.push('/db?tab=clients', { scroll: false })} />
+          <ClientForm 
+            client={clientToEdit} 
+            onClose={() => router.push('/db?tab=clients', { scroll: false })}
+            expedienteModalOpen={expedienteUploadModalOpen}
+            onExpedienteModalChange={setExpedienteUploadModalOpen}
+          />
+        </Modal>
+      )}
+
+      {/* Modal de Expediente - Separado y completamente independiente */}
+      {expedienteUploadModalOpen && clientToEdit && (
+        <Modal title="Gestionar Expediente" onClose={() => setExpedienteUploadModalOpen(false)}>
+          <ExpedienteManager
+            clientId={(clientToEdit as any).id}
+            showClientDocs={true}
+            showPolicyDocs={false}
+            showOtros={true}
+            readOnly={false}
+          />
         </Modal>
       )}
 
@@ -1723,7 +1759,7 @@ export default function DatabaseTabs({
         onClose={() => setShowExportModal(false)}
         onSelectFormat={handleExportFormat}
         selectedCount={selectedClients.size}
-        totalCount={clients.length}
+        totalCount={filteredClients.length}
       />
 
       <style jsx>{`

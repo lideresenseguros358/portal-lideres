@@ -900,6 +900,50 @@ export type Database = {
           },
         ]
       }
+      case_progress: {
+        Row: {
+          case_id: string
+          current_step_number: number
+          id: string
+          notes: string | null
+          step_completed_at: string | null
+          step_name: string
+          step_started_at: string | null
+          total_steps: number
+          updated_at: string | null
+        }
+        Insert: {
+          case_id: string
+          current_step_number?: number
+          id?: string
+          notes?: string | null
+          step_completed_at?: string | null
+          step_name: string
+          step_started_at?: string | null
+          total_steps: number
+          updated_at?: string | null
+        }
+        Update: {
+          case_id?: string
+          current_step_number?: number
+          id?: string
+          notes?: string | null
+          step_completed_at?: string | null
+          step_name?: string
+          step_started_at?: string | null
+          total_steps?: number
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "case_progress_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: true
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cases: {
         Row: {
           adelanto_id: string | null
@@ -3236,6 +3280,63 @@ export type Database = {
           },
         ]
       }
+      policy_requirements: {
+        Row: {
+          created_at: string | null
+          display_order: number
+          id: string
+          label: string
+          linked_download_file: string | null
+          linked_download_section: string | null
+          ramo: string
+          required: boolean
+          requirement_type: string
+          standard_name: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          display_order?: number
+          id?: string
+          label: string
+          linked_download_file?: string | null
+          linked_download_section?: string | null
+          ramo: string
+          required?: boolean
+          requirement_type?: string
+          standard_name: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          display_order?: number
+          id?: string
+          label?: string
+          linked_download_file?: string | null
+          linked_download_section?: string | null
+          ramo?: string
+          required?: boolean
+          requirement_type?: string
+          standard_name?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "policy_requirements_linked_download_file_fkey"
+            columns: ["linked_download_file"]
+            isOneToOne: false
+            referencedRelation: "download_files"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "policy_requirements_linked_download_section_fkey"
+            columns: ["linked_download_section"]
+            isOneToOne: false
+            referencedRelation: "download_sections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       production: {
         Row: {
           broker_id: string
@@ -3691,6 +3792,45 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      workflow_steps: {
+        Row: {
+          created_at: string | null
+          display_order: number
+          estimated_days: number | null
+          id: string
+          management_type: string
+          ramo: string
+          step_description: string | null
+          step_name: string
+          step_number: number
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          display_order?: number
+          estimated_days?: number | null
+          id?: string
+          management_type: string
+          ramo: string
+          step_description?: string | null
+          step_name: string
+          step_number: number
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          display_order?: number
+          estimated_days?: number | null
+          id?: string
+          management_type?: string
+          ramo?: string
+          step_description?: string | null
+          step_name?: string
+          step_number?: number
+          updated_at?: string | null
+        }
+        Relationships: []
       }
     }
     Views: {
@@ -4183,6 +4323,7 @@ export type Database = {
         Args: { p_broker_id: string }
         Returns: string
       }
+      fix_text_encoding: { Args: { input_text: string }; Returns: string }
       get_brokers_for_import: {
         Args: never
         Returns: {

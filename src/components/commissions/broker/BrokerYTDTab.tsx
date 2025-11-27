@@ -179,10 +179,20 @@ export default function BrokerYTDTab({ brokerId }: Props) {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-3xl font-bold text-blue-600 font-mono">
-              {formatCurrency(totalCurrent / monthlyData.length)}
-            </p>
-            <p className="text-xs text-gray-600 mt-2 font-semibold">Basado en {monthlyData.length} meses</p>
+            {(() => {
+              const monthsWithData = monthlyData.filter(m => m.current > 0).length;
+              const average = monthsWithData > 0 ? totalCurrent / monthsWithData : 0;
+              return (
+                <>
+                  <p className="text-3xl font-bold text-blue-600 font-mono">
+                    {formatCurrency(average)}
+                  </p>
+                  <p className="text-xs text-gray-600 mt-2 font-semibold">
+                    {monthsWithData} mes(es) con datos
+                  </p>
+                </>
+              );
+            })()}
           </CardContent>
         </Card>
         
@@ -194,12 +204,20 @@ export default function BrokerYTDTab({ brokerId }: Props) {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-3xl font-bold text-purple-600 font-mono">
-              {formatCurrency(Math.max(...monthlyData.map(m => m.current)))}
-            </p>
-            <p className="text-xs text-gray-600 mt-2 font-semibold">
-              {monthlyData.find(m => m.current === Math.max(...monthlyData.map(m => m.current)))?.month} {year}
-            </p>
+            {(() => {
+              const maxValue = Math.max(...monthlyData.map(m => m.current), 0);
+              const bestMonth = monthlyData.find(m => m.current === maxValue);
+              return (
+                <>
+                  <p className="text-3xl font-bold text-purple-600 font-mono">
+                    {formatCurrency(maxValue)}
+                  </p>
+                  <p className="text-xs text-gray-600 mt-2 font-semibold">
+                    {maxValue > 0 ? `${bestMonth?.month} ${year}` : 'Sin datos'}
+                  </p>
+                </>
+              );
+            })()}
           </CardContent>
         </Card>
       </div>

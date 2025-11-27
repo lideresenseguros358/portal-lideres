@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { FaUpload, FaDownload, FaTrash, FaFile, FaFilePdf, FaFileImage, FaPlus, FaTimes, FaEye, FaIdCard, FaFolderPlus } from 'react-icons/fa';
 import { toast } from 'sonner';
 import {
@@ -9,6 +10,8 @@ import {
   getPolicyDocuments,
   deleteExpedienteDocument,
   getExpedienteDocumentUrl,
+  getPolicyDocumentCount,
+  MAX_DOCUMENTS_PER_POLICY,
   type DocumentType,
   type ExpedienteDocument,
 } from '@/lib/storage/expediente';
@@ -21,6 +24,9 @@ interface ExpedienteManagerProps {
   showOtros?: boolean; // Mostrar documentos tipo "otros"
   readOnly?: boolean; // Solo lectura (broker en algunos casos)
   onDocumentsChange?: (docs: ExpedienteDocument[]) => void;
+  // Control externo del modal (para evitar que se cierre por re-renders)
+  externalModalOpen?: boolean;
+  onExternalModalChange?: (open: boolean) => void;
 }
 
 export default function ExpedienteManager({
@@ -31,19 +37,64 @@ export default function ExpedienteManager({
   showOtros = true,
   readOnly = false,
   onDocumentsChange,
+  externalModalOpen,
+  onExternalModalChange,
 }: ExpedienteManagerProps) {
   const [documents, setDocuments] = useState<ExpedienteDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
-  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [internalModalOpen, setInternalModalOpen] = useState(false);
+  
+  // Usar control externo si está disponible, sino usar interno
+  const showUploadModal = externalModalOpen !== undefined ? externalModalOpen : internalModalOpen;
+  const setShowUploadModal = (open: boolean) => {
+    if (onExternalModalChange) {
+      onExternalModalChange(open);
+    } else {
+      setInternalModalOpen(open);
+    }
+  };
+  
   const [previewDoc, setPreviewDoc] = useState<{ url: string; name: string; type: string } | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
+  const [policyDocCount, setPolicyDocCount] = useState<{ count: number; remaining: number } | null>(null);
 
   // Upload form state
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploadDocType, setUploadDocType] = useState<DocumentType>('cedula');
   const [uploadDocName, setUploadDocName] = useState('');
   const [uploadNotes, setUploadNotes] = useState('');
+  const [mounted, setMounted] = useState(false);
+
+  // Montar el componente en el cliente
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Función para forzar la descarga de archivos (programatically)
+  const forceDownload = async (url: string, filename: string) => {
+    try {
+      const response = await fetch(url);
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      console.error('Error al descargar archivo:', error);
+      toast.error('Error al descargar el archivo');
+    }
+  };
+
+  // Usar ref para onDocumentsChange para evitar re-renders constantes
+  const onDocumentsChangeRef = useRef(onDocumentsChange);
+  useEffect(() => {
+    onDocumentsChangeRef.current = onDocumentsChange;
+  }, [onDocumentsChange]);
 
   const loadDocuments = useCallback(async () => {
     setLoading(true);
@@ -64,17 +115,23 @@ export default function ExpedienteManager({
         if (policyDocsResult.ok && policyDocsResult.data) {
           allDocs = [...allDocs, ...policyDocsResult.data];
         }
+        
+        // Load policy document count
+        const countResult = await getPolicyDocumentCount(policyId);
+        if (countResult.ok && countResult.count !== undefined && countResult.remaining !== undefined) {
+          setPolicyDocCount({ count: countResult.count, remaining: countResult.remaining });
+        }
       }
 
       setDocuments(allDocs);
-      onDocumentsChange?.(allDocs);
+      onDocumentsChangeRef.current?.(allDocs);
     } catch (error) {
       console.error('Error loading documents:', error);
       toast.error('Error al cargar documentos');
     } finally {
       setLoading(false);
     }
-  }, [clientId, policyId, showClientDocs, showPolicyDocs, onDocumentsChange]);
+  }, [clientId, policyId, showClientDocs, showPolicyDocs]);
 
   useEffect(() => {
     loadDocuments();
@@ -164,16 +221,9 @@ export default function ExpedienteManager({
     try {
       const result = await getExpedienteDocumentUrl(doc.file_path);
       if (result.ok && result.url) {
-        // Crear elemento link para forzar descarga
-        const link = document.createElement('a');
-        link.href = result.url;
-        link.download = doc.file_name;
-        link.target = '_blank';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        toast.success('Descargando documento...');
+        await forceDownload(result.url, doc.file_name);
       } else {
+        toast.error('Error al obtener la URL del documento');
         toast.error('Error al obtener URL del documento');
       }
     } catch (error) {
@@ -415,9 +465,9 @@ export default function ExpedienteManager({
       </div>
 
       {/* Preview Modal */}
-      {previewDoc && (
+      {previewDoc && mounted && createPortal(
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[60] p-4 overflow-y-auto">
-          <div className="bg-white rounded-xl shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-hidden border-2 border-gray-200 flex flex-col my-4 sm:my-8">
+          <div className="bg-white rounded-xl shadow-2xl max-w-5xl w-full max-h-[90vh] sm:max-h-[85vh] overflow-hidden border-2 border-gray-200 flex flex-col my-4 sm:my-8">
             {/* Header */}
             <div className="sticky top-0 bg-gradient-to-r from-[#010139] to-[#020270] px-5 py-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -430,17 +480,17 @@ export default function ExpedienteManager({
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <a
-                  href={previewDoc.url}
-                  download={previewDoc.name}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="p-2 hover:bg-white/10 rounded-lg transition-all text-white flex items-center gap-2 text-sm font-semibold"
-                  title="Descargar"
-                >
-                  <FaDownload size={16} />
-                  <span className="hidden sm:inline">Descargar</span>
-                </a>
+                {/* Solo mostrar botón de descarga si NO es PDF (los PDFs tienen su propio botón) */}
+                {!previewDoc.type.includes('pdf') && (
+                  <button
+                    onClick={() => forceDownload(previewDoc.url, previewDoc.name)}
+                    className="p-2 hover:bg-white/10 rounded-lg transition-all flex items-center gap-2 text-sm font-semibold"
+                    title="Descargar"
+                  >
+                    <FaDownload size={16} className="text-white" />
+                    <span className="hidden sm:inline text-white">Descargar</span>
+                  </button>
+                )}
                 <button
                   onClick={() => setPreviewDoc(null)}
                   className="p-2 hover:bg-white/10 rounded-lg transition-all"
@@ -471,38 +521,28 @@ export default function ExpedienteManager({
                 <div className="flex flex-col items-center justify-center h-full gap-4">
                   <FaFile size={64} className="text-gray-400" />
                   <p className="text-gray-600">No se puede previsualizar este tipo de archivo</p>
-                  <a
-                    href={previewDoc.url}
-                    download={previewDoc.name}
-                    target="_blank"
-                    rel="noopener noreferrer"
+                  <button
+                    onClick={() => forceDownload(previewDoc.url, previewDoc.name)}
                     className="px-6 py-3 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg hover:shadow-lg transition-all font-semibold flex items-center gap-2"
                   >
                     <FaDownload size={16} />
                     Descargar Archivo
-                  </a>
+                  </button>
                 </div>
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Upload Modal - Rediseñado con branding corporativo */}
-      {showUploadModal && (
+      {showUploadModal && mounted && createPortal(
         <div 
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4 overflow-y-auto"
-          onClick={(e) => {
-            // Solo cerrar si se hace click en el overlay, no en el contenido
-            if (e.target === e.currentTarget) {
-              setShowUploadModal(false);
-              resetUploadForm();
-            }
-          }}
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto"
         >
           <div 
-            className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto border-2 border-gray-200 my-4 sm:my-8"
-            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] sm:max-h-[85vh] overflow-y-auto border-2 border-gray-200 my-4 sm:my-8"
           >
             {/* Header con gradiente corporativo */}
             <div className="sticky top-0 bg-gradient-to-r from-[#010139] to-[#020270] px-5 py-4 flex items-center justify-between rounded-t-xl">
@@ -527,6 +567,54 @@ export default function ExpedienteManager({
             </div>
 
             <div className="p-5 space-y-4">
+              {/* Policy Document Limit Warning */}
+              {policyId && policyDocCount && (
+                <div className={`rounded-lg p-3 border-l-4 ${
+                  policyDocCount.remaining > 0 
+                    ? 'bg-blue-50 border-blue-500' 
+                    : 'bg-red-50 border-red-500'
+                }`}>
+                  <div className="flex items-start gap-2">
+                    <div className="flex-shrink-0 text-lg">
+                      {policyDocCount.remaining > 0 ? '📊' : '⚠️'}
+                    </div>
+                    <div className="flex-1">
+                      <p className={`text-sm font-semibold ${
+                        policyDocCount.remaining > 0 ? 'text-blue-900' : 'text-red-900'
+                      }`}>
+                        {policyDocCount.remaining > 0 
+                          ? `Documentos de póliza: ${policyDocCount.count} de ${MAX_DOCUMENTS_PER_POLICY}` 
+                          : `Límite alcanzado: ${policyDocCount.count}/${MAX_DOCUMENTS_PER_POLICY}`}
+                      </p>
+                      <p className={`text-xs mt-1 ${
+                        policyDocCount.remaining > 0 ? 'text-blue-700' : 'text-red-700'
+                      }`}>
+                        {policyDocCount.remaining > 0 
+                          ? `Puedes subir ${policyDocCount.remaining} documento(s) más para esta póliza.` 
+                          : 'Esta póliza ya tiene el máximo de documentos permitidos. Elimina alguno para subir uno nuevo.'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Client Documents Info (no limit) */}
+              {!policyId && (
+                <div className="rounded-lg p-3 border-l-4 bg-green-50 border-green-500">
+                  <div className="flex items-start gap-2">
+                    <div className="flex-shrink-0 text-lg">💼</div>
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-green-900">
+                        Documentos del Cliente
+                      </p>
+                      <p className="text-xs mt-1 text-green-700">
+                        Puedes subir documentos sin límite de cantidad. Los documentos del cliente están disponibles para todas sus pólizas.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Document Type con iconos */}
               <div>
                 <label className="block text-sm font-bold text-[#010139] mb-2 flex items-center gap-2">
@@ -601,7 +689,7 @@ export default function ExpedienteManager({
                   </div>
                 ) : (
                   <p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
-                    📁 PDF, JPG, PNG, WebP (máx. 10MB)
+                    📁 Formatos aceptados: PDF, JPG, PNG (máx. 10MB por archivo)
                   </p>
                 )}
               </div>
@@ -633,7 +721,7 @@ export default function ExpedienteManager({
                 </button>
                 <button
                   onClick={handleUpload}
-                  disabled={uploading || !uploadFile}
+                  disabled={uploading || !uploadFile || (!!policyId && policyDocCount !== null && policyDocCount?.remaining === 0)}
                   className="flex-1 px-5 py-3 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg hover:shadow-lg hover:scale-[1.02] transition-all font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-2"
                 >
                   {uploading ? (
@@ -651,7 +739,8 @@ export default function ExpedienteManager({
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

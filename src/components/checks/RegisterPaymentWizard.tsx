@@ -1,9 +1,10 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { FaTimes, FaCheckCircle, FaExclamationTriangle, FaPlus, FaTrash } from 'react-icons/fa';
+import { FaTimes, FaCheckCircle, FaExclamationTriangle, FaPlus, FaTrash, FaRecycle } from 'react-icons/fa';
 import { toast } from 'sonner';
 import { actionCreatePendingPayment, actionValidateReferences, actionGetInsurers } from '@/app/(app)/checks/actions';
+import { actionFindOrphanAdvances, actionRecoverOrphanAdvance, type OrphanAdvance } from '@/app/(app)/checks/orphan-advances';
 import { toUppercasePayload, createUppercaseHandler, uppercaseInputClass } from '@/lib/utils/uppercase';
 import { supabaseClient } from '@/lib/supabase/client';
 
@@ -57,6 +58,11 @@ export default function RegisterPaymentWizardNew({
   const [selectedBrokerId, setSelectedBrokerId] = useState('');
   const [deductMode, setDeductMode] = useState<'full' | 'partial'>('full');
   const [partialDeductAmount, setPartialDeductAmount] = useState('');
+  
+  // Adelantos huérfanos - sistema de recuperación
+  const [orphanAdvances, setOrphanAdvances] = useState<OrphanAdvance[]>([]);
+  const [selectedOrphanAdvance, setSelectedOrphanAdvance] = useState<string | null>(null);
+  const [loadingOrphans, setLoadingOrphans] = useState(false);
   const [multipleRefs, setMultipleRefs] = useState(false);
   const [references, setReferences] = useState([{
     reference_number: '',
@@ -150,6 +156,37 @@ export default function RegisterPaymentWizardNew({
     } catch (error) {
       console.error('Error in loadBrokers:', error);
       toast.error('Error al cargar corredores');
+    }
+  };
+
+  // Cargar adelantos huérfanos cuando se selecciona un broker
+  useEffect(() => {
+    if (isDeductFromBroker && selectedBrokerId) {
+      loadOrphanAdvances(selectedBrokerId);
+    } else {
+      setOrphanAdvances([]);
+      setSelectedOrphanAdvance(null);
+    }
+  }, [selectedBrokerId, isDeductFromBroker]);
+
+  const loadOrphanAdvances = async (brokerId: string) => {
+    setLoadingOrphans(true);
+    try {
+      const result = await actionFindOrphanAdvances(brokerId);
+      if (result.ok) {
+        setOrphanAdvances(result.data || []);
+        if (result.data && result.data.length > 0) {
+          toast.info(`Se encontraron ${result.data.length} adelanto(s) huérfano(s) disponibles para recuperar`, {
+            duration: 5000
+          });
+        }
+      } else {
+        console.error('Error loading orphan advances:', result.error);
+      }
+    } catch (error) {
+      console.error('Error in loadOrphanAdvances:', error);
+    } finally {
+      setLoadingOrphans(false);
     }
   };
 
@@ -735,14 +772,41 @@ export default function RegisterPaymentWizardNew({
         is_broker_deduction: isDeductPayment,
         deduction_broker_id: isDeductPayment ? selectedBrokerId : undefined,
         discount_type: discountType as 'full' | 'partial' | undefined,
-        discount_amount: discountAmount || undefined
+        discount_amount: discountAmount || undefined,
+        orphan_advance_id: selectedOrphanAdvance || undefined // ID del adelanto huérfano a recuperar
       };
 
       const result = await actionCreatePendingPayment(payload);
 
       if (result.ok) {
-        const message = result.message || '✅ Pago pendiente creado exitosamente';
-        toast.success(message);
+        // Si se seleccionó un adelanto huérfano, recuperarlo y asociarlo a este pago
+        const paymentId = result.data && result.data[0]?.id;
+        if (selectedOrphanAdvance && paymentId) {
+          console.log(`🔄 Recuperando adelanto huérfano ${selectedOrphanAdvance} para pago ${paymentId}`);
+          
+          const recoveryResult = await actionRecoverOrphanAdvance(
+            selectedOrphanAdvance,
+            paymentId,
+            formData.client_name
+          );
+          
+          if (recoveryResult.ok) {
+            toast.success('✅ Pago creado y adelanto huérfano recuperado exitosamente', {
+              description: recoveryResult.message,
+              duration: 6000
+            });
+          } else {
+            console.error('Error recuperando adelanto huérfano:', recoveryResult.error);
+            toast.warning('Pago creado pero no se pudo recuperar el adelanto', {
+              description: recoveryResult.error,
+              duration: 6000
+            });
+          }
+        } else {
+          const message = result.message || '✅ Pago pendiente creado exitosamente';
+          toast.success(message);
+        }
+        
         // onSuccess cierra el wizard Y actualiza la lista
         onSuccess();
       } else {
@@ -1119,6 +1183,96 @@ export default function RegisterPaymentWizardNew({
                       </option>
                     ))}
                   </select>
+                  
+                  {/* Adelantos Huérfanos Disponibles para Recuperar */}
+                  {selectedBrokerId && orphanAdvances.length > 0 && (
+                    <div className="mt-4 p-4 bg-orange-50 border-2 border-orange-300 rounded-lg">
+                      <div className="flex items-start gap-3 mb-3">
+                        <FaRecycle className="text-orange-600 text-xl mt-1 flex-shrink-0" />
+                        <div className="flex-1">
+                          <h4 className="text-sm font-bold text-orange-900 mb-1">
+                            🔄 Adelantos Huérfanos Disponibles ({orphanAdvances.length})
+                          </h4>
+                          <p className="text-xs text-orange-700 leading-relaxed">
+                            Se encontraron adelantos que ya fueron descontados pero quedaron sin pago pendiente asociado (probablemente borrados por error). 
+                            Puedes recuperar uno de estos adelantos para asociarlo a este nuevo pago.
+                          </p>
+                        </div>
+                      </div>
+                      
+                      <div className="space-y-2 max-h-64 overflow-y-auto">
+                        {orphanAdvances.map((advance) => (
+                          <label
+                            key={advance.id}
+                            className={`flex items-start gap-3 p-3 border-2 rounded-lg cursor-pointer transition-all ${
+                              selectedOrphanAdvance === advance.id
+                                ? 'border-[#8AAA19] bg-[#8AAA19]/10'
+                                : 'border-orange-200 bg-white hover:border-orange-400'
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name="orphan_advance"
+                              value={advance.id}
+                              checked={selectedOrphanAdvance === advance.id}
+                              onChange={() => setSelectedOrphanAdvance(advance.id)}
+                              className="mt-1 w-4 h-4 text-[#8AAA19]"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-2 mb-1">
+                                <p className="text-sm font-semibold text-[#010139]">
+                                  ${advance.amount.toFixed(2)}
+                                </p>
+                                <span className="text-xs font-mono text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
+                                  {new Date(advance.created_at).toLocaleDateString('es-PA')}
+                                </span>
+                              </div>
+                              <p className="text-xs text-gray-700 truncate">
+                                {advance.reason || 'Sin descripción'}
+                              </p>
+                              <div className="flex items-center gap-2 mt-1">
+                                <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded font-medium">
+                                  ✓ Descontado: ${advance.total_paid.toFixed(2)}
+                                </span>
+                                <span className="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded font-medium">
+                                  {advance.status}
+                                </span>
+                              </div>
+                            </div>
+                          </label>
+                        ))}
+                      </div>
+                      
+                      {selectedOrphanAdvance && (
+                        <div className="mt-3 p-3 bg-green-50 border-l-4 border-green-500 rounded-r-lg">
+                          <p className="text-sm text-green-800 font-semibold">
+                            ✅ Adelanto seleccionado será recuperado
+                          </p>
+                          <p className="text-xs text-green-700 mt-1">
+                            Este adelanto (que ya fue descontado) se asociará a este nuevo pago pendiente. 
+                            NO se creará un nuevo adelanto, se recuperará el existente.
+                          </p>
+                        </div>
+                      )}
+                      
+                      {!selectedOrphanAdvance && (
+                        <div className="mt-3 p-3 bg-blue-50 border-l-4 border-blue-500 rounded-r-lg">
+                          <p className="text-xs text-blue-700">
+                            💡 <strong>Opcional:</strong> Si no seleccionas ninguno, se creará un nuevo adelanto normal. 
+                            Selecciona uno solo si quieres recuperar un adelanto que quedó huérfano por error.
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
+                  {selectedBrokerId && loadingOrphans && (
+                    <div className="mt-4 p-4 bg-gray-50 border-2 border-gray-200 rounded-lg flex items-center justify-center gap-2">
+                      <div className="animate-spin w-4 h-4 border-2 border-[#8AAA19] border-t-transparent rounded-full"></div>
+                      <span className="text-sm text-gray-600">Buscando adelantos huérfanos...</span>
+                    </div>
+                  )}
+                  
                   {selectedBrokerId && (
                     <>
                       {/* Tipo de descuento: Full o Parcial */}

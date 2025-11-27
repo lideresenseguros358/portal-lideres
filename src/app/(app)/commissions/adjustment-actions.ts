@@ -39,14 +39,19 @@ async function getAuthContext() {
  */
 export async function actionCreateAdjustmentReport(
   itemIds: string[],
-  notes: string
+  notes: string,
+  targetBrokerId?: string // Opcional: para que Master pueda crear reportes para brokers específicos
 ) {
   try {
     console.log('[actionCreateAdjustmentReport] Iniciando con items:', itemIds);
-    const { brokerId, userId } = await getAuthContext();
-    console.log('[actionCreateAdjustmentReport] BrokerId:', brokerId);
-    if (!brokerId) {
-      return { ok: false, error: 'No se encontró información del broker' };
+    const { brokerId, userId, role } = await getAuthContext();
+    console.log('[actionCreateAdjustmentReport] BrokerId:', brokerId, 'Role:', role);
+    
+    // Determinar el broker_id del reporte: targetBrokerId (Master) o brokerId (Broker)
+    const reportBrokerId = targetBrokerId || brokerId;
+    
+    if (!reportBrokerId) {
+      return { ok: false, error: 'No se especificó el broker para el reporte' };
     }
 
     const supabase = await getSupabaseServer();
@@ -77,7 +82,7 @@ export async function actionCreateAdjustmentReport(
     const { data: brokerData } = await supabase
       .from('brokers')
       .select('percent_default')
-      .eq('id', brokerId)
+      .eq('id', reportBrokerId)
       .single();
 
     const brokerPercent = brokerData?.percent_default || 0;
@@ -103,7 +108,7 @@ export async function actionCreateAdjustmentReport(
     const { data: report, error: reportError } = await supabase
       .from('adjustment_reports')
       .insert({
-        broker_id: brokerId,
+        broker_id: reportBrokerId,
         status: 'pending',
         total_amount: totalBrokerCommission,
         broker_notes: notes || null
@@ -154,7 +159,7 @@ export async function actionCreateAdjustmentReport(
       const { data: brokerData } = await supabase
         .from('brokers')
         .select('name')
-        .eq('id', brokerId)
+        .eq('id', reportBrokerId)
         .single();
 
       const brokerName = brokerData?.name || 'Broker';
@@ -169,13 +174,13 @@ export async function actionCreateAdjustmentReport(
         // Crear notificación para cada Master
         const notifications = masterProfiles.map((master: any) => ({
           target: master.id,
-          broker_id: brokerId,
+          broker_id: reportBrokerId,
           notification_type: 'commission' as const,
           title: 'Nuevo Reporte de Ajustes',
           body: `${brokerName} ha enviado un reporte de ajustes con ${pendingItems.length} item(s) por un total de $${totalBrokerCommission.toFixed(2)}`,
           meta: {
             report_id: report.id,
-            broker_id: brokerId,
+            broker_id: reportBrokerId,
             broker_name: brokerName,
             items_count: pendingItems.length,
             total_amount: totalBrokerCommission
@@ -285,12 +290,11 @@ export async function actionGetAdjustmentReports(status?: 'pending' | 'approved'
 
 /**
  * Aprobar un reporte de ajuste (Master)
- * Permite elegir modalidad de pago: inmediato o siguiente quincena
+ * Solo cambia status a 'approved' - El pago se procesa después
  */
 export async function actionApproveAdjustmentReport(
   reportId: string,
-  paymentMode: 'immediate' | 'next_fortnight',
-  adminNotes: string
+  adminNotes?: string
 ) {
   try {
     const { role, userId } = await getAuthContext();
@@ -315,38 +319,15 @@ export async function actionApproveAdjustmentReport(
       return { ok: false, error: 'El reporte ya fue revisado' };
     }
 
-    const updateData: any = {
-      status: paymentMode === 'immediate' ? 'paid' : 'approved',
-      payment_mode: paymentMode,
-      admin_notes: adminNotes || null,
-      reviewed_at: new Date().toISOString(),
-      reviewed_by: userId
-    };
-
-    // Si es pago inmediato, marcar como pagado ahora
-    if (paymentMode === 'immediate') {
-      updateData.paid_date = new Date().toISOString();
-    }
-
-    // Si es siguiente quincena, asignar a la próxima quincena DRAFT
-    if (paymentMode === 'next_fortnight') {
-      const { data: draftFortnight } = await supabase
-        .from('fortnights')
-        .select('id')
-        .eq('status', 'DRAFT')
-        .order('period_start', { ascending: false })
-        .limit(1)
-        .single();
-
-      if (draftFortnight) {
-        updateData.fortnight_id = draftFortnight.id;
-      }
-    }
-
-    // Actualizar el reporte
+    // Solo actualizar status a 'approved' y guardar notas
     const { error: updateError } = await supabase
       .from('adjustment_reports')
-      .update(updateData)
+      .update({
+        status: 'approved',
+        admin_notes: adminNotes || null,
+        reviewed_at: new Date().toISOString(),
+        reviewed_by: userId
+      })
       .eq('id', reportId);
 
     if (updateError) {
@@ -365,48 +346,39 @@ export async function actionApproveAdjustmentReport(
       })
       .in('id', itemIds);
 
-    // Crear registros en temp_client_imports (preliminar)
-    // Obtener datos completos de los pending_items
-    const { data: pendingItemsData } = await supabase
-      .from('pending_items')
-      .select(`
-        policy_number,
-        insured_name,
-        insurer_id,
-        insurers!inner(name)
-      `)
-      .in('id', itemIds);
+    // Crear notificación para el broker
+    try {
+      const { data: brokerData } = await supabase
+        .from('brokers')
+        .select('p_id, name')
+        .eq('id', report.broker_id)
+        .single();
 
-    // Obtener email del broker
-    const { data: brokerData } = await supabase
-      .from('brokers')
-      .select('p_id, profiles!inner(email)')
-      .eq('id', report.broker_id)
-      .single();
-
-    const brokerEmail = (brokerData as any)?.profiles?.email;
-
-    if (pendingItemsData && brokerEmail) {
-      const tempImports = pendingItemsData.map((item: any) => ({
-        client_name: item.insured_name || 'POR COMPLETAR',
-        policy_number: item.policy_number,
-        insurer_name: item.insurers?.name || 'N/A',
-        broker_email: brokerEmail,
-        source: 'ajuste_pendiente',
-        created_by: userId,
-        import_status: 'pending' // Broker debe completar datos
-      }));
-
-      await (supabase as any)
-        .from('temp_client_imports')
-        .insert(tempImports);
+      if (brokerData?.p_id) {
+        await supabase
+          .from('notifications')
+          .insert({
+            target: brokerData.p_id,
+            broker_id: report.broker_id,
+            notification_type: 'commission',
+            title: 'Reporte de Ajustes Aprobado',
+            body: `Tu reporte de ajustes por $${report.total_amount.toLocaleString('en-US', { minimumFractionDigits: 2 })} ha sido aprobado`,
+            meta: {
+              report_id: reportId,
+              amount: report.total_amount
+            }
+          });
+      }
+    } catch (notifError) {
+      console.error('Error creating notification:', notifError);
+      // No fallar si falla la notificación
     }
 
     revalidatePath('/commissions');
     
     return { 
       ok: true, 
-      message: `Reporte aprobado - ${paymentMode === 'immediate' ? 'Pagado inmediatamente' : 'Se sumará en siguiente quincena'}` 
+      message: 'Reporte aprobado exitosamente' 
     };
   } catch (error) {
     console.error('[actionApproveAdjustmentReport] Error:', error);
@@ -470,11 +442,39 @@ export async function actionRejectAdjustmentReport(
       .update({ status: 'open' })
       .in('id', itemIds);
 
+    // Crear notificación para el broker
+    try {
+      const { data: brokerData } = await supabase
+        .from('brokers')
+        .select('p_id, name')
+        .eq('id', report.broker_id)
+        .single();
+
+      if (brokerData?.p_id) {
+        await supabase
+          .from('notifications')
+          .insert({
+            target: brokerData.p_id,
+            broker_id: report.broker_id,
+            notification_type: 'commission',
+            title: 'Reporte de Ajustes Rechazado',
+            body: `Tu reporte fue rechazado. Razón: ${reason}`,
+            meta: {
+              report_id: reportId,
+              reason: reason
+            }
+          });
+      }
+    } catch (notifError) {
+      console.error('Error creating notification:', notifError);
+      // No fallar si falla la notificación
+    }
+
     revalidatePath('/commissions');
-    
-    return { 
-      ok: true, 
-      message: 'Reporte rechazado' 
+
+    return {
+      ok: true,
+      message: 'Reporte rechazado exitosamente'
     };
   } catch (error) {
     console.error('[actionRejectAdjustmentReport] Error:', error);
@@ -662,12 +662,12 @@ export async function actionEditAdjustmentReport(
       // Obtener datos de los pending_items
       const { data: pendingItems } = await supabase
         .from('pending_items')
-        .select('id, gross_amount')
+        .select('id, commission_raw')
         .in('id', itemIdsToAdd);
 
       if (pendingItems) {
         const itemsToInsert = pendingItems.map((item: any) => {
-          const commissionRaw = Math.abs(Number(item.gross_amount) || 0);
+          const commissionRaw = Math.abs(Number(item.commission_raw) || 0);
           const brokerCommission = commissionRaw * (brokerPercent / 100);
 
           return {

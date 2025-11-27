@@ -140,8 +140,8 @@ async function sumFortnightTotals(
 ): Promise<number> {
   const supabase = await getSupabaseServer();
   let query = supabase
-    .from("fortnight_broker_totals")
-    .select("net_amount", { count: "exact" })
+    .from("fortnight_details")
+    .select("commission_calculated", { count: "exact" })
     .eq("fortnight_id", fortnightId)
     .limit(FETCH_LIMIT);
 
@@ -149,16 +149,17 @@ async function sumFortnightTotals(
     query = query.eq("broker_id", brokerId);
   }
 
-  const { data, error } = await query.returns<{ net_amount: number | string | null }[]>();
+  const { data, error } = await query.returns<{ commission_calculated: number | string | null }[]>();
   if (error || !data) return 0;
-  return data.reduce((acc: number, item) => acc + toNumber(item.net_amount), 0);
+  return data.reduce((acc: number, item) => acc + toNumber(item.commission_calculated), 0);
 }
 
 export async function getFortnightStatus(userId: string, role: DashboardRole): Promise<FortnightStatus> {
   const brokerId = role === "broker" ? await resolveBrokerId(userId) : null;
 
-  const paidFortnight = await fetchFortnight(["PAID"]);
-  const openFortnight = await fetchFortnight(["READY", "DRAFT"]);
+  // Buscar quincenas cerradas (PAID o READY)
+  const paidFortnight = await fetchFortnight(["PAID", "READY"]);
+  const openFortnight = await fetchFortnight(["DRAFT"]);
 
   const result: FortnightStatus = {};
 
@@ -184,8 +185,31 @@ export async function getFortnightStatus(userId: string, role: DashboardRole): P
 export async function getNetCommissions(userId: string, role: DashboardRole): Promise<NetCommissions> {
   // Try real data first
   const status = await getFortnightStatus(userId, role);
-  const totalPaid = status.paid?.total ?? 0;
+  let totalPaid = status.paid?.total ?? 0;
   const totalOpen = status.open?.total ?? 0;
+
+  // FALLBACK: Si no hay quincenas, calcular desde comm_items el mes actual
+  if (totalPaid === 0 && role === 'broker') {
+    const brokerId = await resolveBrokerId(userId);
+    if (brokerId) {
+      const supabase = await getSupabaseServer();
+      const now = new Date();
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      
+      const { data } = await supabase
+        .from('comm_items')
+        .select('gross_amount')
+        .eq('broker_id', brokerId)
+        .gte('created_at', monthStart.toISOString())
+        .lte('created_at', monthEnd.toISOString())
+        .limit(FETCH_LIMIT);
+      
+      if (data) {
+        totalPaid = data.reduce((acc, item) => acc + toNumber(item.gross_amount), 0);
+      }
+    }
+  }
 
   // Si no hay datos reales, usar mock
   if (MOCK_DATA_ENABLED && totalPaid === 0 && totalOpen === 0) {
@@ -205,7 +229,7 @@ export async function getAnnualNet(userId: string, role: DashboardRole): Promise
   const supabase = await getSupabaseServer();
   const brokerId = role === "broker" ? await resolveBrokerId(userId) : null;
 
-  // Para brokers: suma de comisiones brutas del año
+  // Para brokers: suma de comisiones del año (quincenas + ajustes)
   if (role === "broker" && brokerId) {
     const yearStart = `${CURRENT_YEAR}-01-01T00:00:00.000Z`;
     const yearEnd = `${CURRENT_YEAR}-12-31T23:59:59.999Z`;

@@ -48,23 +48,54 @@ export default function InlineSearchBar({ initialQuery = '' }: InlineSearchBarPr
       setIsLoading(true);
       try {
         const supabase = supabaseClient();
-        const { data, error } = await supabase
+        
+        // 1. Buscar clientes directamente
+        const { data: clientsData, error: clientsError } = await supabase
           .from('clients')
           .select('id, name, national_id, email')
           .or(`name.ilike.%${searchQuery}%,national_id.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%`)
           .limit(8);
 
-        if (!error && data) {
-          setSuggestions(
-            data.map((client) => ({
+        // 2. Buscar pólizas por notas o número de póliza
+        const { data: policiesData } = await supabase
+          .from('policies')
+          .select('client_id, clients!inner(id, name, national_id, email)')
+          .or(`notas.ilike.%${searchQuery}%,policy_number.ilike.%${searchQuery}%`)
+          .limit(8);
+
+        // Combinar resultados y eliminar duplicados
+        const clientsMap = new Map<string, SearchSuggestion>();
+
+        // Agregar clientes encontrados directamente
+        if (!clientsError && clientsData) {
+          clientsData.forEach((client) => {
+            clientsMap.set(client.id, {
               id: client.id,
               name: client.name || 'Sin nombre',
               national_id: client.national_id,
               email: client.email,
               type: 'client' as const,
-            }))
-          );
+            });
+          });
         }
+
+        // Agregar clientes de pólizas con notas/números coincidentes
+        if (policiesData) {
+          policiesData.forEach((policy: any) => {
+            if (policy.clients && !clientsMap.has(policy.clients.id)) {
+              clientsMap.set(policy.clients.id, {
+                id: policy.clients.id,
+                name: policy.clients.name || 'Sin nombre',
+                national_id: policy.clients.national_id,
+                email: policy.clients.email,
+                type: 'client' as const,
+              });
+            }
+          });
+        }
+
+        // Convertir Map a array y limitar a 8 resultados
+        setSuggestions(Array.from(clientsMap.values()).slice(0, 8));
       } catch (error) {
         console.error('Error fetching suggestions:', error);
       } finally {

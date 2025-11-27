@@ -586,7 +586,7 @@ export async function actionGetYTDCommissions(year: number, brokerId?: string | 
       .from('fortnight_details')
       .select(`
         fortnight_id,
-        commission_calculated,
+        gross_amount,
         brokers (id, name),
         insurers (id, name),
         fortnights!inner (period_end)
@@ -613,7 +613,7 @@ export async function actionGetYTDCommissions(year: number, brokerId?: string | 
       const itemYear = date.getFullYear();
       const month = date.getMonth() + 1; // 1-12
       const insurerName = detail.insurers?.name || 'Sin Aseguradora';
-      const commission = Number(detail.commission_calculated) || 0;
+      const commission = Number(detail.gross_amount) || 0;
 
       const targetData = itemYear === year ? currentYearData : previousYearData;
 
@@ -2243,6 +2243,50 @@ export async function actionGetRetainedCommissions() {
   }
 }
 
+/**
+ * Obtener estado de retención para un broker en una quincena específica
+ */
+export async function actionGetRetentionStatus(brokerId: string, fortnightId: string) {
+  try {
+    const supabase = getSupabaseAdmin();
+    
+    // Buscar si hay retención para este broker en esta quincena
+    const { data: retention, error } = await supabase
+      .from('retained_commissions')
+      .select(`
+        id,
+        status,
+        net_amount,
+        fortnight_id,
+        applied_fortnight_id,
+        applied_fortnight:fortnights!retained_commissions_applied_fortnight_id_fkey(
+          id,
+          period_start,
+          period_end,
+          fortnight_number
+        )
+      `)
+      .eq('broker_id', brokerId)
+      .eq('fortnight_id', fortnightId)
+      .single();
+    
+    if (error) {
+      // No existe retención para este broker/quincena
+      if (error.code === 'PGRST116') {
+        return { ok: true as const, data: null };
+      }
+      throw error;
+    }
+
+    return { ok: true as const, data: retention };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : 'Error desconocido',
+    };
+  }
+}
+
 export async function actionPayRetainedCommission(payload: {
   retained_id: string;
   pay_option: 'immediate' | 'next_fortnight';
@@ -2635,7 +2679,7 @@ export async function actionGetPendingItems() {
     console.log('[actionGetPendingItems] Fetching pending items...');
     const supabase = getSupabaseAdmin();
 
-    // 1. Buscar en pending_items (tabla antigua)
+    // 1. Buscar en pending_items SOLO con status='open' (NO in_review ni assigned)
     const { data: pendingData, error: pendingError } = await supabase
       .from('pending_items')
       .select(`
@@ -2645,9 +2689,10 @@ export async function actionGetPendingItems() {
         commission_raw,
         created_at,
         status,
+        fortnight_id,
         insurers ( name )
       `)
-      .eq('status', 'open')
+      .eq('status', 'open')  // CRÍTICO: Solo items que NO están en reportes
       .order('created_at', { ascending: true });
 
     if (pendingError) {
@@ -2680,6 +2725,7 @@ export async function actionGetPendingItems() {
       gross_amount: Number((item as any).commission_raw) || 0,
       created_at: item.created_at,
       status: item.status,
+      fortnight_id: item.fortnight_id,
       insurers: item.insurers,
       source: 'pending_items' as const,
     }));

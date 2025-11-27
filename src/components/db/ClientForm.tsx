@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo, useCallback, memo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { FaTimes, FaPlus, FaEdit, FaTrash } from "react-icons/fa";
+import { FaTimes, FaPlus, FaEdit, FaTrash, FaFolderPlus } from "react-icons/fa";
 import { actionCreateClientWithPolicy } from '@/app/(app)/db/actions';
 import type { Tables } from "@/lib/supabase/client";
 import { toUppercasePayload, createUppercaseHandler, uppercaseInputClass } from '@/lib/utils/uppercase';
@@ -20,9 +20,11 @@ interface ClientFormProps {
   client: ClientWithPolicies | null;
   onClose: () => void;
   readOnly?: boolean; // Modo solo lectura
+  expedienteModalOpen?: boolean;
+  onExpedienteModalChange?: (open: boolean) => void;
 }
 
-export default function ClientForm({ client, onClose, readOnly = false }: ClientFormProps) {
+const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false, expedienteModalOpen: externalExpedienteModalOpen, onExpedienteModalChange }: ClientFormProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const editPolicyId = searchParams.get('editPolicy');
@@ -41,6 +43,17 @@ export default function ClientForm({ client, onClose, readOnly = false }: Client
   const [editingPolicy, setEditingPolicy] = useState<PolicyRow | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  // Usar estado externo si está disponible, sino usar interno
+  const [internalExpedienteModalOpen, setInternalExpedienteModalOpen] = useState(false);
+  const expedienteModalOpen = externalExpedienteModalOpen !== undefined ? externalExpedienteModalOpen : internalExpedienteModalOpen;
+  
+  const handleExpedienteModalChange = useCallback((open: boolean) => {
+    if (onExpedienteModalChange) {
+      onExpedienteModalChange(open);
+    } else {
+      setInternalExpedienteModalOpen(open);
+    }
+  }, [onExpedienteModalChange]);
   
   // Abrir automáticamente el formulario de edición de póliza si se especifica editPolicy
   useEffect(() => {
@@ -109,8 +122,10 @@ export default function ClientForm({ client, onClose, readOnly = false }: Client
           throw new Error(result.error);
         }
       }
-      router.refresh();
+      // Cerrar inmediatamente para mejor UX
       onClose();
+      // Refrescar después para que el usuario no vea demora
+      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error desconocido");
     } finally {
@@ -337,45 +352,47 @@ export default function ClientForm({ client, onClose, readOnly = false }: Client
             </div>
           )}
 
-          {/* Expediente Section - Solo para clientes existentes */}
-          {client && (client as any).id && (
-            <div className="space-y-4">
-              <h3 className="text-lg font-bold text-[#010139] border-b-2 border-[#8AAA19] pb-2">
-                📁 Expediente
-              </h3>
-              <ExpedienteManager
-                clientId={(client as any).id}
-                showClientDocs={true}
-                showPolicyDocs={false}
-                showOtros={true}
-                readOnly={false}
-              />
-            </div>
-          )}
-
           {/* Form Actions */}
-          <div className="sticky bottom-0 bg-white border-t-2 border-gray-100 pt-4 flex justify-end gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-6 py-3 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-all font-semibold text-sm"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="px-6 py-3 bg-gradient-to-r from-[#010139] to-[#020270] text-white rounded-lg hover:shadow-lg hover:scale-[1.02] transition-all font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center gap-2"
-            >
-              {loading ? (
-                <>
-                  <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
-                  <span>Guardando...</span>
-                </>
-              ) : (
-                <span>{client ? "Guardar Cambios" : "Crear Cliente"}</span>
+          <div className="sticky bottom-0 bg-white border-t-2 border-gray-100 pt-3 sm:pt-4 flex flex-col sm:flex-row justify-between gap-2 sm:gap-3">
+            <div>
+              {client && (client as any).id && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (onExpedienteModalChange) {
+                      onExpedienteModalChange(true);
+                    }
+                  }}
+                  className="w-full sm:w-auto px-4 sm:px-5 py-2 sm:py-2.5 bg-white border-2 border-[#8AAA19] text-[#8AAA19] rounded-lg hover:bg-[#8AAA19] hover:text-white transition-all font-semibold text-xs sm:text-sm flex items-center justify-center gap-2"
+                >
+                  <FaFolderPlus size={14} />
+                  <span>Expediente</span>
+                </button>
               )}
-            </button>
+            </div>
+            <div className="flex gap-2 sm:gap-3">
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex-1 sm:flex-none px-4 sm:px-5 py-2 sm:py-2.5 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-all font-semibold text-xs sm:text-sm"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={loading}
+                className="flex-1 sm:flex-none px-4 sm:px-5 py-2 sm:py-2.5 bg-gradient-to-r from-[#010139] to-[#020270] text-white rounded-lg hover:shadow-lg hover:scale-[1.02] transition-all font-semibold text-xs sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-2"
+              >
+                {loading ? (
+                  <>
+                    <div className="animate-spin w-3 h-3 sm:w-4 sm:h-4 border-2 border-white border-t-transparent rounded-full"></div>
+                    <span>Guardando...</span>
+                  </>
+                ) : (
+                  <span>{client ? "Guardar" : "Crear"}</span>
+                )}
+              </button>
+            </div>
           </div>
           </fieldset>
         </form>
@@ -416,7 +433,11 @@ export default function ClientForm({ client, onClose, readOnly = false }: Client
       )}
     </div>
   );
-}
+});
+
+ClientForm.displayName = 'ClientForm';
+
+export default ClientForm;
 
 // Sub-component for Policy Form
 interface PolicyFormProps {
@@ -818,14 +839,14 @@ function PolicyForm({ clientId, policy, onClose, onSave, readOnly = false }: Pol
                   </>
                 ) : (
                   <>
-                    <FaPlus size={14} />
+                    <FaFolderPlus size={14} />
                     <span>{policy ? "Guardar Cambios" : "Crear Póliza"}</span>
                   </>
                 )}
               </button>
             )}
           </div>
-          </fieldset>
+        </fieldset>
         </form>
       </div>
     </div>

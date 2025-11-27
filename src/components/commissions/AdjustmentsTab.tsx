@@ -24,8 +24,11 @@ import {
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { AssignBrokerDropdown } from './AssignBrokerDropdown';
-import { RetainedTab } from './RetainedTab';
+import RetainedGroupedView from './RetainedGroupedView';
+import PaidRetainedView from './PaidRetainedView';
 import MasterAdjustmentReportReview from './MasterAdjustmentReportReview';
+import ApprovedAdjustmentsView from './ApprovedAdjustmentsView';
+import PaidAdjustmentsView from './PaidAdjustmentsView';
 import { actionGetAdjustmentReports, actionApproveAdjustmentReport, actionRejectAdjustmentReport, actionEditAdjustmentReport } from '@/app/(app)/commissions/adjustment-actions';
 
 interface Props {
@@ -57,8 +60,9 @@ type PendingGroup = {
 };
 
 const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingCountChange, isShortcut }: Props) => {
-  const [pendingGroups, setPendingGroups] = useState<PendingGroup[]>([]);
   const [loading, setLoading] = useState(true);
+  const [silentRefreshing, setSilentRefreshing] = useState(false);
+  const [pendingGroups, setPendingGroups] = useState<PendingGroup[]>([]);
   const [showOldItemsWarning, setShowOldItemsWarning] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   
@@ -70,8 +74,12 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
   const [brokerPercent, setBrokerPercent] = useState<number>(0);
   const [selectedBrokerName, setSelectedBrokerName] = useState<string>('');
 
-  const loadPendingItems = useCallback(async () => {
-    setLoading(true);
+  const loadPendingItems = useCallback(async (silentRefresh = false) => {
+    if (silentRefresh) {
+      setSilentRefreshing(true);
+    } else {
+      setLoading(true);
+    }
     
     // Cargar porcentaje del broker si es broker
     if (role === 'broker' && brokerId) {
@@ -152,16 +160,22 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
         return daysDiff >= 90;
       }));
     } else {
-      toast.error('Error al cargar pendientes', { description: result.error });
+      if (!silentRefresh) {
+        toast.error('Error al cargar pendientes', { description: result.error });
+      }
     }
 
-    setLoading(false);
+    if (silentRefresh) {
+      setSilentRefreshing(false);
+    } else {
+      setLoading(false);
+    }
   }, [role, brokerId]);
 
   useEffect(() => {
-    loadPendingItems();
+    loadPendingItems(false); // Carga inicial con spinner
     const interval = setInterval(() => {
-      loadPendingItems();
+      loadPendingItems(true); // Auto-refresh silencioso
     }, 30000);
     
     return () => clearInterval(interval);
@@ -212,28 +226,29 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
       let result;
 
       if (role === 'broker') {
-        // Broker: Migrar a comm_items Y crear claims
-        console.log('[handleSubmitReport] Broker: migrando y creando claims...');
-        result = await actionClaimPendingItem(itemIds);
+        // Broker: Crear reporte de ajustes agrupado
+        console.log('[handleSubmitReport] Broker: creando reporte de ajustes...');
+        result = await actionCreateAdjustmentReport(itemIds, ''); // Sin notas por ahora
         console.log('[handleSubmitReport] Resultado:', result);
       } else {
-        // Master: asignar items al broker seleccionado
+        // Master: Crear reporte de ajustes para el broker seleccionado
         if (!selectedBroker) {
           toast.error('Debe seleccionar un corredor');
           setSubmitting(false);
           return;
         }
         
-        // Asignar todos los items al broker
-        result = await actionResolvePendingGroups({
-          broker_id: selectedBroker,
-          policy_number: 'MULTIPLE',
-          item_ids: itemIds,
-        });
+        console.log('[handleSubmitReport] Master: creando reporte para broker...');
+        // Master crea reporte especificando el broker
+        result = await actionCreateAdjustmentReport(itemIds, `Asignado por Master a ${selectedBrokerName}`, selectedBroker);
       }
       
       if (result.ok) {
-        toast.success(role === 'broker' ? 'Reporte de ajustes enviado - Aparecerá en Identificados' : 'Items asignados exitosamente');
+        toast.success(
+          role === 'broker' 
+            ? 'Reporte de ajustes enviado exitosamente - Aparecerá en "Reportados"' 
+            : 'Reporte de ajustes creado exitosamente - Aparecerá en "Identificados"'
+        );
         // Limpiar selección
         setSelectionMode(false);
         setSelectedItems(new Set());
@@ -242,11 +257,11 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
         await loadPendingItems();
         onActionSuccess && onActionSuccess();
       } else {
-        toast.error('Error al procesar', { description: result.error });
+        toast.error('Error al crear reporte', { description: result.error });
       }
     } catch (error) {
       console.error('Error submitting report:', error);
-      toast.error('Error al procesar');
+      toast.error('Error al procesar reporte');
     } finally {
       setSubmitting(false);
     }
@@ -362,6 +377,12 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
               <h2 className="text-lg sm:text-xl font-semibold text-[#010139]">Comisiones Sin Identificar</h2>
               {loading && (
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#010139]"></div>
+              )}
+              {silentRefreshing && !loading && (
+                <div className="animate-pulse flex items-center gap-1 text-xs text-gray-400">
+                  <div className="h-2 w-2 rounded-full bg-green-400"></div>
+                  <span>Actualizando...</span>
+                </div>
               )}
             </div>
             <p className="text-sm text-gray-600">
@@ -601,26 +622,10 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
   );
 };
 
-// Vista de ajustes pagados
-const PaidAdjustmentsView = () => {
-  return (
-    <div className="space-y-6">
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
-        <FaHistory className="text-5xl text-gray-300 mx-auto mb-4" />
-        <h3 className="text-xl font-semibold text-gray-700 mb-2">
-          Historial de Ajustes Pagados
-        </h3>
-        <p className="text-gray-500">
-          Esta funcionalidad estará disponible próximamente
-        </p>
-      </div>
-    </div>
-  );
-};
-
 // Main Component
 export default function AdjustmentsTab({ role, brokerId, brokers, onActionSuccess, onPendingCountChange, isShortcut }: Props) {
-  const [activeTab, setActiveTab] = useState<'pending' | 'requests' | 'paid' | 'retained'>('pending');
+  const [activeTab, setActiveTab] = useState<'pending' | 'requests' | 'approved' | 'retained' | 'paid'>('pending');
+  const [retainedSubTab, setRetainedSubTab] = useState<'pending' | 'paid'>('pending');
   const [reports, setReports] = useState<any[]>([]);
   const [loadingReports, setLoadingReports] = useState(false);
 
@@ -639,11 +644,14 @@ export default function AdjustmentsTab({ role, brokerId, brokers, onActionSucces
     setLoadingReports(false);
   };
 
-  const handleApprove = async (reportId: string, paymentMode: 'immediate' | 'next_fortnight', adminNotes: string) => {
-    const result = await actionApproveAdjustmentReport(reportId, paymentMode, adminNotes);
+  const handleApprove = async (reportId: string, adminNotes: string) => {
+    const result = await actionApproveAdjustmentReport(reportId, adminNotes);
     if (result.ok) {
+      toast.success('Reporte aprobado - Ahora selecciona reportes aprobados para decidir método de pago');
       await loadReports();
       onActionSuccess?.();
+    } else {
+      toast.error('Error al aprobar', { description: result.error });
     }
   };
 
@@ -670,6 +678,7 @@ export default function AdjustmentsTab({ role, brokerId, brokers, onActionSucces
   const masterTabs = [
     { key: 'pending' as const, label: 'Sin identificar', icon: FaExclamationTriangle },
     { key: 'requests' as const, label: 'Identificados', icon: FaCalendarAlt },
+    { key: 'approved' as const, label: 'Aprobados', icon: FaCheckCircle },
     { key: 'retained' as const, label: 'Retenidos', icon: FaHandHoldingUsd },
     { key: 'paid' as const, label: 'Pagados', icon: FaHistory },
   ];
@@ -748,7 +757,37 @@ export default function AdjustmentsTab({ role, brokerId, brokers, onActionSucces
               />
             )
           )}
-          {activeTab === 'retained' && role === 'master' && <RetainedTab />}
+          {activeTab === 'approved' && role === 'master' && <ApprovedAdjustmentsView />}
+          {activeTab === 'retained' && role === 'master' && (
+            <div className="space-y-4">
+              {/* Sub-tabs para retenidos */}
+              <div className="flex gap-2 border-b border-gray-200 pb-2">
+                <button
+                  onClick={() => setRetainedSubTab('pending')}
+                  className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+                    retainedSubTab === 'pending'
+                      ? 'bg-red-500 text-white'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  <FaHandHoldingUsd className="inline mr-2" size={14} />
+                  Retenidos Pendientes
+                </button>
+                <button
+                  onClick={() => setRetainedSubTab('paid')}
+                  className={`px-4 py-2 text-sm font-medium rounded-t-lg transition-colors ${
+                    retainedSubTab === 'paid'
+                      ? 'bg-green-500 text-white'
+                      : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  }`}
+                >
+                  <FaCheckCircle className="inline mr-2" size={14} />
+                  Retenidos Pagados
+                </button>
+              </div>
+              {retainedSubTab === 'pending' ? <RetainedGroupedView /> : <PaidRetainedView />}
+            </div>
+          )}
           {activeTab === 'paid' && <PaidAdjustmentsView />}
         </div>
       </CardContent>

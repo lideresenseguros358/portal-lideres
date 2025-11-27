@@ -5,6 +5,7 @@ import { getSupabaseServer } from '@/lib/supabase/server';
 import type { Tables, TablesInsert, TablesUpdate } from '@/lib/supabase/client';
 import { revalidatePath } from 'next/cache';
 import { actionApplyAdvancePayment } from '@/app/(app)/commissions/actions';
+import { actionCheckAdvanceBeforeDelete } from './orphan-advances';
 
 const AMOUNT_TOLERANCE = 0.01;
 
@@ -483,6 +484,7 @@ export async function actionCreatePendingPayment(payment: {
   deduction_broker_id?: string;
   discount_type?: 'full' | 'partial';
   discount_amount?: number;
+  orphan_advance_id?: string; // ID de adelanto huérfano a recuperar (NO crear nuevo)
 }) {
   try {
     const supabaseServer = await getSupabaseServer();
@@ -591,9 +593,10 @@ export async function actionCreatePendingPayment(payment: {
       brokerNameForMessage = brokerData?.name || 'Corredor';
     }
     
-    // Solo crear adelanto único si NO hay divisiones
+    // Solo crear adelanto único si NO hay divisiones Y NO se está recuperando uno huérfano
     // Si hay divisiones, cada una creará su propio adelanto más adelante
-    if (isBrokerDeduction && !hasDivisions) {
+    // Si orphan_advance_id está presente, se recuperará ese adelanto en lugar de crear uno nuevo
+    if (isBrokerDeduction && !hasDivisions && !payment.orphan_advance_id) {
       try {
         const brokerName = brokerNameForMessage;
         
@@ -639,6 +642,18 @@ export async function actionCreatePendingPayment(payment: {
       } catch (error: any) {
         console.error('❌ Error al crear adelanto automático:', error);
         return { ok: false, error: `Error al crear adelanto: ${error.message}` };
+      }
+    } else if (payment.orphan_advance_id) {
+      // Si se está recuperando un adelanto huérfano, agregar su ID al metadata
+      // La recuperación real se hará después en el frontend
+      console.log(`🔄 Adelanto huérfano ${payment.orphan_advance_id} será recuperado (NO se crea nuevo)`);
+      metadata.advance_id = payment.orphan_advance_id;
+      metadata.is_auto_advance = true;
+      metadata.broker_id = payment.deduction_broker_id;
+      metadata.source = 'orphan_recovery';
+      metadata.discount_type = payment.discount_type || 'full';
+      if (isPartialDeduction && payment.discount_amount) {
+        metadata.discount_amount = payment.discount_amount;
       }
     }
     
@@ -2434,8 +2449,27 @@ export async function actionDeletePendingPayment(paymentId: string) {
       }
     }
 
-    // Si el pago estaba ligado a un adelanto, eliminarlo o cancelarlo según tenga historial
+    // VALIDACIÓN CRÍTICA: Si el pago estaba ligado a un adelanto, verificar si se puede eliminar
     if (advanceIdToCancel) {
+      console.log(`🔍 Validando adelanto ligado al pago ${paymentId} (adelanto ${advanceIdToCancel})...`);
+      
+      // Usar función de validación para verificar si es seguro eliminar
+      const checkResult = await actionCheckAdvanceBeforeDelete(advanceIdToCancel);
+      
+      if (!checkResult.ok) {
+        return { ok: false, error: checkResult.error || 'Error al validar adelanto' };
+      }
+      
+      if (!checkResult.canDelete) {
+        return { 
+          ok: false, 
+          error: '⚠️ NO SE PUEDE ELIMINAR ESTE PAGO\n\n' + 
+                 (checkResult.message || 'Este pago tiene un adelanto que ya fue procesado.') +
+                 '\n\nSi necesitas hacer cambios, contacta al administrador del sistema.',
+          reason: checkResult.reason 
+        };
+      }
+      
       console.log(`🧹 Procesando adelanto ligado al pago eliminado ${paymentId} (adelanto ${advanceIdToCancel})...`);
       
       // Verificar si el adelanto tiene historial de pagos

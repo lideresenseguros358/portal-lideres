@@ -28,6 +28,18 @@ const formatCurrency = (value: number) =>
     maximumFractionDigits: 2,
   }).format(value ?? 0);
 
+// Función para formatear nombre: solo primer nombre, capitalizado
+const formatFirstName = (fullName: string | null | undefined): string => {
+  if (!fullName) return "Equipo LISSA";
+  
+  // Tomar solo la parte antes del primer espacio
+  const firstName = fullName.trim().split(" ")[0];
+  if (!firstName) return "Equipo LISSA";
+  
+  // Capitalizar: primera letra mayúscula, resto minúsculas
+  return firstName.charAt(0).toUpperCase() + firstName.slice(1).toLowerCase();
+};
+
 const formatFortnightRange = (start?: string | null, end?: string | null) => {
   if (!start || !end) return null;
   const rangeFormatter = new Intl.DateTimeFormat("es-PA", {
@@ -77,15 +89,15 @@ const MasterDashboard = async ({ userId }: MasterDashboardProps) => {
     getImportantDates(),
   ]);
 
-  const profileName = profileResult.data?.full_name ?? "Equipo LISSA";
+  const profileName = formatFirstName(profileResult.data?.full_name);
   const openRange = formatFortnightRange(fortnightStatus.open?.fortnight.period_start, fortnightStatus.open?.fortnight.period_end);
   const paidRange = formatFortnightRange(fortnightStatus.paid?.fortnight.period_start, fortnightStatus.paid?.fortnight.period_end);
 
   return (
     <div className="master-dashboard">
       <div className="dashboard-header">
-        <h1 className="dashboard-title">Panel Administrativo LISSA</h1>
-        <p className="dashboard-welcome">Bienvenido de vuelta, {profileName}</p>
+        <h1 className="dashboard-title">¡Hola {profileName}! 👋</h1>
+        <p className="dashboard-welcome">Bienvenido al panel administrativo. Aquí tienes el resumen general</p>
       </div>
 
       {/* Bloque 1 - Producción */}

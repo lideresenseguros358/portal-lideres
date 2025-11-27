@@ -1,6 +1,6 @@
 'use server';
 
-import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { getSupabaseServer } from '@/lib/supabase/server';
 import { Tables, TablesInsert, TablesUpdate } from '@/lib/database.types';
 import { DEFAULT_SLA_DAYS } from '@/lib/constants/cases';
 
@@ -31,7 +31,7 @@ export async function actionGetCases(filters?: {
   insurer_id?: string | null;
 }) {
   try {
-    const supabase = await getSupabaseAdmin();
+    const supabase = await getSupabaseServer();
     const { data: { user } } = await supabase.auth.getUser();
     
     if (!user) {
@@ -113,7 +113,7 @@ export async function actionGetCases(filters?: {
 
 export async function actionGetCase(caseId: string) {
   try {
-    const supabase = await getSupabaseAdmin();
+    const supabase = await getSupabaseServer();
     const { data: { user } } = await supabase.auth.getUser();
     
     if (!user) {
@@ -189,7 +189,7 @@ export async function actionCreateCase(payload: {
   files?: { file: File; standardName: string; category?: string; isMultiDocument?: boolean; documentParts?: string[] }[];
 }) {
   try {
-    const supabase = await getSupabaseAdmin();
+    const supabase = await getSupabaseServer();
     const { data: { user } } = await supabase.auth.getUser();
     
     if (!user) {
@@ -373,6 +373,32 @@ export async function actionCreateCase(payload: {
       }
     }
 
+    // Initialize case progress
+    try {
+      // Get workflow steps for this ramo and management_type
+      const { data: steps } = await supabase
+        .from('workflow_steps')
+        .select('*')
+        .eq('ramo', payload.policy_type || 'AUTO')
+        .eq('management_type', payload.management_type)
+        .order('step_number');
+
+      if (steps && steps.length > 0) {
+        // Initialize progress with first step
+        await supabase
+          .from('case_progress')
+          .insert([{
+            case_id: newCase.id,
+            current_step_number: 1,
+            total_steps: steps.length,
+            step_name: steps[0]?.step_name || 'Paso 1',
+          }]);
+      }
+    } catch (progressError) {
+      console.error('Error initializing case progress:', progressError);
+      // Don't fail case creation if progress initialization fails
+    }
+
     return { ok: true as const, data: newCase };
   } catch (error: any) {
     console.error('Error in actionCreateCase:', error);
@@ -386,7 +412,7 @@ export async function actionCreateCase(payload: {
 
 export async function actionUpdateCaseStatus(caseId: string, status: string, notes?: string) {
   try {
-    const supabase = await getSupabaseAdmin();
+    const supabase = await getSupabaseServer();
     const { data: { user } } = await supabase.auth.getUser();
     
     if (!user) {
@@ -475,7 +501,7 @@ export async function actionUpdateCaseStatus(caseId: string, status: string, not
 
 export async function actionUpdateCase(caseId: string, updates: Partial<TablesUpdate<'cases'>>) {
   try {
-    const supabase = await getSupabaseAdmin();
+    const supabase = await getSupabaseServer();
     const { data: { user } } = await supabase.auth.getUser();
     
     if (!user) {
@@ -518,7 +544,7 @@ export async function actionUpdateCase(caseId: string, updates: Partial<TablesUp
 
 export async function actionDeleteCase(caseId: string) {
   try {
-    const supabase = await getSupabaseAdmin();
+    const supabase = await getSupabaseServer();
     const { data: { user } } = await supabase.auth.getUser();
     
     if (!user) {
@@ -571,7 +597,7 @@ export async function actionDeleteCase(caseId: string) {
 
 export async function actionMarkCaseSeen(caseId: string) {
   try {
-    const supabase = await getSupabaseAdmin();
+    const supabase = await getSupabaseServer();
     const { data: { user } } = await supabase.auth.getUser();
     
     if (!user) {
@@ -607,7 +633,7 @@ export async function actionMarkCaseSeen(caseId: string) {
 
 export async function actionClaimCase(caseId: string) {
   try {
-    const supabase = await getSupabaseAdmin();
+    const supabase = await getSupabaseServer();
     const { data: { user } } = await supabase.auth.getUser();
     
     if (!user) {

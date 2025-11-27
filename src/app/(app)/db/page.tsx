@@ -16,17 +16,17 @@ type ClientRow = Tables<"clients">;
 async function getClientsWithPolicies(searchQuery?: string): Promise<ClientWithPolicies[]> {
   const supabase = await getSupabaseServer();
   
-  // Si hay búsqueda, buscar también en notas de pólizas
+  // Si hay búsqueda, buscar también en notas y números de pólizas
   let clientIds: string[] = [];
-  if (searchQuery) {
-    // Buscar pólizas que coincidan con las notas
-    const { data: policiesWithNotes } = await supabase
+  if (searchQuery && searchQuery.trim()) {
+    // Buscar pólizas que coincidan con las notas o número de póliza
+    const { data: policiesMatching } = await supabase
       .from("policies")
       .select("client_id")
-      .ilike("notas", `%${searchQuery}%`);
+      .or(`notas.ilike.%${searchQuery}%,policy_number.ilike.%${searchQuery}%`);
     
-    if (policiesWithNotes && policiesWithNotes.length > 0) {
-      clientIds = [...new Set(policiesWithNotes.map(p => p.client_id))];
+    if (policiesMatching && policiesMatching.length > 0) {
+      clientIds = [...new Set(policiesMatching.map(p => p.client_id))];
     }
   }
   
@@ -57,8 +57,8 @@ async function getClientsWithPolicies(searchQuery?: string): Promise<ClientWithP
     `)
     .order("created_at", { ascending: false });
 
-  if (searchQuery) {
-    // Buscar en clientes O en IDs de clientes que tienen pólizas con notas que coinciden
+  if (searchQuery && searchQuery.trim()) {
+    // Buscar en clientes O en IDs de clientes que tienen pólizas con notas/números que coinciden
     if (clientIds.length > 0) {
       query = query.or(`name.ilike.%${searchQuery}%,national_id.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%,id.in.(${clientIds.join(',')})`);
     } else {
