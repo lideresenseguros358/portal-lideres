@@ -10,7 +10,6 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { FaEdit, FaTrash, FaSave, FaTimes, FaToggleOn, FaToggleOff } from 'react-icons/fa';
 
@@ -111,17 +110,28 @@ export function RecurrencesManagerModal({ isOpen, onClose, onSuccess }: Props) {
     }
   };
 
+  if (!isOpen) return null;
+
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
-        <DialogHeader>
-          <DialogTitle className="text-xl font-bold text-[#010139]">
-            Gestionar Adelantos Recurrentes
-          </DialogTitle>
-          <DialogDescription>
-            Adelantos que se crean automáticamente cada mes
-          </DialogDescription>
-        </DialogHeader>
+    <div 
+      className="standard-modal-backdrop"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !loading) onClose();
+      }}
+    >
+      <div 
+        className="standard-modal-container max-w-4xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="standard-modal-header">
+          <div>
+            <h2 className="standard-modal-title">Gestionar Adelantos Recurrentes</h2>
+            <p className="standard-modal-subtitle">Administra los adelantos que se generan automáticamente cada quincena</p>
+          </div>
+          <button onClick={onClose} className="standard-modal-close" disabled={loading} type="button">
+            <FaTimes size={24} />
+          </button>
+        </div>
 
         <div className="flex-1 overflow-auto">
           {loading ? (
@@ -266,12 +276,18 @@ export function RecurrencesManagerModal({ isOpen, onClose, onSuccess }: Props) {
           )}
         </div>
 
-        <div className="flex-shrink-0 flex justify-end pt-4 border-t">
-          <Button variant="outline" onClick={onClose}>
+        <div className="standard-modal-footer">
+          <div></div>
+          
+          <button
+            type="button"
+            onClick={onClose}
+            className="standard-modal-button-secondary"
+          >
             Cerrar
-          </Button>
+          </button>
         </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </div>
   );
 }

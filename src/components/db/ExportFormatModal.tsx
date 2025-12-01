@@ -22,29 +22,34 @@ export default function ExportFormatModal({
   const exportingCount = selectedCount > 0 ? selectedCount : totalCount;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full">
+    <div 
+      className="standard-modal-backdrop"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div 
+        className="standard-modal-container max-w-md"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
-        <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+        <div className="standard-modal-header">
           <div>
-            <h2 className="text-2xl font-bold text-[#010139]">Exportar Clientes</h2>
-            <p className="text-sm text-gray-600 mt-1">
+            <h2 className="standard-modal-title">Exportar Clientes</h2>
+            <p className="standard-modal-subtitle">
               {selectedCount > 0 
                 ? `${selectedCount} cliente${selectedCount !== 1 ? 's' : ''} seleccionado${selectedCount !== 1 ? 's' : ''}`
                 : `Todos los clientes (${totalCount})`
               }
             </p>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-all"
-          >
-            <X className="text-gray-600" />
+          <button onClick={onClose} className="standard-modal-close" type="button">
+            <X size={24} />
           </button>
         </div>
 
         {/* Content */}
-        <div className="p-6">
+        <div className="standard-modal-content">
           <p className="text-gray-700 mb-6">Selecciona el formato de exportación:</p>
           
           <div className="space-y-3">
@@ -85,10 +90,13 @@ export default function ExportFormatModal({
         </div>
 
         {/* Footer */}
-        <div className="p-6 border-t border-gray-200 bg-gray-50 rounded-b-xl">
+        <div className="standard-modal-footer">
+          <div></div>
+          
           <button
+            type="button"
             onClick={onClose}
-            className="w-full px-6 py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-all font-semibold"
+            className="standard-modal-button-secondary"
           >
             Cancelar
           </button>

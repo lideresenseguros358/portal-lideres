@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -106,18 +105,31 @@ export default function AdjustmentReportModal({
     }).format(amount);
   };
 
+  if (!isOpen) return null;
+
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="text-2xl font-bold text-[#010139] flex items-center gap-2">
-            <FaCheckCircle className="text-[#8AAA19]" />
-            Crear Reporte de Ajustes
-          </DialogTitle>
-          <DialogDescription>
-            Selecciona todos los ajustes que deseas incluir en este reporte
-          </DialogDescription>
-        </DialogHeader>
+    <div 
+      className="standard-modal-backdrop"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !submitting) onClose();
+      }}
+    >
+      <div 
+        className="standard-modal-container max-w-6xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="standard-modal-header">
+          <div>
+            <h2 className="standard-modal-title">
+              <FaCheckCircle className="inline mr-2" />
+              Crear Reporte de Ajustes
+            </h2>
+            <p className="standard-modal-subtitle">Selecciona los ajustes para incluir en este reporte</p>
+          </div>
+          <button onClick={onClose} className="standard-modal-close" disabled={submitting} type="button">
+            <FaTimes size={24} />
+          </button>
+        </div>
 
         {/* Panel de Selección */}
         {selectedItems.size > 0 && (
@@ -261,7 +273,7 @@ export default function AdjustmentReportModal({
             {submitting ? 'Enviando...' : `Enviar Reporte (${selectedItems.size})`}
           </Button>
         </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </div>
   );
 }

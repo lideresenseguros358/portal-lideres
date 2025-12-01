@@ -67,24 +67,33 @@ export default function InviteModal({ onClose }: InviteModalProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] sm:max-h-[85vh] my-4 sm:my-8 overflow-auto">
+    <div 
+      className="standard-modal-backdrop"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div 
+        className="standard-modal-container max-w-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h3 className="text-xl font-bold text-[#010139] flex items-center gap-2">
-            <FaEnvelope className="text-[#8AAA19]" />
-            Invitar Usuarios
-          </h3>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <FaTimes className="text-gray-600" />
+        <div className="standard-modal-header">
+          <div>
+            <h2 className="standard-modal-title">
+              <FaEnvelope className="inline mr-2" />
+              Invitar Usuarios
+            </h2>
+            <p className="standard-modal-subtitle">Enviar invitaciones por correo electrónico</p>
+          </div>
+          <button onClick={onClose} className="standard-modal-close" type="button">
+            <FaTimes size={24} />
           </button>
         </div>
 
-        {/* Formulario */}
-        <form onSubmit={handleSubmit} className="p-6">
+        {/* Content */}
+        <div className="standard-modal-content">
+          <form id="invite-form" onSubmit={handleSubmit}>
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-semibold text-[#010139] mb-2">
@@ -171,19 +180,26 @@ correo4@dominio.com"
             </div>
           </div>
 
-          {/* Acciones */}
-          <div className="flex gap-3 mt-6">
+          </form>
+        </div>
+
+        {/* Footer */}
+        <div className="standard-modal-footer">
+          <div></div>
+          
+          <div className="flex gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-6 py-3 rounded-lg bg-gray-100 text-gray-700 font-semibold hover:bg-gray-200 transition-colors"
+              className="standard-modal-button-secondary"
             >
               Cerrar
             </button>
             <button
               type="submit"
+              form="invite-form"
               disabled={loading || !emailsInput.trim()}
-              className="flex-1 px-6 py-3 rounded-lg bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white font-bold hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="standard-modal-button-primary"
             >
               {loading ? (
                 <>
@@ -192,13 +208,13 @@ correo4@dominio.com"
                 </>
               ) : (
                 <>
-                  <FaEnvelope />
+                  <FaEnvelope className="mr-2" />
                   <span>Enviar Invitaciones</span>
                 </>
               )}
             </button>
           </div>
-        </form>
+        </div>
       </div>
     </div>
   );

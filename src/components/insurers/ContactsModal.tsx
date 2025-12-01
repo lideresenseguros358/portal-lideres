@@ -199,26 +199,26 @@ export default function ContactsModal({
 
   return (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4"
+      className="standard-modal-backdrop"
       onClick={handleBackdropClick}
     >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] sm:max-h-[85vh] my-4 sm:my-8 flex flex-col">
+      <div 
+        className="standard-modal-container max-w-3xl"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+        <div className="standard-modal-header">
           <div>
-            <h2 className="text-2xl font-bold text-[#010139]">Contactos</h2>
-            <p className="text-gray-600 text-sm mt-1">{insurerName}</p>
+            <h2 className="standard-modal-title">Contactos</h2>
+            <p className="standard-modal-subtitle">{insurerName}</p>
           </div>
-          <button
-            onClick={onClose}
-            className="w-10 h-10 flex items-center justify-center rounded-lg bg-gray-100 text-gray-600 hover:bg-red-500 hover:text-white transition-all"
-          >
-            <FaTimes />
+          <button onClick={onClose} className="standard-modal-close" type="button">
+            <FaTimes size={24} />
           </button>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="standard-modal-content">
           {/* Add Contact Button */}
           {!showAddForm && (
             <button

@@ -196,10 +196,18 @@ export default function ImportBankHistoryModalNew({ onClose, onSuccess }: Import
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-      <div className="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto shadow-2xl my-4 sm:my-8">
+    <div 
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4 overflow-y-auto"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div 
+        className="bg-white rounded-2xl max-w-4xl w-full my-8 shadow-2xl flex flex-col max-h-[90vh]"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
-        <div className="bg-gradient-to-r from-[#010139] to-[#020270] text-white p-6 flex items-center justify-between rounded-t-2xl">
+        <div className="bg-gradient-to-r from-[#010139] to-[#020270] text-white p-6 flex items-center justify-between rounded-t-2xl flex-shrink-0">
           <div>
             <h2 className="text-2xl font-bold">Importar Historial de Banco</h2>
             <p className="text-white/80 text-sm mt-1">Archivo Excel del Banco General</p>
@@ -209,7 +217,8 @@ export default function ImportBankHistoryModalNew({ onClose, onSuccess }: Import
           </button>
         </div>
 
-        <div className="p-8">
+        {/* Content */}
+        <div className="p-6 overflow-y-auto flex-1">
           {!showPreview && !result && (
             <>
               {/* Upload Zone */}
@@ -307,17 +316,6 @@ export default function ImportBankHistoryModalNew({ onClose, onSuccess }: Import
                     </tbody>
                   </table>
                 </div>
-                <button
-                  onClick={handleImport}
-                  disabled={loading || hasBlockingIssues || preview.length === 0}
-                  className="flex-1 px-6 py-3 bg-[#8AAA19] text-white rounded-lg hover:bg-[#010139] transition font-medium disabled:opacity-50"
-                >
-                  {hasBlockingIssues
-                    ? 'Existen errores'
-                    : loading
-                      ? 'Importando...'
-                      : 'Confirmar Importación'}
-                </button>
               </div>
             </>
           )}
@@ -340,6 +338,33 @@ export default function ImportBankHistoryModalNew({ onClose, onSuccess }: Import
             </div>
           )}
         </div>
+
+        {/* Footer */}
+        {showPreview && !result && (
+          <div className="px-6 py-4 bg-gray-50 border-t flex items-center justify-between rounded-b-2xl flex-shrink-0">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={loading}
+              className="px-6 py-2 text-gray-700 bg-white border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition font-medium disabled:opacity-50"
+            >
+              Cancelar
+            </button>
+            
+            <button
+              type="button"
+              onClick={handleImport}
+              disabled={loading || hasBlockingIssues || preview.length === 0}
+              className="px-6 py-3 bg-[#8AAA19] text-white rounded-lg hover:bg-[#010139] transition font-medium disabled:opacity-50"
+            >
+              {hasBlockingIssues
+                ? 'Existen errores'
+                : loading
+                  ? 'Importando...'
+                  : 'Confirmar Importación'}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

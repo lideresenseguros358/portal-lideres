@@ -34,28 +34,33 @@ export default function EditDatesModal({ isOpen, onClose, currentDates, onSave }
   const monthName = new Date(dates.year, dates.month - 1).toLocaleString('es', { month: 'long' });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4 overflow-y-auto">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] sm:max-h-[85vh] my-4 sm:my-8 animate-fade-in overflow-hidden flex flex-col">
+    <div 
+      className="standard-modal-backdrop"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div 
+        className="standard-modal-container max-w-3xl"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-[#010139] to-[#020250] flex-shrink-0">
-          <div className="flex items-center gap-3 text-white">
-            <FaCalendarAlt className="text-2xl" />
-            <div>
-              <h2 className="text-xl font-bold">Configuración de Fechas</h2>
-              <p className="text-sm text-gray-300 mt-0.5">Mes de {monthName} {dates.year}</p>
-            </div>
+        <div className="standard-modal-header">
+          <div>
+            <h2 className="standard-modal-title">
+              <FaCalendarAlt className="inline mr-2" />
+              Configuración de Fechas
+            </h2>
+            <p className="standard-modal-subtitle">Mes de {monthName} {dates.year}</p>
           </div>
-          <button
-            onClick={onClose}
-            className="text-white hover:text-gray-300 transition-colors p-1"
-            disabled={isSaving}
-          >
-            <FaTimes className="text-2xl" />
+          <button onClick={onClose} className="standard-modal-close" disabled={isSaving} type="button">
+            <FaTimes size={24} />
           </button>
         </div>
 
-        {/* Body */}
-        <div className="p-6 space-y-6 overflow-y-auto flex-1">
+        {/* Content */}
+        <div className="standard-modal-content">
+          <div className="space-y-6">
           {error && (
             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-start gap-2">
               <span className="text-lg">⚠️</span>
@@ -189,34 +194,41 @@ export default function EditDatesModal({ isOpen, onClose, currentDates, onSave }
               </label>
             </div>
           </div>
+          </div>
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end gap-3 p-6 border-t border-gray-200 bg-gray-50 flex-shrink-0">
-          <button
-            onClick={onClose}
-            disabled={isSaving}
-            className="px-6 py-3 border-2 border-gray-300 text-gray-700 rounded-lg font-bold hover:bg-gray-100 transition-colors"
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={isSaving}
-            className="flex-1 sm:flex-none px-6 py-3 rounded-lg bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white font-bold hover:shadow-xl hover:scale-105 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-          >
-            {isSaving ? (
-              <>
-                <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
-                <span>Guardando...</span>
-              </>
-            ) : (
-              <>
-                <FaSave />
-                <span>Guardar Cambios</span>
-              </>
-            )}
-          </button>
+        <div className="standard-modal-footer">
+          <div></div>
+          
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isSaving}
+              className="standard-modal-button-secondary"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={isSaving}
+              className="standard-modal-button-primary"
+            >
+              {isSaving ? (
+                <>
+                  <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
+                  <span>Guardando...</span>
+                </>
+              ) : (
+                <>
+                  <FaSave />
+                  <span>Guardar Cambios</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>

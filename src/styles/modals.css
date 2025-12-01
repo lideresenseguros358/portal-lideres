@@ -1,0 +1,392 @@
+/**
+ * ESTILOS ESTÁNDAR PARA MODALES
+ * Basado en la estructura perfecta de RegisterPaymentWizard
+ * 
+ * Uso:
+ * 1. Importar en layout.tsx o globals.css
+ * 2. Usar clases .standard-modal-* en tus modales
+ * 3. O usar el componente <StandardModal>
+ */
+
+/* ============================================
+   BACKDROP (Fondo oscuro)
+   ============================================ */
+.standard-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 1rem;
+  overflow-y: auto;
+}
+
+/* ============================================
+   CONTAINER (Card principal del modal)
+   ============================================ */
+.standard-modal-container {
+  background: white;
+  border-radius: 1rem;
+  width: 100%;
+  margin-top: 2rem;
+  margin-bottom: 2rem;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+}
+
+/* ============================================
+   HEADER (Parte superior con gradiente)
+   ============================================ */
+.standard-modal-header {
+  background: linear-gradient(to right, #010139, #020270);
+  color: white;
+  padding: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top-left-radius: 1rem;
+  border-top-right-radius: 1rem;
+  flex-shrink: 0;
+}
+
+.standard-modal-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 2rem;
+  margin: 0;
+}
+
+.standard-modal-subtitle {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  margin-top: 0.25rem;
+  margin-bottom: 0;
+}
+
+.standard-modal-close {
+  color: white;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0.5rem;
+  border-radius: 0.5rem;
+  transition: all 0.2s;
+}
+
+.standard-modal-close:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* ============================================
+   CONTENT (Contenido con scroll)
+   ============================================ */
+.standard-modal-content {
+  padding: 1.5rem;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0; /* Importante para que funcione el scroll */
+}
+
+/* Scrollbar personalizado */
+.standard-modal-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.standard-modal-content::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.standard-modal-content::-webkit-scrollbar-thumb {
+  background: #8AAA19;
+  border-radius: 4px;
+}
+
+.standard-modal-content::-webkit-scrollbar-thumb:hover {
+  background: #010139;
+}
+
+/* ============================================
+   FOOTER (Parte inferior con botones)
+   ============================================ */
+.standard-modal-footer {
+  padding: 1rem 1.5rem;
+  background-color: #f9fafb;
+  border-top: 1px solid #e5e7eb;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom-left-radius: 1rem;
+  border-bottom-right-radius: 1rem;
+  flex-shrink: 0;
+  gap: 1rem;
+}
+
+/* ============================================
+   BOTONES ESTÁNDAR
+   ============================================ */
+.standard-modal-button-primary {
+  padding: 0.5rem 1.5rem;
+  background-color: #8AAA19;
+  color: white;
+  border: none;
+  border-radius: 0.5rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.standard-modal-button-primary:hover:not(:disabled) {
+  background-color: #010139;
+}
+
+.standard-modal-button-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.standard-modal-button-secondary {
+  padding: 0.5rem 1.5rem;
+  background-color: white;
+  color: #374151;
+  border: 2px solid #d1d5db;
+  border-radius: 0.5rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.standard-modal-button-secondary:hover:not(:disabled) {
+  background-color: #f9fafb;
+}
+
+.standard-modal-button-secondary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ============================================
+   PROGRESS INDICATOR (Para wizards)
+   ============================================ */
+.standard-modal-progress {
+  padding: 1rem 1.5rem;
+  background-color: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+  flex-shrink: 0;
+}
+
+.standard-modal-progress-steps {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.standard-modal-progress-step {
+  display: flex;
+  align-items: center;
+  flex: 1;
+}
+
+.standard-modal-progress-circle {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 9999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  transition: all 0.3s;
+}
+
+.standard-modal-progress-circle.active {
+  background-color: #8AAA19;
+  color: white;
+}
+
+.standard-modal-progress-circle.inactive {
+  background-color: #d1d5db;
+  color: #6b7280;
+}
+
+.standard-modal-progress-line {
+  height: 0.25rem;
+  flex: 1;
+  margin: 0 0.5rem;
+}
+
+.standard-modal-progress-line.completed {
+  background-color: #8AAA19;
+}
+
+.standard-modal-progress-line.pending {
+  background-color: #d1d5db;
+}
+
+.standard-modal-progress-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+  color: #6b7280;
+  padding: 0 0.5rem;
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+@media (max-width: 640px) {
+  .standard-modal-backdrop {
+    padding: 0.5rem;
+  }
+
+  .standard-modal-container {
+    margin-top: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .standard-modal-header {
+    padding: 1rem;
+  }
+
+  .standard-modal-title {
+    font-size: 1.25rem;
+  }
+
+  .standard-modal-subtitle {
+    font-size: 0.75rem;
+  }
+
+  .standard-modal-content {
+    padding: 1rem;
+  }
+
+  .standard-modal-footer {
+    padding: 0.75rem 1rem;
+    flex-direction: column;
+  }
+
+  .standard-modal-footer > div:last-child {
+    width: 100%;
+  }
+
+  .standard-modal-button-primary,
+  .standard-modal-button-secondary {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .standard-modal-progress-labels {
+    display: none;
+  }
+
+  .standard-modal-progress-circle {
+    width: 2rem;
+    height: 2rem;
+    font-size: 0.875rem;
+  }
+}
+
+/* ============================================
+   ANIMACIONES
+   ============================================ */
+@keyframes modalFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.standard-modal-backdrop {
+  animation: modalFadeIn 0.2s ease-out;
+}
+
+.standard-modal-container {
+  animation: modalSlideIn 0.3s ease-out;
+}
+
+/* ============================================
+   UTILIDADES ADICIONALES
+   ============================================ */
+
+/* Para formularios dentro del modal */
+.standard-modal-content form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* Para secciones dentro del contenido */
+.standard-modal-section {
+  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.standard-modal-section:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+  margin-bottom: 0;
+}
+
+.standard-modal-section-title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #010139;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid #8AAA19;
+}
+
+/* Para mensajes de error/éxito */
+.standard-modal-alert {
+  padding: 1rem;
+  border-radius: 0.5rem;
+  margin-bottom: 1rem;
+  border-left: 4px solid;
+}
+
+.standard-modal-alert.error {
+  background-color: #fef2f2;
+  border-color: #ef4444;
+  color: #991b1b;
+}
+
+.standard-modal-alert.success {
+  background-color: #f0fdf4;
+  border-color: #22c55e;
+  color: #166534;
+}
+
+.standard-modal-alert.warning {
+  background-color: #fffbeb;
+  border-color: #f59e0b;
+  color: #92400e;
+}
+
+.standard-modal-alert.info {
+  background-color: #eff6ff;
+  border-color: #3b82f6;
+  color: #1e40af;
+}

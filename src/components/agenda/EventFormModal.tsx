@@ -296,23 +296,32 @@ export default function EventFormModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto my-8">
+    <div 
+      className="standard-modal-backdrop"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !submitting) onClose();
+      }}
+    >
+      <div 
+        className="standard-modal-container max-w-3xl"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
-        <div className="sticky top-0 bg-white border-b border-gray-200 p-6 rounded-t-2xl flex justify-between items-center">
-          <h2 className="text-2xl font-bold text-[#010139]">
-            {isEditing ? '✏️ Editar Evento' : '➕ Nuevo Evento'}
-          </h2>
-          <button
-            onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 p-2"
-          >
-            <FaTimes className="text-xl" />
+        <div className="standard-modal-header">
+          <div>
+            <h2 className="standard-modal-title">
+              {isEditing ? '✏️ Editar Evento' : '➕ Nuevo Evento'}
+            </h2>
+            <p className="standard-modal-subtitle">Configura la fecha, hora y participantes</p>
+          </div>
+          <button onClick={onClose} className="standard-modal-close" disabled={submitting} type="button">
+            <FaTimes size={24} />
           </button>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        {/* Content */}
+        <div className="standard-modal-content">
+          <form id="event-form" onSubmit={handleSubmit} className="space-y-6">
           {/* Title */}
           <div>
             <label className="block text-xs sm:text-sm font-semibold text-gray-600 mb-2 uppercase">
@@ -709,12 +718,27 @@ export default function EventFormModal({
             </div>
           )}
 
-          {/* Buttons */}
-          <div className="flex flex-col md:flex-row gap-3 pt-4 border-t border-gray-200">
+          </form>
+        </div>
+
+        {/* Footer */}
+        <div className="standard-modal-footer">
+          <div></div>
+          
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={submitting}
+              className="standard-modal-button-secondary"
+            >
+              Cancelar
+            </button>
             <button
               type="submit"
+              form="event-form"
               disabled={submitting}
-              className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-xl hover:shadow-lg transition-all transform hover:scale-105 font-medium disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+              className="standard-modal-button-primary"
             >
               {submitting ? (
                 <>
@@ -728,16 +752,8 @@ export default function EventFormModal({
                 </>
               )}
             </button>
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={submitting}
-              className="flex-1 px-6 py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-xl transition-all font-medium disabled:opacity-50"
-            >
-              Cancelar
-            </button>
           </div>
-        </form>
+        </div>
       </div>
     </div>
   );

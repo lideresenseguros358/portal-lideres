@@ -364,23 +364,30 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 overflow-y-auto">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto my-4 sm:my-8">
+    <div 
+      className="standard-modal-backdrop"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div 
+        className="standard-modal-container max-w-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
-        <div className="sticky top-0 bg-gradient-to-r from-[#010139] to-[#020270] text-white p-6 rounded-t-2xl">
-          <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-bold">✏️ Editar Pago Pendiente</h2>
-            <button
-              onClick={onClose}
-              className="p-2 hover:bg-white/10 rounded-lg transition"
-            >
-              <FaTimes size={24} />
-            </button>
+        <div className="standard-modal-header">
+          <div>
+            <h2 className="standard-modal-title">✏️ Editar Pago Pendiente</h2>
+            <p className="standard-modal-subtitle">Actualiza la información del pago</p>
           </div>
+          <button onClick={onClose} className="standard-modal-close" type="button">
+            <FaTimes size={24} />
+          </button>
         </div>
 
         {/* Content */}
-        <div className="p-6 space-y-6">
+        <div className="standard-modal-content">
+          <div className="space-y-6">
           {/* Cliente */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -885,25 +892,41 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
               placeholder="Información adicional (opcional)"
             />
           </div>
+          </div>
         </div>
 
         {/* Footer */}
-        <div className="sticky bottom-0 bg-gray-50 px-6 py-4 rounded-b-2xl border-t flex gap-3">
-          <button
-            onClick={onClose}
-            disabled={loading}
-            className="flex-1 px-6 py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition font-semibold disabled:opacity-50"
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={loading}
-            className="flex-1 px-6 py-3 bg-[#8AAA19] hover:bg-[#7a9916] text-white rounded-lg transition font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
-          >
-            <FaSave />
-            {loading ? 'Guardando...' : 'Guardar Cambios'}
-          </button>
+        <div className="standard-modal-footer">
+          <div></div>
+          
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={loading}
+              className="standard-modal-button-secondary"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={loading}
+              className="standard-modal-button-primary"
+            >
+              {loading ? (
+                <>
+                  <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
+                  <span>Guardando...</span>
+                </>
+              ) : (
+                <>
+                  <FaSave />
+                  <span>Guardar Cambios</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>

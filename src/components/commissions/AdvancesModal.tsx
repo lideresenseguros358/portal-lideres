@@ -6,7 +6,7 @@ import { actionGetAdvances, actionApplyAdvanceDiscount } from '@/app/(app)/commi
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { FaTimes } from 'react-icons/fa';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -107,15 +107,33 @@ export default function AdvancesModal({ isOpen, onClose, onSuccess, brokerId, br
     });
   };
 
+  if (!isOpen) return null;
+
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl p-0 bg-white">
-        <Card className="shadow-lg border-0">
-          <CardHeader>
-            <CardTitle className="text-[#010139]">Aplicar Adelantos para {brokerName}</CardTitle>
-            <DialogDescription>Seleccione los saldos pendientes y el monto a descontar en esta quincena o registre un pago externo.</DialogDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+    <div 
+      className="standard-modal-backdrop"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !isPending) onClose();
+      }}
+    >
+      <div 
+        className="standard-modal-container max-w-3xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="standard-modal-header">
+          <div>
+            <h2 className="standard-modal-title">Aplicar Adelantos</h2>
+            <p className="standard-modal-subtitle">{brokerName}</p>
+          </div>
+          <button onClick={onClose} className="standard-modal-close" disabled={isPending} type="button">
+            <FaTimes size={24} />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="standard-modal-content">
+          <div className="space-y-4">
             <Tabs defaultValue="fortnight" onValueChange={(value: string) => setPaymentType(value as any)} className="w-full">
               <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="fortnight">Descontar de Quincena</TabsTrigger>
@@ -171,15 +189,40 @@ export default function AdvancesModal({ isOpen, onClose, onSuccess, brokerId, br
                 </TableBody>
               </Table>
             </div>
-          </CardContent>
-          <DialogFooter className="p-6 bg-gray-50 rounded-b-lg">
-            <Button variant="outline" onClick={onClose} disabled={isPending}>Cancelar</Button>
-            <Button onClick={handleSave} disabled={isPending} className="bg-[#010139] text-white hover:bg-[#010139]/90">
-              {isPending ? 'Guardando...' : 'Guardar y Aplicar'}
-            </Button>
-          </DialogFooter>
-        </Card>
-      </DialogContent>
-    </Dialog>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="standard-modal-footer">
+          <div></div>
+          
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={isPending}
+              className="standard-modal-button-secondary"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={isPending}
+              className="standard-modal-button-primary"
+            >
+              {isPending ? (
+                <>
+                  <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
+                  <span>Guardando...</span>
+                </>
+              ) : (
+                'Guardar y Aplicar'
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

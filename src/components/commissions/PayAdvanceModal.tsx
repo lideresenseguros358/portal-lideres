@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { FaTimes } from 'react-icons/fa';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -250,27 +250,44 @@ export function PayAdvanceModal({ isOpen, onClose, onSuccess, brokerId, brokerNa
     }
   };
 
+  if (!isOpen) return null;
+
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => {
-      if (!open) {
-        resetForm();
-        onClose();
-      }
-    }}>
-      <DialogContent className="max-w-4xl w-[95vw] sm:w-full max-h-[95vh] sm:max-h-[90vh] overflow-hidden flex flex-col">
-        <DialogHeader>
-          <DialogTitle className="text-xl font-bold text-[#010139]">Registrar Pago Externo</DialogTitle>
-          <DialogDescription className="space-y-1">
-            <div>
-              Corredor: <span className="font-semibold">{brokerName}</span> | Total adeudado: <span className="font-semibold text-[#010139]">${totalPending.toFixed(2)}</span>
-            </div>
-            <div className="inline-flex items-center px-2 py-1 rounded bg-purple-100 text-purple-800 text-xs font-semibold">
+    <div 
+      className="standard-modal-backdrop"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          resetForm();
+          onClose();
+        }
+      }}
+    >
+      <div 
+        className="standard-modal-container max-w-4xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="standard-modal-header">
+          <div>
+            <h2 className="standard-modal-title">
+              <FaMoneyBillWave className="inline mr-2" />
+              Registrar Pago Externo
+            </h2>
+            <p className="standard-modal-subtitle">
+              Corredor: {brokerName} | Total adeudado: ${totalPending.toFixed(2)}
+            </p>
+            <div className="mt-2 inline-flex items-center px-2 py-1 rounded bg-purple-100/20 border border-purple-300/30 text-white text-xs font-semibold">
               📅 Quincena Actual: {getCurrentQuincena()} {getCurrentQuincena() === 'Q1' ? '(16-31)' : '(01-15)'}
             </div>
-          </DialogDescription>
-        </DialogHeader>
+          </div>
+          <button onClick={() => { resetForm(); onClose(); }} className="standard-modal-close" type="button">
+            <FaTimes size={24} />
+          </button>
+        </div>
 
-        <Tabs value={paymentType} onValueChange={(value) => setPaymentType(value as 'cash' | 'transfer')} className="w-full flex-1 flex flex-col overflow-hidden">
+        {/* Content */}
+        <div className="standard-modal-content">
+          <Tabs value={paymentType} onValueChange={(value) => setPaymentType(value as 'cash' | 'transfer')} className="w-full flex flex-col">
           <TabsList className="grid w-full grid-cols-2 flex-shrink-0">
             <TabsTrigger value="transfer" className="flex items-center gap-2">
               <FaExchangeAlt /> Transferencia
@@ -445,32 +462,46 @@ export function PayAdvanceModal({ isOpen, onClose, onSuccess, brokerId, brokerNa
               </div>
             </div>
           </TabsContent>
-        </Tabs>
+          </Tabs>
+        </div>
 
-        {/* Total Section */}
-        <div className="flex-shrink-0 border-t pt-4 bg-gradient-to-r from-gray-50 to-gray-100 -mx-6 -mb-6 px-6 pb-6">
-          <div className="flex justify-between items-center mb-4">
-            <span className="text-lg font-semibold text-gray-700">Total a Pagar:</span>
-            <span className="text-2xl font-bold text-[#8AAA19] font-mono">${totalAssigned.toFixed(2)}</span>
+        {/* Footer */}
+        <div className="standard-modal-footer">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold text-gray-700">Total a Pagar:</span>
+            <span className="text-xl font-bold text-[#8AAA19] font-mono">${totalAssigned.toFixed(2)}</span>
           </div>
-
-          <div className="flex justify-end gap-3">
-            <Button variant="outline" onClick={() => {
-              resetForm();
-              onClose();
-            }} disabled={loading}>
-              Cancelar
-            </Button>
-            <Button 
-              onClick={handleSubmit} 
+          
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                resetForm();
+                onClose();
+              }}
               disabled={loading}
-              className="bg-[#010139] hover:bg-[#8AAA19] text-white"
+              className="standard-modal-button-secondary"
             >
-              {loading ? 'Procesando...' : 'Registrar Pago'}
-            </Button>
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={handleSubmit}
+              disabled={loading}
+              className="standard-modal-button-primary"
+            >
+              {loading ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  <span>Procesando...</span>
+                </>
+              ) : (
+                'Registrar Pago'
+              )}
+            </button>
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </div>
   );
 }

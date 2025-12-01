@@ -1113,17 +1113,54 @@ export default function RegisterPaymentWizardNew({
 
           {/* Step 2: Referencias */}
           {step === 2 && (
-            <div className="space-y-4 animate-fadeIn">
-              {/* Toggle: Descuento a Corredor */}
-              <div className="flex items-center gap-2 p-4 bg-gradient-to-r from-[#8AAA19]/10 to-[#8AAA19]/5 border-2 border-[#8AAA19]/30 rounded-lg">
-                <input
-                  type="checkbox"
-                  id="isDeductFromBroker"
-                  checked={isDeductFromBroker}
-                  onChange={(e) => {
-                    const checked = e.target.checked;
-                    setIsDeductFromBroker(checked);
-                    if (checked) {
+            <div className="space-y-5 animate-fadeIn">
+              {/* Header del paso */}
+              <div className="bg-gradient-to-r from-gray-50 to-white p-4 rounded-lg border-l-4 border-[#010139]">
+                <h3 className="text-lg font-bold text-[#010139] mb-1">💳 Método de Pago</h3>
+                <p className="text-sm text-gray-600">Indica cómo se realizará o registrará este pago</p>
+              </div>
+
+              {/* Selector de método de pago */}
+              <div className="bg-white border-2 border-gray-200 rounded-lg p-4 space-y-3">
+                <p className="text-sm font-semibold text-gray-700 mb-3">¿Cómo deseas registrar este pago?</p>
+                
+                {/* Opción 1: Transferencia Bancaria */}
+                <label className={`flex items-start gap-3 p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                  !isDeductFromBroker 
+                    ? 'border-[#8AAA19] bg-[#8AAA19]/5' 
+                    : 'border-gray-300 hover:border-gray-400'
+                }`}>
+                  <input
+                    type="radio"
+                    name="payment_method"
+                    checked={!isDeductFromBroker}
+                    onChange={() => {
+                      setIsDeductFromBroker(false);
+                    }}
+                    className="mt-1 w-5 h-5 text-[#8AAA19]"
+                  />
+                  <div className="flex-1">
+                    <p className="text-sm font-bold text-[#010139]">
+                      🏦 Transferencia Bancaria
+                    </p>
+                    <p className="text-xs text-gray-600 mt-1">
+                      Conciliar con referencia(s) bancaria(s). Ideal para pagos que ya están en el banco.
+                    </p>
+                  </div>
+                </label>
+
+                {/* Opción 2: Descuento a Corredor */}
+                <label className={`flex items-start gap-3 p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                  isDeductFromBroker 
+                    ? 'border-[#8AAA19] bg-[#8AAA19]/5' 
+                    : 'border-gray-300 hover:border-gray-400'
+                }`}>
+                  <input
+                    type="radio"
+                    name="payment_method"
+                    checked={isDeductFromBroker}
+                    onChange={() => {
+                      setIsDeductFromBroker(true);
                       // Limpiar referencias cuando se activa descuento
                       setMultipleRefs(false);
                       setReferences([{
@@ -1136,22 +1173,23 @@ export default function RegisterPaymentWizardNew({
                         status: null,
                         remaining_amount: 0
                       }]);
-                    }
-                  }}
-                  className="w-5 h-5 text-[#8AAA19] rounded focus:ring-[#8AAA19]"
-                />
-                <div className="flex-1">
-                  <label htmlFor="isDeductFromBroker" className="text-sm font-bold text-[#010139] block">
-                    💰 Descuento a Corredor (sin transferencia bancaria)
-                  </label>
-                  <p className="text-xs text-gray-600 mt-0.5">
-                    Se creará un adelanto automáticamente y se descontará de las comisiones del corredor
-                  </p>
-                </div>
+                    }}
+                    className="mt-1 w-5 h-5 text-[#8AAA19]"
+                  />
+                  <div className="flex-1">
+                    <p className="text-sm font-bold text-[#010139]">
+                      💰 Descuento a Corredor
+                    </p>
+                    <p className="text-xs text-gray-600 mt-1">
+                      Se crea un adelanto automático que se descuenta de las comisiones del corredor (sin transferencia bancaria).
+                    </p>
+                  </div>
+                </label>
               </div>
 
+              {/* Opción de pagos múltiples (solo para transferencia bancaria) */}
               {!isDeductFromBroker && (
-                <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg">
+                <div className="flex items-center gap-3 p-4 bg-blue-50 border-2 border-blue-200 rounded-lg">
                   <input
                     type="checkbox"
                     id="multipleRefs"
@@ -1159,30 +1197,39 @@ export default function RegisterPaymentWizardNew({
                     onChange={(e) => setMultipleRefs(e.target.checked)}
                     className="w-5 h-5 text-[#8AAA19] rounded focus:ring-[#8AAA19]"
                   />
-                  <label htmlFor="multipleRefs" className="text-sm font-medium text-gray-700">
-                    Pagos Múltiples (varias transferencias para este pago)
+                  <label htmlFor="multipleRefs" className="text-sm font-medium text-gray-700 cursor-pointer">
+                    📊 Usar múltiples referencias bancarias (varias transferencias para cubrir este pago)
                   </label>
                 </div>
               )}
 
-              {/* Dropdown de Corredores (si está activo descuento) */}
+              {/* Configuración de Descuento a Corredor */}
               {isDeductFromBroker && (
-                <div className="border-2 border-[#8AAA19]/30 rounded-lg p-4 bg-white">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Corredor a descontar <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={selectedBrokerId}
-                    onChange={(e) => setSelectedBrokerId(e.target.value)}
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none text-base"
-                  >
-                    <option value="">Seleccione un corredor...</option>
-                    {brokers.map((broker) => (
-                      <option key={broker.id} value={broker.id}>
-                        {broker.name}
-                      </option>
-                    ))}
-                  </select>
+                <div className="bg-gradient-to-br from-[#8AAA19]/5 to-[#8AAA19]/10 border-2 border-[#8AAA19]/30 rounded-xl p-5 space-y-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-8 h-8 bg-[#8AAA19] rounded-full flex items-center justify-center">
+                      <span className="text-white font-bold">1</span>
+                    </div>
+                    <h4 className="text-base font-bold text-[#010139]">Selecciona el Corredor</h4>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Corredor a descontar <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={selectedBrokerId}
+                      onChange={(e) => setSelectedBrokerId(e.target.value)}
+                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none text-base bg-white"
+                    >
+                      <option value="">Seleccione un corredor...</option>
+                      {brokers.map((broker) => (
+                        <option key={broker.id} value={broker.id}>
+                          {broker.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                   
                   {/* Adelantos Huérfanos Disponibles para Recuperar */}
                   {selectedBrokerId && orphanAdvances.length > 0 && (
@@ -1275,33 +1322,57 @@ export default function RegisterPaymentWizardNew({
                   
                   {selectedBrokerId && (
                     <>
-                      {/* Tipo de descuento: Full o Parcial */}
-                      <div className="mt-4 space-y-3">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Tipo de descuento
-                        </label>
-                        <div className="flex flex-col sm:flex-row gap-3">
-                          <label className="flex items-center gap-2 cursor-pointer p-3 border-2 rounded-lg transition-all hover:bg-gray-50 has-[:checked]:border-[#8AAA19] has-[:checked]:bg-[#8AAA19]/5">
+                      <div className="border-t-2 border-[#8AAA19]/20 pt-4">
+                        <div className="flex items-center gap-2 mb-4">
+                          <div className="w-8 h-8 bg-[#8AAA19] rounded-full flex items-center justify-center">
+                            <span className="text-white font-bold">2</span>
+                          </div>
+                          <h4 className="text-base font-bold text-[#010139]">Tipo de Descuento</h4>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {/* Opción: Descuento 100% */}
+                          <label className={`flex items-start gap-3 p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                            deductMode === 'full'
+                              ? 'border-[#8AAA19] bg-white shadow-md'
+                              : 'border-gray-300 bg-gray-50 hover:border-gray-400'
+                          }`}>
                             <input
                               type="radio"
                               name="deduct_mode"
                               value="full"
                               checked={deductMode === 'full'}
                               onChange={() => setDeductMode('full')}
-                              className="w-4 h-4 text-[#8AAA19]"
+                              className="mt-0.5 w-5 h-5 text-[#8AAA19]"
                             />
-                            <span className="text-sm font-medium">Descuento 100% al corredor</span>
+                            <div>
+                              <p className="text-sm font-bold text-[#010139]">100% Descuento</p>
+                              <p className="text-xs text-gray-600 mt-1">
+                                Todo el monto se descuenta al corredor
+                              </p>
+                            </div>
                           </label>
-                          <label className="flex items-center gap-2 cursor-pointer p-3 border-2 rounded-lg transition-all hover:bg-gray-50 has-[:checked]:border-[#8AAA19] has-[:checked]:bg-[#8AAA19]/5">
+
+                          {/* Opción: Descuento Parcial */}
+                          <label className={`flex items-start gap-3 p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                            deductMode === 'partial'
+                              ? 'border-[#8AAA19] bg-white shadow-md'
+                              : 'border-gray-300 bg-gray-50 hover:border-gray-400'
+                          }`}>
                             <input
                               type="radio"
                               name="deduct_mode"
                               value="partial"
                               checked={deductMode === 'partial'}
                               onChange={() => setDeductMode('partial')}
-                              className="w-4 h-4 text-[#8AAA19]"
+                              className="mt-0.5 w-5 h-5 text-[#8AAA19]"
                             />
-                            <span className="text-sm font-medium">Descuento parcial + banco</span>
+                            <div>
+                              <p className="text-sm font-bold text-[#010139]">Descuento Parcial</p>
+                              <p className="text-xs text-gray-600 mt-1">
+                                Parte se descuenta y parte se paga por banco
+                              </p>
+                            </div>
                           </label>
                         </div>
 
@@ -1360,8 +1431,21 @@ export default function RegisterPaymentWizardNew({
                 </div>
               )}
 
-              {/* Referencias (solo si NO es descuento a corredor O si es descuento PARCIAL) */}
-              {(!isDeductFromBroker || (isDeductFromBroker && deductMode === 'partial')) && references.map((ref, index) => (
+              {/* Sección de Referencias Bancarias */}
+              {(!isDeductFromBroker || (isDeductFromBroker && deductMode === 'partial')) && (
+                <>
+                  <div className="bg-gradient-to-r from-blue-50 to-white p-4 rounded-lg border-l-4 border-blue-600">
+                    <h3 className="text-lg font-bold text-[#010139] mb-1">
+                      {isDeductFromBroker && deductMode === 'partial' ? '💰 Referencias para el Monto Restante' : '🏦 Referencias Bancarias'}
+                    </h3>
+                    <p className="text-sm text-gray-600">
+                      {isDeductFromBroker && deductMode === 'partial' 
+                        ? 'Ingresa la(s) referencia(s) bancaria(s) para cubrir el monto que NO se descuenta al corredor'
+                        : 'Ingresa la(s) referencia(s) de transferencia(s) bancaria(s) que cubren este pago'}
+                    </p>
+                  </div>
+
+                  {references.map((ref, index) => (
                 <div key={index} className="border-2 border-gray-200 rounded-lg p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <h4 className="font-semibold text-gray-700">Referencia {index + 1}</h4>
@@ -1549,6 +1633,8 @@ export default function RegisterPaymentWizardNew({
                   </div>
                 </div>
               ))}
+                </>
+              )}
 
               {(!isDeductFromBroker || (isDeductFromBroker && deductMode === 'partial')) && multipleRefs && (
                 <button
@@ -1562,53 +1648,57 @@ export default function RegisterPaymentWizardNew({
 
               {/* Resumen de montos */}
               {(!isDeductFromBroker || (isDeductFromBroker && deductMode === 'partial')) && (
-              <div className="bg-gray-50 rounded-lg p-4 space-y-2">
-                {isDeductFromBroker && deductMode === 'partial' && (
-                  <>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Monto Total:</span>
-                      <span className="font-semibold text-gray-700">${amountToPay.toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Descuento a corredor:</span>
-                      <span className="font-semibold text-[#8AAA19]">
-                        -${(parseFloat(partialDeductAmount || '0') || 0).toFixed(2)}
-                      </span>
-                    </div>
-                    <div className="flex justify-between pb-2 border-b">
-                      <span className="text-gray-700 font-medium">A Conciliar con Banco:</span>
-                      <span className="font-bold text-[#010139]">
-                        ${Math.max(0, amountToPay - (parseFloat(partialDeductAmount || '0') || 0)).toFixed(2)}
-                      </span>
-                    </div>
-                  </>
-                )}
-                {!isDeductFromBroker && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-700">Monto a Pagar:</span>
-                    <span className="font-bold text-[#010139]">${amountToPay.toFixed(2)}</span>
+                <div className="bg-gradient-to-br from-gray-50 to-gray-100 border-2 border-gray-300 rounded-xl p-5 space-y-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    <h4 className="text-base font-bold text-[#010139]">📊 Resumen de Conciliación</h4>
                   </div>
-                )}
-                <div className="flex justify-between">
-                  <span className="text-gray-700">Total Cubierto:</span>
-                  <span className="font-bold text-blue-600">${totalBankReferences.toFixed(2)}</span>
+                  
+                  {isDeductFromBroker && deductMode === 'partial' && (
+                    <>
+                      <div className="flex justify-between text-sm pb-2">
+                        <span className="text-gray-600">Monto Total:</span>
+                        <span className="font-semibold text-gray-900">${amountToPay.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-600">Descuento a corredor:</span>
+                        <span className="font-semibold text-[#8AAA19]">
+                          -${(parseFloat(partialDeductAmount || '0') || 0).toFixed(2)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between text-sm pb-3 border-b-2 border-gray-300">
+                        <span className="text-gray-700 font-medium">A Conciliar con Banco:</span>
+                        <span className="font-bold text-[#010139]">
+                          ${Math.max(0, amountToPay - (parseFloat(partialDeductAmount || '0') || 0)).toFixed(2)}
+                        </span>
+                      </div>
+                    </>
+                  )}
+                  {!isDeductFromBroker && (
+                    <div className="flex justify-between pb-3 border-b-2 border-gray-300">
+                      <span className="text-gray-700 font-medium">Monto a Pagar:</span>
+                      <span className="font-bold text-[#010139] text-lg">${amountToPay.toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between pt-1">
+                    <span className="text-gray-700">Total Cubierto con Referencias:</span>
+                    <span className="font-bold text-blue-600">${totalBankReferences.toFixed(2)}</span>
+                  </div>
+                  <div className={`flex justify-between pt-3 mt-2 border-t-2 ${
+                    stillNeeded === 0 ? 'border-green-400 bg-green-50' : 'border-orange-400 bg-orange-50'
+                  } -mx-5 -mb-5 px-5 py-4 rounded-b-xl`}>
+                    <span className={`font-bold text-sm ${stillNeeded === 0 ? 'text-green-700' : 'text-orange-700'}`}>
+                      {stillNeeded === 0 ? '✅ ESTADO: COMPLETO' : '⚠️ FALTA CUBRIR:'}
+                    </span>
+                    <span className={`font-bold text-xl ${stillNeeded === 0 ? 'text-green-700' : 'text-orange-700'}`}>
+                      {stillNeeded === 0 ? '✓' : `$${stillNeeded.toFixed(2)}`}
+                    </span>
+                  </div>
+                  {remainder > 0 && (
+                    <p className="text-xs text-amber-700 text-center font-medium pt-2">
+                      💡 Hay un excedente de ${remainder.toFixed(2)} que quedará disponible en la referencia
+                    </p>
+                  )}
                 </div>
-                <div className={`flex justify-between pt-2 border-t ${
-                  stillNeeded === 0 ? 'text-green-600' : 'text-orange-600'
-                }`}>
-                  <span className="font-semibold">
-                    {stillNeeded === 0 ? '✅ Estado:' : '⚠️ Falta cubrir:'}
-                  </span>
-                  <span className="font-bold text-lg">
-                    {stillNeeded === 0 ? 'Completo' : `$${stillNeeded.toFixed(2)}`}
-                  </span>
-                </div>
-                {remainder > 0 && (
-                  <p className="text-xs text-amber-600 text-center pt-1">
-                    Hay un excedente de ${remainder.toFixed(2)} que quedará disponible
-                  </p>
-                )}
-              </div>
               )}
             </div>
           )}

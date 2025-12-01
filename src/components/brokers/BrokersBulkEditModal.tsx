@@ -110,29 +110,34 @@ export default function BrokersBulkEditModal({ isOpen, onClose, brokers, onSave 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] max-h-[90vh] flex flex-col my-4 sm:my-8">
+    <div 
+      className="standard-modal-backdrop"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !saving) onClose();
+      }}
+    >
+      <div 
+        className="standard-modal-container max-w-[95vw]"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
-        <div className="p-6 border-b border-gray-200 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <FaTable className="text-[#8AAA19] text-2xl" />
-            <div>
-              <h2 className="text-2xl font-bold text-[#010139]">Edición Masiva</h2>
-              <p className="text-sm text-gray-600 mt-1">
-                Editando {editedBrokers.length} corredor{editedBrokers.length !== 1 ? 'es' : ''}
-              </p>
-            </div>
+        <div className="standard-modal-header">
+          <div>
+            <h2 className="standard-modal-title">
+              <FaTable className="inline mr-2" />
+              Edición Masiva
+            </h2>
+            <p className="standard-modal-subtitle">
+              Editando {editedBrokers.length} corredor{editedBrokers.length !== 1 ? 'es' : ''}
+            </p>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-all"
-          >
-            <FaTimes className="text-gray-600" />
+          <button onClick={onClose} className="standard-modal-close" disabled={saving} type="button">
+            <FaTimes size={24} />
           </button>
         </div>
 
-        {/* Table Container */}
-        <div className="flex-1 overflow-auto">
+        {/* Content */}
+        <div className="standard-modal-content">
           <div className="min-w-max">
             <table className="w-full border-collapse">
               <thead className="sticky top-0 z-10">
@@ -317,26 +322,38 @@ export default function BrokersBulkEditModal({ isOpen, onClose, brokers, onSave 
         </div>
 
         {/* Footer */}
-        <div className="p-4 sm:p-6 border-t border-gray-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 bg-gray-50">
+        <div className="standard-modal-footer">
           <p className="text-xs sm:text-sm text-gray-600">
-            💡 <span className="hidden sm:inline">Tip: Usa Tab para moverte entre campos. Los cambios se guardan al hacer clic en "Guardar cambios"</span>
-            <span className="sm:hidden">Usa Tab para navegar</span>
+            💡 <span className="hidden sm:inline">Tip: Usa Tab para moverte entre campos</span>
+            <span className="sm:hidden">Usa Tab</span>
           </p>
-          <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
+          
+          <div className="flex gap-3">
             <button
+              type="button"
               onClick={onClose}
               disabled={saving}
-              className="flex-1 sm:flex-none px-4 sm:px-6 py-2 sm:py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-all font-semibold disabled:opacity-50 text-sm sm:text-base"
+              className="standard-modal-button-secondary"
             >
               Cancelar
             </button>
             <button
+              type="button"
               onClick={handleSave}
               disabled={saving}
-              className="flex-1 sm:flex-none px-4 sm:px-6 py-2 sm:py-3 bg-[#8AAA19] hover:bg-[#7a9916] text-white rounded-lg transition-all font-semibold flex items-center justify-center gap-2 disabled:opacity-50 text-sm sm:text-base"
+              className="standard-modal-button-primary"
             >
-              <FaSave />
-              {saving ? 'Guardando...' : 'Guardar'}
+              {saving ? (
+                <>
+                  <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
+                  <span>Guardando...</span>
+                </>
+              ) : (
+                <>
+                  <FaSave />
+                  <span>Guardar</span>
+                </>
+              )}
             </button>
           </div>
         </div>

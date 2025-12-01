@@ -65,24 +65,34 @@ export default function ApproveModal({ request, onClose, onSuccess }: ApproveMod
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] sm:max-h-[85vh] my-4 sm:my-8 overflow-auto">
+    <div 
+      className="standard-modal-backdrop"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div 
+        className="standard-modal-container max-w-lg"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h3 className="text-xl font-bold text-[#010139] flex items-center gap-2">
-            <FaCheckCircle className="text-green-600" />
-            Aprobar Solicitud
-          </h3>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <FaTimes className="text-gray-600" />
+        <div className="standard-modal-header">
+          <div>
+            <h2 className="standard-modal-title">
+              <FaCheckCircle className="inline mr-2" />
+              Aprobar Solicitud
+            </h2>
+            <p className="standard-modal-subtitle">Crear usuario y asignar permisos</p>
+          </div>
+          <button onClick={onClose} className="standard-modal-close" type="button">
+            <FaTimes size={24} />
           </button>
         </div>
 
-        {/* Datos del Solicitante */}
-        <div className="p-6 bg-gray-50 border-b border-gray-200">
+        {/* Content */}
+        <div className="standard-modal-content">
+          {/* Datos del Solicitante */}
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
           <h4 className="font-semibold text-gray-800 mb-3">Información del Solicitante</h4>
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
@@ -102,10 +112,10 @@ export default function ApproveModal({ request, onClose, onSuccess }: ApproveMod
               <span className="font-semibold text-gray-800">{request.telefono}</span>
             </div>
           </div>
-        </div>
+          </div>
 
-        {/* Formulario */}
-        <form onSubmit={handleSubmit} className="p-6">
+          {/* Formulario */}
+          <form id="approve-form" onSubmit={handleSubmit}>
           <div className="space-y-4">
             {/* Rol */}
             <div>
@@ -156,24 +166,38 @@ export default function ApproveModal({ request, onClose, onSuccess }: ApproveMod
             </div>
           </div>
 
-          {/* Acciones */}
-          <div className="flex gap-3 mt-6">
+          </form>
+        </div>
+
+        {/* Footer */}
+        <div className="standard-modal-footer">
+          <div></div>
+          
+          <div className="flex gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-6 py-3 rounded-lg bg-gray-100 text-gray-700 font-semibold hover:bg-gray-200 transition-colors"
+              className="standard-modal-button-secondary"
             >
               Cancelar
             </button>
             <button
               type="submit"
+              form="approve-form"
               disabled={loading}
-              className="flex-1 px-6 py-3 rounded-lg bg-gradient-to-r from-green-600 to-green-700 text-white font-bold hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium disabled:opacity-50 flex items-center gap-2"
             >
-              {loading ? 'Procesando...' : 'Confirmar Aprobación'}
+              {loading ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  <span>Procesando...</span>
+                </>
+              ) : (
+                'Confirmar Aprobación'
+              )}
             </button>
           </div>
-        </form>
+        </div>
       </div>
     </div>
   );

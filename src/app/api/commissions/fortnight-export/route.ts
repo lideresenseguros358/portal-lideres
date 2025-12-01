@@ -246,7 +246,7 @@ export async function GET(request: NextRequest) {
           }))
           .sort((a: any, b: any) => b.total_gross - a.total_gross),
       };
-    }).sort((a, b) => b.total_net - a.total_net);
+    }).sort((a, b) => a.broker_name.localeCompare(b.broker_name)); // Orden alfabético
 
     console.log('[Fortnight Export API] Procesados', result.length, 'brokers');
     

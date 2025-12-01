@@ -1,12 +1,6 @@
 'use client';
 
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from '@/components/ui/dialog';
+import { FaTimes } from 'react-icons/fa';
 import type { BrokerData } from '@/lib/commissions/types';
 
 interface Props {
@@ -19,15 +13,27 @@ export function BrokerDetailModal({ isOpen, onClose, brokerData }: Props) {
   if (!brokerData) return null;
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Detalle de Descuentos: {brokerData.broker_name}</DialogTitle>
-          <DialogDescription>
-            Desglose de los descuentos aplicados en esta quincena.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="py-4">
+    <div 
+      className="standard-modal-backdrop"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div 
+        className="standard-modal-container max-w-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="standard-modal-header">
+          <div>
+            <h2 className="standard-modal-title">Detalle de Descuentos</h2>
+            <p className="standard-modal-subtitle">{brokerData.broker_name}</p>
+          </div>
+          <button onClick={onClose} className="standard-modal-close" type="button">
+            <FaTimes size={24} />
+          </button>
+        </div>
+
+        <div className="standard-modal-content">
           {/* Placeholder for discount details */}
           <p><strong>Total Bruto:</strong> {brokerData.gross_amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</p>
           <p><strong>Total Descuentos:</strong> {brokerData.discounts.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</p>
@@ -37,7 +43,7 @@ export function BrokerDetailModal({ isOpen, onClose, brokerData }: Props) {
             <p className="text-muted-foreground">El desglose detallado de los descuentos aparecerá aquí.</p>
           </div>
         </div>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </div>
   );
 }

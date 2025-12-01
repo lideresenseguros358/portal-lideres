@@ -20,21 +20,30 @@ export default function SearchModal({ onClose, onSearch, insurers }: SearchModal
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 my-4 sm:my-8">
+    <div 
+      className="standard-modal-backdrop"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div 
+        className="standard-modal-container max-w-md"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-bold text-[#010139]">Buscar casos</h2>
-          <button
-            onClick={onClose}
-            className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-all"
-          >
-            <FaTimes />
+        <div className="standard-modal-header">
+          <div>
+            <h2 className="standard-modal-title">Buscar casos</h2>
+            <p className="standard-modal-subtitle">Encuentra casos por cliente, póliza o contenido</p>
+          </div>
+          <button onClick={onClose} className="standard-modal-close" type="button">
+            <FaTimes size={24} />
           </button>
         </div>
 
-        {/* Search Form */}
-        <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Content */}
+        <div className="standard-modal-content">
+          <form id="search-form" onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">
               Buscar por
@@ -52,25 +61,32 @@ export default function SearchModal({ onClose, onSearch, insurers }: SearchModal
             </p>
           </div>
 
-          {/* Actions */}
-          <div className="flex gap-2 pt-4">
+          </form>
+        </div>
+
+        {/* Footer */}
+        <div className="standard-modal-footer">
+          <div></div>
+          
+          <div className="flex gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-all font-semibold"
+              className="standard-modal-button-secondary"
             >
               Cancelar
             </button>
             <button
               type="submit"
+              form="search-form"
               disabled={!searchTerm.trim()}
-              className="flex-1 px-4 py-3 bg-gradient-to-r from-[#010139] to-[#020270] text-white rounded-lg hover:shadow-lg transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="standard-modal-button-primary"
             >
               <FaSearch />
-              Buscar
+              <span>Buscar</span>
             </button>
           </div>
-        </form>
+        </div>
       </div>
     </div>
   );

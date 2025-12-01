@@ -450,6 +450,9 @@ export function exportCompleteReportToPDF(
     throw new Error('No hay brokers para exportar');
   }
 
+  // Ordenar brokers alfabéticamente
+  brokers = [...brokers].sort((a, b) => a.broker_name.localeCompare(b.broker_name));
+
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.width;
   const primaryColor: [number, number, number] = [1, 1, 57];
@@ -741,6 +744,9 @@ export function exportCompleteReportToExcel(
     console.error('[Excel Export] No hay brokers para exportar');
     throw new Error('No hay brokers para exportar');
   }
+
+  // Ordenar brokers alfabéticamente
+  brokers = [...brokers].sort((a, b) => a.broker_name.localeCompare(b.broker_name));
 
   const workbook = XLSX.utils.book_new();
 

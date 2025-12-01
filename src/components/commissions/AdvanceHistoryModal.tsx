@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { actionGetAdvanceHistory } from '@/app/(app)/commissions/actions';
 import { toast } from 'sonner';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { FaTimes } from 'react-icons/fa';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 interface HistoryLog {
@@ -66,15 +66,28 @@ export function AdvanceHistoryModal({ isOpen, onClose, advanceId }: Props) {
   const currentAmount = advance?.current_amount || 0;
   const isFullyPaid = currentAmount <= 0;
 
+  if (!isOpen) return null;
+
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
-        <DialogHeader>
-          <DialogTitle className="text-xl font-bold text-[#010139]">
-            Historial de Pagos - {advance?.reason || 'Adelanto'}
-          </DialogTitle>
-          <DialogDescription>Detalle completo de todos los abonos realizados.</DialogDescription>
-        </DialogHeader>
+    <div 
+      className="standard-modal-backdrop"
+      onClick={(e) => {
+        if (e.target === e.currentTarget && !loading) onClose();
+      }}
+    >
+      <div 
+        className="standard-modal-container max-w-4xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="standard-modal-header">
+          <div>
+            <h2 className="standard-modal-title">Historial de Pagos</h2>
+            <p className="standard-modal-subtitle">{advance?.reason || 'Adelanto'}</p>
+          </div>
+          <button onClick={onClose} className="standard-modal-close" disabled={loading} type="button">
+            <FaTimes size={24} />
+          </button>
+        </div>
         
         {/* Resumen Superior con Deudas */}
         {!loading && advance && (
@@ -235,7 +248,7 @@ export function AdvanceHistoryModal({ isOpen, onClose, advanceId }: Props) {
             }
           }
         `}</style>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </div>
   );
 }

@@ -150,33 +150,34 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-2 sm:p-4">
-      <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full max-h-[95vh] sm:max-h-[90vh] flex flex-col my-2 border-2 border-gray-200">
-        {/* Header con gradiente corporativo */}
-        <div className="bg-gradient-to-r from-[#010139] to-[#020270] px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between rounded-t-xl flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-white/10 rounded-lg">
-              <FaEdit size={20} className="text-white" />
-            </div>
-            <div>
-              <h2 className="text-base sm:text-xl font-bold text-white">
-                {client ? "Editar Cliente" : "Nuevo Cliente"}
-              </h2>
-              <p className="text-xs text-white/80">
-                {client ? "Actualizar información del cliente" : "Agregar un nuevo cliente al sistema"}
-              </p>
-            </div>
+    <div 
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4 overflow-y-auto"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div 
+        className="bg-white rounded-2xl max-w-3xl w-full my-8 shadow-2xl flex flex-col max-h-[90vh]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="bg-gradient-to-r from-[#010139] to-[#020270] text-white p-6 flex items-center justify-between rounded-t-2xl flex-shrink-0">
+          <div>
+            <h2 className="text-2xl font-bold">
+              {client ? "Editar Cliente" : "Nuevo Cliente"}
+            </h2>
+            <p className="text-white/80 text-sm mt-1">
+              {client ? "Actualizar información del cliente" : "Agregar un nuevo cliente al sistema"}
+            </p>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-white/10 rounded-lg transition-all"
-          >
-            <FaTimes size={20} className="text-white" />
+          <button onClick={onClose} className="text-white hover:text-gray-200 transition">
+            <FaTimes size={24} />
           </button>
         </div>
 
-        {/* Form */}
-        <form onSubmit={readOnly ? (e) => e.preventDefault() : handleSubmit} className="p-4 sm:p-6 space-y-4 sm:space-y-6 overflow-y-auto flex-1">
+        {/* Content */}
+        <div className="p-6 overflow-y-auto flex-1">
+          <form id="client-form" onSubmit={readOnly ? (e) => e.preventDefault() : handleSubmit} className="space-y-6">
           {error && (
             <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
               {error}
@@ -351,51 +352,53 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
               )}
             </div>
           )}
-
-          {/* Form Actions */}
-          <div className="sticky bottom-0 bg-white border-t-2 border-gray-100 pt-3 sm:pt-4 flex flex-col sm:flex-row justify-between gap-2 sm:gap-3">
-            <div>
-              {client && (client as any).id && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (onExpedienteModalChange) {
-                      onExpedienteModalChange(true);
-                    }
-                  }}
-                  className="w-full sm:w-auto px-4 sm:px-5 py-2 sm:py-2.5 bg-white border-2 border-[#8AAA19] text-[#8AAA19] rounded-lg hover:bg-[#8AAA19] hover:text-white transition-all font-semibold text-xs sm:text-sm flex items-center justify-center gap-2"
-                >
-                  <FaFolderPlus size={14} />
-                  <span>Expediente</span>
-                </button>
-              )}
-            </div>
-            <div className="flex gap-2 sm:gap-3">
-              <button
-                type="button"
-                onClick={onClose}
-                className="flex-1 sm:flex-none px-4 sm:px-5 py-2 sm:py-2.5 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-all font-semibold text-xs sm:text-sm"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={loading}
-                className="flex-1 sm:flex-none px-4 sm:px-5 py-2 sm:py-2.5 bg-gradient-to-r from-[#010139] to-[#020270] text-white rounded-lg hover:shadow-lg hover:scale-[1.02] transition-all font-semibold text-xs sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-2"
-              >
-                {loading ? (
-                  <>
-                    <div className="animate-spin w-3 h-3 sm:w-4 sm:h-4 border-2 border-white border-t-transparent rounded-full"></div>
-                    <span>Guardando...</span>
-                  </>
-                ) : (
-                  <span>{client ? "Guardar" : "Crear"}</span>
-                )}
-              </button>
-            </div>
-          </div>
           </fieldset>
-        </form>
+          </form>
+        </div>
+
+        {/* Footer */}
+        <div className="px-6 py-4 bg-gray-50 border-t flex items-center justify-between rounded-b-2xl flex-shrink-0">
+          {client && (client as any).id && (
+            <button
+              type="button"
+              onClick={() => {
+                if (onExpedienteModalChange) {
+                  onExpedienteModalChange(true);
+                }
+              }}
+              className="px-6 py-2 bg-white border-2 border-[#8AAA19] text-[#8AAA19] rounded-lg hover:bg-[#8AAA19] hover:text-white transition font-medium flex items-center gap-2"
+            >
+              <FaFolderPlus />
+              <span>Expediente</span>
+            </button>
+          )}
+          {!client || !(client as any).id && <div></div>}
+          
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-6 py-2 text-gray-700 bg-white border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition font-medium"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              form="client-form"
+              disabled={loading}
+              className="px-6 py-2 bg-[#8AAA19] text-white rounded-lg hover:bg-[#010139] transition font-medium disabled:opacity-50 flex items-center gap-2"
+            >
+              {loading ? (
+                <>
+                  <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
+                  <span>Guardando...</span>
+                </>
+              ) : (
+                <span>{client ? "Guardar" : "Crear"}</span>
+              )}
+            </button>
+          </div>
+        </div>
       </div>
       
       {/* Policy Form Modal - Renderizado por separado */}

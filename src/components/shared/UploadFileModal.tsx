@@ -131,27 +131,33 @@ export default function UploadFileModal({
   const otherSections = allSections.filter(s => s.id !== currentSectionId);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4 overflow-y-auto">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] sm:max-h-[85vh] my-4 sm:my-8 animate-fade-in overflow-hidden flex flex-col">
+    <div 
+      className="standard-modal-backdrop"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) handleClose();
+      }}
+    >
+      <div 
+        className="standard-modal-container max-w-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-[#010139] to-[#020250]">
-          <div className="flex items-center gap-3 text-white">
-            <FaUpload className="text-2xl" />
-            <div>
-              <h2 className="text-xl font-bold">Subir Documento</h2>
-              <p className="text-sm text-gray-300">{currentSectionName}</p>
-            </div>
+        <div className="standard-modal-header">
+          <div>
+            <h2 className="standard-modal-title">
+              <FaUpload className="inline mr-2" />
+              Subir Documento
+            </h2>
+            <p className="standard-modal-subtitle">{currentSectionName}</p>
           </div>
-          <button
-            onClick={handleClose}
-            className="text-white hover:text-gray-300 transition-colors p-2"
-          >
-            <FaTimes className="text-xl" />
+          <button onClick={handleClose} className="standard-modal-close" type="button">
+            <FaTimes size={24} />
           </button>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+        {/* Content */}
+        <div className="standard-modal-content">
+          <form id="upload-form" onSubmit={handleSubmit} className="space-y-6">
           {/* Nombre */}
           <div>
             <label className="block text-sm font-semibold text-[#010139] mb-2">
@@ -269,32 +275,26 @@ export default function UploadFileModal({
             </details>
           )}
 
-          {/* Buttons */}
-          <div className="flex items-center gap-3 pt-4">
+          </form>
+        </div>
+
+        {/* Footer */}
+        <div className="standard-modal-footer">
+          <div></div>
+          
+          <div className="flex gap-3">
             <button
               type="button"
               onClick={handleClose}
-              className="
-                flex-1 px-6 py-3 rounded-lg
-                bg-gray-100 text-gray-700 font-semibold
-                hover:bg-gray-200
-                transition-colors
-              "
+              className="standard-modal-button-secondary"
             >
               Cancelar
             </button>
             <button
               type="submit"
+              form="upload-form"
               disabled={uploading}
-              className="
-                flex-1 px-6 py-3 rounded-lg
-                bg-gradient-to-r from-[#8AAA19] to-[#6d8814]
-                text-white font-bold
-                hover:shadow-xl hover:scale-105
-                transition-all duration-200
-                disabled:opacity-50 disabled:cursor-not-allowed
-                flex items-center justify-center gap-2
-              "
+              className="standard-modal-button-primary"
             >
               {uploading ? (
                 <>
@@ -309,7 +309,7 @@ export default function UploadFileModal({
               )}
             </button>
           </div>
-        </form>
+        </div>
       </div>
     </div>
   );

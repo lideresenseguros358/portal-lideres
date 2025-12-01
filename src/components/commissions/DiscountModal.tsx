@@ -131,24 +131,30 @@ export default function DiscountModal({
   const netAmount = grossAmount - getTotalDiscount();
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
-      <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] flex flex-col">
+    <div 
+      className="standard-modal-backdrop"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div 
+        className="standard-modal-container max-w-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
-        <div className="bg-gradient-to-r from-[#010139] to-[#020270] text-white p-6 rounded-t-2xl flex justify-between items-center flex-shrink-0">
+        <div className="standard-modal-header">
           <div>
-            <h3 className="text-xl font-bold">Aplicar Descuentos</h3>
-            <p className="text-sm text-blue-200">{brokerName}</p>
+            <h2 className="standard-modal-title">Aplicar Descuentos</h2>
+            <p className="standard-modal-subtitle">{brokerName}</p>
           </div>
-          <button
-            onClick={onClose}
-            className="text-white hover:bg-white/20 rounded-full p-2 transition-colors"
-          >
-            <FaTimes className="text-xl" />
+          <button onClick={onClose} className="standard-modal-close" type="button">
+            <FaTimes size={24} />
           </button>
         </div>
 
-        {/* Body */}
-        <div className="p-6 overflow-y-auto flex-1 space-y-4">
+        {/* Content */}
+        <div className="standard-modal-content">
+          <div className="space-y-4">
           {/* Resumen de Montos */}
           <div className="bg-gradient-to-r from-blue-50 to-white rounded-lg p-4 border-l-4 border-[#010139]">
             <div className="grid grid-cols-3 gap-4 text-sm">
@@ -248,34 +254,41 @@ export default function DiscountModal({
               </p>
             </div>
           )}
+          </div>
         </div>
 
         {/* Footer */}
-        <div className="bg-gray-50 px-6 py-4 rounded-b-2xl flex justify-end gap-3 flex-shrink-0">
-          <button
-            onClick={onClose}
-            disabled={loading}
-            className="px-6 py-2 border-2 border-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-100 transition-colors"
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={handleApply}
-            disabled={loading || selectedAdvances.size === 0 || getTotalDiscount() > grossAmount}
-            className="px-6 py-2 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg font-semibold hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-          >
-            {loading ? (
-              <>
-                <span className="animate-spin">⏳</span>
-                Aplicando...
-              </>
-            ) : (
-              <>
-                <FaCheckCircle />
-                Aplicar Descuentos
-              </>
-            )}
-          </button>
+        <div className="standard-modal-footer">
+          <div></div>
+          
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={loading}
+              className="standard-modal-button-secondary"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={handleApply}
+              disabled={loading || selectedAdvances.size === 0 || getTotalDiscount() > grossAmount}
+              className="standard-modal-button-primary"
+            >
+              {loading ? (
+                <>
+                  <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
+                  <span>Aplicando...</span>
+                </>
+              ) : (
+                <>
+                  <FaCheckCircle />
+                  <span>Aplicar Descuentos</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>

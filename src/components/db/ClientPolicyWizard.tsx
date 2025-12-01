@@ -416,18 +416,29 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-start sm:items-center justify-center p-4 overflow-y-auto">
-      <div className="bg-white rounded-xl max-w-2xl w-full my-4 sm:my-8 shadow-2xl flex flex-col max-h-[90vh]">
+    <div 
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4 overflow-y-auto"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div 
+        className="bg-white rounded-2xl max-w-2xl w-full my-8 shadow-2xl flex flex-col max-h-[90vh]"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
-        <div className="bg-gradient-to-r from-[#010139] to-[#020270] text-white px-4 py-3 sm:p-6 flex items-center justify-between rounded-t-xl flex-shrink-0">
-          <h2 className="text-base sm:text-2xl font-bold">Nuevo Cliente y Póliza</h2>
-          <button onClick={onClose} className="text-white hover:text-gray-200 transition p-1">
-            <FaTimes size={20} className="sm:w-6 sm:h-6" />
+        <div className="bg-gradient-to-r from-[#010139] to-[#020270] text-white p-6 flex items-center justify-between rounded-t-2xl flex-shrink-0">
+          <div>
+            <h2 className="text-2xl font-bold">Nuevo Cliente y Póliza</h2>
+            <p className="text-white/80 text-sm mt-1">Paso {step} de 4</p>
+          </div>
+          <button onClick={onClose} className="text-white hover:text-gray-200 transition">
+            <FaTimes size={24} />
           </button>
         </div>
 
         {/* Progress Steps */}
-        <div className="px-3 sm:px-6 py-2 sm:py-4 bg-gray-50 border-b flex-shrink-0">
+        <div className="px-6 py-4 bg-gray-50 border-b flex-shrink-0">
           <div className="flex items-center justify-between">
             {[1, 2, 3, 4].map((s) => (
               <div key={s} className="flex items-center flex-1">
@@ -450,8 +461,8 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
           </div>
         </div>
 
-        {/* Form Content */}
-        <div className="p-4 sm:p-6 overflow-y-auto flex-1 min-h-0 space-y-4">
+        {/* Content */}
+        <div className="p-6 overflow-y-auto flex-1">
           {/* Step 1: Cliente */}
           {step === 1 && (
             <div className="space-y-3 sm:space-y-4 animate-fadeIn">
@@ -841,29 +852,41 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
           )}
         </div>
 
-        {/* Footer Actions */}
-        <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gray-50 border-t flex items-center justify-between rounded-b-xl flex-shrink-0">
+        {/* Footer */}
+        <div className="px-6 py-4 bg-gray-50 border-t flex items-center justify-between rounded-b-2xl flex-shrink-0">
           <button
+            type="button"
             onClick={() => step > 1 ? setStep(step - 1) : onClose()}
-            className="px-4 sm:px-6 py-2 text-sm sm:text-base text-gray-700 bg-white border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition"
+            disabled={loading}
+            className="px-6 py-2 text-gray-700 bg-white border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition font-medium disabled:opacity-50"
           >
             {step === 1 ? 'Cancelar' : 'Atrás'}
           </button>
 
           {step < 4 ? (
             <button
+              type="button"
               onClick={handleNext}
-              className="px-4 sm:px-6 py-2 text-sm sm:text-base bg-[#010139] text-white rounded-lg hover:bg-[#8AAA19] transition transform hover:scale-105"
+              disabled={loading}
+              className="px-6 py-2 bg-[#8AAA19] text-white rounded-lg hover:bg-[#010139] transition font-medium disabled:opacity-50"
             >
               Siguiente
             </button>
           ) : (
             <button
+              type="button"
               onClick={handleSubmit}
               disabled={loading}
-              className="px-4 sm:px-6 py-2 text-sm sm:text-base bg-[#8AAA19] text-white rounded-lg hover:bg-[#010139] transition transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-6 py-2 bg-[#8AAA19] text-white rounded-lg hover:bg-[#010139] transition font-medium disabled:opacity-50 flex items-center gap-2"
             >
-              {loading ? 'Creando...' : 'Crear Cliente'}
+              {loading ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <span>Creando...</span>
+                </>
+              ) : (
+                'Crear Cliente y Póliza'
+              )}
             </button>
           )}
         </div>

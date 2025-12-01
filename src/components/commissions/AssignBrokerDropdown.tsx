@@ -1,8 +1,6 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { actionResolvePendingGroups } from '@/app/(app)/commissions/actions';
-import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -17,10 +15,10 @@ interface Props {
   itemGroup: { policy_number: string; items: { id: string }[] };
   brokers: { id: string; name: string }[];
   onSuccess: (brokerId?: string) => void;
+  onSelectBroker?: (brokerId: string, brokerName: string) => void;
 }
 
-export function AssignBrokerDropdown({ itemGroup, brokers, onSuccess }: Props) {
-  const [isAssigning, setIsAssigning] = useState(false);
+export function AssignBrokerDropdown({ itemGroup, brokers, onSuccess, onSelectBroker }: Props) {
   const [searchTerm, setSearchTerm] = useState('');
 
   // Filtrar brokers por término de búsqueda
@@ -33,23 +31,13 @@ export function AssignBrokerDropdown({ itemGroup, brokers, onSuccess }: Props) {
     );
   }, [brokers, searchTerm]);
 
-  const handleAssign = async (brokerId: string) => {
-    setIsAssigning(true);
+  const handleSelectBroker = (brokerId: string, brokerName: string) => {
     setSearchTerm(''); // Limpiar búsqueda
     
-    const result = await actionResolvePendingGroups({
-      broker_id: brokerId,
-      policy_number: itemGroup.policy_number,
-      item_ids: itemGroup.items.map(i => i.id),
-    });
-
-    if (result.ok) {
-      toast.success(`Asignado a corredor exitosamente.`);
-      onSuccess(brokerId);
-    } else {
-      toast.error('Error al asignar.', { description: result.error });
+    // ACTIVAR modo selección en vez de asignar inmediatamente
+    if (onSelectBroker) {
+      onSelectBroker(brokerId, brokerName);
     }
-    setIsAssigning(false);
   };
 
   return (
@@ -57,11 +45,10 @@ export function AssignBrokerDropdown({ itemGroup, brokers, onSuccess }: Props) {
       <DropdownMenuTrigger asChild>
         <Button 
           variant="outline" 
-          size="sm" 
-          disabled={isAssigning}
+          size="sm"
           className="bg-gradient-to-r from-[#010139] to-[#020270] text-white hover:from-[#020270] hover:to-[#010139] border-0 shadow-md font-semibold"
         >
-          {isAssigning ? 'Asignando...' : 'Asignar Corredor'}
+          Asignar Corredor
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="bg-white border border-gray-200 shadow-lg min-w-[250px] p-2">
@@ -91,7 +78,7 @@ export function AssignBrokerDropdown({ itemGroup, brokers, onSuccess }: Props) {
             filteredBrokers.map(broker => (
               <DropdownMenuItem 
                 key={broker.id} 
-                onClick={() => handleAssign(broker.id)}
+                onClick={() => handleSelectBroker(broker.id, broker.name)}
                 className="cursor-pointer hover:bg-gray-100 focus:bg-gray-100 bg-white px-3 py-2 rounded"
               >
                 {broker.name}

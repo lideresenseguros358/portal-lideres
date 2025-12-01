@@ -92,44 +92,49 @@ export default function SearchModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4 overflow-y-auto">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] sm:max-h-[85vh] my-4 sm:my-8 animate-fade-in overflow-hidden flex flex-col">
+    <div 
+      className="standard-modal-backdrop"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div 
+        className="standard-modal-container max-w-3xl"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-[#010139] to-[#020250]">
-          <div className="flex items-center gap-3 text-white">
-            <FaSearch className="text-2xl" />
-            <h2 className="text-xl font-bold">{title}</h2>
+        <div className="standard-modal-header">
+          <div>
+            <h2 className="standard-modal-title">
+              <FaSearch className="inline mr-2" />
+              {title}
+            </h2>
+            <p className="standard-modal-subtitle">Buscar documentos y archivos</p>
           </div>
-          <button
-            onClick={onClose}
-            className="text-white hover:text-gray-300 transition-colors p-2"
-          >
-            <FaTimes className="text-xl" />
+          <button onClick={onClose} className="standard-modal-close" type="button">
+            <FaTimes size={24} />
           </button>
         </div>
 
-        {/* Search Input */}
-        <div className="p-6 pb-4 border-b border-gray-200">
-          <div className="relative">
-            <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder={placeholder}
-              autoFocus
-              className="
-                w-full pl-12 pr-4 py-3
-                border-2 border-gray-300 rounded-lg
-                focus:border-[#8AAA19] focus:outline-none
-                text-lg
-              "
-            />
+        {/* Content */}
+        <div className="standard-modal-content">
+          {/* Search Input */}
+          <div className="mb-6">
+            <div className="relative">
+              <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder={placeholder}
+                autoFocus
+                className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none text-lg"
+              />
+            </div>
           </div>
-        </div>
 
-        {/* Results */}
-        <div className="p-6 max-h-96 overflow-y-auto">
+          {/* Results */}
+          <div>
           {loading && (
             <div className="text-center py-8">
               <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-[#010139] border-t-transparent"></div>
@@ -219,6 +224,7 @@ export default function SearchModal({
               ))}
             </div>
           )}
+          </div>
         </div>
       </div>
     </div>

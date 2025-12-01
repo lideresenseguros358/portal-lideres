@@ -24,31 +24,33 @@ export default function UnpaidReferenceModal({
   const actionIcon = action === 'paid' ? '💰' : '📄';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4 overflow-y-auto animate-fadeIn">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-auto my-4 sm:my-8">
+    <div 
+      className="standard-modal-backdrop"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div 
+        className="standard-modal-container max-w-lg"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
-        <div className="bg-gradient-to-r from-red-600 to-red-700 text-white p-6 rounded-t-2xl">
-          <div className="flex items-start justify-between">
-            <div className="flex items-start gap-3">
-              <div className="bg-white/20 p-3 rounded-lg">
-                <FaExclamationTriangle className="text-2xl" />
-              </div>
-              <div>
-                <h2 className="text-2xl font-bold">No se puede {action === 'paid' ? 'pagar' : 'generar PDF'}</h2>
-                <p className="text-white/90 text-sm mt-1">Referencia no conciliada en historial banco</p>
-              </div>
-            </div>
-            <button
-              onClick={onClose}
-              className="text-white hover:text-gray-200 transition p-2 hover:bg-white/10 rounded-lg"
-            >
-              <FaTimes className="text-xl" />
-            </button>
+        <div className="bg-gradient-to-r from-red-600 to-red-700 text-white p-6 flex items-center justify-between rounded-t-2xl flex-shrink-0">
+          <div>
+            <h2 className="text-2xl font-bold">
+              <FaExclamationTriangle className="inline mr-2" />
+              No se puede {action === 'paid' ? 'pagar' : 'generar PDF'}
+            </h2>
+            <p className="text-white/90 text-sm mt-1">Referencia no conciliada en historial banco</p>
           </div>
+          <button onClick={onClose} className="text-white hover:text-gray-200 transition" type="button">
+            <FaTimes size={24} />
+          </button>
         </div>
 
         {/* Content */}
-        <div className="p-6 space-y-6">
+        <div className="standard-modal-content">
+          <div className="space-y-6">
           {/* Pago info */}
           <div className="bg-gray-50 border-2 border-gray-200 rounded-xl p-4">
             <h3 className="font-semibold text-gray-700 mb-2 flex items-center gap-2">
@@ -148,32 +150,34 @@ export default function UnpaidReferenceModal({
               </div>
             </div>
           </div>
+          </div>
         </div>
 
-        {/* Actions */}
-        <div className="p-6 bg-gray-50 border-t-2 border-gray-200 rounded-b-2xl">
-          <div className="flex flex-col sm:flex-row gap-3">
+        {/* Footer */}
+        <div className="standard-modal-footer">
+          <div></div>
+          
+          <div className="flex gap-3">
             {onEditPayment && (
               <button
+                type="button"
                 onClick={() => {
                   onEditPayment();
                   onClose();
                 }}
-                className="flex-1 px-6 py-3 bg-[#8AAA19] text-white rounded-lg hover:bg-[#010139] transition font-semibold flex items-center justify-center gap-2 shadow-md"
+                className="standard-modal-button-primary"
               >
                 ✏️ Editar Pago
               </button>
             )}
             <button
+              type="button"
               onClick={onClose}
-              className="flex-1 px-6 py-3 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition font-semibold shadow-md"
+              className="standard-modal-button-secondary"
             >
               Entendido
             </button>
           </div>
-          <p className="text-xs text-gray-500 text-center mt-3">
-            ℹ️ Al actualizar el historial banco, este pago se habilitará automáticamente
-          </p>
         </div>
       </div>
     </div>

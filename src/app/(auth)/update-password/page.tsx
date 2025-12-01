@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseClient as getSupabaseClient } from "@/lib/supabase/client";
+import AuthShell from "../_AuthShell";
 
 const UpdatePasswordPage = () => {
   const router = useRouter();
@@ -47,62 +48,46 @@ const UpdatePasswordPage = () => {
   };
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-10">
-      <form
-        onSubmit={handleSubmit}
-        className="w-full max-w-md rounded-2xl bg-white p-8 shadow-xl"
-      >
-        <h1 className="text-2xl font-bold text-slate-900">Actualiza tu contraseña</h1>
-        <p className="mt-2 text-sm text-slate-600">
-          Ingresa una nueva contraseña segura para continuar.
-        </p>
-
-        <div className="mt-6 space-y-4">
-          <label className="block text-sm font-medium text-slate-700">
+    <AuthShell description="Crea una nueva contraseña segura para tu cuenta">
+      <form className="auth-form" onSubmit={handleSubmit}>
+        <div className="auth-field">
+          <label className="auth-label" htmlFor="password">
             Nueva contraseña
-            <input
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-900 focus:outline-none"
-            />
           </label>
-          <label className="block text-sm font-medium text-slate-700">
-            Confirmar contraseña
-            <input
-              type="password"
-              value={confirmPassword}
-              onChange={(event) => setConfirmPassword(event.target.value)}
-              className="mt-1 w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-slate-900 focus:outline-none"
-            />
-          </label>
+          <input
+            id="password"
+            type="password"
+            className="auth-input"
+            placeholder="Mínimo 8 caracteres"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            autoComplete="new-password"
+          />
         </div>
 
-        <button
-          type="submit"
-          disabled={loading}
-          className="mt-6 w-full rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white shadow-lg transition hover:bg-slate-700 disabled:opacity-50"
-        >
+        <div className="auth-field">
+          <label className="auth-label" htmlFor="confirmPassword">
+            Confirmar contraseña
+          </label>
+          <input
+            id="confirmPassword"
+            type="password"
+            className="auth-input"
+            placeholder="Repite tu contraseña"
+            value={confirmPassword}
+            onChange={(event) => setConfirmPassword(event.target.value)}
+            autoComplete="new-password"
+          />
+        </div>
+
+        <button type="submit" className="auth-primary-button" disabled={loading}>
           {loading ? "Guardando..." : "Guardar contraseña"}
         </button>
 
-        {message ? (
-          <div className="mt-4 rounded-lg bg-green-50 px-4 py-3 text-sm text-green-700">
-            {message}
-          </div>
-        ) : null}
-
-        {error ? (
-          <div className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
-            {error}
-          </div>
-        ) : null}
-
-        <p className="mt-8 text-center text-xs text-slate-400">
-          Regulado y Supervisado por la Superintendecia de Seguros y Reaseguros de Panamá - Licencia PJ750
-        </p>
+        {message ? <div className="auth-message success">{message}</div> : null}
+        {error ? <div className="auth-message error">{error}</div> : null}
       </form>
-    </main>
+    </AuthShell>
   );
 };
 

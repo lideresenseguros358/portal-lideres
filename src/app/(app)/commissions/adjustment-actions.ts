@@ -87,13 +87,13 @@ export async function actionCreateAdjustmentReport(
 
     const brokerPercent = brokerData?.percent_default || 0;
 
-    // Calcular total
+    // Calcular total (MISMO CÁLCULO QUE IMPORT)
     let totalBrokerCommission = 0;
     const reportItems: any[] = [];
 
     pendingItems.forEach((item: any) => {
       const commissionRaw = Math.abs(Number(item.commission_raw) || 0);
-      const brokerCommission = commissionRaw * (brokerPercent / 100);
+      const brokerCommission = commissionRaw * brokerPercent;
       totalBrokerCommission += brokerCommission;
 
       reportItems.push({
@@ -141,16 +141,19 @@ export async function actionCreateAdjustmentReport(
       return { ok: false, error: 'Error al crear items del reporte' };
     }
 
-    // Actualizar status de pending_items a 'in_review'
-    console.log('[actionCreateAdjustmentReport] Actualizando status de pending_items a in_review...');
+    // Actualizar status de pending_items a 'in_review' y asignar broker
+    console.log('[actionCreateAdjustmentReport] Actualizando pending_items...');
     const { error: updateError } = await supabase
       .from('pending_items')
-      .update({ status: 'in_review' })
+      .update({ 
+        status: 'in_review',
+        assigned_broker_id: reportBrokerId // Asignar el broker al ítem
+      })
       .in('id', itemIds);
     if (updateError) {
       console.error('[actionCreateAdjustmentReport] Error actualizando status:', updateError);
     } else {
-      console.log('[actionCreateAdjustmentReport] Status actualizado correctamente');
+      console.log('[actionCreateAdjustmentReport] Pending items actualizados correctamente');
     }
 
     // Enviar notificación a Master
@@ -224,7 +227,7 @@ export async function actionGetAdjustmentReports(status?: 'pending' | 'approved'
       .from('adjustment_reports')
       .select(`
         *,
-        brokers!inner(name),
+        brokers!inner(name, percent_default),
         adjustment_report_items!inner(
           *,
           pending_items!inner(
@@ -254,29 +257,46 @@ export async function actionGetAdjustmentReports(status?: 'pending' | 'approved'
     }
 
     // Formatear datos
-    const formattedReports = (data || []).map((report: any) => ({
-      id: report.id,
-      broker_id: report.broker_id,
-      broker_name: report.brokers?.name || 'N/A',
-      status: report.status,
-      total_amount: Number(report.total_amount) || 0,
-      notes: report.broker_notes,
-      admin_notes: report.admin_notes,
-      payment_mode: report.payment_mode,
-      fortnight_id: report.fortnight_id,
-      paid_date: report.paid_date,
-      rejected_reason: report.rejected_reason,
-      created_at: report.created_at,
-      reviewed_at: report.reviewed_at,
-      items: (report.adjustment_report_items || []).map((item: any) => ({
-        id: item.id,
-        policy_number: item.pending_items?.policy_number || 'N/A',
-        insured_name: item.pending_items?.insured_name || 'N/A',
-        commission_raw: Number(item.commission_raw) || 0,
-        broker_commission: Number(item.broker_commission) || 0,
-        insurer_name: item.pending_items?.insurers?.name || 'N/A'
-      }))
-    }));
+    const formattedReports = (data || []).map((report: any) => {
+      const brokerPercent = report.brokers?.percent_default || 1.0;
+      
+      // Calcular items con valores correctos
+      const items = (report.adjustment_report_items || []).map((item: any) => {
+        const commissionRaw = Number(item.commission_raw) || 0;
+        // RECALCULAR correctamente: raw * percent (NO dividir por 100)
+        const brokerCommission = commissionRaw * brokerPercent;
+        
+        return {
+          id: item.id,
+          policy_number: item.pending_items?.policy_number || 'N/A',
+          insured_name: item.pending_items?.insured_name || 'N/A',
+          commission_raw: commissionRaw,
+          broker_commission: brokerCommission,
+          insurer_name: item.pending_items?.insurers?.name || 'N/A'
+        };
+      });
+      
+      // RECALCULAR total sumando broker_commission de todos los items
+      const totalAmount = items.reduce((sum: number, item: any) => sum + item.broker_commission, 0);
+      
+      return {
+        id: report.id,
+        broker_id: report.broker_id,
+        broker_name: report.brokers?.name || 'N/A',
+        broker_percent: brokerPercent,
+        status: report.status,
+        total_amount: totalAmount, // ← TOTAL CORRECTO
+        notes: report.broker_notes,
+        admin_notes: report.admin_notes,
+        payment_mode: report.payment_mode,
+        fortnight_id: report.fortnight_id,
+        paid_date: report.paid_date,
+        rejected_reason: report.rejected_reason,
+        created_at: report.created_at,
+        reviewed_at: report.reviewed_at,
+        items: items
+      };
+    });
 
     return { ok: true, data: formattedReports };
   } catch (error) {
@@ -435,11 +455,14 @@ export async function actionRejectAdjustmentReport(
       return { ok: false, error: 'Error al rechazar reporte' };
     }
 
-    // Restaurar status de pending_items a 'open'
+    // Restaurar status de pending_items a 'open' y borrar assigned_broker_id
     const itemIds = report.adjustment_report_items.map((item: any) => item.pending_item_id);
     await supabase
       .from('pending_items')
-      .update({ status: 'open' })
+      .update({ 
+        status: 'open',
+        assigned_broker_id: null // Liberar para que pueda ser asignado a otro broker
+      })
       .in('id', itemIds);
 
     // Crear notificación para el broker
@@ -650,10 +673,13 @@ export async function actionEditAdjustmentReport(
         return { ok: false, error: 'Error al eliminar items del reporte' };
       }
 
-      // Actualizar status de pending_items de vuelta a 'open'
+      // Actualizar status de pending_items de vuelta a 'open' y liberar assigned_broker_id
       await supabase
         .from('pending_items')
-        .update({ status: 'open' })
+        .update({ 
+          status: 'open',
+          assigned_broker_id: null // Liberar para que pueda ser asignado a otro broker
+        })
         .in('id', itemIdsToRemove);
     }
 
@@ -668,7 +694,7 @@ export async function actionEditAdjustmentReport(
       if (pendingItems) {
         const itemsToInsert = pendingItems.map((item: any) => {
           const commissionRaw = Math.abs(Number(item.commission_raw) || 0);
-          const brokerCommission = commissionRaw * (brokerPercent / 100);
+          const brokerCommission = commissionRaw * brokerPercent;
 
           return {
             report_id: reportId,
@@ -687,10 +713,13 @@ export async function actionEditAdjustmentReport(
           return { ok: false, error: 'Error al agregar items al reporte' };
         }
 
-        // Actualizar status de pending_items a 'in_review'
+        // Actualizar status de pending_items a 'in_review' y asignar broker
         await supabase
           .from('pending_items')
-          .update({ status: 'in_review' })
+          .update({ 
+            status: 'in_review',
+            assigned_broker_id: report.broker_id // Asignar el broker del reporte
+          })
           .in('id', itemIdsToAdd);
       }
     }

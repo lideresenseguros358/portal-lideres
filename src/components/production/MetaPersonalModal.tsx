@@ -50,35 +50,34 @@ export default function MetaPersonalModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+    <div 
+      className="standard-modal-backdrop"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
       <div 
-        className="bg-white rounded-2xl shadow-2xl max-w-md w-full transform transition-all"
+        className="standard-modal-container max-w-md"
+        onClick={(e) => e.stopPropagation()}
         onKeyDown={handleKeyDown}
       >
         {/* Header */}
-        <div className="bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white p-6 rounded-t-2xl">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="text-xl font-bold flex items-center gap-2">
-                <FaBullseye />
-                Meta Personal Anual
-              </h3>
-              <p className="text-sm text-gray-100 mt-1">
-                {brokerName}
-              </p>
-            </div>
-            <button
-              onClick={onClose}
-              className="text-white hover:text-gray-200 transition-colors"
-              disabled={saving}
-            >
-              <FaTimes className="text-2xl" />
-            </button>
+        <div className="bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white p-6 flex items-center justify-between rounded-t-2xl flex-shrink-0">
+          <div>
+            <h2 className="text-2xl font-bold">
+              <FaBullseye className="inline mr-2" />
+              Meta Personal Anual
+            </h2>
+            <p className="text-white/90 text-sm mt-1">{brokerName}</p>
           </div>
+          <button onClick={onClose} className="text-white hover:text-gray-200 transition" disabled={saving} type="button">
+            <FaTimes size={24} />
+          </button>
         </div>
 
-        {/* Body */}
-        <div className="p-6 space-y-6">
+        {/* Content */}
+        <div className="standard-modal-content">
+          <div className="space-y-6">
           <div>
             <label className="block text-sm font-semibold text-[#010139] mb-2">
               Meta Anual (USD)
@@ -112,34 +111,41 @@ export default function MetaPersonalModal({
               </p>
             </div>
           )}
+          </div>
         </div>
 
         {/* Footer */}
-        <div className="bg-gray-50 px-6 py-4 rounded-b-2xl flex justify-end gap-3">
-          <button
-            onClick={onClose}
-            className="px-6 py-2 border-2 border-gray-300 text-gray-700 rounded-lg font-semibold hover:bg-gray-100 transition-colors"
-            disabled={saving}
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="px-6 py-2 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg font-semibold hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-          >
-            {saving ? (
-              <>
-                <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
-                <span>Guardando...</span>
-              </>
-            ) : (
-              <>
-                <FaSave />
-                <span>Guardar Meta</span>
-              </>
-            )}
-          </button>
+        <div className="standard-modal-footer">
+          <div></div>
+          
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={saving}
+              className="standard-modal-button-secondary"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving}
+              className="standard-modal-button-primary"
+            >
+              {saving ? (
+                <>
+                  <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
+                  <span>Guardando...</span>
+                </>
+              ) : (
+                <>
+                  <FaSave />
+                  <span>Guardar Meta</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
     </div>

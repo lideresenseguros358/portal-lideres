@@ -134,8 +134,8 @@ export async function actionUploadImport(formData: FormData) {
     }>();
     
     (existingPolicies || []).forEach((p: any) => {
-      // Prioridad: percent_override > percent_default > 100
-      const percent = p.percent_override ?? p.brokers?.percent_default ?? 100;
+      // Prioridad: percent_override > percent_default > 1.0
+      const percent = p.percent_override ?? p.brokers?.percent_default ?? 1.0;
       
       policyMap.set(p.policy_number, {
         broker_id: p.broker_id,
@@ -155,11 +155,12 @@ export async function actionUploadImport(formData: FormData) {
       // Si existe póliza con broker identificado, va a comm_items
       if (policyData && policyData.broker_id) {
         // CALCULAR comisión del broker aplicando el porcentaje
+        // percent_default es DECIMAL (0.82 = 82%)
         const commissionRaw = row.commission_amount || 0;
         const percent = policyData.percent;
-        const grossAmount = commissionRaw * (percent / 100);
+        const grossAmount = commissionRaw * percent;
         
-        console.log(`[CALC] Policy ${row.policy_number}: Raw=${commissionRaw}, Percent=${percent}%, Gross=${grossAmount}`);
+        console.log(`[CALC] Policy ${row.policy_number}: Raw=${commissionRaw}, Percent=${percent}, Gross=${grossAmount}`);
         
         itemsToInsert.push({
           import_id: importRecord.id,
@@ -407,8 +408,8 @@ export async function actionCreateDraftFortnight(payload: unknown) {
             .eq('id', item.assigned_broker_id!)
             .single();
           
-          const percent = (broker as any)?.percent_default || 100;
-          const grossAmount = item.commission_raw * (percent / 100);
+          const percent = (broker as any)?.percent_default || 1.0;
+          const grossAmount = item.commission_raw * percent;
           
           await supabase
             .from('comm_items')
@@ -495,8 +496,8 @@ export async function actionCreateDraftFortnight(payload: unknown) {
           for (const adj of adjustments) {
             const item = adj.comm_items;
             const rawAmount = Math.abs(item.gross_amount);
-            const percent = broker.percent_default || 0;
-            const brokerAmount = rawAmount * (percent / 100);
+            const percent = broker.percent_default || 1.0;
+            const brokerAmount = rawAmount * percent;
 
             await supabase
               .from('comm_items')
@@ -1651,17 +1652,6 @@ export async function actionResolvePendingGroups(payload: unknown) {
 
     if (error) throw error;
 
-    // Migrar automáticamente a comm_items (según flujo documentado)
-    if (data && data.length > 0 && !parsed.skip_migration) {
-      const migrateResult = await actionMigratePendingToCommItems(
-        data.map(item => item.id)
-      );
-      
-      if (!migrateResult.ok) {
-        console.error('Error al migrar:', migrateResult.error);
-      }
-    }
-
     revalidatePath('/(app)/commissions');
     return { ok: true as const, data: { updated: data?.length || 0 } };
   } catch (error) {
@@ -2673,14 +2663,17 @@ export async function actionGetLastClosedFortnight() {
   }
 }
 
-// Get pending items (sin broker asignado)
+// Get pending items
 export async function actionGetPendingItems() {
   try {
     console.log('[actionGetPendingItems] Fetching pending items...');
     const supabase = getSupabaseAdmin();
+    const { role, brokerId } = await getAuthContext();
 
-    // 1. Buscar en pending_items SOLO con status='open' (NO in_review ni assigned)
-    const { data: pendingData, error: pendingError } = await supabase
+    // 1. Buscar en pending_items: status='open'
+    // MASTER: ve items SIN assigned_broker_id (para poder asignar)
+    // BROKER: ve items con SU assigned_broker_id (para poder reportar)
+    let pendingQuery = supabase
       .from('pending_items')
       .select(`
         id,
@@ -2690,28 +2683,51 @@ export async function actionGetPendingItems() {
         created_at,
         status,
         fortnight_id,
+        assigned_broker_id,
         insurers ( name )
       `)
-      .eq('status', 'open')  // CRÍTICO: Solo items que NO están en reportes
+      .eq('status', 'open')
       .order('created_at', { ascending: true });
+    
+    // Filtrar según rol
+    if (role === 'broker' && brokerId) {
+      // Broker ve solo items asignados a él
+      pendingQuery = pendingQuery.eq('assigned_broker_id', brokerId);
+    } else if (role === 'master') {
+      // Master ve solo items SIN asignar
+      pendingQuery = pendingQuery.is('assigned_broker_id', null);
+    }
+    
+    const { data: pendingData, error: pendingError } = await pendingQuery;
 
     if (pendingError) {
       console.error('[actionGetPendingItems] Error pending_items:', pendingError);
     }
 
-    // 2. Buscar en comm_items sin broker_id (comisiones sin identificar del bulk upload)
-    const { data: commData, error: commError } = await supabase
-      .from('comm_items')
-      .select(`
-        id,
-        insured_name,
-        policy_number,
-        gross_amount,
-        created_at,
-        insurers ( name )
-      `)
-      .is('broker_id', null)
-      .order('created_at', { ascending: true });
+    // 2. Buscar en comm_items (comisiones del bulk upload)
+    // MASTER: ve items SIN broker_id (sin identificar)
+    // BROKER: NO ve comm_items (solo ve pending_items asignados a él)
+    let commData = null;
+    let commError = null;
+    
+    if (role === 'master') {
+      const result = await supabase
+        .from('comm_items')
+        .select(`
+          id,
+          insured_name,
+          policy_number,
+          gross_amount,
+          created_at,
+          broker_id,
+          insurers ( name )
+        `)
+        .is('broker_id', null)  // Master ve solo items SIN broker asignado
+        .order('created_at', { ascending: true });
+      
+      commData = result.data;
+      commError = result.error;
+    }
 
     if (commError) {
       console.error('[actionGetPendingItems] Error comm_items:', commError);
@@ -3654,8 +3670,8 @@ export async function actionMigratePendingToCommItems(pending_item_ids: string[]
       
       if (!broker) continue;
       
-      const percent = (broker as any).percent_default || 100;
-      const grossAmount = item.commission_raw * (percent / 100);
+      const percent = (broker as any).percent_default || 1.0;
+      const grossAmount = item.commission_raw * percent;
       
       const { data: newCommItem, error: insertError } = await supabase
         .from('comm_items')
@@ -3726,8 +3742,8 @@ export async function actionGeneratePayNowCSV(item_ids: string[]) {
     // Crear fortnight_broker_totals falsos para el CSV
     const totalsByBroker = items.reduce((acc, item) => {
       const brokerId = item.assigned_broker_id!;
-      const percent = item.brokers?.percent_default || 100;
-      const grossAmount = item.commission_raw * (percent / 100);
+      const percent = item.brokers?.percent_default || 1.0;
+      const grossAmount = item.commission_raw * percent;
       
       if (!acc[brokerId]) {
         acc[brokerId] = {
@@ -3793,8 +3809,8 @@ export async function actionConfirmPayNowPaid(item_ids: string[]) {
     }
     
     for (const item of items) {
-      const percent = item.brokers?.percent_default || 100;
-      const grossAmount = item.commission_raw * (percent / 100);
+      const percent = item.brokers?.percent_default || 1.0;
+      const grossAmount = item.commission_raw * percent;
       
       await supabase
         .from('comm_metadata')
@@ -4062,8 +4078,8 @@ export async function actionGetAdjustmentsCSVData(claimIds: string[]) {
       if (!broker || !item) return;
 
       const brokerId = broker.id;
-      const percent = broker.percent_default ?? 0;
-      const brokerAmount = Math.abs(item.gross_amount) * (percent / 100);
+      const percent = broker.percent_default ?? 1.0;
+      const brokerAmount = Math.abs(item.gross_amount) * percent;
 
       if (!brokerTotals.has(brokerId)) {
         brokerTotals.set(brokerId, {

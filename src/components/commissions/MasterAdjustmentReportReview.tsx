@@ -237,33 +237,33 @@ export default function MasterAdjustmentReportReview({
       {/* Batch Actions Bar */}
       {selectedReports.size > 0 && (
         <Card className="bg-gradient-to-r from-blue-50 to-white border-2 border-blue-500">
-          <CardContent className="p-4">
-            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-              <div>
-                <p className="font-bold text-blue-900">
-                  {selectedReports.size} reporte(s) seleccionado(s)
+          <CardContent className="p-3 sm:p-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div className="w-full sm:w-auto">
+                <p className="font-bold text-blue-900 text-sm sm:text-base">
+                  {selectedReports.size} {selectedReports.size === 1 ? 'reporte' : 'reportes'}
                 </p>
-                <p className="text-sm text-blue-700">
+                <p className="text-xs sm:text-sm text-blue-700">
                   Total: {formatCurrency(reports.filter(r => selectedReports.has(r.id)).reduce((sum, r) => sum + r.total_amount, 0))}
                 </p>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2 w-full sm:w-auto">
                 <Button
                   size="sm"
                   variant="outline"
                   onClick={() => setSelectedReports(new Set())}
-                  className="border-gray-500"
+                  className="border-gray-500 text-xs sm:text-sm flex-1 sm:flex-none"
                 >
-                  Limpiar Selección
+                  Limpiar
                 </Button>
                 <Button
                   size="sm"
                   onClick={handleBatchApprove}
                   disabled={batchApproving}
-                  className="bg-green-600 hover:bg-green-700 text-white"
+                  className="bg-green-600 hover:bg-green-700 text-white text-xs sm:text-sm flex-1 sm:flex-none"
                 >
-                  <FaCheckCircle className="mr-2" />
-                  {batchApproving ? 'Aprobando...' : 'Aprobar Seleccionados'}
+                  <FaCheckCircle className="mr-1 sm:mr-2" />
+                  {batchApproving ? 'Aprobando...' : 'Aprobar'}
                 </Button>
               </div>
             </div>
@@ -305,22 +305,22 @@ export default function MasterAdjustmentReportReview({
                   />
                 </div>
               )}
-              <div className="flex-1">
-                <div className="flex items-center gap-3 mb-2">
-                  <CardTitle className="text-lg font-bold text-[#010139]">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
+                  <CardTitle className="text-base sm:text-lg font-bold text-[#010139] truncate">
                     {report.broker_name}
                   </CardTitle>
                   {getStatusBadge(report.status)}
                 </div>
-                <div className="text-sm text-gray-600 space-y-1">
+                <div className="text-xs sm:text-sm text-gray-600 space-y-1">
                   <p>
-                    <span className="font-semibold">{report.items.length}</span> ajustes •{' '}
+                    <span className="font-semibold">{report.items.length}</span> {report.items.length === 1 ? 'ajuste' : 'ajustes'} •{' '}
                     <span className="font-mono font-semibold text-[#8AAA19]">
                       {formatCurrency(report.total_amount)}
                     </span>
                   </p>
-                  <p className="text-xs text-gray-500">
-                    Enviado el {formatDate(report.created_at)}
+                  <p className="text-xs text-gray-500 truncate">
+                    {formatDate(report.created_at)}
                   </p>
                 </div>
               </div>
@@ -334,10 +334,10 @@ export default function MasterAdjustmentReportReview({
                       e.stopPropagation();
                       setReviewingReport(report);
                     }}
-                    className="bg-white border-green-500 text-green-700 hover:bg-green-50"
+                    className="bg-white border-green-500 text-green-700 hover:bg-green-50 text-xs sm:text-sm px-2 sm:px-3"
                   >
-                    <FaCheckCircle className="mr-2" />
-                    Aprobar
+                    <FaCheckCircle className="sm:mr-2" />
+                    <span className="hidden sm:inline">Aprobar</span>
                   </Button>
                   <Button
                     size="sm"
@@ -346,10 +346,10 @@ export default function MasterAdjustmentReportReview({
                       e.stopPropagation();
                       setEditingReport(report);
                     }}
-                    className="bg-white border-yellow-500 text-yellow-700 hover:bg-yellow-50"
+                    className="bg-white border-yellow-500 text-yellow-700 hover:bg-yellow-50 text-xs sm:text-sm px-2 sm:px-3"
                   >
-                    <FaEdit className="mr-2" />
-                    Editar
+                    <FaEdit className="sm:mr-2" />
+                    <span className="hidden sm:inline">Editar</span>
                   </Button>
                   <Button
                     size="sm"
@@ -358,10 +358,10 @@ export default function MasterAdjustmentReportReview({
                       e.stopPropagation();
                       setRejectingReport(report);
                     }}
-                    className="bg-white border-red-500 text-red-700 hover:bg-red-50"
+                    className="bg-white border-red-500 text-red-700 hover:bg-red-50 text-xs sm:text-sm px-2 sm:px-3"
                   >
-                    <FaTimesCircle className="mr-2" />
-                    Rechazar
+                    <FaTimesCircle className="sm:mr-2" />
+                    <span className="hidden sm:inline">Rechazar</span>
                   </Button>
                 </div>
               )}
@@ -394,8 +394,8 @@ export default function MasterAdjustmentReportReview({
                 </div>
               )}
 
-              {/* Tabla de Items */}
-              <div className="overflow-x-auto bg-white rounded-lg border">
+              {/* Tabla de Items - Desktop */}
+              <div className="hidden md:block bg-white rounded-lg border overflow-hidden">
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-gray-50">
@@ -403,7 +403,7 @@ export default function MasterAdjustmentReportReview({
                       <TableHead className="font-semibold">Cliente</TableHead>
                       <TableHead className="font-semibold">Aseguradora</TableHead>
                       <TableHead className="text-right font-semibold">Monto Crudo</TableHead>
-                      <TableHead className="text-right font-semibold">Comisión Broker</TableHead>
+                      <TableHead className="text-right font-semibold">Comisión</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -430,6 +430,48 @@ export default function MasterAdjustmentReportReview({
                     </TableRow>
                   </TableBody>
                 </Table>
+              </div>
+
+              {/* Lista de Items - Mobile */}
+              <div className="md:hidden space-y-3">
+                {report.items.map((item) => (
+                  <div key={item.id} className="bg-white border rounded-lg p-4 space-y-2">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1">
+                        <p className="text-xs text-gray-500 mb-1">Póliza</p>
+                        <p className="font-semibold text-sm text-[#010139]">{item.policy_number}</p>
+                      </div>
+                      <Badge variant="outline" className="text-xs">{item.insurer_name || '—'}</Badge>
+                    </div>
+                    {item.insured_name && (
+                      <div>
+                        <p className="text-xs text-gray-500">Cliente</p>
+                        <p className="text-sm">{item.insured_name}</p>
+                      </div>
+                    )}
+                    <div className="flex justify-between pt-2 border-t">
+                      <div>
+                        <p className="text-xs text-gray-500">Monto Crudo</p>
+                        <p className="text-sm font-mono">{formatCurrency(Math.abs(item.commission_raw))}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs text-gray-500">Comisión</p>
+                        <p className="text-sm font-mono font-semibold text-[#8AAA19]">
+                          {formatCurrency(item.broker_commission)}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {/* Total en Mobile */}
+                <div className="bg-gray-100 border-2 border-[#8AAA19] rounded-lg p-4">
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-gray-900">TOTAL:</span>
+                    <span className="font-mono font-bold text-[#8AAA19] text-lg">
+                      {formatCurrency(report.total_amount)}
+                    </span>
+                  </div>
+                </div>
               </div>
             </CardContent>
           )}

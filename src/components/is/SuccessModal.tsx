@@ -59,19 +59,12 @@ export default function SuccessModal({
     alert('Póliza enviada a su correo electrónico');
   };
 
+  if (!isOpen) return null;
+
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 overflow-y-auto">
-          {/* Overlay */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-          />
-
+        <>
           {/* Confetti */}
           {showConfetti && (
             <Confetti
@@ -83,23 +76,41 @@ export default function SuccessModal({
             />
           )}
 
-          {/* Modal */}
+          {/* Modal Backdrop */}
           <motion.div
-            initial={{ opacity: 0, scale: 0.9, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9, y: 20 }}
-            className="relative bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto my-4 sm:my-8"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="standard-modal-backdrop"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) onClose();
+            }}
           >
-            {/* Close button */}
-            <button
-              onClick={onClose}
-              className="absolute top-4 right-4 p-2 hover:bg-gray-100 rounded-full transition-colors z-10"
+            {/* Modal Container */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="bg-white rounded-2xl max-w-2xl w-full my-8 shadow-2xl flex flex-col max-h-[90vh]"
+              onClick={(e) => e.stopPropagation()}
             >
-              <FaTimes className="w-5 h-5 text-gray-500" />
-            </button>
+              {/* Header */}
+              <div className="bg-gradient-to-r from-green-600 to-green-700 text-white p-6 flex items-center justify-between rounded-t-2xl flex-shrink-0">
+                <div>
+                  <h2 className="text-2xl font-bold">
+                    <FaCheckCircle className="inline mr-2" />
+                    ¡Felicidades!
+                  </h2>
+                  <p className="text-white/90 text-sm mt-1">Póliza Emitida Exitosamente</p>
+                </div>
+                <button onClick={onClose} className="text-white hover:text-gray-200 transition" type="button">
+                  <FaTimes size={24} />
+                </button>
+              </div>
 
-            {/* Content */}
-            <div className="p-8 text-center">
+              {/* Content */}
+              <div className="standard-modal-content">
+                <div className="text-center">
               {/* Success icon animado */}
               <motion.div
                 initial={{ scale: 0 }}
@@ -209,9 +220,11 @@ export default function SuccessModal({
               >
                 Recibirá una copia de su póliza en su correo electrónico
               </motion.p>
-            </div>
+                </div>
+              </div>
+            </motion.div>
           </motion.div>
-        </div>
+        </>
       )}
     </AnimatePresence>
   );

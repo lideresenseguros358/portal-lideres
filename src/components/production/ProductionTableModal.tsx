@@ -113,19 +113,24 @@ export default function ProductionTableModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-60 p-2 sm:p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-7xl max-h-[90vh] sm:max-h-[85vh] my-4 sm:my-8 flex flex-col">
+    <div 
+      className="standard-modal-backdrop"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div 
+        className="standard-modal-container max-w-7xl"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
-        <div className="bg-gradient-to-r from-[#010139] to-[#020252] text-white px-3 sm:px-6 py-3 sm:py-4 rounded-t-xl flex items-center justify-between flex-shrink-0">
+        <div className="standard-modal-header">
           <div>
-            <h3 className="text-sm sm:text-lg font-bold">Cuadro Completo de Producción {year}</h3>
-            <p className="text-[10px] sm:text-xs text-gray-300 mt-0.5">Top Brokers - Ordenado por Neto Anual</p>
+            <h2 className="standard-modal-title">Cuadro Completo de Producción {year}</h2>
+            <p className="standard-modal-subtitle">Top Brokers - Ordenado por Neto Anual</p>
           </div>
-          <button
-            onClick={onClose}
-            className="text-white hover:text-gray-300 transition-colors p-1"
-          >
-            <FaTimes className="text-base sm:text-xl" />
+          <button onClick={onClose} className="standard-modal-close" type="button">
+            <FaTimes size={24} />
           </button>
         </div>
 

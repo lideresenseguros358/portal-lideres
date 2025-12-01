@@ -144,7 +144,7 @@ export async function GET(request: NextRequest) {
         discounts_json: totals.discounts_json,
         is_retained: totals.is_retained
       };
-    });
+    }).sort((a, b) => a.broker_name.localeCompare(b.broker_name)); // Orden alfabético
 
     // 6. Calcular totales
     const totalCorredores = brokers.reduce((sum, b) => sum + b.gross_amount, 0);

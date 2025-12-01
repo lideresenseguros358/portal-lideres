@@ -9,7 +9,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { FaTimes } from 'react-icons/fa';
 import {
   Select,
   SelectContent,
@@ -102,27 +102,40 @@ export function AddAdvanceModal({ isOpen, onClose, onSuccess, brokers }: Props) 
     }
   };
 
-  return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[500px] max-h-[90vh] p-0 gap-0 flex flex-col">
-        {/* Header con gradiente corporativo */}
-        <DialogHeader className="bg-gradient-to-r from-[#010139] to-[#020270] text-white p-6 pb-8 flex-shrink-0">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="p-3 bg-white/10 rounded-lg">
-              <FaMoneyBillWave className="text-2xl" />
-            </div>
-            <div>
-              <DialogTitle className="text-2xl font-bold text-white">Nuevo Adelanto</DialogTitle>
-              <DialogDescription className="text-gray-200 mt-1">
-                Registra un adelanto de comisión para un corredor
-              </DialogDescription>
-            </div>
-          </div>
-        </DialogHeader>
+  if (!isOpen) return null;
 
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="overflow-y-auto flex-1">
-            <div className="p-6 space-y-6">
+  return (
+    <>
+      <div 
+        className="standard-modal-backdrop"
+        onClick={(e) => {
+          if (e.target === e.currentTarget) onClose();
+        }}
+      >
+        <div 
+          className="standard-modal-container max-w-[500px]"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div className="standard-modal-header">
+            <div>
+              <h2 className="standard-modal-title">
+                <FaMoneyBillWave className="inline mr-2" />
+                Nuevo Adelanto
+              </h2>
+              <p className="standard-modal-subtitle">
+                Registra un adelanto de comisión para un corredor
+              </p>
+            </div>
+            <button onClick={onClose} className="standard-modal-close" type="button">
+              <FaTimes size={24} />
+            </button>
+          </div>
+
+          {/* Content */}
+          <div className="standard-modal-content">
+            <Form {...form}>
+              <form id="advance-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             {/* Corredor */}
             <FormField
               control={form.control}
@@ -336,23 +349,28 @@ export function AddAdvanceModal({ isOpen, onClose, onSuccess, brokers }: Props) 
                 Gestionar Adelantos Recurrentes
               </Button>
             </div>
-            </div>
+              </form>
+            </Form>
+          </div>
 
-            {/* Footer con botones */}
-            <DialogFooter className="gap-3 sm:gap-2 pt-4 border-t border-gray-200 flex-shrink-0 px-6 pb-6">
-              <Button 
-                type="button" 
-                variant="outline" 
-                onClick={onClose} 
+          {/* Footer */}
+          <div className="standard-modal-footer">
+            <div></div>
+            
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={onClose}
                 disabled={form.formState.isSubmitting}
-                className="border-2 border-gray-300 hover:bg-gray-100 transition-colors"
+                className="standard-modal-button-secondary"
               >
                 Cancelar
-              </Button>
-              <Button 
-                type="submit" 
+              </button>
+              <button
+                type="submit"
+                form="advance-form"
                 disabled={form.formState.isSubmitting}
-                className="bg-gradient-to-r from-[#8AAA19] to-[#6d8814] hover:from-[#6d8814] hover:to-[#8AAA19] text-white shadow-lg transition-all duration-200"
+                className="standard-modal-button-primary"
               >
                 {form.formState.isSubmitting ? (
                   <>
@@ -365,11 +383,11 @@ export function AddAdvanceModal({ isOpen, onClose, onSuccess, brokers }: Props) 
                     {isRecurrent ? 'Crear Recurrencia' : 'Agregar Adelanto'}
                   </>
                 )}
-              </Button>
-            </DialogFooter>
-          </form>
-        </Form>
-      </DialogContent>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Modal de gestión de recurrencias */}
       <RecurrencesManagerModal
@@ -377,6 +395,6 @@ export function AddAdvanceModal({ isOpen, onClose, onSuccess, brokers }: Props) 
         onClose={() => setShowRecurrencesManager(false)}
         onSuccess={onSuccess}
       />
-    </Dialog>
+    </>
   );
 }
