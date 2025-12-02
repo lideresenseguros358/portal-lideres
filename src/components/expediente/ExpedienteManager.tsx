@@ -466,7 +466,7 @@ export default function ExpedienteManager({
 
       {/* Preview Modal */}
       {previewDoc && mounted && createPortal(
-        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[60] p-4 overflow-y-auto">
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[10000] p-4 overflow-y-auto">
           <div className="bg-white rounded-xl shadow-2xl max-w-5xl w-full max-h-[90vh] sm:max-h-[85vh] overflow-hidden border-2 border-gray-200 flex flex-col my-4 sm:my-8">
             {/* Header */}
             <div className="sticky top-0 bg-gradient-to-r from-[#010139] to-[#020270] px-5 py-4 flex items-center justify-between">
@@ -539,7 +539,7 @@ export default function ExpedienteManager({
       {/* Upload Modal - Rediseñado con branding corporativo */}
       {showUploadModal && mounted && createPortal(
         <div 
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto"
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[10000] p-4 overflow-y-auto"
         >
           <div 
             className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] sm:max-h-[85vh] overflow-y-auto border-2 border-gray-200 my-4 sm:my-8"

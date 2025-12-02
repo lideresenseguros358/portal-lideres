@@ -2671,8 +2671,8 @@ export async function actionGetPendingItems() {
     const { role, brokerId } = await getAuthContext();
 
     // 1. Buscar en pending_items: SOLO status='open' realmente sin asignar
-    // MASTER: ve items status='open' SIN assigned_broker_id (sin identificar)
-    // BROKER: NO ve pending_items con status='open' (solo ve los asignados a él en reportes)
+    // TANTO MASTER COMO BROKER ven items status='open' SIN assigned_broker_id (sin identificar)
+    // Los brokers pueden "marcar mío" seleccionándolos y enviando reporte de ajuste
     let pendingQuery = supabase
       .from('pending_items')
       .select(`
@@ -2690,12 +2690,7 @@ export async function actionGetPendingItems() {
       .is('assigned_broker_id', null) // CRÍTICO: Sin broker asignado
       .order('created_at', { ascending: true });
     
-    // Filtrar según rol
-    if (role === 'broker') {
-      // Broker NO ve items 'open' sin asignar - solo ve sus reportes en otra vista
-      pendingQuery = pendingQuery.eq('id', '00000000-0000-0000-0000-000000000000'); // Filtro que no retorna nada
-    }
-    // Master ve todos los items 'open' sin asignar (ya filtrados arriba)
+    // Tanto master como broker ven todos los items sin identificar
     
     const { data: pendingData, error: pendingError } = await pendingQuery;
 
@@ -2704,29 +2699,24 @@ export async function actionGetPendingItems() {
     }
 
     // 2. Buscar en comm_items (comisiones del bulk upload)
-    // MASTER: ve items SIN broker_id (sin identificar)
-    // BROKER: NO ve comm_items (solo ve pending_items asignados a él)
-    let commData = null;
-    let commError = null;
+    // TANTO MASTER COMO BROKER ven items SIN broker_id (sin identificar)
+    // Los brokers pueden "marcar mío" seleccionándolos y enviando reporte de ajuste
+    const result = await supabase
+      .from('comm_items')
+      .select(`
+        id,
+        insured_name,
+        policy_number,
+        gross_amount,
+        created_at,
+        broker_id,
+        insurers ( name )
+      `)
+      .is('broker_id', null)  // Todos ven items SIN broker asignado
+      .order('created_at', { ascending: true });
     
-    if (role === 'master') {
-      const result = await supabase
-        .from('comm_items')
-        .select(`
-          id,
-          insured_name,
-          policy_number,
-          gross_amount,
-          created_at,
-          broker_id,
-          insurers ( name )
-        `)
-        .is('broker_id', null)  // Master ve solo items SIN broker asignado
-        .order('created_at', { ascending: true });
-      
-      commData = result.data;
-      commError = result.error;
-    }
+    const commData = result.data;
+    const commError = result.error;
 
     if (commError) {
       console.error('[actionGetPendingItems] Error comm_items:', commError);

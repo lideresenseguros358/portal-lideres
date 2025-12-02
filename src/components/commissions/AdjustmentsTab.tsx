@@ -17,9 +17,14 @@ import {
   FaUserCheck,
   FaCheckCircle,
   FaPaperPlane,
+  FaClock,
+  FaInfoCircle,
+  FaDollarSign,
 } from 'react-icons/fa';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AssignBrokerDropdown } from './AssignBrokerDropdown';
 import RetainedGroupedView from './RetainedGroupedView';
 import PaidRetainedView from './PaidRetainedView';
@@ -35,6 +40,283 @@ interface Props {
   isShortcut?: boolean;
   onActionSuccess?: () => void;
   onPendingCountChange?: (count: number) => void;
+}
+
+// Componente para vista de reportes pagados de Broker
+function BrokerPaidReportsList({ reports }: { reports: any[] }) {
+  const [expandedReports, setExpandedReports] = useState<Set<string>>(new Set());
+
+  const toggleReport = (reportId: string) => {
+    setExpandedReports(prev => {
+      const next = new Set(prev);
+      if (next.has(reportId)) {
+        next.delete(reportId);
+      } else {
+        next.add(reportId);
+      }
+      return next;
+    });
+  };
+
+  const formatMoney = (amount: number) => {
+    return new Intl.NumberFormat('en-US', { 
+      style: 'currency', 
+      currency: 'USD',
+      minimumFractionDigits: 2
+    }).format(amount);
+  };
+
+  if (reports.length === 0) {
+    return (
+      <div className="text-center py-12 sm:py-20">
+        <FaCheckCircle className="text-5xl sm:text-6xl text-gray-300 mx-auto mb-4" />
+        <h3 className="text-lg sm:text-xl font-semibold text-gray-600 mb-2">
+          No hay ajustes pagados
+        </h3>
+        <p className="text-sm text-gray-500">Tu historial de ajustes pagados aparecerá aquí</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {reports.map((report: any) => {
+        const items = report.items || [];
+        const isExpanded = expandedReports.has(report.id);
+        const itemCount = items.length;
+        
+        return (
+          <Card key={report.id} className="border-2 border-green-200 hover:shadow-md transition-shadow">
+            <CardContent className="p-4">
+              <div 
+                className="flex items-start justify-between cursor-pointer"
+                onClick={() => toggleReport(report.id)}
+              >
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-2">
+                    <h3 className="text-base font-bold text-[#010139]">
+                      Reporte de Ajustes
+                    </h3>
+                    <Badge className="bg-green-600 text-white">
+                      <FaCheckCircle className="mr-1" size={10} /> Pagado
+                    </Badge>
+                  </div>
+                  
+                  <div className="flex flex-wrap gap-4 text-sm text-gray-600">
+                    <span className="flex items-center gap-1">
+                      <FaCalendarAlt className="text-gray-400" size={12} />
+                      Enviado: {new Date(report.created_at).toLocaleDateString('es-PA', { 
+                        year: 'numeric', 
+                        month: 'short', 
+                        day: 'numeric' 
+                      })}
+                    </span>
+                    {report.paid_date && (
+                      <span className="flex items-center gap-1 font-semibold text-green-700">
+                        <FaCheckCircle className="text-green-600" size={12} />
+                        Pagado: {new Date(report.paid_date).toLocaleDateString('es-PA', { 
+                          year: 'numeric', 
+                          month: 'short', 
+                          day: 'numeric' 
+                        })}
+                      </span>
+                    )}
+                    <span className="flex items-center gap-1">
+                      <FaInfoCircle className="text-gray-400" size={12} />
+                      {itemCount} {itemCount === 1 ? 'item' : 'items'}
+                    </span>
+                    <span className="flex items-center gap-1 font-bold text-[#8AAA19] text-lg">
+                      <FaDollarSign className="text-green-600" size={14} />
+                      {formatMoney(Math.abs(report.total_amount || 0))}
+                    </span>
+                  </div>
+                </div>
+                
+                <Button variant="ghost" size="sm" className="ml-2">
+                  {isExpanded ? '▼' : '▶'}
+                </Button>
+              </div>
+
+              {isExpanded && (
+                <div className="mt-4 pt-4 border-t">
+                  <h4 className="text-sm font-semibold text-gray-700 mb-3">Detalle de Items:</h4>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-gray-50">
+                          <TableHead>Póliza</TableHead>
+                          <TableHead>Asegurado</TableHead>
+                          <TableHead>Aseguradora</TableHead>
+                          <TableHead className="text-right">Comisión Bruta</TableHead>
+                          <TableHead className="text-right">Tu Comisión</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {items.map((item: any) => (
+                          <TableRow key={item.id}>
+                            <TableCell className="font-medium">{item.policy_number || '—'}</TableCell>
+                            <TableCell>{item.insured_name || '—'}</TableCell>
+                            <TableCell>{item.insurer_name || '—'}</TableCell>
+                            <TableCell className="text-right font-mono">
+                              {formatMoney(Math.abs(item.commission_raw || 0))}
+                            </TableCell>
+                            <TableCell className="text-right font-mono font-semibold text-[#8AAA19]">
+                              {formatMoney(Math.abs(item.broker_commission || 0))}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        );
+      })}
+    </div>
+  );
+}
+
+// Componente para vista de reportes de Broker (solo lectura)
+function BrokerReportsList({ reports }: { reports: any[] }) {
+  const [expandedReports, setExpandedReports] = useState<Set<string>>(new Set());
+
+  const toggleReport = (reportId: string) => {
+    setExpandedReports(prev => {
+      const next = new Set(prev);
+      if (next.has(reportId)) {
+        next.delete(reportId);
+      } else {
+        next.add(reportId);
+      }
+      return next;
+    });
+  };
+
+  const formatMoney = (amount: number) => {
+    return new Intl.NumberFormat('en-US', { 
+      style: 'currency', 
+      currency: 'USD',
+      minimumFractionDigits: 2
+    }).format(amount);
+  };
+
+  if (reports.length === 0) {
+    return (
+      <div className="text-center py-12 sm:py-20">
+        <FaClock className="text-5xl sm:text-6xl text-gray-300 mx-auto mb-4" />
+        <h3 className="text-lg sm:text-xl font-semibold text-gray-600 mb-2">
+          No hay reportes pendientes
+        </h3>
+        <p className="text-sm text-gray-500">Tus reportes de ajustes aparecerán aquí</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {reports.map((report: any) => {
+        const items = report.items || [];
+        const isExpanded = expandedReports.has(report.id);
+        const itemCount = items.length;
+        
+        return (
+          <Card key={report.id} className="border-2 hover:shadow-md transition-shadow">
+            <CardContent className="p-4">
+              {/* Header - Siempre visible */}
+              <div 
+                className="flex items-start justify-between cursor-pointer"
+                onClick={() => toggleReport(report.id)}
+              >
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-2">
+                    <h3 className="text-base font-bold text-[#010139]">
+                      Reporte de Ajustes
+                    </h3>
+                    {report.status === 'pending' && (
+                      <Badge className="bg-amber-500 text-white">
+                        <FaClock className="mr-1" size={10} /> Esperando Revisión
+                      </Badge>
+                    )}
+                    {report.status === 'approved' && (
+                      <Badge className="bg-green-600 text-white">
+                        <FaCheckCircle className="mr-1" size={10} /> Aprobado
+                      </Badge>
+                    )}
+                  </div>
+                  
+                  <div className="flex flex-wrap gap-4 text-sm text-gray-600">
+                    <span className="flex items-center gap-1">
+                      <FaCalendarAlt className="text-gray-400" size={12} />
+                      Enviado: {new Date(report.created_at).toLocaleDateString('es-PA', { 
+                        year: 'numeric', 
+                        month: 'short', 
+                        day: 'numeric' 
+                      })}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <FaInfoCircle className="text-gray-400" size={12} />
+                      {itemCount} {itemCount === 1 ? 'item' : 'items'}
+                    </span>
+                    <span className="flex items-center gap-1 font-semibold text-[#010139]">
+                      <FaDollarSign className="text-green-600" size={12} />
+                      {formatMoney(Math.abs(report.total_amount || 0))}
+                    </span>
+                  </div>
+                </div>
+                
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="ml-2"
+                >
+                  {isExpanded ? '▼' : '▶'}
+                </Button>
+              </div>
+
+              {/* Detalles expandibles */}
+              {isExpanded && (
+                <div className="mt-4 pt-4 border-t">
+                  <h4 className="text-sm font-semibold text-gray-700 mb-3">Detalle de Items:</h4>
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-gray-50">
+                          <TableHead>Póliza</TableHead>
+                          <TableHead>Asegurado</TableHead>
+                          <TableHead>Aseguradora</TableHead>
+                          <TableHead className="text-right">Comisión Bruta</TableHead>
+                          <TableHead className="text-right">Tu Comisión</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {items.map((item: any) => (
+                          <TableRow key={item.id}>
+                            <TableCell className="font-medium">
+                              {item.policy_number || '—'}
+                            </TableCell>
+                            <TableCell>{item.insured_name || '—'}</TableCell>
+                            <TableCell>{item.insurer_name || '—'}</TableCell>
+                            <TableCell className="text-right font-mono">
+                              {formatMoney(Math.abs(item.commission_raw || 0))}
+                            </TableCell>
+                            <TableCell className="text-right font-mono font-semibold text-[#8AAA19]">
+                              {formatMoney(Math.abs(item.broker_commission || 0))}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        );
+      })}
+    </div>
+  );
 }
 
 type PendingItemDetail = {
@@ -639,6 +921,7 @@ export default function AdjustmentsTab({ role, brokerId, brokers, onActionSucces
   const [activeTab, setActiveTab] = useState<'pending' | 'requests' | 'approved' | 'retained' | 'paid'>('pending');
   const [retainedSubTab, setRetainedSubTab] = useState<'pending' | 'paid'>('pending');
   const [reports, setReports] = useState<any[]>([]);
+  const [paidReports, setPaidReports] = useState<any[]>([]);
   const [loadingReports, setLoadingReports] = useState(false);
 
   const handleSuccess = () => {
@@ -652,6 +935,16 @@ export default function AdjustmentsTab({ role, brokerId, brokers, onActionSucces
     const result = await actionGetAdjustmentReports('pending');
     if (result.ok) {
       setReports(result.data || []);
+    }
+    setLoadingReports(false);
+  };
+
+  const loadPaidReports = async () => {
+    if (activeTab !== 'paid' || role !== 'broker') return;
+    setLoadingReports(true);
+    const result = await actionGetAdjustmentReports('paid');
+    if (result.ok) {
+      setPaidReports(result.data || []);
     }
     setLoadingReports(false);
   };
@@ -683,9 +976,10 @@ export default function AdjustmentsTab({ role, brokerId, brokers, onActionSucces
   useEffect(() => {
     if (activeTab === 'requests') {
       loadReports();
+    } else if (activeTab === 'paid' && role === 'broker') {
+      loadPaidReports();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab]);
+  }, [activeTab, role]);
 
   const masterTabs = [
     { key: 'pending' as const, label: 'Sin identificar', icon: FaExclamationTriangle },
@@ -759,7 +1053,7 @@ export default function AdjustmentsTab({ role, brokerId, brokers, onActionSucces
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#010139]"></div>
                 <span className="ml-3 text-gray-600">Cargando reportes...</span>
               </div>
-            ) : (
+            ) : role === 'master' ? (
               <MasterAdjustmentReportReview
                 reports={reports}
                 onApprove={handleApprove}
@@ -767,6 +1061,9 @@ export default function AdjustmentsTab({ role, brokerId, brokers, onActionSucces
                 onEdit={handleEdit}
                 onReload={loadReports}
               />
+            ) : (
+              // BROKER VIEW - Solo lectura, sin botones ni checkboxes
+              <BrokerReportsList reports={reports} />
             )
           )}
           {activeTab === 'approved' && role === 'master' && <ApprovedAdjustmentsView />}
@@ -800,7 +1097,14 @@ export default function AdjustmentsTab({ role, brokerId, brokers, onActionSucces
               {retainedSubTab === 'pending' ? <RetainedGroupedView /> : <PaidRetainedView />}
             </div>
           )}
-          {activeTab === 'paid' && <PaidAdjustmentsView />}
+          {activeTab === 'paid' && (
+            role === 'master' ? (
+              <PaidAdjustmentsView />
+            ) : (
+              // BROKER VIEW - Solo lectura para ajustes pagados
+              <BrokerPaidReportsList reports={paidReports} />
+            )
+          )}
         </div>
       </CardContent>
     </Card>

@@ -15,7 +15,9 @@ import {
   FaPaperPlane, 
   FaTrash, 
   FaInfoCircle,
-  FaCalculator 
+  FaCalculator,
+  FaCalendarAlt,
+  FaDollarSign
 } from 'react-icons/fa';
 import { toast } from 'sonner';
 import { 
@@ -44,6 +46,19 @@ export default function BrokerPendingTab({ brokerId }: Props) {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [brokerPercent, setBrokerPercent] = useState(0);
+  const [expandedReports, setExpandedReports] = useState<Set<string>>(new Set());
+
+  const toggleReport = (reportId: string) => {
+    setExpandedReports(prev => {
+      const next = new Set(prev);
+      if (next.has(reportId)) {
+        next.delete(reportId);
+      } else {
+        next.add(reportId);
+      }
+      return next;
+    });
+  };
 
   // Cargar datos
   const loadData = useCallback(async () => {
@@ -126,6 +141,9 @@ export default function BrokerPendingTab({ brokerId }: Props) {
 
   // Enviar reporte
   const handleSubmitReport = async () => {
+    console.log('[BrokerPendingTab] handleSubmitReport - Iniciando');
+    console.log('[BrokerPendingTab] Items seleccionados:', selectedItems.size);
+    
     if (selectedItems.size === 0) {
       toast.error('Selecciona al menos un ajuste');
       return;
@@ -134,20 +152,32 @@ export default function BrokerPendingTab({ brokerId }: Props) {
     setSubmitting(true);
     try {
       const itemIds = Array.from(selectedItems);
+      console.log('[BrokerPendingTab] Llamando actionCreateAdjustmentReport con items:', itemIds);
+      
       // Usar el nuevo sistema de adjustment_reports
       const result = await actionCreateAdjustmentReport(itemIds, '');
+      console.log('[BrokerPendingTab] Resultado:', result);
       
       if (result.ok) {
         toast.success(result.message || 'Reporte enviado exitosamente');
         clearSelection();
+        
+        // Esperar un momento para que revalidatePath tenga efecto (igual que Master)
+        console.log('[BrokerPendingTab] Esperando 500ms para revalidación...');
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+        console.log('[BrokerPendingTab] Recargando datos...');
         await loadData();
+        console.log('[BrokerPendingTab] Datos recargados exitosamente');
       } else {
+        console.error('[BrokerPendingTab] Error en resultado:', result.error);
         toast.error(result.error || 'Error al enviar reporte');
       }
     } catch (error) {
-      console.error('Error submitting report:', error);
+      console.error('[BrokerPendingTab] Error submitting report:', error);
       toast.error('Error al enviar reporte');
     } finally {
+      console.log('[BrokerPendingTab] Finalizando - setSubmitting(false)');
       setSubmitting(false);
     }
   };
@@ -385,61 +415,114 @@ export default function BrokerPendingTab({ brokerId }: Props) {
                 <div className="text-center py-12 sm:py-20">
                   <FaClock className="text-5xl sm:text-6xl text-gray-300 mx-auto mb-4" />
                   <h3 className="text-lg sm:text-xl font-semibold text-gray-600 mb-2">
-                    No hay solicitudes pendientes
+                    No hay reportes pendientes
                   </h3>
-                  <p className="text-sm text-gray-500">Tus solicitudes de ajustes aparecerán aquí</p>
+                  <p className="text-sm text-gray-500">Tus reportes de ajustes aparecerán aquí</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="bg-gray-50">
-                        <TableHead className="font-semibold text-gray-700">Póliza</TableHead>
-                        <TableHead className="font-semibold text-gray-700">Cliente</TableHead>
-                        <TableHead className="text-right font-semibold text-gray-700">Monto</TableHead>
-                        <TableHead className="font-semibold text-gray-700">Estado</TableHead>
-                        <TableHead className="font-semibold text-gray-700">Fecha</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {myRequests.map((claim: any) => {
-                        const item = claim.comm_items;
-                        return (
-                          <TableRow key={claim.id} className="hover:bg-gray-50 transition-colors">
-                            <TableCell className="font-medium text-gray-700">
-                              {item?.policy_number || '—'}
-                            </TableCell>
-                            <TableCell className="text-gray-600">
-                              {item?.insured_name || '—'}
-                            </TableCell>
-                            <TableCell className="text-right font-mono text-[#010139] font-semibold">
-                              {item ? formatMoney(item.net_amount ? Math.abs(item.net_amount) : Math.abs(item.gross_amount)) : '—'}
-                            </TableCell>
-                            <TableCell>
-                              {claim.status === 'pending' && (
-                                <Badge variant="warning">
-                                  <FaClock className="mr-1" size={10} /> Esperando Revisión
-                                </Badge>
-                              )}
-                              {claim.status === 'approved' && (
-                                <Badge variant="success">
-                                  <FaCheckCircle className="mr-1" size={10} /> Aprobado
-                                </Badge>
-                              )}
-                              {claim.status === 'rejected' && (
-                                <Badge variant="danger">
-                                  <FaTimesCircle className="mr-1" size={10} /> Rechazado
-                                </Badge>
-                              )}
-                            </TableCell>
-                            <TableCell className="text-gray-600 text-sm">
-                              {new Date(claim.created_at).toLocaleDateString('es-PA')}
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
+                <div className="space-y-4">
+                  {myRequests.map((report: any) => {
+                    const items = report.adjustment_report_items || [];
+                    const isExpanded = expandedReports.has(report.id);
+                    const itemCount = items.length;
+                    
+                    return (
+                      <Card key={report.id} className="border-2 hover:shadow-md transition-shadow">
+                        <CardContent className="p-4">
+                          {/* Header - Siempre visible */}
+                          <div 
+                            className="flex items-start justify-between cursor-pointer"
+                            onClick={() => toggleReport(report.id)}
+                          >
+                            <div className="flex-1">
+                              <div className="flex items-center gap-3 mb-2">
+                                <h3 className="text-base font-bold text-[#010139]">
+                                  Reporte de Ajustes
+                                </h3>
+                                {report.status === 'pending' && (
+                                  <Badge className="bg-amber-500 text-white">
+                                    <FaClock className="mr-1" size={10} /> Esperando Revisión
+                                  </Badge>
+                                )}
+                                {report.status === 'approved' && (
+                                  <Badge className="bg-green-600 text-white">
+                                    <FaCheckCircle className="mr-1" size={10} /> Aprobado
+                                  </Badge>
+                                )}
+                              </div>
+                              
+                              <div className="flex flex-wrap gap-4 text-sm text-gray-600">
+                                <span className="flex items-center gap-1">
+                                  <FaCalendarAlt className="text-gray-400" size={12} />
+                                  Enviado: {new Date(report.created_at).toLocaleDateString('es-PA', { 
+                                    year: 'numeric', 
+                                    month: 'short', 
+                                    day: 'numeric' 
+                                  })}
+                                </span>
+                                <span className="flex items-center gap-1">
+                                  <FaInfoCircle className="text-gray-400" size={12} />
+                                  {itemCount} {itemCount === 1 ? 'item' : 'items'}
+                                </span>
+                                <span className="flex items-center gap-1 font-semibold text-[#010139]">
+                                  <FaDollarSign className="text-green-600" size={12} />
+                                  {formatMoney(Math.abs(report.total_amount || 0))}
+                                </span>
+                              </div>
+                            </div>
+                            
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="ml-2"
+                            >
+                              {isExpanded ? '▼' : '▶'}
+                            </Button>
+                          </div>
+
+                          {/* Detalles expandibles */}
+                          {isExpanded && (
+                            <div className="mt-4 pt-4 border-t">
+                              <h4 className="text-sm font-semibold text-gray-700 mb-3">Detalle de Items:</h4>
+                              <div className="overflow-x-auto">
+                                <Table>
+                                  <TableHeader>
+                                    <TableRow className="bg-gray-50">
+                                      <TableHead>Póliza</TableHead>
+                                      <TableHead>Asegurado</TableHead>
+                                      <TableHead>Aseguradora</TableHead>
+                                      <TableHead className="text-right">Comisión Bruta</TableHead>
+                                      <TableHead className="text-right">Tu Comisión</TableHead>
+                                    </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                    {items.map((item: any) => {
+                                      const pending = item.pending_items;
+                                      return (
+                                        <TableRow key={item.id}>
+                                          <TableCell className="font-medium">
+                                            {pending?.policy_number || '—'}
+                                          </TableCell>
+                                          <TableCell>{pending?.insured_name || '—'}</TableCell>
+                                          <TableCell>{pending?.insurers?.name || '—'}</TableCell>
+                                          <TableCell className="text-right font-mono">
+                                            {formatMoney(Math.abs(item.commission_raw || 0))}
+                                          </TableCell>
+                                          <TableCell className="text-right font-mono font-semibold text-[#8AAA19]">
+                                            {formatMoney(Math.abs(item.broker_commission || 0))}
+                                          </TableCell>
+                                        </TableRow>
+                                      );
+                                    })}
+                                  </TableBody>
+                                </Table>
+                              </div>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
@@ -459,38 +542,112 @@ export default function BrokerPendingTab({ brokerId }: Props) {
                   <p className="text-sm text-gray-500">Tu historial de ajustes pagados aparecerá aquí</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <Table>
-                    <TableHeader>
-                      <TableRow className="bg-gray-50">
-                        <TableHead className="font-semibold text-gray-700">Póliza</TableHead>
-                        <TableHead className="font-semibold text-gray-700">Cliente</TableHead>
-                        <TableHead className="text-right font-semibold text-gray-700">Monto</TableHead>
-                        <TableHead className="font-semibold text-gray-700">Fecha Pagado</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {paidAdjustments.map((claim: any) => {
-                        const item = claim.comm_items;
-                        return (
-                          <TableRow key={claim.id} className="hover:bg-gray-50 transition-colors">
-                            <TableCell className="font-medium text-gray-700">
-                              {item?.policy_number || '—'}
-                            </TableCell>
-                            <TableCell className="text-gray-600">
-                              {item?.insured_name || '—'}
-                            </TableCell>
-                            <TableCell className="text-right font-mono text-[#8AAA19] font-bold text-lg">
-                              {item ? formatMoney(item.net_amount ? Math.abs(item.net_amount) : Math.abs(item.gross_amount)) : '—'}
-                            </TableCell>
-                            <TableCell className="text-gray-600 text-sm">
-                              {claim.paid_date ? new Date(claim.paid_date).toLocaleDateString('es-PA') : '—'}
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
-                    </TableBody>
-                  </Table>
+                <div className="space-y-4">
+                  {paidAdjustments.map((report: any) => {
+                    const items = report.adjustment_report_items || [];
+                    const isExpanded = expandedReports.has(report.id);
+                    const itemCount = items.length;
+                    
+                    return (
+                      <Card key={report.id} className="border-2 border-green-200 hover:shadow-md transition-shadow">
+                        <CardContent className="p-4">
+                          {/* Header - Siempre visible */}
+                          <div 
+                            className="flex items-start justify-between cursor-pointer"
+                            onClick={() => toggleReport(report.id)}
+                          >
+                            <div className="flex-1">
+                              <div className="flex items-center gap-3 mb-2">
+                                <h3 className="text-base font-bold text-[#010139]">
+                                  Reporte de Ajustes
+                                </h3>
+                                <Badge className="bg-green-600 text-white">
+                                  <FaCheckCircle className="mr-1" size={10} /> Pagado
+                                </Badge>
+                              </div>
+                              
+                              <div className="flex flex-wrap gap-4 text-sm text-gray-600">
+                                <span className="flex items-center gap-1">
+                                  <FaCalendarAlt className="text-gray-400" size={12} />
+                                  Enviado: {new Date(report.created_at).toLocaleDateString('es-PA', { 
+                                    year: 'numeric', 
+                                    month: 'short', 
+                                    day: 'numeric' 
+                                  })}
+                                </span>
+                                {report.paid_date && (
+                                  <span className="flex items-center gap-1 font-semibold text-green-700">
+                                    <FaCheckCircle className="text-green-600" size={12} />
+                                    Pagado: {new Date(report.paid_date).toLocaleDateString('es-PA', { 
+                                      year: 'numeric', 
+                                      month: 'short', 
+                                      day: 'numeric' 
+                                    })}
+                                  </span>
+                                )}
+                                <span className="flex items-center gap-1">
+                                  <FaInfoCircle className="text-gray-400" size={12} />
+                                  {itemCount} {itemCount === 1 ? 'item' : 'items'}
+                                </span>
+                                <span className="flex items-center gap-1 font-bold text-[#8AAA19] text-lg">
+                                  <FaDollarSign className="text-green-600" size={14} />
+                                  {formatMoney(Math.abs(report.total_amount || 0))}
+                                </span>
+                              </div>
+                            </div>
+                            
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="ml-2"
+                            >
+                              {isExpanded ? '▼' : '▶'}
+                            </Button>
+                          </div>
+
+                          {/* Detalles expandibles */}
+                          {isExpanded && (
+                            <div className="mt-4 pt-4 border-t">
+                              <h4 className="text-sm font-semibold text-gray-700 mb-3">Detalle de Items:</h4>
+                              <div className="overflow-x-auto">
+                                <Table>
+                                  <TableHeader>
+                                    <TableRow className="bg-gray-50">
+                                      <TableHead>Póliza</TableHead>
+                                      <TableHead>Asegurado</TableHead>
+                                      <TableHead>Aseguradora</TableHead>
+                                      <TableHead className="text-right">Comisión Bruta</TableHead>
+                                      <TableHead className="text-right">Tu Comisión</TableHead>
+                                    </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
+                                    {items.map((item: any) => {
+                                      const pending = item.pending_items;
+                                      return (
+                                        <TableRow key={item.id}>
+                                          <TableCell className="font-medium">
+                                            {pending?.policy_number || '—'}
+                                          </TableCell>
+                                          <TableCell>{pending?.insured_name || '—'}</TableCell>
+                                          <TableCell>{pending?.insurers?.name || '—'}</TableCell>
+                                          <TableCell className="text-right font-mono">
+                                            {formatMoney(Math.abs(item.commission_raw || 0))}
+                                          </TableCell>
+                                          <TableCell className="text-right font-mono font-semibold text-[#8AAA19]">
+                                            {formatMoney(Math.abs(item.broker_commission || 0))}
+                                          </TableCell>
+                                        </TableRow>
+                                      );
+                                    })}
+                                  </TableBody>
+                                </Table>
+                              </div>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
                 </div>
               )}
             </CardContent>

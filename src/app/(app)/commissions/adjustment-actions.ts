@@ -55,29 +55,47 @@ export async function actionCreateAdjustmentReport(
       return { ok: false, error: 'No se especificó el broker para el reporte' };
     }
 
-    // Usar Admin para bypasear RLS cuando Master crea reportes para otros brokers
-    const supabase = (role === 'master' && targetBrokerId) ? getSupabaseAdmin() : await getSupabaseServer();
+    // Usar Admin para bypasear RLS en estas operaciones:
+    // - Master creando reportes para otros brokers
+    // - Broker buscando comm_items sin broker_id (necesita permisos especiales)
+    // - Crear pending_items desde comm_items (requiere permisos de escritura)
+    const supabase = getSupabaseAdmin();
 
-    // Obtener los pending items seleccionados
-    console.log('[actionCreateAdjustmentReport] Buscando pending items...');
-    const { data: pendingItems, error: itemsError } = await supabase
+    // Obtener los items seleccionados (pueden ser de pending_items O comm_items)
+    console.log('[actionCreateAdjustmentReport] Buscando items en ambas tablas...');
+    
+    // 1. Buscar en pending_items
+    const { data: pendingItems, error: pendingError } = await supabase
       .from('pending_items')
       .select('*')
       .in('id', itemIds);
-    console.log('[actionCreateAdjustmentReport] Pending items encontrados:', pendingItems?.length);
+    console.log('[actionCreateAdjustmentReport] Pending items encontrados:', pendingItems?.length || 0);
 
-    if (itemsError || !pendingItems || pendingItems.length === 0) {
+    // 2. Buscar en comm_items
+    const { data: commItems, error: commError } = await supabase
+      .from('comm_items')
+      .select('*')
+      .in('id', itemIds);
+    console.log('[actionCreateAdjustmentReport] Comm items encontrados:', commItems?.length || 0);
+
+    const allItems = [...(pendingItems || []), ...(commItems || [])];
+    console.log('[actionCreateAdjustmentReport] Total items encontrados:', allItems.length);
+
+    if (allItems.length === 0) {
       return { ok: false, error: 'No se encontraron items pendientes' };
     }
 
-    // Verificar que ningún item ya esté en un reporte
-    const { data: existingReportItems } = await supabase
-      .from('adjustment_report_items')
-      .select('pending_item_id')
-      .in('pending_item_id', itemIds);
+    // Verificar que ningún item de pending_items ya esté en un reporte
+    const pendingItemIds = pendingItems?.map(i => i.id) || [];
+    if (pendingItemIds.length > 0) {
+      const { data: existingReportItems } = await supabase
+        .from('adjustment_report_items')
+        .select('pending_item_id')
+        .in('pending_item_id', pendingItemIds);
 
-    if (existingReportItems && existingReportItems.length > 0) {
-      return { ok: false, error: 'Algunos items ya están en un reporte existente' };
+      if (existingReportItems && existingReportItems.length > 0) {
+        return { ok: false, error: 'Algunos items ya están en un reporte existente' };
+      }
     }
 
     // Obtener porcentaje del broker
@@ -92,8 +110,10 @@ export async function actionCreateAdjustmentReport(
     // Calcular total (MISMO CÁLCULO QUE IMPORT)
     let totalBrokerCommission = 0;
     const reportItems: any[] = [];
+    const itemsToCreateInPending: any[] = [];
 
-    pendingItems.forEach((item: any) => {
+    // Procesar pending_items
+    (pendingItems || []).forEach((item: any) => {
       const commissionRaw = Math.abs(Number(item.commission_raw) || 0);
       const brokerCommission = commissionRaw * brokerPercent;
       totalBrokerCommission += brokerCommission;
@@ -104,6 +124,70 @@ export async function actionCreateAdjustmentReport(
         broker_commission: brokerCommission
       });
     });
+
+    // Procesar comm_items - crear pending_items para ellos
+    (commItems || []).forEach((item: any) => {
+      const grossAmount = Math.abs(Number(item.gross_amount) || 0);
+      const brokerCommission = grossAmount * brokerPercent;
+      totalBrokerCommission += brokerCommission;
+
+      // Marcar para crear pending_item
+      itemsToCreateInPending.push({
+        originalCommItemId: item.id,
+        commission_raw: grossAmount,
+        broker_commission: brokerCommission,
+        policy_number: item.policy_number,
+        insured_name: item.insured_name,
+        insurer_id: item.insurer_id,
+        fortnight_id: item.fortnight_id
+      });
+    });
+
+    // Crear pending_items para los comm_items
+    if (itemsToCreateInPending.length > 0) {
+      console.log('[actionCreateAdjustmentReport] Creando pending_items para comm_items:', itemsToCreateInPending.length);
+      const { data: newPendingItems, error: createError } = await supabase
+        .from('pending_items')
+        .insert(itemsToCreateInPending.map(item => ({
+          policy_number: item.policy_number,
+          insured_name: item.insured_name,
+          commission_raw: item.commission_raw,
+          insurer_id: item.insurer_id,
+          fortnight_id: item.fortnight_id,
+          status: 'in_review',
+          assigned_broker_id: reportBrokerId
+        })))
+        .select();
+
+      if (createError || !newPendingItems) {
+        console.error('[actionCreateAdjustmentReport] Error creando pending_items:', createError);
+        return { ok: false, error: 'Error al procesar items de comisiones' };
+      }
+
+      console.log('[actionCreateAdjustmentReport] Pending items creados:', newPendingItems.length);
+
+      // Agregar los nuevos pending_items a reportItems
+      newPendingItems.forEach((newItem: any, index: number) => {
+        reportItems.push({
+          pending_item_id: newItem.id,
+          commission_raw: itemsToCreateInPending[index].commission_raw,
+          broker_commission: itemsToCreateInPending[index].broker_commission
+        });
+      });
+
+      // Actualizar los comm_items originales para asignar el broker
+      const commItemIdsToUpdate = itemsToCreateInPending.map(i => i.originalCommItemId);
+      console.log('[actionCreateAdjustmentReport] Actualizando comm_items con broker_id:', commItemIdsToUpdate);
+      const { error: updateCommError } = await supabase
+        .from('comm_items')
+        .update({ broker_id: reportBrokerId })
+        .in('id', commItemIdsToUpdate);
+
+      if (updateCommError) {
+        console.error('[actionCreateAdjustmentReport] Error actualizando comm_items:', updateCommError);
+        // No fallar por esto, el reporte ya está creado
+      }
+    }
 
     // Crear el reporte
     console.log('[actionCreateAdjustmentReport] Creando reporte con total:', totalBrokerCommission);
@@ -143,23 +227,25 @@ export async function actionCreateAdjustmentReport(
       return { ok: false, error: 'Error al crear items del reporte' };
     }
 
-    // Actualizar status de pending_items a 'in_review' y asignar broker
-    console.log('[actionCreateAdjustmentReport] Actualizando pending_items...');
-    const { error: updateError, data: updatedItems } = await supabase
-      .from('pending_items')
-      .update({ 
-        status: 'in_review',
-        assigned_broker_id: reportBrokerId // Asignar el broker al ítem
-      })
-      .in('id', itemIds)
-      .select();
+    // Actualizar status de pending_items existentes a 'in_review' y asignar broker
+    if (pendingItemIds.length > 0) {
+      console.log('[actionCreateAdjustmentReport] Actualizando pending_items existentes...');
+      const { error: updateError, data: updatedItems } = await supabase
+        .from('pending_items')
+        .update({ 
+          status: 'in_review',
+          assigned_broker_id: reportBrokerId // Asignar el broker al ítem
+        })
+        .in('id', pendingItemIds)
+        .select();
     
-    if (updateError) {
-      console.error('[actionCreateAdjustmentReport] Error actualizando status:', updateError);
-      console.error('[actionCreateAdjustmentReport] Error details:', JSON.stringify(updateError, null, 2));
-    } else {
-      console.log('[actionCreateAdjustmentReport] Pending items actualizados correctamente');
-      console.log('[actionCreateAdjustmentReport] Items actualizados:', updatedItems?.length);
+      if (updateError) {
+        console.error('[actionCreateAdjustmentReport] Error actualizando status:', updateError);
+        console.error('[actionCreateAdjustmentReport] Error details:', JSON.stringify(updateError, null, 2));
+      } else {
+        console.log('[actionCreateAdjustmentReport] Pending items actualizados correctamente');
+        console.log('[actionCreateAdjustmentReport] Items actualizados:', updatedItems?.length);
+      }
     }
 
     // Enviar notificación a Master
@@ -186,12 +272,12 @@ export async function actionCreateAdjustmentReport(
           broker_id: reportBrokerId,
           notification_type: 'commission' as const,
           title: 'Nuevo Reporte de Ajustes',
-          body: `${brokerName} ha enviado un reporte de ajustes con ${pendingItems.length} item(s) por un total de $${totalBrokerCommission.toFixed(2)}`,
+          body: `${brokerName} ha enviado un reporte de ajustes con ${allItems.length} item(s) por un total de $${totalBrokerCommission.toFixed(2)}`,
           meta: {
             report_id: report.id,
             broker_id: reportBrokerId,
             broker_name: brokerName,
-            items_count: pendingItems.length,
+            items_count: allItems.length,
             total_amount: totalBrokerCommission
           }
         }));
@@ -455,25 +541,12 @@ export async function actionRejectAdjustmentReport(
       return { ok: false, error: 'El reporte ya fue revisado' };
     }
 
-    // Actualizar el reporte
-    const { error: updateError } = await supabase
-      .from('adjustment_reports')
-      .update({
-        status: 'rejected',
-        rejected_reason: reason,
-        reviewed_at: new Date().toISOString(),
-        reviewed_by: userId
-      })
-      .eq('id', reportId);
-
-    if (updateError) {
-      console.error('Error updating report:', updateError);
-      return { ok: false, error: 'Error al rechazar reporte' };
-    }
-
-    // Restaurar status de pending_items a 'open' y borrar assigned_broker_id
-    console.log('[actionRejectAdjustmentReport] Restaurando pending items a status=open...');
+    // Guardar info del broker para notificación ANTES de eliminar el reporte
+    const brokerId = report.broker_id;
     const itemIds = report.adjustment_report_items.map((item: any) => item.pending_item_id);
+
+    // PASO 1: Restaurar pending_items a 'open' ANTES de eliminar el reporte
+    console.log('[actionRejectAdjustmentReport] Restaurando pending items a status=open...');
     const { error: restoreError, data: restoredItems } = await supabase
       .from('pending_items')
       .update({ 
@@ -485,16 +558,30 @@ export async function actionRejectAdjustmentReport(
     
     if (restoreError) {
       console.error('[actionRejectAdjustmentReport] Error restaurando items:', restoreError);
-    } else {
-      console.log('[actionRejectAdjustmentReport] Items restaurados:', restoredItems?.length);
+      return { ok: false, error: 'Error al restaurar items' };
     }
+    console.log('[actionRejectAdjustmentReport] Items restaurados:', restoredItems?.length);
 
-    // Crear notificación para el broker
+    // PASO 2: Eliminar adjustment_report_items (por CASCADE al eliminar el reporte)
+    // PASO 3: Eliminar el reporte COMPLETAMENTE (como si nunca existió)
+    console.log('[actionRejectAdjustmentReport] ELIMINANDO reporte completamente de la BD...');
+    const { error: deleteReportError } = await supabase
+      .from('adjustment_reports')
+      .delete()
+      .eq('id', reportId);
+
+    if (deleteReportError) {
+      console.error('[actionRejectAdjustmentReport] Error eliminando reporte:', deleteReportError);
+      return { ok: false, error: 'Error al eliminar reporte rechazado' };
+    }
+    console.log('[actionRejectAdjustmentReport] Reporte eliminado completamente (como si nunca existió)');
+
+    // Crear notificación para el broker (usar brokerId guardado ANTES de eliminar)
     try {
       const { data: brokerData } = await supabase
         .from('brokers')
         .select('p_id, name')
-        .eq('id', report.broker_id)
+        .eq('id', brokerId)
         .single();
 
       if (brokerData?.p_id) {
@@ -502,13 +589,13 @@ export async function actionRejectAdjustmentReport(
           .from('notifications')
           .insert({
             target: brokerData.p_id,
-            broker_id: report.broker_id,
+            broker_id: brokerId,
             notification_type: 'commission',
             title: 'Reporte de Ajustes Rechazado',
-            body: `Tu reporte fue rechazado. Razón: ${reason}`,
+            body: `Tu reporte fue rechazado y eliminado. Razón: ${reason}. Los items volvieron a estar disponibles.`,
             meta: {
-              report_id: reportId,
-              reason: reason
+              reason: reason,
+              items_count: itemIds.length
             }
           });
       }
@@ -521,7 +608,7 @@ export async function actionRejectAdjustmentReport(
 
     return {
       ok: true,
-      message: 'Reporte rechazado exitosamente'
+      message: 'Reporte rechazado y eliminado. Los items volvieron a estar disponibles.'
     };
   } catch (error) {
     console.error('[actionRejectAdjustmentReport] Error:', error);
