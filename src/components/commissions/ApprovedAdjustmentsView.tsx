@@ -114,10 +114,16 @@ export default function ApprovedAdjustmentsView() {
       if (result.ok) {
         toast.success(result.message);
         
-        // Si es pago inmediato, mostrar botón para descargar TXT
+        // Si es pago inmediato, descargar TXT automáticamente
         if (result.mode === 'immediate' && result.reportIds) {
           setProcessedReportIds(result.reportIds);
           setShowDownloadButton(true);
+          
+          // Descargar automáticamente el TXT después de un breve delay
+          toast.info('Generando archivo TXT bancario...');
+          setTimeout(async () => {
+            await handleDownloadTXT(result.reportIds);
+          }, 500);
         }
         
         setSelectedReports(new Set());
@@ -134,9 +140,10 @@ export default function ApprovedAdjustmentsView() {
     }
   };
 
-  const handleDownloadTXT = async () => {
+  const handleDownloadTXT = async (reportIds?: string[]) => {
     try {
-      const result = await actionGenerateBankTXT(processedReportIds);
+      const idsToUse = reportIds || processedReportIds;
+      const result = await actionGenerateBankTXT(idsToUse);
       
       if (result.ok && result.data) {
         // Crear blob y descargar archivo
@@ -225,7 +232,7 @@ export default function ApprovedAdjustmentsView() {
               </Button>
               <Button
                 size="sm"
-                onClick={handleDownloadTXT}
+                onClick={() => handleDownloadTXT()}
                 className="flex-1 sm:flex-none text-xs sm:text-sm bg-gradient-to-r from-blue-600 to-blue-700 text-white font-semibold"
               >
                 <FaMoneyBillWave className="mr-1 sm:mr-2" size={12} />
@@ -236,8 +243,8 @@ export default function ApprovedAdjustmentsView() {
         </div>
       )}
 
-      {/* Sticky bar - Selección múltiple */}
-      {selectedReports.size > 0 && (
+      {/* Sticky bar - Selección múltiple - Ocultar cuando modal abierto */}
+      {selectedReports.size > 0 && !showPaymentModal && (
         <div className="sticky top-[60px] sm:top-[72px] z-[100] bg-gradient-to-r from-green-50 to-white border-2 border-[#8AAA19] rounded-lg p-3 shadow-lg">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3">
             <div className="flex-1">

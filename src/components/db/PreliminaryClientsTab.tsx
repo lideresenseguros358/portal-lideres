@@ -19,6 +19,7 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<any>({});
   const [saving, setSaving] = useState(false);
+  const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     loadPreliminaryClients();
@@ -49,9 +50,22 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
     setLoading(false);
   };
 
+  const toggleExpand = (clientId: string) => {
+    setExpandedClients(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(clientId)) {
+        newSet.delete(clientId);
+      } else {
+        newSet.add(clientId);
+      }
+      return newSet;
+    });
+  };
+
   const startEdit = (client: any) => {
     const today = new Date().toISOString().split('T')[0];
     setEditingId(client.id);
+    setExpandedClients(prev => new Set(prev).add(client.id));
     setEditForm({
       client_name: client.client_name || '',
       national_id: client.national_id || '',
@@ -188,17 +202,27 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
           return (
             <div
               key={client.id}
-              className="bg-white rounded-xl shadow-lg border-2 border-amber-200 p-4 sm:p-6 hover:border-amber-400 transition-all"
+              className="bg-white rounded-xl shadow-lg border-2 border-amber-200 hover:border-amber-400 transition-all overflow-hidden"
             >
-              {/* Header */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 pb-4 border-b">
+              {/* Header Comprimido - Clickeable */}
+              <div 
+                className="p-4 sm:p-6 cursor-pointer hover:bg-gray-50 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                onClick={() => !isEditing && toggleExpand(client.id)}
+              >
                 <div className="flex-1">
-                  <h3 className="text-lg sm:text-xl font-bold text-gray-900">
+                  <h3 className="text-base sm:text-lg font-bold text-gray-900">
                     {client.client_name || '(Sin nombre)'}
                   </h3>
                   <p className="text-sm text-gray-600">
-                    Póliza: <span className="font-mono font-semibold">{client.policy_number || '(Sin número)'}</span>
+                    {insurerName} • Póliza: <span className="font-mono font-semibold">{client.policy_number || '(Sin número)'}</span>
                   </p>
+                  {client.missing_fields.length > 0 && (
+                    <div className="mt-2">
+                      <span className="text-xs font-semibold text-red-700 bg-red-50 px-2 py-1 rounded inline-block">
+                        ⚠️ {client.missing_fields.length} campo{client.missing_fields.length !== 1 ? 's' : ''} faltante{client.missing_fields.length !== 1 ? 's' : ''}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Action Buttons */}
@@ -207,7 +231,10 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
                     {client.is_complete && (
                       <div className="relative group">
                         <button
-                          onClick={() => handleManualMigration(client.id)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleManualMigration(client.id);
+                          }}
                           className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-all font-semibold text-sm flex items-center gap-2"
                         >
                           <FaCheckCircle />
@@ -263,7 +290,10 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
                       </div>
                     )}
                     <button
-                      onClick={() => startEdit(client)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        startEdit(client);
+                      }}
                       className="px-4 py-2 bg-[#010139] hover:bg-[#8AAA19] text-white rounded-lg transition-all font-semibold text-sm flex items-center gap-2"
                     >
                       <FaEdit />
@@ -271,7 +301,10 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
                     </button>
                     {userRole === 'master' && (
                       <button
-                        onClick={() => handleDelete(client.id, client.client_name)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDelete(client.id, client.client_name);
+                        }}
                         className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-all font-semibold text-sm"
                       >
                         <FaTrash />
@@ -281,22 +314,79 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
                 )}
               </div>
 
-              {/* Missing Fields Alert */}
-              {client.missing_fields.length > 0 && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
-                  <p className="text-sm font-semibold text-red-900 mb-1">
-                    ❌ Campos faltantes para migración:
-                  </p>
-                  <ul className="text-sm text-red-700 list-disc list-inside">
-                    {client.missing_fields.map((field: string, idx: number) => (
-                      <li key={idx}>{field}</li>
-                    ))}
-                  </ul>
+              {/* Sección Expandible */}
+              {expandedClients.has(client.id) && !isEditing && (
+                <div className="border-t border-gray-200 bg-gray-50 p-4 sm:p-6">
+                  {/* Campos faltantes con chips */}
+                  {client.missing_fields.length > 0 && (
+                    <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                      <p className="text-sm font-semibold text-red-900 mb-3">
+                        📋 Campos faltantes para migración:
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {client.missing_fields.map((field: string, idx: number) => (
+                          <span 
+                            key={idx}
+                            className="bg-red-100 text-red-800 px-3 py-1.5 rounded-lg text-xs font-medium border border-red-200"
+                          >
+                            {field}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Datos actuales */}
+                  <div className="bg-white rounded-lg p-4 border border-gray-200">
+                    <h4 className="font-semibold text-gray-700 mb-4 text-sm">📊 Información Actual</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Nombre</p>
+                        <p className="font-semibold text-sm">{client.client_name || '—'}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Cédula/RUC</p>
+                        <p className="font-semibold text-sm">{client.national_id || '—'}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Email</p>
+                        <p className="font-semibold text-sm">{client.email || '—'}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Teléfono</p>
+                        <p className="font-semibold text-sm">{client.phone || '—'}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Aseguradora</p>
+                        <p className="font-semibold text-sm">{insurerName}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Corredor</p>
+                        <p className="font-semibold text-sm">{brokerName}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Ramo</p>
+                        <p className="font-semibold text-sm">{client.ramo || '—'}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Estado</p>
+                        <p className="font-semibold text-sm">{client.status || '—'}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Fecha Inicio</p>
+                        <p className="font-semibold text-sm">{client.start_date || '—'}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Fecha Renovación</p>
+                        <p className="font-semibold text-sm">{client.renewal_date || '—'}</p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               )}
 
               {/* Edit Form */}
-              {isEditing ? (
+              {isEditing && expandedClients.has(client.id) && (
                 <div className="space-y-4">
                   {/* Client Info */}
                   <div className="border-t pt-4">
@@ -458,52 +548,6 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
                       <FaTimes />
                       Cancelar
                     </button>
-                  </div>
-                </div>
-              ) : (
-                // View Mode
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <p className="text-gray-600">Cédula/RUC:</p>
-                    <p className="font-semibold">{client.national_id || '-'}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-600">Email:</p>
-                    <p className="font-semibold">{client.email || '-'}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-600">Teléfono:</p>
-                    <p className="font-semibold">{client.phone || '-'}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-600">Ramo:</p>
-                    <p className="font-semibold">{client.ramo || '-'}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-600">Aseguradora:</p>
-                    <p className="font-semibold">{insurerName}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-600">Corredor:</p>
-                    <p className="font-semibold">{brokerName}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-600">Fecha Inicio:</p>
-                    <p className="font-semibold">{client.start_date || '-'}</p>
-                  </div>
-                  <div>
-                    <p className="text-gray-600">Fecha Renovación:</p>
-                    <p className="font-semibold">{client.renewal_date || '❌ Faltante'}</p>
-                  </div>
-                  {client.notes && (
-                    <div className="md:col-span-2">
-                      <p className="text-gray-600">Notas:</p>
-                      <p className="font-semibold">{client.notes}</p>
-                    </div>
-                  )}
-                  <div className="md:col-span-2">
-                    <p className="text-gray-600">Creado:</p>
-                    <p className="text-sm">{new Date(client.created_at).toLocaleString('es-PA')}</p>
                   </div>
                 </div>
               )}

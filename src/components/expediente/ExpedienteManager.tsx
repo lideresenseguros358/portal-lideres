@@ -376,7 +376,7 @@ export default function ExpedienteManager({
             return (
               <div
                 key={reqType}
-                className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 p-2.5 sm:p-3 bg-amber-50 border border-amber-300 rounded-lg"
+                className="flex flex-col gap-2 p-2.5 sm:p-3 bg-amber-50 border border-amber-300 rounded-lg"
               >
                 <div className="flex items-center gap-2 flex-1 min-w-0">
                   <div className="text-lg sm:text-xl flex-shrink-0 text-amber-600">
@@ -397,7 +397,7 @@ export default function ExpedienteManager({
                       setUploadDocType(reqType);
                       setShowUploadModal(true);
                     }}
-                    className="flex-shrink-0 flex items-center justify-center gap-1.5 px-3 py-2 bg-[#010139] text-white rounded-lg hover:bg-[#020270] transition-all text-xs font-semibold shadow-md hover:shadow-lg"
+                    className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-3 py-2 bg-[#010139] text-white rounded-lg hover:bg-[#020270] transition-all text-xs font-semibold shadow-md hover:shadow-lg"
                     title="Subir cédula/pasaporte del cliente"
                   >
                     <FaIdCard size={12} />

@@ -122,7 +122,7 @@ export default function PaidAdjustmentsView() {
               <div>
                 <p className="text-xs sm:text-sm text-gray-600">Total Pagado</p>
                 <p className="text-xl sm:text-2xl font-bold text-[#8AAA19]">
-                  ${reports.reduce((sum, r) => sum + r.total_amount, 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                  ${reports.reduce((sum, r) => sum + r.total_amount, 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </p>
               </div>
             </div>
@@ -175,7 +175,7 @@ export default function PaidAdjustmentsView() {
                         </span>
                         <span className="text-xs text-gray-400">•</span>
                         <span className="text-xs sm:text-sm font-semibold text-[#8AAA19]">
-                          ${report.total_amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                          ${report.total_amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
                       </div>
                       <div className="flex flex-wrap items-center gap-2 mt-1">
@@ -269,10 +269,10 @@ export default function PaidAdjustmentsView() {
                             </div>
                             <div className="text-right flex-shrink-0">
                               <p className="font-semibold text-[#8AAA19]">
-                                ${item.broker_commission.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                ${item.broker_commission.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </p>
                               <p className="text-gray-500 text-[10px]">
-                                Bruto: ${item.commission_raw.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                                Bruto: ${item.commission_raw.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                               </p>
                             </div>
                           </div>

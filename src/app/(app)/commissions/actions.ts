@@ -2670,9 +2670,9 @@ export async function actionGetPendingItems() {
     const supabase = getSupabaseAdmin();
     const { role, brokerId } = await getAuthContext();
 
-    // 1. Buscar en pending_items: status='open'
-    // MASTER: ve items SIN assigned_broker_id (para poder asignar)
-    // BROKER: ve items con SU assigned_broker_id (para poder reportar)
+    // 1. Buscar en pending_items: SOLO status='open' realmente sin asignar
+    // MASTER: ve items status='open' SIN assigned_broker_id (sin identificar)
+    // BROKER: NO ve pending_items con status='open' (solo ve los asignados a él en reportes)
     let pendingQuery = supabase
       .from('pending_items')
       .select(`
@@ -2686,17 +2686,16 @@ export async function actionGetPendingItems() {
         assigned_broker_id,
         insurers ( name )
       `)
-      .eq('status', 'open')
+      .eq('status', 'open') // CRÍTICO: Solo items realmente sin identificar
+      .is('assigned_broker_id', null) // CRÍTICO: Sin broker asignado
       .order('created_at', { ascending: true });
     
     // Filtrar según rol
-    if (role === 'broker' && brokerId) {
-      // Broker ve solo items asignados a él
-      pendingQuery = pendingQuery.eq('assigned_broker_id', brokerId);
-    } else if (role === 'master') {
-      // Master ve solo items SIN asignar
-      pendingQuery = pendingQuery.is('assigned_broker_id', null);
+    if (role === 'broker') {
+      // Broker NO ve items 'open' sin asignar - solo ve sus reportes en otra vista
+      pendingQuery = pendingQuery.eq('id', '00000000-0000-0000-0000-000000000000'); // Filtro que no retorna nada
     }
+    // Master ve todos los items 'open' sin asignar (ya filtrados arriba)
     
     const { data: pendingData, error: pendingError } = await pendingQuery;
 

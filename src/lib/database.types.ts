@@ -3702,6 +3702,75 @@ export type Database = {
           },
         ]
       }
+      temp_client_imports: {
+        Row: {
+          address: string | null
+          broker_email: string
+          client_name: string
+          created_at: string | null
+          created_by: string | null
+          email: string | null
+          error_message: string | null
+          id: string
+          import_status: string | null
+          insurer_name: string
+          national_id: string | null
+          percent_override: number | null
+          phone: string | null
+          policy_number: string
+          processed_at: string | null
+          ramo: string | null
+          renewal_date: string | null
+          source: string | null
+          start_date: string | null
+          status: string | null
+        }
+        Insert: {
+          address?: string | null
+          broker_email: string
+          client_name: string
+          created_at?: string | null
+          created_by?: string | null
+          email?: string | null
+          error_message?: string | null
+          id?: string
+          import_status?: string | null
+          insurer_name: string
+          national_id?: string | null
+          percent_override?: number | null
+          phone?: string | null
+          policy_number: string
+          processed_at?: string | null
+          ramo?: string | null
+          renewal_date?: string | null
+          source?: string | null
+          start_date?: string | null
+          status?: string | null
+        }
+        Update: {
+          address?: string | null
+          broker_email?: string
+          client_name?: string
+          created_at?: string | null
+          created_by?: string | null
+          email?: string | null
+          error_message?: string | null
+          id?: string
+          import_status?: string | null
+          insurer_name?: string
+          national_id?: string | null
+          percent_override?: number | null
+          phone?: string | null
+          policy_number?: string
+          processed_at?: string | null
+          ramo?: string | null
+          renewal_date?: string | null
+          source?: string | null
+          start_date?: string | null
+          status?: string | null
+        }
+        Relationships: []
+      }
       user_requests: {
         Row: {
           additional_fields: Json | null

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { getSupabaseServer } from '@/lib/supabase/server';
+import { getSupabaseAdmin } from '@/lib/supabase/admin';
 
 /**
  * Obtener el contexto de autenticación
@@ -54,7 +55,8 @@ export async function actionCreateAdjustmentReport(
       return { ok: false, error: 'No se especificó el broker para el reporte' };
     }
 
-    const supabase = await getSupabaseServer();
+    // Usar Admin para bypasear RLS cuando Master crea reportes para otros brokers
+    const supabase = (role === 'master' && targetBrokerId) ? getSupabaseAdmin() : await getSupabaseServer();
 
     // Obtener los pending items seleccionados
     console.log('[actionCreateAdjustmentReport] Buscando pending items...');
@@ -143,17 +145,21 @@ export async function actionCreateAdjustmentReport(
 
     // Actualizar status de pending_items a 'in_review' y asignar broker
     console.log('[actionCreateAdjustmentReport] Actualizando pending_items...');
-    const { error: updateError } = await supabase
+    const { error: updateError, data: updatedItems } = await supabase
       .from('pending_items')
       .update({ 
         status: 'in_review',
         assigned_broker_id: reportBrokerId // Asignar el broker al ítem
       })
-      .in('id', itemIds);
+      .in('id', itemIds)
+      .select();
+    
     if (updateError) {
       console.error('[actionCreateAdjustmentReport] Error actualizando status:', updateError);
+      console.error('[actionCreateAdjustmentReport] Error details:', JSON.stringify(updateError, null, 2));
     } else {
       console.log('[actionCreateAdjustmentReport] Pending items actualizados correctamente');
+      console.log('[actionCreateAdjustmentReport] Items actualizados:', updatedItems?.length);
     }
 
     // Enviar notificación a Master
@@ -322,7 +328,8 @@ export async function actionApproveAdjustmentReport(
       return { ok: false, error: 'No autorizado' };
     }
 
-    const supabase = await getSupabaseServer();
+    // Usar Admin para bypasear RLS
+    const supabase = getSupabaseAdmin();
 
     // Obtener el reporte
     const { data: report, error: reportError } = await supabase
@@ -356,15 +363,23 @@ export async function actionApproveAdjustmentReport(
     }
 
     // Actualizar status de pending_items a 'assigned'
+    console.log('[actionApproveAdjustmentReport] Actualizando pending items a status=assigned...');
     const itemIds = report.adjustment_report_items.map((item: any) => item.pending_item_id);
-    await supabase
+    const { error: assignError, data: assignedItems } = await supabase
       .from('pending_items')
       .update({ 
         status: 'assigned',
         assigned_broker_id: report.broker_id,
         assigned_at: new Date().toISOString()
       })
-      .in('id', itemIds);
+      .in('id', itemIds)
+      .select();
+    
+    if (assignError) {
+      console.error('[actionApproveAdjustmentReport] Error asignando items:', assignError);
+    } else {
+      console.log('[actionApproveAdjustmentReport] Items asignados:', assignedItems?.length);
+    }
 
     // Crear notificación para el broker
     try {
@@ -422,7 +437,8 @@ export async function actionRejectAdjustmentReport(
       return { ok: false, error: 'No autorizado' };
     }
 
-    const supabase = await getSupabaseServer();
+    // Usar Admin para bypasear RLS
+    const supabase = getSupabaseAdmin();
 
     // Obtener el reporte con sus items
     const { data: report, error: reportError } = await supabase
@@ -456,14 +472,22 @@ export async function actionRejectAdjustmentReport(
     }
 
     // Restaurar status de pending_items a 'open' y borrar assigned_broker_id
+    console.log('[actionRejectAdjustmentReport] Restaurando pending items a status=open...');
     const itemIds = report.adjustment_report_items.map((item: any) => item.pending_item_id);
-    await supabase
+    const { error: restoreError, data: restoredItems } = await supabase
       .from('pending_items')
       .update({ 
         status: 'open',
         assigned_broker_id: null // Liberar para que pueda ser asignado a otro broker
       })
-      .in('id', itemIds);
+      .in('id', itemIds)
+      .select();
+    
+    if (restoreError) {
+      console.error('[actionRejectAdjustmentReport] Error restaurando items:', restoreError);
+    } else {
+      console.log('[actionRejectAdjustmentReport] Items restaurados:', restoredItems?.length);
+    }
 
     // Crear notificación para el broker
     try {

@@ -184,82 +184,75 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
     }
   }, [pendingGroups, onPendingCountChange, isShortcut, role]);
 
-  // Auto-assign old items (>90 days) to office
-  useEffect(() => {
-    const checkAndAutoAssignOldItems = async () => {
-      if (role !== 'master' || isShortcut) return;
-      
-      const oldItemsExist = pendingGroups.some(g => {
-        const daysDiff = Math.floor((Date.now() - new Date(g.oldest_date).getTime()) / (1000 * 60 * 60 * 24));
-        return daysDiff >= 90 && g.status === 'open';
-      });
-
-      if (oldItemsExist) {
-        const result = await actionAutoAssignOldPendingItems();
-        if (result.ok && result.data.assigned > 0) {
-          toast.success(`${result.data.assigned} comisión(es) antigua(s) asignada(s) automáticamente a Oficina`);
-          await loadPendingItems();
-          onActionSuccess && onActionSuccess();
-        }
-      }
-    };
-
-    // Run check on mount and when groups change
-    const timer = setTimeout(checkAndAutoAssignOldItems, 1000);
-    return () => clearTimeout(timer);
-  }, [pendingGroups, role, isShortcut, onActionSuccess, loadPendingItems]);
-
   const handleSubmitReport = async () => {
-    console.log('[handleSubmitReport] Iniciando...');
+    console.log('[handleSubmitReport] ===== INICIANDO =====');
+    console.log('[handleSubmitReport] Role:', role);
+    console.log('[handleSubmitReport] Items seleccionados:', selectedItems.size);
+    console.log('[handleSubmitReport] Selected Broker:', selectedBroker);
+    console.log('[handleSubmitReport] Broker Name:', selectedBrokerName);
+    
     if (selectedItems.size === 0) {
       toast.error('Selecciona al menos un ajuste');
+      return;
+    }
+
+    // Validación para Master
+    if (role === 'master' && !selectedBroker) {
+      toast.error('Debe seleccionar un corredor');
       return;
     }
 
     setSubmitting(true);
     try {
       const itemIds = Array.from(selectedItems);
-      console.log('[handleSubmitReport] Items seleccionados:', itemIds);
+      console.log('[handleSubmitReport] ItemIds array:', itemIds);
       let result;
 
       if (role === 'broker') {
         // Broker: Crear reporte de ajustes agrupado
-        console.log('[handleSubmitReport] Broker: creando reporte de ajustes...');
-        result = await actionCreateAdjustmentReport(itemIds, ''); // Sin notas por ahora
-        console.log('[handleSubmitReport] Resultado:', result);
+        console.log('[handleSubmitReport] Broker: llamando actionCreateAdjustmentReport...');
+        result = await actionCreateAdjustmentReport(itemIds, '');
+        console.log('[handleSubmitReport] Resultado Broker:', result);
       } else {
         // Master: Crear reporte de ajustes para el broker seleccionado
-        if (!selectedBroker) {
-          toast.error('Debe seleccionar un corredor');
-          setSubmitting(false);
-          return;
-        }
-        
-        console.log('[handleSubmitReport] Master: creando reporte para broker...');
-        // Master crea reporte especificando el broker
-        result = await actionCreateAdjustmentReport(itemIds, `Asignado por Master a ${selectedBrokerName}`, selectedBroker);
+        console.log('[handleSubmitReport] Master: llamando actionCreateAdjustmentReport...');
+        console.log('[handleSubmitReport] Params: itemIds, notes, targetBrokerId:', itemIds, `Asignado por Master a ${selectedBrokerName}`, selectedBroker);
+        result = await actionCreateAdjustmentReport(itemIds, `Asignado por Master a ${selectedBrokerName}`, selectedBroker ?? undefined);
+        console.log('[handleSubmitReport] Resultado Master:', result);
       }
       
-      if (result.ok) {
+      console.log('[handleSubmitReport] Result.ok:', result?.ok);
+      
+      if (result && result.ok) {
         toast.success(
           role === 'broker' 
-            ? 'Reporte de ajustes enviado exitosamente - Aparecerá en "Reportados"' 
-            : 'Reporte de ajustes creado exitosamente - Aparecerá en "Identificados"'
+            ? 'Reporte de ajustes enviado exitosamente' 
+            : 'Reporte de ajustes creado exitosamente para ' + selectedBrokerName
         );
         // Limpiar selección
         setSelectionMode(false);
         setSelectedItems(new Set());
         setSelectedBroker(null);
         setSelectedBrokerName('');
+        setBrokerPercent(0);
+        console.log('[handleSubmitReport] Recargando pending items...');
+        // Esperar un momento para que revalidatePath tenga efecto
+        await new Promise(resolve => setTimeout(resolve, 500));
         await loadPendingItems();
         onActionSuccess && onActionSuccess();
+        console.log('[handleSubmitReport] ===== COMPLETADO EXITOSAMENTE =====');
       } else {
-        toast.error('Error al crear reporte', { description: result.error });
+        const errorMsg = result?.error || 'Error desconocido';
+        console.error('[handleSubmitReport] Error en resultado:', errorMsg);
+        toast.error('Error al crear reporte: ' + errorMsg);
       }
     } catch (error) {
-      console.error('Error submitting report:', error);
-      toast.error('Error al procesar reporte');
+      console.error('[handleSubmitReport] ===== EXCEPCIÓN =====');
+      console.error('[handleSubmitReport] Error:', error);
+      console.error('[handleSubmitReport] Error stack:', error instanceof Error ? error.stack : 'N/A');
+      toast.error('Error al procesar reporte: ' + (error instanceof Error ? error.message : 'Error desconocido'));
     } finally {
+      console.log('[handleSubmitReport] Finally block - setSubmitting(false)');
       setSubmitting(false);
     }
   };
@@ -269,6 +262,7 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
     setSelectedItems(new Set());
     setSelectedBroker(null);
     setSelectedBrokerName('');
+    setBrokerPercent(0);
   };
 
   const handleClaimItem = (itemIds: string[]) => {
@@ -305,7 +299,8 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
   }, 0);
 
   // percent_default es DECIMAL (0.82 = 82%)
-  const selectedBrokerCommission = role === 'broker' && brokerPercent > 0 
+  // Calcular comisión para Broker (con su propio %) o Master (con % del broker seleccionado)
+  const selectedBrokerCommission = brokerPercent > 0 
     ? selectedTotal * brokerPercent
     : 0;
 
@@ -335,9 +330,15 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
                 <p className="text-sm text-gray-600">
                   Total bruto: {selectedTotal.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
                 </p>
-                <p className="text-sm font-medium text-[#010139]">
-                  {selectedBroker ? `Asignando a: ${selectedBrokerName}` : 'Seleccionar broker'}
-                </p>
+                {selectedBroker && brokerPercent > 0 ? (
+                  <p className="text-sm font-semibold text-[#8AAA19]">
+                    Comisión {selectedBrokerName} ({(brokerPercent * 100).toFixed(0)}%): {selectedBrokerCommission.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                  </p>
+                ) : (
+                  <p className="text-sm font-medium text-[#010139]">
+                    {selectedBroker ? `Asignando a: ${selectedBrokerName}` : 'Seleccionar broker'}
+                  </p>
+                )}
               </div>
             )}
           </div>
@@ -353,11 +354,11 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
             <Button
               size="sm"
               onClick={handleSubmitReport}
-              disabled={submitting || selectedItems.size === 0}
+              disabled={submitting || selectedItems.size === 0 || (role === 'master' && !selectedBroker)}
               className="bg-gradient-to-r from-[#8AAA19] to-[#7a9617] text-white font-semibold"
             >
               <FaPaperPlane className="mr-2" size={12} />
-              {submitting ? 'Enviando...' : (role === 'broker' ? 'Enviar Reporte' : 'Enviar')}
+              {submitting ? 'Enviando...' : (role === 'broker' ? 'Enviar Reporte' : 'Crear Reporte')}
             </Button>
           </div>
         </div>
@@ -515,10 +516,23 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
                               }}
                               brokers={brokers}
                               onSuccess={() => {}}
-                              onSelectBroker={(brokerId, brokerName) => {
+                              onSelectBroker={async (brokerId, brokerName) => {
                                 // Activar modo selección
                                 setSelectedBroker(brokerId);
                                 setSelectedBrokerName(brokerName);
+                                
+                                // Obtener porcentaje del broker seleccionado
+                                const { supabaseClient } = await import('@/lib/supabase/client');
+                                const supabase = supabaseClient();
+                                const { data: brokerData } = await supabase
+                                  .from('brokers')
+                                  .select('percent_default')
+                                  .eq('id', brokerId)
+                                  .single();
+                                if (brokerData) {
+                                  setBrokerPercent(brokerData.percent_default || 0);
+                                }
+                                
                                 setSelectionMode(true);
                                 // Pre-seleccionar los items de esta póliza
                                 const itemIds = group.items.map(i => i.id);

@@ -1259,6 +1259,26 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
                   </div>
                 </div>
 
+                {/* Notas del pago */}
+                {(() => {
+                  try {
+                    const metadata = typeof payment.notes === 'string' ? JSON.parse(payment.notes) : (payment.notes || {});
+                    const displayNotes = metadata?.notes;
+                    
+                    if (displayNotes && displayNotes.trim()) {
+                      return (
+                        <div className="mb-3 p-3 bg-blue-50 border-l-4 border-blue-500 rounded-r-lg">
+                          <p className="text-xs font-semibold text-blue-900 mb-1">📝 Notas:</p>
+                          <p className="text-sm text-blue-800">{displayNotes}</p>
+                        </div>
+                      );
+                    }
+                  } catch (e) {
+                    return null;
+                  }
+                  return null;
+                })()}
+
                 {/* Referencias */}
                 <div className="space-y-2 mb-4">
                   <h4 className="text-sm font-semibold text-gray-700">Referencias:</h4>
@@ -1450,6 +1470,26 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
                         </div>
                       </div>
                     </div>
+
+                    {/* Notas del pago */}
+                    {(() => {
+                      try {
+                        const metadata = typeof payment.notes === 'string' ? JSON.parse(payment.notes) : (payment.notes || {});
+                        const displayNotes = metadata?.notes;
+                        
+                        if (displayNotes && displayNotes.trim()) {
+                          return (
+                            <div className="mb-3 p-3 bg-blue-50 border-l-4 border-blue-500 rounded-r-lg">
+                              <p className="text-xs font-semibold text-blue-900 mb-1">📝 Notas:</p>
+                              <p className="text-sm text-blue-800">{displayNotes}</p>
+                            </div>
+                          );
+                        }
+                      } catch (e) {
+                        return null;
+                      }
+                      return null;
+                    })()}
 
                     {/* Referencias */}
                     <div className="space-y-2 mb-4">

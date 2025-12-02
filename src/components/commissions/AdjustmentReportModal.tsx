@@ -43,13 +43,13 @@ export default function AdjustmentReportModal({
   const selectionTotals = useMemo(() => {
     const selected = pendingItems.filter(item => selectedItems.has(item.id));
     const totalRaw = selected.reduce((sum, item) => sum + Math.abs(Number(item.commission_raw) || 0), 0);
-    const totalBroker = totalRaw * (brokerPercent / 100);
+    const totalBroker = totalRaw * brokerPercent; // percent_default es DECIMAL (0.82), NO dividir /100
 
     return {
       count: selected.length,
       totalRaw,
       totalBroker,
-      percent: brokerPercent,
+      percent: brokerPercent * 100, // Multiplicar por 100 solo para DISPLAY
       items: selected
     };
   }, [selectedItems, pendingItems, brokerPercent]);
@@ -206,7 +206,7 @@ export default function AdjustmentReportModal({
                   pendingItems.map((item) => {
                     const isSelected = selectedItems.has(item.id);
                     const rawAmount = Math.abs(Number(item.commission_raw) || 0);
-                    const brokerAmount = rawAmount * (brokerPercent / 100);
+                    const brokerAmount = rawAmount * brokerPercent; // percent_default es DECIMAL, NO dividir /100
 
                     return (
                       <TableRow 

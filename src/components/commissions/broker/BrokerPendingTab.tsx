@@ -20,10 +20,12 @@ import {
 import { toast } from 'sonner';
 import { 
   actionGetPendingItems, 
-  actionSubmitClaimsReport,
-  actionGetClaimsReports,
   actionGetCurrentBroker
 } from '@/app/(app)/commissions/actions';
+import { 
+  actionCreateAdjustmentReport,
+  actionGetAdjustmentReports
+} from '@/app/(app)/commissions/adjustment-actions';
 import { 
   calculateBrokerCommission, 
   formatCurrency as formatMoney, 
@@ -59,18 +61,16 @@ export default function BrokerPendingTab({ brokerId }: Props) {
         setPendingItems(pendingResult.data || []);
       }
 
-      // Cargar mis reportes/solicitudes
-      const claimsResult = await actionGetClaimsReports('pending');
-      if (claimsResult.ok) {
-        const myClaims = (claimsResult.data || []).filter((c: any) => c.broker_id === brokerId);
-        setMyRequests(myClaims);
+      // Cargar mis reportes de ajustes pendientes
+      const pendingReportsResult = await actionGetAdjustmentReports('pending');
+      if (pendingReportsResult.ok) {
+        setMyRequests(pendingReportsResult.data || []);
       }
 
       // Cargar ajustes pagados
-      const paidResult = await actionGetClaimsReports('paid');
+      const paidResult = await actionGetAdjustmentReports('paid');
       if (paidResult.ok) {
-        const myPaid = (paidResult.data || []).filter((c: any) => c.broker_id === brokerId);
-        setPaidAdjustments(myPaid);
+        setPaidAdjustments(paidResult.data || []);
       }
     } catch (error) {
       console.error('Error loading data:', error);
@@ -87,13 +87,13 @@ export default function BrokerPendingTab({ brokerId }: Props) {
   const selectionTotals = useMemo(() => {
     const selected = pendingItems.filter(item => selectedItems.has(item.id));
     const totalRaw = selected.reduce((sum, item) => sum + (Number(item.gross_amount) || 0), 0);
-    const totalBroker = Math.abs(totalRaw) * (brokerPercent / 100);
+    const totalBroker = Math.abs(totalRaw) * brokerPercent; // percent_default es DECIMAL (0.82), NO dividir /100
 
     return {
       count: selected.length,
       totalRaw,
       totalBroker,
-      percent: brokerPercent,
+      percent: brokerPercent * 100, // Multiplicar por 100 solo para DISPLAY
     };
   }, [selectedItems, pendingItems, brokerPercent]);
 
@@ -134,7 +134,8 @@ export default function BrokerPendingTab({ brokerId }: Props) {
     setSubmitting(true);
     try {
       const itemIds = Array.from(selectedItems);
-      const result = await actionSubmitClaimsReport(itemIds);
+      // Usar el nuevo sistema de adjustment_reports
+      const result = await actionCreateAdjustmentReport(itemIds, '');
       
       if (result.ok) {
         toast.success(result.message || 'Reporte enviado exitosamente');
@@ -322,7 +323,7 @@ export default function BrokerPendingTab({ brokerId }: Props) {
                           // Usar net_amount si está disponible, sino calcular con porcentaje
                           const brokerAmount = item.net_amount 
                             ? Math.abs(Number(item.net_amount) || 0)
-                            : Math.abs(rawAmount) * (brokerPercent / 100);
+                            : Math.abs(rawAmount) * brokerPercent; // percent_default es DECIMAL, NO dividir /100
 
                           return (
                             <TableRow 

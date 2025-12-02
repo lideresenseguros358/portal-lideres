@@ -133,9 +133,14 @@ export function MasterClaimsView() {
         toast.success(result.message || 'Reportes aprobados');
         
         if (paymentType === 'now') {
-          // Guardar IDs para mostrar botón de CSV
+          // Descargar TXT automáticamente
           setApprovedClaims(claimIds);
-          toast.info('Ahora puedes generar el CSV bancario');
+          toast.info('Generando archivo TXT bancario...');
+          
+          // Generar y descargar automáticamente el TXT
+          setTimeout(async () => {
+            await generateACHForApprovedClaims(claimIds);
+          }, 500);
         } else {
           toast.info('Los ajustes se incluirán en la siguiente quincena');
         }
@@ -186,16 +191,12 @@ export function MasterClaimsView() {
     }
   };
 
-  // Generar ACH
-  const handleGenerateACH = async () => {
-    if (approvedClaims.length === 0) {
-      toast.error('No hay ajustes aprobados para generar archivo ACH');
-      return;
-    }
+  // Función auxiliar para generar ACH
+  const generateACHForApprovedClaims = async (claimIds: string[]) => {
+    if (claimIds.length === 0) return;
 
-    setProcessing(true);
     try {
-      const result = await actionGetAdjustmentsCSVData(approvedClaims);
+      const result = await actionGetAdjustmentsCSVData(claimIds);
 
       if (result.ok && result.data) {
         // Convertir datos a formato esperado por generateAdjustmentsACH
@@ -224,19 +225,35 @@ export function MasterClaimsView() {
         
         if (achResult.errors.length > 0) {
           const errorList = achResult.errors.map(e => `${e.brokerName}: ${e.errors.join(', ')}`).join('\n');
-          toast.error(`Faltan datos bancarios en ${achResult.errors.length} broker(s). No se incluirán en el archivo:\n${errorList}`, { duration: 8000 });
+          toast.error(`Faltan datos bancarios en ${achResult.errors.length} broker(s):\n${errorList}`, { duration: 8000 });
         }
         
         if (achResult.validCount > 0) {
           const filename = getAdjustmentsACHFilename();
           downloadAdjustmentsACH(achResult.content, filename);
-          toast.success(`Archivo ACH generado con ${achResult.validCount} registro(s) - Total: $${achResult.totalAmount.toFixed(2)}`);
+          toast.success(`Archivo TXT descargado - ${achResult.validCount} registro(s) - Total: $${achResult.totalAmount.toFixed(2)}`);
         } else {
-          toast.error('No se pudo generar el archivo ACH. Verifica los datos bancarios de los brokers.');
+          toast.error('No se pudo generar el archivo TXT. Verifica los datos bancarios de los brokers.');
         }
       } else {
-        toast.error(result.error || 'Error al obtener datos para archivo ACH');
+        toast.error(result.error || 'Error al obtener datos para archivo TXT');
       }
+    } catch (error) {
+      console.error('Error generating ACH:', error);
+      toast.error('Error al generar archivo TXT');
+    }
+  };
+
+  // Generar ACH (llamado por botón manual)
+  const handleGenerateACH = async () => {
+    if (approvedClaims.length === 0) {
+      toast.error('No hay ajustes aprobados para generar archivo ACH');
+      return;
+    }
+
+    setProcessing(true);
+    try {
+      await generateACHForApprovedClaims(approvedClaims);
     } catch (error) {
       console.error('Error generating ACH:', error);
       toast.error('Error inesperado al generar archivo ACH');

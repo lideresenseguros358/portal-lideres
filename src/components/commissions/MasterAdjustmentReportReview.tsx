@@ -87,10 +87,10 @@ export default function MasterAdjustmentReportReview({
 
     setProcessing(true);
     try {
-      await onApprove(reviewingReport.id, adminNotes);
-      toast.success('Reporte aprobado - Ahora selecciona reportes aprobados para decidir método de pago');
+      await onApprove(reviewingReport.id, '');
+      toast.success('Reporte aprobado exitosamente');
       setReviewingReport(null);
-      setAdminNotes('');
+      setPaymentMode('next_fortnight');
       onReload();
     } catch (error) {
       console.error('Error approving report:', error);
@@ -101,17 +101,13 @@ export default function MasterAdjustmentReportReview({
   };
 
   const handleReject = async () => {
-    if (!rejectingReport || !rejectReason.trim()) {
-      toast.error('Debes proporcionar una razón para el rechazo');
-      return;
-    }
+    if (!rejectingReport) return;
 
     setProcessing(true);
     try {
-      await onReject(rejectingReport.id, rejectReason);
+      await onReject(rejectingReport.id, 'Rechazado por Master');
       toast.success('Reporte rechazado');
       setRejectingReport(null);
-      setRejectReason('');
       onReload();
     } catch (error) {
       console.error('Error rejecting report:', error);
@@ -234,8 +230,8 @@ export default function MasterAdjustmentReportReview({
 
   return (
     <div className="space-y-4">
-      {/* Batch Actions Bar */}
-      {selectedReports.size > 0 && (
+      {/* Batch Actions Bar - Ocultar cuando hay modales abiertos */}
+      {selectedReports.size > 0 && !reviewingReport && !rejectingReport && !editingReport && (
         <Card className="bg-gradient-to-r from-blue-50 to-white border-2 border-blue-500">
           <CardContent className="p-3 sm:p-4">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
@@ -326,42 +322,39 @@ export default function MasterAdjustmentReportReview({
               </div>
               
               {report.status === 'pending' && (
-                <div className="flex flex-wrap gap-2">
+                <div className="flex gap-2">
                   <Button
                     size="sm"
-                    variant="outline"
                     onClick={(e) => {
                       e.stopPropagation();
                       setReviewingReport(report);
                     }}
-                    className="bg-white border-green-500 text-green-700 hover:bg-green-50 text-xs sm:text-sm px-2 sm:px-3"
+                    className="bg-[#8AAA19] hover:bg-[#7a9617] text-white px-3 py-1.5 h-auto"
                   >
-                    <FaCheckCircle className="sm:mr-2" />
-                    <span className="hidden sm:inline">Aprobar</span>
+                    <FaCheckCircle className="mr-1.5" size={12} />
+                    <span className="text-xs font-semibold">Aprobar</span>
                   </Button>
                   <Button
                     size="sm"
-                    variant="outline"
                     onClick={(e) => {
                       e.stopPropagation();
                       setEditingReport(report);
                     }}
-                    className="bg-white border-yellow-500 text-yellow-700 hover:bg-yellow-50 text-xs sm:text-sm px-2 sm:px-3"
+                    className="bg-[#010139] hover:bg-[#020270] text-white px-3 py-1.5 h-auto"
                   >
-                    <FaEdit className="sm:mr-2" />
-                    <span className="hidden sm:inline">Editar</span>
+                    <FaEdit className="mr-1.5" size={12} />
+                    <span className="text-xs font-semibold">Editar</span>
                   </Button>
                   <Button
                     size="sm"
-                    variant="outline"
                     onClick={(e) => {
                       e.stopPropagation();
                       setRejectingReport(report);
                     }}
-                    className="bg-white border-red-500 text-red-700 hover:bg-red-50 text-xs sm:text-sm px-2 sm:px-3"
+                    className="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 h-auto"
                   >
-                    <FaTimesCircle className="sm:mr-2" />
-                    <span className="hidden sm:inline">Rechazar</span>
+                    <FaTimesCircle className="mr-1.5" size={12} />
+                    <span className="text-xs font-semibold">Rechazar</span>
                   </Button>
                 </div>
               )}
@@ -487,21 +480,21 @@ export default function MasterAdjustmentReportReview({
               Aprobar Reporte de Ajuste
             </DialogTitle>
             <DialogDescription>
-              Define cómo y cuándo se pagará este reporte
+              Confirma la aprobación de este reporte
             </DialogDescription>
           </DialogHeader>
 
           {reviewingReport && (
-            <div className="space-y-6">
+            <div className="space-y-4">
               {/* Resumen */}
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <p className="text-sm text-gray-600 mb-2">
+              <div className="bg-green-50 p-4 rounded-lg border-l-4 border-green-500">
+                <p className="text-sm text-gray-700 mb-2">
                   <span className="font-semibold">Broker:</span> {reviewingReport.broker_name}
                 </p>
-                <p className="text-sm text-gray-600 mb-2">
-                  <span className="font-semibold">Items:</span> {reviewingReport.items.length}
+                <p className="text-sm text-gray-700 mb-2">
+                  <span className="font-semibold">Items:</span> {reviewingReport.items.length} ajuste(s)
                 </p>
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-gray-700">
                   <span className="font-semibold">Total:</span>{' '}
                   <span className="font-mono font-bold text-[#8AAA19] text-lg">
                     {formatCurrency(reviewingReport.total_amount)}
@@ -509,54 +502,19 @@ export default function MasterAdjustmentReportReview({
                 </p>
               </div>
 
-              {/* Modalidad de Pago */}
-              <div className="space-y-3">
-                <Label className="text-base font-semibold">Modalidad de Pago</Label>
-                <RadioGroup value={paymentMode} onValueChange={(v: any) => setPaymentMode(v)}>
-                  <div className="flex items-center space-x-3 p-4 border-2 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
-                    <RadioGroupItem value="next_fortnight" id="next_fortnight" />
-                    <Label htmlFor="next_fortnight" className="flex-1 cursor-pointer">
-                      <div className="flex items-center gap-2 mb-1">
-                        <FaCalendarAlt className="text-blue-500" />
-                        <span className="font-semibold">Sumar en Siguiente Quincena</span>
-                      </div>
-                      <p className="text-sm text-gray-600">
-                        Se agregará automáticamente al cierre de la próxima quincena y aparecerá en el historial
-                      </p>
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-3 p-4 border-2 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
-                    <RadioGroupItem value="immediate" id="immediate" />
-                    <Label htmlFor="immediate" className="flex-1 cursor-pointer">
-                      <div className="flex items-center gap-2 mb-1">
-                        <FaDollarSign className="text-green-500" />
-                        <span className="font-semibold">Pagar Ya (Inmediato)</span>
-                      </div>
-                      <p className="text-sm text-gray-600">
-                        Se marca como pagado inmediatamente. Solo aparecerá en "Ajustes Pagados"
-                      </p>
-                    </Label>
-                  </div>
-                </RadioGroup>
-              </div>
-
-              {/* Notas Admin */}
-              <div className="space-y-2">
-                <Label htmlFor="admin-notes">Notas de Administración (opcional)</Label>
-                <Textarea
-                  id="admin-notes"
-                  value={adminNotes}
-                  onChange={(e) => setAdminNotes(e.target.value)}
-                  placeholder="Agrega comentarios internos sobre este ajuste..."
-                  rows={3}
-                  className="resize-none"
-                />
+              <div className="bg-blue-50 border-l-4 border-blue-400 p-3">
+                <p className="text-sm text-blue-800">
+                  El reporte será marcado como <span className="font-semibold">Aprobado</span>. Luego podrás seleccionar el método de pago en la pestaña "Aprobados".
+                </p>
               </div>
 
               {/* Actions */}
               <div className="flex gap-3 pt-4 border-t">
                 <Button
-                  onClick={() => setReviewingReport(null)}
+                  onClick={() => {
+                    setReviewingReport(null);
+                    setAdminNotes('');
+                  }}
                   variant="outline"
                   disabled={processing}
                   className="flex-1"
@@ -569,7 +527,7 @@ export default function MasterAdjustmentReportReview({
                   className="flex-1 bg-gradient-to-r from-green-600 to-green-700 hover:from-green-700 hover:to-green-800 text-white font-semibold shadow-lg"
                 >
                   <FaCheckCircle className="mr-2" />
-                  {processing ? 'Aprobando...' : 'Aprobar y Confirmar'}
+                  {processing ? 'Aprobando...' : 'Aprobar Reporte'}
                 </Button>
               </div>
             </div>
@@ -578,15 +536,16 @@ export default function MasterAdjustmentReportReview({
       </Dialog>
 
       {/* Modal de Rechazo */}
+      {/* Modal de Rechazo - Simplificado sin motivo */}
       <Dialog open={!!rejectingReport} onOpenChange={() => setRejectingReport(null)}>
-        <DialogContent className="max-w-xl">
+        <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="text-2xl font-bold text-red-600 flex items-center gap-2">
               <FaTimesCircle />
-              Rechazar Reporte de Ajuste
+              Confirmar Rechazo
             </DialogTitle>
             <DialogDescription>
-              Proporciona una razón para el rechazo
+              ¿Estás seguro que deseas rechazar este reporte?
             </DialogDescription>
           </DialogHeader>
 
@@ -599,19 +558,15 @@ export default function MasterAdjustmentReportReview({
                 <p className="text-sm text-red-900">
                   <span className="font-semibold">Total:</span> {formatCurrency(rejectingReport.total_amount)}
                 </p>
+                <p className="text-sm text-red-900">
+                  <span className="font-semibold">Items:</span> {rejectingReport.items.length} ajuste(s)
+                </p>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="reject-reason">Razón del Rechazo *</Label>
-                <Textarea
-                  id="reject-reason"
-                  value={rejectReason}
-                  onChange={(e) => setRejectReason(e.target.value)}
-                  placeholder="Explica por qué se rechaza este reporte..."
-                  rows={4}
-                  className="resize-none"
-                  required
-                />
+              <div className="bg-yellow-50 border-l-4 border-yellow-400 p-3">
+                <p className="text-sm text-yellow-800">
+                  Los items volverán al listado "Sin Identificar" y podrán ser reasignados.
+                </p>
               </div>
 
               <div className="flex gap-3 pt-4 border-t">
@@ -625,7 +580,7 @@ export default function MasterAdjustmentReportReview({
                 </Button>
                 <Button
                   onClick={handleReject}
-                  disabled={processing || !rejectReason.trim()}
+                  disabled={processing}
                   className="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold"
                 >
                   <FaTimesCircle className="mr-2" />
