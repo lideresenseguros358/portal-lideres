@@ -1172,6 +1172,7 @@ export type Database = {
       clients: {
         Row: {
           active: boolean
+          birth_date: string | null
           broker_id: string
           created_at: string
           email: string | null
@@ -1182,6 +1183,7 @@ export type Database = {
         }
         Insert: {
           active?: boolean
+          birth_date?: string | null
           broker_id: string
           created_at?: string
           email?: string | null
@@ -1192,6 +1194,7 @@ export type Database = {
         }
         Update: {
           active?: boolean
+          birth_date?: string | null
           broker_id?: string
           created_at?: string
           email?: string | null
@@ -3582,6 +3585,7 @@ export type Database = {
       }
       temp_client_import: {
         Row: {
+          birth_date: string | null
           broker_id: string | null
           client_id: string | null
           client_name: string | null
@@ -3605,6 +3609,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          birth_date?: string | null
           broker_id?: string | null
           client_id?: string | null
           client_name?: string | null
@@ -3628,6 +3633,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          birth_date?: string | null
           broker_id?: string | null
           client_id?: string | null
           client_name?: string | null

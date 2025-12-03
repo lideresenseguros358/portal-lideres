@@ -11,6 +11,7 @@ export const ClientInsertSchema = z.object({
   national_id: z.string().trim().optional().nullable(),
   email: z.string().email('Email inválido').optional().nullable(),
   phone: z.string().trim().optional().nullable(),
+  birth_date: z.string().min(1, 'Fecha de nacimiento requerida'),
   active: z.boolean().default(true),
   broker_id: z.string().uuid().optional(),
 })
@@ -27,25 +28,28 @@ export const PolicyInsertSchema = z.object({
 
 // ===== Helpers internos =====
 function toInsertPayload(brokerId: string, parsed: z.infer<typeof ClientInsertSchema>): ClientIns {
+  // Nota: birth_date causa error de TypeScript hasta que se ejecute el SQL y se regeneren tipos
   return {
     broker_id: brokerId,
     name: parsed.name,
     national_id: parsed.national_id || undefined,
     email: parsed.email || undefined,
     phone: parsed.phone || undefined,
+    birth_date: parsed.birth_date,
     active: parsed.active ?? true,
-  };
+  } as ClientIns;
 }
 
 function toUpdatePayload(parsed: z.infer<typeof ClientUpdateSchema>): ClientUpd {
-  const payload: ClientUpd = {};
+  const payload: any = {}; // Usar any temporalmente hasta regenerar tipos
   if (parsed.name !== undefined) payload.name = parsed.name;
   if (parsed.national_id !== undefined) payload.national_id = parsed.national_id || undefined;
   if (parsed.email !== undefined) payload.email = parsed.email || undefined;
   if (parsed.phone !== undefined) payload.phone = parsed.phone || undefined;
+  if (parsed.birth_date !== undefined) payload.birth_date = parsed.birth_date;
   if (parsed.active !== undefined) payload.active = parsed.active;
   if (parsed.broker_id !== undefined) payload.broker_id = parsed.broker_id;
-  return payload;
+  return payload as ClientUpd;
 }
 
 // ===== CRUD =====

@@ -72,6 +72,42 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
           return false;
         });
         
+        // Enriquecer referencias con información de bank_transfers
+        const supabase = supabaseClient();
+        const allReferenceNumbers = new Set<string>();
+        
+        validPayments.forEach((payment: any) => {
+          payment.payment_references?.forEach((ref: any) => {
+            if (ref.reference_number && ref.exists_in_bank) {
+              allReferenceNumbers.add(ref.reference_number);
+            }
+          });
+        });
+        
+        // Obtener información de bank_transfers
+        const transfersMap = new Map<string, any>();
+        if (allReferenceNumbers.size > 0) {
+          const { data: transfers } = await supabase
+            .from('bank_transfers')
+            .select('reference_number, amount, used_amount, remaining_amount')
+            .in('reference_number', Array.from(allReferenceNumbers));
+          
+          transfers?.forEach(transfer => {
+            transfersMap.set(transfer.reference_number, transfer);
+          });
+        }
+        
+        // Enriquecer payment_references con remaining_amount
+        validPayments.forEach((payment: any) => {
+          payment.payment_references?.forEach((ref: any) => {
+            const transfer = transfersMap.get(ref.reference_number);
+            if (transfer) {
+              ref.bank_remaining_amount = transfer.remaining_amount ?? 
+                Math.max((transfer.amount || 0) - (transfer.used_amount || 0), 0);
+            }
+          });
+        });
+        
         setPayments(validPayments);
         
         // Limpiar selección de IDs que ya no existen
@@ -254,7 +290,7 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
         });
       } else {
         // Lógica original para batches normales (NO descuento a corredor)
-        const batchRefsMap = new Map<string, number>();
+        const batchRefsMap = new Map<string, { amount: number; remaining: number }>();
         let totalBatchAmount = 0;
 
         batchPayments.forEach(payment => {
@@ -262,20 +298,26 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
           payment.payment_references?.forEach((ref: any) => {
             const refNum = ref.reference_number;
             const amount = parseFloat(ref.amount || '0');
+            // Obtener remaining disponible real
+            const remaining = ref.bank_remaining_amount !== undefined && ref.bank_remaining_amount !== null
+              ? parseFloat(String(ref.bank_remaining_amount))
+              : amount;
+            
             if (!batchRefsMap.has(refNum)) {
-              batchRefsMap.set(refNum, amount);
+              batchRefsMap.set(refNum, { amount, remaining });
             }
           });
         });
 
-        const totalBankAmount = Array.from(batchRefsMap.values()).reduce((sum, amount) => sum + amount, 0);
+        const totalBankAmount = Array.from(batchRefsMap.values()).reduce((sum, item) => sum + item.amount, 0);
+        const totalBankRemaining = Array.from(batchRefsMap.values()).reduce((sum, item) => sum + item.remaining, 0);
         const allRefsLabel = Array.from(batchRefsMap.keys()).join(' + ');
         
         groups[`BATCH-${batchId}`] = {
           reference_number: allRefsLabel,
           bank_amount: totalBankAmount,
           total_pending: totalBatchAmount,
-          remaining: totalBankAmount - totalBatchAmount,
+          remaining: totalBankRemaining - totalBatchAmount, // Disponible - Pendiente
           payments: batchPayments,
           allAreDescuentoCorredor: false,
           isBatch: true
@@ -290,16 +332,22 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
       // Si el pago tiene múltiples referencias, tratarlo como un grupo especial
       if (refs.length > 1) {
         // Calcular totales de todas las referencias
-        const refsMap = new Map<string, number>();
+        const refsMap = new Map<string, { amount: number; remaining: number }>();
         refs.forEach((ref: any) => {
           const refNum = ref.reference_number;
           const amount = parseFloat(ref.amount || '0');
+          // Obtener remaining disponible real
+          const remaining = ref.bank_remaining_amount !== undefined && ref.bank_remaining_amount !== null
+            ? parseFloat(String(ref.bank_remaining_amount))
+            : amount;
+          
           if (!refsMap.has(refNum)) {
-            refsMap.set(refNum, amount);
+            refsMap.set(refNum, { amount, remaining });
           }
         });
         
-        const totalBankAmount = Array.from(refsMap.values()).reduce((sum, amount) => sum + amount, 0);
+        const totalBankAmount = Array.from(refsMap.values()).reduce((sum, item) => sum + item.amount, 0);
+        const totalBankRemaining = Array.from(refsMap.values()).reduce((sum, item) => sum + item.remaining, 0);
         const allRefsLabel = Array.from(refsMap.keys()).join(' + ');
         const isDescuento = isDescuentoACorredor(payment);
         const paymentAmount = parseFloat(payment.amount_to_pay || '0');
@@ -310,7 +358,7 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
           reference_number: allRefsLabel,
           bank_amount: totalBankAmount,
           total_pending: isDescuento ? 0 : paymentAmount,
-          remaining: totalBankAmount - paymentAmount,
+          remaining: totalBankRemaining - paymentAmount, // Disponible - Pendiente
           payments: [payment],
           allAreDescuentoCorredor: isDescuento,
           isBatch: false,
@@ -321,11 +369,16 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
         refs.forEach((ref: any) => {
           const refNum = ref.reference_number;
           if (!groups[refNum]) {
+            // Usar bank_remaining_amount si está disponible, sino calcular desde amount
+            const bankRemaining = ref.bank_remaining_amount !== undefined && ref.bank_remaining_amount !== null
+              ? parseFloat(String(ref.bank_remaining_amount))
+              : parseFloat(ref.amount || '0');
+            
             groups[refNum] = {
               reference_number: refNum,
               bank_amount: parseFloat(ref.amount || '0'),
               total_pending: 0,
-              remaining: parseFloat(ref.amount || '0'),
+              remaining: bankRemaining, // Usar el remaining real del banco
               payments: [],
               allAreDescuentoCorredor: true,
               isBatch: false
@@ -346,11 +399,13 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
       }
     });
 
-    // Calcular remanente real
+    // Calcular remanente final solo para grupos simples
+    // (batch y multi-ref ya tienen su remaining calculado)
     Object.keys(groups).forEach(key => {
       const group = groups[key];
-      if (group && !group.isBatch) {
-        group.remaining = group.bank_amount - group.total_pending;
+      if (group && !group.isBatch && !group.isMultiRef) {
+        // Fórmula: Disponible en banco - Pendiente = Remanente
+        group.remaining = group.remaining - group.total_pending;
       }
     });
 
@@ -507,7 +562,7 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
             };
           });
         } else {
-          const batchRefsMap = new Map<string, number>();
+          const batchRefsMap = new Map<string, { amount: number; remaining: number }>();
           let totalBatchAmount = 0;
 
           batchPayments.forEach(payment => {
@@ -515,20 +570,25 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
             payment.payment_references?.forEach((ref: any) => {
               const refNum = ref.reference_number;
               const amount = parseFloat(ref.amount || '0');
+              const remaining = ref.bank_remaining_amount !== undefined && ref.bank_remaining_amount !== null
+                ? parseFloat(String(ref.bank_remaining_amount))
+                : amount;
+              
               if (!batchRefsMap.has(refNum)) {
-                batchRefsMap.set(refNum, amount);
+                batchRefsMap.set(refNum, { amount, remaining });
               }
             });
           });
 
-          const totalBankAmount = Array.from(batchRefsMap.values()).reduce((sum, amount) => sum + amount, 0);
+          const totalBankAmount = Array.from(batchRefsMap.values()).reduce((sum, item) => sum + item.amount, 0);
+          const totalBankRemaining = Array.from(batchRefsMap.values()).reduce((sum, item) => sum + item.remaining, 0);
           const allRefsLabel = Array.from(batchRefsMap.keys()).join(' + ');
           
           groups[`BATCH-${batchId}`] = {
             reference_number: allRefsLabel,
             bank_amount: totalBankAmount,
             total_pending: totalBatchAmount,
-            remaining: totalBankAmount - totalBatchAmount,
+            remaining: totalBankRemaining - totalBatchAmount,
             payments: batchPayments,
             allAreDescuentoCorredor: false,
             isBatch: true
@@ -541,16 +601,21 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
         const refs = payment.payment_references || [];
         
         if (refs.length > 1) {
-          const refsMap = new Map<string, number>();
+          const refsMap = new Map<string, { amount: number; remaining: number }>();
           refs.forEach((ref: any) => {
             const refNum = ref.reference_number;
             const amount = parseFloat(ref.amount || '0');
+            const remaining = ref.bank_remaining_amount !== undefined && ref.bank_remaining_amount !== null
+              ? parseFloat(String(ref.bank_remaining_amount))
+              : amount;
+            
             if (!refsMap.has(refNum)) {
-              refsMap.set(refNum, amount);
+              refsMap.set(refNum, { amount, remaining });
             }
           });
           
-          const totalBankAmount = Array.from(refsMap.values()).reduce((sum, amount) => sum + amount, 0);
+          const totalBankAmount = Array.from(refsMap.values()).reduce((sum, item) => sum + item.amount, 0);
+          const totalBankRemaining = Array.from(refsMap.values()).reduce((sum, item) => sum + item.remaining, 0);
           const allRefsLabel = Array.from(refsMap.keys()).join(' + ');
           const isDescuento = isDescuentoACorredor(payment);
           const paymentAmount = parseFloat(payment.amount_to_pay || '0');
@@ -560,7 +625,7 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
             reference_number: allRefsLabel,
             bank_amount: totalBankAmount,
             total_pending: isDescuento ? 0 : paymentAmount,
-            remaining: totalBankAmount - paymentAmount,
+            remaining: totalBankRemaining - paymentAmount,
             payments: [payment],
             allAreDescuentoCorredor: isDescuento,
             isBatch: false,
@@ -570,11 +635,15 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
           refs.forEach((ref: any) => {
             const refNum = ref.reference_number;
             if (!groups[refNum]) {
+              const bankRemaining = ref.bank_remaining_amount !== undefined && ref.bank_remaining_amount !== null
+                ? parseFloat(String(ref.bank_remaining_amount))
+                : parseFloat(ref.amount || '0');
+              
               groups[refNum] = {
                 reference_number: refNum,
                 bank_amount: parseFloat(ref.amount || '0'),
                 total_pending: 0,
-                remaining: parseFloat(ref.amount || '0'),
+                remaining: bankRemaining,
                 payments: [],
                 allAreDescuentoCorredor: true,
                 isBatch: false
@@ -597,8 +666,9 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
 
       Object.keys(groups).forEach(key => {
         const group = groups[key];
-        if (group && !group.isBatch) {
-          group.remaining = group.bank_amount - group.total_pending;
+        if (group && !group.isBatch && !group.isMultiRef) {
+          // Fórmula: Disponible - Pendiente = Remanente
+          group.remaining = group.remaining - group.total_pending;
         }
       });
 
@@ -1698,7 +1768,7 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
                           <span className="text-sm font-mono font-semibold">{ref.reference_number}</span>
                         </div>
                         <span className="text-sm font-semibold">
-                          ${Number(payment.amount_to_pay).toFixed(2)}
+                          ${Number(ref.amount).toFixed(2)}
                         </span>
                       </div>
                     );

@@ -1279,40 +1279,55 @@ export default function DatabaseTabs({
     }
   };
 
-  // Aplicar filtros a los clientes (ANTES de las funciones que lo usan)
+  // Aplicar filtros a los clientes Y sus pólizas
   const filteredClients = useMemo(() => {
-    let filtered = [...clients];
+    let filtered = clients.map(client => {
+      // Primero filtrar las pólizas del cliente
+      let filteredPolicies = [...(client.policies || [])];
 
-    if (filters.insurer) {
-      filtered = filtered.filter(client => 
-        client.policies?.some(p => p.insurer_id === filters.insurer)
-      );
-    }
+      if (filters.insurer) {
+        filteredPolicies = filteredPolicies.filter(p => p.insurer_id === filters.insurer);
+      }
 
-    if (filters.ramo) {
-      filtered = filtered.filter(client => 
-        client.policies?.some(p => p.ramo?.toLowerCase() === filters.ramo?.toLowerCase())
-      );
-    }
+      if (filters.ramo) {
+        filteredPolicies = filteredPolicies.filter(p => p.ramo?.toLowerCase() === filters.ramo?.toLowerCase());
+      }
 
-    if (filters.month !== undefined) {
-      filtered = filtered.filter(client => 
-        client.policies?.some(p => {
+      if (filters.month !== undefined) {
+        filteredPolicies = filteredPolicies.filter(p => {
           if (!p.renewal_date) return false;
           const renewalMonth = new Date(p.renewal_date).getMonth();
           return renewalMonth === filters.month;
-        })
-      );
-    }
+        });
+      }
 
-    if (filters.broker && role === 'master') {
-      filtered = filtered.filter(client => 
-        (client as any).brokers?.id === filters.broker
-      );
-    }
+      // Retornar cliente con pólizas filtradas
+      return {
+        ...client,
+        policies: filteredPolicies
+      };
+    });
+
+    // Luego filtrar clientes que tienen al menos una póliza que cumple los criterios
+    // o que cumplen el filtro de corredor
+    filtered = filtered.filter(client => {
+      // Si hay filtro de corredor, aplicarlo
+      if (filters.broker && role === 'master') {
+        if ((client as any).brokers?.id !== filters.broker) {
+          return false;
+        }
+      }
+
+      // Si hay filtros de póliza, el cliente debe tener al menos una póliza filtrada
+      if (filters.insurer || filters.ramo || filters.month !== undefined) {
+        return client.policies && client.policies.length > 0;
+      }
+
+      return true;
+    });
 
     return filtered;
-  }, [clients, filters, role, searchQuery]);
+  }, [clients, filters, role]);
 
   const handleToggleClient = (clientId: string) => {
     setSelectedClients((prev) => {

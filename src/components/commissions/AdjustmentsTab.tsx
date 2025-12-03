@@ -924,12 +924,7 @@ export default function AdjustmentsTab({ role, brokerId, brokers, onActionSucces
   const [paidReports, setPaidReports] = useState<any[]>([]);
   const [loadingReports, setLoadingReports] = useState(false);
 
-  const handleSuccess = () => {
-    onActionSuccess?.();
-    loadReports();
-  };
-
-  const loadReports = async () => {
+  const loadReports = useCallback(async () => {
     if (activeTab !== 'requests') return;
     setLoadingReports(true);
     const result = await actionGetAdjustmentReports('pending');
@@ -937,9 +932,9 @@ export default function AdjustmentsTab({ role, brokerId, brokers, onActionSucces
       setReports(result.data || []);
     }
     setLoadingReports(false);
-  };
+  }, [activeTab]);
 
-  const loadPaidReports = async () => {
+  const loadPaidReports = useCallback(async () => {
     if (activeTab !== 'paid' || role !== 'broker') return;
     setLoadingReports(true);
     const result = await actionGetAdjustmentReports('paid');
@@ -947,6 +942,11 @@ export default function AdjustmentsTab({ role, brokerId, brokers, onActionSucces
       setPaidReports(result.data || []);
     }
     setLoadingReports(false);
+  }, [activeTab, role]);
+
+  const handleSuccess = () => {
+    onActionSuccess?.();
+    loadReports();
   };
 
   const handleApprove = async (reportId: string, adminNotes: string) => {
@@ -979,7 +979,7 @@ export default function AdjustmentsTab({ role, brokerId, brokers, onActionSucces
     } else if (activeTab === 'paid' && role === 'broker') {
       loadPaidReports();
     }
-  }, [activeTab, role]);
+  }, [activeTab, role, loadReports, loadPaidReports]);
 
   const masterTabs = [
     { key: 'pending' as const, label: 'Sin identificar', icon: FaExclamationTriangle },

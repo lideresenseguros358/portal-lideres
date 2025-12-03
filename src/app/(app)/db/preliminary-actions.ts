@@ -46,25 +46,53 @@ export async function actionGetPreliminaryClients() {
       return { ok: false as const, error: error.message };
     }
 
-    // Calculate missing fields for each record
+    // Calculate missing fields for each record - TODOS los campos necesarios para migración
     const enrichedData = (data || []).map((record: any) => {
       const missingFields: string[] = [];
 
+      // Campos obligatorios del cliente
       if (!record.client_name || record.client_name.trim() === '') {
         missingFields.push('Nombre del cliente');
       }
+      if (!record.national_id || record.national_id.trim() === '') {
+        missingFields.push('Cédula/RUC');
+      }
+      if (!record.email || record.email.trim() === '') {
+        missingFields.push('Email');
+      }
+      if (!record.phone || record.phone.trim() === '') {
+        missingFields.push('Teléfono');
+      }
+      if (!record.birth_date) {
+        missingFields.push('Fecha de nacimiento');
+      }
+      
+      // Campos obligatorios de la póliza
       if (!record.policy_number || record.policy_number.trim() === '') {
         missingFields.push('Número de póliza');
+      }
+      if (!record.ramo || record.ramo.trim() === '') {
+        missingFields.push('Ramo');
       }
       if (!record.insurer_id) {
         missingFields.push('Aseguradora');
       }
+      if (!record.start_date) {
+        missingFields.push('Fecha de inicio');
+      }
       if (!record.renewal_date) {
         missingFields.push('Fecha de renovación');
       }
+      if (!record.status || record.status.trim() === '') {
+        missingFields.push('Estado de póliza');
+      }
+      
+      // Otros campos obligatorios
       if (!record.broker_id) {
         missingFields.push('Corredor asignado');
       }
+
+      console.log(`[Preliminar] Cliente: ${record.client_name || 'Sin nombre'} - Campos faltantes: ${missingFields.length}`, missingFields);
 
       return {
         ...record,
@@ -107,6 +135,9 @@ export async function actionUpdatePreliminaryClient(id: string, updates: any) {
     }
     if (updates.phone !== undefined) {
       cleanedUpdates.phone = updates.phone?.trim() || null;
+    }
+    if (updates.birth_date !== undefined) {
+      cleanedUpdates.birth_date = updates.birth_date || null;
     }
     if (updates.policy_number !== undefined) {
       cleanedUpdates.policy_number = updates.policy_number?.trim().toUpperCase() || null;

@@ -92,7 +92,7 @@ export default function BrokerPendingTab({ brokerId }: Props) {
       toast.error('Error al cargar datos');
     }
     setLoading(false);
-  }, [brokerId]);
+  }, []);
 
   useEffect(() => {
     loadData();

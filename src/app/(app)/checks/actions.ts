@@ -795,14 +795,11 @@ export async function actionCreatePendingPayment(payment: {
     // Insert payment references para cada pago creado
     const allReferencesToInsert: TablesInsert<'payment_references'>[] = [];
     
-    // Si hay divisiones, necesitamos dividir las referencias proporcionalmente
+    // Si hay divisiones, asignar referencias con el monto de cada división
     if (hasDivisions && !isBrokerDeduction && payment.divisions && pendingPayments.length === payment.divisions.length) {
-      console.log('📊 Distribuyendo referencias proporcionalmente entre divisiones...');
+      console.log('📊 Asignando referencias a divisiones...');
       
-      // Calcular el total de todas las divisiones
-      const totalDivisions = payment.divisions.reduce((sum, div) => sum + Number(div.amount), 0);
-      
-      // Para cada división, calcular su proporción y asignar referencias
+      // Para cada división, asignar referencias con el monto de la división
       for (let i = 0; i < pendingPayments.length; i++) {
         const pendingPayment = pendingPayments[i];
         const division = payment.divisions[i];
@@ -814,33 +811,28 @@ export async function actionCreatePendingPayment(payment: {
         }
         
         const divisionAmount = Number(division.amount);
-        const divisionProportion = divisionAmount / totalDivisions;
         
         console.log(`📝 División ${i + 1}/${pendingPayments.length}:`, {
           client: pendingPayment.client_name,
-          amount: divisionAmount,
-          proportion: (divisionProportion * 100).toFixed(2) + '%'
+          amount: divisionAmount
         });
         
-        // Para cada referencia, calcular el monto proporcional
+        // Para cada referencia, usar el monto de la división
         for (const ref of payment.references) {
-          const refAmountToUse = Number(ref.amount_to_use);
-          const proportionalAmount = refAmountToUse * divisionProportion;
-          
-          console.log(`  └─ Ref ${ref.reference_number}: $${refAmountToUse.toFixed(2)} × ${(divisionProportion * 100).toFixed(2)}% = $${proportionalAmount.toFixed(2)}`);
+          console.log(`  └─ Ref ${ref.reference_number}: amount_to_use = $${divisionAmount.toFixed(2)}`);
           
           allReferencesToInsert.push({
             payment_id: pendingPayment.id,
             reference_number: ref.reference_number,
             date: ref.date,
             amount: ref.amount, // Monto total de la transferencia bancaria
-            amount_to_use: proportionalAmount, // Monto proporcional para esta división
+            amount_to_use: divisionAmount, // Monto de esta división
             exists_in_bank: bankRefMap.has(ref.reference_number)
           });
         }
       }
       
-      console.log('✅ Referencias distribuidas proporcionalmente');
+      console.log('✅ Referencias asignadas a divisiones');
     } else {
       // Lógica para pagos sin divisiones o descuentos a corredor con divisiones
       for (const pendingPayment of pendingPayments) {
@@ -1710,16 +1702,10 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
         }
       }
 
-      console.log('🧹 [actionMarkPaymentsAsPaidNew] Limpiando payment_details...');
-      const { error: detailCleanupError } = await supabase
-        .from('payment_details')
-        .update({ payment_id: null } satisfies TablesUpdate<'payment_details'>)
-        .eq('payment_id', payment.id);
-
-      if (detailCleanupError) {
-        console.error('❌ [actionMarkPaymentsAsPaidNew] Error limpiando payment_details:', detailCleanupError);
-        throw detailCleanupError;
-      }
+      // NO LIMPIAR payment_details aquí - ya no es necesario porque vamos a eliminar el pago
+      // Esta línea causaba problemas con divisiones porque limpiaba payment_id de todos los
+      // payment_details asociados, incluso de otras divisiones que aún no se han procesado
+      console.log('ℹ️ [actionMarkPaymentsAsPaidNew] Saltando limpieza de payment_details (se eliminará con el pago)');
 
       console.log('🧹 [actionMarkPaymentsAsPaidNew] Eliminando payment_references...');
       const { error: referencesDeleteError } = await supabase

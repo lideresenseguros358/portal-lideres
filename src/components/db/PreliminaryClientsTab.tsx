@@ -71,6 +71,7 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
       national_id: client.national_id || '',
       email: client.email || '',
       phone: client.phone || '',
+      birth_date: client.birth_date || '',
       policy_number: client.policy_number || '',
       ramo: client.ramo || '',
       insurer_id: client.insurer_id || '',
@@ -357,6 +358,10 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
                         <p className="font-semibold text-sm">{client.phone || '—'}</p>
                       </div>
                       <div>
+                        <p className="text-xs text-gray-500 mb-1">Fecha de Nacimiento</p>
+                        <p className="font-semibold text-sm">{client.birth_date || '—'}</p>
+                      </div>
+                      <div>
                         <p className="text-xs text-gray-500 mb-1">Aseguradora</p>
                         <p className="font-semibold text-sm">{insurerName}</p>
                       </div>
@@ -430,6 +435,17 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
                           type="tel"
                           value={editForm.phone}
                           onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                          className="w-full px-4 py-2 border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Fecha de Nacimiento <span className="text-red-500">*</span>
+                        </label>
+                        <input
+                          type="date"
+                          value={editForm.birth_date}
+                          onChange={(e) => setEditForm({ ...editForm, birth_date: e.target.value })}
                           className="w-full px-4 py-2 border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none"
                         />
                       </div>
