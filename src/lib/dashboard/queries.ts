@@ -188,25 +188,33 @@ export async function getNetCommissions(userId: string, role: DashboardRole): Pr
   let totalPaid = status.paid?.total ?? 0;
   const totalOpen = status.open?.total ?? 0;
 
-  // FALLBACK: Si no hay quincenas, calcular desde comm_items el mes actual
+  // FALLBACK: Si no hay quincenas, buscar la última quincena disponible en historial
   if (totalPaid === 0 && role === 'broker') {
     const brokerId = await resolveBrokerId(userId);
     if (brokerId) {
       const supabase = await getSupabaseServer();
-      const now = new Date();
-      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-      const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
       
-      const { data } = await supabase
-        .from('comm_items')
-        .select('gross_amount')
-        .eq('broker_id', brokerId)
-        .gte('created_at', monthStart.toISOString())
-        .lte('created_at', monthEnd.toISOString())
-        .limit(FETCH_LIMIT);
+      // Buscar la última quincena CERRADA que tenga datos, sin filtrar por mes
+      const { data: lastFortnight } = await supabase
+        .from('fortnights')
+        .select('id, period_start, period_end')
+        .in('status', ['PAID', 'READY'])
+        .order('period_end', { ascending: false })
+        .limit(1)
+        .maybeSingle();
       
-      if (data) {
-        totalPaid = data.reduce((acc, item) => acc + toNumber(item.gross_amount), 0);
+      if (lastFortnight) {
+        // Sumar las comisiones de esa quincena específica
+        const { data } = await supabase
+          .from('fortnight_details')
+          .select('commission_calculated')
+          .eq('fortnight_id', lastFortnight.id)
+          .eq('broker_id', brokerId)
+          .limit(FETCH_LIMIT);
+        
+        if (data) {
+          totalPaid = data.reduce((acc, item) => acc + toNumber(item.commission_calculated), 0);
+        }
       }
     }
   }
