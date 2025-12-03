@@ -5,7 +5,7 @@ import { FaTimes, FaCheckCircle, FaExclamationTriangle, FaPlus, FaTrash, FaRecyc
 import { toast } from 'sonner';
 import { actionCreatePendingPayment, actionValidateReferences, actionGetInsurers } from '@/app/(app)/checks/actions';
 import { actionFindOrphanAdvances, actionRecoverOrphanAdvance, type OrphanAdvance } from '@/app/(app)/checks/orphan-advances';
-import { toUppercasePayload, createUppercaseHandler, uppercaseInputClass } from '@/lib/utils/uppercase';
+import { toUppercasePayload, createUppercaseHandler, createBankSafeHandler, sanitizePolicyNumber, generateEmisionWebPolicy, uppercaseInputClass } from '@/lib/utils/uppercase';
 import { supabaseClient } from '@/lib/supabase/client';
 
 interface AdvancePrefill {
@@ -53,8 +53,13 @@ export default function RegisterPaymentWizardNew({
     broker_cuenta: ''
   });
 
+  // Step 1: Emisión Web
+  const [isEmisionWeb, setIsEmisionWeb] = useState(false);
+
   // Step 2: Referencias
+  const [paymentMethod, setPaymentMethod] = useState<'bank_transfer' | 'broker_deduct' | 'other_bank'>('bank_transfer');
   const [isDeductFromBroker, setIsDeductFromBroker] = useState(false);
+  const [isOtherBank, setIsOtherBank] = useState(false);
   const [selectedBrokerId, setSelectedBrokerId] = useState('');
   const [deductMode, setDeductMode] = useState<'full' | 'partial'>('full');
   const [partialDeductAmount, setPartialDeductAmount] = useState('');
@@ -773,7 +778,8 @@ export default function RegisterPaymentWizardNew({
         deduction_broker_id: isDeductPayment ? selectedBrokerId : undefined,
         discount_type: discountType as 'full' | 'partial' | undefined,
         discount_amount: discountAmount || undefined,
-        orphan_advance_id: selectedOrphanAdvance || undefined // ID del adelanto huérfano a recuperar
+        orphan_advance_id: selectedOrphanAdvance || undefined, // ID del adelanto huérfano a recuperar
+        is_other_bank: isOtherBank || undefined // Marcar como otro banco/depósito
       };
 
       const result = await actionCreatePendingPayment(payload);
@@ -911,13 +917,16 @@ export default function RegisterPaymentWizardNew({
                 <input
                   type="text"
                   value={formData.client_name}
-                  onChange={createUppercaseHandler((e) => {
+                  onChange={createBankSafeHandler((e) => {
                     setFormData({ ...formData, client_name: e.target.value });
                     if (validationErrors.length > 0) setValidationErrors([]);
                   })}
                   className={getInputClassName(`w-full px-4 py-2 border-2 rounded-lg focus:outline-none ${uppercaseInputClass}`, 'cliente')}
-                  placeholder="Nombre del cliente"
+                  placeholder="NOMBRE DEL CLIENTE"
                 />
+                <p className="text-xs text-gray-500 mt-1">
+                  ⚠️ Sin ñ, acentos ni caracteres especiales (requisito bancario)
+                </p>
               </div>
 
               <div>
@@ -976,42 +985,45 @@ export default function RegisterPaymentWizardNew({
                         <input
                           type="text"
                           value={formData.banco_nombre}
-                          onChange={createUppercaseHandler((e) => setFormData({ ...formData, banco_nombre: e.target.value }))}
+                          onChange={createBankSafeHandler((e) => setFormData({ ...formData, banco_nombre: e.target.value }))}
                           className={`w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#010139] focus:outline-none ${uppercaseInputClass}`}
-                          placeholder="Ej: BANCO GENERAL"
+                          placeholder="BANCO GENERAL"
                         />
                       </div>
 
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Tipo de Cuenta <span className="text-red-500">*</span>
-                        </label>
-                        <select
-                          value={formData.tipo_cuenta}
-                          onChange={(e) => setFormData({ ...formData, tipo_cuenta: e.target.value })}
-                          className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#010139] focus:outline-none"
-                        >
-                          <option value="">Seleccionar...</option>
-                          <option value="CORRIENTE">Corriente</option>
-                          <option value="AHORRO">Ahorro</option>
-                        </select>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Tipo de Cuenta <span className="text-red-500">*</span>
+                          </label>
+                          <select
+                            value={formData.tipo_cuenta}
+                            onChange={(e) => setFormData({ ...formData, tipo_cuenta: e.target.value })}
+                            className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#010139] focus:outline-none"
+                          >
+                            <option value="">Seleccionar...</option>
+                            <option value="CORRIENTE">Corriente</option>
+                            <option value="AHORRO">Ahorro</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Número de Cuenta <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={formData.cuenta_banco}
+                            onChange={createBankSafeHandler((e) => setFormData({ ...formData, cuenta_banco: e.target.value }))}
+                            className={`w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#010139] focus:outline-none ${uppercaseInputClass}`}
+                            placeholder="NUMERO DE CUENTA"
+                          />
+                        </div>
                       </div>
 
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Número de Cuenta <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          value={formData.cuenta_banco}
-                          onChange={createUppercaseHandler((e) => setFormData({ ...formData, cuenta_banco: e.target.value }))}
-                          className={`w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#010139] focus:outline-none ${uppercaseInputClass}`}
-                          placeholder="Número de cuenta del cliente"
-                        />
-                        <p className="text-xs text-gray-500 mt-1">
-                          Titular: {formData.client_name || '(ingrese cliente arriba)'}
-                        </p>
-                      </div>
+                      <p className="text-xs text-gray-600 bg-gray-50 border border-gray-200 rounded p-2">
+                        📝 <strong>Titular:</strong> {formData.client_name || '(ingrese cliente arriba)'}
+                      </p>
                     </>
                   )}
 
@@ -1049,26 +1061,17 @@ export default function RegisterPaymentWizardNew({
 
               {formData.purpose === 'poliza' && (
                 <>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Número de Póliza <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.policy_number}
-                      onChange={createUppercaseHandler((e) => setFormData({ ...formData, policy_number: e.target.value }))}
-                      className={`w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none ${uppercaseInputClass}`}
-                      placeholder="POL-2024-001"
-                    />
-                  </div>
-
+                  {/* Aseguradora primero para mobile-first */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Aseguradora <span className="text-red-500">*</span>
                     </label>
                     <select
                       value={formData.insurer_name}
-                      onChange={(e) => setFormData({ ...formData, insurer_name: e.target.value })}
+                      onChange={(e) => {
+                        setFormData({ ...formData, insurer_name: e.target.value });
+                        if (isEmisionWeb) setIsEmisionWeb(false);
+                      }}
                       className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none"
                     >
                       <option value="">Seleccionar...</option>
@@ -1076,6 +1079,63 @@ export default function RegisterPaymentWizardNew({
                         <option key={ins.id} value={ins.name}>{ins.name}</option>
                       ))}
                     </select>
+                  </div>
+
+                  {/* Checkbox Emisión Web */}
+                  <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-3">
+                    <label className="flex items-start gap-3 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={isEmisionWeb}
+                        onChange={(e) => {
+                          const checked = e.target.checked;
+                          setIsEmisionWeb(checked);
+                          if (checked) {
+                            setFormData({ ...formData, policy_number: generateEmisionWebPolicy() });
+                          } else {
+                            setFormData({ ...formData, policy_number: '' });
+                          }
+                        }}
+                        className="w-5 h-5 text-[#8AAA19] rounded focus:ring-[#8AAA19] mt-0.5 flex-shrink-0"
+                      />
+                      <div>
+                        <span className="text-sm font-medium text-gray-700">🌐 Emisión Web</span>
+                        <p className="text-xs text-gray-600 mt-0.5">
+                          Autocompleta con "EMISION WEB" y la fecha de hoy
+                        </p>
+                      </div>
+                    </label>
+                  </div>
+
+                  {/* Número de Póliza */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Número de Póliza <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.policy_number}
+                      onChange={(e) => {
+                        const sanitized = sanitizePolicyNumber(e.target.value, formData.insurer_name);
+                        setFormData({ ...formData, policy_number: sanitized });
+                      }}
+                      disabled={isEmisionWeb}
+                      className={`w-full px-4 py-2 border-2 rounded-lg focus:outline-none ${uppercaseInputClass} ${
+                        isEmisionWeb ? 'bg-gray-100 cursor-not-allowed' : 'border-gray-300 focus:border-[#8AAA19]'
+                      }`}
+                      placeholder={
+                        formData.insurer_name?.toUpperCase().includes('LA REGIONAL') || 
+                        formData.insurer_name?.toUpperCase().includes('REGIONAL')
+                          ? 'POL2024001 (sin guiones)'
+                          : 'POL-2024-001'
+                      }
+                    />
+                    {(formData.insurer_name?.toUpperCase().includes('LA REGIONAL') || 
+                      formData.insurer_name?.toUpperCase().includes('REGIONAL')) && !isEmisionWeb && (
+                      <p className="text-xs text-amber-600 mt-1 font-medium">
+                        ⚠️ La Regional: No permite guiones (-)
+                      </p>
+                    )}
                   </div>
                 </>
               )}
@@ -1102,10 +1162,10 @@ export default function RegisterPaymentWizardNew({
                 <label className="block text-sm font-medium text-gray-700 mb-1">Notas</label>
                 <textarea
                   value={formData.notes}
-                  onChange={createUppercaseHandler((e) => setFormData({ ...formData, notes: e.target.value }))}
+                  onChange={createBankSafeHandler((e) => setFormData({ ...formData, notes: e.target.value }))}
                   className={`w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none ${uppercaseInputClass}`}
                   rows={2}
-                  placeholder="Información adicional (opcional)"
+                  placeholder="INFORMACION ADICIONAL (OPCIONAL)"
                 />
               </div>
             </div>
@@ -1126,16 +1186,18 @@ export default function RegisterPaymentWizardNew({
                 
                 {/* Opción 1: Transferencia Bancaria */}
                 <label className={`flex items-start gap-3 p-4 border-2 rounded-lg cursor-pointer transition-all ${
-                  !isDeductFromBroker 
+                  paymentMethod === 'bank_transfer'
                     ? 'border-[#8AAA19] bg-[#8AAA19]/5' 
                     : 'border-gray-300 hover:border-gray-400'
                 }`}>
                   <input
                     type="radio"
                     name="payment_method"
-                    checked={!isDeductFromBroker}
+                    checked={paymentMethod === 'bank_transfer'}
                     onChange={() => {
+                      setPaymentMethod('bank_transfer');
                       setIsDeductFromBroker(false);
+                      setIsOtherBank(false);
                     }}
                     className="mt-1 w-5 h-5 text-[#8AAA19]"
                   />
@@ -1149,18 +1211,59 @@ export default function RegisterPaymentWizardNew({
                   </div>
                 </label>
 
-                {/* Opción 2: Descuento a Corredor */}
+                {/* Opción 2: Otro Banco/Depósitos */}
                 <label className={`flex items-start gap-3 p-4 border-2 rounded-lg cursor-pointer transition-all ${
-                  isDeductFromBroker 
+                  paymentMethod === 'other_bank'
+                    ? 'border-amber-500 bg-amber-50' 
+                    : 'border-gray-300 hover:border-gray-400'
+                }`}>
+                  <input
+                    type="radio"
+                    name="payment_method"
+                    checked={paymentMethod === 'other_bank'}
+                    onChange={() => {
+                      setPaymentMethod('other_bank');
+                      setIsDeductFromBroker(false);
+                      setIsOtherBank(true);
+                      setMultipleRefs(false);
+                      // Crear referencia temporal con fecha y monto
+                      setReferences([{
+                        reference_number: `TEMP-${Date.now()}`,
+                        date: new Date().toISOString().split('T')[0],
+                        amount: formData.amount_to_pay || '',
+                        amount_to_use: formData.amount_to_pay || '',
+                        exists_in_bank: false,
+                        validating: false,
+                        status: null,
+                        remaining_amount: 0
+                      }]);
+                    }}
+                    className="mt-1 w-5 h-5 text-amber-500"
+                  />
+                  <div className="flex-1">
+                    <p className="text-sm font-bold text-[#010139]">
+                      🏪 Otro Banco/Depósitos
+                    </p>
+                    <p className="text-xs text-gray-600 mt-1">
+                      Para pagos de otro banco o depósitos donde aún no tienes el número de referencia. Registra la fecha y monto de la transferencia.
+                    </p>
+                  </div>
+                </label>
+
+                {/* Opción 3: Descuento a Corredor */}
+                <label className={`flex items-start gap-3 p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                  paymentMethod === 'broker_deduct'
                     ? 'border-[#8AAA19] bg-[#8AAA19]/5' 
                     : 'border-gray-300 hover:border-gray-400'
                 }`}>
                   <input
                     type="radio"
                     name="payment_method"
-                    checked={isDeductFromBroker}
+                    checked={paymentMethod === 'broker_deduct'}
                     onChange={() => {
+                      setPaymentMethod('broker_deduct');
                       setIsDeductFromBroker(true);
+                      setIsOtherBank(false);
                       // Limpiar referencias cuando se activa descuento
                       setMultipleRefs(false);
                       setReferences([{
@@ -1187,8 +1290,65 @@ export default function RegisterPaymentWizardNew({
                 </label>
               </div>
 
+              {/* Info para Otro Banco con campos de fecha y monto */}
+              {isOtherBank && (
+                <div className="bg-amber-50 border-2 border-amber-300 rounded-lg p-4 space-y-4">
+                  <div className="flex items-start gap-3">
+                    <div className="text-amber-600 text-2xl">⚠️</div>
+                    <div className="flex-1">
+                      <p className="text-sm font-bold text-amber-900 mb-1">Registro Temporal</p>
+                      <p className="text-xs text-amber-800 leading-relaxed">
+                        Este pago quedará marcado como "Pendiente de conciliar" hasta que actualices el número de referencia bancaria correcto. 
+                        Registra la fecha y monto de la transferencia/depósito.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Fecha de Transferencia <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="date"
+                        value={references[0]?.date || ''}
+                        onChange={(e) => {
+                          const newRefs = [...references];
+                          if (newRefs[0]) {
+                            newRefs[0].date = e.target.value;
+                            setReferences(newRefs);
+                          }
+                        }}
+                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-amber-500 focus:outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Monto Transferido <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={references[0]?.amount || ''}
+                        onChange={(e) => {
+                          const newRefs = [...references];
+                          if (newRefs[0]) {
+                            newRefs[0].amount = e.target.value;
+                            newRefs[0].amount_to_use = e.target.value;
+                            setReferences(newRefs);
+                          }
+                        }}
+                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-amber-500 focus:outline-none"
+                        placeholder="0.00"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Opción de pagos múltiples (solo para transferencia bancaria) */}
-              {!isDeductFromBroker && (
+              {!isDeductFromBroker && !isOtherBank && (
                 <div className="flex items-center gap-3 p-4 bg-blue-50 border-2 border-blue-200 rounded-lg">
                   <input
                     type="checkbox"

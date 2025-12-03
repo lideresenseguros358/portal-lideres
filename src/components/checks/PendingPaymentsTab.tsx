@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { FaPlus, FaCheckCircle, FaExclamationTriangle, FaFileDownload, FaEdit, FaTrash } from 'react-icons/fa';
+import { FaPlus, FaCheckCircle, FaExclamationTriangle, FaFileDownload, FaEdit, FaTrash, FaSearch, FaTimes } from 'react-icons/fa';
 import { actionGetPendingPaymentsNew, actionMarkPaymentsAsPaidNew, actionDeletePendingPayment, actionSyncPendingPaymentsWithAdvances } from '@/app/(app)/checks/actions';
 import { supabaseClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
@@ -14,10 +14,28 @@ interface PendingPaymentsTabProps {
   refreshTrigger?: number;
 }
 
+const STORAGE_KEY = 'pendingPaymentsSelectedIds';
+
 export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refreshTrigger }: PendingPaymentsTabProps) {
   const [payments, setPayments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  
+  // Inicializar selectedIds desde localStorage
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (stored) {
+          const ids = JSON.parse(stored);
+          return new Set(ids);
+        }
+      } catch (error) {
+        console.error('Error loading selected IDs from localStorage:', error);
+      }
+    }
+    return new Set();
+  });
+  
   const [groupByReference, setGroupByReference] = useState(true);
   const [showUnpaidModal, setShowUnpaidModal] = useState<{
     payment: { client_name: string; amount: number };
@@ -26,6 +44,7 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
   } | null>(null);
   const [editingPayment, setEditingPayment] = useState<any | null>(null);
   const [brokers, setBrokers] = useState<any[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const loadPayments = useCallback(async () => {
     setLoading(true);
@@ -54,6 +73,24 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
         });
         
         setPayments(validPayments);
+        
+        // Limpiar selección de IDs que ya no existen
+        setSelectedIds(prevSelected => {
+          const validIds = new Set<string>();
+          const paymentIds = new Set(validPayments.map((p: any) => p.id));
+          
+          prevSelected.forEach(id => {
+            if (paymentIds.has(id)) {
+              validIds.add(id);
+            }
+          });
+          
+          // Si cambió algo, retornar nuevo Set
+          if (validIds.size !== prevSelected.size) {
+            return validIds;
+          }
+          return prevSelected;
+        });
       } else {
         console.error('Error al cargar pagos:', result.error);
         toast.error('Error al cargar pagos');
@@ -101,6 +138,23 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
     // Ejecutar sincronización y luego cargar pagos
     autoSync().then(() => loadPayments());
   }, [refreshTrigger, loadPayments]);
+
+  // Guardar selectedIds en localStorage cada vez que cambie
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        if (selectedIds.size > 0) {
+          const idsArray = Array.from(selectedIds);
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(idsArray));
+        } else {
+          // Si no hay selección, limpiar localStorage
+          localStorage.removeItem(STORAGE_KEY);
+        }
+      } catch (error) {
+        console.error('Error saving selected IDs to localStorage:', error);
+      }
+    }
+  }, [selectedIds]);
 
   const toggleSelect = (id: string) => {
     const payment = payments.find((p) => p.id === id);
@@ -306,14 +360,24 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
   // Función de ordenamiento - memoizada
   const sortPayments = useCallback((paymentsToSort: any[]) => {
     return [...paymentsToSort].sort((a, b) => {
-      // 1. Ordenar por estado: conciliados primero (blocked=false primero)
       const stateA = getPaymentState(a);
       const stateB = getPaymentState(b);
-      const blockedA = stateA.blocked ? 1 : 0;
-      const blockedB = stateB.blocked ? 1 : 0;
       
-      if (blockedA !== blockedB) {
-        return blockedA - blockedB;
+      // Determinar prioridad de ordenamiento
+      // 1 = Conciliado (no bloqueado, no other_bank)
+      // 2 = Otro banco/depósito (other_bank)
+      // 3 = Bloqueado/No conciliado
+      const getPriority = (state: any) => {
+        if (state.key === 'other_bank') return 2;
+        if (state.blocked) return 3;
+        return 1;
+      };
+      
+      const priorityA = getPriority(stateA);
+      const priorityB = getPriority(stateB);
+      
+      if (priorityA !== priorityB) {
+        return priorityA - priorityB;
       }
       
       // 2. Ordenar por fecha: más antiguo primero
@@ -346,6 +410,202 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
   const sortedPayments = useMemo(() => {
     return sortPayments(payments);
   }, [payments, sortPayments]);
+
+  // Filtrar pagos por búsqueda
+  const filteredPayments = useMemo(() => {
+    if (!searchTerm.trim()) return payments;
+    
+    const search = searchTerm.toLowerCase();
+    return payments.filter((payment) => {
+      // Buscar en nombre del cliente
+      if (payment.client_name?.toLowerCase().includes(search)) return true;
+      
+      // Buscar en número de póliza
+      if (payment.policy_number?.toLowerCase().includes(search)) return true;
+      
+      // Buscar en aseguradora
+      if (payment.insurer_name?.toLowerCase().includes(search)) return true;
+      
+      // Buscar en monto
+      if (payment.amount_to_pay?.toString().includes(search)) return true;
+      
+      // Buscar en referencias bancarias
+      if (payment.payment_references?.some((ref: any) => 
+        ref.reference_number?.toLowerCase().includes(search)
+      )) return true;
+      
+      // Buscar en metadata/notas
+      try {
+        const metadata = typeof payment.notes === 'string' ? JSON.parse(payment.notes) : payment.notes;
+        if (metadata?.notes?.toLowerCase().includes(search)) return true;
+        
+        // Buscar en broker (si es descuento a corredor)
+        if (metadata?.broker_id) {
+          const broker = brokers.find(b => b.id === metadata.broker_id);
+          if (broker?.name?.toLowerCase().includes(search)) return true;
+        }
+        
+        // Buscar en tipo de devolución
+        if (metadata?.devolucion_tipo?.toLowerCase().includes(search)) return true;
+        if (metadata?.client_name?.toLowerCase().includes(search)) return true;
+        if (metadata?.banco_nombre?.toLowerCase().includes(search)) return true;
+      } catch (e) {
+        // Ignorar errores de parseo
+      }
+      
+      // Buscar en propósito
+      if (payment.purpose?.toLowerCase().includes(search)) return true;
+      
+      return false;
+    });
+  }, [payments, searchTerm, brokers]);
+
+  // Aplicar filtros a sortedPayments y sortedGroupedPayments
+  const displayPayments = useMemo(() => {
+    const filtered = filteredPayments;
+    if (groupByReference) {
+      // Re-agrupar los pagos filtrados
+      const groups: { [key: string]: any } = {};
+      const batchGroups = new Map<string, any[]>();
+      const nonBatchPayments: any[] = [];
+
+      filtered.forEach(payment => {
+        const batchId = getBatchId(payment);
+        if (batchId) {
+          if (!batchGroups.has(batchId)) {
+            batchGroups.set(batchId, []);
+          }
+          batchGroups.get(batchId)!.push(payment);
+        } else {
+          nonBatchPayments.push(payment);
+        }
+      });
+
+      // Procesar grupos de batch
+      batchGroups.forEach((batchPayments, batchId) => {
+        let allDescuento = true;
+        batchPayments.forEach(payment => {
+          if (!isDescuentoACorredor(payment)) {
+            allDescuento = false;
+          }
+        });
+
+        if (allDescuento) {
+          batchPayments.forEach((payment) => {
+            const refs = payment.payment_references || [];
+            const refNum = refs[0]?.reference_number || `ADELANTO-${payment.id}`;
+            const amount = parseFloat(payment.amount_to_pay || '0');
+            
+            groups[`ADELANTO-${payment.id}`] = {
+              reference_number: refNum,
+              bank_amount: amount,
+              total_pending: 0,
+              remaining: 0,
+              payments: [payment],
+              allAreDescuentoCorredor: true,
+              isBatch: true
+            };
+          });
+        } else {
+          const batchRefsMap = new Map<string, number>();
+          let totalBatchAmount = 0;
+
+          batchPayments.forEach(payment => {
+            totalBatchAmount += parseFloat(payment.amount_to_pay || '0');
+            payment.payment_references?.forEach((ref: any) => {
+              const refNum = ref.reference_number;
+              const amount = parseFloat(ref.amount || '0');
+              if (!batchRefsMap.has(refNum)) {
+                batchRefsMap.set(refNum, amount);
+              }
+            });
+          });
+
+          const totalBankAmount = Array.from(batchRefsMap.values()).reduce((sum, amount) => sum + amount, 0);
+          const allRefsLabel = Array.from(batchRefsMap.keys()).join(' + ');
+          
+          groups[`BATCH-${batchId}`] = {
+            reference_number: allRefsLabel,
+            bank_amount: totalBankAmount,
+            total_pending: totalBatchAmount,
+            remaining: totalBankAmount - totalBatchAmount,
+            payments: batchPayments,
+            allAreDescuentoCorredor: false,
+            isBatch: true
+          };
+        }
+      });
+
+      // Procesar pagos sin batch
+      nonBatchPayments.forEach(payment => {
+        const refs = payment.payment_references || [];
+        
+        if (refs.length > 1) {
+          const refsMap = new Map<string, number>();
+          refs.forEach((ref: any) => {
+            const refNum = ref.reference_number;
+            const amount = parseFloat(ref.amount || '0');
+            if (!refsMap.has(refNum)) {
+              refsMap.set(refNum, amount);
+            }
+          });
+          
+          const totalBankAmount = Array.from(refsMap.values()).reduce((sum, amount) => sum + amount, 0);
+          const allRefsLabel = Array.from(refsMap.keys()).join(' + ');
+          const isDescuento = isDescuentoACorredor(payment);
+          const paymentAmount = parseFloat(payment.amount_to_pay || '0');
+          
+          const groupKey = `MULTI-${payment.id}`;
+          groups[groupKey] = {
+            reference_number: allRefsLabel,
+            bank_amount: totalBankAmount,
+            total_pending: isDescuento ? 0 : paymentAmount,
+            remaining: totalBankAmount - paymentAmount,
+            payments: [payment],
+            allAreDescuentoCorredor: isDescuento,
+            isBatch: false,
+            isMultiRef: true
+          };
+        } else {
+          refs.forEach((ref: any) => {
+            const refNum = ref.reference_number;
+            if (!groups[refNum]) {
+              groups[refNum] = {
+                reference_number: refNum,
+                bank_amount: parseFloat(ref.amount || '0'),
+                total_pending: 0,
+                remaining: parseFloat(ref.amount || '0'),
+                payments: [],
+                allAreDescuentoCorredor: true,
+                isBatch: false
+              };
+            }
+            
+            const isDescuento = isDescuentoACorredor(payment);
+            if (!isDescuento) {
+              groups[refNum].allAreDescuentoCorredor = false;
+            }
+            
+            const amountToUse = parseFloat(ref.amount_to_use || payment.amount_to_pay || '0');
+            if (!isDescuento) {
+              groups[refNum].total_pending += amountToUse;
+            }
+            groups[refNum].payments.push({ ...payment, ref_amount_to_use: amountToUse });
+          });
+        }
+      });
+
+      Object.keys(groups).forEach(key => {
+        const group = groups[key];
+        if (group && !group.isBatch) {
+          group.remaining = group.bank_amount - group.total_pending;
+        }
+      });
+
+      return { grouped: groups, simple: sortPayments(filtered) };
+    }
+    return { grouped: {}, simple: sortPayments(filtered) };
+  }, [filteredPayments, groupByReference, sortPayments]);
 
   const handleMarkAsPaid = async (e?: React.MouseEvent) => {
     if (e) {
@@ -894,6 +1154,93 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
         </button>
       </div>
 
+      {/* Sticky Bar - Acciones cuando hay selecciones */}
+      {selectedIds.size > 0 && (
+        <div className="sticky top-[60px] sm:top-[72px] z-[100] bg-gradient-to-r from-blue-50 to-white border-2 border-[#8AAA19] rounded-lg p-3 sm:p-4 shadow-lg">
+          <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3">
+            {/* Info de selección */}
+            <div className="flex-1">
+              <p className="font-bold text-[#010139] text-base sm:text-lg">
+                {selectedIds.size} pago(s) seleccionado(s)
+              </p>
+              <p className="text-sm text-gray-600">
+                Total: <span className="font-semibold text-[#8AAA19]">
+                  ${Array.from(selectedIds).reduce((sum, id) => {
+                    const payment = payments.find(p => p.id === id);
+                    return sum + (payment ? Number(payment.amount_to_pay || 0) : 0);
+                  }, 0).toFixed(2)}
+                </span>
+              </p>
+            </div>
+            
+            {/* Buscador */}
+            <div className="flex-1 max-w-md">
+              <div className="relative">
+                <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={14} />
+                <input
+                  type="text"
+                  placeholder="Buscar pagos..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-10 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 outline-none text-sm"
+                />
+                {searchTerm && (
+                  <button
+                    onClick={() => setSearchTerm('')}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    <FaTimes size={14} />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Botones de acción */}
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectedIds(new Set())}
+                className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 border-2 border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition font-medium text-sm shadow-sm"
+                title="Deseleccionar todos los pagos"
+              >
+                <FaCheckCircle className="text-gray-400" />
+                <span className="hidden sm:inline">Deseleccionar</span>
+                <span className="sm:hidden">✓</span>
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  handleDownloadPDF(e);
+                }}
+                className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition font-medium text-sm shadow-md"
+              >
+                <FaFileDownload />
+                <span className="hidden sm:inline">Descargar PDF</span>
+                <span className="sm:hidden">PDF</span>
+              </button>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (!loading) {
+                    handleMarkAsPaid(e);
+                  }
+                }}
+                disabled={loading}
+                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg hover:from-[#6d8814] hover:to-[#5a7010] transition font-medium text-sm shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <FaCheckCircle />
+                <span className="hidden sm:inline">Marcar Pagados</span>
+                <span className="sm:hidden">Pagar</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Resumen */}
       {!loading && payments.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -945,53 +1292,17 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
         </div>
       )}
 
-      {/* Acciones */}
+      {/* Info y controles */}
       <div className="bg-white rounded-xl shadow-lg p-6 border-2 border-gray-100">
         <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
           <div>
             <h3 className="text-lg font-semibold text-[#010139]">
-              Listado de Pagos ({payments.length})
+              Listado de Pagos ({filteredPayments.length}{searchTerm ? ` de ${payments.length}` : ''})
             </h3>
             <p className="text-sm text-gray-600">
-              Los pagos procesados se ven en el historial del banco
+              {searchTerm ? `Filtrando por: "${searchTerm}"` : 'Los pagos procesados se ven en el historial del banco'}
             </p>
           </div>
-
-          {selectedIds.size > 0 && (
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  handleDownloadPDF(e);
-                }}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition font-medium touch-manipulation"
-              >
-                <FaFileDownload />
-                <span className="hidden sm:inline">Descargar PDF</span>
-                <span className="sm:hidden">PDF</span>
-                <span>({selectedIds.size})</span>
-              </button>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  if (!loading) {
-                    handleMarkAsPaid(e);
-                  }
-                }}
-                disabled={loading}
-                className="flex items-center gap-2 px-4 py-2 bg-[#8AAA19] text-white rounded-lg hover:bg-[#010139] transition font-medium touch-manipulation disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <FaCheckCircle />
-                <span className="hidden sm:inline">Marcar como Pagados</span>
-                <span className="sm:hidden">Pagar</span>
-                <span>({selectedIds.size})</span>
-              </button>
-            </div>
-          )}
         </div>
       </div>
 
@@ -1000,6 +1311,21 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
         <div className="p-12 text-center text-gray-500 bg-white rounded-xl shadow-lg">
           <div className="animate-spin w-8 h-8 border-4 border-[#010139] border-t-transparent rounded-full mx-auto mb-4"></div>
           <p className="font-medium">Cargando pagos...</p>
+        </div>
+      ) : filteredPayments.length === 0 && searchTerm ? (
+        <div className="p-12 text-center text-gray-500 bg-white rounded-xl shadow-lg">
+          <div className="mb-4">
+            <FaSearch className="w-16 h-16 mx-auto text-gray-300" />
+          </div>
+          <p className="text-lg font-semibold mb-2">No se encontraron pagos</p>
+          <p className="text-sm mb-4">No hay pagos que coincidan con "{searchTerm}"</p>
+          <button
+            onClick={() => setSearchTerm('')}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition"
+          >
+            <FaTimes />
+            Limpiar búsqueda
+          </button>
         </div>
       ) : payments.length === 0 ? (
         <div className="p-12 text-center text-gray-500 bg-white rounded-xl shadow-lg">
@@ -1018,29 +1344,97 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
         </div>
       ) : (
         <div className="space-y-4">
-          {payments.length > 0 && (
-            <div className="flex items-center justify-between px-4 mb-4">
-              <div className="flex items-center gap-2">
+          {/* Controles: Buscador, Checkbox y Toggle de Vista */}
+          <div className="bg-white rounded-xl shadow-md border-2 border-gray-100 p-4">
+            {/* Mobile: Buscador arriba (full width) */}
+            <div className="mb-3 lg:hidden">
+              <div className="relative">
+                <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={14} />
+                <input
+                  type="text"
+                  placeholder="Buscar pagos..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="w-full pl-10 pr-10 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 outline-none text-sm"
+                />
+                {searchTerm && (
+                  <button
+                    onClick={() => setSearchTerm('')}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    <FaTimes size={14} />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Layout responsive: columna en mobile, fila en desktop */}
+            <div className="flex flex-col lg:flex-row lg:items-center gap-3 lg:gap-4">
+              {/* Checkbox Seleccionar Todos */}
+              <div className="flex items-center gap-2 flex-shrink-0">
                 <input
                   type="checkbox"
-                  checked={selectedIds.size === payments.length && payments.length > 0}
+                  checked={selectedIds.size === filteredPayments.length && filteredPayments.length > 0}
                   onChange={selectAll}
                   className="w-5 h-5 text-[#8AAA19] rounded focus:ring-[#8AAA19]"
                 />
-                <span className="text-sm font-medium text-gray-700">Seleccionar todos</span>
+                <span className="text-sm font-medium text-gray-700">
+                  Seleccionar todos{searchTerm ? ' (filtrados)' : ''}
+                </span>
               </div>
+
+              {/* Buscador - Desktop (centro) */}
+              <div className="hidden lg:block flex-1 max-w-md">
+                <div className="relative">
+                  <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={14} />
+                  <input
+                    type="text"
+                    placeholder="Buscar pagos..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-10 pr-10 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 outline-none text-sm"
+                  />
+                  {searchTerm && (
+                    <button
+                      onClick={() => setSearchTerm('')}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    >
+                      <FaTimes size={14} />
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Botón de agrupación */}
               <button
                 onClick={() => setGroupByReference(!groupByReference)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition flex items-center gap-2"
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition flex items-center justify-center gap-2 flex-shrink-0"
               >
-                {groupByReference ? '📊 Agrupado por Referencia' : '📄 Lista Simple'}
+                {groupByReference ? '📊 Agrupado' : '📄 Lista Simple'}
               </button>
             </div>
-          )}
+
+            {/* Indicador de resultados de búsqueda */}
+            {searchTerm && (
+              <div className="mt-3 pt-3 border-t border-gray-200">
+                <p className="text-xs text-gray-600">
+                  {filteredPayments.length === 0 ? (
+                    <span className="text-red-600 font-semibold">
+                      ❌ No se encontraron pagos que coincidan con "{searchTerm}"
+                    </span>
+                  ) : (
+                    <span>
+                      ✓ Mostrando <span className="font-semibold text-[#8AAA19]">{filteredPayments.length}</span> de {payments.length} pagos
+                    </span>
+                  )}
+                </p>
+              </div>
+            )}
+          </div>
 
           {groupByReference ? (
             <div className="space-y-4">
-              {Object.entries(sortedGroupedPayments)
+              {Object.entries(displayPayments.grouped)
                 .sort(([keyA, groupA]: [string, any], [keyB, groupB]: [string, any]) => {
                   // Ordenar grupos por el estado del primer pago
                   if (groupA.payments.length === 0) return 1;
@@ -1316,20 +1710,65 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
                   <div className="flex flex-wrap items-center gap-2">
                     <StatusBadge payment={payment} />
 
-                    {isDescuentoACorredor(payment) && (() => {
-                      // Parsear notes correctamente
+                    {/* Etiqueta de motivo del pago */}
+                    {(() => {
+                      // Parsear metadata
                       const metadata = typeof payment.notes === 'string' 
                         ? JSON.parse(payment.notes) 
                         : payment.notes;
-                      const brokerId = metadata?.broker_id;
-                      const broker = brokers.find(b => b.id === brokerId);
-                      const brokerName = broker?.name;
                       
-                      return (
-                        <span className="px-2 py-0.5 bg-[#010139]/5 text-[#010139] border border-[#010139]/30 rounded-full text-[11px] font-semibold">
-                          💰 Descuento a corredor{brokerName ? ` – ${brokerName}` : ''}
-                        </span>
-                      );
+                      // Si es descuento a corredor
+                      if (isDescuentoACorredor(payment)) {
+                        const brokerId = metadata?.broker_id;
+                        const broker = brokers.find(b => b.id === brokerId);
+                        const brokerName = broker?.name;
+                        
+                        return (
+                          <span className="px-2 py-0.5 bg-[#010139]/5 text-[#010139] border border-[#010139]/30 rounded-full text-[11px] font-semibold">
+                            💰 Descuento a corredor{brokerName ? ` – ${brokerName}` : ''}
+                          </span>
+                        );
+                      }
+                      
+                      // Si es devolución
+                      if (payment.purpose === 'devolucion' && metadata?.devolucion_tipo) {
+                        if (metadata.devolucion_tipo === 'cliente') {
+                          const clientName = metadata.client_name || payment.client_name;
+                          return (
+                            <span className="px-2 py-0.5 bg-purple-50 text-purple-700 border border-purple-300 rounded-full text-[11px] font-semibold">
+                              💸 Devolución a Cliente: {clientName}
+                            </span>
+                          );
+                        } else if (metadata.devolucion_tipo === 'corredor' && metadata.broker_id) {
+                          const broker = brokers.find(b => b.id === metadata.broker_id);
+                          const brokerName = broker?.name || 'Corredor';
+                          return (
+                            <span className="px-2 py-0.5 bg-orange-50 text-orange-700 border border-orange-300 rounded-full text-[11px] font-semibold">
+                              💸 Devolución a Corredor: {brokerName}
+                            </span>
+                          );
+                        }
+                      }
+                      
+                      // Si es pago a póliza
+                      if (payment.purpose === 'poliza' && payment.policy_number) {
+                        return (
+                          <span className="px-2 py-0.5 bg-blue-50 text-blue-700 border border-blue-300 rounded-full text-[11px] font-semibold">
+                            📄 Pago a Póliza: {payment.policy_number}
+                          </span>
+                        );
+                      }
+                      
+                      // Si es otro tipo
+                      if (payment.purpose === 'otro') {
+                        return (
+                          <span className="px-2 py-0.5 bg-gray-50 text-gray-700 border border-gray-300 rounded-full text-[11px] font-semibold">
+                            📝 Otro
+                          </span>
+                        );
+                      }
+                      
+                      return null;
                     })()}
                   </div>
                   <div className="text-xs text-gray-500">
@@ -1337,23 +1776,7 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
                   </div>
                 </div>
 
-                {/* Total recibido - No mostrar para descuentos a corredor */}
-                {!isDescuentoACorredor(payment) && payment.total_received > 0 && (
-                  <div className="mt-3 pt-3 border-t border-gray-200">
-                    <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Total recibido:</span>
-                      <span className="font-semibold">${parseFloat(payment.total_received).toFixed(2)}</span>
-                    </div>
-                    {payment.total_received > payment.amount_to_pay && (
-                      <div className="flex justify-between text-sm text-amber-600 mt-1">
-                        <span>Remanente:</span>
-                        <span className="font-semibold">
-                          ${(parseFloat(payment.total_received) - parseFloat(payment.amount_to_pay)).toFixed(2)}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                )}
+                {/* Total recibido - NO mostrar en vista agrupada (el remanente se muestra en el header del grupo) */}
               </div>
             );
             })}
@@ -1363,7 +1786,7 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
             </div>
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {sortedPayments.map((payment) => {
+              {displayPayments.simple.map((payment) => {
                 const paymentState = getPaymentState(payment);
                 return (
                   <div
@@ -1604,6 +2027,25 @@ function getPaymentState(payment: any) {
   const remaining = Math.max(total - applied, 0);
 
   const isDescuentoCorredor = isDescuentoACorredor(payment);
+  
+  // Detectar si es otro banco/depósito
+  let isOtherBank = false;
+  try {
+    const metadata = typeof payment.notes === 'string' ? JSON.parse(payment.notes) : payment.notes;
+    isOtherBank = metadata?.is_other_bank === true;
+  } catch (e) {
+    // Si no se puede parsear, no es otro banco
+  }
+  
+  // Si es otro banco, mostrar estado amarillo especial
+  if (isOtherBank) {
+    return {
+      key: 'other_bank',
+      label: 'Actualizar referencia para conciliar',
+      badgeClass: 'bg-amber-100 text-amber-800 border-amber-300',
+      blocked: false,
+    } as const;
+  }
   
   const hasErrors = !isDescuentoCorredor && payment.payment_references?.some((ref: any) => !ref.exists_in_bank);
   if (hasErrors || !payment.can_be_paid) {

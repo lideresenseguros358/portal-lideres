@@ -485,6 +485,7 @@ export async function actionCreatePendingPayment(payment: {
   discount_type?: 'full' | 'partial';
   discount_amount?: number;
   orphan_advance_id?: string; // ID de adelanto huérfano a recuperar (NO crear nuevo)
+  is_other_bank?: boolean; // Marcar como otro banco/depósito (pendiente de conciliar)
 }) {
   try {
     const supabaseServer = await getSupabaseServer();
@@ -575,6 +576,7 @@ export async function actionCreatePendingPayment(payment: {
     // Preparar metadata para notes
     const metadata: any = {
       notes: payment.notes || null,
+      is_other_bank: payment.is_other_bank || false,
     };
     
     // Si es descuento a corredor, obtener nombre del broker
@@ -793,43 +795,92 @@ export async function actionCreatePendingPayment(payment: {
     // Insert payment references para cada pago creado
     const allReferencesToInsert: TablesInsert<'payment_references'>[] = [];
     
-    for (const pendingPayment of pendingPayments) {
-      // Si es descuento a corredor con divisiones, crear referencia única por adelanto
-      if (isBrokerDeduction && hasDivisions) {
-        // Extraer advance_id del metadata del pago
-        const paymentMetadata = typeof pendingPayment.notes === 'string' 
-          ? JSON.parse(pendingPayment.notes) 
-          : pendingPayment.notes;
-        const advanceId = paymentMetadata?.advance_id;
+    // Si hay divisiones, necesitamos dividir las referencias proporcionalmente
+    if (hasDivisions && !isBrokerDeduction && payment.divisions && pendingPayments.length === payment.divisions.length) {
+      console.log('📊 Distribuyendo referencias proporcionalmente entre divisiones...');
+      
+      // Calcular el total de todas las divisiones
+      const totalDivisions = payment.divisions.reduce((sum, div) => sum + Number(div.amount), 0);
+      
+      // Para cada división, calcular su proporción y asignar referencias
+      for (let i = 0; i < pendingPayments.length; i++) {
+        const pendingPayment = pendingPayments[i];
+        const division = payment.divisions[i];
         
-        if (advanceId) {
-          // Crear referencia única basada en el advance_id
-          const uniqueRef = `ADELANTO-${advanceId.slice(0, 8)}`;
-          const divAmount = Number(pendingPayment.amount_to_pay) || 0;
-          const refDate = new Date().toISOString().split('T')[0] as string;
+        // Validar que existan ambos
+        if (!pendingPayment || !division) {
+          console.error(`❌ Error: División ${i} no encontrada`);
+          continue;
+        }
+        
+        const divisionAmount = Number(division.amount);
+        const divisionProportion = divisionAmount / totalDivisions;
+        
+        console.log(`📝 División ${i + 1}/${pendingPayments.length}:`, {
+          client: pendingPayment.client_name,
+          amount: divisionAmount,
+          proportion: (divisionProportion * 100).toFixed(2) + '%'
+        });
+        
+        // Para cada referencia, calcular el monto proporcional
+        for (const ref of payment.references) {
+          const refAmountToUse = Number(ref.amount_to_use);
+          const proportionalAmount = refAmountToUse * divisionProportion;
+          
+          console.log(`  └─ Ref ${ref.reference_number}: $${refAmountToUse.toFixed(2)} × ${(divisionProportion * 100).toFixed(2)}% = $${proportionalAmount.toFixed(2)}`);
           
           allReferencesToInsert.push({
             payment_id: pendingPayment.id,
-            reference_number: uniqueRef,
-            date: refDate,
-            amount: divAmount,
-            amount_to_use: divAmount,
-            exists_in_bank: false // false para descuento a corredor
+            reference_number: ref.reference_number,
+            date: ref.date,
+            amount: ref.amount, // Monto total de la transferencia bancaria
+            amount_to_use: proportionalAmount, // Monto proporcional para esta división
+            exists_in_bank: bankRefMap.has(ref.reference_number)
           });
-          
-          console.log(`📝 Referencia única creada: ${uniqueRef} para adelanto ${advanceId}`);
         }
-      } else {
-        // Lógica original para pagos normales o descuentos sin división
-        const referencesToInsert = payment.references.map((ref) => ({
-          payment_id: pendingPayment.id,
-          reference_number: ref.reference_number,
-          date: ref.date,
-          amount: ref.amount, // Monto total de la transferencia bancaria
-          amount_to_use: ref.amount_to_use, // Monto específico que se usará de esta referencia
-          exists_in_bank: skipBankValidation ? false : bankRefMap.has(ref.reference_number) // false para descuento a corredor
-        }));
-        allReferencesToInsert.push(...referencesToInsert);
+      }
+      
+      console.log('✅ Referencias distribuidas proporcionalmente');
+    } else {
+      // Lógica para pagos sin divisiones o descuentos a corredor con divisiones
+      for (const pendingPayment of pendingPayments) {
+        // Si es descuento a corredor con divisiones, crear referencia única por adelanto
+        if (isBrokerDeduction && hasDivisions) {
+          // Extraer advance_id del metadata del pago
+          const paymentMetadata = typeof pendingPayment.notes === 'string' 
+            ? JSON.parse(pendingPayment.notes) 
+            : pendingPayment.notes;
+          const advanceId = paymentMetadata?.advance_id;
+          
+          if (advanceId) {
+            // Crear referencia única basada en el advance_id
+            const uniqueRef = `ADELANTO-${advanceId.slice(0, 8)}`;
+            const divAmount = Number(pendingPayment.amount_to_pay) || 0;
+            const refDate = new Date().toISOString().split('T')[0] as string;
+            
+            allReferencesToInsert.push({
+              payment_id: pendingPayment.id,
+              reference_number: uniqueRef,
+              date: refDate,
+              amount: divAmount,
+              amount_to_use: divAmount,
+              exists_in_bank: false // false para descuento a corredor
+            });
+            
+            console.log(`📝 Referencia única creada: ${uniqueRef} para adelanto ${advanceId}`);
+          }
+        } else {
+          // Lógica original para pagos sin división
+          const referencesToInsert = payment.references.map((ref) => ({
+            payment_id: pendingPayment.id,
+            reference_number: ref.reference_number,
+            date: ref.date,
+            amount: ref.amount, // Monto total de la transferencia bancaria
+            amount_to_use: ref.amount_to_use, // Monto específico que se usará de esta referencia
+            exists_in_bank: skipBankValidation ? false : bankRefMap.has(ref.reference_number) // false para descuento a corredor
+          }));
+          allReferencesToInsert.push(...referencesToInsert);
+        }
       }
     }
 
