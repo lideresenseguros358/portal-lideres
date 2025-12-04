@@ -72,9 +72,6 @@ export async function POST(request: NextRequest) {
     if (!bankData?.account_number) {
       return NextResponse.json({ error: 'Número de cuenta es requerido' }, { status: 400 });
     }
-    if (!bankData?.numero_cedula) {
-      return NextResponse.json({ error: 'Cédula del titular es requerida' }, { status: 400 });
-    }
     if (!bankData?.nombre_completo) {
       return NextResponse.json({ error: 'Nombre completo del titular es requerido' }, { status: 400 });
     }

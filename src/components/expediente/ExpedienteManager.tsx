@@ -536,40 +536,48 @@ export default function ExpedienteManager({
         document.body
       )}
 
-      {/* Upload Modal - Rediseñado con branding corporativo */}
+      {/* Upload Modal */}
       {showUploadModal && mounted && createPortal(
         <div 
-          className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[10000] p-4 overflow-y-auto"
+          className="standard-modal-backdrop"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowUploadModal(false);
+              resetUploadForm();
+            }
+          }}
         >
           <div 
-            className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] sm:max-h-[85vh] overflow-y-auto border-2 border-gray-200 my-4 sm:my-8"
+            className="standard-modal-container max-w-xl"
+            onClick={(e) => e.stopPropagation()}
           >
-            {/* Header con gradiente corporativo */}
-            <div className="sticky top-0 bg-gradient-to-r from-[#010139] to-[#020270] px-5 py-4 flex items-center justify-between rounded-t-xl">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-white/10 rounded-lg">
-                  <FaFolderPlus size={20} className="text-white" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-bold text-white">Subir Documento</h3>
-                  <p className="text-xs text-white/80">Agregar archivo al expediente</p>
-                </div>
+            {/* Header */}
+            <div className="standard-modal-header">
+              <div>
+                <h2 className="standard-modal-title">
+                  <FaFolderPlus className="inline mr-2" />
+                  Subir Documento
+                </h2>
+                <p className="standard-modal-subtitle">
+                  Agregar archivo al expediente del cliente
+                </p>
               </div>
               <button
                 onClick={() => {
                   setShowUploadModal(false);
                   resetUploadForm();
                 }}
-                className="p-2 hover:bg-white/10 rounded-lg transition-all"
+                className="standard-modal-close"
+                type="button"
               >
-                <FaTimes size={18} className="text-white" />
+                <FaTimes size={24} />
               </button>
             </div>
 
-            <div className="p-5 space-y-4">
+            <div className="standard-modal-content">
               {/* Policy Document Limit Warning */}
               {policyId && policyDocCount && (
-                <div className={`rounded-lg p-3 border-l-4 ${
+                <div className={`rounded-lg p-4 border-l-4 ${
                   policyDocCount.remaining > 0 
                     ? 'bg-blue-50 border-blue-500' 
                     : 'bg-red-50 border-red-500'
@@ -600,7 +608,7 @@ export default function ExpedienteManager({
 
               {/* Client Documents Info (no limit) */}
               {!policyId && (
-                <div className="rounded-lg p-3 border-l-4 bg-green-50 border-green-500">
+                <div className="rounded-lg p-4 border-l-4 bg-green-50 border-green-500">
                   <div className="flex items-start gap-2">
                     <div className="flex-shrink-0 text-lg">💼</div>
                     <div className="flex-1">
@@ -615,16 +623,16 @@ export default function ExpedienteManager({
                 </div>
               )}
 
-              {/* Document Type con iconos */}
+              {/* Document Type */}
               <div>
-                <label className="block text-sm font-bold text-[#010139] mb-2 flex items-center gap-2">
+                <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
                   <FaFile size={14} className="text-[#8AAA19]" />
-                  Tipo de Documento *
+                  Tipo de Documento <span className="text-red-500">*</span>
                 </label>
                 <select
                   value={uploadDocType}
                   onChange={(e) => setUploadDocType(e.target.value as DocumentType)}
-                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none text-sm font-medium transition-all"
+                  className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none transition-all"
                 >
                   {showClientDocs && (
                     <option value="cedula">🆔 CÉDULA/PASAPORTE</option>
@@ -650,15 +658,15 @@ export default function ExpedienteManager({
               {/* Document Name (only for "otros") */}
               {uploadDocType === 'otros' && (
                 <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
-                  <label className="block text-sm font-bold text-[#010139] mb-2">
-                    ✏️ Nombre del Documento *
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    ✏️ Nombre del Documento <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
                     value={uploadDocName}
                     onChange={(e) => setUploadDocName(e.target.value)}
                     placeholder="Ej: Carta de autorización, Certificado médico..."
-                    className="w-full px-4 py-3 border-2 border-blue-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none text-sm font-medium"
+                    className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none"
                   />
                   <p className="text-xs text-blue-700 mt-2">
                     💡 Dale un nombre descriptivo para identificarlo fácilmente
@@ -666,18 +674,18 @@ export default function ExpedienteManager({
                 </div>
               )}
 
-              {/* File Input con mejor diseño */}
+              {/* File Input */}
               <div>
-                <label className="block text-sm font-bold text-[#010139] mb-2 flex items-center gap-2">
+                <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
                   <FaUpload size={14} className="text-[#8AAA19]" />
-                  Seleccionar Archivo *
+                  Seleccionar Archivo <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
                   <input
                     type="file"
                     accept=".pdf,.jpg,.jpeg,.png,.webp"
                     onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
-                    className="w-full px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none text-sm font-medium hover:border-[#8AAA19] transition-all cursor-pointer"
+                    className="w-full px-4 py-2.5 border-2 border-dashed border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none hover:border-[#8AAA19] transition-all cursor-pointer"
                   />
                 </div>
                 {uploadFile ? (
@@ -696,7 +704,7 @@ export default function ExpedienteManager({
 
               {/* Notes */}
               <div>
-                <label className="block text-sm font-bold text-[#010139] mb-2">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
                   📝 Notas (opcional)
                 </label>
                 <textarea
@@ -704,26 +712,31 @@ export default function ExpedienteManager({
                   onChange={(e) => setUploadNotes(e.target.value)}
                   rows={3}
                   placeholder="Agrega notas o comentarios sobre este documento..."
-                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none resize-none text-sm"
+                  className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none resize-none"
                 />
               </div>
 
-              {/* Actions con mejor diseño */}
-              <div className="flex gap-3 pt-3 border-t-2 border-gray-100">
-                <button
-                  onClick={() => {
-                    setShowUploadModal(false);
-                    resetUploadForm();
-                  }}
-                  className="flex-1 px-5 py-3 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-all font-semibold text-sm"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={handleUpload}
-                  disabled={uploading || !uploadFile || (!!policyId && policyDocCount !== null && policyDocCount?.remaining === 0)}
-                  className="flex-1 px-5 py-3 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg hover:shadow-lg hover:scale-[1.02] transition-all font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-2"
-                >
+            </div>
+
+            {/* Footer */}
+            <div className="standard-modal-footer">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowUploadModal(false);
+                  resetUploadForm();
+                }}
+                disabled={uploading}
+                className="standard-modal-button-secondary"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleUpload}
+                disabled={uploading || !uploadFile || (!!policyId && policyDocCount !== null && policyDocCount?.remaining === 0)}
+                className="standard-modal-button-primary"
+              >
                   {uploading ? (
                     <>
                       <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
@@ -736,7 +749,6 @@ export default function ExpedienteManager({
                     </>
                   )}
                 </button>
-              </div>
             </div>
           </div>
         </div>,

@@ -48,21 +48,18 @@ export async function PATCH(
     }
 
     if (action === 'reject') {
-      // Rechazar solicitud
-      const { error: updateError } = await supabase
+      // ELIMINAR solicitud completamente (no solo marcarla como rechazada)
+      // Esto evita acumular data inútil en la base de datos
+      const { error: deleteError } = await supabase
         .from('user_requests')
-        .update({
-          status: 'rejected',
-          reviewed_by: user.id,
-          reviewed_at: new Date().toISOString()
-        })
+        .delete()
         .eq('id', id);
 
-      if (updateError) throw updateError;
+      if (deleteError) throw deleteError;
 
       return NextResponse.json({ 
         success: true, 
-        message: 'Solicitud rechazada' 
+        message: 'Solicitud rechazada y eliminada' 
       });
     }
 
@@ -139,17 +136,17 @@ export async function PATCH(
         p_id: authData.user!.id,
         // Datos personales del BROKER
         name: userRequest.nombre_completo, // Nombre del broker
-        nombre_completo: userRequest.nombre_completo, // Nombre del broker
+        nombre_completo: userRequest.nombre_completo, // Nombre del broker (para queries internas)
         email: userRequest.email, // Email del broker
         national_id: userRequest.cedula, // Cédula del broker
         phone: userRequest.telefono,
         license_no: userRequest.licencia,
         birth_date: userRequest.fecha_nacimiento,
-        // Datos bancarios ACH
-        bank_route: bankRoute, // Código de ruta bancaria
-        bank_account_no: userRequest.bank_account_no, // Número de cuenta
-        tipo_cuenta: userRequest.tipo_cuenta || '04', // Tipo de cuenta: 03 o 04
-        beneficiary_name: userRequest.nombre_completo_titular, // Nombre del TITULAR de la cuenta (puede ser diferente al broker)
+        // Datos bancarios ACH para generación de archivo TXT
+        bank_route: bankRoute, // Código de ruta bancaria (ej: "71")
+        bank_account_no: userRequest.bank_account_no, // Número de cuenta (limpio)
+        tipo_cuenta: userRequest.tipo_cuenta || '04', // Tipo de cuenta: "03"=Corriente, "04"=Ahorro
+        beneficiary_name: userRequest.nombre_completo_titular, // Nombre del TITULAR de la cuenta ACH (MAYÚSCULAS sin acentos, max 22 chars)
         // Comisión
         percent_default: parseFloat(commission_percent),
         // Campos adicionales

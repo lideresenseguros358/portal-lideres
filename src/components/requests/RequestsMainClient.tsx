@@ -13,7 +13,7 @@ export default function RequestsMainClient() {
   const [showApproveModal, setShowApproveModal] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<any>(null);
-  const [stats, setStats] = useState({ pending: 0, approved: 0, rejected: 0 });
+  const [stats, setStats] = useState({ pending: 0, approved: 0 });
 
   useEffect(() => {
     loadRequests();
@@ -38,22 +38,19 @@ export default function RequestsMainClient() {
 
   const loadStats = async () => {
     try {
-      const [pendingRes, approvedRes, rejectedRes] = await Promise.all([
+      const [pendingRes, approvedRes] = await Promise.all([
         fetch('/api/requests?status=pending'),
-        fetch('/api/requests?status=approved'),
-        fetch('/api/requests?status=rejected')
+        fetch('/api/requests?status=approved')
       ]);
 
-      const [pending, approved, rejected] = await Promise.all([
+      const [pending, approved] = await Promise.all([
         pendingRes.json(),
-        approvedRes.json(),
-        rejectedRes.json()
+        approvedRes.json()
       ]);
 
       setStats({
         pending: pending.requests?.length || 0,
-        approved: approved.requests?.length || 0,
-        rejected: rejected.requests?.length || 0
+        approved: approved.requests?.length || 0
       });
     } catch (error) {
       console.error('Error loading stats:', error);
@@ -66,7 +63,7 @@ export default function RequestsMainClient() {
   };
 
   const handleReject = async (requestId: string) => {
-    if (!confirm('¿Estás seguro de rechazar esta solicitud? Esta acción no se puede deshacer.')) {
+    if (!confirm('¿Estás seguro de rechazar y ELIMINAR esta solicitud? Se borrará permanentemente de la base de datos.')) {
       return;
     }
 
@@ -80,7 +77,7 @@ export default function RequestsMainClient() {
       const data = await res.json();
 
       if (data.success) {
-        toast.success('Solicitud rechazada');
+        toast.success('Solicitud rechazada y eliminada');
         loadRequests();
         loadStats();
       } else {
@@ -123,7 +120,7 @@ export default function RequestsMainClient() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
           <div className="bg-gradient-to-br from-[#8AAA19] to-[#6d8814] rounded-xl p-6 text-white shadow-lg">
             <div className="flex items-center justify-between">
               <div>
@@ -141,16 +138,6 @@ export default function RequestsMainClient() {
                 <p className="text-4xl font-bold">{stats.approved}</p>
               </div>
               <FaCheckCircle className="text-4xl opacity-80" />
-            </div>
-          </div>
-
-          <div className="bg-gradient-to-br from-red-500 to-red-600 rounded-xl p-6 text-white shadow-lg">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm opacity-90 mb-1">Rechazadas</p>
-                <p className="text-4xl font-bold">{stats.rejected}</p>
-              </div>
-              <FaTimesCircle className="text-4xl opacity-80" />
             </div>
           </div>
         </div>

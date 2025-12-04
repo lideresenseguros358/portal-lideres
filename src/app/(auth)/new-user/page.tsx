@@ -3,7 +3,8 @@
 import { FormEvent, useState } from "react";
 import { FaUser, FaIdCard, FaUniversity, FaArrowRight, FaArrowLeft, FaCheckCircle } from "react-icons/fa";
 import AuthShell from "../_AuthShell";
-import { BankSelect, AccountTypeSelect } from '@/components/ui/BankSelect';
+// NO usar BankSelect/AccountTypeSelect en páginas públicas (auth) - no tienen acceso a Supabase
+// import { BankSelect, AccountTypeSelect } from '@/components/ui/BankSelect';
 import { toUpperNoAccents, cleanAccountNumber } from '@/lib/commissions/ach-normalization';
 
 // Wizard de 3 pasos para registro de nuevo usuario
@@ -361,10 +362,10 @@ export default function NewUserWizard() {
             </div>
 
             {/* Campos condicionales */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4 items-start">
               {/* Licencia - Solo para CORREDOR */}
               {personalData.broker_type === 'corredor' && (
-                <div>
+                <div className="md:col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Licencia de Corredor (Opcional)
                   </label>
@@ -380,33 +381,33 @@ export default function NewUserWizard() {
 
               {/* Código ASSA - Solo para AGENTE */}
               {personalData.broker_type === 'agente' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Código ASSA (Opcional)
-                  </label>
-                  <input
-                    type="text"
-                    value={personalData.assa_code}
-                    onChange={(e) => setPersonalData({ ...personalData, assa_code: e.target.value.toUpperCase() })}
-                    className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#010139] focus:outline-none"
-                    placeholder="Código ASSA"
-                  />
-                </div>
-              )}
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Código ASSA (Opcional)
+                    </label>
+                    <input
+                      type="text"
+                      value={personalData.assa_code}
+                      onChange={(e) => setPersonalData({ ...personalData, assa_code: e.target.value.toUpperCase() })}
+                      className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#010139] focus:outline-none"
+                      placeholder="PJ750-XX"
+                    />
+                  </div>
 
-              {/* Fecha Vencimiento Carnet - Solo para AGENTE */}
-              {personalData.broker_type === 'agente' && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Fecha Vencimiento Carnet (Opcional)
-                  </label>
-                  <input
-                    type="date"
-                    value={personalData.carnet_expiry_date}
-                    onChange={(e) => setPersonalData({ ...personalData, carnet_expiry_date: e.target.value })}
-                    className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#010139] focus:outline-none"
-                  />
-                </div>
+                  {/* Fecha Vencimiento Carnet - Solo para AGENTE */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Fecha Carnet (Opcional)
+                    </label>
+                    <input
+                      type="date"
+                      value={personalData.carnet_expiry_date}
+                      onChange={(e) => setPersonalData({ ...personalData, carnet_expiry_date: e.target.value })}
+                      className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#010139] focus:outline-none"
+                    />
+                  </div>
+                </>
               )}
             </div>
             </div>
@@ -455,12 +456,33 @@ export default function NewUserWizard() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Banco <span className="text-red-500">*</span>
                 </label>
-                <BankSelect
+                <select
                   value={bankData.bank_route}
-                  onChange={(route) => setBankData({ ...bankData, bank_route: route })}
+                  onChange={(e) => setBankData({ ...bankData, bank_route: e.target.value })}
                   required
-                  className="text-base"
-                />
+                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#010139] focus:outline-none text-base"
+                >
+                  <option value="">Seleccionar banco...</option>
+                  <option value="71">BANCO GENERAL</option>
+                  <option value="01">BANCO NACIONAL DE PANAMA</option>
+                  <option value="38">BANISTMO</option>
+                  <option value="11">BANCO DE BOGOTA PANAMA</option>
+                  <option value="18">BANCO ALIADO</option>
+                  <option value="51">MULTI BANK INC</option>
+                  <option value="13">CAJA DE AHORROS</option>
+                  <option value="02">BAC INTERNATIONAL BANK, INC.</option>
+                  <option value="12">CREDICORP BANK</option>
+                  <option value="77">BANCO DELTA</option>
+                  <option value="50">GLOBAL BANK CORPORATION</option>
+                  <option value="28">CITIBANK N.A. SUCURSAL PANAMA</option>
+                  <option value="30">SCOTIABANK (PANAMA), S.A.</option>
+                  <option value="64">BANK OF CHINA LIMITED</option>
+                  <option value="72">BICSA</option>
+                  <option value="52">BANESCO, S.A.</option>
+                  <option value="19">METROBANK, S.A.</option>
+                  <option value="79">TOWERBANK INTERNATIONAL, INC</option>
+                  <option value="78">BANCO INTERNACIONAL DE COSTA RICA</option>
+                </select>
                 {bankData.bank_route && (
                   <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded">
                     <p className="text-xs text-green-800">
@@ -474,11 +496,16 @@ export default function NewUserWizard() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Tipo de Cuenta <span className="text-red-500">*</span>
                 </label>
-                <AccountTypeSelect
+                <select
                   value={bankData.account_type}
-                  onChange={(type) => setBankData({ ...bankData, account_type: type })}
+                  onChange={(e) => setBankData({ ...bankData, account_type: e.target.value })}
                   required
-                />
+                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#010139] focus:outline-none"
+                >
+                  <option value="">Seleccionar tipo...</option>
+                  <option value="03">Cuenta Corriente (03)</option>
+                  <option value="04">Cuenta de Ahorro (04)</option>
+                </select>
               </div>
 
               <div>

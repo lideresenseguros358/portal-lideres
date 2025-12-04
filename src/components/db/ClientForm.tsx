@@ -190,82 +190,102 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
           {/* Datos del Cliente */}
           <fieldset disabled={readOnly}>
           <div className="space-y-4">
-            <h3 className="text-lg font-bold text-[#010139] border-b-2 border-[#8AAA19] pb-2">
-              👤 Información del Cliente
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="md:col-span-2">
-                <label className="block text-sm font-bold text-[#010139] mb-2">
-                  Nombre Completo *
+            <div className="flex items-center gap-2 border-b-2 border-[#8AAA19] pb-3">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#8AAA19] to-[#6d8814] flex items-center justify-center flex-shrink-0">
+                <span className="text-white text-xl">👤</span>
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-[#010139]">
+                  Información del Cliente
+                </h3>
+                <p className="text-xs text-gray-600">Datos personales y de contacto</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Nombre - Full width */}
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Nombre Completo <span className="text-red-500">*</span>
                 </label>
                 <input
                   type="text"
                   required
                   value={formData.name}
                   onChange={createUppercaseHandler((e) => setFormData({ ...formData, name: e.target.value }))}
-                  className={`w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none text-sm font-medium transition-all ${uppercaseInputClass}`}
-                  placeholder="Ej: JUAN PÉREZ"
+                  className={`w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none transition-all ${uppercaseInputClass}`}
+                  placeholder="JUAN PÉREZ GÓMEZ"
                 />
               </div>
 
+              {/* Cédula y Teléfono - 2 columnas */}
               <div>
-                <label className="block text-sm font-bold text-[#010139] mb-2">
-                  🆔 Cédula/RUC
+                <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1.5">
+                  <span className="text-blue-600">🆔</span>
+                  Cédula/RUC
                 </label>
                 <input
                   type="text"
                   value={formData.national_id}
                   onChange={createUppercaseHandler((e) => setFormData({ ...formData, national_id: e.target.value }))}
-                  className={`w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none text-sm font-medium transition-all ${uppercaseInputClass}`}
+                  className={`w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none transition-all ${uppercaseInputClass}`}
                   placeholder="8-123-4567"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-bold text-[#010139] mb-2">
-                  📞 Teléfono
+                <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1.5">
+                  <span className="text-green-600">📞</span>
+                  Teléfono
                 </label>
                 <input
                   type="tel"
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none text-sm font-medium transition-all"
+                  className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none transition-all"
                   placeholder="6123-4567"
                 />
               </div>
 
-              <div className="md:col-span-2">
-                <label className="block text-sm font-bold text-[#010139] mb-2">
-                  ✉️ Correo Electrónico
+              {/* Email - Full width */}
+              <div className="sm:col-span-2">
+                <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1.5">
+                  <span className="text-purple-600">✉️</span>
+                  Correo Electrónico
                 </label>
                 <input
                   type="email"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none text-sm font-medium transition-all"
+                  className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none transition-all"
                   placeholder="cliente@email.com"
                 />
               </div>
 
+              {/* Fecha Nacimiento y Estado - 2 columnas */}
               <div>
-                <label className="block text-sm font-bold text-[#010139] mb-2">
-                  🎂 Fecha de Nacimiento
+                <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1.5">
+                  <span className="text-pink-600">🎂</span>
+                  Fecha de Nacimiento
                 </label>
                 <input
                   type="date"
                   value={formData.birth_date}
                   onChange={(e) => setFormData({ ...formData, birth_date: e.target.value })}
-                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none text-sm font-medium transition-all"
+                  className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none transition-all"
                 />
               </div>
 
-              <div className="md:col-span-2">
-                <label className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border-2 border-gray-200 hover:border-[#8AAA19] transition-all cursor-pointer">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Estado
+                </label>
+                <label className="flex items-center gap-3 h-[44px] px-4 bg-gray-50 rounded-lg border-2 border-gray-200 hover:border-[#8AAA19] transition-all cursor-pointer">
                   <input
                     type="checkbox"
                     checked={formData.active}
                     onChange={(e) => setFormData({ ...formData, active: e.target.checked })}
-                    className="w-5 h-5 rounded border-gray-300 text-[#8AAA19] focus:ring-[#8AAA19]"
+                    className="w-4 h-4 rounded border-gray-300 text-[#8AAA19] focus:ring-[#8AAA19]"
                   />
                   <span className="text-sm font-semibold text-gray-700">✅ Cliente Activo</span>
                 </label>
