@@ -6,6 +6,7 @@
 import { ISEnvironment, IS_ENDPOINTS, CORREDOR_FIJO, INSURER_SLUG } from './config';
 import { isPost, isGet } from './http-client';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { getTodayLocalDate } from '../utils/dates';
 
 export interface CotizacionAutoRequest {
   // Cliente
@@ -265,7 +266,7 @@ export async function crearClienteYPolizaIS(data: {
         policy_number: data.nro_poliza,
         ramo: 'AUTO',
         status: 'ACTIVA',
-        start_date: new Date().toISOString().split('T')[0],
+        start_date: getTodayLocalDate(),
         notas: notasVehiculo,
       })
       .select('id')

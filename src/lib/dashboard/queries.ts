@@ -225,7 +225,7 @@ export async function getNetCommissions(userId: string, role: DashboardRole): Pr
     console.log('📅 [getNetCommissions] fortnightsError:', fortnightsError);
 
     // PASO 2: Buscar comisiones del broker en la última quincena (incluir código ASSA)
-    if (paidFortnights && paidFortnights.length > 0) {
+    if (paidFortnights && paidFortnights.length > 0 && paidFortnights[0]) {
       const lastFortnightId = paidFortnights[0].id; // La más reciente
       
       let commissionsQuery = supabase

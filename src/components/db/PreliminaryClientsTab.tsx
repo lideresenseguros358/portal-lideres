@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { FaExclamationTriangle, FaEdit, FaSave, FaTimes, FaTrash, FaCheckCircle, FaCalendar, FaUser, FaFileAlt, FaBuilding } from 'react-icons/fa';
+import { getTodayLocalDate, addOneYearToDate } from '@/lib/utils/dates';
 import { toast } from 'sonner';
 import { actionGetPreliminaryClients, actionUpdatePreliminaryClient, actionDeletePreliminaryClient, actionTriggerMigration } from '@/app/(app)/db/preliminary-actions';
 import { createUppercaseHandler, uppercaseInputClass } from '@/lib/utils/uppercase';
@@ -26,17 +27,11 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
   }, []);
 
   useEffect(() => {
-    if (editForm.start_date && editingId) {
-      const startDate = new Date(editForm.start_date);
-      const renewalDate = new Date(startDate);
-      renewalDate.setFullYear(startDate.getFullYear() + 1);
-      const renewalDateStr = renewalDate.toISOString().split('T')[0] || '';
-      
-      if (!editForm.renewal_date) {
-        setEditForm((prev: any) => ({ ...prev, renewal_date: renewalDateStr }));
-      }
+    if (editForm.start_date && editingId && !editForm.renewal_date) {
+      const calculatedRenewalDate = addOneYearToDate(editForm.start_date);
+      setEditForm((prev: any) => ({ ...prev, renewal_date: calculatedRenewalDate }));
     }
-  }, [editForm.start_date, editForm.renewal_date, editingId]);
+  }, [editForm.start_date, editingId, editForm.renewal_date]);
 
   const loadPreliminaryClients = async () => {
     setLoading(true);
@@ -63,7 +58,7 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
   };
 
   const startEdit = (client: any) => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = getTodayLocalDate();
     setEditingId(client.id);
     setExpandedClients(prev => new Set(prev).add(client.id));
     setEditForm({

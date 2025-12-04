@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { createUppercaseHandler, uppercaseInputClass } from '@/lib/utils/uppercase';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { POLICY_TYPES, checkSpecialOverride } from '@/lib/constants/policy-types';
+import { getTodayLocalDate, addOneYearToDate } from '@/lib/utils/dates';
 
 interface WizardProps {
   onClose: () => void;
@@ -45,7 +46,7 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
   const [showClientSuggestions, setShowClientSuggestions] = useState(false);
   const [userBrokerId, setUserBrokerId] = useState<string | null>(null);
   const [specialOverride, setSpecialOverride] = useState<{ hasSpecialOverride: boolean; overrideValue: number | null; condition?: string }>({ hasSpecialOverride: false, overrideValue: null });
-  const today = new Date().toISOString().split('T')[0];
+  const today = getTodayLocalDate();
   
   const [formData, setFormData] = useState<FormData>({
     client_name: '',
@@ -96,15 +97,9 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
   }, [role]);
 
   useEffect(() => {
-    if (formData.start_date) {
-      const startDate = new Date(formData.start_date);
-      const renewalDate = new Date(startDate);
-      renewalDate.setFullYear(startDate.getFullYear() + 1);
-      const renewalDateStr = renewalDate.toISOString().split('T')[0] || '';
-      
-      if (!formData.renewal_date) {
-        setFormData(prev => ({ ...prev, renewal_date: renewalDateStr }));
-      }
+    if (formData.start_date && !formData.renewal_date) {
+      const calculatedRenewalDate = addOneYearToDate(formData.start_date);
+      setFormData(prev => ({ ...prev, renewal_date: calculatedRenewalDate }));
     }
   }, [formData.start_date, formData.renewal_date]);
   
@@ -652,22 +647,17 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                     value={formData.start_date}
                     onChange={(e) => {
                       const startDate = e.target.value;
-                      let renewalDate = formData.renewal_date || '';
                       
                       // Auto-calcular fecha de renovación (exactamente 1 año después)
+                      let calculatedRenewalDate = formData.renewal_date || '';
                       if (startDate) {
-                        const date = new Date(startDate + 'T00:00:00');
-                        date.setFullYear(date.getFullYear() + 1);
-                        const calculatedDate = date.toISOString().split('T')[0];
-                        if (calculatedDate) {
-                          renewalDate = calculatedDate;
-                        }
+                        calculatedRenewalDate = addOneYearToDate(startDate);
                       }
                       
                       setFormData({ 
                         ...formData, 
                         start_date: startDate,
-                        renewal_date: renewalDate
+                        renewal_date: calculatedRenewalDate
                       });
                     }}
                     className="w-full min-w-0 px-2 sm:px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition text-sm sm:text-base appearance-none"

@@ -8,6 +8,7 @@
 import { ISEnvironment } from './config';
 import { isPost, isGet } from './http-client';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { getTodayLocalDate } from '../utils/dates';
 
 // ============================================
 // INTERFACES - Adaptar según documentación real
@@ -387,7 +388,7 @@ export async function crearClienteYPolizaOptiSeguro(data: {
         policy_number: data.nro_poliza,
         ramo: data.ramo,
         status: 'ACTIVA',
-        start_date: new Date().toISOString().split('T')[0],
+        start_date: getTodayLocalDate(),
         notas: notasPoliza,
       })
       .select('id')

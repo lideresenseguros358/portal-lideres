@@ -1,5 +1,6 @@
-import { getSupabaseAdmin, type Tables } from '@/lib/supabase/admin';
+import { getSupabaseAdmin, Tables } from '../supabase/admin';
 import { createNotification } from './create';
+import { getTodayLocalDate, getFutureDateLocal, getPastDateLocal } from '../utils/dates';
 import { sendNotificationEmail } from './send-email';
 
 type Policy = Tables<'policies'>;
@@ -23,11 +24,9 @@ interface PolicyWithClient extends Policy {
  */
 export async function runRenewalNotifications(options: RenewalNotificationOptions = {}) {
   const { daysBefore = 30 } = options;
-  const supabase = getSupabaseAdmin();
+  const supabase = await getSupabaseAdmin();
   
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const todayISO = today.toISOString().split('T')[0];
+  const todayISO = getTodayLocalDate();
   
   let results = {
     alert_30d: 0,
@@ -66,9 +65,7 @@ export async function runRenewalNotifications(options: RenewalNotificationOption
  * Alerta 30 días antes del vencimiento
  */
 async function run30DaysAlert(supabase: any, todayISO: string) {
-  const futureDate = new Date();
-  futureDate.setDate(futureDate.getDate() + 30);
-  const futureISO = futureDate.toISOString().split('T')[0];
+  const futureISO = getFutureDateLocal(30);
   
   // Pólizas que vencen en exactamente 30 días
   const { data: policies } = await supabase
@@ -128,9 +125,7 @@ async function run30DaysAlert(supabase: any, todayISO: string) {
  * Alerta 7 días antes del vencimiento
  */
 async function run7DaysAlert(supabase: any, todayISO: string) {
-  const futureDate = new Date();
-  futureDate.setDate(futureDate.getDate() + 7);
-  const futureISO = futureDate.toISOString().split('T')[0];
+  const futureISO = getFutureDateLocal(7);
   
   const { data: policies } = await supabase
     .from('policies')
@@ -242,9 +237,7 @@ async function run0DaysAlert(supabase: any, todayISO: string) {
  * Eliminación automática 60 días post-vencimiento
  */
 async function run60DaysPostExpiration(supabase: any, todayISO: string) {
-  const sixtyDaysAgo = new Date();
-  sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
-  const sixtyDaysAgoISO = sixtyDaysAgo.toISOString().split('T')[0];
+  const sixtyDaysAgoISO = getPastDateLocal(60);
   
   // Pólizas vencidas hace exactamente 60 días
   const { data: policies } = await supabase
