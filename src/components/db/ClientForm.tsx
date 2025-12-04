@@ -249,11 +249,10 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
 
               <div>
                 <label className="block text-sm font-bold text-[#010139] mb-2">
-                  🎂 Fecha de Nacimiento *
+                  🎂 Fecha de Nacimiento
                 </label>
                 <input
                   type="date"
-                  required
                   value={formData.birth_date}
                   onChange={(e) => setFormData({ ...formData, birth_date: e.target.value })}
                   className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none text-sm font-medium transition-all"

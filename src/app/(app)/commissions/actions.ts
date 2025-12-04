@@ -557,6 +557,8 @@ export async function actionGetYTDCommissions(year: number, brokerId?: string | 
   const previousYearEndDate = `${previousYear}-12-31`;
 
   try {
+    console.log('📊 [actionGetYTDCommissions] year:', year, 'brokerId:', brokerId);
+    
     // Obtener quincenas cerradas del año actual (y anterior si se solicita)
     let fortnightsQuery = supabase
       .from('fortnights')
@@ -568,8 +570,12 @@ export async function actionGetYTDCommissions(year: number, brokerId?: string | 
 
     const { data: fortnights, error: fortnightsError } = await fortnightsQuery;
 
+    console.log('📊 [actionGetYTDCommissions] fortnights encontrados:', fortnights?.length || 0);
+    console.log('📊 [actionGetYTDCommissions] fortnights:', fortnights);
+
     if (fortnightsError) throw new Error(fortnightsError.message);
     if (!fortnights || fortnights.length === 0) {
+      console.log('⚠️ [actionGetYTDCommissions] No hay quincenas PAID');
       // Si no hay quincenas, retornar estructura vacía
       return {
         ok: true as const,
@@ -580,6 +586,18 @@ export async function actionGetYTDCommissions(year: number, brokerId?: string | 
       };
     }
 
+    // Obtener código ASSA del broker si existe
+    let assaCode: string | null = null;
+    if (brokerId) {
+      const { data: brokerData } = await supabase
+        .from('brokers')
+        .select('assa_code')
+        .eq('id', brokerId)
+        .single();
+      assaCode = brokerData?.assa_code || null;
+      console.log('📊 [actionGetYTDCommissions] assa_code del broker:', assaCode);
+    }
+
     // Obtener detalles de todas las quincenas
     const fortnightIds = fortnights.map(f => f.id);
     
@@ -587,18 +605,29 @@ export async function actionGetYTDCommissions(year: number, brokerId?: string | 
       .from('fortnight_details')
       .select(`
         fortnight_id,
-        gross_amount,
+        commission_calculated,
+        broker_id,
+        assa_code,
         brokers (id, name),
         insurers (id, name),
         fortnights!inner (period_end)
       `)
       .in('fortnight_id', fortnightIds);
 
+    // Filtrar por broker_id O por assa_code
     if (brokerId) {
-      detailsQuery = detailsQuery.eq('broker_id', brokerId);
+      if (assaCode) {
+        // Incluir registros donde broker_id = brokerId O assa_code = assaCode del broker
+        detailsQuery = detailsQuery.or(`broker_id.eq.${brokerId},assa_code.eq.${assaCode}`);
+      } else {
+        // Solo por broker_id si no tiene código ASSA
+        detailsQuery = detailsQuery.eq('broker_id', brokerId);
+      }
     }
 
     const { data: details, error: detailsError } = await detailsQuery as any;
+
+    console.log('📊 [actionGetYTDCommissions] details encontrados:', details?.length || 0);
 
     if (detailsError) throw new Error(detailsError.message);
 
@@ -614,7 +643,7 @@ export async function actionGetYTDCommissions(year: number, brokerId?: string | 
       const itemYear = date.getFullYear();
       const month = date.getMonth() + 1; // 1-12
       const insurerName = detail.insurers?.name || 'Sin Aseguradora';
-      const commission = Number(detail.gross_amount) || 0;
+      const commission = Number(detail.commission_calculated) || 0;
 
       const targetData = itemYear === year ? currentYearData : previousYearData;
 
@@ -633,6 +662,9 @@ export async function actionGetYTDCommissions(year: number, brokerId?: string | 
       // Total
       targetData.total += commission;
     });
+
+    console.log('✅ [actionGetYTDCommissions] currentYearData:', currentYearData);
+    console.log('✅ [actionGetYTDCommissions] total:', currentYearData.total);
 
     return {
       ok: true as const,

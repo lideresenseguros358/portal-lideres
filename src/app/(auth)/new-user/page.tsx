@@ -430,6 +430,17 @@ export default function NewUserWizard() {
                 <h3 className="text-xl font-bold text-[#010139]">Paso 3: Cuenta para Pago de Comisiones</h3>
               </div>
 
+              {/* Info Box */}
+              <div className="bg-gradient-to-r from-blue-50 to-blue-100 border-2 border-blue-300 rounded-lg p-4 mb-4">
+                <p className="text-sm text-blue-900 font-semibold mb-2">
+                  💰 ¿Para qué necesitamos esta información?
+                </p>
+                <p className="text-xs text-blue-800 leading-relaxed">
+                  Esta cuenta bancaria será utilizada para transferir tus comisiones de forma automática vía ACH (Banco General de Panamá). 
+                  Es importante que los datos sean correctos para evitar retrasos en tus pagos.
+                </p>
+              </div>
+
               {/* Checkbox ayuda llenar */}
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                 <label className="flex items-center gap-3 cursor-pointer">
@@ -458,11 +469,14 @@ export default function NewUserWizard() {
                   value={bankData.bank_route}
                   onChange={(route) => setBankData({ ...bankData, bank_route: route })}
                   required
+                  className="text-base"
                 />
                 {bankData.bank_route && (
-                  <p className="text-xs text-gray-500 mt-1">
-                    Código de ruta: {bankData.bank_route}
-                  </p>
+                  <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded">
+                    <p className="text-xs text-green-800">
+                      ✅ Banco seleccionado | Código de ruta ACH: <span className="font-mono font-bold">{bankData.bank_route}</span>
+                    </p>
+                  </div>
                 )}
               </div>
 

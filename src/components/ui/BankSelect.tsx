@@ -45,6 +45,8 @@ export function BankSelect({
   const loadBanks = async () => {
     try {
       setLoading(true);
+      console.log('[BankSelect] Cargando bancos desde ach_banks...');
+      
       const { data, error: fetchError } = await supabaseClient()
         .from('ach_banks')
         .select('id, bank_name, route_code')
@@ -52,14 +54,20 @@ export function BankSelect({
         .order('bank_name', { ascending: true });
 
       if (fetchError) {
-        console.error('Error loading banks:', fetchError);
+        console.error('[BankSelect] Error loading banks:', fetchError);
         setError('Error al cargar bancos');
         return;
       }
 
+      console.log(`[BankSelect] ${data?.length || 0} bancos cargados correctamente`);
+      if (data && data.length === 0) {
+        console.warn('[BankSelect] No hay bancos activos en la tabla ach_banks');
+        setError('No hay bancos disponibles');
+      }
+      
       setBanks(data || []);
     } catch (err) {
-      console.error('Error loading banks:', err);
+      console.error('[BankSelect] Error loading banks:', err);
       setError('Error al cargar bancos');
     } finally {
       setLoading(false);

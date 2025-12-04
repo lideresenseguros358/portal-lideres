@@ -68,13 +68,34 @@ const BrokerDashboard = async ({ userId }: BrokerDashboardProps) => {
   const ranking: RankingResult = rankingData;
   const contests: ContestProgress[] = contestData;
 
-  const paidRange = fortnightStatus.paid?.fortnight
-    ? `${new Intl.DateTimeFormat("es-PA", { day: "2-digit", month: "short" }).format(
-        new Date(fortnightStatus.paid.fortnight.period_start),
+  // Obtener el rango de la última quincena pagada (puede ser de otro mes)
+  let paidRange: string | null = null;
+  
+  if (fortnightStatus.paid?.fortnight) {
+    // Hay una quincena pagada en el período reciente
+    paidRange = `${new Intl.DateTimeFormat("es-PA", { day: "2-digit", month: "short" }).format(
+      new Date(fortnightStatus.paid.fortnight.period_start),
+    )} – ${new Intl.DateTimeFormat("es-PA", { day: "2-digit", month: "short" }).format(
+      new Date(fortnightStatus.paid.fortnight.period_end),
+    )}`;
+  } else if (netCommissions.lastPaid > 0 && brokerId) {
+    // No hay quincena pagada reciente, buscar la última en historial
+    const lastFortnight = await supabase
+      .from('fortnights')
+      .select('period_start, period_end')
+      .in('status', ['PAID', 'READY'])
+      .order('period_end', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    
+    if (lastFortnight.data) {
+      paidRange = `${new Intl.DateTimeFormat("es-PA", { day: "2-digit", month: "short" }).format(
+        new Date(lastFortnight.data.period_start),
       )} – ${new Intl.DateTimeFormat("es-PA", { day: "2-digit", month: "short" }).format(
-        new Date(fortnightStatus.paid.fortnight.period_end),
-      )}`
-    : null;
+        new Date(lastFortnight.data.period_end),
+      )}`;
+    }
+  }
 
   const rankingEntries: RankingEntry[] = [...ranking.entries]
     .sort((a, b) => a.position - b.position)

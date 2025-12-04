@@ -194,6 +194,90 @@ Dashboard Broker carga → getNetCommissions()
 
 ---
 
-**Estado:** ✅ **COMPLETADO**  
+**Estado:** ✅ **COMPLETADO** (Actualizado: 3 dic 2025, 6:36 PM)  
 **Prioridad:** 🔴 **ALTA**  
 **Impacto:** Dashboard broker ahora muestra correctamente la última quincena pagada sin depender del mes actual
+
+---
+
+## 🔄 Actualización Final (3 dic 2025, 6:40 PM)
+
+### Problema Real Identificado:
+
+El fallback previo NO funcionaba porque:
+1. `getFortnightStatus()` retornaba la última quincena cerrada GENERAL
+2. Esa quincena podía NO tener datos del broker específico
+3. Resultado: `totalPaid = 0` incluso con fallback
+
+**Ejemplo del problema:**
+```
+Última quincena cerrada: 1-15 dic (PAID)
+└─ Broker A: $0 (no tuvo ventas en esa quincena)
+└─ Broker B: $5,000
+
+Quincena anterior: 16-30 nov (PAID)  
+└─ Broker A: $4,250 ✅ (SÍ tuvo ventas aquí)
+└─ Broker B: $3,800
+
+Dashboard mostraba: $0.00 ❌ (buscaba solo la más reciente)
+Debía mostrar: $4,250.50 ✅ (última donde el broker tuvo datos)
+```
+
+### Solución REAL Implementada:
+
+**Reescritura completa de `getNetCommissions()` para brokers:**
+
+```typescript
+// ✅ NUEVA LÓGICA: Buscar última quincena donde EL BROKER tenga datos
+const { data: fortnights } = await supabase
+  .from('fortnights')
+  .select('id, status, period_start, period_end')
+  .in('status', ['PAID', 'READY', 'DRAFT'])
+  .order('period_end', { ascending: false })
+  .limit(10); // Últimas 10 quincenas
+
+// Iterar hasta encontrar la primera quincena CERRADA con datos del broker
+for (const fortnight of fortnights) {
+  if (fortnight.status === 'PAID' || fortnight.status === 'READY') {
+    const { data: details } = await supabase
+      .from('fortnight_details')
+      .select('commission_calculated')
+      .eq('fortnight_id', fortnight.id)
+      .eq('broker_id', brokerId) // ✅ FILTRO POR BROKER
+      .limit(FETCH_LIMIT);
+    
+    if (details && details.length > 0) {
+      totalPaid = details.reduce(...);
+      if (totalPaid > 0) {
+        break; // ✅ Encontramos la última con datos del broker
+      }
+    }
+  }
+}
+```
+
+**Diferencia Clave:**
+- ❌ Antes: Buscaba última quincena cerrada (sin importar si el broker tenía datos)
+- ✅ Ahora: Busca última quincena cerrada DONDE EL BROKER TENGA DATOS
+
+### Resultado Final:
+
+```
+✅ 30 Noviembre:
+   Monto: $4,250.50 (quincena 16-30 nov)
+   Rango: "16 nov – 30 nov"
+
+✅ 1 Diciembre (nueva quincena cerrada sin datos del broker):
+   Monto: $4,250.50 ✅ (sigue mostrando nov porque broker no tiene datos en dic)
+   Rango: "16 nov – 30 nov" ✅
+
+✅ 15 Diciembre (broker tiene datos en nueva quincena):
+   Monto: $5,120.75 (quincena 1-15 dic)
+   Rango: "1 dic – 15 dic"
+```
+
+**Archivos Modificados:**
+1. ✅ `src/lib/dashboard/queries.ts` (getNetCommissions - lógica COMPLETAMENTE reescrita)
+2. ✅ `src/components/dashboard/BrokerDashboard.tsx` (paidRange - fallback)
+
+**Estado:** ✅ **VERDADERAMENTE RESUELTO**

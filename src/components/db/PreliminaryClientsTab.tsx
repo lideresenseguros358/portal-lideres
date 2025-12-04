@@ -444,6 +444,7 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
                         </label>
                         <input
                           type="date"
+                          required
                           value={editForm.birth_date}
                           onChange={(e) => setEditForm({ ...editForm, birth_date: e.target.value })}
                           className="w-full px-4 py-2 border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none"

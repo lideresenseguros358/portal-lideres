@@ -21,6 +21,7 @@ interface FormData {
   national_id: string;
   email: string;
   phone: string;
+  birth_date: string;
   // Póliza
   policy_number: string;
   insurer_id: string;
@@ -51,6 +52,7 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
     national_id: '',
     email: '',
     phone: '',
+    birth_date: '',
     policy_number: '',
     insurer_id: '',
     ramo: '',
@@ -224,6 +226,7 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
       national_id: client.national_id || '',
       email: client.email || '',
       phone: client.phone || '',
+      birth_date: (client as any).birth_date || '',
       broker_email: brokerEmail,
     });
     setShowClientSuggestions(false);
@@ -266,6 +269,10 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
       }
       if (!formData.phone.trim()) {
         toast.error('El teléfono es obligatorio');
+        return false;
+      }
+      if (!formData.birth_date.trim()) {
+        toast.error('La fecha de nacimiento es obligatoria');
         return false;
       }
     } else if (step === 2) {
@@ -369,6 +376,7 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
           national_id: formData.national_id ? formData.national_id.toUpperCase() : null,
           email: formData.email || null,
           phone: formData.phone || null,
+          birth_date: formData.birth_date || null,
           active: true,
           broker_id: broker?.p_id || undefined,
         };
@@ -559,6 +567,19 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                     placeholder="6000-0000"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                  Fecha de Nacimiento <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={formData.birth_date}
+                  onChange={(e) => setFormData({ ...formData, birth_date: e.target.value })}
+                  className="w-full px-3 py-2 sm:px-4 text-sm sm:text-base border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition"
+                />
               </div>
             </div>
           )}

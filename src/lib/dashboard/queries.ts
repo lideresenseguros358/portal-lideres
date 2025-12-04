@@ -1,6 +1,7 @@
 import { startOfYear, endOfYear, startOfMonth, endOfMonth } from "date-fns";
 
 import { getSupabaseServer, type Tables } from "@/lib/supabase/server";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import type {
   AnnualNet,
   CalendarEvent,
@@ -183,44 +184,104 @@ export async function getFortnightStatus(userId: string, role: DashboardRole): P
 }
 
 export async function getNetCommissions(userId: string, role: DashboardRole): Promise<NetCommissions> {
-  // Try real data first
-  const status = await getFortnightStatus(userId, role);
-  let totalPaid = status.paid?.total ?? 0;
-  const totalOpen = status.open?.total ?? 0;
+  const brokerId = role === "broker" ? await resolveBrokerId(userId) : null;
+  const supabase = await getSupabaseAdmin(); // USAR ADMIN para ignorar RLS
+  
+  console.log('🔍 [getNetCommissions] userId:', userId);
+  console.log('🔍 [getNetCommissions] role:', role);
+  console.log('🔍 [getNetCommissions] brokerId:', brokerId);
+  
+  let totalPaid = 0;
+  let totalOpen = 0;
 
-  // FALLBACK: Si no hay quincenas, buscar la última quincena disponible en historial
-  if (totalPaid === 0 && role === 'broker') {
-    const brokerId = await resolveBrokerId(userId);
-    if (brokerId) {
-      const supabase = await getSupabaseServer();
+  if (brokerId) {
+    // Obtener código ASSA del broker
+    const { data: brokerData } = await supabase
+      .from('brokers')
+      .select('assa_code')
+      .eq('id', brokerId)
+      .single();
+    const assaCode = brokerData?.assa_code || null;
+    console.log('🔍 [getNetCommissions] assa_code del broker:', assaCode);
+    
+    // PRIMERO: Ver qué quincenas hay y sus status reales
+    const { data: allFortnights } = await supabase
+      .from('fortnights')
+      .select('id, status, period_start, period_end')
+      .order('period_end', { ascending: false })
+      .limit(5);
+    
+    console.log('🔎 [getNetCommissions] TODAS las quincenas (últimas 5):', allFortnights);
+    
+    // PASO 1: Buscar últimas quincenas PAID/READY
+    const { data: paidFortnights, error: fortnightsError } = await supabase
+      .from('fortnights')
+      .select('id')
+      .in('status', ['PAID', 'READY'])
+      .order('period_end', { ascending: false })
+      .limit(10);
+
+    console.log('📅 [getNetCommissions] paidFortnights (PAID/READY):', paidFortnights);
+    console.log('📅 [getNetCommissions] fortnightsError:', fortnightsError);
+
+    // PASO 2: Buscar comisiones del broker en la última quincena (incluir código ASSA)
+    if (paidFortnights && paidFortnights.length > 0) {
+      const lastFortnightId = paidFortnights[0].id; // La más reciente
       
-      // Buscar la última quincena CERRADA que tenga datos, sin filtrar por mes
-      const { data: lastFortnight } = await supabase
-        .from('fortnights')
-        .select('id, period_start, period_end')
-        .in('status', ['PAID', 'READY'])
-        .order('period_end', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+      let commissionsQuery = supabase
+        .from('fortnight_details')
+        .select('commission_calculated')
+        .eq('fortnight_id', lastFortnightId);
       
-      if (lastFortnight) {
-        // Sumar las comisiones de esa quincena específica
-        const { data } = await supabase
-          .from('fortnight_details')
-          .select('commission_calculated')
-          .eq('fortnight_id', lastFortnight.id)
-          .eq('broker_id', brokerId)
-          .limit(FETCH_LIMIT);
-        
-        if (data) {
-          totalPaid = data.reduce((acc, item) => acc + toNumber(item.commission_calculated), 0);
-        }
+      // Filtrar por broker_id O por assa_code
+      if (assaCode) {
+        commissionsQuery = commissionsQuery.or(`broker_id.eq.${brokerId},assa_code.eq.${assaCode}`);
+      } else {
+        commissionsQuery = commissionsQuery.eq('broker_id', brokerId);
+      }
+      
+      const { data: commissions, error: commissionsError } = await commissionsQuery;
+
+      console.log('💰 [getNetCommissions] commissions:', commissions);
+      console.log('💰 [getNetCommissions] commissionsError:', commissionsError);
+      console.log('💰 [getNetCommissions] count:', commissions?.length || 0);
+
+      if (commissions && commissions.length > 0) {
+        totalPaid = commissions.reduce((acc: number, item: any) => acc + toNumber(item.commission_calculated), 0);
+        console.log('✅ [getNetCommissions] totalPaid calculado:', totalPaid);
+      }
+    }
+
+    // PASO 3: Buscar quincena DRAFT
+    const { data: draftFortnight, error: draftFortnightError } = await supabase
+      .from('fortnights')
+      .select('id')
+      .eq('status', 'DRAFT')
+      .order('period_end', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    console.log('📝 [getNetCommissions] draftFortnight:', draftFortnight);
+
+    if (draftFortnight) {
+      const { data: draftCommissions } = await supabase
+        .from('fortnight_details')
+        .select('commission_calculated')
+        .eq('broker_id', brokerId)
+        .eq('fortnight_id', draftFortnight.id);
+
+      if (draftCommissions && draftCommissions.length > 0) {
+        totalOpen = draftCommissions.reduce((acc, item) => acc + toNumber(item.commission_calculated), 0);
+        console.log('✅ [getNetCommissions] totalOpen calculado:', totalOpen);
       }
     }
   }
 
+  console.log('🎯 [getNetCommissions] RESULTADO FINAL - lastPaid:', totalPaid, 'open:', totalOpen);
+
   // Si no hay datos reales, usar mock
   if (MOCK_DATA_ENABLED && totalPaid === 0 && totalOpen === 0) {
+    console.log('🎭 [getNetCommissions] Usando MOCK DATA');
     return {
       lastPaid: 4250.50,
       open: 3890.25,

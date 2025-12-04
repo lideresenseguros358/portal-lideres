@@ -92,8 +92,11 @@ export default function ApproveModal({ request, onClose, onSuccess }: ApproveMod
         {/* Content */}
         <div className="standard-modal-content">
           {/* Datos del Solicitante */}
-          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-6">
-          <h4 className="font-semibold text-gray-800 mb-3">Información del Solicitante</h4>
+          <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 mb-4">
+          <h4 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+            <span className="text-blue-600">👤</span>
+            Información Personal
+          </h4>
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
               <span className="text-gray-600">Nombre:</span>
@@ -111,7 +114,44 @@ export default function ApproveModal({ request, onClose, onSuccess }: ApproveMod
               <span className="text-gray-600">Teléfono:</span>
               <span className="font-semibold text-gray-800">{request.telefono}</span>
             </div>
+            {request.licencia && (
+              <div className="flex justify-between">
+                <span className="text-gray-600">Licencia:</span>
+                <span className="font-semibold text-gray-800">{request.licencia}</span>
+              </div>
+            )}
           </div>
+          </div>
+
+          {/* Datos Bancarios ACH */}
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
+            <h4 className="font-semibold text-blue-900 mb-3 flex items-center gap-2">
+              <span className="text-blue-600">🏦</span>
+              Datos Bancarios para Comisiones (ACH)
+            </h4>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-blue-700">Banco (Código Ruta):</span>
+                <span className="font-semibold text-blue-900">{request.bank_route || 'No especificado'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-blue-700">Tipo de Cuenta:</span>
+                <span className="font-semibold text-blue-900">
+                  {request.tipo_cuenta === '03' ? 'Corriente (03)' : request.tipo_cuenta === '04' ? 'Ahorro (04)' : request.tipo_cuenta || 'No especificado'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-blue-700">Número de Cuenta:</span>
+                <span className="font-semibold text-blue-900 font-mono">{request.bank_account_no || 'No especificado'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-blue-700">Titular:</span>
+                <span className="font-semibold text-blue-900">{request.nombre_completo_titular || 'No especificado'}</span>
+              </div>
+            </div>
+            <p className="text-xs text-blue-600 mt-3">
+              ℹ️ Esta información se usará para el pago de comisiones vía ACH Banco General
+            </p>
           </div>
 
           {/* Formulario */}
@@ -157,6 +197,16 @@ export default function ApproveModal({ request, onClose, onSuccess }: ApproveMod
                 Opciones globales definidas en Configuración
               </p>
             </div>
+
+            {/* Tipo de Broker */}
+            {request.additional_fields && (
+              <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                <p className="text-sm text-green-800">
+                  <strong>Tipo:</strong> {(request.additional_fields as any).broker_type === 'agente' ? '🎫 Agente' : '📋 Corredor'}
+                  {(request.additional_fields as any).assa_code && ` | Código ASSA: ${(request.additional_fields as any).assa_code}`}
+                </p>
+              </div>
+            )}
 
             {/* Advertencia */}
             <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">

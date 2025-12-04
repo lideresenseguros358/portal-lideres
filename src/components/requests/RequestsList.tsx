@@ -49,7 +49,8 @@ export default function RequestsList({
               <th className="px-6 py-4 text-left font-semibold">Usuario</th>
               <th className="px-6 py-4 text-left font-semibold">Email</th>
               <th className="px-6 py-4 text-left font-semibold">Datos Personales</th>
-              <th className="px-6 py-4 text-left font-semibold">Fecha Solicitud</th>
+              <th className="px-6 py-4 text-left font-semibold">Datos Bancarios</th>
+              <th className="px-6 py-4 text-left font-semibold">Fecha</th>
               <th className="px-6 py-4 text-center font-semibold">Acciones</th>
             </tr>
           </thead>
@@ -92,6 +93,19 @@ export default function RequestsList({
                         <span className="font-semibold">Lic:</span> {request.licencia}
                       </p>
                     )}
+                  </div>
+                </td>
+                <td className="px-6 py-4">
+                  <div className="text-xs space-y-1">
+                    <p className="text-gray-700">
+                      <span className="font-semibold">🏦 Banco:</span> {request.bank_route || 'N/A'}
+                    </p>
+                    <p className="text-gray-700">
+                      <span className="font-semibold">Tipo:</span> {request.tipo_cuenta === '03' ? 'Corriente' : request.tipo_cuenta === '04' ? 'Ahorro' : 'N/A'}
+                    </p>
+                    <p className="text-gray-700 font-mono">
+                      <span className="font-semibold">Cuenta:</span> {request.bank_account_no || 'N/A'}
+                    </p>
                   </div>
                 </td>
                 <td className="px-6 py-4">
@@ -164,6 +178,22 @@ export default function RequestsList({
                     day: 'numeric'
                   })}
                 </span>
+              </div>
+            </div>
+
+            {/* Datos Bancarios */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4">
+              <h5 className="text-xs font-semibold text-blue-900 mb-2">🏦 Cuenta para Comisiones</h5>
+              <div className="space-y-1 text-xs">
+                <p className="text-blue-800">
+                  <span className="font-semibold">Banco:</span> {request.bank_route || 'N/A'}
+                </p>
+                <p className="text-blue-800">
+                  <span className="font-semibold">Tipo:</span> {request.tipo_cuenta === '03' ? 'Corriente' : request.tipo_cuenta === '04' ? 'Ahorro' : 'N/A'}
+                </p>
+                <p className="text-blue-800 font-mono">
+                  <span className="font-semibold">Cuenta:</span> {request.bank_account_no || 'N/A'}
+                </p>
               </div>
             </div>
 

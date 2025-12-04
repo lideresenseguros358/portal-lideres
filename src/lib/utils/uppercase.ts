@@ -8,7 +8,7 @@
  * Mantiene nulls, numbers, booleans, arrays y objetos anidados
  * Excluye campos específicos que NO deben convertirse a mayúsculas
  */
-const EXCLUDE_UPPERCASE_FIELDS = ['role', 'email', 'password', 'token', 'tipo_cuenta', 'bank_route', 'broker_type'];
+const EXCLUDE_UPPERCASE_FIELDS = ['role', 'email', 'password', 'token', 'tipo_cuenta', 'bank_route', 'broker_type', 'birth_date'];
 
 export function toUppercasePayload<T extends Record<string, any>>(obj: T): T {
   if (!obj || typeof obj !== 'object') return obj;
