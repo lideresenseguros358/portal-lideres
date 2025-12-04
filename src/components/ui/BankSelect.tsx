@@ -47,7 +47,7 @@ export function BankSelect({
       setLoading(true);
       console.log('[BankSelect] Cargando bancos desde ach_banks...');
       
-      const { data, error: fetchError } = await supabaseClient()
+      const { data, error: fetchError} = await supabaseClient()
         .from('ach_banks')
         .select('id, bank_name, route_code')
         .eq('status', 'ACTIVE')

@@ -32,17 +32,16 @@ export default function NewUserWizard() {
     carnet_expiry_date: "",
   });
 
-  // Paso 3: Datos Bancarios ACH
+  // Paso 3: Datos Bancarios ACH (para pago de comisiones)
   const [bankData, setBankData] = useState({
     bank_route: "", // Código de ruta desde ach_banks (ej: "71")
     account_type: "04", // Código desde ach_account_types: "03"=Corriente, "04"=Ahorro
     account_number: "", // Número de cuenta (limpio, sin espacios/guiones)
-    numero_cedula: "", // Cédula del titular
-    nombre_completo: "", // Nombre completo (normalizado ACH, MAYÚSCULAS sin acentos)
+    nombre_completo: "", // Nombre completo del titular (normalizado ACH, MAYÚSCULAS sin acentos)
   });
 
-  // Checkbox para ayuda a llenar
-  const [autoFillCedula, setAutoFillCedula] = useState(false);
+  // Checkbox para ayuda a llenar nombre del titular
+  const [autoFillNombre, setAutoFillNombre] = useState(false);
 
   // Validación Paso 1
   const validateStep1 = () => {
@@ -90,10 +89,6 @@ export default function NewUserWizard() {
       setError("El número de cuenta es obligatorio");
       return false;
     }
-    if (!bankData.numero_cedula) {
-      setError("La cédula del titular es obligatoria");
-      return false;
-    }
     if (!bankData.nombre_completo) {
       setError("El nombre completo del titular es obligatorio");
       return false;
@@ -102,21 +97,19 @@ export default function NewUserWizard() {
     return true;
   };
 
-  // Función helper checkbox - Copia nombre Y cédula del broker
+  // Función helper checkbox - Copia nombre del broker como titular
   const handleAutoFillChange = (checked: boolean) => {
-    setAutoFillCedula(checked);
+    setAutoFillNombre(checked);
     if (checked) {
       // Normalizar nombre a formato ACH
       const nombreNormalizado = toUpperNoAccents(personalData.nombre || '').substring(0, 22);
       setBankData(prev => ({
         ...prev,
-        numero_cedula: personalData.cedula,
         nombre_completo: nombreNormalizado
       }));
     } else {
       setBankData(prev => ({
         ...prev,
-        numero_cedula: "",
         nombre_completo: ""
       }));
     }
@@ -272,7 +265,7 @@ export default function NewUserWizard() {
                   onChange={(e) => {
                     setPersonalData({ ...personalData, nombre: e.target.value });
                     // Si checkbox está marcado, actualizar también el titular
-                    if (autoFillCedula) {
+                    if (autoFillNombre) {
                       const nombreNormalizado = toUpperNoAccents(e.target.value).substring(0, 22);
                       setBankData({ ...bankData, nombre_completo: nombreNormalizado });
                     }
@@ -292,9 +285,6 @@ export default function NewUserWizard() {
                   value={personalData.cedula}
                   onChange={(e) => {
                     setPersonalData({ ...personalData, cedula: e.target.value });
-                    if (autoFillCedula) {
-                      setBankData({ ...bankData, numero_cedula: e.target.value });
-                    }
                   }}
                   className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#010139] focus:outline-none"
                   placeholder="8-123-4567"
@@ -446,7 +436,7 @@ export default function NewUserWizard() {
                 <label className="flex items-center gap-3 cursor-pointer">
                   <input
                     type="checkbox"
-                    checked={autoFillCedula}
+                    checked={autoFillNombre}
                     onChange={(e) => handleAutoFillChange(e.target.checked)}
                     className="w-4 h-4 text-[#010139] border-gray-300 rounded focus:ring-[#010139]"
                   />
@@ -455,7 +445,7 @@ export default function NewUserWizard() {
                       Usar mis datos personales (cuenta propia)
                     </span>
                     <span className="text-xs text-blue-700">
-                      Auto-llena titular y cédula con tus datos del Paso 2
+                      Auto-llena el nombre del titular con tus datos del Paso 2
                     </span>
                   </div>
                 </label>
@@ -514,21 +504,6 @@ export default function NewUserWizard() {
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Cédula del Titular <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={bankData.numero_cedula}
-                  onChange={(e) => setBankData({ ...bankData, numero_cedula: e.target.value })}
-                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#010139] focus:outline-none"
-                  placeholder="8-123-4567"
-                  required
-                  disabled={autoFillCedula}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
                   Nombre Completo del Titular <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -542,7 +517,7 @@ export default function NewUserWizard() {
                   placeholder="JUAN PEREZ"
                   maxLength={22}
                   required
-                  disabled={autoFillCedula}
+                  disabled={autoFillNombre}
                 />
                 <p className="text-xs text-gray-500 mt-1">
                   MAYÚSCULAS sin acentos. Máximo 22 caracteres.
