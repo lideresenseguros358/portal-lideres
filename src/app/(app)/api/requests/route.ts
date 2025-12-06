@@ -3,19 +3,6 @@ import { getSupabaseServer } from '@/lib/supabase/server';
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from '@/lib/database.types';
 
-// Cliente público de Supabase (sin autenticación) para inserciones anónimas
-const getPublicSupabaseClient = () => {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-  
-  return createClient<Database>(supabaseUrl, supabaseAnonKey, {
-    auth: {
-      persistSession: false,
-      autoRefreshToken: false,
-    }
-  });
-};
-
 // GET - Listar solicitudes
 export async function GET(request: NextRequest) {
   try {
@@ -59,9 +46,13 @@ export async function GET(request: NextRequest) {
 // IMPORTANTE: Usa cliente público (anónimo) para permitir inserciones sin autenticación
 export async function POST(request: NextRequest) {
   try {
-    // Usar cliente público en lugar de getSupabaseServer
+    // Crear cliente Supabase anónimo directamente (sin autenticación)
     // Esto permite inserciones anónimas gracias a la política RLS "public_can_insert_request"
-    const supabase = getPublicSupabaseClient();
+    const supabase = createClient<Database>(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+    
     const body = await request.json();
 
     const {
@@ -94,20 +85,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Nombre completo del titular es requerido' }, { status: 400 });
     }
 
-    // Verificar que el email no esté ya registrado
-    // Esta consulta funciona sin autenticación gracias al cliente público
-    const { data: existingRequest } = await supabase
-      .from('user_requests')
-      .select('id')
-      .eq('email', credentials.email)
-      .eq('status', 'pending')
-      .single();
-
-    if (existingRequest) {
-      return NextResponse.json({ 
-        error: 'Ya existe una solicitud pendiente con este email' 
-      }, { status: 400 });
-    }
+    // NOTA: No podemos verificar emails duplicados con cliente anónimo porque
+    // la política RLS solo permite SELECT a usuarios master.
+    // La base de datos manejará duplicados con unique constraint si es necesario.
 
     // Encriptar contraseña (en producción usar bcrypt, aquí simplificado)
     const encryptedPassword = Buffer.from(credentials.password).toString('base64');
