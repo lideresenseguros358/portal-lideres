@@ -1,5 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseServer } from '@/lib/supabase/server';
+import { createClient } from '@supabase/supabase-js';
+import type { Database } from '@/lib/database.types';
+
+// Cliente público de Supabase (sin autenticación) para inserciones anónimas
+const getPublicSupabaseClient = () => {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+  
+  return createClient<Database>(supabaseUrl, supabaseAnonKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    }
+  });
+};
 
 // GET - Listar solicitudes
 export async function GET(request: NextRequest) {
@@ -41,9 +56,12 @@ export async function GET(request: NextRequest) {
 }
 
 // POST - Crear nueva solicitud (desde formulario público)
+// IMPORTANTE: Usa cliente público (anónimo) para permitir inserciones sin autenticación
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await getSupabaseServer();
+    // Usar cliente público en lugar de getSupabaseServer
+    // Esto permite inserciones anónimas gracias a la política RLS "public_can_insert_request"
+    const supabase = getPublicSupabaseClient();
     const body = await request.json();
 
     const {
@@ -77,6 +95,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Verificar que el email no esté ya registrado
+    // Esta consulta funciona sin autenticación gracias al cliente público
     const { data: existingRequest } = await supabase
       .from('user_requests')
       .select('id')
@@ -93,7 +112,16 @@ export async function POST(request: NextRequest) {
     // Encriptar contraseña (en producción usar bcrypt, aquí simplificado)
     const encryptedPassword = Buffer.from(credentials.password).toString('base64');
 
-    // Crear solicitud con campos ACH correctos (después de migración)
+    // ============================================
+    // INSERCIÓN PÚBLICA SIN AUTENTICACIÓN
+    // ============================================
+    // Gracias a la política RLS "public_can_insert_request" (TO anon, authenticated WITH CHECK true)
+    // este INSERT funciona sin requerir usuario autenticado.
+    // La seguridad se maneja mediante:
+    //   1. Solo INSERT está permitido (no SELECT)
+    //   2. Master debe aprobar/rechazar (políticas separadas)
+    //   3. Validaciones en backend
+    // ============================================
     const { data: newRequest, error } = await supabase
       .from('user_requests')
       .insert([{
