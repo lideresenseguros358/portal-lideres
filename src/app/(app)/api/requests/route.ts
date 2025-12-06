@@ -115,7 +115,7 @@ export async function POST(request: NextRequest) {
     //   2. Master debe aprobar/rechazar (políticas separadas)
     //   3. Validaciones en backend
     // ============================================
-    const { data: newRequest, error } = await supabase
+    const { error } = await supabase
       .from('user_requests')
       .insert([{
         email: credentials.email,
@@ -137,16 +137,15 @@ export async function POST(request: NextRequest) {
           carnet_expiry_date: personalData.carnet_expiry_date || null
         },
         status: 'pending'
-      }])
-      .select()
-      .single();
+      }]);
+      // NO hacemos .select() porque el usuario anónimo no tiene permisos de SELECT
+      // La política RLS "master_can_view_requests" solo permite SELECT a usuarios master
 
     if (error) throw error;
 
     return NextResponse.json({ 
       success: true, 
-      message: 'Solicitud enviada exitosamente. Espera la aprobación del Master.',
-      request: newRequest 
+      message: 'Solicitud enviada exitosamente. Espera la aprobación del Master.'
     });
 
   } catch (error: any) {
