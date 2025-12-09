@@ -28,6 +28,7 @@ interface Advance {
   recurrence_id?: string | null;
   total_paid?: number; // Total pagado desde advance_logs
   last_payment_date?: string | null; // Fecha del último pago desde advance_logs
+  payment_logs?: Array<{ date: string; amount: number }>; // Logs individuales con fecha y monto
   payment_details?: {
     policy_number: string | null;
     client_name: string | null;
@@ -121,9 +122,10 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
             recurrence_id: (item as any).recurrence_id ?? null,
             total_paid: (item as any).total_paid ? Number((item as any).total_paid) : undefined,
             last_payment_date: (item as any).last_payment_date ?? null,
+            payment_logs: (item as any).payment_logs ?? [],
             payment_details: (item as any).payment_details ?? null,
           };
-          console.log('[AdvancesTab] Advance:', advance.id.substring(0,8), 'status:', advance.status, 'amount:', advance.amount, 'total_paid:', advance.total_paid, 'last_payment:', advance.last_payment_date);
+          console.log('[AdvancesTab] Advance:', advance.id.substring(0,8), 'status:', advance.status, 'amount:', advance.amount, 'total_paid:', advance.total_paid, 'payment_logs:', advance.payment_logs?.length, 'last_payment:', advance.last_payment_date);
           return advance;
         });
         setAllAdvances(normalized);
@@ -196,6 +198,14 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
         // Sumar total_paid de AMBOS adelantos del grupo
         const combinedTotalPaid = group.reduce((sum, adv) => sum + (adv.total_paid || 0), 0);
         
+        // Combinar payment_logs de AMBOS adelantos
+        const combinedPaymentLogs: Array<{ date: string; amount: number }> = [];
+        group.forEach(adv => {
+          if (adv.payment_logs && adv.payment_logs.length > 0) {
+            combinedPaymentLogs.push(...adv.payment_logs);
+          }
+        });
+        
         // Usar la fecha de pago más reciente de cualquiera de los dos
         const latestPaymentDate = group
           .filter(a => a.last_payment_date)
@@ -213,6 +223,7 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
           recurrence_id: base.recurrence_id,
           total_paid: combinedTotalPaid, // Total de AMBOS
           last_payment_date: latestPaymentDate, // Fecha más reciente
+          payment_logs: combinedPaymentLogs, // Logs combinados de ambos
           payment_details: base.payment_details
         };
         // Guardar referencia a todos los adelantos del grupo con sus montos
@@ -376,29 +387,45 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
         }))
       );
       
+      // Agrupar por fecha usando payment_logs para obtener el monto REAL pagado en cada fecha
       allPaidAdvances.forEach(adv => {
-        if (!adv.last_payment_date) return;
+        if (!adv.payment_logs || adv.payment_logs.length === 0) return;
         
-        // Extraer ESTRICTAMENTE solo YYYY-MM-DD (primeros 10 caracteres)
-        // Backend ya devuelve en formato YYYY-MM-DD puro
-        const dateKey = adv.last_payment_date.substring(0, 10);
-        
-        if (!byDate[dateKey]) {
-          byDate[dateKey] = { advances: [], total: 0, brokers: {} };
-        }
-        byDate[dateKey].advances.push(adv);
-        byDate[dateKey].total += (adv.total_paid || 0);
-        
-        if (role === 'master') {
-          const brokerId = adv.brokers?.id || 'unknown';
-          const brokerName = adv.brokers?.name || 'Sin corredor';
+        // Procesar cada log individual
+        adv.payment_logs.forEach(log => {
+          const dateKey = log.date.substring(0, 10);
           
-          if (!byDate[dateKey].brokers[brokerId]) {
-            byDate[dateKey].brokers[brokerId] = { name: brokerName, advances: [], total: 0 };
+          if (!byDate[dateKey]) {
+            byDate[dateKey] = { advances: [], total: 0, brokers: {} };
           }
-          byDate[dateKey].brokers[brokerId].advances.push(adv);
-          byDate[dateKey].brokers[brokerId].total += (adv.total_paid || 0);
-        }
+          
+          // Solo agregar el adelanto una vez por fecha (para mostrar en la lista)
+          const alreadyAdded = byDate[dateKey].advances.some(a => a.id === adv.id);
+          if (!alreadyAdded) {
+            byDate[dateKey].advances.push(adv);
+          }
+          
+          // Sumar el monto REAL pagado en esta fecha
+          byDate[dateKey].total += log.amount;
+          
+          if (role === 'master') {
+            const brokerId = adv.brokers?.id || 'unknown';
+            const brokerName = adv.brokers?.name || 'Sin corredor';
+            
+            if (!byDate[dateKey].brokers[brokerId]) {
+              byDate[dateKey].brokers[brokerId] = { name: brokerName, advances: [], total: 0 };
+            }
+            
+            // Solo agregar el adelanto una vez por fecha y broker
+            const alreadyAddedToBroker = byDate[dateKey].brokers[brokerId].advances.some(a => a.id === adv.id);
+            if (!alreadyAddedToBroker) {
+              byDate[dateKey].brokers[brokerId].advances.push(adv);
+            }
+            
+            // Sumar el monto REAL pagado en esta fecha para este broker
+            byDate[dateKey].brokers[brokerId].total += log.amount;
+          }
+        });
       });
 
       // Ordenar fechas de más reciente a más antigua (comparación string YYYY-MM-DD)

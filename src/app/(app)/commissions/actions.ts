@@ -1161,20 +1161,24 @@ export async function actionGetAdvances(brokerId?: string, year?: number) {
       }
       
       // Agrupar logs por advance_id - ESTRICTO por día
-      const paymentsByAdvance: Record<string, { total: number, lastDate: string }> = {};
+      const paymentsByAdvance: Record<string, { total: number, lastDate: string, logs: Array<{date: string, amount: number}> }> = {};
       if (logs) {
         logs.forEach((log: any) => {
           if (!paymentsByAdvance[log.advance_id]) {
             // Extraer ESTRICTAMENTE solo YYYY-MM-DD (primeros 10 caracteres)
             // Ignorar completamente hora y zona horaria
             const dateOnly = String(log.created_at).substring(0, 10);
-            paymentsByAdvance[log.advance_id] = { total: 0, lastDate: dateOnly };
+            paymentsByAdvance[log.advance_id] = { total: 0, lastDate: dateOnly, logs: [] };
           }
           const current = paymentsByAdvance[log.advance_id];
           if (current) {
-            current.total += Number(log.amount) || 0;
-            // Actualizar última fecha si es más reciente (comparación string YYYY-MM-DD)
             const logDateOnly = String(log.created_at).substring(0, 10);
+            const logAmount = Number(log.amount) || 0;
+            
+            current.total += logAmount;
+            current.logs.push({ date: logDateOnly, amount: logAmount });
+            
+            // Actualizar última fecha si es más reciente (comparación string YYYY-MM-DD)
             if (logDateOnly > current.lastDate) {
               current.lastDate = logDateOnly;
             }
@@ -1186,11 +1190,12 @@ export async function actionGetAdvances(brokerId?: string, year?: number) {
         Object.values(paymentsByAdvance).slice(0, 3).map(p => p.lastDate)
       );
       
-      // Agregar total_paid, last_payment_date y payment_details a cada adelanto
+      // Agregar total_paid, last_payment_date, payment_logs y payment_details a cada adelanto
       dataWithExtras = data.map((adv: any) => ({
         ...adv,
         total_paid: paymentsByAdvance[adv.id]?.total || 0,
         last_payment_date: paymentsByAdvance[adv.id]?.lastDate || null,
+        payment_logs: paymentsByAdvance[adv.id]?.logs || [],
         payment_details: paymentDetailsByAdvance[adv.id] || null,
       }));
       
