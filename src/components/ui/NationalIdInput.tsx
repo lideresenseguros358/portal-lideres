@@ -62,44 +62,53 @@ export default function NationalIdInput({
       hasInitialized.current = true;
       lastValueRef.current = value;
       
-      // Intentar detectar el tipo de documento
-      if (value.includes('-')) {
+      // Detectar tipo de documento de manera inteligente
+      if (!value.includes('-')) {
+        // Sin guiones = pasaporte
+        setDocumentType('pasaporte');
+        setSingleValue(value);
+      } else {
         const parts = value.split('-');
-        if (parts.length === 3) {
-          // Es cédula
+        
+        if (parts.length === 3 && parts[0] && CEDULA_PREFIXES.includes(parts[0].toUpperCase())) {
+          // Es cédula (3 partes y provincia válida)
           setDocumentType('cedula');
-          setCedulaPart1(parts[0] || '');
+          setCedulaPart1(parts[0].toUpperCase());
           setCedulaPart2(parts[1] || '');
           setCedulaPart3(parts[2] || '');
+        } else if (parts[0] && parts[0].length > 2) {
+          // Primera parte tiene más de 2 caracteres = RUC
+          setDocumentType('ruc');
+          setSingleValue(value);
         } else {
-          // Podría ser RUC
+          // Cualquier otro formato con guiones = RUC
           setDocumentType('ruc');
           setSingleValue(value);
         }
-      } else if (value) {
-        // Probablemente pasaporte
-        setDocumentType('pasaporte');
-        setSingleValue(value);
       }
     }
     // Actualizar si value cambia externamente después de la inicialización
     else if (hasInitialized.current && value && value !== lastValueRef.current) {
       lastValueRef.current = value;
       
-      if (value.includes('-')) {
+      if (!value.includes('-')) {
+        setDocumentType('pasaporte');
+        setSingleValue(value);
+      } else {
         const parts = value.split('-');
-        if (parts.length === 3) {
+        
+        if (parts.length === 3 && parts[0] && CEDULA_PREFIXES.includes(parts[0].toUpperCase())) {
           setDocumentType('cedula');
-          setCedulaPart1(parts[0] || '');
+          setCedulaPart1(parts[0].toUpperCase());
           setCedulaPart2(parts[1] || '');
           setCedulaPart3(parts[2] || '');
+        } else if (parts[0] && parts[0].length > 2) {
+          setDocumentType('ruc');
+          setSingleValue(value);
         } else {
           setDocumentType('ruc');
           setSingleValue(value);
         }
-      } else if (value) {
-        setDocumentType('pasaporte');
-        setSingleValue(value);
       }
     }
     
@@ -187,9 +196,9 @@ export default function NationalIdInput({
       {/* Inputs según tipo de documento */}
       {documentType === 'cedula' && (
         <div>
-          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+          <div className="flex flex-row gap-2">
             {/* Parte 1: Provincia/Prefijo */}
-            <div className="flex-none w-full sm:w-32">
+            <div className="flex-none w-24 sm:w-32">
               <Select value={cedulaPart1} onValueChange={setCedulaPart1}>
                 <SelectTrigger className="w-full border-2 border-gray-300 focus:border-[#8AAA19] h-11">
                   <SelectValue placeholder="Provincia" />
@@ -205,7 +214,7 @@ export default function NationalIdInput({
             </div>
 
             {/* Parte 2: Tomo (max 4 dígitos) */}
-            <div className="flex-1 sm:flex-none sm:w-28">
+            <div className="flex-1 min-w-0 sm:w-28">
               <input
                 type="text"
                 inputMode="numeric"
@@ -213,12 +222,12 @@ export default function NationalIdInput({
                 value={cedulaPart2}
                 onChange={handleCedulaPart2Change}
                 maxLength={4}
-                className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none h-11 text-center font-mono"
+                className="w-full px-1 sm:px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none h-11 text-center font-mono text-sm sm:text-base"
               />
             </div>
 
             {/* Parte 3: Asiento (max 5 dígitos) */}
-            <div className="flex-1 sm:flex-none sm:w-32">
+            <div className="flex-1 min-w-0 sm:w-32">
               <input
                 type="text"
                 inputMode="numeric"
@@ -226,7 +235,7 @@ export default function NationalIdInput({
                 value={cedulaPart3}
                 onChange={handleCedulaPart3Change}
                 maxLength={5}
-                className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none h-11 text-center font-mono"
+                className="w-full px-1 sm:px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none h-11 text-center font-mono text-sm sm:text-base"
               />
             </div>
           </div>

@@ -138,15 +138,15 @@ export default function PolicyNumberInput({
           />
         </div>
       ) : (
-        // Múltiples inputs
-        <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+        // Múltiples inputs - siempre horizontales
+        <div className="flex flex-row gap-2">
           {Array.from({ length: config.inputCount }).map((_, index) => {
             const inputType = config.inputTypes[index];
 
             if (inputType === 'dropdown') {
               // Dropdown (ej: ASSA parte 2)
               return (
-                <div key={index} className="flex-none w-full sm:w-32">
+                <div key={index} className="flex-none w-24 sm:w-32">
                   <Select 
                     value={inputs[index] || ''} 
                     onValueChange={(val) => handleInputChange(index, val)}
@@ -165,7 +165,7 @@ export default function PolicyNumberInput({
             } else if (inputType === 'numeric') {
               // Input numérico
               return (
-                <div key={index} className={`flex-1 ${config.inputCount > 3 ? 'sm:flex-none sm:w-28' : ''}`}>
+                <div key={index} className="flex-1 min-w-0 sm:w-28">
                   <input
                     type="text"
                     inputMode="numeric"
@@ -174,7 +174,7 @@ export default function PolicyNumberInput({
                       const val = e.target.value.replace(/\D/g, ''); // Solo números
                       handleInputChange(index, val);
                     }}
-                    className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none h-11 text-center font-mono"
+                    className="w-full px-1 sm:px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none h-11 text-center font-mono text-sm sm:text-base"
                     placeholder={`Parte ${index + 1}`}
                   />
                 </div>
@@ -182,12 +182,12 @@ export default function PolicyNumberInput({
             } else {
               // Input mixto (texto y números)
               return (
-                <div key={index} className="flex-1">
+                <div key={index} className="flex-1 min-w-0 sm:w-32">
                   <input
                     type="text"
                     value={inputs[index] || ''}
                     onChange={(e) => handleInputChange(index, e.target.value.toUpperCase())}
-                    className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none h-11 font-mono"
+                    className="w-full px-1 sm:px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none h-11 font-mono text-sm sm:text-base"
                     placeholder={`Parte ${index + 1}`}
                   />
                 </div>
