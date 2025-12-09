@@ -23,7 +23,7 @@ DECLARE
   v_tipo_cuenta text;
   v_beneficiary_name text;
   v_percent_default numeric;
-  v_broker_type text;
+  v_broker_type public.broker_type_enum;  -- ENUM, no TEXT
   v_assa_code text;
   v_carnet_expiry_date date;
 BEGIN
@@ -57,10 +57,18 @@ BEGIN
     0.82
   );
 
-  -- Campos adicionales
-  v_broker_type := COALESCE(NEW.raw_user_meta_data->>'broker_type', 'corredor');
+  -- Campos adicionales (IMPORTANTE: broker_type es un ENUM, no TEXT)
+  v_broker_type := COALESCE(
+    (NEW.raw_user_meta_data->>'broker_type')::public.broker_type_enum,
+    'corredor'::public.broker_type_enum
+  );
   v_assa_code := NEW.raw_user_meta_data->>'assa_code';
-  v_carnet_expiry_date := (NEW.raw_user_meta_data->>'carnet_expiry_date')::date;
+  
+  BEGIN
+    v_carnet_expiry_date := (NEW.raw_user_meta_data->>'carnet_expiry_date')::date;
+  EXCEPTION WHEN OTHERS THEN
+    v_carnet_expiry_date := NULL;
+  END;
 
   -- Master especial
   IF lower(NEW.email) = 'contacto@lideresenseguros.com' THEN
