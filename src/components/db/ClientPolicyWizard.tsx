@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { POLICY_TYPES, checkSpecialOverride } from '@/lib/constants/policy-types';
 import { getTodayLocalDate, addOneYearToDate } from '@/lib/utils/dates';
 import NationalIdInput from '@/components/ui/NationalIdInput';
+import PolicyNumberInput from '@/components/ui/PolicyNumberInput';
 
 interface WizardProps {
   onClose: () => void;
@@ -597,19 +598,22 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                 </Select>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Número de Póliza <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
+              {/* Número de Póliza con autoayuda por aseguradora */}
+              {formData.insurer_id ? (
+                <PolicyNumberInput
+                  insurerName={insurers.find(i => i.id === formData.insurer_id)?.name || ''}
                   value={formData.policy_number}
-                  onChange={createUppercaseHandler((e) => setFormData({ ...formData, policy_number: e.target.value }))}
-                  className={`w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition ${uppercaseInputClass}`}
-                  placeholder="POL-2024-001"
+                  onChange={(value) => setFormData({ ...formData, policy_number: value })}
+                  label="Número de Póliza"
+                  required
                 />
-              </div>
+              ) : (
+                <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <p className="text-sm text-yellow-800">
+                    ⚠️ Primero selecciona una aseguradora para ver el formato correcto del número de póliza
+                  </p>
+                </div>
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">

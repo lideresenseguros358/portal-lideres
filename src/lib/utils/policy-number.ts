@@ -1,0 +1,405 @@
+/**
+ * UTILIDADES PARA NÚMEROS DE PÓLIZA
+ * 
+ * Funciones de normalización, validación y parseo para números de póliza
+ * según las reglas específicas de cada aseguradora.
+ */
+
+export type InsurerSlug = 
+  | 'assa'
+  | 'ancon'
+  | 'internacional'
+  | 'sura'
+  | 'banesco'
+  | 'mb'
+  | 'fedpa'
+  | 'regional'
+  | 'optima'
+  | 'aliado'
+  | 'palig'
+  | 'acerta'
+  | 'mapfre'
+  | 'univivir'
+  | 'assistcard'
+  | 'vumi'
+  | 'ifs'
+  | 'ww-medical'
+  | 'mercantil'
+  | 'general';
+
+/**
+ * Configuración de formato por aseguradora
+ */
+export interface PolicyFormatConfig {
+  insurer: string;
+  slug: InsurerSlug;
+  inputCount: number;
+  inputTypes: ('numeric' | 'text' | 'dropdown' | 'mixed')[];
+  dropdownOptions?: string[];
+  joinWith: string; // '' = sin separador, '-' = con guiones
+  normalize: boolean; // Si requiere normalización especial
+  reorder?: number[]; // Índices para reordenar inputs (base 0)
+  removeLeadingZeros?: boolean[]; // Por cada input
+  examples: string[];
+  parserRule: 'full' | 'partial'; // full = buscar completo, partial = buscar parte
+  parserInputs?: number[]; // Índices de inputs a usar para búsqueda (base 0)
+}
+
+/**
+ * Configuraciones de todas las aseguradoras
+ */
+export const POLICY_FORMATS: Record<InsurerSlug, PolicyFormatConfig> = {
+  'assa': {
+    insurer: 'ASSA',
+    slug: 'assa',
+    inputCount: 3,
+    inputTypes: ['numeric', 'dropdown', 'numeric'],
+    dropdownOptions: ['A', 'B', 'BR', 'BC', 'BG', 'BI', 'BV', 'G', 'GC', 'GG', 'T'],
+    joinWith: '',
+    normalize: false,
+    examples: ['02BR12345', '05A67890'],
+    parserRule: 'full',
+  },
+  'ancon': {
+    insurer: 'ANCON',
+    slug: 'ancon',
+    inputCount: 3,
+    inputTypes: ['numeric', 'numeric', 'numeric'],
+    joinWith: '-',
+    normalize: false,
+    examples: ['0220-00678-01', '0315-01234-02'],
+    parserRule: 'partial',
+    parserInputs: [1], // Solo el segundo input (índice 1)
+  },
+  'internacional': {
+    insurer: 'INTERNACIONAL',
+    slug: 'internacional',
+    inputCount: 3,
+    inputTypes: ['numeric', 'numeric', 'numeric'],
+    joinWith: '-',
+    normalize: true,
+    reorder: [1, 0, 2], // input2-input1-input3
+    removeLeadingZeros: [true, true, true],
+    examples: ['1-30-98767', '2-15-123456'],
+    parserRule: 'full',
+  },
+  'sura': {
+    insurer: 'SURA',
+    slug: 'sura',
+    inputCount: 1,
+    inputTypes: ['mixed'],
+    joinWith: '',
+    normalize: false,
+    examples: ['04123456897', '0234-2234-12345'],
+    parserRule: 'full',
+  },
+  'banesco': {
+    insurer: 'BANESCO',
+    slug: 'banesco',
+    inputCount: 4,
+    inputTypes: ['numeric', 'numeric', 'numeric', 'numeric'],
+    joinWith: '-',
+    normalize: false,
+    examples: ['1-1-10001234-0', '2-3-10005678-1'],
+    parserRule: 'partial',
+    parserInputs: [0, 1, 2], // Primeros 3 inputs (índices 0, 1, 2)
+  },
+  'mb': {
+    insurer: 'MB',
+    slug: 'mb',
+    inputCount: 4,
+    inputTypes: ['numeric', 'numeric', 'numeric', 'numeric'],
+    joinWith: '-',
+    normalize: false,
+    examples: ['02-01-123456-4', '03-02-789012-5'],
+    parserRule: 'partial',
+    parserInputs: [2], // Solo el tercer input (índice 2)
+  },
+  'fedpa': {
+    insurer: 'FEDPA',
+    slug: 'fedpa',
+    inputCount: 4,
+    inputTypes: ['numeric', 'numeric', 'numeric', 'numeric'],
+    joinWith: '-',
+    normalize: false,
+    examples: ['02-01-123456-4'],
+    parserRule: 'partial',
+    parserInputs: [2],
+  },
+  'regional': {
+    insurer: 'REGIONAL',
+    slug: 'regional',
+    inputCount: 4,
+    inputTypes: ['numeric', 'numeric', 'numeric', 'numeric'],
+    joinWith: '-',
+    normalize: false,
+    examples: ['02-01-123456-4'],
+    parserRule: 'partial',
+    parserInputs: [2],
+  },
+  'optima': {
+    insurer: 'OPTIMA',
+    slug: 'optima',
+    inputCount: 4,
+    inputTypes: ['numeric', 'numeric', 'numeric', 'numeric'],
+    joinWith: '-',
+    normalize: false,
+    examples: ['02-01-123456-4'],
+    parserRule: 'partial',
+    parserInputs: [2],
+  },
+  'aliado': {
+    insurer: 'ALIADO',
+    slug: 'aliado',
+    inputCount: 4,
+    inputTypes: ['numeric', 'numeric', 'numeric', 'numeric'],
+    joinWith: '-',
+    normalize: false,
+    examples: ['02-01-123456-4'],
+    parserRule: 'partial',
+    parserInputs: [2],
+  },
+  'palig': {
+    insurer: 'PALIG',
+    slug: 'palig',
+    inputCount: 1,
+    inputTypes: ['mixed'],
+    joinWith: '',
+    normalize: false,
+    examples: ['680882', '4239-1234'],
+    parserRule: 'full',
+  },
+  'acerta': {
+    insurer: 'ACERTA',
+    slug: 'acerta',
+    inputCount: 3,
+    inputTypes: ['numeric', 'numeric', 'numeric'],
+    joinWith: '-',
+    normalize: false,
+    examples: ['10-100001234-0', '12-200002345-1'],
+    parserRule: 'partial',
+    parserInputs: [1], // Solo el segundo input (índice 1)
+  },
+  'mapfre': {
+    insurer: 'MAPFRE',
+    slug: 'mapfre',
+    inputCount: 1,
+    inputTypes: ['mixed'],
+    joinWith: '',
+    normalize: false,
+    examples: ['021234455666', 'MAP-2024-001'],
+    parserRule: 'full',
+  },
+  'univivir': {
+    insurer: 'UNIVIVIR',
+    slug: 'univivir',
+    inputCount: 3,
+    inputTypes: ['numeric', 'numeric', 'numeric'],
+    joinWith: '-',
+    normalize: false,
+    examples: ['01-09-12345', '02-10-67890'],
+    parserRule: 'partial',
+    parserInputs: [2], // Solo el tercer input (índice 2)
+  },
+  'assistcard': {
+    insurer: 'ASSISTCARD',
+    slug: 'assistcard',
+    inputCount: 1,
+    inputTypes: ['mixed'],
+    joinWith: '',
+    normalize: false,
+    examples: ['123445566', 'ASS-2024-001'],
+    parserRule: 'full',
+  },
+  'vumi': {
+    insurer: 'VUMI',
+    slug: 'vumi',
+    inputCount: 1,
+    inputTypes: ['mixed'],
+    joinWith: '',
+    normalize: false,
+    examples: ['123445566'],
+    parserRule: 'full',
+  },
+  'ifs': {
+    insurer: 'IFS',
+    slug: 'ifs',
+    inputCount: 1,
+    inputTypes: ['mixed'],
+    joinWith: '',
+    normalize: false,
+    examples: ['123445566'],
+    parserRule: 'full',
+  },
+  'ww-medical': {
+    insurer: 'WW MEDICAL',
+    slug: 'ww-medical',
+    inputCount: 3,
+    inputTypes: ['text', 'numeric', 'numeric'],
+    joinWith: '-',
+    normalize: false,
+    examples: ['WP69-16-123456', 'WM70-18-234567'],
+    parserRule: 'full',
+  },
+  'mercantil': {
+    insurer: 'MERCANTIL',
+    slug: 'mercantil',
+    inputCount: 3,
+    inputTypes: ['numeric', 'numeric', 'numeric'],
+    joinWith: '-',
+    normalize: false,
+    examples: ['2-8-123', '3-9-456'],
+    parserRule: 'full',
+  },
+  'general': {
+    insurer: 'GENERAL',
+    slug: 'general',
+    inputCount: 3,
+    inputTypes: ['mixed', 'mixed', 'mixed'],
+    joinWith: '-',
+    normalize: false,
+    examples: ['AUTO-123456-2025', 'GEN-2024-001'],
+    parserRule: 'full',
+  },
+};
+
+/**
+ * Remover ceros a la izquierda de un string numérico
+ */
+function removeLeadingZeros(value: string): string {
+  if (!value) return value;
+  const num = parseInt(value, 10);
+  return isNaN(num) ? value : num.toString();
+}
+
+/**
+ * Normalizar número de póliza según reglas de la aseguradora
+ * 
+ * @param insurerSlug - Slug de la aseguradora
+ * @param parts - Array de strings con cada parte del número
+ * @returns Número normalizado para guardar en BD
+ */
+export function normalizePolicyNumber(insurerSlug: InsurerSlug, parts: string[]): string {
+  const config = POLICY_FORMATS[insurerSlug];
+  if (!config) return parts.join('-');
+
+  let normalizedParts = [...parts];
+
+  // Remover ceros a la izquierda si aplica
+  if (config.removeLeadingZeros) {
+    normalizedParts = normalizedParts.map((part, index) => {
+      if (config.removeLeadingZeros![index]) {
+        return removeLeadingZeros(part);
+      }
+      return part;
+    });
+  }
+
+  // Reordenar si aplica (INTERNACIONAL)
+  if (config.reorder) {
+    const reordered: string[] = [];
+    config.reorder.forEach(index => {
+      reordered.push(normalizedParts[index] ?? '');
+    });
+    normalizedParts = reordered;
+  }
+
+  // Unir con el separador configurado
+  return normalizedParts.filter(p => p).join(config.joinWith);
+}
+
+/**
+ * Obtener término de búsqueda para parsers de comisiones/morosidad
+ * 
+ * @param insurerSlug - Slug de la aseguradora
+ * @param policyNumber - Número completo de póliza
+ * @returns Término a usar en búsqueda
+ */
+export function getPolicySearchTerm(insurerSlug: InsurerSlug, policyNumber: string): string {
+  const config = POLICY_FORMATS[insurerSlug];
+  if (!config) return policyNumber;
+
+  // Si usa búsqueda completa, retornar tal cual
+  if (config.parserRule === 'full') {
+    return policyNumber;
+  }
+
+  // Si usa búsqueda parcial
+  if (config.parserRule === 'partial' && config.parserInputs) {
+    // Separar el número de póliza
+    const parts = policyNumber.split(config.joinWith || '-');
+    
+    // Extraer solo las partes indicadas
+    const searchParts = config.parserInputs.map(index => parts[index] || '');
+    
+    // Para ANCON y casos similares, también buscar sin ceros
+    if (insurerSlug === 'ancon' && searchParts.length === 1) {
+      return removeLeadingZeros(searchParts[0] ?? '');
+    }
+    
+    // Retornar con el mismo separador
+    return searchParts.filter(p => p).join(config.joinWith);
+  }
+
+  return policyNumber;
+}
+
+/**
+ * Validar formato de número de póliza
+ * 
+ * @param insurerSlug - Slug de la aseguradora
+ * @param parts - Array de strings con cada parte
+ * @returns true si es válido
+ */
+export function validatePolicyFormat(insurerSlug: InsurerSlug, parts: string[]): boolean {
+  const config = POLICY_FORMATS[insurerSlug];
+  if (!config) return false;
+
+  // Verificar cantidad de inputs
+  if (parts.length !== config.inputCount) return false;
+
+  // Verificar que no estén vacíos
+  if (parts.some(p => !p || p.trim() === '')) return false;
+
+  // Verificar tipos
+  for (let i = 0; i < parts.length; i++) {
+    const type = config.inputTypes[i];
+    const value = parts[i];
+
+    if (!value) return false; // value no debe ser undefined
+
+    if (type === 'numeric') {
+      // Solo debe contener números
+      if (!/^\d+$/.test(value)) return false;
+    } else if (type === 'dropdown') {
+      // Debe estar en las opciones
+      if (!config.dropdownOptions?.includes(value)) return false;
+    }
+    // 'text' y 'mixed' aceptan cualquier cosa
+  }
+
+  return true;
+}
+
+/**
+ * Obtener configuración de formato para una aseguradora
+ */
+export function getPolicyFormatConfig(insurerSlug: InsurerSlug): PolicyFormatConfig | null {
+  return POLICY_FORMATS[insurerSlug] || null;
+}
+
+/**
+ * Detectar slug de aseguradora por nombre
+ */
+export function getInsurerSlug(insurerName: string): InsurerSlug | null {
+  const normalized = insurerName.toUpperCase().trim();
+  
+  // Buscar en las configuraciones
+  for (const [slug, config] of Object.entries(POLICY_FORMATS)) {
+    if (config.insurer.toUpperCase() === normalized) {
+      return slug as InsurerSlug;
+    }
+  }
+  
+  return null;
+}

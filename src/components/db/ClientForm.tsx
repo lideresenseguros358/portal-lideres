@@ -9,6 +9,7 @@ import { toUppercasePayload, createUppercaseHandler, uppercaseInputClass } from 
 import ExpedienteManager from '@/components/expediente/ExpedienteManager';
 import { POLICY_TYPES, checkSpecialOverride } from '@/lib/constants/policy-types';
 import NationalIdInput from '@/components/ui/NationalIdInput';
+import PolicyNumberInput from '@/components/ui/PolicyNumberInput';
 
 import { ClientWithPolicies } from '@/types/db';
 
@@ -687,20 +688,7 @@ function PolicyForm({ clientId, policy, onClose, onSave, readOnly = false }: Pol
             </div>
           )}
           <fieldset disabled={readOnly}>
-            <div>
-              <label className="block text-sm font-bold text-[#010139] mb-2">
-                📝 Número de Póliza *
-              </label>
-              <input
-                type="text"
-                required
-                value={formData.policy_number}
-                onChange={createUppercaseHandler((e) => setFormData({ ...formData, policy_number: e.target.value }))}
-                className={`w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none text-sm font-medium transition-all ${uppercaseInputClass}`}
-                placeholder="AUTO-12345"
-              />
-            </div>
-
+            {/* Primero: Aseguradora */}
             <div>
               <label className="block text-sm font-bold text-[#010139] mb-2">
                 🏢 Aseguradora *
@@ -722,6 +710,23 @@ function PolicyForm({ clientId, policy, onClose, onSave, readOnly = false }: Pol
                 ))}
               </select>
             </div>
+
+            {/* Segundo: Número de Póliza con autoayuda */}
+            {formData.insurer_id && formData.insurer_id !== 'all' ? (
+              <PolicyNumberInput
+                insurerName={insurers.find(i => i.id === formData.insurer_id)?.name || ''}
+                value={formData.policy_number}
+                onChange={(value) => setFormData({ ...formData, policy_number: value })}
+                label="Número de Póliza"
+                required
+              />
+            ) : (
+              <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <p className="text-sm text-yellow-800">
+                  ⚠️ Primero selecciona una aseguradora para ver el formato correcto del número de póliza
+                </p>
+              </div>
+            )}
 
             <div>
               <label className="block text-sm font-bold text-[#010139] mb-2">
