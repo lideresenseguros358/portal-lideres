@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface NationalIdInputProps {
@@ -43,6 +43,8 @@ export default function NationalIdInput({
   className = ''
 }: NationalIdInputProps) {
   const [documentType, setDocumentType] = useState<DocumentType>('cedula');
+  const isInitialMount = useRef(true);
+  const lastValueRef = useRef(value);
   
   // Para cédula: 3 partes separadas
   const [cedulaPart1, setCedulaPart1] = useState('');
@@ -52,9 +54,11 @@ export default function NationalIdInput({
   // Para pasaporte y RUC: un solo campo
   const [singleValue, setSingleValue] = useState('');
 
-  // Inicializar desde el value prop
+  // Inicializar desde el value prop SOLO UNA VEZ o cuando value cambia externamente
   useEffect(() => {
-    if (value) {
+    if (value && value !== lastValueRef.current) {
+      lastValueRef.current = value;
+      
       // Intentar detectar el tipo de documento
       if (value.includes('-')) {
         const parts = value.split('-');
@@ -69,28 +73,39 @@ export default function NationalIdInput({
           setDocumentType('ruc');
           setSingleValue(value);
         }
-      } else {
+      } else if (value) {
         // Probablemente pasaporte
         setDocumentType('pasaporte');
         setSingleValue(value);
       }
     }
+    
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+    }
   }, [value]);
 
   // Actualizar el valor cuando cambien las partes de la cédula
   useEffect(() => {
-    if (documentType === 'cedula') {
+    if (!isInitialMount.current && documentType === 'cedula') {
       const fullCedula = [cedulaPart1, cedulaPart2, cedulaPart3]
         .filter(part => part) // Eliminar partes vacías
         .join('-');
-      onChange(fullCedula);
+      
+      if (fullCedula !== lastValueRef.current) {
+        lastValueRef.current = fullCedula;
+        onChange(fullCedula);
+      }
     }
   }, [cedulaPart1, cedulaPart2, cedulaPart3, documentType, onChange]);
 
   // Actualizar el valor cuando cambie el campo único
   useEffect(() => {
-    if (documentType === 'pasaporte' || documentType === 'ruc') {
-      onChange(singleValue);
+    if (!isInitialMount.current && (documentType === 'pasaporte' || documentType === 'ruc')) {
+      if (singleValue !== lastValueRef.current) {
+        lastValueRef.current = singleValue;
+        onChange(singleValue);
+      }
     }
   }, [singleValue, documentType, onChange]);
 
