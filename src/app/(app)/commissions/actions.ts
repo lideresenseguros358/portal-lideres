@@ -4486,49 +4486,69 @@ export async function actionGetAvailablePeriods() {
 
 /**
  * Get detailed broker commissions with policies grouped by insurer
+ * INCLUDES ASSA codes for the broker
  */
 export async function actionGetBrokerCommissionDetails(fortnightId: string, brokerId?: string) {
   try {
     const supabase = getSupabaseAdmin();
     
-    // Get fortnight dates
-    const { data: fortnight, error: fError } = await supabase
-      .from('fortnights')
-      .select('period_start, period_end')
-      .eq('id', fortnightId)
-      .single();
-
-    if (fError) throw fError;
-    if (!fortnight) {
-      return { ok: true as const, data: [] };
+    // Obtener assa_code del broker si existe
+    let assaCode: string | null = null;
+    if (brokerId) {
+      const { data: brokerData } = await supabase
+        .from('brokers')
+        .select('assa_code')
+        .eq('id', brokerId)
+        .single();
+      
+      assaCode = brokerData?.assa_code || null;
+      console.log('[actionGetBrokerCommissionDetails] Broker:', brokerId, 'ASSA Code:', assaCode);
     }
-
-    // Get all comm_items for this fortnight date range
-    let query = supabase
-      .from('comm_items')
+    
+    // Buscar DIRECTAMENTE en fortnight_details (NO en comm_items)
+    // porque fortnight_details tiene la info correcta de assa_code
+    let detailsQuery = supabase
+      .from('fortnight_details')
       .select(`
         id,
         policy_number,
-        insured_name,
-        gross_amount,
+        client_name,
+        commission_raw,
+        percent_applied,
+        commission_calculated,
         broker_id,
         insurer_id,
-        created_at,
-        raw_row,
-        brokers ( id, name, email, percent_default ),
+        is_assa_code,
+        assa_code,
+        brokers ( id, name, email, percent_default, assa_code ),
         insurers ( id, name )
       `)
-      .gte('created_at', fortnight.period_start)
-      .lte('created_at', fortnight.period_end)
-      .not('broker_id', 'is', null);
+      .eq('fortnight_id', fortnightId);
 
+    // Filtrar por broker_id O assa_code (igual que actionGetYTDCommissions)
     if (brokerId) {
-      query = query.eq('broker_id', brokerId);
+      if (assaCode) {
+        console.log('[actionGetBrokerCommissionDetails] Filtrando por broker_id O assa_code:', assaCode);
+        detailsQuery = detailsQuery.or(`broker_id.eq.${brokerId},assa_code.eq.${assaCode}`);
+      } else {
+        console.log('[actionGetBrokerCommissionDetails] Filtrando solo por broker_id');
+        detailsQuery = detailsQuery.eq('broker_id', brokerId);
+      }
     }
 
-    const { data: commItems, error: ciError } = await query;
+    const { data: commItems, error: ciError } = await detailsQuery;
 
     if (ciError) throw ciError;
+
+    console.log('[actionGetBrokerCommissionDetails] Items encontrados:', commItems?.length || 0);
+    if (commItems && commItems.length > 0) {
+      console.log('[actionGetBrokerCommissionDetails] Sample items:', commItems.slice(0, 3).map(i => ({
+        policy: i.policy_number,
+        is_assa: i.is_assa_code,
+        assa_code: i.assa_code,
+        commission: i.commission_calculated
+      })));
+    }
 
     // Group by broker
     const brokerMap = new Map<string, any>();
@@ -4544,40 +4564,58 @@ export async function actionGetBrokerCommissionDetails(fortnightId: string, brok
           broker_email: item.brokers.email,
           percent_default: item.brokers.percent_default,
           insurers: new Map<string, any>(),
+          assa_codes: [], // Códigos ASSA separados
           total_gross: 0,
           total_net: 0,
         });
       }
 
       const broker = brokerMap.get(bId);
-      const insurerId = item.insurer_id;
-      const insurerName = item.insurers?.name || 'Desconocido';
-
-      if (!broker.insurers.has(insurerId)) {
-        broker.insurers.set(insurerId, {
-          insurer_id: insurerId,
-          insurer_name: insurerName,
-          policies: [],
-          total_gross: 0,
+      
+      // Si es código ASSA, agregarlo a la lista separada
+      if (item.is_assa_code) {
+        broker.assa_codes.push({
+          policy_number: item.policy_number,
+          assa_code: item.assa_code,
+          client_name: item.client_name,
+          commission_raw: item.commission_raw,
+          percent_applied: item.percent_applied,
+          commission_calculated: item.commission_calculated,
+          net_amount: item.commission_calculated,
         });
+        broker.total_gross += Number(item.commission_raw) || 0;
+        broker.total_net += Number(item.commission_calculated) || 0;
+      } else {
+        // Pólizas regulares por aseguradora
+        const insurerId = item.insurer_id;
+        const insurerName = item.insurers?.name || 'Desconocido';
+
+        if (!broker.insurers.has(insurerId)) {
+          broker.insurers.set(insurerId, {
+            insurer_id: insurerId,
+            insurer_name: insurerName,
+            policies: [],
+            total_gross: 0,
+          });
+        }
+
+        const insurer = broker.insurers.get(insurerId);
+        const grossAmount = Number(item.commission_raw) || 0;
+        const percentage = Number(item.percent_applied) || 0;
+        const netAmount = Number(item.commission_calculated) || 0;
+
+        insurer.policies.push({
+          policy_number: item.policy_number,
+          insured_name: item.client_name,
+          gross_amount: grossAmount,
+          percentage: percentage,
+          net_amount: netAmount,
+        });
+
+        insurer.total_gross += grossAmount;
+        broker.total_gross += grossAmount;
+        broker.total_net += netAmount;
       }
-
-      const insurer = broker.insurers.get(insurerId);
-      const grossAmount = Number(item.gross_amount) || 0;
-      const percentage = item.raw_row?.percentage_applied || item.brokers.percent_default || 0;
-      const netAmount = grossAmount * percentage;
-
-      insurer.policies.push({
-        policy_number: item.policy_number,
-        insured_name: item.insured_name,
-        gross_amount: grossAmount,
-        percentage: percentage,
-        net_amount: netAmount,
-      });
-
-      insurer.total_gross += grossAmount;
-      broker.total_gross += grossAmount;
-      broker.total_net += netAmount;
     });
 
     // Format response
@@ -4594,7 +4632,18 @@ export async function actionGetBrokerCommissionDetails(fortnightId: string, brok
         total_gross: ins.total_gross,
         policies: ins.policies.sort((a: any, b: any) => b.gross_amount - a.gross_amount),
       })).sort((a: any, b: any) => b.total_gross - a.total_gross),
+      assa_codes: broker.assa_codes || [], // Incluir códigos ASSA
     })).sort((a, b) => b.total_net - a.total_net);
+
+    console.log('[actionGetBrokerCommissionDetails] Result brokers:', result.length);
+    if (result.length > 0 && result[0] && result[0].assa_codes && result[0].assa_codes.length > 0) {
+      const firstBroker = result[0];
+      console.log('[actionGetBrokerCommissionDetails] Broker con ASSA codes:', {
+        broker: firstBroker.broker_name,
+        assa_count: firstBroker.assa_codes.length,
+        assa_total: firstBroker.assa_codes.reduce((sum: number, a: any) => sum + a.commission_calculated, 0)
+      });
+    }
 
     return { ok: true as const, data: result };
   } catch (error) {
