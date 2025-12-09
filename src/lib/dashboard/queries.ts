@@ -295,30 +295,65 @@ export async function getNetCommissions(userId: string, role: DashboardRole): Pr
 }
 
 export async function getAnnualNet(userId: string, role: DashboardRole): Promise<AnnualNet> {
-  const supabase = await getSupabaseServer();
+  const supabase = getSupabaseAdmin(); // Usar admin para acceder a todas las tablas
   const brokerId = role === "broker" ? await resolveBrokerId(userId) : null;
 
-  // Para brokers: suma de comisiones del año (quincenas + ajustes)
+  // Para brokers: suma de comisiones del año usando fortnight_details (igual que gráficas YTD)
   if (role === "broker" && brokerId) {
-    const yearStart = `${CURRENT_YEAR}-01-01T00:00:00.000Z`;
-    const yearEnd = `${CURRENT_YEAR}-12-31T23:59:59.999Z`;
+    // Obtener código ASSA del broker
+    const { data: brokerData } = await supabase
+      .from('brokers')
+      .select('assa_code')
+      .eq('id', brokerId)
+      .single();
     
-    const { data, error } = await supabase
-      .from("comm_items")
-      .select("gross_amount")
-      .eq("broker_id", brokerId)
-      .gte("created_at", yearStart)
-      .lte("created_at", yearEnd)
-      .limit(FETCH_LIMIT)
-      .returns<{ gross_amount: number | string | null }[]>();
+    const assaCode = brokerData?.assa_code || null;
     
-    if (error || !data) {
+    console.log('📊 [getAnnualNet] Broker:', brokerId, 'ASSA Code:', assaCode);
+    
+    // Obtener quincenas del año actual
+    const { data: fortnights } = await supabase
+      .from('fortnights')
+      .select('id, period_start, period_end')
+      .gte('period_start', `${CURRENT_YEAR}-01-01`)
+      .lte('period_end', `${CURRENT_YEAR}-12-31`)
+      .in('status', ['PAID', 'READY']);
+    
+    if (!fortnights || fortnights.length === 0) {
+      console.log('📊 [getAnnualNet] No hay quincenas del año', CURRENT_YEAR);
       return { value: 0 };
     }
     
-    const value = data.reduce((acc: number, item) => {
-      return acc + toNumber(item.gross_amount);
+    const fortnightIds = fortnights.map(f => f.id);
+    console.log('📊 [getAnnualNet] Quincenas encontradas:', fortnightIds.length);
+    
+    // Buscar comisiones en fortnight_details (igual que actionGetYTDCommissions)
+    let detailsQuery = supabase
+      .from('fortnight_details')
+      .select('commission_calculated')
+      .in('fortnight_id', fortnightIds);
+    
+    // Filtrar por broker_id O assa_code (IGUAL QUE EN GRÁFICAS)
+    if (assaCode) {
+      detailsQuery = detailsQuery.or(`broker_id.eq.${brokerId},assa_code.eq.${assaCode}`);
+      console.log('📊 [getAnnualNet] Filtrando por broker_id O assa_code');
+    } else {
+      detailsQuery = detailsQuery.eq('broker_id', brokerId);
+      console.log('📊 [getAnnualNet] Filtrando solo por broker_id');
+    }
+    
+    const { data, error } = await detailsQuery;
+    
+    if (error) {
+      console.error('📊 [getAnnualNet] Error:', error);
+      return { value: 0 };
+    }
+    
+    const value = (data || []).reduce((acc: number, item: any) => {
+      return acc + toNumber(item.commission_calculated);
     }, 0);
+    
+    console.log('📊 [getAnnualNet] Total calculado:', value, 'de', data?.length || 0, 'registros');
     
     // Si no hay datos reales, usar mock
     if (MOCK_DATA_ENABLED && value === 0) {
