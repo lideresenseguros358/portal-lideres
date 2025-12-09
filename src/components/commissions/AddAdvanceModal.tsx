@@ -135,7 +135,7 @@ export function AddAdvanceModal({ isOpen, onClose, onSuccess, brokers }: Props) 
           {/* Content */}
           <div className="standard-modal-content">
             <Form {...form}>
-              <form id="advance-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+              <form id="advance-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             {/* Corredor */}
             <FormField
               control={form.control}
@@ -215,8 +215,8 @@ export function AddAdvanceModal({ isOpen, onClose, onSuccess, brokers }: Props) 
             />
 
             {/* Adelanto Recurrente */}
-            <div className="border-t border-gray-200 pt-4">
-              <div className="flex items-center justify-between p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border-2 border-blue-200">
+            <div className="border-t border-gray-200 pt-4 mt-4">
+              <div className="flex items-center justify-between p-3 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border-2 border-blue-200">
                 <div className="flex items-center gap-3">
                   <FaCalendarAlt className="text-blue-600 text-xl" />
                   <div>
@@ -240,17 +240,17 @@ export function AddAdvanceModal({ isOpen, onClose, onSuccess, brokers }: Props) 
 
               {/* Configuración de Recurrencia */}
               {isRecurrent && (
-                <div className="mt-3 p-4 bg-gray-50 rounded-lg border border-gray-300 space-y-4">
+                <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-300 space-y-3">
                   {/* Quincena */}
                   <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-2">
+                    <label className="block text-xs font-semibold text-gray-700 mb-1.5">
                       ¿En qué quincena se debe aplicar?
                     </label>
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-3 gap-1.5">
                       <button
                         type="button"
                         onClick={() => setFortnightType('Q1')}
-                        className={`p-3 rounded-lg border-2 transition-all ${
+                        className={`p-2 rounded-lg border-2 transition-all ${
                           fortnightType === 'Q1'
                             ? 'bg-[#8AAA19] border-[#8AAA19] text-white shadow-md'
                             : 'bg-white border-gray-300 text-gray-700 hover:border-[#8AAA19]'
@@ -262,7 +262,7 @@ export function AddAdvanceModal({ isOpen, onClose, onSuccess, brokers }: Props) 
                       <button
                         type="button"
                         onClick={() => setFortnightType('Q2')}
-                        className={`p-3 rounded-lg border-2 transition-all ${
+                        className={`p-2 rounded-lg border-2 transition-all ${
                           fortnightType === 'Q2'
                             ? 'bg-[#8AAA19] border-[#8AAA19] text-white shadow-md'
                             : 'bg-white border-gray-300 text-gray-700 hover:border-[#8AAA19]'
@@ -274,7 +274,7 @@ export function AddAdvanceModal({ isOpen, onClose, onSuccess, brokers }: Props) 
                       <button
                         type="button"
                         onClick={() => setFortnightType('BOTH')}
-                        className={`p-3 rounded-lg border-2 transition-all ${
+                        className={`p-2 rounded-lg border-2 transition-all ${
                           fortnightType === 'BOTH'
                             ? 'bg-[#8AAA19] border-[#8AAA19] text-white shadow-md'
                             : 'bg-white border-gray-300 text-gray-700 hover:border-[#8AAA19]'
@@ -288,14 +288,14 @@ export function AddAdvanceModal({ isOpen, onClose, onSuccess, brokers }: Props) 
 
                   {/* Fecha de Vencimiento */}
                   <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-2">
+                    <label className="block text-xs font-semibold text-gray-700 mb-1.5">
                       Duración de la Recurrencia
                     </label>
-                    <div className="space-y-2">
+                    <div className="space-y-1.5">
                       <button
                         type="button"
                         onClick={() => setHasEndDate(false)}
-                        className={`w-full p-3 rounded-lg border-2 transition-all flex items-center gap-3 ${
+                        className={`w-full p-2.5 rounded-lg border-2 transition-all flex items-center gap-2 ${
                           !hasEndDate
                             ? 'bg-blue-50 border-blue-500 text-blue-900'
                             : 'bg-white border-gray-300 text-gray-700 hover:border-blue-500'
@@ -310,7 +310,7 @@ export function AddAdvanceModal({ isOpen, onClose, onSuccess, brokers }: Props) 
                       <button
                         type="button"
                         onClick={() => setHasEndDate(true)}
-                        className={`w-full p-3 rounded-lg border-2 transition-all flex items-center gap-3 ${
+                        className={`w-full p-2.5 rounded-lg border-2 transition-all flex items-center gap-2 ${
                           hasEndDate
                             ? 'bg-blue-50 border-blue-500 text-blue-900'
                             : 'bg-white border-gray-300 text-gray-700 hover:border-blue-500'
@@ -343,7 +343,7 @@ export function AddAdvanceModal({ isOpen, onClose, onSuccess, brokers }: Props) 
                 type="button"
                 variant="outline"
                 onClick={() => setShowRecurrencesManager(true)}
-                className="w-full mt-3 border-2 border-gray-300 hover:border-[#010139] hover:bg-gray-50"
+                className="w-full mt-2 border-2 border-gray-300 hover:border-[#010139] hover:bg-gray-50 text-sm h-10"
               >
                 <FaCog className="mr-2" />
                 Gestionar Adelantos Recurrentes
@@ -355,9 +355,7 @@ export function AddAdvanceModal({ isOpen, onClose, onSuccess, brokers }: Props) 
 
           {/* Footer */}
           <div className="standard-modal-footer">
-            <div></div>
-            
-            <div className="flex gap-3">
+            <div className="flex gap-2 w-full sm:w-auto flex-1 sm:flex-none">
               <button
                 type="button"
                 onClick={onClose}

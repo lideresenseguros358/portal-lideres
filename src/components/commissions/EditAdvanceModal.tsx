@@ -148,7 +148,7 @@ export function EditAdvanceModal({ advance, onClose, onSuccess }: Props) {
         {/* Content */}
         <div className="standard-modal-content">
           <Form {...form}>
-            <form id="edit-advance-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+            <form id="edit-advance-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
               {/* Monto */}
               <FormField
                 control={form.control}
@@ -200,11 +200,11 @@ export function EditAdvanceModal({ advance, onClose, onSuccess }: Props) {
 
               {/* Info sobre recurrencia */}
               {advance.is_recurring && (
-                <div className="p-4 bg-amber-50 border-2 border-amber-200 rounded-lg">
-                  <div className="flex items-start gap-3">
-                    <div className="text-amber-600 text-xl">⚠️</div>
-                    <div className="text-sm text-gray-700">
-                      <p className="font-semibold text-amber-800 mb-1">Nota sobre adelantos recurrentes</p>
+                <div className="p-3 bg-amber-50 border-2 border-amber-200 rounded-lg">
+                  <div className="flex items-start gap-2">
+                    <div className="text-amber-600 text-lg flex-shrink-0">⚠️</div>
+                    <div className="text-xs text-gray-700">
+                      <p className="font-semibold text-amber-800 mb-0.5">Nota sobre adelantos recurrentes</p>
                       <p className="text-xs">
                         Los cambios solo afectarán este adelanto específico. Para modificar todos los adelantos futuros,
                         edita la configuración en "Gestionar Adelantos Recurrentes".
@@ -215,6 +215,26 @@ export function EditAdvanceModal({ advance, onClose, onSuccess }: Props) {
               )}
             </form>
           </Form>
+          
+          {/* Confirmación de eliminación */}
+          {showDeleteConfirm && (
+            <div className="mt-4 p-3 bg-red-50 border-l-4 border-red-500 rounded-lg">
+              <div className="flex items-start gap-2">
+                <FaExclamationTriangle className="text-red-600 text-lg flex-shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="font-bold text-red-900 text-sm mb-1">¿Eliminar esta deuda?</p>
+                  <p className="text-xs text-red-800 leading-relaxed">
+                    {advance?.is_recurring 
+                      ? 'Este adelanto recurrente se reseteará a su monto original y permanecerá activo con su historial de pagos. '
+                      : 'Se eliminará permanentemente. '}
+                    {!advance?.is_recurring && hasPaymentHistory 
+                      ? 'Como tiene historial de pagos, se moverá a "Deudas Saldadas".'
+                      : !advance?.is_recurring ? 'Como NO tiene historial de pagos, se eliminará por completo.' : ''}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Footer */}
@@ -224,15 +244,15 @@ export function EditAdvanceModal({ advance, onClose, onSuccess }: Props) {
               type="button"
               onClick={() => setShowDeleteConfirm(true)}
               disabled={form.formState.isSubmitting || isDeleting}
-              className="px-4 py-2 border-2 border-red-400 text-red-700 rounded-lg hover:bg-red-50 hover:border-red-500 font-medium transition"
+              className="px-3 py-2 border-2 border-red-400 text-red-700 rounded-lg hover:bg-red-50 hover:border-red-500 font-medium transition text-sm flex items-center gap-1.5"
             >
-              <FaTrash className="inline mr-2" />
+              <FaTrash className="text-sm" />
               Eliminar
             </button>
           )}
           {showDeleteConfirm && <div></div>}
           
-          <div className="flex gap-3">
+          <div className="flex gap-2 w-full sm:w-auto flex-1 sm:flex-none">
             {!showDeleteConfirm ? (
               <>
                 <button
@@ -276,7 +296,7 @@ export function EditAdvanceModal({ advance, onClose, onSuccess }: Props) {
                   type="button"
                   onClick={handleDelete}
                   disabled={isDeleting}
-                  className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium disabled:opacity-50 flex items-center gap-2"
+                  className="flex-1 sm:flex-none px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium disabled:opacity-50 flex items-center justify-center gap-2 text-sm"
                 >
                   {isDeleting ? (
                     <>
@@ -285,8 +305,8 @@ export function EditAdvanceModal({ advance, onClose, onSuccess }: Props) {
                     </>
                   ) : (
                     <>
-                      <FaExclamationTriangle />
-                      <span>Confirmar Eliminar</span>
+                      <FaExclamationTriangle className="text-sm" />
+                      <span>Sí, Eliminar</span>
                     </>
                   )}
                 </button>
@@ -294,27 +314,6 @@ export function EditAdvanceModal({ advance, onClose, onSuccess }: Props) {
             )}
           </div>
         </div>
-        
-        {showDeleteConfirm && (
-          <div className="px-6 pb-4">
-            <div className="p-4 bg-red-50 border-l-4 border-red-500 rounded-lg">
-              <div className="flex items-start gap-3">
-                <FaExclamationTriangle className="text-red-600 text-xl flex-shrink-0" />
-                <div className="flex-1">
-                  <p className="font-bold text-red-900 mb-1">¿Eliminar esta deuda?</p>
-                  <p className="text-sm text-red-800 leading-relaxed">
-                    {advance?.is_recurring 
-                      ? 'Este adelanto recurrente se reseteará a su monto original y permanecerá activo con su historial de pagos. '
-                      : 'Se eliminará permanentemente. '}
-                    {!advance?.is_recurring && hasPaymentHistory 
-                      ? 'Como tiene historial de pagos, se moverá a "Deudas Saldadas".'
-                      : !advance?.is_recurring ? 'Como NO tiene historial de pagos, se eliminará por completo.' : ''}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
