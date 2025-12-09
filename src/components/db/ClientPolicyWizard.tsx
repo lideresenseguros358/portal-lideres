@@ -568,7 +568,8 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                   required
                   value={formData.birth_date}
                   onChange={(e) => setFormData({ ...formData, birth_date: e.target.value })}
-                  className="w-full px-3 py-2 sm:px-4 text-sm sm:text-base border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition"
+                  className="w-full max-w-full px-3 py-2 sm:px-4 text-sm sm:text-base border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition"
+                  style={{ colorScheme: 'light' }}
                 />
               </div>
             </div>
@@ -637,7 +638,7 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-                <div className="min-w-0">
+                <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Fecha de Inicio <span className="text-red-500">*</span></label>
                   <input
                     type="date"
@@ -658,11 +659,12 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                         renewal_date: calculatedRenewalDate
                       });
                     }}
-                    className="w-full min-w-0 px-2 sm:px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition text-sm sm:text-base appearance-none"
+                    className="w-full max-w-full px-3 py-2 sm:px-4 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition text-sm sm:text-base"
+                    style={{ colorScheme: 'light' }}
                   />
                 </div>
 
-                <div className="min-w-0">
+                <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Fecha de Renovación <span className="text-red-500">*</span>
                     {formData.start_date && (
@@ -673,7 +675,8 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                     type="date"
                     value={formData.renewal_date}
                     onChange={(e) => setFormData({ ...formData, renewal_date: e.target.value })}
-                    className="w-full min-w-0 px-2 sm:px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition text-sm sm:text-base appearance-none"
+                    className="w-full max-w-full px-3 py-2 sm:px-4 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition text-sm sm:text-base"
+                    style={{ colorScheme: 'light' }}
                     required
                   />
                 </div>
@@ -862,12 +865,12 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 bg-gray-50 border-t flex items-center justify-between rounded-b-2xl flex-shrink-0">
+        <div className="px-3 sm:px-6 py-3 sm:py-4 bg-gray-50 border-t flex items-center justify-between gap-2 sm:gap-3 rounded-b-2xl flex-shrink-0">
           <button
             type="button"
             onClick={() => step > 1 ? setStep(step - 1) : onClose()}
             disabled={loading}
-            className="px-6 py-2 text-gray-700 bg-white border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition font-medium disabled:opacity-50"
+            className="flex-1 sm:flex-none px-3 sm:px-6 py-2 text-sm sm:text-base text-gray-700 bg-white border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition font-medium disabled:opacity-50"
           >
             {step === 1 ? 'Cancelar' : 'Atrás'}
           </button>
@@ -877,7 +880,7 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
               type="button"
               onClick={handleNext}
               disabled={loading}
-              className="px-6 py-2 bg-[#8AAA19] text-white rounded-lg hover:bg-[#010139] transition font-medium disabled:opacity-50"
+              className="flex-1 sm:flex-none px-3 sm:px-6 py-2 text-sm sm:text-base bg-[#8AAA19] text-white rounded-lg hover:bg-[#010139] transition font-medium disabled:opacity-50"
             >
               Siguiente
             </button>
@@ -886,15 +889,19 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
               type="button"
               onClick={handleSubmit}
               disabled={loading}
-              className="px-6 py-2 bg-[#8AAA19] text-white rounded-lg hover:bg-[#010139] transition font-medium disabled:opacity-50 flex items-center gap-2"
+              className="flex-1 sm:flex-none px-3 sm:px-6 py-2 text-sm sm:text-base bg-[#8AAA19] text-white rounded-lg hover:bg-[#010139] transition font-medium disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {loading ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  <span>Creando...</span>
+                  <span className="hidden sm:inline">Creando...</span>
+                  <span className="sm:hidden">...</span>
                 </>
               ) : (
-                'Crear Cliente y Póliza'
+                <>
+                  <span className="hidden sm:inline">Crear Cliente y Póliza</span>
+                  <span className="sm:hidden">Crear</span>
+                </>
               )}
             </button>
           )}

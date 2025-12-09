@@ -266,7 +266,8 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
                   type="date"
                   value={formData.birth_date}
                   onChange={(e) => setFormData({ ...formData, birth_date: e.target.value })}
-                  className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none transition-all"
+                  className="w-full max-w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none transition-all"
+                  style={{ colorScheme: 'light' }}
                 />
               </div>
 
@@ -386,7 +387,7 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 bg-gray-50 border-t flex items-center justify-between rounded-b-2xl flex-shrink-0">
+        <div className="px-3 sm:px-6 py-3 sm:py-4 bg-gray-50 border-t flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 rounded-b-2xl flex-shrink-0">
           {client && (client as any).id && (
             <button
               type="button"
@@ -395,19 +396,19 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
                   onExpedienteModalChange(true);
                 }
               }}
-              className="px-6 py-2 bg-white border-2 border-[#8AAA19] text-[#8AAA19] rounded-lg hover:bg-[#8AAA19] hover:text-white transition font-medium flex items-center gap-2"
+              className="px-4 sm:px-6 py-2 text-sm sm:text-base bg-white border-2 border-[#8AAA19] text-[#8AAA19] rounded-lg hover:bg-[#8AAA19] hover:text-white transition font-medium flex items-center justify-center gap-2"
             >
               <FaFolderPlus />
               <span>Expediente</span>
             </button>
           )}
-          {!client || !(client as any).id && <div></div>}
+          {!client || !(client as any).id && <div className="hidden sm:block"></div>}
           
-          <div className="flex gap-3">
+          <div className="flex gap-2 sm:gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="px-6 py-2 text-gray-700 bg-white border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition font-medium"
+              className="flex-1 sm:flex-none px-4 sm:px-6 py-2 text-sm sm:text-base text-gray-700 bg-white border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition font-medium"
             >
               Cancelar
             </button>
@@ -415,12 +416,13 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
               type="submit"
               form="client-form"
               disabled={loading}
-              className="px-6 py-2 bg-[#8AAA19] text-white rounded-lg hover:bg-[#010139] transition font-medium disabled:opacity-50 flex items-center gap-2"
+              className="flex-1 sm:flex-none px-4 sm:px-6 py-2 text-sm sm:text-base bg-[#8AAA19] text-white rounded-lg hover:bg-[#010139] transition font-medium disabled:opacity-50 flex items-center justify-center gap-2"
             >
               {loading ? (
                 <>
                   <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
-                  <span>Guardando...</span>
+                  <span className="hidden sm:inline">Guardando...</span>
+                  <span className="sm:hidden">...</span>
                 </>
               ) : (
                 <span>{client ? "Guardar" : "Crear"}</span>
@@ -781,7 +783,8 @@ function PolicyForm({ clientId, policy, onClose, onSave, readOnly = false }: Pol
                   type="date"
                   value={formData.start_date}
                   onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none text-sm font-medium transition-all"
+                  className="w-full max-w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none text-sm font-medium transition-all"
+                  style={{ colorScheme: 'light' }}
                 />
               </div>
               <div>
@@ -792,7 +795,8 @@ function PolicyForm({ clientId, policy, onClose, onSave, readOnly = false }: Pol
                   type="date"
                   value={formData.renewal_date}
                   onChange={(e) => setFormData({ ...formData, renewal_date: e.target.value })}
-                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none text-sm font-medium transition-all"
+                  className="w-full max-w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none text-sm font-medium transition-all"
+                  style={{ colorScheme: 'light' }}
                 />
               </div>
             </div>
@@ -854,11 +858,11 @@ function PolicyForm({ clientId, policy, onClose, onSave, readOnly = false }: Pol
               )}
             </div>
 
-          <div className="sticky bottom-0 bg-white border-t-2 border-gray-100 pt-4 flex justify-end gap-3">
+          <div className="sticky bottom-0 bg-white border-t-2 border-gray-100 pt-4 flex justify-end gap-2 sm:gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="px-6 py-3 text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-all font-semibold text-sm"
+              className="flex-1 sm:flex-none px-4 sm:px-6 py-2.5 sm:py-3 text-sm sm:text-base text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-all font-semibold"
             >
               {readOnly ? 'Cerrar' : 'Cancelar'}
             </button>
@@ -866,17 +870,19 @@ function PolicyForm({ clientId, policy, onClose, onSave, readOnly = false }: Pol
               <button
                 type="submit"
                 disabled={loading}
-                className="px-6 py-3 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg hover:shadow-lg hover:scale-[1.02] transition-all font-semibold text-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center gap-2"
+                className="flex-1 sm:flex-none px-4 sm:px-6 py-2.5 sm:py-3 text-sm sm:text-base bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg hover:shadow-lg hover:scale-[1.02] transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-2"
               >
                 {loading ? (
                   <>
                     <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
-                    <span>Guardando...</span>
+                    <span className="hidden sm:inline">Guardando...</span>
+                    <span className="sm:hidden">...</span>
                   </>
                 ) : (
                   <>
-                    <FaFolderPlus size={14} />
-                    <span>{policy ? "Guardar Cambios" : "Crear Póliza"}</span>
+                    <FaFolderPlus size={14} className="hidden sm:inline" />
+                    <span className="hidden sm:inline">{policy ? "Guardar Cambios" : "Crear Póliza"}</span>
+                    <span className="sm:hidden">{policy ? "Guardar" : "Crear"}</span>
                   </>
                 )}
               </button>
