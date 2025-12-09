@@ -242,7 +242,7 @@ export function exportBrokerToPDF(
     doc.setTextColor(120, 53, 15);
     doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
-    doc.text('🔢 Códigos ASSA', leftMargin + 2, yPos + 5);
+    doc.text('Codigos ASSA', leftMargin + 2, yPos + 5);
     doc.text(formatCurrency(totalAssaCodes), leftMargin + tableWidth - 2, yPos + 5, { align: 'right' });
     yPos += 7;
 
@@ -453,7 +453,7 @@ export function exportBrokerToExcel(
   // Códigos ASSA
   if (broker.assa_codes && broker.assa_codes.length > 0) {
     const totalAssaCodes = broker.assa_codes.reduce((sum: number, item: AssaCodeDetail) => sum + item.net_amount, 0);
-    data.push(['🔢 Códigos ASSA', '', '', '', formatCurrency(totalAssaCodes)]);
+    data.push(['Codigos ASSA', '', '', '', formatCurrency(totalAssaCodes)]);
     data.push(['Código', 'Cliente', 'Prima', '%', 'Comisión']);
     
     broker.assa_codes.forEach(item => {
