@@ -299,6 +299,7 @@ export default function GeneralTab({ insurer }: GeneralTabProps) {
           display: flex;
           flex-wrap: wrap;
           gap: 12px;
+          width: 100%;
         }
         .btn-primary { 
           display: inline-flex; 
@@ -316,6 +317,8 @@ export default function GeneralTab({ insurer }: GeneralTabProps) {
           cursor: pointer;
           transition: background 0.2s;
           white-space: nowrap;
+          flex: 1 1 auto;
+          min-width: fit-content;
         }
         .btn-primary:hover {
           background: #8AAA19;
@@ -323,6 +326,14 @@ export default function GeneralTab({ insurer }: GeneralTabProps) {
         .btn-primary:disabled { 
           opacity: 0.7;
           cursor: not-allowed;
+        }
+        
+        /* Mobile responsive */
+        @media (max-width: 640px) {
+          .btn-primary {
+            width: 100%;
+            flex: 1 1 100%;
+          }
         }
         
         .logo-container {

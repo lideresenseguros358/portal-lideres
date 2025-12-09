@@ -120,10 +120,10 @@ export default function InsurersList({ initialInsurers }: InsurersListProps) {
   return (
     <div>
       {/* Actions Bar - Con Card */}
-      <div className="bg-white rounded-xl shadow-lg border-2 border-gray-100 p-4 sm:p-6 mb-6">
-        <div className="flex flex-col sm:flex-row gap-4 items-stretch sm:items-center justify-between">
+      <div className="bg-white rounded-xl shadow-lg border-2 border-gray-100 p-3 sm:p-4 md:p-6 mb-6">
+        <div className="flex flex-col gap-3 sm:gap-4">
           {/* Buscador compacto */}
-          <div className="relative flex-1 max-w-md">
+          <div className="relative w-full">
             <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
             <input
               type="text"
@@ -134,12 +134,12 @@ export default function InsurersList({ initialInsurers }: InsurersListProps) {
             />
           </div>
           
-          {/* Filtros y Botón */}
-          <div className="flex gap-3 items-center">
+          {/* Filtros y Botón - Responsive */}
+          <div className="flex flex-wrap gap-2 sm:gap-3 items-center justify-center sm:justify-start">
             {/* Filtros compactos */}
             <button 
               onClick={() => setStatusFilter('all')} 
-              className={`px-4 py-2 rounded-lg font-medium transition-all text-sm ${
+              className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg font-medium transition-all text-xs sm:text-sm ${
                 statusFilter === 'all' 
                   ? 'bg-[#010139] text-white shadow-md' 
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -149,7 +149,7 @@ export default function InsurersList({ initialInsurers }: InsurersListProps) {
             </button>
             <button 
               onClick={() => setStatusFilter('active')} 
-              className={`px-4 py-2 rounded-lg font-medium transition-all text-sm ${
+              className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg font-medium transition-all text-xs sm:text-sm ${
                 statusFilter === 'active' 
                   ? 'bg-[#8AAA19] text-white shadow-md' 
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -159,7 +159,7 @@ export default function InsurersList({ initialInsurers }: InsurersListProps) {
             </button>
             <button 
               onClick={() => setStatusFilter('inactive')} 
-              className={`px-4 py-2 rounded-lg font-medium transition-all text-sm ${
+              className={`flex-1 sm:flex-none px-3 sm:px-4 py-2 rounded-lg font-medium transition-all text-xs sm:text-sm ${
                 statusFilter === 'inactive' 
                   ? 'bg-red-500 text-white shadow-md' 
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -171,7 +171,7 @@ export default function InsurersList({ initialInsurers }: InsurersListProps) {
             {/* Botón Nueva Aseguradora */}
             <Link 
               href="/insurers/new" 
-              className="flex items-center justify-center gap-2 px-4 py-2 bg-[#010139] text-white rounded-lg hover:bg-[#8AAA19] transition-colors font-semibold shadow-lg whitespace-nowrap"
+              className="w-full sm:w-auto flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-[#010139] text-white rounded-lg hover:bg-[#8AAA19] transition-colors font-semibold shadow-lg whitespace-nowrap text-xs sm:text-sm"
             >
               <FaPlus /> Nueva
             </Link>
@@ -223,7 +223,7 @@ export default function InsurersList({ initialInsurers }: InsurersListProps) {
                     <InsurerLogo 
                       logoUrl={insurer.logo_url}
                       insurerName={insurer.name}
-                      size="xl"
+                      size="2xl"
                     />
                   </div>
                   
@@ -232,11 +232,11 @@ export default function InsurersList({ initialInsurers }: InsurersListProps) {
                     <p className="text-[11px] sm:text-xs font-bold text-[#010139] truncate">{insurer.name}</p>
                   </div>
                   
-                  {/* Botones de acción - Más pequeños */}
-                  <div className="flex justify-center gap-1.5 mt-1">
+                  {/* Botones de acción - Responsive y contenidos */}
+                  <div className="flex justify-center gap-1.5 mt-1 px-2">
                     <Link 
                       href={`/insurers/${insurer.id}/edit`} 
-                      className="w-7 h-7 flex items-center justify-center rounded-lg bg-blue-50 text-blue-600 hover:bg-[#010139] hover:text-white transition-all text-xs" 
+                      className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg bg-[#010139] text-white hover:bg-[#8AAA19] transition-all" 
                       title="Editar" 
                       onClick={(e) => e.stopPropagation()}
                     >
@@ -244,14 +244,14 @@ export default function InsurersList({ initialInsurers }: InsurersListProps) {
                     </Link>
                     <button 
                       onClick={(e) => { e.stopPropagation(); handleClone(insurer.id); }} 
-                      className="w-7 h-7 flex items-center justify-center rounded-lg bg-green-50 text-green-600 hover:bg-[#8AAA19] hover:text-white transition-all text-xs" 
+                      className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg bg-[#8AAA19] text-white hover:bg-[#010139] transition-all" 
                       title="Clonar"
                     >
                       <FaClone size={12} />
                     </button>
                     <button 
                       onClick={(e) => { e.stopPropagation(); handleToggle(insurer.id); }} 
-                      className="w-7 h-7 flex items-center justify-center rounded-lg bg-orange-50 text-orange-600 hover:bg-orange-500 hover:text-white transition-all text-xs" 
+                      className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg bg-orange-50 text-orange-600 hover:bg-orange-500 hover:text-white transition-all" 
                       title={insurer.active ? 'Desactivar' : 'Activar'}
                     >
                       {insurer.active ? <FaToggleOn size={14} /> : <FaToggleOff size={14} />}
@@ -264,10 +264,12 @@ export default function InsurersList({ initialInsurers }: InsurersListProps) {
                   style={{ 
                     backfaceVisibility: 'hidden',
                     WebkitBackfaceVisibility: 'hidden',
-                    transform: 'rotateY(180deg)'
+                    transform: 'rotateY(180deg)',
+                    display: 'flex',
+                    flexDirection: 'column'
                   }}
                 >
-                  <div className="flex justify-between items-start mb-2">
+                  <div className="flex justify-between items-start mb-2 flex-shrink-0">
                     <h4 className="text-xs font-bold text-[#010139]">Contacto</h4>
                     <button 
                       onClick={(e) => { e.stopPropagation(); handleFlip(insurer.id); }} 
@@ -280,21 +282,21 @@ export default function InsurersList({ initialInsurers }: InsurersListProps) {
                   {(() => {
                     const primaryContact = insurer.contacts.find(c => c.is_primary);
                     return primaryContact ? (
-                      <div className="text-gray-700 text-[10px] space-y-1 flex-1 overflow-y-auto">
+                      <div className="text-gray-700 text-[10px] space-y-1 flex-1 overflow-y-auto mb-2">
                         <p className="font-bold text-[#010139] text-xs mb-1 truncate">{primaryContact.name}</p>
                         {primaryContact.position && <p className="text-gray-600 truncate">📋 {primaryContact.position}</p>}
                         {primaryContact.phone && <p className="text-gray-600 truncate">📞 {primaryContact.phone}</p>}
                         {primaryContact.email && <p className="text-gray-600 truncate">✉️ {primaryContact.email}</p>}
                       </div>
                     ) : (
-                      <div className="text-gray-500 text-[10px] flex-1 flex items-center justify-center">
+                      <div className="text-gray-500 text-[10px] flex-1 flex items-center justify-center mb-2">
                         <p className="text-center">Sin contacto principal</p>
                       </div>
                     );
                   })()}
                   <button
                     onClick={(e) => { e.stopPropagation(); handleOpenModal(insurer); }}
-                    className="mt-2 w-full py-1.5 px-2 bg-[#8AAA19] text-white rounded-lg hover:bg-[#6d8814] transition-all flex items-center justify-center gap-1 font-semibold text-[10px]"
+                    className="w-full py-1.5 px-2 bg-[#8AAA19] text-white rounded-lg hover:bg-[#6d8814] transition-all flex items-center justify-center gap-1 font-semibold text-[10px] flex-shrink-0"
                   >
                     <FaEye size={10} /> Ver ({insurer.contacts.length})
                   </button>
