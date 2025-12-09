@@ -3,6 +3,7 @@
 import { FormEvent, useState } from "react";
 import { FaUser, FaIdCard, FaUniversity, FaArrowRight, FaArrowLeft, FaCheckCircle } from "react-icons/fa";
 import AuthShell from "../_AuthShell";
+import NationalIdInput from '@/components/ui/NationalIdInput';
 // NO usar BankSelect/AccountTypeSelect en páginas públicas (auth) - no tienen acceso a Supabase
 // import { BankSelect, AccountTypeSelect } from '@/components/ui/BankSelect';
 import { toUpperNoAccents, cleanAccountNumber } from '@/lib/commissions/ach-normalization';
@@ -277,21 +278,12 @@ export default function NewUserWizard() {
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Cédula / Pasaporte <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={personalData.cedula}
-                  onChange={(e) => {
-                    setPersonalData({ ...personalData, cedula: e.target.value });
-                  }}
-                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#010139] focus:outline-none"
-                  placeholder="8-123-4567"
-                  required
-                />
-              </div>
+              <NationalIdInput
+                value={personalData.cedula}
+                onChange={(value) => setPersonalData({ ...personalData, cedula: value })}
+                label="Documento de Identidad"
+                required
+              />
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">

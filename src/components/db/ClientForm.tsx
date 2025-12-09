@@ -8,6 +8,7 @@ import type { Tables } from "@/lib/supabase/client";
 import { toUppercasePayload, createUppercaseHandler, uppercaseInputClass } from '@/lib/utils/uppercase';
 import ExpedienteManager from '@/components/expediente/ExpedienteManager';
 import { POLICY_TYPES, checkSpecialOverride } from '@/lib/constants/policy-types';
+import NationalIdInput from '@/components/ui/NationalIdInput';
 
 import { ClientWithPolicies } from '@/types/db';
 
@@ -219,19 +220,11 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
               </div>
 
               {/* Cédula y Teléfono - 2 columnas */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1.5">
-                  <span className="text-blue-600">🆔</span>
-                  Cédula/RUC
-                </label>
-                <input
-                  type="text"
-                  value={formData.national_id}
-                  onChange={createUppercaseHandler((e) => setFormData({ ...formData, national_id: e.target.value }))}
-                  className={`w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none transition-all ${uppercaseInputClass}`}
-                  placeholder="8-123-4567"
-                />
-              </div>
+              <NationalIdInput
+                value={formData.national_id}
+                onChange={(value) => setFormData({ ...formData, national_id: value })}
+                label="Documento de Identidad"
+              />
 
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1.5">

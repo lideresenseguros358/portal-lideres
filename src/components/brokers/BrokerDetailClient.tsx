@@ -10,6 +10,7 @@ import { PERCENT_OPTIONS, OFICINA_EMAIL } from '@/lib/constants/brokers';
 import { createUppercaseHandler, uppercaseInputClass, toUppercasePayload } from '@/lib/utils/uppercase';
 import { BankSelect, AccountTypeSelect } from '@/components/ui/BankSelect';
 import { cleanAccountNumber, toUpperNoAccents } from '@/lib/commissions/ach-normalization';
+import NationalIdInput from '@/components/ui/NationalIdInput';
 
 interface BrokerDetailClientProps {
   brokerId: string;
@@ -369,19 +370,23 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
               </div>
 
               {/* National ID */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
-                  <FaIdCard className="text-[#8AAA19]" />
-                  Cédula/Pasaporte
-                </label>
-                <input
-                  type="text"
+              {isEditing ? (
+                <NationalIdInput
                   value={formData.national_id}
-                  onChange={createUppercaseHandler((e) => setFormData({ ...formData, national_id: e.target.value }))}
-                  disabled={!isEditing}
-                  className={`w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none disabled:bg-gray-50 disabled:text-gray-600 ${!isEditing ? '' : uppercaseInputClass}`}
+                  onChange={(value) => setFormData({ ...formData, national_id: value })}
+                  label="Documento de Identidad"
                 />
-              </div>
+              ) : (
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
+                    <FaIdCard className="text-[#8AAA19]" />
+                    Cédula/Pasaporte
+                  </label>
+                  <div className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg bg-gray-50 text-gray-600 font-mono">
+                    {formData.national_id || 'No especificado'}
+                  </div>
+                </div>
+              )}
 
               {/* Birth Date */}
               <div className="min-w-0">

@@ -8,6 +8,7 @@ import { createUppercaseHandler, uppercaseInputClass } from '@/lib/utils/upperca
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { POLICY_TYPES, checkSpecialOverride } from '@/lib/constants/policy-types';
 import { getTodayLocalDate, addOneYearToDate } from '@/lib/utils/dates';
+import NationalIdInput from '@/components/ui/NationalIdInput';
 
 interface WizardProps {
   onClose: () => void;
@@ -524,19 +525,12 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                 )}
               </div>
 
-              <div>
-                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
-                  Cédula / Pasaporte / RUC <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={formData.national_id}
-                  onChange={createUppercaseHandler((e) => setFormData({ ...formData, national_id: e.target.value }))}
-                  className={`w-full px-3 py-2 sm:px-4 text-sm sm:text-base border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition ${uppercaseInputClass}`}
-                  placeholder="8-123-4567"
-                />
-              </div>
+              <NationalIdInput
+                value={formData.national_id}
+                onChange={(value) => setFormData({ ...formData, national_id: value })}
+                label="Documento de Identidad"
+                required
+              />
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div>
