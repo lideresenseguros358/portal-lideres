@@ -44,7 +44,8 @@ export default function NationalIdInput({
 }: NationalIdInputProps) {
   const [documentType, setDocumentType] = useState<DocumentType>('cedula');
   const isInitialMount = useRef(true);
-  const lastValueRef = useRef(value);
+  const lastValueRef = useRef('');
+  const hasInitialized = useRef(false);
   
   // Para cédula: 3 partes separadas
   const [cedulaPart1, setCedulaPart1] = useState('');
@@ -54,9 +55,11 @@ export default function NationalIdInput({
   // Para pasaporte y RUC: un solo campo
   const [singleValue, setSingleValue] = useState('');
 
-  // Inicializar desde el value prop SOLO UNA VEZ o cuando value cambia externamente
+  // Inicializar desde el value prop
   useEffect(() => {
-    if (value && value !== lastValueRef.current) {
+    // Inicializar en el primer render si hay un value inicial
+    if (!hasInitialized.current && value) {
+      hasInitialized.current = true;
       lastValueRef.current = value;
       
       // Intentar detectar el tipo de documento
@@ -75,6 +78,26 @@ export default function NationalIdInput({
         }
       } else if (value) {
         // Probablemente pasaporte
+        setDocumentType('pasaporte');
+        setSingleValue(value);
+      }
+    }
+    // Actualizar si value cambia externamente después de la inicialización
+    else if (hasInitialized.current && value && value !== lastValueRef.current) {
+      lastValueRef.current = value;
+      
+      if (value.includes('-')) {
+        const parts = value.split('-');
+        if (parts.length === 3) {
+          setDocumentType('cedula');
+          setCedulaPart1(parts[0] || '');
+          setCedulaPart2(parts[1] || '');
+          setCedulaPart3(parts[2] || '');
+        } else {
+          setDocumentType('ruc');
+          setSingleValue(value);
+        }
+      } else if (value) {
         setDocumentType('pasaporte');
         setSingleValue(value);
       }

@@ -221,21 +221,6 @@ export default function PolicyNumberInput({
         )}
       </div>
 
-      {/* Notas especiales para parsers */}
-      {config.parserRule === 'partial' && (
-        <div className="mt-2 p-2 bg-purple-50 border border-purple-200 rounded-lg">
-          <p className="text-xs text-purple-800">
-            <strong>🔍 Búsqueda en reportes:</strong>{' '}
-            {config.slug === 'ancon' && 'Se usa solo el número del medio'}
-            {config.slug === 'banesco' && 'Se usan los primeros 3 números'}
-            {(config.slug === 'mb' || config.slug === 'fedpa' || config.slug === 'regional' || 
-              config.slug === 'optima' || config.slug === 'aliado') && 'Se usa solo el tercer número'}
-            {config.slug === 'acerta' && 'Se usa solo el número del medio'}
-            {config.slug === 'univivir' && 'Se usa solo el último número'}
-          </p>
-        </div>
-      )}
-
       {/* Error message */}
       {error && (
         <p className="text-xs text-red-600 mt-2">
