@@ -3161,24 +3161,31 @@ export async function actionRecalculateFortnight(fortnight_id: string) {
       return acc;
     }, {} as Record<string, { gross: number; items_count: number }>);
     
-    // 4. Obtener adelantos seleccionados (de comm_metadata)
-    const { data: advanceSelections } = await supabase
-      .from('comm_metadata')
-      .select('value')
+    // 4. Obtener descuentos aplicados desde advance_logs (no desde comm_metadata para evitar duplicados)
+    const { data: advanceLogs } = await supabase
+      .from('advance_logs')
+      .select('advance_id, amount, advances!inner(broker_id, reason)')
       .eq('fortnight_id', fortnight_id)
-      .eq('key', 'selected_advance');
+      .eq('payment_type', 'fortnight');
     
     // 5. Agrupar adelantos por broker
-    const brokerAdvances: Record<string, { advance_id: string; amount: number }[]> = {};
-    (advanceSelections || []).forEach(meta => {
+    const brokerAdvances: Record<string, { advance_id: string; amount: number; description: string }[]> = {};
+    (advanceLogs || []).forEach(log => {
       try {
-        const { broker_id, advance_id, amount } = JSON.parse(meta.value || '{}');
-        if (!brokerAdvances[broker_id]) {
-          brokerAdvances[broker_id] = [];
+        const brokerId = (log.advances as any).broker_id;
+        const description = (log.advances as any).reason || 'Adelanto';
+        if (!brokerId) return;
+        
+        if (!brokerAdvances[brokerId]) {
+          brokerAdvances[brokerId] = [];
         }
-        brokerAdvances[broker_id].push({ advance_id, amount: Number(amount) });
+        brokerAdvances[brokerId].push({ 
+          advance_id: log.advance_id, 
+          amount: Number(log.amount),
+          description: description
+        });
       } catch (e) {
-        console.error('Error parsing advance selection:', e);
+        console.error('Error parsing advance log:', e);
       }
     });
     
