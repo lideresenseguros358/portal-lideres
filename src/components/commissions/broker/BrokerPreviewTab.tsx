@@ -60,6 +60,7 @@ interface BrokerDetail {
   broker_id: string;
   broker_name: string;
   broker_email: string;
+  percent_default?: number;
   insurers: InsurerGroup[];
   assa_codes: DetailItem[];
   gross_amount: number;
@@ -246,7 +247,7 @@ export default function BrokerPreviewTab({ brokerId }: Props) {
       const transformedBroker = {
         broker_name: details.broker_name,
         broker_email: details.broker_email || '',
-        percent_default: 0,
+        percent_default: details.percent_default || 0,
         total_gross: details.gross_amount,
         total_net: details.net_amount,
         discounts_json: details.discounts_json || {},
@@ -261,6 +262,15 @@ export default function BrokerPreviewTab({ brokerId }: Props) {
             percentage: item.percent_applied,
             net_amount: item.commission_calculated,
           }))
+        })),
+        assa_codes: (details.assa_codes || []).map(item => ({
+          policy_number: item.policy_number,
+          assa_code: item.assa_code,
+          client_name: item.client_name,
+          commission_raw: item.commission_raw,
+          percent_applied: item.percent_applied,
+          commission_calculated: item.commission_calculated,
+          net_amount: item.commission_calculated,
         })),
         adjustments: details.adjustments
       };

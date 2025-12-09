@@ -38,6 +38,8 @@ interface InsurerGroup {
 interface BrokerDetail {
   broker_id: string;
   broker_name: string;
+  broker_email?: string;
+  percent_default?: number;
   insurers: InsurerGroup[];
   assa_codes: DetailItem[];
   gross_amount: number;
@@ -216,6 +218,15 @@ export default function FortnightDetailView({ fortnightId, fortnightData }: Fort
           percentage: item.percent_applied,
           net_amount: item.commission_calculated,
         }))
+      })),
+      assa_codes: (broker.assa_codes || []).map((item: any) => ({
+        policy_number: item.policy_number,
+        assa_code: item.assa_code,
+        client_name: item.client_name,
+        commission_raw: item.commission_raw,
+        percent_applied: item.percent_applied,
+        commission_calculated: item.commission_calculated,
+        net_amount: item.commission_calculated,
       }))
     };
   };
