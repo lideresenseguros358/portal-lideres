@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseServer } from '@/lib/supabase/server';
+import { getSupabaseAdmin } from '@/lib/supabase/admin';
 
 // PATCH - Aprobar o rechazar solicitud
 export async function PATCH(
@@ -84,8 +85,11 @@ export async function PATCH(
     // Desencriptar contraseña
     const password = Buffer.from(userRequest.encrypted_password, 'base64').toString();
 
-    // Crear usuario en auth.users
-    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+    // Crear cliente admin para operaciones privilegiadas
+    const adminClient = getSupabaseAdmin();
+
+    // Crear usuario en auth.users usando cliente admin
+    const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
       email: userRequest.email,
       password: password,
       email_confirm: true,
