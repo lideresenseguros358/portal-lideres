@@ -88,6 +88,23 @@ export async function PATCH(
     // Crear cliente admin para operaciones privilegiadas
     const adminClient = getSupabaseAdmin();
 
+    console.log('🔵 Intentando crear usuario:', {
+      email: userRequest.email,
+      has_password: !!password,
+      role: role.toLowerCase()
+    });
+
+    // Verificar si el usuario ya existe
+    const { data: existingUsers } = await adminClient.auth.admin.listUsers();
+    const userExists = existingUsers?.users.find(u => u.email === userRequest.email);
+    
+    if (userExists) {
+      console.error('❌ Usuario ya existe:', userRequest.email);
+      return NextResponse.json({ 
+        error: `El email ${userRequest.email} ya está registrado en el sistema` 
+      }, { status: 400 });
+    }
+
     // Crear usuario en auth.users usando cliente admin
     const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
       email: userRequest.email,
@@ -100,11 +117,19 @@ export async function PATCH(
     });
 
     if (authError) {
-      console.error('Error creating auth user:', authError);
+      console.error('❌ Error creating auth user:', {
+        error: authError,
+        message: authError.message,
+        status: authError.status,
+        code: (authError as any).code
+      });
       return NextResponse.json({ 
-        error: `Error al crear usuario: ${authError.message}` 
+        error: `Error al crear usuario: ${authError.message}`,
+        details: (authError as any).code || authError.status
       }, { status: 500 });
     }
+
+    console.log('✅ Usuario creado en auth.users:', authData.user.id);
 
     // El trigger automáticamente creará el profile
     // Esperar un momento para que el trigger se ejecute
