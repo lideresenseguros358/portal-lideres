@@ -1,8 +1,10 @@
 'use client';
 
 import { useState, useTransition, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { FaSave, FaToggleOn, FaToggleOff, FaImage, FaTrash } from 'react-icons/fa';
 import Image from 'next/image';
+import { toast } from 'sonner';
 import { actionUpdateInsurer, actionToggleInsurerActive } from '@/app/(app)/insurers/actions';
 import { toUppercasePayload, createUppercaseHandler, uppercaseInputClass } from '@/lib/utils/uppercase';
 import { supabaseClient } from '@/lib/supabase/client';
@@ -17,6 +19,7 @@ interface GeneralTabProps {
 }
 
 export default function GeneralTab({ insurer }: GeneralTabProps) {
+  const router = useRouter();
   const [name, setName] = useState(insurer.name);
   const [isActive, setIsActive] = useState(insurer.active);
   const [logoUrl, setLogoUrl] = useState(insurer.logo_url || null);
@@ -33,9 +36,14 @@ export default function GeneralTab({ insurer }: GeneralTabProps) {
         logo_url: logoUrl
       });
       if (!result.ok) {
-        alert(`Error: ${result.error}`);
+        toast.error(`Error: ${result.error}`);
       } else {
         setName(upperName);
+        toast.success('✅ Cambios guardados exitosamente');
+        // Redirigir automáticamente después de guardar
+        setTimeout(() => {
+          router.push('/insurers');
+        }, 500);
       }
     });
   };
@@ -46,13 +54,13 @@ export default function GeneralTab({ insurer }: GeneralTabProps) {
 
     // Validar tipo de archivo
     if (!file.type.startsWith('image/')) {
-      alert('Por favor selecciona un archivo de imagen');
+      toast.error('Por favor selecciona un archivo de imagen');
       return;
     }
 
     // Validar tamaño (max 2MB)
     if (file.size > 2 * 1024 * 1024) {
-      alert('El archivo es muy grande. Máximo 2MB');
+      toast.error('El archivo es muy grande. Máximo 2MB');
       return;
     }
 
@@ -99,10 +107,10 @@ export default function GeneralTab({ insurer }: GeneralTabProps) {
         throw new Error(result.error);
       }
 
-      alert('Logo actualizado exitosamente');
+      toast.success('✅ Logo actualizado exitosamente');
     } catch (error: any) {
       console.error('Error uploading logo:', error);
-      alert(`Error al subir logo: ${error.message}`);
+      toast.error(`Error al subir logo: ${error.message}`);
     } finally {
       setUploading(false);
       if (fileInputRef.current) {
@@ -135,10 +143,10 @@ export default function GeneralTab({ insurer }: GeneralTabProps) {
       }
 
       setLogoUrl(null);
-      alert('Logo eliminado exitosamente');
+      toast.success('✅ Logo eliminado exitosamente');
     } catch (error: any) {
       console.error('Error deleting logo:', error);
-      alert(`Error al eliminar logo: ${error.message}`);
+      toast.error(`Error al eliminar logo: ${error.message}`);
     } finally {
       setUploading(false);
     }
@@ -149,8 +157,9 @@ export default function GeneralTab({ insurer }: GeneralTabProps) {
       const result = await actionToggleInsurerActive(insurer.id);
       if (result.ok && result.data) {
         setIsActive((result.data as any).active);
+        toast.success('✅ Estado actualizado');
       } else {
-        alert(`Error: ${result.error}`);
+        toast.error(`Error: ${result.error}`);
       }
     });
   };

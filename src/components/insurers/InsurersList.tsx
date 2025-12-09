@@ -121,63 +121,61 @@ export default function InsurersList({ initialInsurers }: InsurersListProps) {
     <div>
       {/* Actions Bar - Con Card */}
       <div className="bg-white rounded-xl shadow-lg border-2 border-gray-100 p-4 sm:p-6 mb-6">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          {/* Buscador y Filtros */}
-          <div className="flex flex-col gap-3 flex-1">
-            {/* Buscador */}
-            <div className="relative w-full">
-              <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Buscar aseguradoras..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition-colors"
-              />
-            </div>
-            
-            {/* Pestañas de filtro - Distribuidas en mobile */}
-            <div className="grid grid-cols-3 gap-2 w-full">
-              <button 
-                onClick={() => setStatusFilter('all')} 
-                className={`px-3 py-2 rounded-lg font-medium transition-all text-sm sm:text-base ${
-                  statusFilter === 'all' 
-                    ? 'bg-[#010139] text-white shadow-md' 
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                Todas
-              </button>
-              <button 
-                onClick={() => setStatusFilter('active')} 
-                className={`px-3 py-2 rounded-lg font-medium transition-all text-sm sm:text-base ${
-                  statusFilter === 'active' 
-                    ? 'bg-[#8AAA19] text-white shadow-md' 
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                Activas
-              </button>
-              <button 
-                onClick={() => setStatusFilter('inactive')} 
-                className={`px-3 py-2 rounded-lg font-medium transition-all text-sm sm:text-base ${
-                  statusFilter === 'inactive' 
-                    ? 'bg-red-500 text-white shadow-md' 
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                Inactivas
-              </button>
-            </div>
+        <div className="flex flex-col sm:flex-row gap-4 items-stretch sm:items-center justify-between">
+          {/* Buscador compacto */}
+          <div className="relative flex-1 max-w-md">
+            <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
+            <input
+              type="text"
+              placeholder="Buscar..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-4 py-2 text-sm border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition-colors"
+            />
           </div>
           
-          {/* Botón Nueva Aseguradora */}
-          <Link 
-            href="/insurers/new" 
-            className="flex items-center justify-center gap-2 px-6 py-2.5 bg-[#010139] text-white rounded-lg hover:bg-[#8AAA19] transition-colors font-semibold shadow-lg [&>svg]:text-white"
-          >
-            <FaPlus className="text-white" /> <span className="text-white">Nueva Aseguradora</span>
-          </Link>
+          {/* Filtros y Botón */}
+          <div className="flex gap-3 items-center">
+            {/* Filtros compactos */}
+            <button 
+              onClick={() => setStatusFilter('all')} 
+              className={`px-4 py-2 rounded-lg font-medium transition-all text-sm ${
+                statusFilter === 'all' 
+                  ? 'bg-[#010139] text-white shadow-md' 
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              Todas
+            </button>
+            <button 
+              onClick={() => setStatusFilter('active')} 
+              className={`px-4 py-2 rounded-lg font-medium transition-all text-sm ${
+                statusFilter === 'active' 
+                  ? 'bg-[#8AAA19] text-white shadow-md' 
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              Activas
+            </button>
+            <button 
+              onClick={() => setStatusFilter('inactive')} 
+              className={`px-4 py-2 rounded-lg font-medium transition-all text-sm ${
+                statusFilter === 'inactive' 
+                  ? 'bg-red-500 text-white shadow-md' 
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              Inactivas
+            </button>
+            
+            {/* Botón Nueva Aseguradora */}
+            <Link 
+              href="/insurers/new" 
+              className="flex items-center justify-center gap-2 px-4 py-2 bg-[#010139] text-white rounded-lg hover:bg-[#8AAA19] transition-colors font-semibold shadow-lg whitespace-nowrap"
+            >
+              <FaPlus /> Nueva
+            </Link>
+          </div>
         </div>
       </div>
 
@@ -187,11 +185,11 @@ export default function InsurersList({ initialInsurers }: InsurersListProps) {
           <p className="text-gray-500 text-lg">No se encontraron aseguradoras.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
           {filteredInsurers.map(insurer => (
             <div
               key={insurer.id}
-              className={`bg-white rounded-2xl shadow-lg hover:shadow-xl transition-all duration-300 hover:-translate-y-1 cursor-pointer min-h-[220px] ${
+              className={`bg-white rounded-xl shadow-md hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 cursor-pointer aspect-square ${
                 isPending ? 'opacity-50' : ''
               }`}
               onClick={() => handleFlip(insurer.id)}
@@ -206,94 +204,99 @@ export default function InsurersList({ initialInsurers }: InsurersListProps) {
               >
                 {/* Card Front - Logo protagonista */}
                 <div 
-                  className="absolute inset-0 flex flex-col p-4 bg-white rounded-2xl"
+                  className="absolute inset-0 flex flex-col p-3 bg-gradient-to-br from-white to-gray-50 rounded-xl"
                   style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}
                 >
-                  {/* Badge de estado en esquina */}
-                  <div className="absolute top-3 right-3">
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-medium shadow-sm ${
+                  {/* Badge de estado */}
+                  <div className="absolute top-2 right-2 z-10">
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold shadow-sm ${
                       insurer.active 
-                        ? 'bg-green-100 text-green-700' 
-                        : 'bg-gray-100 text-gray-600'
+                        ? 'bg-green-500 text-white' 
+                        : 'bg-gray-400 text-white'
                     }`}>
-                      {insurer.active ? 'Activa' : 'Inactiva'}
+                      {insurer.active ? '✓' : '○'}
                     </span>
                   </div>
                   
-                  {/* Logo protagonista - Centrado y grande */}
-                  <div className="flex-1 flex items-center justify-center py-4">
+                  {/* Logo - Centrado y grande */}
+                  <div className="flex-1 flex items-center justify-center p-2">
                     <InsurerLogo 
                       logoUrl={insurer.logo_url}
                       insurerName={insurer.name}
-                      size="2xl"
+                      size="xl"
                     />
                   </div>
                   
-                  {/* Botones de acción */}
-                  <div className="flex justify-end gap-2 mt-2">
+                  {/* Nombre en la parte inferior */}
+                  <div className="text-center px-1 py-2 border-t border-gray-200 bg-white/50 backdrop-blur-sm">
+                    <p className="text-[11px] sm:text-xs font-bold text-[#010139] truncate">{insurer.name}</p>
+                  </div>
+                  
+                  {/* Botones de acción - Más pequeños */}
+                  <div className="flex justify-center gap-1.5 mt-1">
                     <Link 
                       href={`/insurers/${insurer.id}/edit`} 
-                      className="w-9 h-9 flex items-center justify-center rounded-lg bg-[#f6f6ff] text-gray-600 hover:bg-[#010139] hover:text-white transition-all" 
+                      className="w-7 h-7 flex items-center justify-center rounded-lg bg-blue-50 text-blue-600 hover:bg-[#010139] hover:text-white transition-all text-xs" 
                       title="Editar" 
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <FaEdit />
+                      <FaEdit size={12} />
                     </Link>
                     <button 
                       onClick={(e) => { e.stopPropagation(); handleClone(insurer.id); }} 
-                      className="w-9 h-9 flex items-center justify-center rounded-lg bg-[#f6f6ff] text-gray-600 hover:bg-[#8AAA19] hover:text-white transition-all" 
+                      className="w-7 h-7 flex items-center justify-center rounded-lg bg-green-50 text-green-600 hover:bg-[#8AAA19] hover:text-white transition-all text-xs" 
                       title="Clonar"
                     >
-                      <FaClone />
+                      <FaClone size={12} />
                     </button>
                     <button 
                       onClick={(e) => { e.stopPropagation(); handleToggle(insurer.id); }} 
-                      className="w-9 h-9 flex items-center justify-center rounded-lg bg-[#f6f6ff] text-gray-600 hover:bg-orange-500 hover:text-white transition-all" 
+                      className="w-7 h-7 flex items-center justify-center rounded-lg bg-orange-50 text-orange-600 hover:bg-orange-500 hover:text-white transition-all text-xs" 
                       title={insurer.active ? 'Desactivar' : 'Activar'}
                     >
-                      {insurer.active ? <FaToggleOn /> : <FaToggleOff />}
+                      {insurer.active ? <FaToggleOn size={14} /> : <FaToggleOff size={14} />}
                     </button>
                   </div>
                 </div>
                 {/* Card Back */}
                 <div 
-                  className="absolute inset-0 flex flex-col p-6 bg-white rounded-2xl"
+                  className="absolute inset-0 flex flex-col p-3 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl"
                   style={{ 
                     backfaceVisibility: 'hidden',
                     WebkitBackfaceVisibility: 'hidden',
                     transform: 'rotateY(180deg)'
                   }}
                 >
-                  <div className="flex justify-between items-center mb-4">
-                    <h4 className="text-base font-semibold text-[#010139]">Contacto Principal</h4>
+                  <div className="flex justify-between items-start mb-2">
+                    <h4 className="text-xs font-bold text-[#010139]">Contacto</h4>
                     <button 
                       onClick={(e) => { e.stopPropagation(); handleFlip(insurer.id); }} 
-                      className="w-9 h-9 flex items-center justify-center rounded-lg bg-[#f6f6ff] text-gray-600 hover:bg-[#010139] hover:text-white transition-all" 
+                      className="w-6 h-6 flex items-center justify-center rounded-lg bg-white text-gray-600 hover:bg-[#010139] hover:text-white transition-all shadow-sm" 
                       title="Volver"
                     >
-                      <FaUndo />
+                      <FaUndo size={10} />
                     </button>
                   </div>
                   {(() => {
                     const primaryContact = insurer.contacts.find(c => c.is_primary);
                     return primaryContact ? (
-                      <div className="text-gray-700 text-sm space-y-2 flex-1">
-                        <p className="font-bold text-[#010139] text-base">{primaryContact.name}</p>
-                        {primaryContact.position && <p className="text-gray-600">📋 {primaryContact.position}</p>}
-                        {primaryContact.phone && <p className="text-gray-600">📞 {primaryContact.phone}</p>}
-                        {primaryContact.email && <p className="text-gray-600">✉️ {primaryContact.email}</p>}
+                      <div className="text-gray-700 text-[10px] space-y-1 flex-1 overflow-y-auto">
+                        <p className="font-bold text-[#010139] text-xs mb-1 truncate">{primaryContact.name}</p>
+                        {primaryContact.position && <p className="text-gray-600 truncate">📋 {primaryContact.position}</p>}
+                        {primaryContact.phone && <p className="text-gray-600 truncate">📞 {primaryContact.phone}</p>}
+                        {primaryContact.email && <p className="text-gray-600 truncate">✉️ {primaryContact.email}</p>}
                       </div>
                     ) : (
-                      <div className="text-gray-500 text-sm flex-1 flex items-center justify-center">
-                        <p>No hay contacto principal</p>
+                      <div className="text-gray-500 text-[10px] flex-1 flex items-center justify-center">
+                        <p className="text-center">Sin contacto principal</p>
                       </div>
                     );
                   })()}
                   <button
                     onClick={(e) => { e.stopPropagation(); handleOpenModal(insurer); }}
-                    className="mt-4 w-full py-2 px-4 bg-[#8AAA19] text-white rounded-lg hover:bg-[#6d8814] transition-all flex items-center justify-center gap-2 font-semibold"
+                    className="mt-2 w-full py-1.5 px-2 bg-[#8AAA19] text-white rounded-lg hover:bg-[#6d8814] transition-all flex items-center justify-center gap-1 font-semibold text-[10px]"
                   >
-                    <FaEye /> Ver + ({insurer.contacts.length})
+                    <FaEye size={10} /> Ver ({insurer.contacts.length})
                   </button>
                 </div>
               </div>
