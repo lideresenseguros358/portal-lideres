@@ -240,11 +240,6 @@ export default function NationalIdInput({
             <SelectItem value="ruc">🏢 RUC</SelectItem>
           </SelectContent>
         </Select>
-        <p className="text-xs text-gray-500 mt-1">
-          {documentType === 'cedula' && '✅ Detectado: Cédula Panameña'}
-          {documentType === 'pasaporte' && '✅ Detectado: Pasaporte (sin guiones)'}
-          {documentType === 'ruc' && '✅ Detectado: RUC (formato especial)'}
-        </p>
       </div>
 
       {/* Inputs según tipo de documento */}
