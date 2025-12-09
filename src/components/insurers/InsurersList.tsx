@@ -173,7 +173,7 @@ export default function InsurersList({ initialInsurers }: InsurersListProps) {
               href="/insurers/new" 
               className="w-full sm:w-auto flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-[#010139] text-white rounded-lg hover:bg-[#8AAA19] transition-colors font-semibold shadow-lg whitespace-nowrap text-xs sm:text-sm"
             >
-              <FaPlus className="text-white" /> Nueva
+              <FaPlus className="text-white" /> <span className="text-white">Nueva</span>
             </Link>
           </div>
         </div>
