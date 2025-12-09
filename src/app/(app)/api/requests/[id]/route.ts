@@ -91,6 +91,8 @@ export async function PATCH(
     console.log('🔵 Intentando crear usuario:', {
       email: userRequest.email,
       has_password: !!password,
+      password_length: password.length,
+      password_preview: password.substring(0, 3) + '***',
       role: role.toLowerCase()
     });
 
