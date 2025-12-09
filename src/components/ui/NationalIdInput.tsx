@@ -250,11 +250,6 @@ export default function NationalIdInput({
       {/* Inputs según tipo de documento */}
       {documentType === 'cedula' && (
         <div>
-          <div className="p-3 bg-green-50 border-2 border-green-300 rounded-lg mb-3">
-            <p className="text-xs text-green-800 font-semibold">
-              ✅ Provincia válida detectada → CÉDULA PANAMEÑA
-            </p>
-          </div>
           <div className="flex flex-row gap-2">
             {/* Parte 1: Provincia/Prefijo */}
             <div className="flex-none w-24 sm:w-32">
@@ -328,11 +323,6 @@ export default function NationalIdInput({
 
       {documentType === 'pasaporte' && (
         <div>
-          <div className="p-3 bg-blue-50 border-2 border-blue-300 rounded-lg mb-3">
-            <p className="text-xs text-blue-800 font-semibold">
-              🚫 Sin guiones detectados → PASAPORTE
-            </p>
-          </div>
           <input
             type="text"
             placeholder="PA123456789"
@@ -356,11 +346,6 @@ export default function NationalIdInput({
 
       {documentType === 'ruc' && (
         <div>
-          <div className="p-3 bg-orange-50 border-2 border-orange-300 rounded-lg mb-3">
-            <p className="text-xs text-orange-800 font-semibold">
-              🏢 Formato no coincide con cédula → RUC
-            </p>
-          </div>
           <input
             type="text"
             placeholder="475690-1-434939"
