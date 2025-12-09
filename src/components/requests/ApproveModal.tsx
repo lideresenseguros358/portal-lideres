@@ -230,13 +230,12 @@ export default function ApproveModal({ request, onClose, onSuccess }: ApproveMod
 
         {/* Footer */}
         <div className="standard-modal-footer">
-          <div></div>
-          
-          <div className="flex gap-3">
+          <div className="flex flex-col-reverse sm:flex-row gap-3 w-full sm:w-auto">
             <button
               type="button"
               onClick={onClose}
-              className="standard-modal-button-secondary"
+              disabled={loading}
+              className="flex-1 sm:flex-none px-4 sm:px-6 py-3 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-medium disabled:opacity-50 text-sm sm:text-base"
             >
               Cancelar
             </button>
@@ -244,7 +243,7 @@ export default function ApproveModal({ request, onClose, onSuccess }: ApproveMod
               type="submit"
               form="approve-form"
               disabled={loading}
-              className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium disabled:opacity-50 flex items-center gap-2"
+              className="flex-1 sm:flex-none px-4 sm:px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-semibold disabled:opacity-50 flex items-center justify-center gap-2 text-sm sm:text-base shadow-lg"
             >
               {loading ? (
                 <>
@@ -252,7 +251,10 @@ export default function ApproveModal({ request, onClose, onSuccess }: ApproveMod
                   <span>Procesando...</span>
                 </>
               ) : (
-                'Confirmar Aprobación'
+                <>
+                  <FaCheckCircle />
+                  <span>Aprobar</span>
+                </>
               )}
             </button>
           </div>

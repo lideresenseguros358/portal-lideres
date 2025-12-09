@@ -124,14 +124,16 @@ export default function RequestsList({
                   <div className="flex items-center justify-center gap-2">
                     <button
                       onClick={() => onApprove(request)}
-                      className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-semibold text-sm"
+                      className="flex items-center gap-1.5 px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all font-semibold text-xs shadow-md hover:shadow-lg"
+                      title="Aprobar solicitud"
                     >
                       <FaCheckCircle />
                       <span>Aprobar</span>
                     </button>
                     <button
                       onClick={() => onReject(request.id)}
-                      className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-semibold text-sm"
+                      className="flex items-center gap-1.5 px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-all font-semibold text-xs shadow-md hover:shadow-lg"
+                      title="Rechazar y eliminar solicitud"
                     >
                       <FaTimesCircle />
                       <span>Rechazar</span>
@@ -198,19 +200,19 @@ export default function RequestsList({
             </div>
 
             {/* Acciones */}
-            <div className="flex gap-2">
+            <div className="flex gap-3">
               <button
                 onClick={() => onApprove(request)}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-semibold"
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 active:bg-green-800 transition-all font-semibold text-sm shadow-lg"
               >
-                <FaCheckCircle />
+                <FaCheckCircle className="text-base" />
                 <span>Aprobar</span>
               </button>
               <button
                 onClick={() => onReject(request.id)}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-semibold"
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 active:bg-red-800 transition-all font-semibold text-sm shadow-lg"
               >
-                <FaTimesCircle />
+                <FaTimesCircle className="text-base" />
                 <span>Rechazar</span>
               </button>
             </div>

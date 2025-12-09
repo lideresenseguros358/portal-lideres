@@ -13,11 +13,8 @@ export default function RequestsMainClient() {
   const [showApproveModal, setShowApproveModal] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [selectedRequest, setSelectedRequest] = useState<any>(null);
-  const [stats, setStats] = useState({ pending: 0, approved: 0 });
-
   useEffect(() => {
     loadRequests();
-    loadStats();
   }, []);
 
   const loadRequests = async () => {
@@ -36,26 +33,6 @@ export default function RequestsMainClient() {
     }
   };
 
-  const loadStats = async () => {
-    try {
-      const [pendingRes, approvedRes] = await Promise.all([
-        fetch('/api/requests?status=pending'),
-        fetch('/api/requests?status=approved')
-      ]);
-
-      const [pending, approved] = await Promise.all([
-        pendingRes.json(),
-        approvedRes.json()
-      ]);
-
-      setStats({
-        pending: pending.requests?.length || 0,
-        approved: approved.requests?.length || 0
-      });
-    } catch (error) {
-      console.error('Error loading stats:', error);
-    }
-  };
 
   const handleApprove = (request: any) => {
     setSelectedRequest(request);
@@ -79,7 +56,6 @@ export default function RequestsMainClient() {
       if (data.success) {
         toast.success('Solicitud rechazada y eliminada');
         loadRequests();
-        loadStats();
       } else {
         toast.error(data.error || 'Error al rechazar solicitud');
       }
@@ -93,53 +69,46 @@ export default function RequestsMainClient() {
     setShowApproveModal(false);
     setSelectedRequest(null);
     loadRequests();
-    loadStats();
   };
 
   return (
     <div className="min-h-screen p-4 sm:p-6 lg:p-8">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
-          <div>
-            <h1 className="text-3xl sm:text-4xl font-bold text-[#010139] mb-2">
-              📋 Solicitudes de Usuarios
-            </h1>
-            <p className="text-gray-600">
-              Aprueba o rechaza nuevas solicitudes de acceso
-            </p>
-          </div>
-
-          <button
-            onClick={() => setShowInviteModal(true)}
-            className="flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-xl font-bold shadow-lg hover:shadow-xl hover:scale-105 transition-all"
-          >
-            <FaEnvelope />
-            <span>Invitar Usuarios</span>
-          </button>
-        </div>
-
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          <div className="bg-gradient-to-br from-[#8AAA19] to-[#6d8814] rounded-xl p-6 text-white shadow-lg">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm opacity-90 mb-1">Pendientes</p>
-                <p className="text-4xl font-bold">{stats.pending}</p>
-              </div>
-              <FaUserPlus className="text-4xl opacity-80" />
+        <div className="mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-4">
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold text-[#010139] mb-1">
+                📋 Solicitudes de Usuarios
+              </h1>
+              <p className="text-sm sm:text-base text-gray-600">
+                Aprueba o rechaza nuevas solicitudes de acceso
+              </p>
             </div>
+
+            <button
+              onClick={() => setShowInviteModal(true)}
+              className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg font-semibold shadow-lg hover:shadow-xl hover:scale-105 transition-all text-sm sm:text-base"
+            >
+              <FaEnvelope />
+              <span>Invitar Usuarios</span>
+            </button>
           </div>
 
-          <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl p-6 text-white shadow-lg">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm opacity-90 mb-1">Aprobadas</p>
-                <p className="text-4xl font-bold">{stats.approved}</p>
-              </div>
-              <FaCheckCircle className="text-4xl opacity-80" />
+          {/* Status message */}
+          {!loading && (
+            <div className="bg-blue-50 border-l-4 border-blue-500 px-4 py-3 rounded-r-lg">
+              <p className="text-sm sm:text-base text-blue-900">
+                {requests.length === 0 ? (
+                  <span>✅ No hay solicitudes pendientes</span>
+                ) : (
+                  <span>
+                    📌 <strong>{requests.length}</strong> {requests.length === 1 ? 'solicitud pendiente' : 'solicitudes pendientes'} de aprobación
+                  </span>
+                )}
+              </p>
             </div>
-          </div>
+          )}
         </div>
 
         {/* Lista de Solicitudes */}
