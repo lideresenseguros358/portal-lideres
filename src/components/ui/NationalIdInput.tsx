@@ -55,60 +55,103 @@ export default function NationalIdInput({
   // Para pasaporte y RUC: un solo campo
   const [singleValue, setSingleValue] = useState('');
 
+  // Debug: rastrear cambios de estado
+  useEffect(() => {
+    console.log('[NationalIdInput] Estado actual:', {
+      documentType,
+      cedulaPart1,
+      cedulaPart2,
+      cedulaPart3,
+      singleValue,
+      value
+    });
+  }, [documentType, cedulaPart1, cedulaPart2, cedulaPart3, singleValue, value]);
+
   // Inicializar desde el value prop
   useEffect(() => {
-    // Inicializar en el primer render si hay un value inicial
-    if (!hasInitialized.current && value) {
-      hasInitialized.current = true;
-      lastValueRef.current = value;
-      
-      // Detectar tipo de documento de manera inteligente
-      if (!value.includes('-')) {
-        // Sin guiones = pasaporte
-        setDocumentType('pasaporte');
-        setSingleValue(value);
-      } else {
-        const parts = value.split('-');
-        
-        if (parts.length === 3 && parts[0] && CEDULA_PREFIXES.includes(parts[0].toUpperCase())) {
-          // Es cédula (3 partes y provincia válida)
-          setDocumentType('cedula');
-          setCedulaPart1(parts[0].toUpperCase());
-          setCedulaPart2(parts[1] || '');
-          setCedulaPart3(parts[2] || '');
-        } else if (parts[0] && parts[0].length > 2) {
-          // Primera parte tiene más de 2 caracteres = RUC
-          setDocumentType('ruc');
-          setSingleValue(value);
-        } else {
-          // Cualquier otro formato con guiones = RUC
-          setDocumentType('ruc');
-          setSingleValue(value);
-        }
+    // Si no hay value, limpiar todo
+    if (!value || value.trim() === '') {
+      if (lastValueRef.current !== '') {
+        lastValueRef.current = '';
+        setCedulaPart1('');
+        setCedulaPart2('');
+        setCedulaPart3('');
+        setSingleValue('');
+        setDocumentType('cedula');
       }
+      return;
     }
-    // Actualizar si value cambia externamente después de la inicialización
-    else if (hasInitialized.current && value && value !== lastValueRef.current) {
-      lastValueRef.current = value;
+    
+    // Si el value no ha cambiado, no hacer nada
+    if (value === lastValueRef.current) {
+      return;
+    }
+    
+    // Actualizar lastValueRef
+    lastValueRef.current = value;
+    hasInitialized.current = true;
+    
+    console.log('[NationalIdInput] Procesando value:', value);
+    
+    // Detectar tipo de documento de manera inteligente
+    if (!value.includes('-')) {
+      // Sin guiones = pasaporte
+      console.log('[NationalIdInput] Detectado: PASAPORTE (sin guiones)');
+      setDocumentType('pasaporte');
+      setSingleValue(value);
+      setCedulaPart1('');
+      setCedulaPart2('');
+      setCedulaPart3('');
+    } else {
+      const parts = value.split('-');
+      console.log('[NationalIdInput] Parts:', parts);
       
-      if (!value.includes('-')) {
-        setDocumentType('pasaporte');
-        setSingleValue(value);
-      } else {
-        const parts = value.split('-');
+      // Verificar si es cédula (3 partes y provincia válida)
+      if (parts.length === 3 && parts[0]) {
+        const provincia = parts[0].toUpperCase();
+        console.log('[NationalIdInput] Verificando provincia:', provincia, 'en lista:', CEDULA_PREFIXES.includes(provincia));
         
-        if (parts.length === 3 && parts[0] && CEDULA_PREFIXES.includes(parts[0].toUpperCase())) {
+        if (CEDULA_PREFIXES.includes(provincia)) {
+          // Es cédula
+          console.log('[NationalIdInput] Detectado: CÉDULA');
           setDocumentType('cedula');
-          setCedulaPart1(parts[0].toUpperCase());
+          setCedulaPart1(provincia);
           setCedulaPart2(parts[1] || '');
           setCedulaPart3(parts[2] || '');
-        } else if (parts[0] && parts[0].length > 2) {
+          setSingleValue('');
+        } else if (parts[0].length > 2) {
+          // Primera parte tiene más de 2 caracteres = RUC
+          console.log('[NationalIdInput] Detectado: RUC (primera parte > 2 caracteres)');
           setDocumentType('ruc');
           setSingleValue(value);
+          setCedulaPart1('');
+          setCedulaPart2('');
+          setCedulaPart3('');
         } else {
+          // Provincia no válida y primera parte <= 2 = RUC
+          console.log('[NationalIdInput] Detectado: RUC (provincia no válida)');
           setDocumentType('ruc');
           setSingleValue(value);
+          setCedulaPart1('');
+          setCedulaPart2('');
+          setCedulaPart3('');
         }
+      } else if (parts[0] && parts[0].length > 2) {
+        // No tiene 3 partes pero primera parte > 2 caracteres = RUC
+        console.log('[NationalIdInput] Detectado: RUC (no 3 partes, primera > 2)');
+        setDocumentType('ruc');
+        setSingleValue(value);
+        setCedulaPart1('');
+        setCedulaPart2('');
+        setCedulaPart3('');
+      } else {
+        // Cualquier otro formato con guiones = RUC
+        console.log('[NationalIdInput] Detectado: RUC (formato desconocido)');
+        setDocumentType('ruc');
+        setSingleValue(value);
+        setCedulaPart1('');
+        setCedulaPart2('');
+        setCedulaPart3('');
       }
     }
     
@@ -148,6 +191,7 @@ export default function NationalIdInput({
     setCedulaPart2('');
     setCedulaPart3('');
     setSingleValue('');
+    lastValueRef.current = '';
     onChange('');
   };
 
@@ -199,9 +243,18 @@ export default function NationalIdInput({
           <div className="flex flex-row gap-2">
             {/* Parte 1: Provincia/Prefijo */}
             <div className="flex-none w-24 sm:w-32">
-              <Select value={cedulaPart1} onValueChange={setCedulaPart1}>
+              <Select 
+                value={cedulaPart1} 
+                onValueChange={(val) => {
+                  console.log('[NationalIdInput] Select onChange:', val);
+                  setCedulaPart1(val);
+                }}
+                key={`provincia-${cedulaPart1}`}
+              >
                 <SelectTrigger className="w-full border-2 border-gray-300 focus:border-[#8AAA19] h-11">
-                  <SelectValue placeholder="Provincia" />
+                  <SelectValue placeholder="Provincia">
+                    {cedulaPart1 || 'Provincia'}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   {CEDULA_PREFIXES.map((prefix) => (
