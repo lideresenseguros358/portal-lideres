@@ -107,14 +107,46 @@ export async function PATCH(
       }, { status: 400 });
     }
 
+    // Preparar additional_fields
+    const additionalFields = userRequest.additional_fields && typeof userRequest.additional_fields === 'object' 
+      ? userRequest.additional_fields as Record<string, any>
+      : {};
+
     // Crear usuario en auth.users usando cliente admin
+    // IMPORTANTE: Pasar TODOS los datos en user_metadata para que el trigger los use
     const { data: authData, error: authError } = await adminClient.auth.admin.createUser({
       email: userRequest.email,
       password: password,
       email_confirm: true,
       user_metadata: {
+        // Datos básicos
         full_name: userRequest.nombre_completo,
-        role: role.toLowerCase()
+        role: role.toLowerCase(),
+        
+        // Datos personales
+        cedula: userRequest.cedula,
+        national_id: userRequest.cedula,
+        telefono: userRequest.telefono,
+        phone: userRequest.telefono,
+        licencia: userRequest.licencia,
+        license_no: userRequest.licencia,
+        fecha_nacimiento: userRequest.fecha_nacimiento,
+        birth_date: userRequest.fecha_nacimiento,
+        
+        // Datos bancarios ACH
+        bank_route: userRequest.bank_route,
+        bank_account_no: userRequest.bank_account_no,
+        tipo_cuenta: userRequest.tipo_cuenta,
+        beneficiary_name: userRequest.nombre_completo_titular,
+        nombre_completo_titular: userRequest.nombre_completo_titular,
+        
+        // Comisión
+        percent_default: parseFloat(commission_percent),
+        
+        // Campos adicionales
+        broker_type: additionalFields.broker_type || 'corredor',
+        assa_code: additionalFields.assa_code || null,
+        carnet_expiry_date: additionalFields.carnet_expiry_date || null
       }
     });
 
@@ -133,80 +165,16 @@ export async function PATCH(
 
     console.log('✅ Usuario creado en auth.users:', authData.user.id);
 
-    // El trigger automáticamente creará el profile
-    // Esperar un momento para que el trigger se ejecute
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    // Actualizar profile con datos adicionales
-    const { error: profileError } = await supabase
-      .from('profiles')
-      .update({
-        full_name: userRequest.nombre_completo,
-        role: role.toLowerCase() as any
-      })
-      .eq('id', authData.user!.id);
-
-    if (profileError) {
-      console.error('Error updating profile:', profileError);
-    }
-
-    // Crear registro en brokers
-    // Convertir additional_fields de Json a objeto
-    const additionalFields = userRequest.additional_fields && typeof userRequest.additional_fields === 'object' 
-      ? userRequest.additional_fields as Record<string, any>
-      : {};
-
-    // Obtener bank_route desde user_request (ya está en la tabla después de migración)
-    const bankRoute = userRequest.bank_route || null;
+    // El trigger handle_new_user_full() automáticamente creará:
+    // 1. Profile con rol y datos personales
+    // 2. Broker con todos los campos (cédula, banco, comisión, etc.)
+    // 3. Link broker_id en profile
+    // Todos los datos vienen de user_metadata que pasamos arriba
     
-    // Crear broker con campos ACH correctos
-    const { error: brokerError } = await supabase
-      .from('brokers')
-      .insert([{
-        id: authData.user!.id,
-        p_id: authData.user!.id,
-        // Datos personales del BROKER
-        name: userRequest.nombre_completo, // Nombre del broker
-        nombre_completo: userRequest.nombre_completo, // Nombre del broker (para queries internas)
-        email: userRequest.email, // Email del broker
-        national_id: userRequest.cedula, // Cédula del broker
-        phone: userRequest.telefono,
-        license_no: userRequest.licencia,
-        birth_date: userRequest.fecha_nacimiento,
-        // Datos bancarios ACH para generación de archivo TXT
-        bank_route: bankRoute, // Código de ruta bancaria (ej: "71")
-        bank_account_no: userRequest.bank_account_no, // Número de cuenta (limpio)
-        tipo_cuenta: userRequest.tipo_cuenta || '04', // Tipo de cuenta: "03"=Corriente, "04"=Ahorro
-        beneficiary_name: userRequest.nombre_completo_titular, // Nombre del TITULAR de la cuenta ACH (MAYÚSCULAS sin acentos, max 22 chars)
-        // Comisión
-        percent_default: parseFloat(commission_percent),
-        // Campos adicionales
-        active: true,
-        broker_type: additionalFields.broker_type || 'corredor',
-        assa_code: additionalFields.assa_code || null,
-        carnet_expiry_date: additionalFields.carnet_expiry_date || null
-      }]);
+    // Esperar un momento para que el trigger se ejecute
+    await new Promise(resolve => setTimeout(resolve, 1500));
 
-    if (brokerError) {
-      console.error('Error creating broker:', brokerError);
-      return NextResponse.json({ 
-        error: `Error al crear broker: ${brokerError.message}` 
-      }, { status: 500 });
-    }
-
-    // Vincular broker_id en profiles para completar la relación
-    const { error: linkError } = await supabase
-      .from('profiles')
-      .update({
-        broker_id: authData.user!.id
-      })
-      .eq('id', authData.user!.id);
-
-    if (linkError) {
-      console.error('Error linking broker to profile:', linkError);
-      // No retornamos error porque el broker ya fue creado
-      // El link puede hacerse manualmente después si falla
-    }
+    console.log('✅ Trigger ejecutado - Profile y Broker creados');
 
     // Actualizar solicitud
     const { error: updateError } = await supabase
