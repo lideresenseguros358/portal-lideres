@@ -148,7 +148,7 @@ export function EditAdvanceModal({ advance, onClose, onSuccess }: Props) {
         {/* Content */}
         <div className="standard-modal-content">
           <Form {...form}>
-            <form id="edit-advance-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            <form id="edit-advance-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-3">
               {/* Monto */}
               <FormField
                 control={form.control}
@@ -166,7 +166,7 @@ export function EditAdvanceModal({ advance, onClose, onSuccess }: Props) {
                           type="number" 
                           placeholder="0.00" 
                           step="0.01" 
-                          className="pl-8 border-2 border-gray-300 focus:border-[#8AAA19] h-11 font-mono text-lg"
+                          className="pl-8 border-2 border-gray-300 focus:border-[#8AAA19] h-10 font-mono text-base"
                           {...field} 
                         />
                       </div>
@@ -189,7 +189,7 @@ export function EditAdvanceModal({ advance, onClose, onSuccess }: Props) {
                     <FormControl>
                       <Input 
                         placeholder="Ej: Adelanto de comisiones" 
-                        className="border-2 border-gray-300 focus:border-[#8AAA19] h-11"
+                        className="border-2 border-gray-300 focus:border-[#8AAA19] h-10"
                         {...field} 
                       />
                     </FormControl>
@@ -200,7 +200,7 @@ export function EditAdvanceModal({ advance, onClose, onSuccess }: Props) {
 
               {/* Info sobre recurrencia */}
               {advance.is_recurring && (
-                <div className="p-3 bg-amber-50 border-2 border-amber-200 rounded-lg">
+                <div className="p-2.5 bg-amber-50 border-2 border-amber-200 rounded-lg">
                   <div className="flex items-start gap-2">
                     <div className="text-amber-600 text-lg flex-shrink-0">⚠️</div>
                     <div className="text-xs text-gray-700">
@@ -218,7 +218,7 @@ export function EditAdvanceModal({ advance, onClose, onSuccess }: Props) {
           
           {/* Confirmación de eliminación */}
           {showDeleteConfirm && (
-            <div className="mt-4 p-3 bg-red-50 border-l-4 border-red-500 rounded-lg">
+            <div className="mt-3 p-2.5 bg-red-50 border-l-4 border-red-500 rounded-lg">
               <div className="flex items-start gap-2">
                 <FaExclamationTriangle className="text-red-600 text-lg flex-shrink-0 mt-0.5" />
                 <div className="flex-1">
@@ -244,7 +244,7 @@ export function EditAdvanceModal({ advance, onClose, onSuccess }: Props) {
               type="button"
               onClick={() => setShowDeleteConfirm(true)}
               disabled={form.formState.isSubmitting || isDeleting}
-              className="px-3 py-2 border-2 border-red-400 text-red-700 rounded-lg hover:bg-red-50 hover:border-red-500 font-medium transition text-sm flex items-center gap-1.5"
+              className="px-3 py-1.5 border-2 border-red-400 text-red-700 rounded-lg hover:bg-red-50 hover:border-red-500 font-medium transition text-sm flex items-center gap-1.5"
             >
               <FaTrash className="text-sm" />
               Eliminar
@@ -259,7 +259,7 @@ export function EditAdvanceModal({ advance, onClose, onSuccess }: Props) {
                   type="button"
                   onClick={onClose}
                   disabled={form.formState.isSubmitting || isDeleting}
-                  className="standard-modal-button-secondary"
+                  className="flex-1 sm:flex-none px-4 py-1.5 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium text-sm"
                 >
                   Cancelar
                 </button>
@@ -267,16 +267,16 @@ export function EditAdvanceModal({ advance, onClose, onSuccess }: Props) {
                   type="submit"
                   form="edit-advance-form"
                   disabled={form.formState.isSubmitting || isDeleting}
-                  className="standard-modal-button-primary"
+                  className="flex-1 sm:flex-none px-4 py-1.5 bg-[#8AAA19] text-white rounded-lg hover:bg-[#6d8814] transition font-medium disabled:opacity-50 flex items-center justify-center gap-2 text-sm"
                 >
                   {form.formState.isSubmitting ? (
                     <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
                       <span>Guardando...</span>
                     </>
                   ) : (
                     <>
-                      <FaMoneyBillWave className="mr-2" />
+                      <FaMoneyBillWave className="text-white" />
                       <span>Guardar</span>
                     </>
                   )}
@@ -288,7 +288,7 @@ export function EditAdvanceModal({ advance, onClose, onSuccess }: Props) {
                   type="button"
                   onClick={() => setShowDeleteConfirm(false)}
                   disabled={isDeleting}
-                  className="standard-modal-button-secondary"
+                  className="flex-1 sm:flex-none px-4 py-1.5 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium text-sm"
                 >
                   Cancelar
                 </button>
@@ -296,7 +296,7 @@ export function EditAdvanceModal({ advance, onClose, onSuccess }: Props) {
                   type="button"
                   onClick={handleDelete}
                   disabled={isDeleting}
-                  className="flex-1 sm:flex-none px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium disabled:opacity-50 flex items-center justify-center gap-2 text-sm"
+                  className="flex-1 sm:flex-none px-4 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium disabled:opacity-50 flex items-center justify-center gap-2 text-sm"
                 >
                   {isDeleting ? (
                     <>
@@ -305,7 +305,7 @@ export function EditAdvanceModal({ advance, onClose, onSuccess }: Props) {
                     </>
                   ) : (
                     <>
-                      <FaExclamationTriangle className="text-sm" />
+                      <FaExclamationTriangle className="text-white" />
                       <span>Sí, Eliminar</span>
                     </>
                   )}

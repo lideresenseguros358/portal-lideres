@@ -135,7 +135,7 @@ export function AddAdvanceModal({ isOpen, onClose, onSuccess, brokers }: Props) 
           {/* Content */}
           <div className="standard-modal-content">
             <Form {...form}>
-              <form id="advance-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+              <form id="advance-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-3">
             {/* Corredor */}
             <FormField
               control={form.control}
@@ -148,7 +148,7 @@ export function AddAdvanceModal({ isOpen, onClose, onSuccess, brokers }: Props) 
                   </FormLabel>
                   <FormControl>
                     <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <SelectTrigger className="border-2 border-gray-300 focus:border-[#8AAA19] h-11">
+                      <SelectTrigger className="border-2 border-gray-300 focus:border-[#8AAA19] h-10">
                         <SelectValue placeholder="Seleccione un corredor" />
                       </SelectTrigger>
                       <SelectContent>
@@ -182,7 +182,7 @@ export function AddAdvanceModal({ isOpen, onClose, onSuccess, brokers }: Props) 
                         type="number" 
                         placeholder="0.00" 
                         step="0.01" 
-                        className="pl-8 border-2 border-gray-300 focus:border-[#8AAA19] h-11 font-mono text-lg"
+                        className="pl-8 border-2 border-gray-300 focus:border-[#8AAA19] h-10 font-mono text-base"
                         {...field} 
                       />
                     </div>
@@ -205,7 +205,7 @@ export function AddAdvanceModal({ isOpen, onClose, onSuccess, brokers }: Props) 
                   <FormControl>
                     <Input 
                       placeholder="Ej: Adelanto de comisiones" 
-                      className="border-2 border-gray-300 focus:border-[#8AAA19] h-11"
+                      className="border-2 border-gray-300 focus:border-[#8AAA19] h-10"
                       {...field} 
                     />
                   </FormControl>
@@ -215,10 +215,10 @@ export function AddAdvanceModal({ isOpen, onClose, onSuccess, brokers }: Props) 
             />
 
             {/* Adelanto Recurrente */}
-            <div className="border-t border-gray-200 pt-4 mt-4">
-              <div className="flex items-center justify-between p-3 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border-2 border-blue-200">
-                <div className="flex items-center gap-3">
-                  <FaCalendarAlt className="text-blue-600 text-xl" />
+            <div className="border-t border-gray-200 pt-3 mt-3">
+              <div className="flex items-center justify-between p-2.5 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border-2 border-blue-200">
+                <div className="flex items-center gap-2">
+                  <FaCalendarAlt className="text-blue-600 text-lg" />
                   <div>
                     <p className="font-semibold text-sm text-gray-900">Adelanto Recurrente</p>
                     <p className="text-xs text-gray-600">Se crea ahora y se repetirá automáticamente cada mes</p>
@@ -240,10 +240,10 @@ export function AddAdvanceModal({ isOpen, onClose, onSuccess, brokers }: Props) 
 
               {/* Configuración de Recurrencia */}
               {isRecurrent && (
-                <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-300 space-y-3">
+                <div className="mt-2 p-2.5 bg-gray-50 rounded-lg border border-gray-300 space-y-2.5">
                   {/* Quincena */}
                   <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">
                       ¿En qué quincena se debe aplicar?
                     </label>
                     <div className="grid grid-cols-3 gap-1.5">
@@ -288,7 +288,7 @@ export function AddAdvanceModal({ isOpen, onClose, onSuccess, brokers }: Props) 
 
                   {/* Fecha de Vencimiento */}
                   <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">
                       Duración de la Recurrencia
                     </label>
                     <div className="space-y-1.5">
