@@ -21,6 +21,11 @@ export default function ApproveModal({ request, onClose, onSuccess }: ApproveMod
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    console.log('🔵 ApproveModal: Iniciando proceso de aprobación');
+    console.log('🔵 Request ID:', request.id);
+    console.log('🔵 Role:', role);
+    console.log('🔵 Commission:', commissionPercent);
+
     // Validar rol
     const normalizedRole = role.toLowerCase().trim();
     if (!['master', 'broker'].includes(normalizedRole)) {
@@ -38,6 +43,7 @@ export default function ApproveModal({ request, onClose, onSuccess }: ApproveMod
     setLoading(true);
 
     try {
+      console.log('🔵 Enviando PATCH request...');
       const res = await fetch(`/api/requests/${request.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -48,16 +54,19 @@ export default function ApproveModal({ request, onClose, onSuccess }: ApproveMod
         })
       });
 
+      console.log('🔵 Response status:', res.status);
       const data = await res.json();
+      console.log('🔵 Response data:', data);
 
       if (data.success) {
         toast.success('Usuario aprobado y creado exitosamente');
         onSuccess();
       } else {
+        console.error('❌ Error en respuesta:', data.error);
         toast.error(data.error || 'Error al aprobar solicitud');
       }
     } catch (error) {
-      console.error('Error approving request:', error);
+      console.error('❌ Error completo:', error);
       toast.error('Error al aprobar solicitud');
     } finally {
       setLoading(false);
