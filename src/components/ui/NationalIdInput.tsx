@@ -222,9 +222,17 @@ export default function NationalIdInput({
 
       {/* Selector de tipo de documento */}
       <div className="mb-3">
-        <Select value={documentType} onValueChange={handleDocumentTypeChange}>
+        <Select 
+          value={documentType} 
+          onValueChange={handleDocumentTypeChange}
+          key={`doctype-${documentType}`}
+        >
           <SelectTrigger className="w-full sm:w-64 border-2 border-gray-300 focus:border-[#8AAA19] h-10">
-            <SelectValue />
+            <SelectValue>
+              {documentType === 'cedula' && '🪪 Cédula'}
+              {documentType === 'pasaporte' && '🛂 Pasaporte'}
+              {documentType === 'ruc' && '🏢 RUC'}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="cedula">🪪 Cédula</SelectItem>
@@ -233,13 +241,20 @@ export default function NationalIdInput({
           </SelectContent>
         </Select>
         <p className="text-xs text-gray-500 mt-1">
-          Selecciona el tipo de documento para formato correcto
+          {documentType === 'cedula' && '✅ Detectado: Cédula Panameña'}
+          {documentType === 'pasaporte' && '✅ Detectado: Pasaporte (sin guiones)'}
+          {documentType === 'ruc' && '✅ Detectado: RUC (formato especial)'}
         </p>
       </div>
 
       {/* Inputs según tipo de documento */}
       {documentType === 'cedula' && (
         <div>
+          <div className="p-3 bg-green-50 border-2 border-green-300 rounded-lg mb-3">
+            <p className="text-xs text-green-800 font-semibold">
+              ✅ Provincia válida detectada → CÉDULA PANAMEÑA
+            </p>
+          </div>
           <div className="flex flex-row gap-2">
             {/* Parte 1: Provincia/Prefijo */}
             <div className="flex-none w-24 sm:w-32">
@@ -313,6 +328,11 @@ export default function NationalIdInput({
 
       {documentType === 'pasaporte' && (
         <div>
+          <div className="p-3 bg-blue-50 border-2 border-blue-300 rounded-lg mb-3">
+            <p className="text-xs text-blue-800 font-semibold">
+              🚫 Sin guiones detectados → PASAPORTE
+            </p>
+          </div>
           <input
             type="text"
             placeholder="PA123456789"
@@ -320,6 +340,14 @@ export default function NationalIdInput({
             onChange={handleSingleValueChange}
             className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none h-11 font-mono"
           />
+          {singleValue && (
+            <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
+              <p className="text-xs text-blue-700">
+                <strong>Valor leído:</strong>{' '}
+                <span className="font-mono text-sm font-semibold">{singleValue}</span>
+              </p>
+            </div>
+          )}
           <p className="text-xs text-gray-500 mt-2">
             📝 <strong>Formato:</strong> Letras y números sin espacios (ej: PA123456789)
           </p>
@@ -328,6 +356,11 @@ export default function NationalIdInput({
 
       {documentType === 'ruc' && (
         <div>
+          <div className="p-3 bg-orange-50 border-2 border-orange-300 rounded-lg mb-3">
+            <p className="text-xs text-orange-800 font-semibold">
+              🏢 Formato no coincide con cédula → RUC
+            </p>
+          </div>
           <input
             type="text"
             placeholder="475690-1-434939"
@@ -335,6 +368,14 @@ export default function NationalIdInput({
             onChange={handleSingleValueChange}
             className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none h-11 font-mono"
           />
+          {singleValue && (
+            <div className="mt-2 p-2 bg-orange-50 border border-orange-200 rounded-lg">
+              <p className="text-xs text-orange-700">
+                <strong>Valor leído:</strong>{' '}
+                <span className="font-mono text-sm font-semibold">{singleValue}</span>
+              </p>
+            </div>
+          )}
           <p className="text-xs text-gray-500 mt-2">
             📝 <strong>Formato:</strong> Números separados por guiones (ej: 475690-1-434939)
           </p>
