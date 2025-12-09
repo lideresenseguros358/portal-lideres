@@ -135,13 +135,13 @@ export function AddAdvanceModal({ isOpen, onClose, onSuccess, brokers }: Props) 
           {/* Content */}
           <div className="standard-modal-content">
             <Form {...form}>
-              <form id="advance-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-3">
+              <form id="advance-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-2">
             {/* Corredor */}
             <FormField
               control={form.control}
               name="broker_id"
               render={({ field }) => (
-                <FormItem>
+                <FormItem className="space-y-1">
                   <FormLabel className="flex items-center gap-2 text-sm font-semibold text-gray-700">
                     <FaUser className="text-[#010139]" />
                     Corredor
@@ -170,7 +170,7 @@ export function AddAdvanceModal({ isOpen, onClose, onSuccess, brokers }: Props) 
               control={form.control}
               name="amount"
               render={({ field }) => (
-                <FormItem>
+                <FormItem className="space-y-1">
                   <FormLabel className="flex items-center gap-2 text-sm font-semibold text-gray-700">
                     <FaDollarSign className="text-[#8AAA19]" />
                     Monto
@@ -197,7 +197,7 @@ export function AddAdvanceModal({ isOpen, onClose, onSuccess, brokers }: Props) 
               control={form.control}
               name="reason"
               render={({ field }) => (
-                <FormItem>
+                <FormItem className="space-y-1">
                   <FormLabel className="flex items-center gap-2 text-sm font-semibold text-gray-700">
                     <FaFileAlt className="text-[#010139]" />
                     Razón o Motivo
@@ -215,7 +215,7 @@ export function AddAdvanceModal({ isOpen, onClose, onSuccess, brokers }: Props) 
             />
 
             {/* Adelanto Recurrente */}
-            <div className="border-t border-gray-200 pt-3 mt-3">
+            <div className="border-t border-gray-200 pt-2 mt-2">
               <div className="flex items-center justify-between p-2.5 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border-2 border-blue-200">
                 <div className="flex items-center gap-2">
                   <FaCalendarAlt className="text-blue-600 text-lg" />

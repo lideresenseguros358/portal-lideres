@@ -148,13 +148,13 @@ export function EditAdvanceModal({ advance, onClose, onSuccess }: Props) {
         {/* Content */}
         <div className="standard-modal-content">
           <Form {...form}>
-            <form id="edit-advance-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-3">
+            <form id="edit-advance-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-2">
               {/* Monto */}
               <FormField
                 control={form.control}
                 name="amount"
                 render={({ field }) => (
-                  <FormItem>
+                  <FormItem className="space-y-2">
                     <FormLabel className="flex items-center gap-2 text-sm font-semibold text-gray-700">
                       <FaDollarSign className="text-[#8AAA19]" />
                       Monto
@@ -181,7 +181,7 @@ export function EditAdvanceModal({ advance, onClose, onSuccess }: Props) {
                 control={form.control}
                 name="reason"
                 render={({ field }) => (
-                  <FormItem>
+                  <FormItem className="space-y-1">
                     <FormLabel className="flex items-center gap-2 text-sm font-semibold text-gray-700">
                       <FaFileAlt className="text-[#010139]" />
                       Razón o Motivo
@@ -239,27 +239,23 @@ export function EditAdvanceModal({ advance, onClose, onSuccess }: Props) {
 
         {/* Footer */}
         <div className="standard-modal-footer">
-          {!showDeleteConfirm && (
-            <button
-              type="button"
-              onClick={() => setShowDeleteConfirm(true)}
-              disabled={form.formState.isSubmitting || isDeleting}
-              className="px-3 py-1.5 border-2 border-red-400 text-red-700 rounded-lg hover:bg-red-50 hover:border-red-500 font-medium transition text-sm flex items-center gap-1.5"
-            >
-              <FaTrash className="text-sm" />
-              Eliminar
-            </button>
-          )}
-          {showDeleteConfirm && <div></div>}
-          
-          <div className="flex gap-2 w-full sm:w-auto flex-1 sm:flex-none">
+          <div className="flex gap-2 w-full justify-end">
             {!showDeleteConfirm ? (
               <>
                 <button
                   type="button"
+                  onClick={() => setShowDeleteConfirm(true)}
+                  disabled={form.formState.isSubmitting || isDeleting}
+                  className="px-3 py-1.5 border-2 border-red-400 text-red-700 rounded-lg hover:bg-red-50 hover:border-red-500 font-medium transition text-sm flex items-center gap-1.5"
+                >
+                  <FaTrash className="text-sm" />
+                  Eliminar
+                </button>
+                <button
+                  type="button"
                   onClick={onClose}
                   disabled={form.formState.isSubmitting || isDeleting}
-                  className="flex-1 sm:flex-none px-4 py-1.5 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium text-sm"
+                  className="px-4 py-1.5 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium text-sm"
                 >
                   Cancelar
                 </button>
@@ -267,7 +263,7 @@ export function EditAdvanceModal({ advance, onClose, onSuccess }: Props) {
                   type="submit"
                   form="edit-advance-form"
                   disabled={form.formState.isSubmitting || isDeleting}
-                  className="flex-1 sm:flex-none px-4 py-1.5 bg-[#8AAA19] text-white rounded-lg hover:bg-[#6d8814] transition font-medium disabled:opacity-50 flex items-center justify-center gap-2 text-sm"
+                  className="px-4 py-1.5 bg-[#8AAA19] text-white rounded-lg hover:bg-[#6d8814] transition font-medium disabled:opacity-50 flex items-center justify-center gap-2 text-sm"
                 >
                   {form.formState.isSubmitting ? (
                     <>
@@ -288,7 +284,7 @@ export function EditAdvanceModal({ advance, onClose, onSuccess }: Props) {
                   type="button"
                   onClick={() => setShowDeleteConfirm(false)}
                   disabled={isDeleting}
-                  className="flex-1 sm:flex-none px-4 py-1.5 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium text-sm"
+                  className="px-4 py-1.5 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium text-sm"
                 >
                   Cancelar
                 </button>
@@ -296,7 +292,7 @@ export function EditAdvanceModal({ advance, onClose, onSuccess }: Props) {
                   type="button"
                   onClick={handleDelete}
                   disabled={isDeleting}
-                  className="flex-1 sm:flex-none px-4 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium disabled:opacity-50 flex items-center justify-center gap-2 text-sm"
+                  className="px-4 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium disabled:opacity-50 flex items-center justify-center gap-2 text-sm"
                 >
                   {isDeleting ? (
                     <>
