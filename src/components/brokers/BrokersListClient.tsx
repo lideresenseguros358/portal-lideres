@@ -184,12 +184,12 @@ export default function BrokersListClient() {
               value={search}
               onChange={createUppercaseHandler((e) => setSearch(e.target.value))}
               placeholder="BUSCAR POR NOMBRE, EMAIL, CÉDULA O CÓDIGO..."
-              className={`w-full pl-10 pr-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none ${uppercaseInputClass}`}
+              className={`w-full pl-10 pr-4 py-2.5 sm:py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none text-sm ${uppercaseInputClass}`}
             />
           </div>
           <button
             type="submit"
-            className="px-6 py-3 bg-[#010139] text-white rounded-lg hover:bg-[#020270] transition-all font-semibold"
+            className="px-4 sm:px-6 py-2.5 bg-[#010139] text-white rounded-lg hover:bg-[#020270] transition-all font-semibold text-sm"
           >
             Buscar
           </button>

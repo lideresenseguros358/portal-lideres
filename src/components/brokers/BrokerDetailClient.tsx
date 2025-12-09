@@ -261,15 +261,15 @@ export default function BrokerDetailClient({ brokerId }: BrokerDetailClientProps
             <button
               onClick={handleToggleActive}
               className={`
-                px-4 sm:px-5 py-2 sm:py-2.5 rounded-lg font-semibold text-xs sm:text-sm transition-all flex items-center gap-2
+                px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg font-medium text-xs sm:text-sm transition-all flex items-center gap-1.5
                 ${broker.active
-                  ? 'bg-green-100 text-green-800 border-2 border-green-300 hover:bg-green-200'
-                  : 'bg-red-100 text-red-800 border-2 border-red-300 hover:bg-red-200'
+                  ? 'bg-white text-green-700 border-2 border-green-400 hover:bg-green-50'
+                  : 'bg-white text-red-700 border-2 border-red-400 hover:bg-red-50'
                 }
               `}
             >
-              {broker.active ? <FaCheckCircle size={14} /> : <FaTimesCircle size={14} />}
-              <span className="hidden sm:inline">{broker.active ? 'Activo' : 'Inactivo'}</span>
+              {broker.active ? <FaCheckCircle size={16} /> : <FaTimesCircle size={16} />}
+              <span>{broker.active ? 'Activo' : 'Inactivo'}</span>
             </button>
           )}
         </div>
