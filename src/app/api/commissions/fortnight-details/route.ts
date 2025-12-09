@@ -46,7 +46,7 @@ export async function GET(request: NextRequest) {
     // 3. Obtener totales por broker con descuentos
     const { data: brokerTotals } = await supabase
       .from('fortnight_broker_totals')
-      .select('broker_id, gross_amount, net_amount, discounts_json')
+      .select('broker_id, gross_amount, net_amount, discounts_json, is_retained')
       .eq('fortnight_id', fortnightId);
 
     const totalsMap = new Map();
@@ -54,7 +54,9 @@ export async function GET(request: NextRequest) {
       totalsMap.set(bt.broker_id, {
         gross: bt.gross_amount,
         net: bt.net_amount,
-        discount: bt.gross_amount - bt.net_amount
+        discount: bt.gross_amount - bt.net_amount,
+        discounts_json: bt.discounts_json || {},
+        is_retained: bt.is_retained || false
       });
     });
 

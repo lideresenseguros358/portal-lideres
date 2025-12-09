@@ -3164,29 +3164,75 @@ export async function actionRecalculateFortnight(fortnight_id: string) {
     // 4. Obtener descuentos aplicados desde advance_logs (no desde comm_metadata para evitar duplicados)
     const { data: advanceLogs } = await supabase
       .from('advance_logs')
-      .select('advance_id, amount, advances!inner(broker_id, reason)')
+      .select('advance_id, amount, advances!inner(broker_id, reason, recurrence_id, is_recurring)')
       .eq('fortnight_id', fortnight_id)
       .eq('payment_type', 'fortnight');
     
-    // 5. Agrupar adelantos por broker
+    // 5. Agrupar adelantos por broker, consolidando adelantos recurrentes
     const brokerAdvances: Record<string, { advance_id: string; amount: number; description: string }[]> = {};
+    
+    // Primero, agrupar por recurrence_id para adelantos recurrentes
+    const recurrenceGroups: Record<string, { broker_id: string; reason: string; total: number; advance_ids: string[] }> = {};
+    const nonRecurrentLogs: any[] = [];
+    
     (advanceLogs || []).forEach(log => {
       try {
         const brokerId = (log.advances as any).broker_id;
         const description = (log.advances as any).reason || 'Adelanto';
+        const recurrenceId = (log.advances as any).recurrence_id;
+        const isRecurring = (log.advances as any).is_recurring;
+        
         if (!brokerId) return;
         
-        if (!brokerAdvances[brokerId]) {
-          brokerAdvances[brokerId] = [];
+        // Si es recurrente y tiene recurrence_id, agrupar
+        if (isRecurring && recurrenceId) {
+          const key = `${brokerId}_${recurrenceId}`;
+          if (!recurrenceGroups[key]) {
+            recurrenceGroups[key] = {
+              broker_id: brokerId,
+              reason: description,
+              total: 0,
+              advance_ids: []
+            };
+          }
+          recurrenceGroups[key].total += Number(log.amount);
+          recurrenceGroups[key].advance_ids.push(log.advance_id);
+        } else {
+          // Adelanto no recurrente, agregar directamente
+          nonRecurrentLogs.push({
+            broker_id: brokerId,
+            advance_id: log.advance_id,
+            amount: Number(log.amount),
+            description: description
+          });
         }
-        brokerAdvances[brokerId].push({ 
-          advance_id: log.advance_id, 
-          amount: Number(log.amount),
-          description: description
-        });
       } catch (e) {
         console.error('Error parsing advance log:', e);
       }
+    });
+    
+    // Agregar adelantos recurrentes consolidados (un solo registro por recurrence_id)
+    Object.values(recurrenceGroups).forEach(group => {
+      if (!brokerAdvances[group.broker_id]) {
+        brokerAdvances[group.broker_id] = [];
+      }
+      brokerAdvances[group.broker_id].push({
+        advance_id: group.advance_ids[0], // Usar el ID del primero para referencia
+        amount: group.total,
+        description: group.reason
+      });
+    });
+    
+    // Agregar adelantos no recurrentes
+    nonRecurrentLogs.forEach(log => {
+      if (!brokerAdvances[log.broker_id]) {
+        brokerAdvances[log.broker_id] = [];
+      }
+      brokerAdvances[log.broker_id].push({
+        advance_id: log.advance_id,
+        amount: log.amount,
+        description: log.description
+      });
     });
     
     // 6. Calcular totales y crear/actualizar fortnight_broker_totals
