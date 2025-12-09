@@ -525,78 +525,91 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
                               </TableRow>
 
                               {/* Adelantos del broker */}
-                              {isBrokerExpanded && brokerData.advances.map(advance => (
-                                <TableRow
-                                  key={advance.id}
-                                  className="hover:bg-gray-50 transition-colors"
-                                >
-                                  <TableCell></TableCell>
-                                  <TableCell className="pl-16 text-gray-600">
-                                    <div className="flex items-center gap-2">
-                                      <span>{advance.reason || 'Sin motivo especificado'}</span>
-                                      {advance.is_recurring && (
-                                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-800 border border-purple-300">
-                                          🔁 RECURRENTE
-                                        </span>
-                                      )}
-                                    </div>
-                                  </TableCell>
-                                  <TableCell className="text-right font-mono text-gray-700">
-                                    {(advance.total_paid || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
-                                  </TableCell>
-                                  <TableCell className="text-center">
-                                    <div className="flex items-center justify-center gap-2">
-                                      <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setEditingAdvance(advance);
-                                        }}
-                                        className="hover:bg-[#010139] hover:text-white"
-                                        title="Editar adelanto"
-                                      >
-                                        <FaEdit className="text-sm" />
-                                      </Button>
-                                      <Button
-                                        size="sm"
-                                        variant="ghost"
-                                        onClick={() => setSelectedAdvanceId(advance.id)}
-                                        className="hover:bg-[#8AAA19] hover:text-white"
-                                        title="Ver historial"
-                                      >
-                                        <FaHistory className="text-sm" />
-                                      </Button>
-                                    </div>
-                                  </TableCell>
-                                </TableRow>
-                              ))}
+                              {isBrokerExpanded && brokerData.advances.map(advance => {
+                                // Calcular monto pagado en ESTA FECHA específica
+                                const paidOnThisDate = (advance.payment_logs || [])
+                                  .filter(log => log.date === dateKey)
+                                  .reduce((sum, log) => sum + log.amount, 0);
+                                
+                                return (
+                                  <TableRow
+                                    key={advance.id}
+                                    className="hover:bg-gray-50 transition-colors"
+                                  >
+                                    <TableCell></TableCell>
+                                    <TableCell className="pl-16 text-gray-600">
+                                      <div className="flex items-center gap-2">
+                                        <span>{advance.reason || 'Sin motivo especificado'}</span>
+                                        {advance.is_recurring && (
+                                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-800 border border-purple-300">
+                                            🔁 RECURRENTE
+                                          </span>
+                                        )}
+                                      </div>
+                                    </TableCell>
+                                    <TableCell className="text-right font-mono text-gray-700">
+                                      {paidOnThisDate.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                                    </TableCell>
+                                    <TableCell className="text-center">
+                                      <div className="flex items-center justify-center gap-2">
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setEditingAdvance(advance);
+                                          }}
+                                          className="hover:bg-[#010139] hover:text-white"
+                                          title="Editar adelanto"
+                                        >
+                                          <FaEdit className="text-sm" />
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          onClick={() => setSelectedAdvanceId(advance.id)}
+                                          className="hover:bg-[#8AAA19] hover:text-white"
+                                          title="Ver historial"
+                                        >
+                                          <FaHistory className="text-sm" />
+                                        </Button>
+                                      </div>
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })}
                             </React.Fragment>
                           );
                         })
                       ) : isDateExpanded ? (
                         // Vista Broker: Mostrar adelantos directamente (sin nombre de broker)
-                        dateGroup.advances.map(advance => (
-                          <TableRow
-                            key={advance.id}
-                            className="hover:bg-gray-50 transition-colors"
-                          >
-                            <TableCell></TableCell>
-                            <TableCell className="pl-12 text-gray-600">
-                              <div className="flex items-center gap-2">
-                                <span>{advance.reason || 'Sin motivo especificado'}</span>
-                                {advance.is_recurring && (
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-800 border border-purple-300">
-                                    🔁 RECURRENTE
-                                  </span>
-                                )}
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-right font-mono text-gray-700">
-                              {(advance.total_paid || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
-                            </TableCell>
-                            <TableCell className="text-center">
-                              <Button
+                        dateGroup.advances.map(advance => {
+                          // Calcular monto pagado en ESTA FECHA específica
+                          const paidOnThisDate = (advance.payment_logs || [])
+                            .filter(log => log.date === dateKey)
+                            .reduce((sum, log) => sum + log.amount, 0);
+                          
+                          return (
+                            <TableRow
+                              key={advance.id}
+                              className="hover:bg-gray-50 transition-colors"
+                            >
+                              <TableCell></TableCell>
+                              <TableCell className="pl-12 text-gray-600">
+                                <div className="flex items-center gap-2">
+                                  <span>{advance.reason || 'Sin motivo especificado'}</span>
+                                  {advance.is_recurring && (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-800 border border-purple-300">
+                                      🔁 RECURRENTE
+                                    </span>
+                                  )}
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-right font-mono text-gray-700">
+                                {paidOnThisDate.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <Button
                                 size="sm"
                                 variant="ghost"
                                 onClick={() => setSelectedAdvanceId(advance.id)}
@@ -607,7 +620,8 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
                               </Button>
                             </TableCell>
                           </TableRow>
-                        ))
+                          );
+                        })
                       ) : null}
                     </React.Fragment>
                   );

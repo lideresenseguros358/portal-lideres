@@ -670,6 +670,49 @@ export default function BrokerPreviewTab({ brokerId }: Props) {
                       </div>
                     )}
 
+                    {/* Códigos ASSA */}
+                    {details.assa_codes && details.assa_codes.length > 0 && (
+                      <div>
+                        <h4 className="mb-3 text-base font-bold text-[#010139]">
+                          🔢 Códigos ASSA • Total: {formatCurrency(details.assa_codes.reduce((sum, item) => sum + item.commission_calculated, 0))}
+                        </h4>
+                        <Card className="border-2 border-yellow-300 bg-yellow-50/30">
+                          <div className="p-4">
+                            <Table>
+                              <TableHeader>
+                                <TableRow className="bg-yellow-100/50">
+                                  <TableHead>Código</TableHead>
+                                  <TableHead>Cliente</TableHead>
+                                  <TableHead className="text-right">Prima</TableHead>
+                                  <TableHead className="text-center">%</TableHead>
+                                  <TableHead className="text-right">Comisión</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {details.assa_codes.map((item) => (
+                                  <TableRow key={item.id}>
+                                    <TableCell className="font-mono text-sm font-semibold text-yellow-900">
+                                      {item.assa_code || item.policy_number}
+                                    </TableCell>
+                                    <TableCell>{item.client_name}</TableCell>
+                                    <TableCell className="text-right font-mono">
+                                      {formatCurrency(item.commission_raw)}
+                                    </TableCell>
+                                    <TableCell className="text-center font-mono">
+                                      {(item.percent_applied * 100).toFixed(0)}%
+                                    </TableCell>
+                                    <TableCell className="text-right font-mono font-semibold text-yellow-900">
+                                      {formatCurrency(item.commission_calculated)}
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        </Card>
+                      </div>
+                    )}
+
                           {/* Adelantos Descontados */}
                           {details.discounts_json?.adelantos && details.discounts_json.adelantos.length > 0 && (
                             <div>
