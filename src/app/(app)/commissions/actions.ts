@@ -3464,7 +3464,8 @@ export async function actionPayFortnight(fortnight_id: string) {
         ),
         brokers!inner (
           id,
-          percent_default
+          percent_default,
+          assa_code
         )
       `)
       .eq('fortnight_id', fortnight_id);
@@ -3487,6 +3488,20 @@ export async function actionPayFortnight(fortnight_id: string) {
         // Detectar si es código ASSA
         const isAssaCode = item.policy_number?.startsWith('PJ750') || false;
         
+        // Extraer código ASSA del broker si corresponde
+        let assaCodeToSave = null;
+        if (isAssaCode && item.brokers?.assa_code) {
+          // Verificar si el policy_number contiene el código ASSA del broker
+          // Formato esperado: PJ750-1-123456 donde PJ750-1 es el código del broker
+          const policyNumber = item.policy_number || '';
+          const brokerAssaCode = item.brokers.assa_code;
+          
+          // Si el policy_number empieza con el código del broker, guardarlo
+          if (policyNumber.startsWith(brokerAssaCode)) {
+            assaCodeToSave = brokerAssaCode;
+          }
+        }
+        
         return {
           fortnight_id: fortnight_id,
           broker_id: item.broker_id,
@@ -3500,7 +3515,7 @@ export async function actionPayFortnight(fortnight_id: string) {
           percent_applied: percentApplied,
           commission_calculated: item.gross_amount,
           is_assa_code: isAssaCode,
-          assa_code: isAssaCode ? item.policy_number : null,
+          assa_code: assaCodeToSave,
           source_import_id: item.import_id
         };
       });

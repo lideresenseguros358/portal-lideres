@@ -10,6 +10,16 @@ interface PolicyDetail {
   net_amount: number;
 }
 
+interface AssaCodeDetail {
+  policy_number: string;
+  assa_code?: string;
+  client_name: string;
+  commission_raw: number;
+  percent_applied: number;
+  commission_calculated: number;
+  net_amount: number;
+}
+
 interface InsurerDetail {
   insurer_name: string;
   total_gross: number;
@@ -23,6 +33,7 @@ interface BrokerDetail {
   total_gross: number;
   total_net: number;
   insurers: InsurerDetail[];
+  assa_codes?: AssaCodeDetail[];
 }
 
 const formatCurrency = (amount: number) => {
@@ -214,6 +225,55 @@ export function exportBrokerToPDF(
     yPos = (doc as any).lastAutoTable.finalY + 5;
   });
 
+  // Códigos ASSA
+  if (broker.assa_codes && broker.assa_codes.length > 0) {
+    if (yPos > 250) {
+      doc.addPage();
+      yPos = 20;
+    }
+
+    const tableWidth = 165;
+    const leftMargin = (pageWidth - tableWidth) / 2;
+    const totalAssaCodes = broker.assa_codes.reduce((sum, item) => sum + item.net_amount, 0);
+    
+    // Título de códigos ASSA
+    doc.setFillColor(234, 179, 8); // yellow
+    doc.rect(leftMargin, yPos, tableWidth, 7, 'F');
+    doc.setTextColor(120, 53, 15);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text('🔢 Códigos ASSA', leftMargin + 2, yPos + 5);
+    doc.text(formatCurrency(totalAssaCodes), leftMargin + tableWidth - 2, yPos + 5, { align: 'right' });
+    yPos += 7;
+
+    const assaTableData = broker.assa_codes.map(item => [
+      item.assa_code || item.policy_number,
+      item.client_name.substring(0, 35),
+      formatCurrency(item.commission_raw),
+      `${(item.percent_applied * 100).toFixed(0)}%`,
+      formatCurrency(item.commission_calculated),
+    ]);
+
+    autoTable(doc, {
+      startY: yPos,
+      head: [['Código', 'Cliente', 'Prima', '%', 'Comisión']],
+      body: assaTableData,
+      theme: 'grid',
+      styles: { fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: [234, 179, 8], textColor: [255, 255, 255], fontSize: 8 },
+      columnStyles: {
+        0: { cellWidth: 30 },
+        1: { cellWidth: 70 },
+        2: { cellWidth: 25, halign: 'right' },
+        3: { cellWidth: 15, halign: 'center' },
+        4: { cellWidth: 25, halign: 'right' },
+      },
+      margin: { left: leftMargin, right: leftMargin },
+    });
+
+    yPos = (doc as any).lastAutoTable.finalY + 5;
+  }
+
   // Summary
   if (yPos > 230) {
     doc.addPage();
@@ -389,6 +449,25 @@ export function exportBrokerToExcel(
     
     data.push([]);
   });
+
+  // Códigos ASSA
+  if (broker.assa_codes && broker.assa_codes.length > 0) {
+    const totalAssaCodes = broker.assa_codes.reduce((sum: number, item: AssaCodeDetail) => sum + item.net_amount, 0);
+    data.push(['🔢 Códigos ASSA', '', '', '', formatCurrency(totalAssaCodes)]);
+    data.push(['Código', 'Cliente', 'Prima', '%', 'Comisión']);
+    
+    broker.assa_codes.forEach(item => {
+      data.push([
+        item.assa_code || item.policy_number,
+        item.client_name,
+        item.commission_raw,
+        `${(item.percent_applied * 100).toFixed(0)}%`,
+        item.commission_calculated,
+      ]);
+    });
+    
+    data.push([]);
+  }
 
   data.push(['RESUMEN']);
   data.push(['Total Bruto:', '', '', '', broker.total_gross]);
