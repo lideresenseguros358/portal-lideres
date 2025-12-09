@@ -173,7 +173,7 @@ export default function InsurersList({ initialInsurers }: InsurersListProps) {
               href="/insurers/new" 
               className="w-full sm:w-auto flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-[#010139] text-white rounded-lg hover:bg-[#8AAA19] transition-colors font-semibold shadow-lg whitespace-nowrap text-xs sm:text-sm"
             >
-              <FaPlus /> Nueva
+              <FaPlus className="text-white" /> Nueva
             </Link>
           </div>
         </div>
@@ -240,14 +240,14 @@ export default function InsurersList({ initialInsurers }: InsurersListProps) {
                       title="Editar" 
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <FaEdit size={12} />
+                      <FaEdit size={12} className="text-white" />
                     </Link>
                     <button 
                       onClick={(e) => { e.stopPropagation(); handleClone(insurer.id); }} 
                       className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg bg-[#8AAA19] text-white hover:bg-[#010139] transition-all" 
                       title="Clonar"
                     >
-                      <FaClone size={12} />
+                      <FaClone size={12} className="text-white" />
                     </button>
                     <button 
                       onClick={(e) => { e.stopPropagation(); handleToggle(insurer.id); }} 
@@ -298,7 +298,7 @@ export default function InsurersList({ initialInsurers }: InsurersListProps) {
                     onClick={(e) => { e.stopPropagation(); handleOpenModal(insurer); }}
                     className="w-full py-1.5 px-2 bg-[#8AAA19] text-white rounded-lg hover:bg-[#6d8814] transition-all flex items-center justify-center gap-1 font-semibold text-[10px] flex-shrink-0"
                   >
-                    <FaEye size={10} /> Ver ({insurer.contacts.length})
+                    <FaEye size={10} className="text-white" /> Ver ({insurer.contacts.length})
                   </button>
                 </div>
               </div>
