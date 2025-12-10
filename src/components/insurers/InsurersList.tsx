@@ -189,20 +189,12 @@ export default function InsurersList({ initialInsurers }: InsurersListProps) {
           {filteredInsurers.map(insurer => (
             <div
               key={insurer.id}
-              className={`relative bg-white rounded-xl shadow-md hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 cursor-pointer ${
+              className={`relative bg-white rounded-xl shadow-md hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 cursor-pointer sm:!h-[350px] ${
                 isPending ? 'opacity-50' : ''
               }`}
               onClick={() => handleFlip(insurer.id)}
-              style={{ perspective: '1000px', height: '260px' }}
+              style={{ perspective: '1000px', minHeight: '320px', height: 'auto' }}
             >
-              {/* MOBILE: Mayor altura */}
-              <style jsx>{`
-                @media (min-width: 640px) {
-                  div[style*="height: 260px"] {
-                    height: 280px !important;
-                  }
-                }
-              `}</style>
 
               <div 
                 className="relative w-full h-full"

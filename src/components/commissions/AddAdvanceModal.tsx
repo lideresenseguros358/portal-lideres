@@ -107,13 +107,13 @@ export function AddAdvanceModal({ isOpen, onClose, onSuccess, brokers }: Props) 
   return (
     <>
       <div 
-        className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black bg-opacity-50 overflow-y-auto"
+        className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4 overflow-y-auto"
         onClick={(e) => {
           if (e.target === e.currentTarget) onClose();
         }}
       >
         <div 
-          className="bg-white rounded-2xl max-w-[500px] w-full my-8 shadow-2xl flex flex-col max-h-[90vh] relative"
+          className="bg-white rounded-2xl max-w-[500px] w-full my-8 shadow-2xl flex flex-col max-h-[90vh]"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
