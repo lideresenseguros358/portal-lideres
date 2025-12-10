@@ -1879,14 +1879,14 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
                         className="w-5 h-5 text-[#8AAA19] rounded focus:ring-[#8AAA19] mt-1 flex-shrink-0"
                       />
                       <div className="flex-1 min-w-0">
-                        {/* Layout móvil: Vertical - UX MEJORADA */}
-                        <div className="md:hidden space-y-3">
-                          {/* Sección 1: Cliente y Monto (Información Principal) */}
-                          <div className="flex items-start justify-between gap-3">
+                        {/* Layout móvil: Vertical - UX MEJORADA Y COMPLETA */}
+                        <div className="md:hidden">
+                          {/* Sección 1: Encabezado - Cliente y Monto */}
+                          <div className="flex items-start justify-between gap-3 mb-3">
                             <div className="flex-1 min-w-0">
                               <h3 className="font-bold text-base text-[#010139] break-words leading-tight mb-1">{payment.client_name}</h3>
                               {payment.insurer_name && (
-                                <p className="text-xs font-medium text-gray-600 break-words">{payment.insurer_name}</p>
+                                <p className="text-xs font-semibold text-gray-700 break-words">{payment.insurer_name}</p>
                               )}
                               {payment.policy_number && (
                                 <p className="text-xs text-gray-500 break-words mt-0.5">📄 {payment.policy_number}</p>
@@ -1896,18 +1896,93 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
                               <div className="text-2xl font-bold text-[#8AAA19] whitespace-nowrap">
                                 ${parseFloat(payment.amount_to_pay).toFixed(2)}
                               </div>
-                              <div className="text-[10px] text-gray-500 font-semibold uppercase tracking-wide">A Pagar</div>
+                              <div className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">A Pagar</div>
+                            </div>
+                          </div>
+
+                          {/* Sección 2: Referencias (si existen) */}
+                          {payment.payment_references && payment.payment_references.length > 0 && (
+                            <div className="mb-3">
+                              <h4 className="text-xs font-bold text-gray-700 mb-1.5">📄 Referencias:</h4>
+                              <div className="space-y-1.5">
+                                {payment.payment_references.map((ref: any) => {
+                                  const isDescuentoCorredor = isDescuentoACorredor(payment);
+                                  const isValid = isDescuentoCorredor ? payment.can_be_paid : ref.exists_in_bank;
+                                  return (
+                                    <div
+                                      key={ref.id}
+                                      className={`flex items-center justify-between p-2 rounded-lg text-xs ${
+                                        isValid ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'
+                                      }`}
+                                    >
+                                      <div className="flex items-center gap-1.5">
+                                        {isValid ? (
+                                          <FaCheckCircle className="text-green-600 flex-shrink-0" size={12} />
+                                        ) : (
+                                          <FaExclamationTriangle className="text-red-600 flex-shrink-0" size={12} />
+                                        )}
+                                        <span className="font-mono font-semibold">{ref.reference_number}</span>
+                                      </div>
+                                      <span className="font-bold">
+                                        ${Number(ref.amount).toFixed(2)}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Sección 3: Notas (si existen) */}
+                          {(() => {
+                            try {
+                              const metadata = typeof payment.notes === 'string' ? JSON.parse(payment.notes) : (payment.notes || {});
+                              const displayNotes = metadata?.notes;
+                              if (displayNotes && displayNotes.trim()) {
+                                return (
+                                  <div className="mb-3 p-2.5 bg-blue-50 border-l-4 border-blue-500 rounded-r-lg">
+                                    <p className="text-[10px] font-bold text-blue-900 mb-1">📝 Notas:</p>
+                                    <p className="text-xs text-blue-800 leading-relaxed">{displayNotes}</p>
+                                  </div>
+                                );
+                              }
+                            } catch (e) {
+                              return null;
+                            }
+                            return null;
+                          })()}
+
+                          {/* Sección 4: Status y Fecha */}
+                          <div className="flex items-center justify-between mb-3 pb-3 border-b border-gray-200">
+                            <StatusBadge payment={payment} />
+                            <div className="text-[10px] text-gray-500 font-medium">
+                              {(() => {
+                                const isDescuentoCorredor = isDescuentoACorredor(payment);
+                                if (isDescuentoCorredor) {
+                                  if (payment.can_be_paid) {
+                                    return `Descontado: ${new Date(payment.created_at).toLocaleDateString('es-PA')}`;
+                                  } else {
+                                    return `Creado: ${new Date(payment.created_at).toLocaleDateString('es-PA')}`;
+                                  }
+                                } else {
+                                  const refs = payment.payment_references || [];
+                                  if (refs.length > 0 && refs[0].bank_transfer) {
+                                    return `Transfer: ${new Date(refs[0].bank_transfer.transfer_date).toLocaleDateString('es-PA')}`;
+                                  }
+                                  return `Creado: ${new Date(payment.created_at).toLocaleDateString('es-PA')}`;
+                                }
+                              })()}
                             </div>
                           </div>
                           
-                          {/* Sección 2: Botones de Acción */}
-                          <div className="flex gap-2 pt-2 border-t border-gray-100">
+                          {/* Sección 5: Botones de Acción */}
+                          <div className="flex gap-2">
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleEdit(payment.id);
                               }}
-                              className="flex-1 py-2 px-3 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors flex items-center justify-center gap-2"
+                              className="flex-1 py-2.5 px-3 text-sm font-semibold text-blue-700 bg-blue-100 hover:bg-blue-200 rounded-lg transition-colors flex items-center justify-center gap-2 shadow-sm"
                             >
                               <FaEdit size={14} /> Editar
                             </button>
@@ -1916,7 +1991,7 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
                                 e.stopPropagation();
                                 handleDelete(payment.id);
                               }}
-                              className="flex-1 py-2 px-3 text-sm font-medium text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors flex items-center justify-center gap-2"
+                              className="flex-1 py-2.5 px-3 text-sm font-semibold text-red-700 bg-red-100 hover:bg-red-200 rounded-lg transition-colors flex items-center justify-center gap-2 shadow-sm"
                             >
                               <FaTrash size={14} /> Eliminar
                             </button>
@@ -1968,28 +2043,30 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
                       </div>
                     </div>
 
-                    {/* Notas del pago */}
-                    {(() => {
-                      try {
-                        const metadata = typeof payment.notes === 'string' ? JSON.parse(payment.notes) : (payment.notes || {});
-                        const displayNotes = metadata?.notes;
-                        
-                        if (displayNotes && displayNotes.trim()) {
-                          return (
-                            <div className="mb-3 p-3 bg-blue-50 border-l-4 border-blue-500 rounded-r-lg">
-                              <p className="text-xs font-semibold text-blue-900 mb-1">📝 Notas:</p>
-                              <p className="text-sm text-blue-800">{displayNotes}</p>
-                            </div>
-                          );
+                    {/* Notas del pago - Solo desktop */}
+                    <div className="hidden md:block">
+                      {(() => {
+                        try {
+                          const metadata = typeof payment.notes === 'string' ? JSON.parse(payment.notes) : (payment.notes || {});
+                          const displayNotes = metadata?.notes;
+                          
+                          if (displayNotes && displayNotes.trim()) {
+                            return (
+                              <div className="mb-3 p-3 bg-blue-50 border-l-4 border-blue-500 rounded-r-lg">
+                                <p className="text-xs font-semibold text-blue-900 mb-1">📝 Notas:</p>
+                                <p className="text-sm text-blue-800">{displayNotes}</p>
+                              </div>
+                            );
+                          }
+                        } catch (e) {
+                          return null;
                         }
-                      } catch (e) {
                         return null;
-                      }
-                      return null;
-                    })()}
+                      })()}
+                    </div>
 
-                    {/* Referencias */}
-                    <div className="space-y-2 mb-4">
+                    {/* Referencias - Solo desktop */}
+                    <div className="hidden md:block space-y-2 mb-4">
                       <h4 className="text-sm font-semibold text-gray-700">Referencias:</h4>
                       {payment.payment_references?.map((ref: any) => {
                         const isDescuentoCorredor = isDescuentoACorredor(payment);
@@ -2018,8 +2095,8 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
                       })}
                     </div>
 
-                    {/* Status badge */}
-                    <div className="flex items-center justify-between">
+                    {/* Status badge - Solo desktop */}
+                    <div className="hidden md:flex items-center justify-between">
                       <StatusBadge payment={payment} />
                       <div className="text-xs text-gray-500">
                         {(() => {

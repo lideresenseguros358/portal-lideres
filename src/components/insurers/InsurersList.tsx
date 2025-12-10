@@ -255,7 +255,7 @@ export default function InsurersList({ initialInsurers }: InsurersListProps) {
                   </div>
                   
                   {/* Botones de acción */}
-                  <div className="flex justify-center gap-2 mt-2 px-2">
+                  <div className="flex justify-center gap-2 mt-3 px-4">
                     <Link 
                       href={`/insurers/${insurer.id}/edit`} 
                       className="w-8 h-8 sm:w-9 sm:h-9 flex items-center justify-center rounded-lg bg-[#010139] text-white hover:bg-[#8AAA19] transition-all shadow-sm" 
