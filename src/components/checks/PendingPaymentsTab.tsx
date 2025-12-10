@@ -2263,17 +2263,23 @@ function getPaymentState(payment: any) {
 
   const isDescuentoCorredor = isDescuentoACorredor(payment);
   
-  // Detectar si es otro banco/depósito
-  let isOtherBank = false;
-  try {
-    const metadata = typeof payment.notes === 'string' ? JSON.parse(payment.notes) : payment.notes;
-    isOtherBank = metadata?.is_other_bank === true;
-  } catch (e) {
-    // Si no se puede parsear, no es otro banco
+  // VERIFICAR REFERENCIAS INDIVIDUALES - NO USAR EL METADATA GENERAL
+  // Si hay referencias NO conciliadas, verificar si tienen is_other_bank
+  const hasUnconciledReferences = !isDescuentoCorredor && payment.payment_references?.some((ref: any) => !ref.exists_in_bank);
+  
+  // Si hay referencias no conciliadas, verificar si TODAS son "otro banco"
+  let allUnconciledAreOtherBank = false;
+  if (hasUnconciledReferences && payment.payment_references) {
+    const unconciledRefs = payment.payment_references.filter((ref: any) => !ref.exists_in_bank);
+    // Verificar si TODAS las referencias no conciliadas tienen bank_transfer con is_other_bank
+    allUnconciledAreOtherBank = unconciledRefs.length > 0 && unconciledRefs.every((ref: any) => {
+      // Verificar si el bank_transfer asociado tiene is_other_bank
+      return ref.bank_transfer && ref.bank_transfer.is_other_bank === true;
+    });
   }
   
-  // Si es otro banco, mostrar estado amarillo especial
-  if (isOtherBank) {
+  // Si TODAS las referencias no conciliadas son "otro banco", mostrar estado amarillo
+  if (hasUnconciledReferences && allUnconciledAreOtherBank) {
     return {
       key: 'other_bank',
       label: 'Actualizar referencia para conciliar',
@@ -2282,6 +2288,7 @@ function getPaymentState(payment: any) {
     } as const;
   }
   
+  // Si hay errores (referencias no conciliadas que NO son "otro banco"), mostrar rojo
   const hasErrors = !isDescuentoCorredor && payment.payment_references?.some((ref: any) => !ref.exists_in_bank);
   if (hasErrors || !payment.can_be_paid) {
     return {
