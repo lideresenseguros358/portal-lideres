@@ -1879,91 +1879,106 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
                         className="w-5 h-5 text-[#8AAA19] rounded focus:ring-[#8AAA19] mt-1 flex-shrink-0"
                       />
                       <div className="flex-1 min-w-0">
-                        {/* 💲 DISEÑO MOBILE OPTIMIZADO 💲 */}
-                        <div className="lg:hidden">
-                          {/* 💵 MONTO - DESTACADO CON BORDE */}
-                          <div className="bg-gradient-to-br from-[#8AAA19] via-[#7a9916] to-[#6d8814] text-white p-4 rounded-xl mb-4 shadow-lg border-4 border-[#6d8814]">
-                            <div className="text-xs font-bold uppercase tracking-widest mb-1 opacity-90">💵 Monto Total</div>
-                            <div className="text-4xl font-black">
-                              ${parseFloat(payment.amount_to_pay).toFixed(2)}
+                        {/* ━━━━━━━━━━━━━━ MOBILE REDISEÑADO COMPLETAMENTE ━━━━━━━━━━━━━━ */}
+                        <div className="lg:hidden space-y-4">
+                          {/* 🎯 HEADER: MONTO MUY GRANDE */}
+                          <div className="relative overflow-hidden rounded-2xl shadow-2xl">
+                            <div className="absolute inset-0 bg-gradient-to-r from-[#010139] to-[#020270] opacity-95"></div>
+                            <div className="relative z-10 p-6 text-center">
+                              <div className="text-sm font-bold text-white/80 uppercase tracking-[0.3em] mb-2">
+                                💰 Monto a Pagar
+                              </div>
+                              <div className="text-5xl font-black text-white drop-shadow-lg">
+                                ${parseFloat(payment.amount_to_pay).toFixed(2)}
+                              </div>
                             </div>
                           </div>
 
-                          {/* 👤 CLIENTE */}
-                          <div className="bg-white border-4 border-gray-300 p-4 rounded-xl mb-4 shadow-md">
-                            <div className="flex items-center gap-2 mb-3">
-                              <div className="w-10 h-10 rounded-full bg-[#010139] flex items-center justify-center flex-shrink-0">
-                                <span className="text-white text-lg">👤</span>
-                              </div>
-                              <h3 className="font-black text-xl text-[#010139] leading-tight">{payment.client_name}</h3>
-                            </div>
+                          {/* 📇 TARJETA CLIENTE */}
+                          <div className="bg-gradient-to-br from-white to-gray-50 border-l-8 border-[#8AAA19] p-5 rounded-xl shadow-xl">
+                            <h3 className="text-2xl font-black text-[#010139] mb-3 flex items-center gap-3">
+                              <span className="w-12 h-12 bg-gradient-to-br from-[#8AAA19] to-[#6d8814] rounded-full flex items-center justify-center text-white text-xl shadow-lg">
+                                👤
+                              </span>
+                              {payment.client_name}
+                            </h3>
                             {payment.insurer_name && (
-                              <div className="flex items-center gap-3 text-base font-semibold text-gray-800 mb-2 bg-blue-50 p-2 rounded-lg">
-                                <span className="text-xl">🏢</span>
-                                <span>{payment.insurer_name}</span>
+                              <div className="flex items-center gap-3 p-3 bg-blue-100 rounded-lg mb-2 border-l-4 border-blue-600">
+                                <span className="text-2xl">🏢</span>
+                                <span className="text-lg font-bold text-blue-900">{payment.insurer_name}</span>
                               </div>
                             )}
                             {payment.policy_number && (
-                              <div className="flex items-center gap-3 text-sm font-medium text-gray-700 bg-gray-100 p-2 rounded-lg">
-                                <span className="text-lg">📄</span>
-                                <span className="font-mono font-bold">{payment.policy_number}</span>
+                              <div className="flex items-center gap-3 p-3 bg-purple-100 rounded-lg border-l-4 border-purple-600">
+                                <span className="text-2xl">📋</span>
+                                <span className="text-base font-black font-mono text-purple-900">{payment.policy_number}</span>
                               </div>
                             )}
                           </div>
 
-                          {/* ✅ REFERENCIAS */}
+                          {/* 💳 REFERENCIAS BANCARIAS */}
                           {payment.payment_references && payment.payment_references.length > 0 && (
-                            <div className="mb-4">
-                              <div className="flex items-center gap-2 mb-3 bg-gradient-to-r from-blue-600 to-blue-500 text-white p-2 rounded-lg">
-                                <span className="text-xl">📋</span>
-                                <div className="text-sm font-black uppercase tracking-wider">Referencias Bancarias</div>
-                              </div>
-                              <div className="space-y-3">
-                                {payment.payment_references.map((ref: any) => {
-                                  const isDescuentoCorredor = isDescuentoACorredor(payment);
-                                  const isValid = isDescuentoCorredor ? payment.can_be_paid : ref.exists_in_bank;
-                                  return (
-                                    <div
-                                      key={ref.id}
-                                      className={`flex items-center justify-between p-4 rounded-xl shadow-lg border-4 ${
-                                        isValid ? 'bg-green-50 border-green-500' : 'bg-red-50 border-red-500'
-                                      }`}
-                                    >
-                                      <div className="flex items-center gap-3">
-                                        {isValid ? (
-                                          <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
-                                            <FaCheckCircle className="text-white" size={18} />
+                            <div className="relative">
+                              <div className="absolute -inset-1 bg-gradient-to-r from-orange-600 to-orange-400 rounded-2xl blur opacity-25"></div>
+                              <div className="relative bg-white rounded-2xl p-4 border-2 border-orange-500">
+                                <div className="flex items-center gap-3 mb-4 pb-3 border-b-2 border-orange-200">
+                                  <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-orange-600 rounded-full flex items-center justify-center shadow-lg">
+                                    <span className="text-2xl">💳</span>
+                                  </div>
+                                  <div className="text-lg font-black text-orange-900 uppercase">Referencias</div>
+                                </div>
+                                <div className="space-y-3">
+                                  {payment.payment_references.map((ref: any) => {
+                                    const isDescuentoCorredor = isDescuentoACorredor(payment);
+                                    const isValid = isDescuentoCorredor ? payment.can_be_paid : ref.exists_in_bank;
+                                    return (
+                                      <div
+                                        key={ref.id}
+                                        className={`relative overflow-hidden rounded-xl shadow-lg border-3 ${
+                                          isValid ? 'bg-gradient-to-r from-green-500 to-green-600' : 'bg-gradient-to-r from-red-500 to-red-600'
+                                        }`}
+                                      >
+                                        <div className="p-4 flex items-center justify-between">
+                                          <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-md">
+                                              {isValid ? (
+                                                <FaCheckCircle className="text-green-600" size={24} />
+                                              ) : (
+                                                <FaExclamationTriangle className="text-red-600" size={24} />
+                                              )}
+                                            </div>
+                                            <span className="font-mono font-black text-white text-lg drop-shadow">{ref.reference_number}</span>
                                           </div>
-                                        ) : (
-                                          <div className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center">
-                                            <FaExclamationTriangle className="text-white" size={18} />
-                                          </div>
-                                        )}
-                                        <span className="font-mono font-black text-base">{ref.reference_number}</span>
+                                          <span className="font-black text-white text-xl drop-shadow">
+                                            ${Number(ref.amount).toFixed(2)}
+                                          </span>
+                                        </div>
                                       </div>
-                                      <span className="font-black text-lg">
-                                        ${Number(ref.amount).toFixed(2)}
-                                      </span>
-                                    </div>
-                                  );
-                                })}
+                                    );
+                                  })}
+                                </div>
                               </div>
                             </div>
                           )}
 
-                          {/* 📝 NOTAS */}
+                          {/* 📌 NOTAS DESTACADAS */}
                           {(() => {
                             try {
                               const metadata = typeof payment.notes === 'string' ? JSON.parse(payment.notes) : (payment.notes || {});
                               const displayNotes = metadata?.notes;
                               if (displayNotes && displayNotes.trim()) {
                                 return (
-                                  <div className="mb-4 p-4 bg-gradient-to-r from-blue-100 to-blue-50 border-l-8 border-blue-600 rounded-r-xl shadow-lg">
-                                    <div className="flex items-center gap-2 mb-2">
-                                      <span className="text-2xl">📝</span>
-                                      <p className="text-sm font-black text-blue-900 uppercase">Notas Importantes</p>
+                                  <div className="relative">
+                                    <div className="absolute -inset-1 bg-gradient-to-r from-yellow-400 to-yellow-300 rounded-2xl blur opacity-40"></div>
+                                    <div className="relative bg-gradient-to-br from-yellow-50 to-orange-50 border-4 border-yellow-400 rounded-2xl p-5 shadow-xl">
+                                      <div className="flex items-center gap-3 mb-3">
+                                        <div className="w-12 h-12 bg-gradient-to-br from-yellow-400 to-orange-400 rounded-full flex items-center justify-center shadow-lg">
+                                          <span className="text-2xl">📌</span>
+                                        </div>
+                                        <p className="text-base font-black text-orange-900 uppercase tracking-wide">Nota Importante</p>
+                                      </div>
+                                      <p className="text-lg text-orange-900 font-semibold leading-relaxed pl-3 border-l-4 border-orange-400">{displayNotes}</p>
                                     </div>
-                                    <p className="text-base text-blue-900 font-medium leading-relaxed">{displayNotes}</p>
                                   </div>
                                 );
                               }
@@ -1973,55 +1988,66 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
                             return null;
                           })()}
 
-                          {/* 📆 ESTADO */}
-                          <div className="bg-gradient-to-r from-gray-200 to-gray-100 p-4 rounded-xl mb-4 shadow-md border-2 border-gray-300">
-                            <div className="flex items-center justify-between">
-                              <div className="flex-1">
-                                <StatusBadge payment={payment} />
-                              </div>
-                              <div className="text-right">
-                                <div className="text-xs font-bold text-gray-500 uppercase mb-1">Fecha</div>
-                                <div className="text-sm font-black text-gray-800">
-                                  {(() => {
-                                    const isDescuentoCorredor = isDescuentoACorredor(payment);
-                                    if (isDescuentoCorredor) {
-                                      if (payment.can_be_paid) {
-                                        return new Date(payment.created_at).toLocaleDateString('es-PA', { day: '2-digit', month: 'short', year: 'numeric' });
-                                      } else {
-                                        return new Date(payment.created_at).toLocaleDateString('es-PA', { day: '2-digit', month: 'short', year: 'numeric' });
-                                      }
+                          {/* 🏷️ ESTADO Y FECHA */}
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="bg-gradient-to-br from-indigo-100 to-indigo-50 border-2 border-indigo-400 rounded-xl p-4 shadow-lg">
+                              <div className="text-xs font-bold text-indigo-600 uppercase mb-2 tracking-wider">Estado</div>
+                              <StatusBadge payment={payment} />
+                            </div>
+                            <div className="bg-gradient-to-br from-pink-100 to-pink-50 border-2 border-pink-400 rounded-xl p-4 shadow-lg">
+                              <div className="text-xs font-bold text-pink-600 uppercase mb-2 tracking-wider">📅 Fecha</div>
+                              <div className="text-sm font-black text-pink-900">
+                                {(() => {
+                                  const isDescuentoCorredor = isDescuentoACorredor(payment);
+                                  if (isDescuentoCorredor) {
+                                    if (payment.can_be_paid) {
+                                      return new Date(payment.created_at).toLocaleDateString('es-PA', { day: '2-digit', month: 'short' });
                                     } else {
-                                      const refs = payment.payment_references || [];
-                                      if (refs.length > 0 && refs[0].bank_transfer) {
-                                        return new Date(refs[0].bank_transfer.transfer_date).toLocaleDateString('es-PA', { day: '2-digit', month: 'short', year: 'numeric' });
-                                      }
-                                      return new Date(payment.created_at).toLocaleDateString('es-PA', { day: '2-digit', month: 'short', year: 'numeric' });
+                                      return new Date(payment.created_at).toLocaleDateString('es-PA', { day: '2-digit', month: 'short' });
                                     }
-                                  })()}
-                                </div>
+                                  } else {
+                                    const refs = payment.payment_references || [];
+                                    if (refs.length > 0 && refs[0].bank_transfer) {
+                                      return new Date(refs[0].bank_transfer.transfer_date).toLocaleDateString('es-PA', { day: '2-digit', month: 'short' });
+                                    }
+                                    return new Date(payment.created_at).toLocaleDateString('es-PA', { day: '2-digit', month: 'short' });
+                                  }
+                                })()}
                               </div>
                             </div>
                           </div>
                           
-                          {/* ⚙️ BOTONES DE ACCIÓN */}
-                          <div className="grid grid-cols-2 gap-4">
+                          {/* 🎯 ACCIONES DESTACADAS */}
+                          <div className="grid grid-cols-2 gap-3">
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleEdit(payment.id);
                               }}
-                              className="py-4 px-4 text-base font-black text-white bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 rounded-xl transition-all shadow-xl border-2 border-blue-800 flex items-center justify-center gap-2"
+                              className="relative overflow-hidden group"
                             >
-                              <FaEdit size={20} className="text-white" /> EDITAR
+                              <div className="absolute inset-0 bg-gradient-to-r from-cyan-500 to-blue-600 transition-all group-hover:scale-110"></div>
+                              <div className="relative py-5 px-4 flex flex-col items-center justify-center gap-2">
+                                <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                                  <FaEdit className="text-cyan-600" size={24} />
+                                </div>
+                                <span className="text-base font-black text-white uppercase tracking-wider drop-shadow-md">Editar</span>
+                              </div>
                             </button>
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleDelete(payment.id);
                               }}
-                              className="py-4 px-4 text-base font-black text-white bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 rounded-xl transition-all shadow-xl border-2 border-red-800 flex items-center justify-center gap-2"
+                              className="relative overflow-hidden group"
                             >
-                              <FaTrash size={20} className="text-white" /> ELIMINAR
+                              <div className="absolute inset-0 bg-gradient-to-r from-rose-500 to-red-600 transition-all group-hover:scale-110"></div>
+                              <div className="relative py-5 px-4 flex flex-col items-center justify-center gap-2">
+                                <div className="w-14 h-14 bg-white rounded-full flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform">
+                                  <FaTrash className="text-rose-600" size={24} />
+                                </div>
+                                <span className="text-base font-black text-white uppercase tracking-wider drop-shadow-md">Eliminar</span>
+                              </div>
                             </button>
                           </div>
                         </div>
