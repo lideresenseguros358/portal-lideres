@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { FaUpload, FaCog, FaCheckCircle } from 'react-icons/fa';
 import { actionGetActiveInsurers, actionImportDelinquency } from '@/app/(app)/delinquency/actions';
+import { actionProcessOCR } from '@/app/(app)/insurers/actions';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -13,6 +14,7 @@ export default function ImportTab() {
   const [cutoffDate, setCutoffDate] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [ocrProgress, setOcrProgress] = useState<string>('');
 
   useEffect(() => {
     loadInsurers();
@@ -122,10 +124,34 @@ export default function ImportTab() {
         parsedData = await parseExcelFile(file);
       } else if (ext === 'csv') {
         parsedData = await parseCSVFile(file);
-      } else if (ext === 'pdf' || ext === 'jpg' || ext === 'jpeg' || ext === 'png') {
-        toast.error('Los archivos PDF e imágenes requieren configuración OCR adicional');
-        setUploading(false);
-        return;
+      } else if (ext === 'pdf' || ext === 'jpg' || ext === 'jpeg' || ext === 'png' || ext === 'gif' || ext === 'bmp' || ext === 'webp' || ext === 'tiff' || ext === 'tif') {
+        // Procesar con OCR
+        toast.info('🔍 Procesando documento con OCR...');
+        setOcrProgress('Extrayendo texto del documento...');
+        
+        const arrayBuffer = await file.arrayBuffer();
+        const ocrResult = await actionProcessOCR(arrayBuffer, file.name);
+        
+        if (!ocrResult.ok || !ocrResult.data.xlsxBuffer) {
+          toast.error(`Error en OCR: ${ocrResult.error || 'No se pudo procesar el documento'}`);
+          setUploading(false);
+          setOcrProgress('');
+          return;
+        }
+        
+        setOcrProgress('Normalizando datos a formato tabular...');
+        
+        // Crear archivo XLSX temporal del resultado de OCR
+        const xlsxBlob = new Blob([ocrResult.data.xlsxBuffer], {
+          type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        });
+        const xlsxFile = new File([xlsxBlob], 'ocr-result.xlsx', { type: xlsxBlob.type });
+        
+        // Parsear el XLSX generado por OCR
+        parsedData = await parseExcelFile(xlsxFile);
+        
+        setOcrProgress('');
+        toast.success('✅ OCR completado exitosamente');
       } else {
         toast.error('Formato de archivo no soportado');
         setUploading(false);
@@ -231,14 +257,24 @@ export default function ImportTab() {
             <input
               id="file-upload"
               type="file"
-              accept=".xlsx,.xls,.csv,.pdf,.jpg,.jpeg,.png"
+              accept=".xlsx,.xls,.csv,.pdf,.jpg,.jpeg,.png,.gif,.bmp,.webp,.tiff,.tif"
               onChange={handleFileChange}
               className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition-colors"
             />
             <p className="text-xs text-gray-500 mt-2">
-              Formatos soportados: .xlsx, .csv, .xls, .pdf, .jpg, .png
+              Formatos soportados: Excel (.xlsx, .xls), CSV, PDF e imágenes (JPG, PNG, etc.)
+            </p>
+            <p className="text-xs text-purple-600 mt-1 font-medium">
+              ✨ Los archivos PDF e imágenes se procesan automáticamente con OCR
             </p>
           </div>
+
+          {ocrProgress && (
+            <div className="flex items-center gap-3 p-4 bg-blue-50 border-2 border-blue-300 rounded-lg">
+              <div className="w-5 h-5 border-3 border-blue-400 border-t-blue-600 rounded-full animate-spin"></div>
+              <span className="text-sm font-medium text-blue-700">{ocrProgress}</span>
+            </div>
+          )}
 
           {file && (
             <div className="bg-blue-50 border-2 border-blue-300 rounded-lg p-4">

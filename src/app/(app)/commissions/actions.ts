@@ -7,6 +7,7 @@ import { getSupabaseServer,
   TablesUpdate,
 } from '@/lib/supabase/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { getAuthContext } from '@/lib/db/context';
 import {
   UploadImportSchema,
   CreateDraftSchema,
@@ -14,10 +15,10 @@ import {
   AdvanceSchema,
   ToggleNotifySchema,
 } from '@/lib/commissions/schemas';
-import { parseCsvXlsx } from '@/lib/commissions/importers';
 import { calculateDiscounts } from '@/lib/commissions/rules';
 import { buildBankACH } from '@/lib/commissions/bankACH';
-import { getAuthContext } from '@/lib/db/context';
+import { parseCsvXlsx } from '@/lib/commissions/importers';
+import { processDocumentOCR } from '@/lib/services/vision-ocr';
 
 type FortnightRow = Tables<'fortnights'>;
 type FortnightIns = TablesInsert<'fortnights'>;
@@ -66,6 +67,44 @@ export async function actionUploadImport(formData: FormData) {
     
     console.log('[SERVER] Parsing file...');
     
+    // Helper to check if file requires OCR
+    const requiresOCR = (fileName: string): boolean => {
+      const extension = fileName.toLowerCase().split('.').pop();
+      const ocrExtensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tiff', 'tif', 'pdf'];
+      return ocrExtensions.includes(extension || '');
+    };
+    
+    // Verificar si el archivo requiere OCR (imagen o PDF)
+    let processedFile: File = file;
+    const needsOCR = requiresOCR(file.name);
+    
+    if (needsOCR) {
+      console.log('[SERVER] File requires OCR processing:', file.name);
+      
+      // Procesar con OCR
+      const arrayBuffer = await file.arrayBuffer();
+      const ocrResult = await processDocumentOCR(arrayBuffer, file.name);
+      
+      if (!ocrResult.success || !ocrResult.xlsxBuffer) {
+        return {
+          ok: false as const,
+          error: `Error en OCR: ${ocrResult.error || 'No se pudo procesar el documento'}`
+        };
+      }
+      
+      console.log('[SERVER] OCR completed successfully. Converting to XLSX File...');
+      
+      // Crear un nuevo File con el buffer XLSX normalizado
+      const xlsxBlob = new Blob([ocrResult.xlsxBuffer], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      });
+      processedFile = new File([xlsxBlob], file.name.replace(/\.[^.]+$/, '.xlsx'), {
+        type: xlsxBlob.type
+      });
+      
+      console.log('[SERVER] XLSX file created from OCR:', processedFile.name);
+    }
+    
     // Get insurer mapping rules (including multi-column support for ASSA)
     const { data: mappingRules } = await supabase
       .from('insurer_mapping_rules')
@@ -86,7 +125,7 @@ export async function actionUploadImport(formData: FormData) {
     console.log('[SERVER] Invert negatives from insurer config:', invertNegatives);
     console.log('[SERVER] Use multi commission columns (ASSA):', useMultiColumns);
     
-    const rows = await parseCsvXlsx(file, mappingRules || [], invertNegatives, useMultiColumns);
+    const rows = await parseCsvXlsx(processedFile, mappingRules || [], invertNegatives, useMultiColumns);
     console.log('[SERVER] Parsed rows:', rows.length);
     console.log('[SERVER] First 3 rows:', rows.slice(0, 3).map(r => ({
       policy: r.policy_number,

@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { FaVial, FaCheckCircle, FaTimesCircle, FaTable } from 'react-icons/fa';
-import { actionPreviewMapping } from '@/app/(app)/insurers/actions';
+import { FaVial, FaCheckCircle, FaTimesCircle, FaTable, FaFileImage, FaFilePdf, FaMagic } from 'react-icons/fa';
+import { actionPreviewMapping, actionProcessOCR } from '@/app/(app)/insurers/actions';
 
 interface TestsTabProps {
   insurerId: string;
@@ -13,25 +13,72 @@ export default function TestsTab({ insurerId }: TestsTabProps) {
   const [target, setTarget] = useState('COMMISSIONS');
   const [testResult, setTestResult] = useState<any>(null);
   const [isPending, startTransition] = useTransition();
+  const [isProcessingOCR, setIsProcessingOCR] = useState(false);
+  const [ocrProgress, setOcrProgress] = useState<string>('');
+
+  // Helper function to check if file requires OCR
+  const requiresOCR = (fileName: string): boolean => {
+    const extension = fileName.toLowerCase().split('.').pop();
+    const ocrExtensions = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tiff', 'tif', 'pdf'];
+    return ocrExtensions.includes(extension || '');
+  };
 
   const handleTest = () => {
     if (!testFile) return;
     startTransition(async () => {
       try {
-        // Leer el archivo como ArrayBuffer para soportar .xls y .xlsx
-        const arrayBuffer = await testFile.arrayBuffer();
+        // Leer el archivo como ArrayBuffer
+        let arrayBuffer = await testFile.arrayBuffer();
+        let fileName = testFile.name;
+        
+        // Verificar si el archivo requiere OCR (imagen o PDF)
+        const needsOCR = requiresOCR(fileName);
+        
+        if (needsOCR) {
+          setIsProcessingOCR(true);
+          setOcrProgress('🔍 Procesando documento con OCR...');
+          
+          // Procesar con OCR
+          const ocrResult = await actionProcessOCR(arrayBuffer, fileName);
+          
+          if (!ocrResult.ok) {
+            setTestResult({
+              ok: false,
+              error: ocrResult.error || 'Error al procesar OCR'
+            });
+            setIsProcessingOCR(false);
+            setOcrProgress('');
+            return;
+          }
+          
+          setOcrProgress('✅ OCR completado. Normalizando a XLSX...');
+          
+          // Usar el buffer XLSX normalizado del OCR
+          arrayBuffer = ocrResult.data.xlsxBuffer!;
+          fileName = testFile.name.replace(/\.[^.]+$/, '.xlsx'); // Cambiar extensión a .xlsx
+          
+          setOcrProgress('📊 Analizando estructura de datos...');
+        }
+        
+        // Procesar con el parser normal
         const result = await actionPreviewMapping({
           insurerId,
           targetField: target,
           fileBuffer: arrayBuffer,
-          fileName: testFile.name,
+          fileName: fileName,
         });
+        
         setTestResult(result);
+        setIsProcessingOCR(false);
+        setOcrProgress('');
+        
       } catch (error) {
         setTestResult({
           ok: false,
           error: error instanceof Error ? error.message : 'Error al procesar el archivo'
         });
+        setIsProcessingOCR(false);
+        setOcrProgress('');
       }
     });
   };
@@ -40,6 +87,12 @@ export default function TestsTab({ insurerId }: TestsTabProps) {
     <div className="tab-pane">
       <h2 className="tab-title">Pruebas de Mapeo</h2>
       <p className="mb-4">Sube un archivo de ejemplo para verificar que las reglas de mapeo funcionan correctamente.</p>
+      <div className="ocr-notice">
+        <FaMagic className="icon" />
+        <div>
+          <strong>OCR Automático:</strong> Los archivos PDF e imágenes se procesan automáticamente con Google Cloud Vision para extraer y normalizar los datos a formato tabular.
+        </div>
+      </div>
 
       <div className="test-form">
         <select value={target} onChange={e => setTarget(e.target.value)}>
@@ -48,13 +101,20 @@ export default function TestsTab({ insurerId }: TestsTabProps) {
         </select>
         <input 
           type="file" 
-          accept=".csv,.xlsx,.xls"
+          accept=".csv,.xlsx,.xls,.pdf,.jpg,.jpeg,.png,.gif,.bmp,.webp,.tiff,.tif"
           onChange={(e) => setTestFile(e.target.files?.[0] || null)}
         />
         <button onClick={handleTest} className="btn-primary" disabled={isPending || !testFile}>
-          <FaVial /> {isPending ? 'Probando...' : 'Probar Mapeo'}
+          <FaVial /> {isPending ? (isProcessingOCR ? 'Procesando OCR...' : 'Probando...') : 'Probar Mapeo'}
         </button>
       </div>
+
+      {isProcessingOCR && ocrProgress && (
+        <div className="ocr-progress">
+          <div className="progress-spinner"></div>
+          <span>{ocrProgress}</span>
+        </div>
+      )}
 
       {testResult && (
         <div className="test-result-container">
@@ -181,6 +241,46 @@ export default function TestsTab({ insurerId }: TestsTabProps) {
         }
         .test-form input[type="file"] {
           cursor: pointer;
+        }
+        .ocr-notice {
+          display: flex;
+          align-items: start;
+          gap: 12px;
+          padding: 12px 16px;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          color: white;
+          border-radius: 8px;
+          margin-bottom: 16px;
+          font-size: 14px;
+          line-height: 1.5;
+        }
+        .ocr-notice .icon {
+          font-size: 20px;
+          margin-top: 2px;
+          flex-shrink: 0;
+        }
+        .ocr-progress {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 16px;
+          background: #f0f9ff;
+          border: 2px solid #3b82f6;
+          border-radius: 8px;
+          margin-bottom: 16px;
+          font-weight: 500;
+          color: #1e40af;
+        }
+        .progress-spinner {
+          width: 20px;
+          height: 20px;
+          border: 3px solid #93c5fd;
+          border-top-color: #3b82f6;
+          border-radius: 50%;
+          animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin {
+          to { transform: rotate(360deg); }
         }
         .btn-primary { 
           display: inline-flex; 

@@ -18,6 +18,7 @@ import {
   type PreviewMappingOptions
 } from '@/lib/db/insurers';
 import { listAllBrokers } from '@/lib/db/brokers';
+import { processDocumentOCR } from '@/lib/services/vision-ocr';
 
 export async function actionCreateInsurer(data: unknown) {
   try {
@@ -137,6 +138,37 @@ export async function actionPreviewMapping(options: PreviewMappingOptions) {
     return { 
       ok: false as const, 
       error: error instanceof Error ? error.message : 'Error desconocido' 
+    };
+  }
+}
+
+// =====================================================
+// OCR ACTIONS
+// =====================================================
+
+export async function actionProcessOCR(fileBuffer: ArrayBuffer, fileName: string) {
+  try {
+    const result = await processDocumentOCR(fileBuffer, fileName);
+    
+    if (!result.success) {
+      return {
+        ok: false as const,
+        error: result.error || 'Error al procesar OCR'
+      };
+    }
+    
+    return {
+      ok: true as const,
+      data: {
+        text: result.text,
+        xlsxBuffer: result.xlsxBuffer,
+        structuredData: result.structuredData,
+      }
+    };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : 'Error desconocido al procesar OCR'
     };
   }
 }
