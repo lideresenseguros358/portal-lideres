@@ -280,9 +280,9 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
                     type="checkbox"
                     checked={formData.active}
                     onChange={(e) => setFormData({ ...formData, active: e.target.checked })}
-                    className="w-4 h-4 rounded border-gray-300 text-[#8AAA19] focus:ring-[#8AAA19]"
+                    className="sr-only"
                   />
-                  <span className="text-sm font-semibold text-gray-700">☑️ Cliente Activo</span>
+                  <span className="text-sm font-semibold text-gray-700">{formData.active ? '☑️' : '☐'} Cliente Activo</span>
                 </label>
               </div>
             </div>

@@ -189,22 +189,12 @@ export default function InsurersList({ initialInsurers }: InsurersListProps) {
           {filteredInsurers.map(insurer => (
             <div
               key={insurer.id}
-              className={`relative bg-white rounded-xl shadow-md hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 cursor-pointer aspect-square ${
+              className={`relative bg-white rounded-xl shadow-md hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 cursor-pointer ${
                 isPending ? 'opacity-50' : ''
               }`}
               onClick={() => handleFlip(insurer.id)}
-              style={{ perspective: '1000px' }}
+              style={{ perspective: '1000px', minHeight: '200px', height: '220px' }}
             >
-              {/* Badge de estado - FIJO, fuera del flip */}
-              <div className="absolute top-2 right-2 z-20 pointer-events-none">
-                <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold shadow-sm ${
-                  insurer.active 
-                    ? 'bg-green-500 text-white' 
-                    : 'bg-gray-400 text-white'
-                }`}>
-                  {insurer.active ? '✓' : '○'}
-                </span>
-              </div>
 
               <div 
                 className={`relative w-full h-full transition-transform duration-600`}
@@ -218,8 +208,19 @@ export default function InsurersList({ initialInsurers }: InsurersListProps) {
                   className="absolute inset-0 flex flex-col p-2 sm:p-3 bg-gradient-to-br from-white to-gray-50 rounded-xl"
                   style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}
                 >
+                  {/* Badge de estado - Dentro del flip para que desaparezca */}
+                  <div className="absolute top-2 right-2 z-10">
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold shadow-sm ${
+                      insurer.active 
+                        ? 'bg-green-500 text-white' 
+                        : 'bg-gray-400 text-white'
+                    }`}>
+                      {insurer.active ? '✓' : '○'}
+                    </span>
+                  </div>
+                  
                   {/* Logo - Centrado y grande */}
-                  <div className="flex-1 flex items-center justify-center p-1 sm:p-2 mt-4">
+                  <div className="flex-1 flex items-center justify-center p-1 sm:p-2 mt-6">
                     <InsurerLogo 
                       logoUrl={insurer.logo_url}
                       insurerName={insurer.name}
@@ -227,15 +228,15 @@ export default function InsurersList({ initialInsurers }: InsurersListProps) {
                     />
                   </div>
                   
-                  {/* Nombre en la parte inferior - Solo visible cuando NO está volteado */}
-                  <div className="text-center px-1 py-1.5 sm:py-2 border-t border-gray-200 bg-white/50 backdrop-blur-sm">
+                  {/* Nombre en la parte inferior - Se oculta con el flip */}
+                  <div className="text-center px-1 py-1.5 sm:py-2 border-t border-gray-200 bg-white/50 backdrop-blur-sm" style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}>
                     <p className="text-[10px] sm:text-xs font-bold text-[#010139] truncate px-1" title={insurer.name}>
                       {insurer.name}
                     </p>
                   </div>
                   
-                  {/* Botones de acción - Responsive y contenidos */}
-                  <div className="flex justify-center gap-1 sm:gap-1.5 mt-1 px-1">
+                  {/* Botones de acción - Responsive y contenidos - Se ocultan con el flip */}
+                  <div className="flex justify-center gap-1 sm:gap-1.5 mt-1 px-1" style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}>
                     <Link 
                       href={`/insurers/${insurer.id}/edit`} 
                       className="w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center rounded-md sm:rounded-lg bg-[#010139] text-white hover:bg-[#8AAA19] transition-all flex-shrink-0" 
