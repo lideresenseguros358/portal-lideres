@@ -257,7 +257,7 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
               </div>
 
               {/* Fecha Nacimiento y Estado - 2 columnas */}
-              <div>
+              <div className="w-full max-w-full overflow-hidden">
                 <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1.5">
                   <span className="text-pink-600">🎂</span>
                   Fecha de Nacimiento
@@ -267,7 +267,7 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
                   value={formData.birth_date}
                   onChange={(e) => setFormData({ ...formData, birth_date: e.target.value })}
                   className="w-full max-w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none transition-all"
-                  style={{ colorScheme: 'light' }}
+                  style={{ WebkitAppearance: 'none' }}
                 />
               </div>
 
@@ -282,7 +282,7 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
                     onChange={(e) => setFormData({ ...formData, active: e.target.checked })}
                     className="w-4 h-4 rounded border-gray-300 text-[#8AAA19] focus:ring-[#8AAA19]"
                   />
-                  <span className="text-sm font-semibold text-gray-700">✅ Cliente Activo</span>
+                  <span className="text-sm font-semibold text-gray-700">☑️ Cliente Activo</span>
                 </label>
               </div>
             </div>
@@ -653,15 +653,15 @@ function PolicyForm({ clientId, policy, onClose, onSave, readOnly = false }: Pol
 
   return (
     <div 
-      className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-[110] p-2 sm:p-4"
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[110] p-4 overflow-y-auto"
       onClick={onClose}
     >
       <div 
-        className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[95vh] sm:max-h-[90vh] flex flex-col my-2 border-2 border-gray-200"
+        className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col my-8"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header con gradiente corporativo */}
-        <div className="bg-gradient-to-r from-[#010139] to-[#020270] px-4 sm:px-5 py-3 sm:py-4 flex items-center justify-between rounded-t-xl flex-shrink-0">
+        <div className="bg-gradient-to-r from-[#010139] to-[#020270] px-4 sm:px-5 py-3 sm:py-4 flex items-center justify-between rounded-t-2xl flex-shrink-0">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-white/10 rounded-lg">
               <FaPlus size={18} className="text-white" />
@@ -768,14 +768,14 @@ function PolicyForm({ clientId, policy, onClose, onSave, readOnly = false }: Pol
                 onChange={(e) => setFormData({ ...formData, status: e.target.value as PolicyFormState['status'] })}
                 className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none text-sm font-medium transition-all"
               >
-                <option value="ACTIVA">✅ ACTIVA</option>
+                <option value="ACTIVA">☑️ ACTIVA</option>
                 <option value="VENCIDA">🔴 VENCIDA</option>
                 <option value="CANCELADA">❌ CANCELADA</option>
               </select>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
+              <div className="w-full max-w-full overflow-hidden">
                 <label className="block text-sm font-bold text-[#010139] mb-2">
                   📅 Fecha de Inicio
                 </label>
@@ -784,10 +784,10 @@ function PolicyForm({ clientId, policy, onClose, onSave, readOnly = false }: Pol
                   value={formData.start_date}
                   onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
                   className="w-full max-w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none text-sm font-medium transition-all"
-                  style={{ colorScheme: 'light' }}
+                  style={{ WebkitAppearance: 'none' }}
                 />
               </div>
-              <div>
+              <div className="w-full max-w-full overflow-hidden">
                 <label className="block text-sm font-bold text-[#010139] mb-2">
                   🔁 Fecha de Renovación
                 </label>
@@ -796,7 +796,7 @@ function PolicyForm({ clientId, policy, onClose, onSave, readOnly = false }: Pol
                   value={formData.renewal_date}
                   onChange={(e) => setFormData({ ...formData, renewal_date: e.target.value })}
                   className="w-full max-w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none text-sm font-medium transition-all"
-                  style={{ colorScheme: 'light' }}
+                  style={{ WebkitAppearance: 'none' }}
                 />
               </div>
             </div>

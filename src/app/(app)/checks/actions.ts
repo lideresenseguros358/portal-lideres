@@ -99,11 +99,11 @@ export async function actionGetChecksDashboardStats() {
     
     const totalPending = (pendingPayments || []).reduce((sum, p) => sum + (Number(p.amount_to_pay) || 0), 0);
     
-    // 4. Devoluciones: pending_payments tipo 'devolution' con status='paid'
+    // 4. Devoluciones: pending_payments tipo 'devolucion' con status='paid'
     const { data: devolutions } = await supabase
       .from('pending_payments')
       .select('amount_to_pay')
-      .eq('purpose', 'devolution')
+      .eq('purpose', 'devolucion')
       .eq('status', 'paid');
     
     const totalDevolutions = (devolutions || []).reduce((sum, d) => sum + (Number(d.amount_to_pay) || 0), 0);

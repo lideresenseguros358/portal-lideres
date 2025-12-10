@@ -559,7 +559,7 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                 </div>
               </div>
 
-              <div>
+              <div className="w-full max-w-full overflow-hidden">
                 <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                   Fecha de Nacimiento <span className="text-red-500">*</span>
                 </label>
@@ -569,7 +569,7 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                   value={formData.birth_date}
                   onChange={(e) => setFormData({ ...formData, birth_date: e.target.value })}
                   className="w-full max-w-full px-3 py-2 sm:px-4 text-sm sm:text-base border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition"
-                  style={{ colorScheme: 'light' }}
+                  style={{ WebkitAppearance: 'none' }}
                 />
               </div>
             </div>
@@ -638,7 +638,7 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-                <div>
+                <div className="w-full max-w-full overflow-hidden">
                   <label className="block text-sm font-medium text-gray-700 mb-1">Fecha de Inicio <span className="text-red-500">*</span></label>
                   <input
                     type="date"
@@ -660,11 +660,11 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                       });
                     }}
                     className="w-full max-w-full px-3 py-2 sm:px-4 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition text-sm sm:text-base"
-                    style={{ colorScheme: 'light' }}
+                    style={{ WebkitAppearance: 'none' }}
                   />
                 </div>
 
-                <div>
+                <div className="w-full max-w-full overflow-hidden">
                   <label className="block text-sm font-medium text-gray-700 mb-1">
                     Fecha de Renovación <span className="text-red-500">*</span>
                     {formData.start_date && (
@@ -676,7 +676,7 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                     value={formData.renewal_date}
                     onChange={(e) => setFormData({ ...formData, renewal_date: e.target.value })}
                     className="w-full max-w-full px-3 py-2 sm:px-4 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition text-sm sm:text-base"
-                    style={{ colorScheme: 'light' }}
+                    style={{ WebkitAppearance: 'none' }}
                     required
                   />
                 </div>

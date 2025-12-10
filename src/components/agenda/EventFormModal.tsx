@@ -297,30 +297,30 @@ export default function EventFormModal({
 
   return (
     <div 
-      className="standard-modal-backdrop"
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4 overflow-y-auto"
       onClick={(e) => {
         if (e.target === e.currentTarget && !submitting) onClose();
       }}
     >
       <div 
-        className="standard-modal-container max-w-3xl"
+        className="bg-white rounded-2xl max-w-3xl w-full my-8 shadow-2xl flex flex-col max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="standard-modal-header">
+        <div className="bg-gradient-to-r from-[#010139] to-[#020270] text-white p-6 flex items-center justify-between rounded-t-2xl flex-shrink-0">
           <div>
-            <h2 className="standard-modal-title">
+            <h2 className="text-2xl font-bold">
               {isEditing ? '✏️ Editar Evento' : '➕ Nuevo Evento'}
             </h2>
-            <p className="standard-modal-subtitle">Configura la fecha, hora y participantes</p>
+            <p className="text-white/80 text-sm mt-1">Configura la fecha, hora y participantes</p>
           </div>
-          <button onClick={onClose} className="standard-modal-close" disabled={submitting} type="button">
+          <button onClick={onClose} className="text-white hover:text-gray-200 transition" disabled={submitting} type="button">
             <FaTimes size={24} />
           </button>
         </div>
 
         {/* Content */}
-        <div className="standard-modal-content">
+        <div className="p-6 overflow-y-auto flex-1">
           <form id="event-form" onSubmit={handleSubmit} className="space-y-6">
           {/* Title */}
           <div>
@@ -331,7 +331,7 @@ export default function EventFormModal({
               type="text"
               value={title}
               onChange={createUppercaseHandler((e) => setTitle(e.target.value))}
-              className={`w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition-colors ${uppercaseInputClass}`}
+              className={`w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition-colors ${uppercaseInputClass}`}
               placeholder="JUNTA DE AGENCIA MENSUAL"
               required
             />
@@ -339,7 +339,7 @@ export default function EventFormModal({
 
           {/* Dates */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="min-w-0">
+            <div className="w-full max-w-full overflow-hidden">
               <label className="block text-xs sm:text-sm font-semibold text-gray-600 mb-2 uppercase">
                 Fecha de Inicio <span className="text-red-500">*</span>
               </label>
@@ -347,11 +347,12 @@ export default function EventFormModal({
                 type="date"
                 value={startDate}
                 onChange={(e) => handleStartDateChange(e.target.value)}
-                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition-colors"
+                className="w-full max-w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition-colors"
+                style={{ WebkitAppearance: 'none' }}
                 required
               />
             </div>
-            <div className="min-w-0">
+            <div className="w-full max-w-full overflow-hidden">
               <label className="block text-xs sm:text-sm font-semibold text-gray-600 mb-2 uppercase">
                 Hora de Inicio
               </label>
@@ -360,13 +361,14 @@ export default function EventFormModal({
                 value={startTime}
                 onChange={(e) => handleStartTimeChange(e.target.value)}
                 disabled={isAllDay}
-                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition-colors disabled:bg-gray-100"
+                className="w-full max-w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition-colors disabled:bg-gray-100"
+                style={{ WebkitAppearance: 'none' }}
               />
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="min-w-0">
+            <div className="w-full max-w-full overflow-hidden">
               <label className="block text-xs sm:text-sm font-semibold text-gray-600 mb-2 uppercase">
                 Fecha de Fin <span className="text-red-500">*</span>
               </label>
@@ -374,11 +376,12 @@ export default function EventFormModal({
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition-colors"
+                className="w-full max-w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition-colors"
+                style={{ WebkitAppearance: 'none' }}
                 required
               />
             </div>
-            <div className="min-w-0">
+            <div className="w-full max-w-full overflow-hidden">
               <label className="block text-xs sm:text-sm font-semibold text-gray-600 mb-2 uppercase">
                 Hora de Fin
               </label>
@@ -387,7 +390,8 @@ export default function EventFormModal({
                 value={endTime}
                 onChange={(e) => setEndTime(e.target.value)}
                 disabled={isAllDay}
-                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition-colors disabled:bg-gray-100"
+                className="w-full max-w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition-colors disabled:bg-gray-100"
+                style={{ WebkitAppearance: 'none' }}
               />
             </div>
           </div>
@@ -433,12 +437,15 @@ export default function EventFormModal({
                   
                   {/* Input + Botón Agregar */}
                   <div className="flex gap-2">
-                    <input
-                      type="date"
-                      value={newDate}
-                      onChange={(e) => setNewDate(e.target.value)}
-                      className="flex-1 px-4 py-3 border-2 border-purple-300 rounded-lg focus:border-purple-500 focus:outline-none transition-colors"
-                    />
+                    <div className="flex-1 w-full max-w-full overflow-hidden">
+                      <input
+                        type="date"
+                        value={newDate}
+                        onChange={(e) => setNewDate(e.target.value)}
+                        className="w-full max-w-full px-4 py-2.5 border-2 border-purple-300 rounded-lg focus:border-purple-500 focus:outline-none transition-colors"
+                        style={{ WebkitAppearance: 'none' }}
+                      />
+                    </div>
                     <button
                       type="button"
                       onClick={() => {
@@ -451,7 +458,7 @@ export default function EventFormModal({
                         }
                       }}
                       disabled={!newDate}
-                      className="px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                      className="px-6 py-2.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 flex-shrink-0"
                     >
                       + Agregar
                     </button>
@@ -722,37 +729,33 @@ export default function EventFormModal({
         </div>
 
         {/* Footer */}
-        <div className="standard-modal-footer">
-          <div></div>
-          
-          <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={submitting}
-              className="standard-modal-button-secondary"
-            >
-              Cancelar
-            </button>
-            <button
-              type="submit"
-              form="event-form"
-              disabled={submitting}
-              className="standard-modal-button-primary"
-            >
-              {submitting ? (
-                <>
-                  <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full"></div>
-                  <span>{isEditing ? 'Actualizando...' : 'Creando...'}</span>
-                </>
-              ) : (
-                <>
-                  <FaCheck />
-                  <span>{isEditing ? 'Actualizar Evento' : 'Crear Evento'}</span>
-                </>
-              )}
-            </button>
-          </div>
+        <div className="bg-gray-50 px-6 py-4 rounded-b-2xl flex justify-end gap-3 flex-shrink-0">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={submitting}
+            className="px-4 py-2 bg-white border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-semibold transition-colors disabled:opacity-50"
+          >
+            Cancelar
+          </button>
+          <button
+            type="submit"
+            form="event-form"
+            disabled={submitting}
+            className="px-4 py-2 bg-gradient-to-r from-[#010139] to-[#020270] text-white rounded-lg hover:shadow-lg font-semibold transition-all disabled:opacity-50 flex items-center gap-2"
+          >
+            {submitting ? (
+              <>
+                <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full"></div>
+                <span>{isEditing ? 'Actualizando...' : 'Creando...'}</span>
+              </>
+            ) : (
+              <>
+                <FaCheck />
+                <span>{isEditing ? 'Actualizar' : 'Crear'}</span>
+              </>
+            )}
+          </button>
         </div>
       </div>
     </div>

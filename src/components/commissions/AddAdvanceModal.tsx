@@ -107,35 +107,35 @@ export function AddAdvanceModal({ isOpen, onClose, onSuccess, brokers }: Props) 
   return (
     <>
       <div 
-        className="standard-modal-backdrop"
+        className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4 overflow-y-auto"
         onClick={(e) => {
           if (e.target === e.currentTarget) onClose();
         }}
       >
         <div 
-          className="standard-modal-container max-w-[500px]"
+          className="bg-white rounded-2xl max-w-[500px] w-full my-8 shadow-2xl flex flex-col max-h-[90vh]"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="standard-modal-header">
+          <div className="bg-gradient-to-r from-[#010139] to-[#020270] text-white p-6 flex items-center justify-between rounded-t-2xl flex-shrink-0">
             <div>
-              <h2 className="standard-modal-title">
+              <h2 className="text-2xl font-bold">
                 <FaMoneyBillWave className="inline mr-2" />
                 Nuevo Adelanto
               </h2>
-              <p className="standard-modal-subtitle">
+              <p className="text-white/80 text-sm mt-1">
                 Registra un adelanto de comisión para un corredor
               </p>
             </div>
-            <button onClick={onClose} className="standard-modal-close" type="button">
+            <button onClick={onClose} className="text-white hover:text-gray-200 transition" type="button">
               <FaTimes size={24} />
             </button>
           </div>
 
           {/* Content */}
-          <div className="standard-modal-content">
+          <div className="p-6 overflow-y-auto flex-1">
             <Form {...form}>
-              <form id="advance-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-2">
+              <form id="advance-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             {/* Corredor */}
             <FormField
               control={form.control}
@@ -354,35 +354,33 @@ export function AddAdvanceModal({ isOpen, onClose, onSuccess, brokers }: Props) 
           </div>
 
           {/* Footer */}
-          <div className="standard-modal-footer">
-            <div className="flex gap-2 w-full sm:w-auto flex-1 sm:flex-none">
-              <button
-                type="button"
-                onClick={onClose}
-                disabled={form.formState.isSubmitting}
-                className="standard-modal-button-secondary"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                form="advance-form"
-                disabled={form.formState.isSubmitting}
-                className="standard-modal-button-primary"
-              >
-                {form.formState.isSubmitting ? (
-                  <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                    {isRecurrent ? 'Creando recurrencia...' : 'Agregando...'}
-                  </>
-                ) : (
-                  <>
-                    {isRecurrent ? <FaCalendarAlt className="mr-2" /> : <FaMoneyBillWave className="mr-2" />}
-                    {isRecurrent ? 'Crear Recurrencia' : 'Agregar Adelanto'}
-                  </>
-                )}
-              </button>
-            </div>
+          <div className="bg-gray-50 px-6 py-4 rounded-b-2xl flex justify-end gap-3 flex-shrink-0">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={form.formState.isSubmitting}
+              className="px-4 py-2 bg-white border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 font-semibold transition-colors disabled:opacity-50"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              form="advance-form"
+              disabled={form.formState.isSubmitting}
+              className="px-4 py-2 bg-gradient-to-r from-[#010139] to-[#020270] text-white rounded-lg hover:shadow-lg font-semibold transition-all disabled:opacity-50 flex items-center gap-2"
+            >
+              {form.formState.isSubmitting ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  {isRecurrent ? 'Creando...' : 'Agregando...'}
+                </>
+              ) : (
+                <>
+                  {isRecurrent ? <FaCalendarAlt /> : <FaMoneyBillWave />}
+                  {isRecurrent ? 'Crear Recurrencia' : 'Agregar'}
+                </>
+              )}
+            </button>
           </div>
         </div>
       </div>

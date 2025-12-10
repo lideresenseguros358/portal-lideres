@@ -189,12 +189,23 @@ export default function InsurersList({ initialInsurers }: InsurersListProps) {
           {filteredInsurers.map(insurer => (
             <div
               key={insurer.id}
-              className={`bg-white rounded-xl shadow-md hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 cursor-pointer aspect-square ${
+              className={`relative bg-white rounded-xl shadow-md hover:shadow-2xl transition-all duration-300 hover:-translate-y-1 cursor-pointer aspect-square ${
                 isPending ? 'opacity-50' : ''
               }`}
               onClick={() => handleFlip(insurer.id)}
               style={{ perspective: '1000px' }}
             >
+              {/* Badge de estado - FIJO, fuera del flip */}
+              <div className="absolute top-2 right-2 z-20 pointer-events-none">
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold shadow-sm ${
+                  insurer.active 
+                    ? 'bg-green-500 text-white' 
+                    : 'bg-gray-400 text-white'
+                }`}>
+                  {insurer.active ? '✓' : '○'}
+                </span>
+              </div>
+
               <div 
                 className={`relative w-full h-full transition-transform duration-600`}
                 style={{ 
@@ -204,22 +215,11 @@ export default function InsurersList({ initialInsurers }: InsurersListProps) {
               >
                 {/* Card Front - Logo protagonista */}
                 <div 
-                  className="absolute inset-0 flex flex-col p-3 bg-gradient-to-br from-white to-gray-50 rounded-xl"
+                  className="absolute inset-0 flex flex-col p-2 sm:p-3 bg-gradient-to-br from-white to-gray-50 rounded-xl"
                   style={{ backfaceVisibility: 'hidden', WebkitBackfaceVisibility: 'hidden' }}
                 >
-                  {/* Badge de estado */}
-                  <div className="absolute top-2 right-2 z-10">
-                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold shadow-sm ${
-                      insurer.active 
-                        ? 'bg-green-500 text-white' 
-                        : 'bg-gray-400 text-white'
-                    }`}>
-                      {insurer.active ? '✓' : '○'}
-                    </span>
-                  </div>
-                  
                   {/* Logo - Centrado y grande */}
-                  <div className="flex-1 flex items-center justify-center p-2">
+                  <div className="flex-1 flex items-center justify-center p-1 sm:p-2 mt-4">
                     <InsurerLogo 
                       logoUrl={insurer.logo_url}
                       insurerName={insurer.name}
@@ -227,40 +227,45 @@ export default function InsurersList({ initialInsurers }: InsurersListProps) {
                     />
                   </div>
                   
-                  {/* Nombre en la parte inferior */}
-                  <div className="text-center px-1 py-2 border-t border-gray-200 bg-white/50 backdrop-blur-sm">
-                    <p className="text-[11px] sm:text-xs font-bold text-[#010139] truncate">{insurer.name}</p>
+                  {/* Nombre en la parte inferior - Solo visible cuando NO está volteado */}
+                  <div className="text-center px-1 py-1.5 sm:py-2 border-t border-gray-200 bg-white/50 backdrop-blur-sm">
+                    <p className="text-[10px] sm:text-xs font-bold text-[#010139] truncate px-1" title={insurer.name}>
+                      {insurer.name}
+                    </p>
                   </div>
                   
                   {/* Botones de acción - Responsive y contenidos */}
-                  <div className="flex justify-center gap-1.5 mt-1 px-2">
+                  <div className="flex justify-center gap-1 sm:gap-1.5 mt-1 px-1">
                     <Link 
                       href={`/insurers/${insurer.id}/edit`} 
-                      className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg bg-[#010139] text-white hover:bg-[#8AAA19] transition-all" 
+                      className="w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center rounded-md sm:rounded-lg bg-[#010139] text-white hover:bg-[#8AAA19] transition-all flex-shrink-0" 
                       title="Editar" 
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <FaEdit size={12} className="text-white" />
+                      <FaEdit size={10} className="sm:hidden text-white" />
+                      <FaEdit size={12} className="hidden sm:block text-white" />
                     </Link>
                     <button 
                       onClick={(e) => { e.stopPropagation(); handleClone(insurer.id); }} 
-                      className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg bg-[#8AAA19] text-white hover:bg-[#010139] transition-all" 
+                      className="w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center rounded-md sm:rounded-lg bg-[#8AAA19] text-white hover:bg-[#010139] transition-all flex-shrink-0" 
                       title="Clonar"
                     >
-                      <FaClone size={12} className="text-white" />
+                      <FaClone size={10} className="sm:hidden text-white" />
+                      <FaClone size={12} className="hidden sm:block text-white" />
                     </button>
                     <button 
                       onClick={(e) => { e.stopPropagation(); handleToggle(insurer.id); }} 
-                      className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg bg-orange-50 text-orange-600 hover:bg-orange-500 hover:text-white transition-all" 
+                      className="w-6 h-6 sm:w-8 sm:h-8 flex items-center justify-center rounded-md sm:rounded-lg bg-orange-50 text-orange-600 hover:bg-orange-500 hover:text-white transition-all flex-shrink-0" 
                       title={insurer.active ? 'Desactivar' : 'Activar'}
                     >
-                      {insurer.active ? <FaToggleOn size={14} /> : <FaToggleOff size={14} />}
+                      {insurer.active ? <FaToggleOn size={12} className="sm:hidden" /> : <FaToggleOff size={12} className="sm:hidden" />}
+                      {insurer.active ? <FaToggleOn size={14} className="hidden sm:block" /> : <FaToggleOff size={14} className="hidden sm:block" />}
                     </button>
                   </div>
                 </div>
                 {/* Card Back */}
                 <div 
-                  className="absolute inset-0 flex flex-col p-3 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl"
+                  className="absolute inset-0 flex flex-col p-2 sm:p-3 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl"
                   style={{ 
                     backfaceVisibility: 'hidden',
                     WebkitBackfaceVisibility: 'hidden',
@@ -269,36 +274,38 @@ export default function InsurersList({ initialInsurers }: InsurersListProps) {
                     flexDirection: 'column'
                   }}
                 >
-                  <div className="flex justify-between items-start mb-2 flex-shrink-0">
-                    <h4 className="text-xs font-bold text-[#010139]">Contacto</h4>
+                  <div className="flex justify-between items-start mb-2 flex-shrink-0 mt-4">
+                    <h4 className="text-[10px] sm:text-xs font-bold text-[#010139]">Contacto</h4>
                     <button 
                       onClick={(e) => { e.stopPropagation(); handleFlip(insurer.id); }} 
-                      className="w-6 h-6 flex items-center justify-center rounded-lg bg-white text-gray-600 hover:bg-[#010139] hover:text-white transition-all shadow-sm" 
+                      className="w-5 h-5 sm:w-6 sm:h-6 flex items-center justify-center rounded-md sm:rounded-lg bg-white text-gray-600 hover:bg-[#010139] hover:text-white transition-all shadow-sm flex-shrink-0" 
                       title="Volver"
                     >
-                      <FaUndo size={10} />
+                      <FaUndo size={9} className="sm:hidden" />
+                      <FaUndo size={10} className="hidden sm:block" />
                     </button>
                   </div>
                   {(() => {
                     const primaryContact = insurer.contacts.find(c => c.is_primary);
                     return primaryContact ? (
-                      <div className="text-gray-700 text-[10px] space-y-1 flex-1 overflow-y-auto mb-2">
-                        <p className="font-bold text-[#010139] text-xs mb-1 truncate">{primaryContact.name}</p>
+                      <div className="text-gray-700 text-[9px] sm:text-[10px] space-y-1 flex-1 overflow-y-auto mb-2">
+                        <p className="font-bold text-[#010139] text-[10px] sm:text-xs mb-1 truncate">{primaryContact.name}</p>
                         {primaryContact.position && <p className="text-gray-600 truncate">📋 {primaryContact.position}</p>}
                         {primaryContact.phone && <p className="text-gray-600 truncate">📞 {primaryContact.phone}</p>}
-                        {primaryContact.email && <p className="text-gray-600 truncate">✉️ {primaryContact.email}</p>}
+                        {primaryContact.email && <p className="text-gray-600 truncate break-all">✉️ {primaryContact.email}</p>}
                       </div>
                     ) : (
-                      <div className="text-gray-500 text-[10px] flex-1 flex items-center justify-center mb-2">
+                      <div className="text-gray-500 text-[9px] sm:text-[10px] flex-1 flex items-center justify-center mb-2">
                         <p className="text-center">Sin contacto principal</p>
                       </div>
                     );
                   })()}
                   <button
                     onClick={(e) => { e.stopPropagation(); handleOpenModal(insurer); }}
-                    className="w-full py-1.5 px-2 bg-[#8AAA19] text-white rounded-lg hover:bg-[#6d8814] transition-all flex items-center justify-center gap-1 font-semibold text-[10px] flex-shrink-0"
+                    className="w-full py-1.5 px-2 bg-[#8AAA19] text-white rounded-md sm:rounded-lg hover:bg-[#6d8814] transition-all flex items-center justify-center gap-1 font-semibold text-[9px] sm:text-[10px] flex-shrink-0"
                   >
-                    <FaEye size={10} className="text-white" /> Ver ({insurer.contacts.length})
+                    <FaEye size={9} className="text-white sm:hidden" />
+                    <FaEye size={10} className="text-white hidden sm:block" /> Ver ({insurer.contacts.length})
                   </button>
                 </div>
               </div>

@@ -1440,17 +1440,28 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
 
             {/* Layout responsive: columna en mobile, fila en desktop */}
             <div className="flex flex-col lg:flex-row lg:items-center gap-3 lg:gap-4">
-              {/* Checkbox Seleccionar Todos */}
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <input
-                  type="checkbox"
-                  checked={selectedIds.size === filteredPayments.length && filteredPayments.length > 0}
-                  onChange={selectAll}
-                  className="w-5 h-5 text-[#8AAA19] rounded focus:ring-[#8AAA19]"
-                />
-                <span className="text-sm font-medium text-gray-700">
-                  Seleccionar todos{searchTerm ? ' (filtrados)' : ''}
-                </span>
+              {/* Checkbox y Botón Agrupado juntos en mobile */}
+              <div className="flex items-center gap-2 lg:gap-3">
+                {/* Checkbox Seleccionar Todos */}
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.size === filteredPayments.length && filteredPayments.length > 0}
+                    onChange={selectAll}
+                    className="w-5 h-5 text-[#8AAA19] rounded focus:ring-[#8AAA19]"
+                  />
+                  <span className="text-sm font-medium text-gray-700">
+                    Seleccionar todos{searchTerm ? ' (filtrados)' : ''}
+                  </span>
+                </div>
+
+                {/* Botón de agrupación - más pequeño en mobile */}
+                <button
+                  onClick={() => setGroupByReference(!groupByReference)}
+                  className="px-2 py-1.5 lg:px-4 lg:py-2 text-xs lg:text-sm font-medium text-gray-700 bg-white border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition flex items-center justify-center gap-1 lg:gap-2 flex-shrink-0 whitespace-nowrap"
+                >
+                  {groupByReference ? '📊 Agrupado' : '📄 Simple'}
+                </button>
               </div>
 
               {/* Buscador - Desktop (centro) */}
@@ -1474,14 +1485,6 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
                   )}
                 </div>
               </div>
-
-              {/* Botón de agrupación */}
-              <button
-                onClick={() => setGroupByReference(!groupByReference)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition flex items-center justify-center gap-2 flex-shrink-0"
-              >
-                {groupByReference ? '📊 Agrupado' : '📄 Lista Simple'}
-              </button>
             </div>
 
             {/* Indicador de resultados de búsqueda */}
@@ -1876,25 +1879,17 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
                         className="w-5 h-5 text-[#8AAA19] rounded focus:ring-[#8AAA19] mt-1 flex-shrink-0"
                       />
                       <div className="flex-1 min-w-0">
-                        {/* Layout móvil: Vertical */}
-                        <div className="md:hidden space-y-3">
-                          <div>
-                            <h3 className="font-bold text-base text-[#010139] break-words leading-tight">{payment.client_name}</h3>
-                            {payment.policy_number && (
-                              <p className="text-xs text-gray-600 break-words mt-1">Póliza: {payment.policy_number}</p>
-                            )}
-                            {payment.insurer_name && (
-                              <p className="text-xs text-gray-600 break-words">{payment.insurer_name}</p>
-                            )}
-                          </div>
+                        {/* Layout móvil: Vertical - MONTO PRIORIZADO */}
+                        <div className="md:hidden space-y-2">
+                          {/* Monto prominente arriba */}
                           <div className="flex items-center justify-between">
                             <div>
-                              <div className="text-xl font-bold text-[#8AAA19]">
+                              <div className="text-2xl font-bold text-[#8AAA19]">
                                 ${parseFloat(payment.amount_to_pay).toFixed(2)}
                               </div>
-                              <div className="text-xs text-gray-500">A pagar</div>
+                              <div className="text-xs text-gray-500 font-medium">A pagar</div>
                             </div>
-                            <div className="flex gap-2">
+                            <div className="flex gap-1.5">
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -1916,6 +1911,16 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
                                 <FaTrash size={14} />
                               </button>
                             </div>
+                          </div>
+                          {/* Cliente y detalles abajo más compactos */}
+                          <div>
+                            <h3 className="font-semibold text-sm text-[#010139] break-words leading-tight">{payment.client_name}</h3>
+                            {payment.policy_number && (
+                              <p className="text-xs text-gray-500 break-words mt-0.5">Póliza: {payment.policy_number}</p>
+                            )}
+                            {payment.insurer_name && (
+                              <p className="text-xs text-gray-500 break-words">{payment.insurer_name}</p>
+                            )}
                           </div>
                         </div>
                         
@@ -2018,7 +2023,37 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
                     <div className="flex items-center justify-between">
                       <StatusBadge payment={payment} />
                       <div className="text-xs text-gray-500">
-                        {new Date(payment.created_at).toLocaleDateString('es-PA')}
+                        {(() => {
+                          // Determinar qué fecha mostrar según el tipo de pago
+                          const isDescuentoCorredor = isDescuentoACorredor(payment);
+                          
+                          if (isDescuentoCorredor) {
+                            // Es descuento a corredor
+                            if (payment.can_be_paid) {
+                              // Ya fue conciliado, buscar fecha de descuento en advance_logs
+                              try {
+                                const metadata = typeof payment.notes === 'string' ? JSON.parse(payment.notes) : payment.notes;
+                                const advanceId = metadata?.advance_id;
+                                // Si tenemos acceso a advance_logs aquí, usaríamos esa fecha
+                                // Por ahora, usar created_at como fallback
+                                return `Descontado: ${new Date(payment.created_at).toLocaleDateString('es-PA')}`;
+                              } catch (e) {
+                                return `Descontado: ${new Date(payment.created_at).toLocaleDateString('es-PA')}`;
+                              }
+                            } else {
+                              // Aún no conciliado, mostrar fecha de creación
+                              return `Creado: ${new Date(payment.created_at).toLocaleDateString('es-PA')}`;
+                            }
+                          } else {
+                            // Es transferencia normal, buscar fecha de la transferencia
+                            const refs = payment.payment_references || [];
+                            if (refs.length > 0 && refs[0].bank_transfer) {
+                              return `Transferencia: ${new Date(refs[0].bank_transfer.transfer_date).toLocaleDateString('es-PA')}`;
+                            }
+                            // Fallback: fecha de creación
+                            return `Creado: ${new Date(payment.created_at).toLocaleDateString('es-PA')}`;
+                          }
+                        })()}
                       </div>
                     </div>
                   </div>

@@ -827,11 +827,11 @@ export async function getFinanceData() {
   
   const pending = (pendingPayments || []).reduce((sum, p) => sum + toNumber(p.amount_to_pay), 0);
   
-  // 4. Devoluciones: pending_payments tipo 'devolution' con status='paid'
+  // 4. Devoluciones: pending_payments tipo 'devolucion' con status='paid'
   const { data: devolutions } = await adminClient
     .from('pending_payments')
     .select('amount_to_pay')
-    .eq('purpose', 'devolution')
+    .eq('purpose', 'devolucion')
     .eq('status', 'paid');
   
   const returned = (devolutions || []).reduce((sum, d) => sum + toNumber(d.amount_to_pay), 0);
