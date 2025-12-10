@@ -413,22 +413,104 @@ export async function importAssaCodes(insurerId: string, csvContent: string) {
 export interface PreviewMappingOptions {
   targetField: string; // 'COMMISSIONS' o 'DELINQUENCY' o cualquier otro campo
   insurerId: string;
-  fileContent: string;
+  fileBuffer: ArrayBuffer;
+  fileName: string;
 }
 
 export async function previewMapping(options: PreviewMappingOptions) {
-  const { targetField, insurerId, fileContent } = options;
+  const { targetField, insurerId, fileBuffer, fileName } = options;
   
   // Obtener reglas de mapeo para el campo objetivo
   const rules = await listMappingRules(insurerId, targetField);
   
-  // Parsear primera línea del archivo como headers
-  const lines = fileContent.split('\n').filter(line => line.trim());
-  if (lines.length === 0) {
-    return { success: false, error: 'Archivo vacío' };
+  // Parsear el archivo según su tipo
+  let headers: string[] = [];
+  let dataRows: any[] = [];
+  
+  try {
+    const fileExtension = fileName.toLowerCase().split('.').pop();
+    
+    if (fileExtension === 'csv') {
+      // Parsear CSV
+      const textDecoder = new TextDecoder('utf-8');
+      const fileContent = textDecoder.decode(fileBuffer);
+      const lines = fileContent.split('\n').filter(line => line.trim());
+      
+      if (lines.length === 0) {
+        return { success: false, error: 'Archivo CSV vacío' };
+      }
+      
+      headers = lines[0]?.split(',').map(h => h.trim()) || [];
+      
+      // Parsear primeras 5 filas de datos
+      for (let i = 1; i < Math.min(6, lines.length); i++) {
+        const line = lines[i];
+        if (!line) continue;
+        const values = line.split(',').map(v => v.trim());
+        const row: any = {};
+        headers.forEach((header, idx) => {
+          row[header] = values[idx] || '';
+        });
+        dataRows.push(row);
+      }
+      
+    } else if (fileExtension === 'xlsx' || fileExtension === 'xls') {
+      // Parsear Excel usando xlsx
+      const XLSX = await import('xlsx');
+      const workbook = XLSX.read(fileBuffer, { type: 'array' });
+      
+      // Tomar la primera hoja
+      const firstSheetName = workbook.SheetNames[0];
+      if (!firstSheetName) {
+        return { success: false, error: 'El archivo Excel no tiene hojas' };
+      }
+      
+      const worksheet = workbook.Sheets[firstSheetName];
+      if (!worksheet) {
+        return { success: false, error: 'No se pudo leer la hoja de Excel' };
+      }
+      
+      // Convertir a JSON (array de objetos)
+      const jsonData: any[] = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+      
+      if (jsonData.length === 0) {
+        return { success: false, error: 'La hoja de Excel está vacía' };
+      }
+      
+      // Primera fila son los headers
+      headers = (jsonData[0] as any[]).map(h => String(h || '').trim());
+      
+      // Parsear primeras 5 filas de datos (saltando el header)
+      for (let i = 1; i < Math.min(6, jsonData.length); i++) {
+        const rowArray = jsonData[i] as any[];
+        const row: any = {};
+        headers.forEach((header, idx) => {
+          row[header] = rowArray[idx] !== undefined ? String(rowArray[idx]) : '';
+        });
+        dataRows.push(row);
+      }
+      
+    } else {
+      return { 
+        success: false, 
+        error: `Formato de archivo no soportado: ${fileExtension}. Use .csv, .xlsx o .xls` 
+      };
+    }
+    
+    if (headers.length === 0) {
+      return { success: false, error: 'No se pudieron detectar columnas en el archivo' };
+    }
+    
+  } catch (error) {
+    console.error('Error parsing file:', error);
+    return { 
+      success: false, 
+      error: `Error al parsear el archivo: ${error instanceof Error ? error.message : 'Error desconocido'}` 
+    };
   }
   
-  const headers = lines[0]?.split(',').map(h => h.trim().toLowerCase()) || [];
+  // Normalizar headers a lowercase para comparación
+  const headersLower = headers.map(h => h.toLowerCase());
   
   // Crear mapa de aliases -> target_field
   const aliasMap = new Map<string, string>();
@@ -444,7 +526,19 @@ export async function previewMapping(options: PreviewMappingOptions) {
   }
   
   // Mapear headers originales a campos objetivo
-  const normalizedHeaders = headers.map(h => aliasMap.get(h) || h);
+  const normalizedHeaders = headersLower.map(h => aliasMap.get(h) || h);
+  
+  // Crear filas normalizadas (usando headers normalizados como keys)
+  const previewRows = dataRows.map(row => {
+    const normalizedRow: any = {};
+    headers.forEach((originalHeader, idx) => {
+      const normalizedHeader = normalizedHeaders[idx];
+      if (normalizedHeader) {
+        normalizedRow[normalizedHeader] = row[originalHeader];
+      }
+    });
+    return normalizedRow;
+  });
   
   // Verificar campos requeridos según el tipo
   const requiredFields = targetField === 'COMMISSIONS' 
@@ -471,7 +565,7 @@ export async function previewMapping(options: PreviewMappingOptions) {
     success: true,
     originalHeaders: headers,
     normalizedHeaders,
+    previewRows, // Filas con datos parseados
     rules,
-    preview: lines.slice(0, 5), // Primeras 5 líneas como preview
   };
 }
