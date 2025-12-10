@@ -107,33 +107,36 @@ export function AddAdvanceModal({ isOpen, onClose, onSuccess, brokers }: Props) 
   return (
     <>
       <div 
-        className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9999] p-4 overflow-y-auto"
+        className="fixed inset-0 bg-black bg-opacity-50 z-[9999] overflow-y-auto"
         onClick={(e) => {
           if (e.target === e.currentTarget) onClose();
         }}
+        style={{ minHeight: '100vh' }}
       >
-        <div 
-          className="bg-white rounded-2xl max-w-[500px] w-full my-8 shadow-2xl flex flex-col max-h-[90vh]"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* Header */}
-          <div className="bg-gradient-to-r from-[#010139] to-[#020270] text-white p-6 flex items-center justify-between rounded-t-2xl flex-shrink-0">
-            <div>
-              <h2 className="text-2xl font-bold">
-                <FaMoneyBillWave className="inline mr-2" />
-                Nuevo Adelanto
-              </h2>
-              <p className="text-white/80 text-sm mt-1">
-                Registra un adelanto de comisión para un corredor
-              </p>
+        <div className="min-h-screen flex items-center justify-center p-4">
+          <div 
+            className="bg-white rounded-2xl max-w-[500px] w-full my-8 shadow-2xl flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxHeight: '90vh' }}
+          >
+            {/* Header */}
+            <div className="bg-gradient-to-r from-[#010139] to-[#020270] text-white p-6 flex items-center justify-between rounded-t-2xl flex-shrink-0">
+              <div>
+                <h2 className="text-2xl font-bold">
+                  <FaMoneyBillWave className="inline mr-2" />
+                  Nuevo Adelanto
+                </h2>
+                <p className="text-white/80 text-sm mt-1">
+                  Registra un adelanto de comisión para un corredor
+                </p>
+              </div>
+              <button onClick={onClose} className="text-white hover:text-gray-200 transition" type="button">
+                <FaTimes size={24} />
+              </button>
             </div>
-            <button onClick={onClose} className="text-white hover:text-gray-200 transition" type="button">
-              <FaTimes size={24} />
-            </button>
-          </div>
 
-          {/* Content */}
-          <div className="p-6 overflow-y-auto flex-1">
+            {/* Content */}
+            <div className="p-6 overflow-y-auto flex-1" style={{ maxHeight: 'calc(90vh - 180px)' }}>
             <Form {...form}>
               <form id="advance-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             {/* Corredor */}
@@ -381,6 +384,7 @@ export function AddAdvanceModal({ isOpen, onClose, onSuccess, brokers }: Props) 
                 </>
               )}
             </button>
+          </div>
           </div>
         </div>
       </div>
