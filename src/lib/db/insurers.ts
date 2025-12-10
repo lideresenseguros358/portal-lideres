@@ -509,24 +509,48 @@ export async function previewMapping(options: PreviewMappingOptions) {
     };
   }
   
-  // Normalizar headers a lowercase para comparación
-  const headersLower = headers.map(h => h.toLowerCase());
+  // Función para normalizar strings (elimina acentos, espacios extra, lowercase)
+  const normalizeString = (str: string): string => {
+    return str
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '') // Eliminar acentos
+      .trim()
+      .replace(/\s+/g, ' '); // Normalizar espacios
+  };
+  
+  console.log('[PREVIEW] Headers originales:', headers);
+  console.log('[PREVIEW] Reglas de mapeo:', rules.map(r => ({
+    target: r.target_field,
+    aliases: r.aliases
+  })));
+  
+  // Normalizar headers para comparación
+  const headersNormalized = headers.map(h => normalizeString(h));
   
   // Crear mapa de aliases -> target_field
   const aliasMap = new Map<string, string>();
   for (const rule of rules) {
-    aliasMap.set(rule.target_field.toLowerCase(), rule.target_field);
+    // Agregar el target_field mismo como alias
+    aliasMap.set(normalizeString(rule.target_field), rule.target_field);
     
+    // Agregar todos los aliases
     const aliases = Array.isArray(rule.aliases) ? rule.aliases : [];
     for (const alias of aliases) {
-      if (typeof alias === 'string') {
-        aliasMap.set(alias.toLowerCase(), rule.target_field);
+      if (typeof alias === 'string' && alias.trim()) {
+        aliasMap.set(normalizeString(alias), rule.target_field);
       }
     }
   }
   
+  console.log('[PREVIEW] Alias map:', Array.from(aliasMap.entries()));
+  
   // Mapear headers originales a campos objetivo
-  const normalizedHeaders = headersLower.map(h => aliasMap.get(h) || h);
+  const normalizedHeaders = headersNormalized.map((h, idx) => {
+    const mapped = aliasMap.get(h);
+    console.log(`[PREVIEW] Mapping "${headers[idx]}" (normalized: "${h}") -> ${mapped || 'NO MATCH'}`);
+    return mapped || h;
+  });
   
   // Crear filas normalizadas (usando headers normalizados como keys)
   const previewRows = dataRows.map(row => {
@@ -552,9 +576,13 @@ export async function previewMapping(options: PreviewMappingOptions) {
   );
   
   if (missingFields.length > 0) {
+    console.log('[PREVIEW] Normalized headers:', normalizedHeaders);
+    console.log('[PREVIEW] Required fields:', requiredFields);
+    console.log('[PREVIEW] Missing fields:', missingFields);
+    
     return {
       success: false,
-      error: `Campos requeridos faltantes: ${missingFields.join(', ')}`,
+      error: `Campos requeridos faltantes: ${missingFields.join(', ')}\nColumnas detectadas: ${headers.join(', ')}\nColumnas normalizadas: ${normalizedHeaders.join(', ')}`,
       originalHeaders: headers,
       normalizedHeaders,
       rules,
