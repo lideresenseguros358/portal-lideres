@@ -77,10 +77,6 @@ async function extractTextFromImage(imageBuffer: Buffer): Promise<string> {
  * Flujo: Intenta texto nativo primero, luego iLovePDF si falla
  */
 async function extractTextFromPDF(pdfBuffer: Buffer): Promise<string> {
-  // USAR UNPDF - Librería moderna sin workers, diseñada para Node.js
-  console.log('[PDF-UNPDF] 🚀 Extrayendo texto con unpdf...');
-  console.log(`[PDF-UNPDF] Tamaño del PDF: ${pdfBuffer.length} bytes`);
-  
   try {
     const { extractText } = await import('unpdf');
     
@@ -89,26 +85,18 @@ async function extractTextFromPDF(pdfBuffer: Buffer): Promise<string> {
     
     // Extraer texto del PDF
     const result = await extractText(uint8Array);
-    const { text, totalPages } = result;
-    
-    console.log(`[PDF-UNPDF] 📄 PDF tiene ${totalPages} página(s)`);
+    const { text } = result;
     
     // text es un array de strings (uno por página), unirlos
     const fullText = Array.isArray(text) ? text.join('\n') : String(text);
-    
-    console.log(`[PDF-UNPDF] 📝 Texto extraído: ${fullText.length} caracteres`);
     
     if (!fullText || fullText.trim().length === 0) {
       throw new Error('El PDF no contiene texto extraíble');
     }
     
-    console.log(`[PDF-UNPDF] ✅ ÉXITO - Texto extraído: ${fullText.length} caracteres`);
-    console.log(`[PDF-UNPDF] Primeras 500 caracteres:\n${fullText.substring(0, 500)}`);
-    
     return fullText;
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : 'Error desconocido';
-    console.error('[PDF-NATIVO] ❌ ERROR:', errorMsg);
     
     throw new Error(
       'No se pudo extraer texto del PDF.\n\n' +
@@ -126,16 +114,11 @@ async function extractTextFromPDF(pdfBuffer: Buffer): Promise<string> {
  * PARSER ESPECÍFICO PARA FORMATO ANCON
  */
 function structureTextToTable(text: string): any[][] {
-  console.log('[PARSER-ANCON] Iniciando parseo de formato ANCON...');
-  
   const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
   
   if (lines.length === 0) {
-    console.log('[PARSER-ANCON] ⚠️ No hay líneas para procesar');
     return [];
   }
-  
-  console.log(`[PARSER-ANCON] Procesando ${lines.length} líneas de texto`);
   
   const rows: any[][] = [];
   
@@ -146,13 +129,11 @@ function structureTextToTable(text: string): any[][] {
   for (const line of lines) {
     // Saltar headers repetidos
     if (line.includes('Póliza') && line.includes('Asegurado') && line.includes('Comisión')) {
-      console.log('[PARSER-ANCON] ⏭️ Saltando header');
       continue;
     }
     
     // Saltar líneas de totales
     if (line.includes('Total por Corredor')) {
-      console.log('[PARSER-ANCON] ⏭️ Saltando línea de total');
       continue;
     }
     
@@ -200,22 +181,11 @@ function structureTextToTable(text: string): any[][] {
     }
   }
   
-  console.log(`[PARSER-ANCON] ✅ Extraídas ${rows.length} filas de datos`);
-  
   // Agregar header
   const finalRows = [
     ['Póliza', 'Asegurado', 'Comisión'], // Header
     ...rows
   ];
-  
-  // Log de muestra
-  if (rows.length > 0) {
-    console.log(`[PARSER-ANCON] Primera fila de datos: ${rows[0]?.join(' | ')}`);
-    if (rows.length > 1) {
-      console.log(`[PARSER-ANCON] Segunda fila de datos: ${rows[1]?.join(' | ')}`);
-    }
-    console.log(`[PARSER-ANCON] Última fila de datos: ${rows[rows.length - 1]?.join(' | ')}`);
-  }
   
   return finalRows;
 }
