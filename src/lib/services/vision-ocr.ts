@@ -73,123 +73,42 @@ async function extractTextFromImage(imageBuffer: Buffer): Promise<string> {
 }
 
 /**
- * Extrae texto de un PDF usando iLovePDF (OCR + Extract to CSV)
- * Flujo: PDF → OCR → CSV estructurado → Texto limpio
+ * Extrae texto de un PDF usando estrategia de fallback
+ * Flujo: Intenta texto nativo primero, luego iLovePDF si falla
  */
 async function extractTextFromPDF(pdfBuffer: Buffer): Promise<string> {
-  // ESTRATEGIA 1: Intentar primero con texto nativo (más rápido y confiable)
+  // USAR SOLO PDF-PARSE (texto nativo) - MÁS RÁPIDO Y CONFIABLE
+  console.log('[PDF-NATIVO] 🚀 Extrayendo texto nativo del PDF con pdf-parse...');
+  console.log(`[PDF-NATIVO] Tamaño del PDF: ${pdfBuffer.length} bytes`);
+  
   try {
-    console.log('[PDF-Parse] Intentando extraer texto nativo del PDF...');
     const pdfParseModule = await import('pdf-parse');
     const pdfParse = pdfParseModule.default || pdfParseModule;
     
     const pdfData = await (pdfParse as any)(pdfBuffer);
     
-    if (pdfData.text && pdfData.text.trim().length > 100) {
-      console.log(`[PDF-Parse] ✅ Texto nativo encontrado: ${pdfData.text.length} caracteres`);
-      console.log(`[PDF-Parse] Primeras 300 caracteres:\n${pdfData.text.substring(0, 300)}`);
-      return pdfData.text;
+    console.log(`[PDF-NATIVO] 📄 PDF tiene ${pdfData.numpages} página(s)`);
+    console.log(`[PDF-NATIVO] 📝 Texto extraído: ${pdfData.text?.length || 0} caracteres`);
+    
+    if (!pdfData.text || pdfData.text.trim().length === 0) {
+      throw new Error('El PDF no contiene texto nativo extraíble');
     }
     
-    console.log('[PDF-Parse] ⚠️ Texto nativo insuficiente, intentando con iLovePDF...');
-  } catch (err) {
-    console.log('[PDF-Parse] ⚠️ Error en extracción nativa, intentando con iLovePDF...');
-  }
-  
-  // ESTRATEGIA 2: Si no hay texto nativo, usar iLovePDF OCR + Extract
-  try {
-    console.log('[PDF→CSV] Procesando PDF: OCR + Extracción a CSV...');
-    console.log(`[PDF→CSV] Tamaño del PDF: ${pdfBuffer.length} bytes`);
+    console.log(`[PDF-NATIVO] ✅ ÉXITO - Texto extraído: ${pdfData.text.length} caracteres`);
+    console.log(`[PDF-NATIVO] Primeras 500 caracteres:\n${pdfData.text.substring(0, 500)}`);
     
-    // Importar servicio de iLovePDF
-    const { convertPDFToExcel } = await import('./ilovepdf-converter');
-    
-    // Procesar: PDF → OCR → CSV (2 pasos automáticos)
-    const csvBuffer = await convertPDFToExcel(pdfBuffer);
-    console.log(`[PDF→CSV] ✅ CSV generado: ${csvBuffer.length} bytes`);
-    
-    // Convertir CSV a texto
-    const csvText = csvBuffer.toString('utf-8');
-    console.log(`[PDF→CSV] CSV contiene ${csvText.length} caracteres`);
-    
-    // Parsear CSV: PageNo,XPos,YPos,Width,FontName,FontSize,Length,Text
-    const lines = csvText.split('\n');
-    console.log(`[PDF→CSV] CSV tiene ${lines.length} líneas`);
-    
-    if (lines.length < 2) {
-      throw new Error('El CSV generado está vacío o no contiene datos');
-    }
-    
-    // Saltar header y extraer solo la columna "Text" (última columna)
-    const textLines: string[] = [];
-    
-    for (let i = 1; i < lines.length; i++) {
-      const line = lines[i]?.trim();
-      if (!line) continue;
-      
-      // CSV format: PageNo,XPos,YPos,Width,FontName,FontSize,Length,Text
-      // La última columna es el texto
-      const parts = line.split(',');
-      if (parts.length >= 8) {
-        // El texto está en la última posición (puede contener comas)
-        // Unir todo desde la posición 7 en adelante
-        const text = parts.slice(7).join(',').trim();
-        if (text && text !== '""' && text !== '') {
-          // Remover comillas si las tiene
-          const cleanText = text.replace(/^"(.*)"$/, '$1');
-          textLines.push(cleanText);
-        }
-      }
-    }
-    
-    if (textLines.length === 0) {
-      throw new Error(
-        'No se pudo extraer texto del PDF con OCR.\n\n' +
-        'El PDF podría estar vacío o el OCR no pudo detectar texto.\n' +
-        'Por favor:\n\n' +
-        '1️⃣ Verifique que el PDF contenga texto o imágenes legibles\n' +
-        '2️⃣ Intente exportar a Excel (.xlsx) desde su aplicación original'
-      );
-    }
-    
-    // Unir todas las líneas de texto
-    const extractedText = textLines.join('\n');
-    
-    console.log(`[PDF→CSV] ✅ Texto extraído: ${extractedText.length} caracteres`);
-    console.log(`[PDF→CSV] Total de líneas de texto: ${textLines.length}`);
-    console.log(`[PDF→CSV] Primeras 300 caracteres:\n${extractedText.substring(0, 300)}`);
-    
-    return extractedText;
-    
+    return pdfData.text;
   } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
-    console.error('[PDF→CSV] ❌ Error:', errorMessage);
+    const errorMsg = error instanceof Error ? error.message : 'Error desconocido';
+    console.error('[PDF-NATIVO] ❌ ERROR:', errorMsg);
     
-    // Si el error es de credenciales de iLovePDF, re-lanzarlo directamente
-    if (errorMessage.includes('iLovePDF API no está configurada') || 
-        errorMessage.includes('Credenciales de iLovePDF inválidas')) {
-      throw error;
-    }
-    
-    // Si es límite alcanzado, dar mensaje específico
-    if (errorMessage.includes('Límite de conversiones alcanzado')) {
-      throw error;
-    }
-    
-    // Si ya es nuestro mensaje, re-lanzarlo
-    if (errorMessage.includes('No se pudo extraer texto del PDF')) {
-      throw error;
-    }
-    
-    // Para otros errores, dar mensaje genérico
     throw new Error(
-      'Error al extraer texto del PDF.\n\n' +
-      'El sistema intentó extraer el texto automáticamente pero falló.\n' +
-      'Por favor intente:\n\n' +
-      '1️⃣ Exportar el PDF a Excel (.xlsx) manualmente desde su aplicación\n' +
-      '2️⃣ Verificar que el PDF no esté corrupto o protegido con contraseña\n' +
-      '3️⃣ Asegurarse que el PDF contenga texto legible\n\n' +
-      `Detalle técnico: ${errorMessage}`
+      'No se pudo extraer texto del PDF.\n\n' +
+      'El PDF podría no tener texto extraíble (puede ser un escaneo).\n' +
+      'Por favor:\n\n' +
+      '1️⃣ Exportar el PDF a Excel (.xlsx) manualmente\n' +
+      '2️⃣ Verificar que el PDF contenga texto seleccionable\n\n' +
+      `Detalle técnico: ${errorMsg}`
     );
   }
 }
