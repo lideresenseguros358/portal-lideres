@@ -73,97 +73,143 @@ async function extractTextFromImage(imageBuffer: Buffer): Promise<string> {
 }
 
 /**
- * Extrae texto de un PDF usando Google Cloud Vision OCR
- * Usa Document AI Text Detection que soporta PDFs directamente
+ * Extrae texto de un PDF - Estrategia híbrida
+ * 1. Intenta extraer texto nativo del PDF con pdf-parse
+ * 2. Si falla o no hay texto, es un PDF escaneado y necesita conversión manual
  */
 async function extractTextFromPDF(pdfBuffer: Buffer): Promise<string> {
   try {
-    console.log('[OCR] Procesando PDF con Google Cloud Vision Document AI');
+    console.log('[OCR] Intentando extraer texto nativo del PDF...');
+    console.log(`[OCR] Tamaño del PDF: ${pdfBuffer.length} bytes`);
     
-    const client = getVisionClient();
+    // Intentar extraer texto nativo con pdf-parse
+    const pdfParseModule = await import('pdf-parse');
+    const pdfParse = pdfParseModule.default || pdfParseModule;
     
-    // Google Cloud Vision soporta PDFs directamente con documentTextDetection
-    // Convertir buffer a base64
-    const base64PDF = pdfBuffer.toString('base64');
+    const data = await (pdfParse as any)(pdfBuffer);
     
-    console.log('[OCR] Enviando PDF a Google Vision API...');
+    console.log(`[OCR] PDF tiene ${data.numpages} página(s)`);
+    console.log(`[OCR] Texto extraído: ${data.text?.length || 0} caracteres`);
     
-    const [result] = await client.documentTextDetection({
-      image: {
-        content: base64PDF
-      },
-      imageContext: {
-        languageHints: ['es', 'en'] // Español e Inglés
-      }
-    });
-    
-    const fullTextAnnotation = result.fullTextAnnotation;
-    
-    if (!fullTextAnnotation || !fullTextAnnotation.text) {
-      throw new Error('No se pudo extraer texto del PDF. Verifique que el documento contenga texto legible.');
+    if (data.text && data.text.trim().length > 100) {
+      // Hay suficiente texto, usarlo
+      console.log('[OCR] ✅ Texto nativo extraído del PDF exitosamente');
+      console.log(`[OCR] Primeras 200 caracteres: ${data.text.substring(0, 200)}`);
+      return data.text;
     }
     
-    const extractedText = fullTextAnnotation.text;
-    console.log(`[OCR] PDF procesado exitosamente: ${extractedText.length} caracteres extraídos`);
+    // Si llegamos aquí, el PDF no tiene texto nativo suficiente
+    // Es probablemente un PDF escaneado o imagen
+    console.log('[OCR] ⚠️ PDF no contiene texto nativo suficiente (PDF escaneado)');
     
-    return extractedText;
+    throw new Error(
+      'Este PDF es una imagen escaneada y requiere procesamiento especial.\n\n' +
+      '📋 OPCIONES PARA PROCESAR ESTE ARCHIVO:\n\n' +
+      '1️⃣ RECOMENDADO: Exportar a Excel desde el sistema origen:\n' +
+      '   • Abrir el PDF en su aplicación\n' +
+      '   • Archivo → Exportar → Microsoft Excel (.xlsx)\n' +
+      '   • Subir el archivo .xlsx al sistema\n\n' +
+      '2️⃣ Convertir PDF a imágenes individuales:\n' +
+      '   • Usar: https://pdf2png.com/\n' +
+      '   • Subir cada página como imagen (JPG/PNG)\n' +
+      '   • El sistema procesará las imágenes con OCR\n\n' +
+      '3️⃣ Usar herramienta de conversión PDF → Excel:\n' +
+      '   • https://www.adobe.com/acrobat/online/pdf-to-excel.html\n' +
+      '   • https://www.ilovepdf.com/pdf_to_excel\n\n' +
+      '💡 La opción 1 es la más precisa y rápida.'
+    );
     
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
     console.error('[OCR] Error al procesar PDF:', errorMessage);
     
-    // Si Google Vision no puede procesar el PDF directamente, sugerir alternativa
-    if (errorMessage.includes('Invalid image') || errorMessage.includes('not supported')) {
-      throw new Error('Este PDF no puede ser procesado directamente. Por favor: 1) Exporte el PDF a Excel desde su aplicación, o 2) Convierta el PDF a imágenes (JPG/PNG) y suba las imágenes.');
+    // Si el error ya es nuestro mensaje personalizado, re-lanzarlo
+    if (errorMessage.includes('OPCIONES PARA PROCESAR')) {
+      throw error;
     }
     
-    throw new Error('Error al procesar PDF con OCR: ' + errorMessage);
+    // Otros errores
+    throw new Error(
+      'Error al procesar PDF.\n\n' +
+      'Este archivo no puede ser procesado automáticamente. Por favor:\n' +
+      '1) Exporte el PDF a Excel (.xlsx) desde su sistema origen, o\n' +
+      '2) Convierta el PDF a imágenes (JPG/PNG) y suba las imágenes.\n\n' +
+      `Detalle técnico: ${errorMessage}`
+    );
   }
 }
 
 /**
  * Estructura el texto extraído en formato tabular
- * Intenta detectar filas y columnas basándose en el formato del texto
+ * Optimizado para reportes de seguros con múltiples columnas
  */
 function structureTextToTable(text: string): any[][] {
-  // Dividir en líneas
-  const lines = text.split('\n').filter(line => line.trim());
+  // Dividir en líneas y limpiar
+  const lines = text.split('\n')
+    .map(line => line.trim())
+    .filter(line => line.length > 0);
   
   if (lines.length === 0) {
     return [];
   }
   
-  // Estrategia 1: Detectar si hay delimitadores claros (tabs, múltiples espacios, pipes, etc.)
+  console.log(`[PARSER] Procesando ${lines.length} líneas de texto`);
+  
+  // Detectar si hay delimitadores explícitos
   const hasTabs = lines.some(line => line.includes('\t'));
   const hasPipes = lines.some(line => line.includes('|'));
   
   let rows: any[][] = [];
   
   if (hasTabs) {
-    // Separar por tabs
+    console.log('[PARSER] Detectado delimitador: TAB');
     rows = lines.map(line => line.split('\t').map(cell => cell.trim()).filter(cell => cell));
   } else if (hasPipes) {
-    // Separar por pipes (tablas markdown o similares)
+    console.log('[PARSER] Detectado delimitador: PIPE');
     rows = lines
       .filter(line => !line.match(/^[\s\-|]+$/)) // Filtrar líneas separadoras
       .map(line => line.split('|').map(cell => cell.trim()).filter(cell => cell));
   } else {
-    // Estrategia 2: Detectar columnas por espaciado consistente
-    // Intentar detectar múltiples espacios consecutivos como separadores
+    // Detectar columnas por espaciado múltiple (2+ espacios)
     const multiSpaceRegex = /\s{2,}/;
     
     if (lines.some(line => multiSpaceRegex.test(line))) {
+      console.log('[PARSER] Detectado delimitador: ESPACIOS MÚLTIPLES');
       rows = lines.map(line => 
         line.split(multiSpaceRegex).map(cell => cell.trim()).filter(cell => cell)
       );
     } else {
-      // Estrategia 3: Cada línea es una celda en una sola columna
-      rows = lines.map(line => [line.trim()]);
+      console.log('[PARSER] Sin delimitador claro, usando espacio simple');
+      // Para reportes con columnas muy ajustadas, separar por espacio simple
+      // pero intentar mantener números y texto juntos
+      rows = lines.map(line => {
+        // Dividir por espacios pero mantener grupos de dígitos con puntos/comas
+        const parts = line.split(/\s+/).filter(part => part.length > 0);
+        return parts;
+      });
     }
   }
   
+  // Filtrar filas que parecen ser headers o footers no deseados
+  rows = rows.filter(row => {
+    const rowText = row.join(' ').toLowerCase();
+    // No filtrar si la fila tiene información de seguros
+    if (rowText.includes('polic') || rowText.includes('asegurad') || 
+        rowText.includes('prima') || rowText.includes('comis')) {
+      return true;
+    }
+    // Filtrar filas con muy pocas celdas (probablemente headers genéricos)
+    if (row.length < 2) {
+      return false;
+    }
+    return true;
+  });
+  
   // Normalizar: asegurar que todas las filas tengan el mismo número de columnas
-  const maxCols = Math.max(...rows.map(row => row.length));
+  const maxCols = Math.max(...rows.map(row => row.length), 0);
+  
+  console.log(`[PARSER] Detectadas ${maxCols} columnas`);
+  console.log(`[PARSER] Total de filas: ${rows.length}`);
   
   if (maxCols > 1) {
     rows = rows.map(row => {
@@ -172,6 +218,14 @@ function structureTextToTable(text: string): any[][] {
       }
       return row;
     });
+  }
+  
+  // Log de muestra
+  if (rows.length > 0 && rows[0]) {
+    console.log(`[PARSER] Primera fila (headers): ${rows[0].join(' | ')}`);
+    if (rows.length > 1 && rows[1]) {
+      console.log(`[PARSER] Segunda fila (datos): ${rows[1].join(' | ')}`);
+    }
   }
   
   return rows;
