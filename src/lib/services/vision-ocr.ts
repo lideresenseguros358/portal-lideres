@@ -77,6 +77,26 @@ async function extractTextFromImage(imageBuffer: Buffer): Promise<string> {
  * Flujo: PDF → OCR → CSV estructurado → Texto limpio
  */
 async function extractTextFromPDF(pdfBuffer: Buffer): Promise<string> {
+  // ESTRATEGIA 1: Intentar primero con texto nativo (más rápido y confiable)
+  try {
+    console.log('[PDF-Parse] Intentando extraer texto nativo del PDF...');
+    const pdfParseModule = await import('pdf-parse');
+    const pdfParse = pdfParseModule.default || pdfParseModule;
+    
+    const pdfData = await (pdfParse as any)(pdfBuffer);
+    
+    if (pdfData.text && pdfData.text.trim().length > 100) {
+      console.log(`[PDF-Parse] ✅ Texto nativo encontrado: ${pdfData.text.length} caracteres`);
+      console.log(`[PDF-Parse] Primeras 300 caracteres:\n${pdfData.text.substring(0, 300)}`);
+      return pdfData.text;
+    }
+    
+    console.log('[PDF-Parse] ⚠️ Texto nativo insuficiente, intentando con iLovePDF...');
+  } catch (err) {
+    console.log('[PDF-Parse] ⚠️ Error en extracción nativa, intentando con iLovePDF...');
+  }
+  
+  // ESTRATEGIA 2: Si no hay texto nativo, usar iLovePDF OCR + Extract
   try {
     console.log('[PDF→CSV] Procesando PDF: OCR + Extracción a CSV...');
     console.log(`[PDF→CSV] Tamaño del PDF: ${pdfBuffer.length} bytes`);
