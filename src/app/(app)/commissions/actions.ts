@@ -125,7 +125,7 @@ export async function actionUploadImport(formData: FormData) {
     console.log('[SERVER] Invert negatives from insurer config:', invertNegatives);
     console.log('[SERVER] Use multi commission columns (ASSA):', useMultiColumns);
     
-    const rows = await parseCsvXlsx(processedFile, mappingRules || [], invertNegatives, useMultiColumns);
+    const rows = await parseCsvXlsx(processedFile, mappingRules || [], invertNegatives, useMultiColumns, parsed.insurer_id);
     console.log('[SERVER] Parsed rows:', rows.length);
     console.log('[SERVER] First 3 rows:', rows.slice(0, 3).map(r => ({
       policy: r.policy_number,

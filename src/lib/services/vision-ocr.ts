@@ -77,7 +77,14 @@ async function extractTextFromPDF(pdfBuffer: Buffer): Promise<string> {
     throw new Error('El PDF parece ser escaneado. Por favor, conviértalo a imágenes (JPG/PNG) y suba esas imágenes.');
     
   } catch (error) {
-    throw new Error('Error al procesar PDF: ' + (error instanceof Error ? error.message : 'Error desconocido'));
+    const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
+    
+    // Si es error de DOMMatrix, es porque pdf-parse necesita canvas en Node.js
+    if (errorMessage.includes('DOMMatrix')) {
+      throw new Error('OCR de PDF no disponible en este entorno. Por favor, exporte el PDF a Excel (.xlsx) desde su aplicación o convierta el PDF a imágenes (JPG/PNG).');
+    }
+    
+    throw new Error('Error al procesar PDF: ' + errorMessage);
   }
 }
 

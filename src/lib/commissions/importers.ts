@@ -2,6 +2,7 @@ import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import type { Tables, TablesInsert } from '@/lib/supabase/server';
 import type { ParsedRow } from './schemas';
 import * as XLSX from 'xlsx';
+import { previewMapping } from '@/lib/db/insurers';
 
 type CommImportRow = Tables<'comm_imports'>;
 type CommItemRow = Tables<'comm_items'>;
@@ -16,12 +17,55 @@ interface MappingRule {
 }
 
 /**
- * Parse XLSX file using xlsx library
+ * Parse XLSX file using previewMapping for consistent logic
  */
-async function parseXlsxFile(file: File, mappingRules: MappingRule[] = [], invertNegatives: boolean = false, useMultiColumns: boolean = false): Promise<ParsedRow[]> {
+async function parseXlsxFile(file: File, mappingRules: MappingRule[] = [], invertNegatives: boolean = false, useMultiColumns: boolean = false, insurerId?: string): Promise<ParsedRow[]> {
   console.log('[PARSER] Parsing XLSX file:', file.name);
   console.log('[PARSER] Using mapping rules:', mappingRules);
+  console.log('[PARSER] Insurer ID:', insurerId);
   
+  // Si tenemos insurerId, usar previewMapping para consistencia
+  if (insurerId) {
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      
+      const result = await previewMapping({
+        targetField: 'COMMISSIONS',
+        insurerId,
+        fileBuffer: arrayBuffer,
+        fileName: file.name
+      });
+      
+      if (!result.success || !result.previewRows) {
+        console.log('[PARSER] previewMapping failed, falling back to manual parsing');
+        // Caer al método manual
+      } else {
+        console.log('[PARSER] previewMapping successful, processing rows...');
+        
+        // Convertir previewRows a ParsedRow[]
+        const rows: ParsedRow[] = [];
+        for (const row of result.previewRows) {
+          if (row.policy_number && row.gross_amount !== 0) {
+            rows.push({
+              policy_number: row.policy_number,
+              client_name: row.client_name || null,
+              commission_amount: row.gross_amount || 0,
+              raw_row: row,
+            });
+          }
+        }
+        
+        console.log('[PARSER] Parsed rows:', rows.length);
+        console.log('[PARSER] Sample row:', rows[0]);
+        return rows;
+      }
+    } catch (error) {
+      console.log('[PARSER] Error with previewMapping, falling back:', error);
+    }
+  }
+  
+  // Fallback: método manual (código original)
+  console.log('[PARSER] Using manual parsing...');
   const arrayBuffer = await file.arrayBuffer();
   const workbook = XLSX.read(arrayBuffer, { type: 'array' });
   
@@ -202,13 +246,14 @@ async function parseXlsxFile(file: File, mappingRules: MappingRule[] = [], inver
 /**
  * Parse CSV or XLSX file into rows
  */
-export async function parseCsvXlsx(file: File, mappingRules: MappingRule[] = [], invertNegatives: boolean = false, useMultiColumns: boolean = false): Promise<ParsedRow[]> {
+export async function parseCsvXlsx(file: File, mappingRules: MappingRule[] = [], invertNegatives: boolean = false, useMultiColumns: boolean = false, insurerId?: string): Promise<ParsedRow[]> {
   console.log('[PARSER] Starting to parse file:', file.name);
   console.log('[PARSER] Use multi columns (ASSA):', useMultiColumns);
+  console.log('[PARSER] Insurer ID:', insurerId);
   
   // Check if it's XLSX
   if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
-    return parseXlsxFile(file, mappingRules, invertNegatives, useMultiColumns);
+    return parseXlsxFile(file, mappingRules, invertNegatives, useMultiColumns, insurerId);
   }
   
   // Otherwise parse as CSV
