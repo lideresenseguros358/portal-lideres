@@ -557,7 +557,7 @@ export async function previewMapping(options: PreviewMappingOptions) {
       log('Final headers:', headers);
       
       // Parsear primeras 5 filas de datos (después del header)
-      const dataStartRow = headerRowIndex + 2; // +2 si usamos la siguiente fila para headers
+      const dataStartRow = headerRowIndex + 1; // +1 para la fila inmediatamente después del header
       log('Data starts at row:', dataStartRow);
       
       for (let i = dataStartRow; i < Math.min(dataStartRow + 5, jsonData.length); i++) {
@@ -686,51 +686,54 @@ export async function previewMapping(options: PreviewMappingOptions) {
     ? ['policy_number', 'client_name', 'amount', 'balance']
     : [];
   
-  const processedRows = previewRows.map(row => {
+  // Encontrar todas las columnas que mapean a gross_amount (ANTES del map)
+  const grossAmountColumns: string[] = [];
+  normalizedHeaders.forEach((header, idx) => {
+    if (header === 'gross_amount' && headers[idx]) {
+      grossAmountColumns.push(headers[idx]!);
+    }
+  });
+  
+  if (grossAmountColumns.length > 0) {
+    log(`Found ${grossAmountColumns.length} column(s) mapped to gross_amount:`, grossAmountColumns);
+  }
+  
+  const processedRows = dataRows.map((originalRow, rowIndex) => {
     const processedRow: any = {};
+    const normalizedRow = previewRows[rowIndex];
     
     // Para comisiones, aplicar lógica especial si hay múltiples columnas mapeadas a gross_amount
     if (targetField === 'COMMISSIONS') {
-      // Encontrar todas las columnas que mapean a gross_amount
-      const grossAmountColumns: string[] = [];
-      normalizedHeaders.forEach((header, idx) => {
-        if (header === 'gross_amount' && headers[idx]) {
-          grossAmountColumns.push(headers[idx]!);
-        }
-      });
-      
-      log(`Found ${grossAmountColumns.length} column(s) mapped to gross_amount:`, grossAmountColumns);
-      
       // Si hay múltiples columnas, aplicar lógica first_non_zero
       if (grossAmountColumns.length > 1) {
         let finalAmount = 0;
         
         for (const colName of grossAmountColumns) {
-          const value = row[colName];
+          const value = originalRow[colName]; // Usar originalRow con header original
           const numValue = parseFloat(String(value || '0').replace(/[^\d.-]/g, ''));
           
           if (Math.abs(numValue) > 0.001) {
             finalAmount = numValue;
-            log(`  Using value ${numValue} from column "${colName}"`);
+            log(`  Row ${rowIndex + 1}: Using value ${numValue} from column "${colName}"`);
             break;
           }
         }
         
         processedRow.gross_amount = finalAmount;
       } else if (grossAmountColumns.length === 1 && grossAmountColumns[0]) {
-        const value = row[grossAmountColumns[0]];
+        const value = originalRow[grossAmountColumns[0]];
         processedRow.gross_amount = parseFloat(String(value || '0').replace(/[^\d.-]/g, ''));
       } else {
         processedRow.gross_amount = 0;
       }
       
-      // Agregar policy_number y client_name
-      processedRow.policy_number = row.policy_number || '';
-      processedRow.client_name = row.client_name || '';
+      // Agregar policy_number y client_name desde normalizedRow
+      processedRow.policy_number = normalizedRow.policy_number || '';
+      processedRow.client_name = normalizedRow.client_name || '';
     } else if (targetField === 'DELINQUENCY') {
       // Para morosidad, copiar campos directamente
       displayFields.forEach(field => {
-        processedRow[field] = row[field] || '';
+        processedRow[field] = normalizedRow[field] || '';
       });
     }
     
