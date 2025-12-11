@@ -51,82 +51,49 @@ async function extractTextFromImage(imageBuffer: Buffer): Promise<string> {
 }
 
 /**
- * Convierte una página de PDF a imagen PNG usando pdfjs-dist
- */
-async function convertPDFPageToImage(pdfBuffer: Buffer, pageNumber: number): Promise<Buffer> {
-  const pdfjsLib = await import('pdfjs-dist');
-  const { createCanvas } = await import('canvas');
-  
-  // Cargar el documento PDF
-  const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(pdfBuffer) });
-  const pdfDocument = await loadingTask.promise;
-  
-  // Obtener la página
-  const page = await pdfDocument.getPage(pageNumber);
-  
-  // Configurar el viewport (escala 2.0 para mejor calidad)
-  const viewport = page.getViewport({ scale: 2.0 });
-  
-  // Crear canvas
-  const canvas = createCanvas(viewport.width, viewport.height);
-  const context = canvas.getContext('2d');
-  
-  // Renderizar la página en el canvas
-  const renderContext = {
-    canvasContext: context as any,
-    viewport: viewport,
-  };
-  
-  await (page.render as any)(renderContext).promise;
-  
-  // Convertir canvas a buffer PNG
-  return canvas.toBuffer('image/png');
-}
-
-/**
  * Extrae texto de un PDF usando Google Cloud Vision OCR
- * Convierte PDF → Imágenes → OCR automáticamente
+ * Usa Document AI Text Detection que soporta PDFs directamente
  */
 async function extractTextFromPDF(pdfBuffer: Buffer): Promise<string> {
   try {
-    console.log('[OCR] Iniciando conversión PDF → Imágenes → OCR');
+    console.log('[OCR] Procesando PDF con Google Cloud Vision Document AI');
     
-    const pdfjsLib = await import('pdfjs-dist');
+    const client = getVisionClient();
     
-    // Cargar el documento PDF
-    const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(pdfBuffer) });
-    const pdfDocument = await loadingTask.promise;
+    // Google Cloud Vision soporta PDFs directamente con documentTextDetection
+    // Convertir buffer a base64
+    const base64PDF = pdfBuffer.toString('base64');
     
-    const numPages = pdfDocument.numPages;
-    console.log(`[OCR] PDF tiene ${numPages} página(s)`);
+    console.log('[OCR] Enviando PDF a Google Vision API...');
     
-    let allText = '';
+    const [result] = await client.documentTextDetection({
+      image: {
+        content: base64PDF
+      },
+      imageContext: {
+        languageHints: ['es', 'en'] // Español e Inglés
+      }
+    });
     
-    // Procesar cada página
-    for (let pageNum = 1; pageNum <= numPages; pageNum++) {
-      console.log(`[OCR] Procesando página ${pageNum}/${numPages}...`);
-      
-      // Convertir página a imagen
-      const imageBuffer = await convertPDFPageToImage(pdfBuffer, pageNum);
-      
-      // Extraer texto de la imagen con Vision OCR
-      const pageText = await extractTextFromImage(imageBuffer);
-      
-      allText += pageText + '\n\n';
-      console.log(`[OCR] Página ${pageNum} procesada: ${pageText.length} caracteres extraídos`);
-    }
+    const fullTextAnnotation = result.fullTextAnnotation;
     
-    console.log(`[OCR] PDF completo procesado: ${allText.length} caracteres totales`);
-    
-    if (!allText || allText.trim().length === 0) {
+    if (!fullTextAnnotation || !fullTextAnnotation.text) {
       throw new Error('No se pudo extraer texto del PDF. Verifique que el documento contenga texto legible.');
     }
     
-    return allText;
+    const extractedText = fullTextAnnotation.text;
+    console.log(`[OCR] PDF procesado exitosamente: ${extractedText.length} caracteres extraídos`);
+    
+    return extractedText;
     
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
     console.error('[OCR] Error al procesar PDF:', errorMessage);
+    
+    // Si Google Vision no puede procesar el PDF directamente, sugerir alternativa
+    if (errorMessage.includes('Invalid image') || errorMessage.includes('not supported')) {
+      throw new Error('Este PDF no puede ser procesado directamente. Por favor: 1) Exporte el PDF a Excel desde su aplicación, o 2) Convierta el PDF a imágenes (JPG/PNG) y suba las imágenes.');
+    }
     
     throw new Error('Error al procesar PDF con OCR: ' + errorMessage);
   }
