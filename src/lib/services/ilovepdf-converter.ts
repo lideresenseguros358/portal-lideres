@@ -134,6 +134,11 @@ export async function convertPDFToExcel(pdfBuffer: Buffer): Promise<Buffer> {
     const startData = await startResponse.json() as StartResponse;
     const { server, task } = startData;
     console.log('[iLovePDF] ✅ Tarea iniciada:', task);
+    console.log('[iLovePDF] Servidor asignado:', server);
+
+    // Asegurar que el servidor tenga el esquema https://
+    const serverUrl = server.startsWith('http') ? server : `https://${server}`;
+    console.log('[iLovePDF] URL del servidor:', serverUrl);
 
     // 3. Subir archivo PDF
     console.log('[iLovePDF] Subiendo archivo PDF...');
@@ -141,7 +146,7 @@ export async function convertPDFToExcel(pdfBuffer: Buffer): Promise<Buffer> {
     formData.append('task', task);
     formData.append('file', new Blob([new Uint8Array(pdfBuffer)]), 'document.pdf');
 
-    const uploadResponse = await fetch(`${server}/v1/upload`, {
+    const uploadResponse = await fetch(`${serverUrl}/v1/upload`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -159,7 +164,7 @@ export async function convertPDFToExcel(pdfBuffer: Buffer): Promise<Buffer> {
 
     // 4. Procesar extracción de texto con modo detailed (CSV)
     console.log('[iLovePDF] Procesando extracción de texto...');
-    const processResponse = await fetch(`${server}/v1/process`, {
+    const processResponse = await fetch(`${serverUrl}/v1/process`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -183,7 +188,7 @@ export async function convertPDFToExcel(pdfBuffer: Buffer): Promise<Buffer> {
 
     // 5. Descargar resultado (CSV con texto extraído)
     console.log('[iLovePDF] Descargando archivo CSV...');
-    const downloadResponse = await fetch(`${server}/v1/download/${task}`, {
+    const downloadResponse = await fetch(`${serverUrl}/v1/download/${task}`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${token}`,
