@@ -51,40 +51,84 @@ async function extractTextFromImage(imageBuffer: Buffer): Promise<string> {
 }
 
 /**
+ * Convierte una página de PDF a imagen PNG usando pdfjs-dist
+ */
+async function convertPDFPageToImage(pdfBuffer: Buffer, pageNumber: number): Promise<Buffer> {
+  const pdfjsLib = await import('pdfjs-dist');
+  const { createCanvas } = await import('canvas');
+  
+  // Cargar el documento PDF
+  const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(pdfBuffer) });
+  const pdfDocument = await loadingTask.promise;
+  
+  // Obtener la página
+  const page = await pdfDocument.getPage(pageNumber);
+  
+  // Configurar el viewport (escala 2.0 para mejor calidad)
+  const viewport = page.getViewport({ scale: 2.0 });
+  
+  // Crear canvas
+  const canvas = createCanvas(viewport.width, viewport.height);
+  const context = canvas.getContext('2d');
+  
+  // Renderizar la página en el canvas
+  const renderContext = {
+    canvasContext: context as any,
+    viewport: viewport,
+  };
+  
+  await (page.render as any)(renderContext).promise;
+  
+  // Convertir canvas a buffer PNG
+  return canvas.toBuffer('image/png');
+}
+
+/**
  * Extrae texto de un PDF usando Google Cloud Vision OCR
- * Para PDFs, convierte cada página a imagen y extrae el texto
+ * Convierte PDF → Imágenes → OCR automáticamente
  */
 async function extractTextFromPDF(pdfBuffer: Buffer): Promise<string> {
-  // Para PDFs, Vision API requiere que estén en Cloud Storage o convertir a imágenes
-  // Como no queremos usar Storage, vamos a usar pdf-parse para extraer texto directo
-  // Si el PDF es escaneado (imagen), usaremos una estrategia diferente
-  
   try {
-    // Importar dinámicamente pdf-parse
-    const pdfParseModule = await import('pdf-parse');
-    const pdfParse = pdfParseModule.default || pdfParseModule;
+    console.log('[OCR] Iniciando conversión PDF → Imágenes → OCR');
     
-    // Intentar extraer texto directo del PDF
-    const data = await (pdfParse as any)(pdfBuffer);
+    const pdfjsLib = await import('pdfjs-dist');
     
-    if (data.text && data.text.trim().length > 100) {
-      // Si hay suficiente texto extraído, usarlo
-      return data.text;
+    // Cargar el documento PDF
+    const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(pdfBuffer) });
+    const pdfDocument = await loadingTask.promise;
+    
+    const numPages = pdfDocument.numPages;
+    console.log(`[OCR] PDF tiene ${numPages} página(s)`);
+    
+    let allText = '';
+    
+    // Procesar cada página
+    for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+      console.log(`[OCR] Procesando página ${pageNum}/${numPages}...`);
+      
+      // Convertir página a imagen
+      const imageBuffer = await convertPDFPageToImage(pdfBuffer, pageNum);
+      
+      // Extraer texto de la imagen con Vision OCR
+      const pageText = await extractTextFromImage(imageBuffer);
+      
+      allText += pageText + '\n\n';
+      console.log(`[OCR] Página ${pageNum} procesada: ${pageText.length} caracteres extraídos`);
     }
     
-    // Si no hay texto o es muy poco, el PDF probablemente es escaneado
-    // En este caso, retornamos un error indicando que se debe usar imagen
-    throw new Error('El PDF parece ser escaneado. Por favor, conviértalo a imágenes (JPG/PNG) y suba esas imágenes.');
+    console.log(`[OCR] PDF completo procesado: ${allText.length} caracteres totales`);
+    
+    if (!allText || allText.trim().length === 0) {
+      throw new Error('No se pudo extraer texto del PDF. Verifique que el documento contenga texto legible.');
+    }
+    
+    return allText;
     
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
+    console.error('[OCR] Error al procesar PDF:', errorMessage);
     
-    // Si es error de DOMMatrix, es porque pdf-parse necesita canvas en Node.js
-    if (errorMessage.includes('DOMMatrix')) {
-      throw new Error('OCR de PDF no disponible en este entorno. Por favor, exporte el PDF a Excel (.xlsx) desde su aplicación o convierta el PDF a imágenes (JPG/PNG).');
-    }
-    
-    throw new Error('Error al procesar PDF: ' + errorMessage);
+    throw new Error('Error al procesar PDF con OCR: ' + errorMessage);
   }
 }
 

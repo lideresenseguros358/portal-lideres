@@ -131,12 +131,12 @@ export default function ImportForm({ insurers, draftFortnightId, onImport }: Pro
         <div className="dropzone" onClick={() => document.getElementById('file-upload')?.click()}>
           <FaUpload className="dropzone-icon" />
           <p className="dropzone-label">
-            {file ? file.name : 'Click para seleccionar archivo (CSV, XLSX, PDF)'}
+            {file ? file.name : 'Click para seleccionar archivo (CSV, Excel, PDF, Imagen)'}
           </p>
           <input
             id="file-upload"
             type="file"
-            accept=".csv,.xlsx,.xls,.pdf,.jpg,.png"
+            accept=".csv,.xlsx,.xls,.pdf,.jpg,.jpeg,.png"
             onChange={(e) => {
               const selectedFile = e.target.files?.[0];
               console.log('File selected:', selectedFile?.name);
