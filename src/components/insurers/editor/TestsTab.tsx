@@ -31,36 +31,12 @@ export default function TestsTab({ insurerId }: TestsTabProps) {
         let arrayBuffer = await testFile.arrayBuffer();
         let fileName = testFile.name;
         
-        // Verificar si el archivo requiere OCR (imagen o PDF)
-        const needsOCR = requiresOCR(fileName);
+        // IMPORTANTE: NO aplicar OCR genérico a PDFs
+        // BANESCO y SURA tienen parsers especializados que manejan PDFs directamente
+        // Otros insurers (ANCON, INTERNACIONAL) sí usan OCR genérico
+        // La detección del insurer y el parser correcto se hace en previewMapping
         
-        if (needsOCR) {
-          setIsProcessingOCR(true);
-          setOcrProgress('🔍 Procesando documento con OCR...');
-          
-          // Procesar con OCR
-          const ocrResult = await actionProcessOCR(arrayBuffer, fileName);
-          
-          if (!ocrResult.ok) {
-            setTestResult({
-              ok: false,
-              error: ocrResult.error || 'Error al procesar OCR'
-            });
-            setIsProcessingOCR(false);
-            setOcrProgress('');
-            return;
-          }
-          
-          setOcrProgress('✅ OCR completado. Normalizando a XLSX...');
-          
-          // Usar el buffer XLSX normalizado del OCR
-          arrayBuffer = ocrResult.data.xlsxBuffer!;
-          fileName = testFile.name.replace(/\.[^.]+$/, '.xlsx'); // Cambiar extensión a .xlsx
-          
-          setOcrProgress('📊 Analizando estructura de datos...');
-        }
-        
-        // Procesar con el parser normal
+        // Procesar directamente con previewMapping (decide el parser según el insurer)
         const result = await actionPreviewMapping({
           insurerId,
           targetField: target,

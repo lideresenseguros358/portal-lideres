@@ -114,7 +114,13 @@ async function extractTextFromPDF(pdfBuffer: Buffer): Promise<string> {
  * PARSER GENÉRICO PARA MÚLTIPLES ASEGURADORAS (ANCON, INTERNACIONAL, ETC)
  */
 function structureTextToTable(text: string): any[][] {
+  console.log('[OCR] ===== TEXTO EXTRAÍDO DEL PDF =====');
+  console.log(text);
+  console.log('[OCR] ===== FIN TEXTO EXTRAÍDO =====');
+  
   const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
+  
+  console.log(`[OCR] Total de líneas encontradas: ${lines.length}`);
   
   if (lines.length === 0) {
     return [];
@@ -191,7 +197,10 @@ function structureTextToTable(text: string): any[][] {
                        !invalidNames.some(invalid => asegurado.toUpperCase().includes(invalid));
         
         if (isValid) {
+          console.log(`[OCR] ✅ Fila válida extraída: Póliza="${poliza}", Asegurado="${asegurado}", Comisión="${comision}"`);
           rows.push([poliza, asegurado, comision]);
+        } else {
+          console.log(`[OCR] ⏭️ Fila rechazada (validación): Póliza="${poliza}", Asegurado="${asegurado}", Comisión="${comision}"`);
         }
       } else {
         // Fallback: usar el método anterior si no encuentra patrón de recibo
@@ -206,12 +215,17 @@ function structureTextToTable(text: string): any[][] {
                          !invalidNames.some(invalid => asegurado.toUpperCase().includes(invalid));
           
           if (isValid) {
+            console.log(`[OCR] ✅ Fila válida extraída (fallback): Póliza="${poliza}", Asegurado="${asegurado}", Comisión="${comision}"`);
             rows.push([poliza, asegurado, comision]);
+          } else {
+            console.log(`[OCR] ⏭️ Fila rechazada (fallback): Póliza="${poliza}", Asegurado="${asegurado}", Comisión="${comision}"`);
           }
         }
       }
     }
   }
+  
+  console.log(`[OCR] Filas extraídas antes del filtro final: ${rows.length}`);
   
   // Filtrar filas inválidas (por si acaso)
   const validRows = rows.filter(row => {
@@ -242,6 +256,14 @@ function structureTextToTable(text: string): any[][] {
     return true;
   });
   
+  console.log(`[OCR] Filas válidas después del filtro: ${validRows.length}`);
+  console.log('[OCR] ===== ESTRUCTURA TABULAR GENERADA =====');
+  console.log('Headers: ["Póliza", "Asegurado", "Comisión"]');
+  validRows.forEach((row, idx) => {
+    console.log(`Fila ${idx + 1}:`, row);
+  });
+  console.log('[OCR] ===== FIN ESTRUCTURA TABULAR =====');
+  
   // Agregar header
   const finalRows = [
     ['Póliza', 'Asegurado', 'Comisión'], // Header
@@ -255,17 +277,30 @@ function structureTextToTable(text: string): any[][] {
  * Convierte datos estructurados a buffer de XLSX
  */
 function convertToXLSX(data: any[][]): ArrayBuffer {
+  console.log('[OCR] ===== CONVIRTIENDO A XLSX =====');
+  console.log(`[OCR] Total de filas (incluyendo header): ${data.length}`);
+  console.log('[OCR] Primeras 3 filas del XLSX:');
+  data.slice(0, 3).forEach((row, idx) => {
+    console.log(`  Fila ${idx}:`, row);
+  });
+  
   // Crear workbook
   const wb = XLSX.utils.book_new();
   
   // Crear worksheet desde el array 2D
   const ws = XLSX.utils.aoa_to_sheet(data);
   
+  // Log del rango del worksheet
+  console.log(`[OCR] Rango del worksheet: ${ws['!ref']}`);
+  
   // Agregar worksheet al workbook
   XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
   
   // Convertir a buffer
   const xlsxBuffer = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+  
+  console.log(`[OCR] XLSX generado: ${xlsxBuffer.byteLength} bytes`);
+  console.log('[OCR] ===== FIN CONVERSIÓN XLSX =====');
   
   return xlsxBuffer as ArrayBuffer;
 }

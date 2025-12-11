@@ -420,7 +420,8 @@ export interface PreviewMappingOptions {
 }
 
 export async function previewMapping(options: PreviewMappingOptions) {
-  const { targetField, insurerId, fileBuffer, fileName } = options;
+  const { targetField, insurerId, fileName } = options;
+  let fileBuffer = options.fileBuffer; // Let para poder reasignar si se convierte PDF a XLSX
   
   // Array para capturar logs y mostrar en UI
   const debugLogs: string[] = [];
@@ -429,6 +430,97 @@ export async function previewMapping(options: PreviewMappingOptions) {
     console.log(`[PREVIEW] ${logMessage}`);
     debugLogs.push(logMessage);
   };
+  
+  // PARSER ESPECIAL PARA SURA (formato multi-tabla complejo)
+  if (targetField === 'COMMISSIONS') {
+    const supabase = getSupabaseAdmin();
+    const { data: insurer } = await supabase
+      .from('insurers')
+      .select('name')
+      .eq('id', insurerId)
+      .single();
+    
+    if (insurer?.name?.toUpperCase().includes('SURA')) {
+      log('Detectado SURA - Usando parser especial');
+      try {
+        const { parseSuraExcel } = await import('@/lib/parsers/sura-parser');
+        const suraRows = parseSuraExcel(fileBuffer);
+        
+        log(`SURA Parser extrajo ${suraRows.length} filas totales`);
+        
+        // En preview (editar mapeos), solo mostrar 5 filas de muestra
+        const previewRows = suraRows.slice(0, 5);
+        log(`Mostrando ${previewRows.length} filas de muestra en preview`);
+        
+        return {
+          success: true,
+          previewRows: previewRows.map(row => ({
+            policy_number: row.policy_number,
+            client_name: row.client_name,
+            gross_amount: row.gross_amount
+          })),
+          originalHeaders: ['Póliza', 'Asegurado', 'Comisión'],
+          normalizedHeaders: ['policy_number', 'client_name', 'gross_amount'],
+          rules: [],
+          debugLogs
+        };
+      } catch (error) {
+        log(`ERROR en parser SURA: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+        return {
+          success: false,
+          error: `Error al parsear archivo de SURA: ${error instanceof Error ? error.message : 'Error desconocido'}`,
+          debugLogs
+        };
+      }
+    }
+    
+    // PARSER ESPECIAL PARA BANESCO (PDF o Excel con columnas mezcladas)
+    if (insurer?.name?.toUpperCase().includes('BANESCO')) {
+      log('Detectado BANESCO - Usando parser especial');
+      try {
+        const fileExtension = fileName.toLowerCase().split('.').pop();
+        let banescoRows: any[] = [];
+        
+        // Si es PDF, usar parser directo de PDF
+        if (fileExtension === 'pdf') {
+          log('BANESCO PDF detectado - Usando parser directo de PDF');
+          const { parseBanescoPDF } = await import('@/lib/parsers/banesco-parser');
+          banescoRows = await parseBanescoPDF(fileBuffer);
+        } else {
+          // Si es XLSX, usar parser de Excel
+          log('BANESCO XLSX detectado - Usando parser de Excel');
+          const { parseBanescoExcel } = await import('@/lib/parsers/banesco-parser');
+          banescoRows = parseBanescoExcel(fileBuffer);
+        }
+        
+        log(`BANESCO Parser extrajo ${banescoRows.length} filas totales`);
+        
+        // En preview (editar mapeos), solo mostrar 5 filas de muestra
+        const previewRows = banescoRows.slice(0, 5);
+        log(`Mostrando ${previewRows.length} filas de muestra en preview`);
+        
+        return {
+          success: true,
+          previewRows: previewRows.map(row => ({
+            policy_number: row.policy_number,
+            client_name: row.client_name,
+            gross_amount: row.gross_amount
+          })),
+          originalHeaders: ['Póliza', 'Asegurado', 'Comisión'],
+          normalizedHeaders: ['policy_number', 'client_name', 'gross_amount'],
+          rules: [],
+          debugLogs
+        };
+      } catch (error) {
+        log(`ERROR en parser BANESCO: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+        return {
+          success: false,
+          error: `Error al parsear archivo de BANESCO: ${error instanceof Error ? error.message : 'Error desconocido'}`,
+          debugLogs
+        };
+      }
+    }
+  }
   
   // Obtener reglas de mapeo para el campo objetivo
   const rules = await listMappingRules(insurerId, targetField);
@@ -439,6 +531,27 @@ export async function previewMapping(options: PreviewMappingOptions) {
   
   try {
     const fileExtension = fileName.toLowerCase().split('.').pop();
+    
+    // Si es PDF y NO es un insurer con parser especializado, usar OCR genérico
+    if (fileExtension === 'pdf') {
+      log('PDF genérico detectado - Aplicando OCR');
+      const { processDocumentOCR } = await import('@/lib/services/vision-ocr');
+      const ocrResult = await processDocumentOCR(fileBuffer, fileName);
+      
+      if (!ocrResult.success || !ocrResult.xlsxBuffer) {
+        log(`ERROR en OCR: ${ocrResult.error}`);
+        return {
+          success: false,
+          error: `Error al procesar PDF con OCR: ${ocrResult.error}`,
+          debugLogs
+        };
+      }
+      
+      log('PDF convertido a XLSX con OCR exitosamente');
+      // Reemplazar el buffer con el XLSX generado y continuar con parseo normal
+      fileBuffer = ocrResult.xlsxBuffer;
+      // Continuar al parseo de XLSX abajo
+    }
     
     if (fileExtension === 'csv') {
       // Parsear CSV
@@ -773,9 +886,11 @@ export async function previewMapping(options: PreviewMappingOptions) {
   log(`Returning ${processedRows.length} processed rows with fields:`, displayFields);
   
   // FILTRAR FILAS INVÁLIDAS (para INTERNACIONAL, SURA y otras aseguradoras)
-  const validRows = processedRows.filter(row => {
+  const validRows = processedRows.filter((row, index) => {
     const policyNum = String(row.policy_number || '').trim();
     const clientName = String(row.client_name || '').trim();
+    
+    log(`Validando fila ${index + 1}: policy="${policyNum}", client="${clientName}", commission="${row.gross_amount}"`);
     
     // Validar que policy_number sea válido
     const isValidPolicy = policyNum && 
@@ -798,11 +913,14 @@ export async function previewMapping(options: PreviewMappingOptions) {
     const commission = Number(row.gross_amount || 0);
     const hasValidCommission = !isNaN(commission) && Math.abs(commission) > 0.01;
     
+    log(`  isValidPolicy: ${isValidPolicy}, isValidClient: ${isValidClient}, hasValidCommission: ${hasValidCommission}`);
+    
     if (!isValidPolicy || !isValidClient || !hasValidCommission) {
-      log(`Fila rechazada: policy="${policyNum}", client="${clientName}", commission="${commission}"`);
+      log(`  ❌ RECHAZADA - Motivos: policy=${!isValidPolicy}, client=${!isValidClient}, commission=${!hasValidCommission}`);
       return false;
     }
     
+    log(`  ✅ ACEPTADA`);
     return true;
   });
   

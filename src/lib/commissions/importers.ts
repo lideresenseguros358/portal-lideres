@@ -34,7 +34,7 @@ async function parseXlsxFile(file: File, mappingRules: MappingRule[] = [], inver
       .eq('id', insurerId)
       .single();
     
-    if (insurer?.name?.toUpperCase() === 'SURA') {
+    if (insurer?.name?.toUpperCase().includes('SURA')) {
       console.log('[PARSER] Detectado SURA - Usando parser especial');
       try {
         const arrayBuffer = await file.arrayBuffer();
@@ -51,6 +51,40 @@ async function parseXlsxFile(file: File, mappingRules: MappingRule[] = [], inver
       } catch (error) {
         console.error('[SURA PARSER] Error:', error);
         throw new Error('Error al parsear archivo de SURA: ' + (error instanceof Error ? error.message : 'Error desconocido'));
+      }
+    }
+    
+    // PARSER ESPECIAL PARA BANESCO (PDF o Excel con columnas mezcladas)
+    if (insurer?.name?.toUpperCase().includes('BANESCO')) {
+      console.log('[PARSER] Detectado BANESCO - Usando parser especial');
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const fileExtension = file.name.toLowerCase().split('.').pop();
+        let banescoRows: any[] = [];
+        
+        // Si es PDF, usar parser directo de PDF
+        if (fileExtension === 'pdf') {
+          console.log('[BANESCO] PDF detectado - Usando parser directo de PDF');
+          const { parseBanescoPDF } = await import('@/lib/parsers/banesco-parser');
+          banescoRows = await parseBanescoPDF(arrayBuffer);
+        } else {
+          // Si es XLSX, usar parser de Excel
+          console.log('[BANESCO] XLSX detectado - Usando parser de Excel');
+          const { parseBanescoExcel } = await import('@/lib/parsers/banesco-parser');
+          banescoRows = parseBanescoExcel(arrayBuffer);
+        }
+        
+        console.log('[BANESCO PARSER] Extraídas', banescoRows.length, 'filas');
+        
+        return banescoRows.map(row => ({
+          policy_number: row.policy_number,
+          client_name: row.client_name,
+          commission_amount: row.gross_amount,
+          raw_row: row
+        }));
+      } catch (error) {
+        console.error('[BANESCO PARSER] Error:', error);
+        throw new Error('Error al parsear archivo de BANESCO: ' + (error instanceof Error ? error.message : 'Error desconocido'));
       }
     }
   }
