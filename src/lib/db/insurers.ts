@@ -420,6 +420,14 @@ export interface PreviewMappingOptions {
 export async function previewMapping(options: PreviewMappingOptions) {
   const { targetField, insurerId, fileBuffer, fileName } = options;
   
+  // Array para capturar logs y mostrar en UI
+  const debugLogs: string[] = [];
+  const log = (message: string, ...args: any[]) => {
+    const logMessage = `${message} ${args.map(a => JSON.stringify(a)).join(' ')}`;
+    console.log(`[PREVIEW] ${logMessage}`);
+    debugLogs.push(logMessage);
+  };
+  
   // Obtener reglas de mapeo para el campo objetivo
   const rules = await listMappingRules(insurerId, targetField);
   
@@ -470,8 +478,8 @@ export async function previewMapping(options: PreviewMappingOptions) {
         return { success: false, error: 'No se pudo leer la hoja de Excel' };
       }
       
-      console.log('[PREVIEW] Worksheet range:', worksheet['!ref']);
-      console.log('[PREVIEW] Worksheet keys:', Object.keys(worksheet).filter(k => !k.startsWith('!')).slice(0, 20));
+      log('Worksheet range:', worksheet['!ref']);
+      log('Worksheet keys sample:', Object.keys(worksheet).filter(k => !k.startsWith('!')).slice(0, 20));
       
       // Convertir a JSON con defval para evitar undefined
       const jsonData: any[] = XLSX.utils.sheet_to_json(worksheet, { 
@@ -481,40 +489,66 @@ export async function previewMapping(options: PreviewMappingOptions) {
         raw: false  // Convertir todo a string
       });
       
-      console.log('[PREVIEW] Total rows in Excel:', jsonData.length);
-      console.log('[PREVIEW] First 3 rows:', jsonData.slice(0, 3));
+      log('Total rows in Excel:', jsonData.length);
+      log('First 5 rows:', jsonData.slice(0, 5));
       
       if (jsonData.length === 0) {
-        return { success: false, error: 'La hoja de Excel está vacía' };
+        return { success: false, error: 'La hoja de Excel está vacía', debugLogs };
       }
       
-      // Buscar la fila de headers (primera fila no vacía)
+      // Buscar la fila de headers - intentar detectar automáticamente
+      // Buscar la primera fila que tenga más celdas con texto (probablemente headers)
       let headerRowIndex = 0;
-      for (let i = 0; i < Math.min(5, jsonData.length); i++) {
+      let maxFilledCells = 0;
+      
+      for (let i = 0; i < Math.min(10, jsonData.length); i++) {
         const row = jsonData[i] as any[];
-        if (row && row.some(cell => cell && String(cell).trim())) {
+        const filledCells = row.filter(cell => cell && String(cell).trim() && !String(cell).match(/^[\d\s\-\.\/]+$/)).length;
+        log(`Row ${i} filled cells (non-numeric):`, filledCells, 'Sample:', row.slice(0, 5));
+        
+        if (filledCells > maxFilledCells) {
+          maxFilledCells = filledCells;
           headerRowIndex = i;
-          break;
         }
       }
       
-      // Primera fila son los headers
+      log('Detected header row index:', headerRowIndex);
+      
+      // Si la fila de headers tiene celdas vacías, intentar combinar con la fila siguiente
       const headerRow = jsonData[headerRowIndex] as any[];
+      const nextRow = jsonData[headerRowIndex + 1] as any[];
+      
       headers = headerRow.map((h, idx) => {
-        const headerValue = String(h || '').trim();
-        // Si el header está vacío, usar el nombre de columna (A, B, C, etc.)
-        return headerValue || `Columna_${String.fromCharCode(65 + idx)}`;
+        let headerValue = String(h || '').trim();
+        
+        // Si el header está vacío o parece un placeholder, intentar usar la siguiente fila
+        if (!headerValue || headerValue.match(/^[~\d_]+$/)) {
+          const nextValue = nextRow && nextRow[idx] ? String(nextRow[idx]).trim() : '';
+          if (nextValue && !nextValue.match(/^[\d\s\-\.\/]+$/)) {
+            headerValue = nextValue;
+            log(`Column ${idx}: Using next row value: "${nextValue}"`);
+          }
+        }
+        
+        // Si aún está vacío, usar nombre de columna
+        if (!headerValue) {
+          headerValue = `Columna_${String.fromCharCode(65 + idx)}`;
+        }
+        
+        return headerValue;
       });
       
-      console.log('[PREVIEW] Headers detectados:', headers);
-      console.log('[PREVIEW] Header row index:', headerRowIndex);
+      log('Final headers:', headers);
       
       // Parsear primeras 5 filas de datos (después del header)
-      const dataStartRow = headerRowIndex + 1;
+      const dataStartRow = headerRowIndex + 2; // +2 si usamos la siguiente fila para headers
+      log('Data starts at row:', dataStartRow);
+      
       for (let i = dataStartRow; i < Math.min(dataStartRow + 5, jsonData.length); i++) {
         const rowArray = jsonData[i] as any[];
         if (!rowArray || !rowArray.some(cell => cell && String(cell).trim())) {
-          continue; // Saltar filas vacías
+          log(`Skipping empty row ${i}`);
+          continue;
         }
         
         const row: any = {};
@@ -523,10 +557,10 @@ export async function previewMapping(options: PreviewMappingOptions) {
           row[header] = cellValue !== undefined && cellValue !== null ? String(cellValue).trim() : '';
         });
         dataRows.push(row);
+        log(`Parsed data row ${i}:`, row);
       }
       
-      console.log('[PREVIEW] Data rows parsed:', dataRows.length);
-      console.log('[PREVIEW] First data row:', dataRows[0]);
+      log('Total data rows parsed:', dataRows.length);
       
     } else {
       return { 
@@ -540,10 +574,11 @@ export async function previewMapping(options: PreviewMappingOptions) {
     }
     
   } catch (error) {
-    console.error('Error parsing file:', error);
+    log('ERROR parsing file:', error);
     return { 
       success: false, 
-      error: `Error al parsear el archivo: ${error instanceof Error ? error.message : 'Error desconocido'}` 
+      error: `Error al parsear el archivo: ${error instanceof Error ? error.message : 'Error desconocido'}`,
+      debugLogs
     };
   }
   
@@ -557,14 +592,15 @@ export async function previewMapping(options: PreviewMappingOptions) {
       .replace(/\s+/g, ' '); // Normalizar espacios
   };
   
-  console.log('[PREVIEW] Headers originales:', headers);
-  console.log('[PREVIEW] Reglas de mapeo:', rules.map(r => ({
+  log('Headers originales:', headers);
+  log('Reglas de mapeo:', rules.map(r => ({
     target: r.target_field,
     aliases: r.aliases
   })));
   
   // Normalizar headers para comparación
   const headersNormalized = headers.map(h => normalizeString(h));
+  log('Headers normalizados:', headersNormalized);
   
   // Crear mapa de aliases -> target_field
   const aliasMap = new Map<string, string>();
@@ -572,31 +608,32 @@ export async function previewMapping(options: PreviewMappingOptions) {
     // Agregar el target_field mismo como alias
     const normalizedTarget = normalizeString(rule.target_field);
     aliasMap.set(normalizedTarget, rule.target_field);
-    console.log(`[PREVIEW] Adding target "${rule.target_field}" -> normalized: "${normalizedTarget}"`);
+    log(`Adding target "${rule.target_field}" -> normalized: "${normalizedTarget}"`);
     
     // Agregar todos los aliases
     const aliases = Array.isArray(rule.aliases) ? rule.aliases : [];
-    console.log(`[PREVIEW] Processing ${aliases.length} aliases for target "${rule.target_field}":`, aliases);
+    log(`Processing ${aliases.length} aliases for target "${rule.target_field}":`, aliases);
     
     for (const alias of aliases) {
       if (typeof alias === 'string' && alias.trim()) {
         const normalizedAlias = normalizeString(alias);
         aliasMap.set(normalizedAlias, rule.target_field);
-        console.log(`[PREVIEW]   Alias "${alias}" -> normalized: "${normalizedAlias}" -> maps to: "${rule.target_field}"`);
+        log(`  Alias "${alias}" -> normalized: "${normalizedAlias}" -> maps to: "${rule.target_field}"`);
       }
     }
   }
   
-  console.log('[PREVIEW] ===== FINAL ALIAS MAP =====');
-  console.log('[PREVIEW] Total entries in alias map:', aliasMap.size);
+  log('===== FINAL ALIAS MAP =====');
+  log('Total entries in alias map:', aliasMap.size);
   aliasMap.forEach((targetField, normalizedKey) => {
-    console.log(`[PREVIEW]   "${normalizedKey}" -> "${targetField}"`);
+    log(`  "${normalizedKey}" -> "${targetField}"`);
   });
   
   // Mapear headers originales a campos objetivo
+  log('===== MAPPING PROCESS =====');
   const normalizedHeaders = headersNormalized.map((h, idx) => {
     const mapped = aliasMap.get(h);
-    console.log(`[PREVIEW] Mapping "${headers[idx]}" (normalized: "${h}") -> ${mapped || 'NO MATCH'}`);
+    log(`Mapping "${headers[idx]}" (normalized: "${h}") -> ${mapped || 'NO MATCH'}`);
     return mapped || h;
   });
   
@@ -624,9 +661,10 @@ export async function previewMapping(options: PreviewMappingOptions) {
   );
   
   if (missingFields.length > 0) {
-    console.log('[PREVIEW] Normalized headers:', normalizedHeaders);
-    console.log('[PREVIEW] Required fields:', requiredFields);
-    console.log('[PREVIEW] Missing fields:', missingFields);
+    log('===== VALIDATION FAILED =====');
+    log('Normalized headers:', normalizedHeaders);
+    log('Required fields:', requiredFields);
+    log('Missing fields:', missingFields);
     
     return {
       success: false,
@@ -634,9 +672,13 @@ export async function previewMapping(options: PreviewMappingOptions) {
       originalHeaders: headers,
       normalizedHeaders,
       rules,
-      missingFields, // Agregar lista de campos faltantes
+      missingFields,
+      debugLogs // Agregar logs de debug
     };
   }
+  
+  log('===== VALIDATION SUCCESS =====');
+  log('All required fields found!');
   
   return {
     success: true,
@@ -644,5 +686,6 @@ export async function previewMapping(options: PreviewMappingOptions) {
     normalizedHeaders,
     previewRows, // Filas con datos parseados
     rules,
+    debugLogs // Agregar logs de debug
   };
 }

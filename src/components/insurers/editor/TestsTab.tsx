@@ -265,6 +265,22 @@ export default function TestsTab({ insurerId }: TestsTabProps) {
                           <li>Vuelve a probar el archivo</li>
                         </ol>
                       </div>
+                      
+                      {testResult.data?.debugLogs && testResult.data.debugLogs.length > 0 && (
+                        <details className="debug-logs-section">
+                          <summary className="debug-logs-header">
+                            🔧 Logs Técnicos de Procesamiento ({testResult.data.debugLogs.length} mensajes)
+                          </summary>
+                          <div className="debug-logs-content">
+                            {testResult.data.debugLogs.map((log: string, idx: number) => (
+                              <div key={idx} className="debug-log-entry">
+                                <span className="log-number">{idx + 1}</span>
+                                <span className="log-message">{log}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </details>
+                      )}
                     </div>
                   )}
                 </div>
@@ -705,6 +721,65 @@ export default function TestsTab({ insurerId }: TestsTabProps) {
           font-family: 'Courier New', monospace;
           font-size: 13px;
           border: 1px solid #e2e8f0;
+        }
+        
+        .debug-logs-section {
+          margin-top: 24px;
+          border: 2px solid #e5e7eb;
+          border-radius: 8px;
+          background: #f9fafb;
+          overflow: hidden;
+        }
+        .debug-logs-header {
+          cursor: pointer;
+          padding: 16px 20px;
+          font-weight: 700;
+          color: #374151;
+          background: #f3f4f6;
+          user-select: none;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          transition: background 0.2s;
+        }
+        .debug-logs-header:hover {
+          background: #e5e7eb;
+        }
+        .debug-logs-content {
+          max-height: 400px;
+          overflow-y: auto;
+          padding: 16px;
+          background: #ffffff;
+        }
+        .debug-log-entry {
+          display: flex;
+          gap: 12px;
+          padding: 8px 12px;
+          margin-bottom: 4px;
+          background: #f9fafb;
+          border-left: 3px solid #94a3b8;
+          border-radius: 4px;
+          font-family: 'Courier New', monospace;
+          font-size: 12px;
+          line-height: 1.5;
+        }
+        .debug-log-entry:hover {
+          background: #f1f5f9;
+        }
+        .log-number {
+          display: inline-block;
+          min-width: 32px;
+          padding: 2px 8px;
+          background: #cbd5e1;
+          color: #475569;
+          border-radius: 4px;
+          font-weight: 700;
+          text-align: center;
+          flex-shrink: 0;
+        }
+        .log-message {
+          color: #1f2937;
+          word-break: break-word;
         }
         
         @media (max-width: 768px) {
