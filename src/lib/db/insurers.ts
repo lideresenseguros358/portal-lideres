@@ -452,8 +452,8 @@ export async function previewMapping(options: PreviewMappingOptions) {
       
       headers = lines[0]?.split(',').map(h => h.trim()) || [];
       
-      // Parsear primeras 5 filas de datos
-      for (let i = 1; i < Math.min(6, lines.length); i++) {
+      // Parsear TODAS las filas de datos
+      for (let i = 1; i < lines.length; i++) {
         const line = lines[i];
         if (!line) continue;
         const values = line.split(',').map(v => v.trim());
@@ -556,11 +556,11 @@ export async function previewMapping(options: PreviewMappingOptions) {
       
       log('Final headers:', headers);
       
-      // Parsear primeras 5 filas de datos (después del header)
+      // Parsear TODAS las filas de datos (no solo 5)
       const dataStartRow = headerRowIndex + 1; // +1 para la fila inmediatamente después del header
       log('Data starts at row:', dataStartRow);
       
-      for (let i = dataStartRow; i < Math.min(dataStartRow + 5, jsonData.length); i++) {
+      for (let i = dataStartRow; i < jsonData.length; i++) {
         const rowArray = jsonData[i] as any[];
         if (!rowArray || !rowArray.some(cell => cell && String(cell).trim())) {
           log(`Skipping empty row ${i}`);
