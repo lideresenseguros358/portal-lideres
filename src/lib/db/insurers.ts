@@ -231,7 +231,9 @@ export async function listMappingRules(insurerId: string, targetField?: string) 
     .eq('insurer_id', insurerId)
     .order('target_field');
   
-  if (targetField) {
+  // Solo filtrar si targetField es específico (ej: 'policy', 'insured')
+  // NO filtrar si es genérico (ej: 'COMMISSIONS', 'DELINQUENCY')
+  if (targetField && !['COMMISSIONS', 'DELINQUENCY'].includes(targetField)) {
     query = query.eq('target_field', targetField);
   }
   
@@ -497,22 +499,36 @@ export async function previewMapping(options: PreviewMappingOptions) {
       }
       
       // Buscar la fila de headers - intentar detectar automáticamente
-      // Buscar la primera fila que tenga más celdas con texto (probablemente headers)
+      // Estrategia: buscar fila que contenga palabras clave de headers (Póliza, Fecha, Asegurado, Monto, etc.)
       let headerRowIndex = 0;
-      let maxFilledCells = 0;
+      let maxScore = 0;
+      const headerKeywords = ['poliza', 'fecha', 'asegurado', 'cliente', 'monto', 'comision', 'prima', 'tasa', 'remesa', 'referencia', 'cedula', 'ruc', 'nombre'];
       
-      for (let i = 0; i < Math.min(10, jsonData.length); i++) {
+      for (let i = 0; i < Math.min(15, jsonData.length); i++) {
         const row = jsonData[i] as any[];
-        const filledCells = row.filter(cell => cell && String(cell).trim() && !String(cell).match(/^[\d\s\-\.\/]+$/)).length;
-        log(`Row ${i} filled cells (non-numeric):`, filledCells, 'Sample:', row.slice(0, 5));
         
-        if (filledCells > maxFilledCells) {
-          maxFilledCells = filledCells;
+        // Contar celdas con texto no-numérico
+        const filledCells = row.filter(cell => cell && String(cell).trim() && !String(cell).match(/^[\d\s\-\.\/]+$/)).length;
+        
+        // Contar coincidencias con palabras clave
+        const keywordMatches = row.filter(cell => {
+          if (!cell) return false;
+          const cellText = String(cell).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+          return headerKeywords.some(keyword => cellText.includes(keyword));
+        }).length;
+        
+        // Calcular score: priorizar keywords, luego cantidad de celdas llenas
+        const score = (keywordMatches * 10) + filledCells;
+        
+        log(`Row ${i} | Filled: ${filledCells} | Keywords: ${keywordMatches} | Score: ${score} | Sample:`, row.slice(0, 5));
+        
+        if (score > maxScore) {
+          maxScore = score;
           headerRowIndex = i;
         }
       }
       
-      log('Detected header row index:', headerRowIndex);
+      log('Detected header row index:', headerRowIndex, 'with score:', maxScore);
       
       // Si la fila de headers tiene celdas vacías, intentar combinar con la fila siguiente
       const headerRow = jsonData[headerRowIndex] as any[];
@@ -602,13 +618,27 @@ export async function previewMapping(options: PreviewMappingOptions) {
   const headersNormalized = headers.map(h => normalizeString(h));
   log('Headers normalizados:', headersNormalized);
   
-  // Crear mapa de aliases -> target_field
+  // Mapeo de target_field internos a campos finales
+  const targetFieldMap: Record<string, string> = {
+    'policy': 'policy_number',
+    'insured': 'client_name',
+    'commission': 'gross_amount',
+    'DELINQUENCY_POLICY_NUMBER': 'policy_number',
+    'DELINQUENCY_CLIENT_NAME': 'client_name',
+    'DELINQUENCY_AMOUNT': 'amount',
+    'DELINQUENCY_BALANCE': 'balance',
+  };
+  
+  // Crear mapa de aliases -> campo final
   const aliasMap = new Map<string, string>();
   for (const rule of rules) {
+    // Determinar el campo final
+    const finalField = targetFieldMap[rule.target_field] || rule.target_field;
+    
     // Agregar el target_field mismo como alias
     const normalizedTarget = normalizeString(rule.target_field);
-    aliasMap.set(normalizedTarget, rule.target_field);
-    log(`Adding target "${rule.target_field}" -> normalized: "${normalizedTarget}"`);
+    aliasMap.set(normalizedTarget, finalField);
+    log(`Adding target "${rule.target_field}" -> normalized: "${normalizedTarget}" -> final: "${finalField}"`);
     
     // Agregar todos los aliases
     const aliases = Array.isArray(rule.aliases) ? rule.aliases : [];
@@ -617,8 +647,8 @@ export async function previewMapping(options: PreviewMappingOptions) {
     for (const alias of aliases) {
       if (typeof alias === 'string' && alias.trim()) {
         const normalizedAlias = normalizeString(alias);
-        aliasMap.set(normalizedAlias, rule.target_field);
-        log(`  Alias "${alias}" -> normalized: "${normalizedAlias}" -> maps to: "${rule.target_field}"`);
+        aliasMap.set(normalizedAlias, finalField);
+        log(`  Alias "${alias}" -> normalized: "${normalizedAlias}" -> maps to: "${finalField}"`);
       }
     }
   }

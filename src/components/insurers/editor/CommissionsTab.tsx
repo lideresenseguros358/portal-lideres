@@ -3,7 +3,6 @@
 import { useState, useTransition, useEffect } from 'react';
 import { FaPlus, FaTrash, FaSave } from 'react-icons/fa';
 import { actionUpsertMappingRule, actionDeleteMappingRule } from '@/app/(app)/insurers/actions';
-import { createUppercaseHandler, uppercaseInputClass } from '@/lib/utils/uppercase';
 
 interface CommissionsTabProps {
   rules: any[]; // Replace with actual type
@@ -90,8 +89,8 @@ export default function CommissionsTab({ rules, insurerId }: CommissionsTabProps
           type="text" 
           placeholder='Ej: Nro Poliza, nombre asegurado, monto honorarios' 
           value={newRule.aliases} 
-          onChange={createUppercaseHandler(e => setNewRule({...newRule, aliases: e.target.value}))}
-          className={uppercaseInputClass}
+          onChange={e => setNewRule({...newRule, aliases: e.target.value})}
+          className="form-input"
         />
         <button onClick={handleAdd} className="btn-add" disabled={isPending}>
           <FaPlus /> {isPending ? 'Guardando...' : 'Agregar'}

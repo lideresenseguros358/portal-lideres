@@ -3,7 +3,6 @@
 import { useState, useTransition } from 'react';
 import { FaPlus, FaTrash } from 'react-icons/fa';
 import { actionUpsertMappingRule, actionDeleteMappingRule } from '@/app/(app)/insurers/actions';
-import { createUppercaseHandler, uppercaseInputClass } from '@/lib/utils/uppercase';
 
 const DELINQUENCY_FIELDS = [
   'DELINQUENCY_POLICY_NUMBER',
@@ -71,8 +70,8 @@ export default function DelinquencyTab({ rules, insurerId }: DelinquencyTabProps
           type="text" 
           placeholder="Aliases (separados por coma)" 
           value={newRule.aliases} 
-          onChange={createUppercaseHandler(e => setNewRule({...newRule, aliases: e.target.value}))}
-          className={uppercaseInputClass}
+          onChange={e => setNewRule({...newRule, aliases: e.target.value})}
+          className="form-input"
         />
         <button onClick={handleAdd} className="btn-add" disabled={isPending}><FaPlus /> Agregar Regla</button>
       </div>
