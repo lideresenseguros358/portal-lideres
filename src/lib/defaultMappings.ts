@@ -64,6 +64,46 @@ export const DEFAULT_MAPPINGS: { insurerName: string; rules: Partial<MappingRule
         aliases: ["Total"] },
     ],
   },
-  // TODO: add the remaining insurers (ANCON, BANESCO, FEDPA, GENERAL, IFS, INTERNACIONAL,
+  {
+    insurerName: "INTERNACIONAL",
+    rules: [
+      {
+        strategy: "aliases",
+        target_field: "policy",
+        aliases: ["Póliza", "Poliza", "Policy Number", "No. Póliza"],
+      },
+      {
+        strategy: "aliases",
+        target_field: "insured",
+        aliases: ["Asegurado / Banco", "Asegurado", "Client Name", "Nombre"],
+      },
+      {
+        strategy: "aliases",
+        target_field: "commission",
+        aliases: ["Total", "Comisión Detallada", "Comisión"],
+      },
+    ],
+  },
+  {
+    insurerName: "ANCON",
+    rules: [
+      {
+        strategy: "aliases",
+        target_field: "policy",
+        aliases: ["Póliza", "Poliza", "Policy Number", "No. Póliza"],
+      },
+      {
+        strategy: "aliases",
+        target_field: "insured",
+        aliases: ["Asegurado", "Client Name", "Nombre"],
+      },
+      {
+        strategy: "aliases",
+        target_field: "commission",
+        aliases: ["Comisión", "Comision", "Total"],
+      },
+    ],
+  },
+  // TODO: add the remaining insurers (BANESCO, FEDPA, GENERAL, IFS,
   // REGIONAL, MAPFRE, MB, OPTIMA, SURA, VIVIR, WWMEDICAL, MERCANTIL, ALIADO, ASSISTCARD)
 ];

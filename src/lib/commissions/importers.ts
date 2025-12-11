@@ -45,10 +45,25 @@ async function parseXlsxFile(file: File, mappingRules: MappingRule[] = [], inver
         // Convertir previewRows a ParsedRow[]
         const rows: ParsedRow[] = [];
         for (const row of result.previewRows) {
-          if (row.policy_number && row.gross_amount !== 0) {
+          const policyNum = row.policy_number?.toString().trim() || '';
+          const clientName = row.client_name?.toString().trim() || '';
+          
+          // Validar que policy_number sea válido
+          const isValidPolicy = policyNum && 
+                               policyNum !== '--' && 
+                               policyNum !== 'undefined' &&
+                               !policyNum.includes('#') &&
+                               policyNum.length > 0;
+          
+          // Validar que client_name no sea texto descriptivo
+          const invalidTexts = ['AGO DE', 'MES DE', 'DETALLE', 'TOTAL', 'OP-', 'COMISION AL'];
+          const isValidClient = clientName && 
+                               !invalidTexts.some(text => clientName.toUpperCase().includes(text));
+          
+          if (isValidPolicy && isValidClient && row.gross_amount !== 0) {
             rows.push({
-              policy_number: row.policy_number,
-              client_name: row.client_name || null,
+              policy_number: policyNum,
+              client_name: clientName || null,
               commission_amount: row.gross_amount || 0,
               raw_row: row,
             });

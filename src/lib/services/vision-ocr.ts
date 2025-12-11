@@ -216,12 +216,30 @@ function structureTextToTable(text: string): any[][] {
   // Filtrar filas inválidas (por si acaso)
   const validRows = rows.filter(row => {
     const [poliza, asegurado, comision] = row;
-    // Asegurar que todos los campos existen y no están vacíos
-    return poliza && asegurado && comision && 
-           poliza.trim() !== '' && 
-           poliza !== '--' && 
-           poliza !== 'undefined' &&
-           !poliza.includes('#');
+    
+    // Validar póliza
+    if (!poliza || poliza === '--' || poliza.includes('#')) {
+      return false;
+    }
+    
+    // Validar campos no vacíos
+    if (!asegurado || !comision) {
+      return false;
+    }
+    
+    // Verificar que la póliza tenga formato válido (números separados por guiones)
+    const policyFormatRegex = /^\d{1,4}-\d{1,5}-\d{2,5}$/;
+    if (!policyFormatRegex.test(poliza.trim())) {
+      return false;
+    }
+    
+    // Verificar que asegurado no sea texto descriptivo
+    const invalidTexts = ['AGO DE', 'MES DE', 'DETALLE', 'TOTAL', 'OP-'];
+    if (invalidTexts.some(text => asegurado.toUpperCase().includes(text))) {
+      return false;
+    }
+    
+    return true;
   });
   
   // Agregar header
