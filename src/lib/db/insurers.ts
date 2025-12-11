@@ -772,7 +772,7 @@ export async function previewMapping(options: PreviewMappingOptions) {
   log('All required fields found!');
   log(`Returning ${processedRows.length} processed rows with fields:`, displayFields);
   
-  // FILTRAR FILAS INVÁLIDAS (para INTERNACIONAL y otras aseguradoras)
+  // FILTRAR FILAS INVÁLIDAS (para INTERNACIONAL, SURA y otras aseguradoras)
   const validRows = processedRows.filter(row => {
     const policyNum = String(row.policy_number || '').trim();
     const clientName = String(row.client_name || '').trim();
@@ -784,13 +784,22 @@ export async function previewMapping(options: PreviewMappingOptions) {
                          !policyNum.includes('#') &&
                          policyNum.length > 0;
     
-    // Validar que client_name no sea texto descriptivo
-    const invalidTexts = ['AGO DE', 'MES DE', 'DETALLE', 'TOTAL', 'OP-', 'COMISION AL'];
+    // Validar que client_name no sea texto descriptivo o vacío
+    const invalidTexts = [
+      'AGO DE', 'MES DE', 'DETALLE', 'TOTAL', 'OP-', 'COMISION AL',
+      'SALDADO', 'DEPOSITADO', 'MOVIMIENTOS', 'NEGATIVO', 'POSITIVO',
+      'SUBTOTAL', 'SURA', 'ESTADO DE CUENTA', 'PERIODO'
+    ];
     const isValidClient = clientName && 
+                         clientName.length > 2 &&
                          !invalidTexts.some(text => clientName.toUpperCase().includes(text));
     
-    if (!isValidPolicy || !isValidClient) {
-      log(`Fila rechazada: policy="${policyNum}", client="${clientName}"`);
+    // Validar que tenga comisión válida (no cero o vacío)
+    const commission = Number(row.gross_amount || 0);
+    const hasValidCommission = !isNaN(commission) && Math.abs(commission) > 0.01;
+    
+    if (!isValidPolicy || !isValidClient || !hasValidCommission) {
+      log(`Fila rechazada: policy="${policyNum}", client="${clientName}", commission="${commission}"`);
       return false;
     }
     
