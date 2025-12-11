@@ -772,12 +772,39 @@ export async function previewMapping(options: PreviewMappingOptions) {
   log('All required fields found!');
   log(`Returning ${processedRows.length} processed rows with fields:`, displayFields);
   
+  // FILTRAR FILAS INVÁLIDAS (para INTERNACIONAL y otras aseguradoras)
+  const validRows = processedRows.filter(row => {
+    const policyNum = String(row.policy_number || '').trim();
+    const clientName = String(row.client_name || '').trim();
+    
+    // Validar que policy_number sea válido
+    const isValidPolicy = policyNum && 
+                         policyNum !== '--' && 
+                         policyNum !== 'undefined' &&
+                         !policyNum.includes('#') &&
+                         policyNum.length > 0;
+    
+    // Validar que client_name no sea texto descriptivo
+    const invalidTexts = ['AGO DE', 'MES DE', 'DETALLE', 'TOTAL', 'OP-', 'COMISION AL'];
+    const isValidClient = clientName && 
+                         !invalidTexts.some(text => clientName.toUpperCase().includes(text));
+    
+    if (!isValidPolicy || !isValidClient) {
+      log(`Fila rechazada: policy="${policyNum}", client="${clientName}"`);
+      return false;
+    }
+    
+    return true;
+  });
+  
+  log(`Filas válidas: ${validRows.length} de ${processedRows.length}`);
+  
   return {
     success: true,
     originalHeaders: headers,
     normalizedHeaders,
     displayHeaders: displayFields, // Solo los campos que se deben mostrar en el preview
-    previewRows: processedRows, // Filas procesadas con solo campos relevantes
+    previewRows: validRows, // FILAS FILTRADAS (solo válidas)
     rules,
     debugLogs // Agregar logs de debug
   };
