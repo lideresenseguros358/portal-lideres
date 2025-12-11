@@ -77,27 +77,49 @@ async function extractTextFromImage(imageBuffer: Buffer): Promise<string> {
  * Flujo: Intenta texto nativo primero, luego iLovePDF si falla
  */
 async function extractTextFromPDF(pdfBuffer: Buffer): Promise<string> {
-  // USAR SOLO PDF-PARSE (texto nativo) - MÁS RÁPIDO Y CONFIABLE
-  console.log('[PDF-NATIVO] 🚀 Extrayendo texto nativo del PDF con pdf-parse...');
-  console.log(`[PDF-NATIVO] Tamaño del PDF: ${pdfBuffer.length} bytes`);
+  // USAR PDFJS-DIST (librería oficial de Mozilla) - SIN DEPENDENCIAS NATIVAS
+  console.log('[PDF-MOZILLA] 🚀 Extrayendo texto con pdfjs-dist...');
+  console.log(`[PDF-MOZILLA] Tamaño del PDF: ${pdfBuffer.length} bytes`);
   
   try {
-    // pdf-parse es un módulo CommonJS, usar require
-    const pdfParse = require('pdf-parse');
+    const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
     
-    const pdfData = await pdfParse(pdfBuffer);
+    // Cargar el documento PDF
+    const loadingTask = pdfjsLib.getDocument({
+      data: new Uint8Array(pdfBuffer),
+      useSystemFonts: true,
+    });
     
-    console.log(`[PDF-NATIVO] 📄 PDF tiene ${pdfData.numpages} página(s)`);
-    console.log(`[PDF-NATIVO] 📝 Texto extraído: ${pdfData.text?.length || 0} caracteres`);
+    const pdfDocument = await loadingTask.promise;
+    const numPages = pdfDocument.numPages;
     
-    if (!pdfData.text || pdfData.text.trim().length === 0) {
-      throw new Error('El PDF no contiene texto nativo extraíble');
+    console.log(`[PDF-MOZILLA] 📄 PDF tiene ${numPages} página(s)`);
+    
+    // Extraer texto de todas las páginas
+    let fullText = '';
+    
+    for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+      const page = await pdfDocument.getPage(pageNum);
+      const textContent = await page.getTextContent();
+      
+      // Concatenar todos los items de texto
+      const pageText = textContent.items
+        .map((item: any) => item.str)
+        .join(' ');
+      
+      fullText += pageText + '\n';
     }
     
-    console.log(`[PDF-NATIVO] ✅ ÉXITO - Texto extraído: ${pdfData.text.length} caracteres`);
-    console.log(`[PDF-NATIVO] Primeras 500 caracteres:\n${pdfData.text.substring(0, 500)}`);
+    console.log(`[PDF-MOZILLA] 📝 Texto extraído: ${fullText.length} caracteres`);
     
-    return pdfData.text;
+    if (!fullText || fullText.trim().length === 0) {
+      throw new Error('El PDF no contiene texto extraíble');
+    }
+    
+    console.log(`[PDF-MOZILLA] ✅ ÉXITO - Texto extraído: ${fullText.length} caracteres`);
+    console.log(`[PDF-MOZILLA] Primeras 500 caracteres:\n${fullText.substring(0, 500)}`);
+    
+    return fullText;
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : 'Error desconocido';
     console.error('[PDF-NATIVO] ❌ ERROR:', errorMsg);
