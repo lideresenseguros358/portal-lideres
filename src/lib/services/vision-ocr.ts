@@ -84,8 +84,11 @@ async function extractTextFromPDF(pdfBuffer: Buffer): Promise<string> {
   try {
     const { extractText } = await import('unpdf');
     
+    // Convertir Buffer a Uint8Array
+    const uint8Array = new Uint8Array(pdfBuffer);
+    
     // Extraer texto del PDF
-    const result = await extractText(pdfBuffer);
+    const result = await extractText(uint8Array);
     const { text, totalPages } = result;
     
     console.log(`[PDF-UNPDF] 📄 PDF tiene ${totalPages} página(s)`);
