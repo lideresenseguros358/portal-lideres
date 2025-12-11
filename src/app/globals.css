@@ -82,12 +82,12 @@ input[type="number"] {
   appearance: textfield;
 }
 
-/* Mayúsculas automáticas en todos los inputs excepto email y password */
-input:not([type="email"]):not([type="password"]):not([type="number"]) {
+/* Mayúsculas automáticas en todos los inputs excepto email, password y aliases */
+input:not([type="email"]):not([type="password"]):not([type="number"]):not([data-no-uppercase]) {
   text-transform: uppercase;
 }
 
-textarea {
+textarea:not([data-no-uppercase]) {
   text-transform: uppercase;
 }
 

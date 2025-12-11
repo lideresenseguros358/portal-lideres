@@ -68,10 +68,11 @@ export default function DelinquencyTab({ rules, insurerId }: DelinquencyTabProps
         </select>
         <input 
           type="text" 
-          placeholder="Aliases (separados por coma)" 
+          placeholder="Ej: Póliza, Asegurado, Saldo" 
           value={newRule.aliases} 
           onChange={e => setNewRule({...newRule, aliases: e.target.value})}
           className="form-input"
+          data-no-uppercase="true"
         />
         <button onClick={handleAdd} className="btn-add" disabled={isPending}><FaPlus /> Agregar Regla</button>
       </div>

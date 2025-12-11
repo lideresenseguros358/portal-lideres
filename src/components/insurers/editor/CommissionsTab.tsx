@@ -87,10 +87,11 @@ export default function CommissionsTab({ rules, insurerId }: CommissionsTabProps
         </select>
         <input 
           type="text" 
-          placeholder='Ej: Nro Poliza, nombre asegurado, monto honorarios' 
+          placeholder='Ej: Póliza, Asegurado, Monto Comisión' 
           value={newRule.aliases} 
           onChange={e => setNewRule({...newRule, aliases: e.target.value})}
           className="form-input"
+          data-no-uppercase="true"
         />
         <button onClick={handleAdd} className="btn-add" disabled={isPending}>
           <FaPlus /> {isPending ? 'Guardando...' : 'Agregar'}
