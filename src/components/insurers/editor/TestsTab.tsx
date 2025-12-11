@@ -157,8 +157,8 @@ export default function TestsTab({ insurerId }: TestsTabProps) {
                           <thead>
                             <tr>
                               <th className="row-number">#</th>
-                              {testResult.data.normalizedHeaders?.map((header: string, idx: number) => (
-                                <th key={idx}>{header}</th>
+                              {(testResult.data.displayHeaders || testResult.data.normalizedHeaders)?.map((header: string, idx: number) => (
+                                <th key={idx}>{header.toUpperCase().replace(/_/g, ' ')}</th>
                               ))}
                             </tr>
                           </thead>
@@ -166,7 +166,7 @@ export default function TestsTab({ insurerId }: TestsTabProps) {
                             {testResult.data.previewRows.map((row: any, rowIdx: number) => (
                               <tr key={rowIdx}>
                                 <td className="row-number">{rowIdx + 1}</td>
-                                {testResult.data.normalizedHeaders?.map((header: string, colIdx: number) => (
+                                {(testResult.data.displayHeaders || testResult.data.normalizedHeaders)?.map((header: string, colIdx: number) => (
                                   <td key={colIdx}>{row[header] ?? '-'}</td>
                                 ))}
                               </tr>

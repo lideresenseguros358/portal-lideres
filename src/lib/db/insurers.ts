@@ -679,6 +679,64 @@ export async function previewMapping(options: PreviewMappingOptions) {
     return normalizedRow;
   });
   
+  // Filtrar y procesar filas para mostrar solo campos relevantes
+  const displayFields = targetField === 'COMMISSIONS' 
+    ? ['policy_number', 'client_name', 'gross_amount'] 
+    : targetField === 'DELINQUENCY'
+    ? ['policy_number', 'client_name', 'amount', 'balance']
+    : [];
+  
+  const processedRows = previewRows.map(row => {
+    const processedRow: any = {};
+    
+    // Para comisiones, aplicar lógica especial si hay múltiples columnas mapeadas a gross_amount
+    if (targetField === 'COMMISSIONS') {
+      // Encontrar todas las columnas que mapean a gross_amount
+      const grossAmountColumns: string[] = [];
+      normalizedHeaders.forEach((header, idx) => {
+        if (header === 'gross_amount' && headers[idx]) {
+          grossAmountColumns.push(headers[idx]!);
+        }
+      });
+      
+      log(`Found ${grossAmountColumns.length} column(s) mapped to gross_amount:`, grossAmountColumns);
+      
+      // Si hay múltiples columnas, aplicar lógica first_non_zero
+      if (grossAmountColumns.length > 1) {
+        let finalAmount = 0;
+        
+        for (const colName of grossAmountColumns) {
+          const value = row[colName];
+          const numValue = parseFloat(String(value || '0').replace(/[^\d.-]/g, ''));
+          
+          if (Math.abs(numValue) > 0.001) {
+            finalAmount = numValue;
+            log(`  Using value ${numValue} from column "${colName}"`);
+            break;
+          }
+        }
+        
+        processedRow.gross_amount = finalAmount;
+      } else if (grossAmountColumns.length === 1 && grossAmountColumns[0]) {
+        const value = row[grossAmountColumns[0]];
+        processedRow.gross_amount = parseFloat(String(value || '0').replace(/[^\d.-]/g, ''));
+      } else {
+        processedRow.gross_amount = 0;
+      }
+      
+      // Agregar policy_number y client_name
+      processedRow.policy_number = row.policy_number || '';
+      processedRow.client_name = row.client_name || '';
+    } else if (targetField === 'DELINQUENCY') {
+      // Para morosidad, copiar campos directamente
+      displayFields.forEach(field => {
+        processedRow[field] = row[field] || '';
+      });
+    }
+    
+    return processedRow;
+  });
+  
   // Verificar campos requeridos según el tipo
   const requiredFields = targetField === 'COMMISSIONS' 
     ? ['policy_number', 'gross_amount'] 
@@ -709,12 +767,14 @@ export async function previewMapping(options: PreviewMappingOptions) {
   
   log('===== VALIDATION SUCCESS =====');
   log('All required fields found!');
+  log(`Returning ${processedRows.length} processed rows with fields:`, displayFields);
   
   return {
     success: true,
     originalHeaders: headers,
     normalizedHeaders,
-    previewRows, // Filas con datos parseados
+    displayHeaders: displayFields, // Solo los campos que se deben mostrar en el preview
+    previewRows: processedRows, // Filas procesadas con solo campos relevantes
     rules,
     debugLogs // Agregar logs de debug
   };
