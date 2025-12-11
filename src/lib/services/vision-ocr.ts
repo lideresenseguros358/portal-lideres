@@ -10,15 +10,37 @@ let visionClient: ImageAnnotatorClient | null = null;
 
 function getVisionClient() {
   if (!visionClient) {
-    const keyPath = path.join(process.cwd(), 'keys', 'gcloud-key.json');
+    // Opción 1: Usar credenciales desde variable de entorno (Producción/Vercel)
+    const googleCredsJSON = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
     
-    if (!fs.existsSync(keyPath)) {
-      throw new Error('Google Cloud credentials file not found at: ' + keyPath);
+    if (googleCredsJSON) {
+      console.log('[VISION] Usando credenciales desde variable de entorno');
+      try {
+        const credentials = JSON.parse(googleCredsJSON);
+        visionClient = new ImageAnnotatorClient({
+          credentials,
+        });
+      } catch (error) {
+        throw new Error('Error al parsear credenciales de Google Cloud desde variable de entorno: ' + (error instanceof Error ? error.message : 'Error desconocido'));
+      }
+    } else {
+      // Opción 2: Usar archivo local (Desarrollo)
+      const keyPath = path.join(process.cwd(), 'keys', 'gcloud-key.json');
+      
+      if (fs.existsSync(keyPath)) {
+        console.log('[VISION] Usando credenciales desde archivo local:', keyPath);
+        visionClient = new ImageAnnotatorClient({
+          keyFilename: keyPath,
+        });
+      } else {
+        throw new Error(
+          'Google Cloud credentials no configuradas. Configure:\n' +
+          '1. Variable de entorno GOOGLE_APPLICATION_CREDENTIALS_JSON en producción, o\n' +
+          '2. Archivo keys/gcloud-key.json en desarrollo\n' +
+          'Ruta buscada: ' + keyPath
+        );
+      }
     }
-    
-    visionClient = new ImageAnnotatorClient({
-      keyFilename: keyPath,
-    });
   }
   return visionClient;
 }
