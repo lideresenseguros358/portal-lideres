@@ -151,23 +151,24 @@ function structureTextToTable(text: string): any[][] {
       continue;
     }
     
-    // Saltar filas que tienen "--" o están vacías en la columna de póliza
-    if (line.startsWith('--') || line.startsWith('###')) {
-      continue;
-    }
-    
     // Detectar líneas de datos por el patrón de póliza
     const policyMatch = line.match(policyLineRegex);
     if (policyMatch) {
       const poliza = policyMatch[1];
       
-      // Saltar si la póliza es "--" o está vacía
-      if (!poliza || poliza === '--' || poliza.trim() === '') {
+      // Saltar si la póliza es "--" o está vacía o es "###"
+      if (!poliza || poliza === '--' || poliza.trim() === '' || poliza.includes('#')) {
         continue;
       }
       
       // Resto de la línea después de la póliza
       const restOfLine = line.substring(policyMatch[0].length).trim();
+      
+      // Saltar líneas que contienen texto descriptivo (no son datos de cliente)
+      if (restOfLine.includes('AGO DE COMISION') || restOfLine.includes('MES DE NOVIEMBRE') ||
+          restOfLine.includes('DETALLE') || restOfLine.toUpperCase().includes('OP-')) {
+        continue;
+      }
       
       // Buscar donde termina el asegurado y empieza el recibo
       // Patrones de recibo: ACH, VC, BG, GB, TCR seguidos de números
@@ -184,7 +185,12 @@ function structureTextToTable(text: string): any[][] {
         const parts = afterAsegurado.split(/\s+/);
         const comision = parts[parts.length - 1];
         
-        if (asegurado && comision) {
+        // Validar que asegurado no sea texto descriptivo
+        const invalidNames = ['AGO DE COMISION', 'MES DE', 'DETALLE', 'TOTAL'];
+        const isValid = asegurado && comision && 
+                       !invalidNames.some(invalid => asegurado.toUpperCase().includes(invalid));
+        
+        if (isValid) {
           rows.push([poliza, asegurado, comision]);
         }
       } else {
@@ -193,16 +199,35 @@ function structureTextToTable(text: string): any[][] {
         if (parts.length >= 2) {
           const asegurado = parts[0];
           const comision = parts[parts.length - 1];
-          rows.push([poliza, asegurado, comision]);
+          
+          // Validar que asegurado no sea texto descriptivo
+          const invalidNames = ['AGO DE COMISION', 'MES DE', 'DETALLE', 'TOTAL'];
+          const isValid = asegurado && comision && 
+                         !invalidNames.some(invalid => asegurado.toUpperCase().includes(invalid));
+          
+          if (isValid) {
+            rows.push([poliza, asegurado, comision]);
+          }
         }
       }
     }
   }
   
+  // Filtrar filas inválidas (por si acaso)
+  const validRows = rows.filter(row => {
+    const [poliza, asegurado, comision] = row;
+    // Asegurar que todos los campos existen y no están vacíos
+    return poliza && asegurado && comision && 
+           poliza.trim() !== '' && 
+           poliza !== '--' && 
+           poliza !== 'undefined' &&
+           !poliza.includes('#');
+  });
+  
   // Agregar header
   const finalRows = [
     ['Póliza', 'Asegurado', 'Comisión'], // Header
-    ...rows
+    ...validRows
   ];
   
   return finalRows;
