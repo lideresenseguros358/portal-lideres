@@ -582,10 +582,11 @@ export async function previewMapping(options: PreviewMappingOptions) {
     
     return {
       success: false,
-      error: `Campos requeridos faltantes: ${missingFields.join(', ')}\nColumnas detectadas: ${headers.join(', ')}\nColumnas normalizadas: ${normalizedHeaders.join(', ')}`,
+      error: `Campos requeridos faltantes: ${missingFields.join(', ')}`,
       originalHeaders: headers,
       normalizedHeaders,
       rules,
+      missingFields, // Agregar lista de campos faltantes
     };
   }
   

@@ -199,15 +199,72 @@ export default function TestsTab({ insurerId }: TestsTabProps) {
                 </>
               ) : (
                 <div className="error-details">
-                  <p><strong>Error:</strong> {testResult.data?.error}</p>
-                  {testResult.data?.originalHeaders && (
-                    <div className="mt-3">
-                      <p className="font-semibold">Columnas detectadas:</p>
-                      <ul className="column-list">
-                        {testResult.data.originalHeaders.map((h: string, i: number) => (
-                          <li key={i}>{h}</li>
-                        ))}
-                      </ul>
+                  <div className="error-header">
+                    <FaTimesCircle className="icon" />
+                    <h4>Error de Validación</h4>
+                  </div>
+                  <p className="error-message"><strong>Error:</strong> {testResult.data?.error}</p>
+                  
+                  {testResult.data?.missingFields && (
+                    <div className="missing-fields-alert">
+                      <strong>Campos faltantes:</strong> {testResult.data.missingFields.join(', ')}
+                      <br />
+                      <small>Configure los aliases en la pestaña "Mapeos" para mapear las columnas del archivo a estos campos.</small>
+                    </div>
+                  )}
+                  
+                  {testResult.data?.originalHeaders && testResult.data?.normalizedHeaders && (
+                    <div className="mapping-debug">
+                      <h5>🔍 Debug: Mapeo de Columnas</h5>
+                      <div className="mapping-table-container">
+                        <table className="mapping-comparison-table">
+                          <thead>
+                            <tr>
+                              <th>#</th>
+                              <th>Columna Original (Excel)</th>
+                              <th>→</th>
+                              <th>Campo Mapeado</th>
+                              <th>Estado</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {testResult.data.originalHeaders.map((original: string, i: number) => {
+                              const normalized = testResult.data.normalizedHeaders[i];
+                              const isMapped = original.toLowerCase() !== normalized.toLowerCase();
+                              const isRequired = testResult.data?.missingFields?.includes(normalized);
+                              
+                              return (
+                                <tr key={i} className={isRequired ? 'required-field' : ''}>
+                                  <td>{i + 1}</td>
+                                  <td className="original-column">{original}</td>
+                                  <td className="arrow">{isMapped ? '✓' : '○'}</td>
+                                  <td className="normalized-column">{normalized}</td>
+                                  <td>
+                                    {isMapped ? (
+                                      <span className="badge mapped">Mapeado</span>
+                                    ) : isRequired ? (
+                                      <span className="badge required">❌ Requerido</span>
+                                    ) : (
+                                      <span className="badge unmapped">Sin mapeo</span>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                      
+                      <div className="help-box">
+                        <strong>💡 Cómo corregir:</strong>
+                        <ol>
+                          <li>Ve a la pestaña <strong>"Mapeos"</strong></li>
+                          <li>Selecciona el tipo: <strong>{target === 'COMMISSIONS' ? 'Comisiones' : 'Morosidad'}</strong></li>
+                          <li>Para cada campo faltante (marcado con ❌), crea o edita una regla</li>
+                          <li>Agrega el nombre de la columna original como <strong>alias</strong></li>
+                          <li>Vuelve a probar el archivo</li>
+                        </ol>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -479,13 +536,160 @@ export default function TestsTab({ insurerId }: TestsTabProps) {
           font-weight: 500;
           font-size: 15px;
           line-height: 1.6;
+          margin-bottom: 16px;
         }
         .error-details {
-          background: white;
-          padding: 16px;
-          border-radius: 8px;
-          border: 1px solid #fecaca;
+          background: #fef2f2;
+          padding: 24px;
+          border-radius: 12px;
+          border: 2px solid #fecaca;
         }
+        .error-header {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          margin-bottom: 16px;
+          color: #991b1b;
+        }
+        .error-header .icon {
+          font-size: 28px;
+        }
+        .error-header h4 {
+          margin: 0;
+          font-size: 20px;
+          font-weight: 700;
+        }
+        
+        .missing-fields-alert {
+          background: #fee2e2;
+          border: 2px solid #fca5a5;
+          border-radius: 8px;
+          padding: 16px;
+          margin: 16px 0;
+          color: #991b1b;
+        }
+        .missing-fields-alert small {
+          display: block;
+          margin-top: 8px;
+          color: #7f1d1d;
+          font-size: 13px;
+        }
+        
+        .mapping-debug {
+          background: white;
+          border: 2px solid #e5e7eb;
+          border-radius: 12px;
+          padding: 24px;
+          margin-top: 24px;
+        }
+        .mapping-debug h5 {
+          font-size: 18px;
+          font-weight: 700;
+          color: #1f2937;
+          margin: 0 0 20px 0;
+        }
+        
+        .mapping-table-container {
+          overflow-x: auto;
+          border-radius: 8px;
+          border: 2px solid #e5e7eb;
+          margin-bottom: 20px;
+        }
+        .mapping-comparison-table {
+          width: 100%;
+          border-collapse: collapse;
+          font-size: 14px;
+        }
+        .mapping-comparison-table thead {
+          background: #f9fafb;
+          border-bottom: 2px solid #e5e7eb;
+        }
+        .mapping-comparison-table th {
+          padding: 12px 16px;
+          text-align: left;
+          font-weight: 700;
+          color: #374151;
+          font-size: 13px;
+          text-transform: uppercase;
+        }
+        .mapping-comparison-table tbody tr {
+          border-bottom: 1px solid #f3f4f6;
+        }
+        .mapping-comparison-table tbody tr:hover {
+          background: #f9fafb;
+        }
+        .mapping-comparison-table tbody tr.required-field {
+          background: #fef2f2;
+        }
+        .mapping-comparison-table tbody tr.required-field:hover {
+          background: #fee2e2;
+        }
+        .mapping-comparison-table td {
+          padding: 12px 16px;
+          color: #1f2937;
+        }
+        .mapping-comparison-table .original-column {
+          font-family: 'Courier New', monospace;
+          background: #f9fafb;
+          font-weight: 600;
+        }
+        .mapping-comparison-table .normalized-column {
+          font-family: 'Courier New', monospace;
+          font-weight: 600;
+          color: #2563eb;
+        }
+        .mapping-comparison-table .arrow {
+          text-align: center;
+          font-size: 16px;
+          color: #10b981;
+        }
+        
+        .badge {
+          display: inline-block;
+          padding: 4px 12px;
+          border-radius: 12px;
+          font-size: 12px;
+          font-weight: 600;
+          text-transform: uppercase;
+        }
+        .badge.mapped {
+          background: #d1fae5;
+          color: #065f46;
+          border: 1px solid #6ee7b7;
+        }
+        .badge.unmapped {
+          background: #f3f4f6;
+          color: #6b7280;
+          border: 1px solid #d1d5db;
+        }
+        .badge.required {
+          background: #fee2e2;
+          color: #991b1b;
+          border: 1px solid #fca5a5;
+        }
+        
+        .help-box {
+          background: #eff6ff;
+          border: 2px solid #bfdbfe;
+          border-radius: 8px;
+          padding: 20px;
+          color: #1e40af;
+        }
+        .help-box strong {
+          display: block;
+          font-size: 16px;
+          margin-bottom: 12px;
+          color: #1e3a8a;
+        }
+        .help-box ol {
+          margin: 0;
+          padding-left: 20px;
+        }
+        .help-box li {
+          margin: 8px 0;
+          line-height: 1.6;
+        }
+        
         .column-list {
           list-style: none;
           padding: 0;
