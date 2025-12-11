@@ -73,67 +73,75 @@ async function extractTextFromImage(imageBuffer: Buffer): Promise<string> {
 }
 
 /**
- * Extrae texto de un PDF - Estrategia híbrida
- * 1. Intenta extraer texto nativo del PDF con pdf-parse
- * 2. Si falla o no hay texto, es un PDF escaneado y necesita conversión manual
+ * Convierte PDF a Excel y extrae el texto
+ * Usa iLovePDF API para conversión automática
  */
 async function extractTextFromPDF(pdfBuffer: Buffer): Promise<string> {
   try {
-    console.log('[OCR] Intentando extraer texto nativo del PDF...');
-    console.log(`[OCR] Tamaño del PDF: ${pdfBuffer.length} bytes`);
+    console.log('[PDF→EXCEL] Convirtiendo PDF a Excel con iLovePDF API...');
+    console.log(`[PDF→EXCEL] Tamaño del PDF: ${pdfBuffer.length} bytes`);
     
-    // Intentar extraer texto nativo con pdf-parse
-    const pdfParseModule = await import('pdf-parse');
-    const pdfParse = pdfParseModule.default || pdfParseModule;
+    // Importar servicio de iLovePDF
+    const { convertPDFToExcel } = await import('./ilovepdf-converter');
     
-    const data = await (pdfParse as any)(pdfBuffer);
+    // Convertir PDF a Excel
+    const excelBuffer = await convertPDFToExcel(pdfBuffer);
+    console.log(`[PDF→EXCEL] ✅ Excel generado: ${excelBuffer.length} bytes`);
     
-    console.log(`[OCR] PDF tiene ${data.numpages} página(s)`);
-    console.log(`[OCR] Texto extraído: ${data.text?.length || 0} caracteres`);
+    // Leer el Excel con XLSX
+    console.log('[PDF→EXCEL] Leyendo contenido del Excel...');
+    const workbook = XLSX.read(excelBuffer);
+    const sheetName = workbook.SheetNames[0];
     
-    if (data.text && data.text.trim().length > 100) {
-      // Hay suficiente texto, usarlo
-      console.log('[OCR] ✅ Texto nativo extraído del PDF exitosamente');
-      console.log(`[OCR] Primeras 200 caracteres: ${data.text.substring(0, 200)}`);
-      return data.text;
+    if (!sheetName) {
+      throw new Error('El Excel generado no contiene hojas');
     }
     
-    // Si llegamos aquí, el PDF no tiene texto nativo suficiente
-    // Es probablemente un PDF escaneado o imagen
-    console.log('[OCR] ⚠️ PDF no contiene texto nativo suficiente (PDF escaneado)');
+    const worksheet = workbook.Sheets[sheetName];
     
-    throw new Error(
-      'Este PDF es una imagen escaneada y requiere procesamiento especial.\n\n' +
-      '📋 OPCIONES PARA PROCESAR ESTE ARCHIVO:\n\n' +
-      '1️⃣ RECOMENDADO: Exportar a Excel desde el sistema origen:\n' +
-      '   • Abrir el PDF en su aplicación\n' +
-      '   • Archivo → Exportar → Microsoft Excel (.xlsx)\n' +
-      '   • Subir el archivo .xlsx al sistema\n\n' +
-      '2️⃣ Convertir PDF a imágenes individuales:\n' +
-      '   • Usar: https://pdf2png.com/\n' +
-      '   • Subir cada página como imagen (JPG/PNG)\n' +
-      '   • El sistema procesará las imágenes con OCR\n\n' +
-      '3️⃣ Usar herramienta de conversión PDF → Excel:\n' +
-      '   • https://www.adobe.com/acrobat/online/pdf-to-excel.html\n' +
-      '   • https://www.ilovepdf.com/pdf_to_excel\n\n' +
-      '💡 La opción 1 es la más precisa y rápida.'
-    );
+    if (!worksheet) {
+      throw new Error('No se pudo leer la hoja del Excel');
+    }
+    
+    // Convertir a array de arrays (texto estructurado)
+    const data = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+    
+    console.log(`[PDF→EXCEL] ✅ Datos extraídos: ${data.length} filas`);
+    
+    // Convertir a texto con tabs como separadores (para mantener estructura)
+    const text = data
+      .filter(row => row && row.length > 0)
+      .map(row => row.join('\t'))
+      .join('\n');
+    
+    console.log(`[PDF→EXCEL] ✅ Texto generado: ${text.length} caracteres`);
+    console.log(`[PDF→EXCEL] Primeras 300 caracteres:\n${text.substring(0, 300)}`);
+    
+    return text;
     
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
-    console.error('[OCR] Error al procesar PDF:', errorMessage);
+    console.error('[PDF→EXCEL] ❌ Error:', errorMessage);
     
-    // Si el error ya es nuestro mensaje personalizado, re-lanzarlo
-    if (errorMessage.includes('OPCIONES PARA PROCESAR')) {
+    // Si el error es de credenciales de iLovePDF, re-lanzarlo directamente
+    if (errorMessage.includes('iLovePDF API no está configurada') || 
+        errorMessage.includes('Credenciales de iLovePDF inválidas')) {
       throw error;
     }
     
-    // Otros errores
+    // Si es límite alcanzado, dar mensaje específico
+    if (errorMessage.includes('Límite de conversiones alcanzado')) {
+      throw error;
+    }
+    
+    // Para otros errores, dar mensaje genérico
     throw new Error(
-      'Error al procesar PDF.\n\n' +
-      'Este archivo no puede ser procesado automáticamente. Por favor:\n' +
-      '1) Exporte el PDF a Excel (.xlsx) desde su sistema origen, o\n' +
-      '2) Convierta el PDF a imágenes (JPG/PNG) y suba las imágenes.\n\n' +
+      'Error al convertir PDF a Excel.\n\n' +
+      'El sistema intentó convertir automáticamente su PDF a Excel pero falló.\n' +
+      'Por favor intente:\n\n' +
+      '1️⃣ Exportar el PDF a Excel (.xlsx) manualmente desde su aplicación\n' +
+      '2️⃣ Verificar que el PDF no esté corrupto o protegido con contraseña\n' +
+      '3️⃣ Usar un conversor online: https://www.ilovepdf.com/pdf_to_excel\n\n' +
       `Detalle técnico: ${errorMessage}`
     );
   }
