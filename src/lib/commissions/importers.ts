@@ -3,6 +3,7 @@ import type { Tables, TablesInsert } from '@/lib/supabase/server';
 import type { ParsedRow } from './schemas';
 import * as XLSX from 'xlsx';
 import { previewMapping } from '@/lib/db/insurers';
+import { parseSuraExcel } from '@/lib/parsers/sura-parser';
 
 type CommImportRow = Tables<'comm_imports'>;
 type CommItemRow = Tables<'comm_items'>;
@@ -24,7 +25,37 @@ async function parseXlsxFile(file: File, mappingRules: MappingRule[] = [], inver
   console.log('[PARSER] Using mapping rules:', mappingRules);
   console.log('[PARSER] Insurer ID:', insurerId);
   
-  // Si tenemos insurerId, usar previewMapping para consistencia
+  // PARSER ESPECIAL PARA SURA (formato multi-tabla complejo)
+  if (insurerId) {
+    const supabase = getSupabaseAdmin();
+    const { data: insurer } = await supabase
+      .from('insurers')
+      .select('name')
+      .eq('id', insurerId)
+      .single();
+    
+    if (insurer?.name?.toUpperCase() === 'SURA') {
+      console.log('[PARSER] Detectado SURA - Usando parser especial');
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const suraRows = parseSuraExcel(arrayBuffer);
+        
+        console.log('[SURA PARSER] Extraídas', suraRows.length, 'filas');
+        
+        return suraRows.map(row => ({
+          policy_number: row.policy_number,
+          client_name: row.client_name,
+          commission_amount: row.gross_amount,
+          raw_row: row
+        }));
+      } catch (error) {
+        console.error('[SURA PARSER] Error:', error);
+        throw new Error('Error al parsear archivo de SURA: ' + (error instanceof Error ? error.message : 'Error desconocido'));
+      }
+    }
+  }
+  
+  // Si tenemos insurerId (y NO es SURA), usar previewMapping para consistencia
   if (insurerId) {
     try {
       const arrayBuffer = await file.arrayBuffer();
