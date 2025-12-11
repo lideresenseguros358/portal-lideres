@@ -77,51 +77,30 @@ async function extractTextFromImage(imageBuffer: Buffer): Promise<string> {
  * Flujo: Intenta texto nativo primero, luego iLovePDF si falla
  */
 async function extractTextFromPDF(pdfBuffer: Buffer): Promise<string> {
-  // USAR PDFJS-DIST (librería oficial de Mozilla) - SIN DEPENDENCIAS NATIVAS
-  console.log('[PDF-MOZILLA] 🚀 Extrayendo texto con pdfjs-dist...');
-  console.log(`[PDF-MOZILLA] Tamaño del PDF: ${pdfBuffer.length} bytes`);
+  // USAR UNPDF - Librería moderna sin workers, diseñada para Node.js
+  console.log('[PDF-UNPDF] 🚀 Extrayendo texto con unpdf...');
+  console.log(`[PDF-UNPDF] Tamaño del PDF: ${pdfBuffer.length} bytes`);
   
   try {
-    const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    const { extractText } = await import('unpdf');
     
-    // Deshabilitar workers para server-side rendering (Next.js)
-    pdfjsLib.GlobalWorkerOptions.workerSrc = '';
+    // Extraer texto del PDF
+    const result = await extractText(pdfBuffer);
+    const { text, totalPages } = result;
     
-    // Cargar el documento PDF
-    const loadingTask = pdfjsLib.getDocument({
-      data: new Uint8Array(pdfBuffer),
-      useSystemFonts: true,
-      standardFontDataUrl: undefined, // No cargar fuentes externas
-    } as any);
+    console.log(`[PDF-UNPDF] 📄 PDF tiene ${totalPages} página(s)`);
     
-    const pdfDocument = await loadingTask.promise;
-    const numPages = pdfDocument.numPages;
+    // text es un array de strings (uno por página), unirlos
+    const fullText = Array.isArray(text) ? text.join('\n') : String(text);
     
-    console.log(`[PDF-MOZILLA] 📄 PDF tiene ${numPages} página(s)`);
-    
-    // Extraer texto de todas las páginas
-    let fullText = '';
-    
-    for (let pageNum = 1; pageNum <= numPages; pageNum++) {
-      const page = await pdfDocument.getPage(pageNum);
-      const textContent = await page.getTextContent();
-      
-      // Concatenar todos los items de texto
-      const pageText = textContent.items
-        .map((item: any) => item.str)
-        .join(' ');
-      
-      fullText += pageText + '\n';
-    }
-    
-    console.log(`[PDF-MOZILLA] 📝 Texto extraído: ${fullText.length} caracteres`);
+    console.log(`[PDF-UNPDF] 📝 Texto extraído: ${fullText.length} caracteres`);
     
     if (!fullText || fullText.trim().length === 0) {
       throw new Error('El PDF no contiene texto extraíble');
     }
     
-    console.log(`[PDF-MOZILLA] ✅ ÉXITO - Texto extraído: ${fullText.length} caracteres`);
-    console.log(`[PDF-MOZILLA] Primeras 500 caracteres:\n${fullText.substring(0, 500)}`);
+    console.log(`[PDF-UNPDF] ✅ ÉXITO - Texto extraído: ${fullText.length} caracteres`);
+    console.log(`[PDF-UNPDF] Primeras 500 caracteres:\n${fullText.substring(0, 500)}`);
     
     return fullText;
   } catch (error) {
