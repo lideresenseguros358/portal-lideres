@@ -73,37 +73,44 @@ async function extractTextFromImage(imageBuffer: Buffer): Promise<string> {
 }
 
 /**
- * Extrae texto de un PDF usando iLovePDF Extract Text API
- * Retorna texto extraído directamente del PDF
+ * Extrae texto de un PDF usando iLovePDF OCR API
+ * Primero aplica OCR al PDF, luego extrae el texto
  */
 async function extractTextFromPDF(pdfBuffer: Buffer): Promise<string> {
   try {
-    console.log('[PDF→TXT] Extrayendo texto del PDF con iLovePDF...');
-    console.log(`[PDF→TXT] Tamaño del PDF: ${pdfBuffer.length} bytes`);
+    console.log('[PDF-OCR] Procesando PDF con iLovePDF OCR...');
+    console.log(`[PDF-OCR] Tamaño del PDF: ${pdfBuffer.length} bytes`);
     
     // Importar servicio de iLovePDF
     const { convertPDFToExcel } = await import('./ilovepdf-converter');
     
-    // Extraer texto con iLovePDF
-    const textBuffer = await convertPDFToExcel(pdfBuffer);
-    console.log(`[PDF→TXT] ✅ Texto generado: ${textBuffer.length} bytes`);
+    // Aplicar OCR al PDF con iLovePDF
+    const pdfWithOCR = await convertPDFToExcel(pdfBuffer);
+    console.log(`[PDF-OCR] ✅ PDF con OCR generado: ${pdfWithOCR.length} bytes`);
     
-    // Convertir buffer a texto
-    const extractedText = textBuffer.toString('utf-8');
-    console.log(`[PDF→TXT] Texto contiene ${extractedText.length} caracteres`);
+    // Ahora extraer el texto del PDF con OCR usando pdf-parse
+    console.log('[PDF-OCR] Extrayendo texto del PDF procesado...');
+    const pdfParseModule = await import('pdf-parse');
+    const pdfParse = pdfParseModule.default || pdfParseModule;
     
-    if (!extractedText || extractedText.trim().length === 0) {
+    const pdfData = await (pdfParse as any)(pdfWithOCR);
+    
+    console.log(`[PDF-OCR] PDF tiene ${pdfData.numpages} página(s)`);
+    console.log(`[PDF-OCR] Texto extraído: ${pdfData.text?.length || 0} caracteres`);
+    
+    if (!pdfData.text || pdfData.text.trim().length === 0) {
       throw new Error(
-        'No se pudo extraer texto del PDF.\n\n' +
-        'El PDF podría estar vacío o el texto no es accesible.\n' +
+        'No se pudo extraer texto del PDF con OCR.\n\n' +
+        'El PDF podría estar vacío o el OCR no pudo detectar texto.\n' +
         'Por favor:\n\n' +
-        '1️⃣ Verifique que el PDF contenga texto visible\n' +
+        '1️⃣ Verifique que el PDF contenga texto o imágenes legibles\n' +
         '2️⃣ Intente exportar a Excel (.xlsx) desde su aplicación original'
       );
     }
     
-    console.log(`[PDF→TXT] ✅ Texto extraído: ${extractedText.length} caracteres`);
-    console.log(`[PDF→TXT] Primeras 300 caracteres:\n${extractedText.substring(0, 300)}`);
+    const extractedText = pdfData.text;
+    console.log(`[PDF-OCR] ✅ Texto extraído exitosamente: ${extractedText.length} caracteres`);
+    console.log(`[PDF-OCR] Primeras 300 caracteres:\n${extractedText.substring(0, 300)}`);
     
     return extractedText;
     

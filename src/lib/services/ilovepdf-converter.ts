@@ -1,7 +1,7 @@
 /**
- * Servicio para extraer texto de PDFs usando iLovePDF Extract Text API
- * Extrae texto estructurado con posiciones y propiedades en formato CSV
- * Tool: 'extract' con modo detailed=true para obtener CSV con columnas
+ * Servicio para procesar PDFs usando iLovePDF OCR API
+ * Convierte PDFs escaneados en PDFs con texto extraíble/buscable
+ * Tool: 'pdfocr' para aplicar OCR y luego extraer texto
  */
 
 const ILOVEPDF_API_URL = 'https://api.ilovepdf.com/v1';
@@ -104,22 +104,22 @@ async function getAuthToken(): Promise<string> {
 }
 
 /**
- * Extrae texto de un PDF usando iLovePDF Extract Text API
- * Retorna texto estructurado en formato CSV con columnas bien definidas
+ * Procesa un PDF con OCR usando iLovePDF OCR API
+ * Convierte PDFs escaneados en PDFs con texto extraíble
  * @param pdfBuffer Buffer del archivo PDF
- * @returns Buffer del archivo CSV con texto extraído
+ * @returns Buffer del PDF procesado con OCR
  */
 export async function convertPDFToExcel(pdfBuffer: Buffer): Promise<Buffer> {
-  console.log('[iLovePDF] Iniciando extracción de texto PDF → CSV');
-  console.log(`[iLovePDF] Tamaño del PDF: ${pdfBuffer.length} bytes`);
+  console.log('[iLovePDF-OCR] Iniciando procesamiento PDF con OCR');
+  console.log(`[iLovePDF-OCR] Tamaño del PDF: ${pdfBuffer.length} bytes`);
 
   try {
     // 1. Obtener token
     const token = await getAuthToken();
 
-    // 2. Iniciar tarea de extracción de texto
-    console.log('[iLovePDF] Iniciando tarea extract (extracción de texto)...');
-    const startResponse = await fetch(`${ILOVEPDF_API_URL}/start/extract`, {
+    // 2. Iniciar tarea de OCR
+    console.log('[iLovePDF-OCR] Iniciando tarea pdfocr (OCR)...');
+    const startResponse = await fetch(`${ILOVEPDF_API_URL}/start/pdfocr`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -133,15 +133,15 @@ export async function convertPDFToExcel(pdfBuffer: Buffer): Promise<Buffer> {
 
     const startData = await startResponse.json() as StartResponse;
     const { server, task } = startData;
-    console.log('[iLovePDF] ✅ Tarea iniciada:', task);
-    console.log('[iLovePDF] Servidor asignado:', server);
+    console.log('[iLovePDF-OCR] ✅ Tarea iniciada:', task);
+    console.log('[iLovePDF-OCR] Servidor asignado:', server);
 
     // Asegurar que el servidor tenga el esquema https://
     const serverUrl = server.startsWith('http') ? server : `https://${server}`;
-    console.log('[iLovePDF] URL del servidor:', serverUrl);
+    console.log('[iLovePDF-OCR] URL del servidor:', serverUrl);
 
     // 3. Subir archivo PDF
-    console.log('[iLovePDF] Subiendo archivo PDF...');
+    console.log('[iLovePDF-OCR] Subiendo archivo PDF...');
     const formData = new FormData();
     formData.append('task', task);
     formData.append('file', new Blob([new Uint8Array(pdfBuffer)]), 'document.pdf');
@@ -160,10 +160,10 @@ export async function convertPDFToExcel(pdfBuffer: Buffer): Promise<Buffer> {
     }
 
     const uploadData = await uploadResponse.json() as UploadResponse;
-    console.log('[iLovePDF] ✅ Archivo subido:', uploadData.server_filename);
+    console.log('[iLovePDF-OCR] ✅ Archivo subido:', uploadData.server_filename);
 
-    // 4. Procesar extracción de texto (modo simple sin detailed)
-    console.log('[iLovePDF] Procesando extracción de texto (modo simple)...');
+    // 4. Procesar OCR del PDF
+    console.log('[iLovePDF-OCR] Procesando OCR del PDF...');
     const processResponse = await fetch(`${serverUrl}/v1/process`, {
       method: 'POST',
       headers: {
@@ -182,12 +182,12 @@ export async function convertPDFToExcel(pdfBuffer: Buffer): Promise<Buffer> {
     }
 
     const processData = await processResponse.json() as ProcessResponse;
-    console.log('[iLovePDF] ✅ Extracción completada');
-    console.log(`[iLovePDF] Archivo de salida: ${processData.download_filename}`);
-    console.log(`[iLovePDF] Tamaño de salida: ${processData.output_filesize} bytes`);
+    console.log('[iLovePDF-OCR] ✅ OCR completado');
+    console.log(`[iLovePDF-OCR] Archivo de salida: ${processData.download_filename}`);
+    console.log(`[iLovePDF-OCR] Tamaño de salida: ${processData.output_filesize} bytes`);
 
-    // 5. Descargar resultado (TXT con texto extraído)
-    console.log('[iLovePDF] Descargando archivo de texto...');
+    // 5. Descargar PDF con OCR aplicado
+    console.log('[iLovePDF-OCR] Descargando PDF procesado...');
     const downloadResponse = await fetch(`${serverUrl}/v1/download/${task}`, {
       method: 'GET',
       headers: {
@@ -200,16 +200,11 @@ export async function convertPDFToExcel(pdfBuffer: Buffer): Promise<Buffer> {
       throw new Error(`Error al descargar: ${error}`);
     }
 
-    const textBuffer = await downloadResponse.arrayBuffer();
-    console.log('[iLovePDF] ✅ Texto descargado exitosamente');
-    console.log(`[iLovePDF] Tamaño final: ${textBuffer.byteLength} bytes`);
-    
-    // Log del contenido para debug
-    const extractedText = Buffer.from(textBuffer).toString('utf-8');
-    console.log(`[iLovePDF] Caracteres extraídos: ${extractedText.length}`);
-    console.log(`[iLovePDF] Primeras 500 caracteres:\n${extractedText.substring(0, 500)}`);
+    const pdfOcrBuffer = await downloadResponse.arrayBuffer();
+    console.log('[iLovePDF-OCR] ✅ PDF con OCR descargado exitosamente');
+    console.log(`[iLovePDF-OCR] Tamaño final: ${pdfOcrBuffer.byteLength} bytes`);
 
-    return Buffer.from(textBuffer);
+    return Buffer.from(pdfOcrBuffer);
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
