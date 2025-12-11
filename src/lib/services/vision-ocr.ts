@@ -82,10 +82,10 @@ async function extractTextFromPDF(pdfBuffer: Buffer): Promise<string> {
   console.log(`[PDF-NATIVO] Tamaño del PDF: ${pdfBuffer.length} bytes`);
   
   try {
-    const pdfParseModule = await import('pdf-parse');
-    const pdfParse = pdfParseModule.default || pdfParseModule;
+    // pdf-parse es un módulo CommonJS, usar require
+    const pdfParse = require('pdf-parse');
     
-    const pdfData = await (pdfParse as any)(pdfBuffer);
+    const pdfData = await pdfParse(pdfBuffer);
     
     console.log(`[PDF-NATIVO] 📄 PDF tiene ${pdfData.numpages} página(s)`);
     console.log(`[PDF-NATIVO] 📝 Texto extraído: ${pdfData.text?.length || 0} caracteres`);
