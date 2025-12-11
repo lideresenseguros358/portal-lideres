@@ -123,94 +123,79 @@ async function extractTextFromPDF(pdfBuffer: Buffer): Promise<string> {
 
 /**
  * Estructura el texto extraído en formato tabular
- * Optimizado para reportes de seguros con múltiples columnas
+ * PARSER ESPECÍFICO PARA FORMATO ANCON
  */
 function structureTextToTable(text: string): any[][] {
-  // Dividir en líneas y limpiar
-  const lines = text.split('\n')
-    .map(line => line.trim())
-    .filter(line => line.length > 0);
+  console.log('[PARSER-ANCON] Iniciando parseo de formato ANCON...');
+  
+  const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
   
   if (lines.length === 0) {
+    console.log('[PARSER-ANCON] ⚠️ No hay líneas para procesar');
     return [];
   }
   
-  console.log(`[PARSER] Procesando ${lines.length} líneas de texto`);
+  console.log(`[PARSER-ANCON] Procesando ${lines.length} líneas de texto`);
   
-  // Detectar si hay delimitadores explícitos
-  const hasTabs = lines.some(line => line.includes('\t'));
-  const hasPipes = lines.some(line => line.includes('|'));
+  const rows: any[][] = [];
   
-  let rows: any[][] = [];
+  // Regex para detectar líneas de datos (comienzan con número de póliza)
+  // Formato: XXXX-XXXXX-XX (ej: 0122-00173-01)
+  const policyLineRegex = /^\d{4}-\d{5}-\d{2}\s+/;
   
-  if (hasTabs) {
-    console.log('[PARSER] Detectado delimitador: TAB');
-    rows = lines.map(line => line.split('\t').map(cell => cell.trim()).filter(cell => cell));
-  } else if (hasPipes) {
-    console.log('[PARSER] Detectado delimitador: PIPE');
-    rows = lines
-      .filter(line => !line.match(/^[\s\-|]+$/)) // Filtrar líneas separadoras
-      .map(line => line.split('|').map(cell => cell.trim()).filter(cell => cell));
-  } else {
-    // Detectar columnas por espaciado múltiple (2+ espacios)
-    const multiSpaceRegex = /\s{2,}/;
+  for (const line of lines) {
+    // Saltar headers repetidos
+    if (line.includes('Póliza') && line.includes('Asegurado') && line.includes('Comisión')) {
+      console.log('[PARSER-ANCON] ⏭️ Saltando header');
+      continue;
+    }
     
-    if (lines.some(line => multiSpaceRegex.test(line))) {
-      console.log('[PARSER] Detectado delimitador: ESPACIOS MÚLTIPLES');
-      rows = lines.map(line => 
-        line.split(multiSpaceRegex).map(cell => cell.trim()).filter(cell => cell)
-      );
-    } else {
-      console.log('[PARSER] Sin delimitador claro, usando espacio simple');
-      // Para reportes con columnas muy ajustadas, separar por espacio simple
-      // pero intentar mantener números y texto juntos
-      rows = lines.map(line => {
-        // Dividir por espacios pero mantener grupos de dígitos con puntos/comas
-        const parts = line.split(/\s+/).filter(part => part.length > 0);
-        return parts;
-      });
+    // Saltar líneas de totales
+    if (line.includes('Total por Corredor')) {
+      console.log('[PARSER-ANCON] ⏭️ Saltando línea de total');
+      continue;
     }
-  }
-  
-  // Filtrar filas que parecen ser headers o footers no deseados
-  rows = rows.filter(row => {
-    const rowText = row.join(' ').toLowerCase();
-    // No filtrar si la fila tiene información de seguros
-    if (rowText.includes('polic') || rowText.includes('asegurad') || 
-        rowText.includes('prima') || rowText.includes('comis')) {
-      return true;
+    
+    // Saltar encabezados de página
+    if (line.includes('ASEGURADORA ANCON') || line.includes('Primas Cobradas') || 
+        line.includes('LIDERES EN SEGUROS') || line.includes('Desde:') || line.includes('Fecha:')) {
+      continue;
     }
-    // Filtrar filas con muy pocas celdas (probablemente headers genéricos)
-    if (row.length < 2) {
-      return false;
-    }
-    return true;
-  });
-  
-  // Normalizar: asegurar que todas las filas tengan el mismo número de columnas
-  const maxCols = Math.max(...rows.map(row => row.length), 0);
-  
-  console.log(`[PARSER] Detectadas ${maxCols} columnas`);
-  console.log(`[PARSER] Total de filas: ${rows.length}`);
-  
-  if (maxCols > 1) {
-    rows = rows.map(row => {
-      while (row.length < maxCols) {
-        row.push('');
+    
+    // Detectar líneas de datos por el patrón de póliza
+    if (policyLineRegex.test(line)) {
+      // Parsear la línea con espacios múltiples como delimitador
+      const parts = line.split(/\s{2,}/).map(p => p.trim()).filter(p => p);
+      
+      if (parts.length >= 3) {
+        // Extraer: Póliza (0), Asegurado (1), Comisión (última)
+        const poliza = parts[0];
+        const asegurado = parts[1];
+        const comision = parts[parts.length - 1]; // Última columna
+        
+        rows.push([poliza, asegurado, comision]);
       }
-      return row;
-    });
+    }
   }
+  
+  console.log(`[PARSER-ANCON] ✅ Extraídas ${rows.length} filas de datos`);
+  
+  // Agregar header
+  const finalRows = [
+    ['Póliza', 'Asegurado', 'Comisión'], // Header
+    ...rows
+  ];
   
   // Log de muestra
-  if (rows.length > 0 && rows[0]) {
-    console.log(`[PARSER] Primera fila (headers): ${rows[0].join(' | ')}`);
-    if (rows.length > 1 && rows[1]) {
-      console.log(`[PARSER] Segunda fila (datos): ${rows[1].join(' | ')}`);
+  if (rows.length > 0) {
+    console.log(`[PARSER-ANCON] Primera fila de datos: ${rows[0]?.join(' | ')}`);
+    if (rows.length > 1) {
+      console.log(`[PARSER-ANCON] Segunda fila de datos: ${rows[1]?.join(' | ')}`);
     }
+    console.log(`[PARSER-ANCON] Última fila de datos: ${rows[rows.length - 1]?.join(' | ')}`);
   }
   
-  return rows;
+  return finalRows;
 }
 
 /**
