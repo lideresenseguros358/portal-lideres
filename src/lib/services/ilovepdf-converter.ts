@@ -1,13 +1,7 @@
 /**
- * Servicio para convertir PDFs a Excel usando iLovePDF API REST
- * Documentación: https://developer.ilovepdf.com/docs
- * 
- * Flujo:
- * 1. Obtener token de autenticación
- * 2. Iniciar tarea (start)
- * 3. Subir archivo PDF (upload)
- * 4. Procesar conversión (process)
- * 5. Descargar resultado Excel (download)
+ * Servicio para extraer texto de PDFs usando iLovePDF Extract Text API
+ * Extrae texto estructurado con posiciones y propiedades en formato CSV
+ * Tool: 'extract' con modo detailed=true para obtener CSV con columnas
  */
 
 const ILOVEPDF_API_URL = 'https://api.ilovepdf.com/v1';
@@ -110,21 +104,22 @@ async function getAuthToken(): Promise<string> {
 }
 
 /**
- * Convierte un PDF a Excel usando iLovePDF API REST
+ * Extrae texto de un PDF usando iLovePDF Extract Text API
+ * Retorna texto estructurado en formato CSV con columnas bien definidas
  * @param pdfBuffer Buffer del archivo PDF
- * @returns Buffer del archivo Excel resultante
+ * @returns Buffer del archivo CSV con texto extraído
  */
 export async function convertPDFToExcel(pdfBuffer: Buffer): Promise<Buffer> {
-  console.log('[iLovePDF] Iniciando conversión PDF → Excel');
+  console.log('[iLovePDF] Iniciando extracción de texto PDF → CSV');
   console.log(`[iLovePDF] Tamaño del PDF: ${pdfBuffer.length} bytes`);
 
   try {
     // 1. Obtener token
     const token = await getAuthToken();
 
-    // 2. Iniciar tarea
-    console.log('[iLovePDF] Iniciando tarea pdftoxls...');
-    const startResponse = await fetch(`${ILOVEPDF_API_URL}/start/pdftoxls`, {
+    // 2. Iniciar tarea de extracción de texto
+    console.log('[iLovePDF] Iniciando tarea extract (extracción de texto)...');
+    const startResponse = await fetch(`${ILOVEPDF_API_URL}/start/extract`, {
       method: 'GET',
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -162,8 +157,8 @@ export async function convertPDFToExcel(pdfBuffer: Buffer): Promise<Buffer> {
     const uploadData = await uploadResponse.json() as UploadResponse;
     console.log('[iLovePDF] ✅ Archivo subido:', uploadData.server_filename);
 
-    // 4. Procesar conversión
-    console.log('[iLovePDF] Procesando conversión...');
+    // 4. Procesar extracción de texto con modo detailed (CSV)
+    console.log('[iLovePDF] Procesando extracción de texto...');
     const processResponse = await fetch(`${server}/v1/process`, {
       method: 'POST',
       headers: {
@@ -172,6 +167,7 @@ export async function convertPDFToExcel(pdfBuffer: Buffer): Promise<Buffer> {
       },
       body: JSON.stringify({
         task: task,
+        detailed: true, // Obtener CSV con columnas: PageNo, XPos, YPos, Width, FontName, FontSize, Length, Text
       }),
     });
 
@@ -181,12 +177,12 @@ export async function convertPDFToExcel(pdfBuffer: Buffer): Promise<Buffer> {
     }
 
     const processData = await processResponse.json() as ProcessResponse;
-    console.log('[iLovePDF] ✅ Conversión completada');
+    console.log('[iLovePDF] ✅ Extracción completada');
     console.log(`[iLovePDF] Archivo de salida: ${processData.download_filename}`);
     console.log(`[iLovePDF] Tamaño de salida: ${processData.output_filesize} bytes`);
 
-    // 5. Descargar resultado
-    console.log('[iLovePDF] Descargando archivo Excel...');
+    // 5. Descargar resultado (CSV con texto extraído)
+    console.log('[iLovePDF] Descargando archivo CSV...');
     const downloadResponse = await fetch(`${server}/v1/download/${task}`, {
       method: 'GET',
       headers: {
@@ -199,11 +195,15 @@ export async function convertPDFToExcel(pdfBuffer: Buffer): Promise<Buffer> {
       throw new Error(`Error al descargar: ${error}`);
     }
 
-    const excelBuffer = await downloadResponse.arrayBuffer();
-    console.log('[iLovePDF] ✅ Excel descargado exitosamente');
-    console.log(`[iLovePDF] Tamaño final: ${excelBuffer.byteLength} bytes`);
+    const csvBuffer = await downloadResponse.arrayBuffer();
+    console.log('[iLovePDF] ✅ CSV descargado exitosamente');
+    console.log(`[iLovePDF] Tamaño final: ${csvBuffer.byteLength} bytes`);
+    
+    // Log del contenido para debug
+    const csvText = Buffer.from(csvBuffer).toString('utf-8');
+    console.log(`[iLovePDF] Primeras 500 caracteres del CSV:\n${csvText.substring(0, 500)}`);
 
-    return Buffer.from(excelBuffer);
+    return Buffer.from(csvBuffer);
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Error desconocido';

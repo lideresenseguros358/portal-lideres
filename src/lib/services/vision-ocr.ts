@@ -73,55 +73,77 @@ async function extractTextFromImage(imageBuffer: Buffer): Promise<string> {
 }
 
 /**
- * Convierte PDF a Excel y extrae el texto
- * Usa iLovePDF API para conversión automática
+ * Extrae texto de un PDF usando iLovePDF Extract Text API
+ * Retorna texto estructurado extraído del CSV generado por iLovePDF
  */
 async function extractTextFromPDF(pdfBuffer: Buffer): Promise<string> {
   try {
-    console.log('[PDF→EXCEL] Convirtiendo PDF a Excel con iLovePDF API...');
-    console.log(`[PDF→EXCEL] Tamaño del PDF: ${pdfBuffer.length} bytes`);
+    console.log('[PDF→CSV] Extrayendo texto del PDF con iLovePDF...');
+    console.log(`[PDF→CSV] Tamaño del PDF: ${pdfBuffer.length} bytes`);
     
     // Importar servicio de iLovePDF
     const { convertPDFToExcel } = await import('./ilovepdf-converter');
     
-    // Convertir PDF a Excel
-    const excelBuffer = await convertPDFToExcel(pdfBuffer);
-    console.log(`[PDF→EXCEL] ✅ Excel generado: ${excelBuffer.length} bytes`);
+    // Extraer texto a CSV con iLovePDF
+    const csvBuffer = await convertPDFToExcel(pdfBuffer);
+    console.log(`[PDF→CSV] ✅ CSV generado: ${csvBuffer.length} bytes`);
     
-    // Leer el Excel con XLSX
-    console.log('[PDF→EXCEL] Leyendo contenido del Excel...');
-    const workbook = XLSX.read(excelBuffer);
-    const sheetName = workbook.SheetNames[0];
+    // Convertir CSV a texto
+    const csvText = csvBuffer.toString('utf-8');
+    console.log(`[PDF→CSV] CSV contiene ${csvText.length} caracteres`);
     
-    if (!sheetName) {
-      throw new Error('El Excel generado no contiene hojas');
+    // Parsear CSV: PageNo, XPos, YPos, Width, FontName, FontSize, Length, Text
+    const lines = csvText.split('\n');
+    console.log(`[PDF→CSV] CSV tiene ${lines.length} líneas`);
+    
+    if (lines.length < 2) {
+      throw new Error('El CSV generado está vacío o no contiene datos');
     }
     
-    const worksheet = workbook.Sheets[sheetName];
+    // Saltar header y extraer solo la columna "Text" (última columna)
+    const textLines: string[] = [];
     
-    if (!worksheet) {
-      throw new Error('No se pudo leer la hoja del Excel');
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i]?.trim();
+      if (!line) continue;
+      
+      // CSV format: PageNo,XPos,YPos,Width,FontName,FontSize,Length,Text
+      // La última columna es el texto
+      const parts = line.split(',');
+      if (parts.length >= 8) {
+        // El texto está en la última posición (puede contener comas)
+        // Unir todo desde la posición 7 en adelante
+        const text = parts.slice(7).join(',').trim();
+        if (text && text !== '""' && text !== '') {
+          // Remover comillas si las tiene
+          const cleanText = text.replace(/^"(.*)"$/, '$1');
+          textLines.push(cleanText);
+        }
+      }
     }
     
-    // Convertir a array de arrays (texto estructurado)
-    const data = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
+    if (textLines.length === 0) {
+      throw new Error(
+        'No se pudo extraer texto del PDF.\n\n' +
+        'El PDF podría estar vacío o el texto no es accesible.\n' +
+        'Por favor:\n\n' +
+        '1️⃣ Verifique que el PDF contenga texto visible\n' +
+        '2️⃣ Intente exportar a Excel (.xlsx) desde su aplicación original'
+      );
+    }
     
-    console.log(`[PDF→EXCEL] ✅ Datos extraídos: ${data.length} filas`);
+    // Unir todas las líneas de texto
+    const extractedText = textLines.join('\n');
     
-    // Convertir a texto con tabs como separadores (para mantener estructura)
-    const text = data
-      .filter(row => row && row.length > 0)
-      .map(row => row.join('\t'))
-      .join('\n');
+    console.log(`[PDF→CSV] ✅ Texto extraído: ${extractedText.length} caracteres`);
+    console.log(`[PDF→CSV] Total de líneas de texto: ${textLines.length}`);
+    console.log(`[PDF→CSV] Primeras 300 caracteres:\n${extractedText.substring(0, 300)}`);
     
-    console.log(`[PDF→EXCEL] ✅ Texto generado: ${text.length} caracteres`);
-    console.log(`[PDF→EXCEL] Primeras 300 caracteres:\n${text.substring(0, 300)}`);
-    
-    return text;
+    return extractedText;
     
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
-    console.error('[PDF→EXCEL] ❌ Error:', errorMessage);
+    console.error('[PDF→CSV] ❌ Error:', errorMessage);
     
     // Si el error es de credenciales de iLovePDF, re-lanzarlo directamente
     if (errorMessage.includes('iLovePDF API no está configurada') || 
@@ -134,14 +156,19 @@ async function extractTextFromPDF(pdfBuffer: Buffer): Promise<string> {
       throw error;
     }
     
+    // Si ya es nuestro mensaje, re-lanzarlo
+    if (errorMessage.includes('No se pudo extraer texto del PDF')) {
+      throw error;
+    }
+    
     // Para otros errores, dar mensaje genérico
     throw new Error(
-      'Error al convertir PDF a Excel.\n\n' +
-      'El sistema intentó convertir automáticamente su PDF a Excel pero falló.\n' +
+      'Error al extraer texto del PDF.\n\n' +
+      'El sistema intentó extraer el texto automáticamente pero falló.\n' +
       'Por favor intente:\n\n' +
       '1️⃣ Exportar el PDF a Excel (.xlsx) manualmente desde su aplicación\n' +
       '2️⃣ Verificar que el PDF no esté corrupto o protegido con contraseña\n' +
-      '3️⃣ Usar un conversor online: https://www.ilovepdf.com/pdf_to_excel\n\n' +
+      '3️⃣ Asegurarse que el PDF contenga texto legible\n\n' +
       `Detalle técnico: ${errorMessage}`
     );
   }
