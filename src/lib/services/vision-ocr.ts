@@ -84,11 +84,15 @@ async function extractTextFromPDF(pdfBuffer: Buffer): Promise<string> {
   try {
     const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
     
+    // Deshabilitar workers para server-side rendering (Next.js)
+    pdfjsLib.GlobalWorkerOptions.workerSrc = '';
+    
     // Cargar el documento PDF
     const loadingTask = pdfjsLib.getDocument({
       data: new Uint8Array(pdfBuffer),
       useSystemFonts: true,
-    });
+      standardFontDataUrl: undefined, // No cargar fuentes externas
+    } as any);
     
     const pdfDocument = await loadingTask.promise;
     const numPages = pdfDocument.numPages;
