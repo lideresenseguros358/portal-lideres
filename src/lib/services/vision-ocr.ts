@@ -164,16 +164,38 @@ function structureTextToTable(text: string): any[][] {
     
     // Detectar líneas de datos por el patrón de póliza
     if (policyLineRegex.test(line)) {
-      // Parsear la línea con espacios múltiples como delimitador
-      const parts = line.split(/\s{2,}/).map(p => p.trim()).filter(p => p);
+      // Extraer póliza (primeros 13 caracteres: XXXX-XXXXX-XX)
+      const poliza = line.substring(0, 13).trim();
       
-      if (parts.length >= 3) {
-        // Extraer: Póliza (0), Asegurado (1), Comisión (última)
-        const poliza = parts[0];
-        const asegurado = parts[1];
-        const comision = parts[parts.length - 1]; // Última columna
+      // Resto de la línea después de la póliza
+      const restOfLine = line.substring(13).trim();
+      
+      // Buscar donde termina el asegurado y empieza el recibo
+      // Patrones de recibo: ACH, VC, BG, GB, TCR seguidos de números
+      const reciboMatch = restOfLine.match(/(ACH|VC|BG|GB|TCR|232-)\d+/);
+      
+      if (reciboMatch && reciboMatch.index !== undefined) {
+        // Asegurado es todo antes del recibo
+        const asegurado = restOfLine.substring(0, reciboMatch.index).trim();
         
-        rows.push([poliza, asegurado, comision]);
+        // Resto después del asegurado (incluye recibo, fecha, montos, comisión)
+        const afterAsegurado = restOfLine.substring(reciboMatch.index).trim();
+        
+        // La comisión es el último número de la línea
+        const parts = afterAsegurado.split(/\s+/);
+        const comision = parts[parts.length - 1];
+        
+        if (asegurado && comision) {
+          rows.push([poliza, asegurado, comision]);
+        }
+      } else {
+        // Fallback: usar el método anterior si no encuentra patrón de recibo
+        const parts = restOfLine.split(/\s{2,}/).map(p => p.trim()).filter(p => p);
+        if (parts.length >= 2) {
+          const asegurado = parts[0];
+          const comision = parts[parts.length - 1];
+          rows.push([poliza, asegurado, comision]);
+        }
       }
     }
   }
