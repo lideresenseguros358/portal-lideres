@@ -74,55 +74,25 @@ async function extractTextFromImage(imageBuffer: Buffer): Promise<string> {
 
 /**
  * Extrae texto de un PDF usando iLovePDF Extract Text API
- * Retorna texto estructurado extraído del CSV generado por iLovePDF
+ * Retorna texto extraído directamente del PDF
  */
 async function extractTextFromPDF(pdfBuffer: Buffer): Promise<string> {
   try {
-    console.log('[PDF→CSV] Extrayendo texto del PDF con iLovePDF...');
-    console.log(`[PDF→CSV] Tamaño del PDF: ${pdfBuffer.length} bytes`);
+    console.log('[PDF→TXT] Extrayendo texto del PDF con iLovePDF...');
+    console.log(`[PDF→TXT] Tamaño del PDF: ${pdfBuffer.length} bytes`);
     
     // Importar servicio de iLovePDF
     const { convertPDFToExcel } = await import('./ilovepdf-converter');
     
-    // Extraer texto a CSV con iLovePDF
-    const csvBuffer = await convertPDFToExcel(pdfBuffer);
-    console.log(`[PDF→CSV] ✅ CSV generado: ${csvBuffer.length} bytes`);
+    // Extraer texto con iLovePDF
+    const textBuffer = await convertPDFToExcel(pdfBuffer);
+    console.log(`[PDF→TXT] ✅ Texto generado: ${textBuffer.length} bytes`);
     
-    // Convertir CSV a texto
-    const csvText = csvBuffer.toString('utf-8');
-    console.log(`[PDF→CSV] CSV contiene ${csvText.length} caracteres`);
+    // Convertir buffer a texto
+    const extractedText = textBuffer.toString('utf-8');
+    console.log(`[PDF→TXT] Texto contiene ${extractedText.length} caracteres`);
     
-    // Parsear CSV: PageNo, XPos, YPos, Width, FontName, FontSize, Length, Text
-    const lines = csvText.split('\n');
-    console.log(`[PDF→CSV] CSV tiene ${lines.length} líneas`);
-    
-    if (lines.length < 2) {
-      throw new Error('El CSV generado está vacío o no contiene datos');
-    }
-    
-    // Saltar header y extraer solo la columna "Text" (última columna)
-    const textLines: string[] = [];
-    
-    for (let i = 1; i < lines.length; i++) {
-      const line = lines[i]?.trim();
-      if (!line) continue;
-      
-      // CSV format: PageNo,XPos,YPos,Width,FontName,FontSize,Length,Text
-      // La última columna es el texto
-      const parts = line.split(',');
-      if (parts.length >= 8) {
-        // El texto está en la última posición (puede contener comas)
-        // Unir todo desde la posición 7 en adelante
-        const text = parts.slice(7).join(',').trim();
-        if (text && text !== '""' && text !== '') {
-          // Remover comillas si las tiene
-          const cleanText = text.replace(/^"(.*)"$/, '$1');
-          textLines.push(cleanText);
-        }
-      }
-    }
-    
-    if (textLines.length === 0) {
+    if (!extractedText || extractedText.trim().length === 0) {
       throw new Error(
         'No se pudo extraer texto del PDF.\n\n' +
         'El PDF podría estar vacío o el texto no es accesible.\n' +
@@ -132,12 +102,8 @@ async function extractTextFromPDF(pdfBuffer: Buffer): Promise<string> {
       );
     }
     
-    // Unir todas las líneas de texto
-    const extractedText = textLines.join('\n');
-    
-    console.log(`[PDF→CSV] ✅ Texto extraído: ${extractedText.length} caracteres`);
-    console.log(`[PDF→CSV] Total de líneas de texto: ${textLines.length}`);
-    console.log(`[PDF→CSV] Primeras 300 caracteres:\n${extractedText.substring(0, 300)}`);
+    console.log(`[PDF→TXT] ✅ Texto extraído: ${extractedText.length} caracteres`);
+    console.log(`[PDF→TXT] Primeras 300 caracteres:\n${extractedText.substring(0, 300)}`);
     
     return extractedText;
     
