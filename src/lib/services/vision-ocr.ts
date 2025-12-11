@@ -111,7 +111,7 @@ async function extractTextFromPDF(pdfBuffer: Buffer): Promise<string> {
 
 /**
  * Estructura el texto extraído en formato tabular
- * PARSER ESPECÍFICO PARA FORMATO ANCON
+ * PARSER GENÉRICO PARA MÚLTIPLES ASEGURADORAS (ANCON, INTERNACIONAL, ETC)
  */
 function structureTextToTable(text: string): any[][] {
   const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
@@ -123,8 +123,10 @@ function structureTextToTable(text: string): any[][] {
   const rows: any[][] = [];
   
   // Regex para detectar líneas de datos (comienzan con número de póliza)
-  // Formato: XXXX-XXXXX-XX (ej: 0122-00173-01)
-  const policyLineRegex = /^\d{4}-\d{5}-\d{2}\s+/;
+  // Formatos soportados:
+  // - ANCON: XXXX-XXXXX-XX (ej: 0122-00173-01)
+  // - INTERNACIONAL: X-X-XXXXX o X-XX-XXXXX (ej: 1-1-36919, 1-15-36032)
+  const policyLineRegex = /^(\d{1,4}-\d{1,5}-\d{2,5})\s+/;
   
   for (const line of lines) {
     // Saltar headers repetidos
@@ -133,23 +135,39 @@ function structureTextToTable(text: string): any[][] {
     }
     
     // Saltar líneas de totales
-    if (line.includes('Total por Corredor')) {
+    if (line.includes('Total por Corredor') || line.includes('Total')) {
       continue;
     }
     
-    // Saltar encabezados de página
+    // Saltar encabezados de página (ANCON)
     if (line.includes('ASEGURADORA ANCON') || line.includes('Primas Cobradas') || 
         line.includes('LIDERES EN SEGUROS') || line.includes('Desde:') || line.includes('Fecha:')) {
       continue;
     }
     
+    // Saltar encabezados de página (INTERNACIONAL)
+    if (line.includes('Compañía Internacional') || line.includes('Estado de Cuenta') || 
+        line.includes('Corredor LIDERES')) {
+      continue;
+    }
+    
+    // Saltar filas que tienen "--" o están vacías en la columna de póliza
+    if (line.startsWith('--') || line.startsWith('###')) {
+      continue;
+    }
+    
     // Detectar líneas de datos por el patrón de póliza
-    if (policyLineRegex.test(line)) {
-      // Extraer póliza (primeros 13 caracteres: XXXX-XXXXX-XX)
-      const poliza = line.substring(0, 13).trim();
+    const policyMatch = line.match(policyLineRegex);
+    if (policyMatch) {
+      const poliza = policyMatch[1];
+      
+      // Saltar si la póliza es "--" o está vacía
+      if (!poliza || poliza === '--' || poliza.trim() === '') {
+        continue;
+      }
       
       // Resto de la línea después de la póliza
-      const restOfLine = line.substring(13).trim();
+      const restOfLine = line.substring(policyMatch[0].length).trim();
       
       // Buscar donde termina el asegurado y empieza el recibo
       // Patrones de recibo: ACH, VC, BG, GB, TCR seguidos de números
