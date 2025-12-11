@@ -668,7 +668,7 @@ export async function previewMapping(options: PreviewMappingOptions) {
   });
   
   // Crear filas normalizadas (usando headers normalizados como keys)
-  const previewRows = dataRows.map(row => {
+  const normalizedRows = dataRows.map(row => {
     const normalizedRow: any = {};
     headers.forEach((originalHeader, idx) => {
       const normalizedHeader = normalizedHeaders[idx];
@@ -700,7 +700,7 @@ export async function previewMapping(options: PreviewMappingOptions) {
   
   const processedRows = dataRows.map((originalRow, rowIndex) => {
     const processedRow: any = {};
-    const normalizedRow = previewRows[rowIndex];
+    const normalizedRow = normalizedRows[rowIndex];
     
     // Para comisiones, aplicar lógica especial si hay múltiples columnas mapeadas a gross_amount
     if (targetField === 'COMMISSIONS') {
@@ -799,12 +799,20 @@ export async function previewMapping(options: PreviewMappingOptions) {
   
   log(`Filas válidas: ${validRows.length} de ${processedRows.length}`);
   
+  // Tomar solo las primeras 5 filas válidas para el preview
+  const previewLimit = 5;
+  const previewRows = validRows.slice(0, previewLimit);
+  
+  log(`Preview mostrará ${previewRows.length} filas (máximo ${previewLimit})`);
+  
   return {
     success: true,
     originalHeaders: headers,
     normalizedHeaders,
     displayHeaders: displayFields, // Solo los campos que se deben mostrar en el preview
-    previewRows: validRows, // FILAS FILTRADAS (solo válidas)
+    previewRows: previewRows, // Solo primeras 5 filas VÁLIDAS
+    totalValidRows: validRows.length, // Total de filas válidas en el archivo
+    totalRows: processedRows.length, // Total de filas procesadas
     rules,
     debugLogs // Agregar logs de debug
   };
