@@ -1202,18 +1202,28 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
     console.log('🔎 [actionMarkPaymentsAsPaidNew] Verificando payment_details existentes...');
     const { data: existingDetails, error: existingDetailsError } = await supabase
       .from('payment_details')
-      .select('payment_id, bank_transfer_id')
+      .select('payment_id, bank_transfer_id, amount_used')
       .in('payment_id', paymentIdsToProcess);
 
     if (existingDetailsError) throw existingDetailsError;
 
-    const existingDetailKeys = new Set<string>();
+    // Map de detalles existentes para soportar múltiples detalles por el mismo transfer
+    // (casos donde un pago usa 2+ referencias del MISMO depósito). Usamos un multiset por amount_used.
+    const existingDetailsByPaymentTransfer = new Map<string, Map<string, number>>();
+    const AMOUNT_MATCH_TOLERANCE = 0.01;
+    const normalizeAmountKey = (n: number) => Math.round(n * 100) / 100;
+
     (existingDetails || []).forEach((detail: any) => {
-      if (detail.payment_id && detail.bank_transfer_id) {
-        existingDetailKeys.add(`${detail.payment_id}:${detail.bank_transfer_id}`);
-      }
+      if (!detail.payment_id || !detail.bank_transfer_id) return;
+      const amountUsed = Number(detail.amount_used || 0);
+      const amtKey = String(normalizeAmountKey(amountUsed));
+      const key = `${detail.payment_id}:${detail.bank_transfer_id}`;
+      const byAmount = existingDetailsByPaymentTransfer.get(key) || new Map<string, number>();
+      byAmount.set(amtKey, (byAmount.get(amtKey) || 0) + 1);
+      existingDetailsByPaymentTransfer.set(key, byAmount);
     });
-    console.log('✅ [actionMarkPaymentsAsPaidNew] Payment_details existentes:', existingDetailKeys.size);
+
+    console.log('✅ [actionMarkPaymentsAsPaidNew] Payment_details existentes:', (existingDetails || []).length);
 
     const referenceNumbers = Array.from(
       new Set<string>(
@@ -1443,8 +1453,10 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
           const refBankAmount = Number(ref.amount || 0);
 
           const availableCandidates = candidates.filter((t: any) => !usedIds.has(String(t.id)));
-          const exactMatches = availableCandidates.filter((t: any) => Number(t.amount || 0) === refBankAmount);
-          const pickFrom = exactMatches.length > 0 ? exactMatches : availableCandidates;
+          // Si no hay candidatos disponibles (p.ej. split del mismo depósito en 2 refs), permitir reusar el mismo transfer
+          const baseCandidates = availableCandidates.length > 0 ? availableCandidates : candidates;
+          const exactMatches = baseCandidates.filter((t: any) => Number(t.amount || 0) === refBankAmount);
+          const pickFrom = exactMatches.length > 0 ? exactMatches : baseCandidates;
           const transfer = pickFrom[0];
 
           if (!transfer) {
@@ -1466,20 +1478,45 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
           });
 
           const detailKey = `${payment.id}:${transfer.id}`;
-          if (existingDetailKeys.has(detailKey)) {
-            console.error('❌ [actionMarkPaymentsAsPaidNew] Pago ya conciliado:', detailKey);
-            return {
-              ok: false as const,
-              error: `El pago "${payment.client_name}" ya fue conciliado con la referencia ${referenceNumber}.`
-            };
-          }
-
-          const amountToUse = Number(ref.amount_to_use ?? 0) || 0;
+          const amountToUse = Number(ref.amount_to_use ?? ref.amount ?? 0) || 0;
           console.log('💵 [actionMarkPaymentsAsPaidNew] Monto a usar:', amountToUse);
           
           if (amountToUse <= 0) {
-            console.log('⚠️ [actionMarkPaymentsAsPaidNew] Monto 0 o negativo, saltando...');
-            continue;
+            console.error('❌ [actionMarkPaymentsAsPaidNew] amount_to_use/amount inválido para referencia:', {
+              referenceNumber,
+              ref
+            });
+            return {
+              ok: false as const,
+              error: `La referencia ${referenceNumber} no tiene un monto válido para conciliar (amount_to_use/amount vacío).`
+            };
+          }
+
+          // Si ya existe un payment_detail igual (mismo pago + mismo transfer + mismo amount_used),
+          // lo consideramos ya aplicado (reintento) y NO volvemos a insertar ni a actualizar used_amount.
+          const byAmount = existingDetailsByPaymentTransfer.get(detailKey);
+          if (byAmount) {
+            // Buscar un monto existente dentro de tolerancia
+            const target = normalizeAmountKey(amountToUse);
+            let matchedKey: string | null = null;
+            for (const [k, count] of byAmount.entries()) {
+              const existingAmt = Number(k);
+              if (count > 0 && Math.abs(existingAmt - target) <= AMOUNT_MATCH_TOLERANCE) {
+                matchedKey = k;
+                break;
+              }
+            }
+
+            if (matchedKey) {
+              byAmount.set(matchedKey, Math.max((byAmount.get(matchedKey) || 1) - 1, 0));
+              existingDetailsByPaymentTransfer.set(detailKey, byAmount);
+              console.log('ℹ️ [actionMarkPaymentsAsPaidNew] Detalle ya existe para este monto, saltando insert/update:', {
+                paymentId: payment.id,
+                bankTransferId: transfer.id,
+                amountToUse
+              });
+              continue;
+            }
           }
 
           const transferAmount = Number(transfer.amount) || 0;
@@ -1538,6 +1575,12 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
           }
           console.log('✅ [actionMarkPaymentsAsPaidNew] Payment_details insertado');
 
+          // Registrar en memoria que este detalle ya existe (para evitar duplicados dentro del mismo request)
+          const insertedAmtKey = String(normalizeAmountKey(amountToUse));
+          const nextByAmount = existingDetailsByPaymentTransfer.get(detailKey) || new Map<string, number>();
+          nextByAmount.set(insertedAmtKey, (nextByAmount.get(insertedAmtKey) || 0) + 1);
+          existingDetailsByPaymentTransfer.set(detailKey, nextByAmount);
+
           // remaining_amount y status son columnas generadas, solo actualizar used_amount
           console.log('🔄 [actionMarkPaymentsAsPaidNew] Actualizando bank_transfers...');
           const { error: transferUpdateError } = await supabase
@@ -1568,7 +1611,6 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
           console.log('💾 [actionMarkPaymentsAsPaidNew] TransferMap actualizado en memoria');
           console.log('✅ [actionMarkPaymentsAsPaidNew] Referencia procesada completamente\n');
 
-          existingDetailKeys.add(detailKey);
         }
       } // Fin de if (!isDescuentoCorredor)
 
