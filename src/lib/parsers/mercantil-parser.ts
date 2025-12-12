@@ -48,20 +48,21 @@ export async function parseMercantilPDF(fileBuffer: ArrayBuffer): Promise<Mercan
       console.log(`[MERCANTIL PDF] Procesando línea con póliza: ${policyNumber}`);
       console.log(`[MERCANTIL PDF] Línea completa: ${line.substring(0, 150)}`);
       
-      // Buscar el nombre del asegurado (MAYÚSCULAS al final o antes de USD/Recibos)
-      // En MERCANTIL: "... 3.56 ... JOSE ANTONIO PRADO DUÑA USD 17.52 ..."
-      const nameMatch = line.match(/([A-Z\s]{10,}(?:DE\s+[A-Z]+)?)\s+(?:USD|Recibos|$)/);
+      // Buscar el nombre del asegurado (MAYÚSCULAS antes de USD)
+      // En MERCANTIL: "... Recibos Cobrados JOSE ANTONIO PRADO DUÑA USD 17.52 20.00 3.56 ..."
+      const nameMatch = line.match(/([A-Z][A-Z\s]{10,}?)\s+USD/);
       
-      // Buscar comisión: último decimal antes de USD o al final
-      // En algunos casos puede estar después del nombre
-      const commissionMatch = line.match(/(\d+\.\d{2})\s*(?:USD|$)/);
+      // Buscar comisión: TERCER decimal después de USD
+      // Formato: "USD 17.52 20.00 3.56" donde 3.56 es la comisión
+      // Capturamos los 3 decimales después de USD
+      const decimalsAfterUSD = line.match(/USD\s+(\d+\.\d{2})\s+(\d+\.\d{2})\s+(\d+\.\d{2})/);
       
       console.log(`[MERCANTIL PDF] Nombre detectado: ${nameMatch ? nameMatch[1] : 'NO ENCONTRADO'}`);
-      console.log(`[MERCANTIL PDF] Comisión detectada: ${commissionMatch ? commissionMatch[1] : 'NO ENCONTRADA'}`);
+      console.log(`[MERCANTIL PDF] Decimales después de USD: ${decimalsAfterUSD ? decimalsAfterUSD.slice(1).join(', ') : 'NO ENCONTRADOS'}`);
       
-      if (nameMatch && nameMatch[1] && commissionMatch && commissionMatch[1]) {
+      if (nameMatch && nameMatch[1] && decimalsAfterUSD && decimalsAfterUSD[3]) {
         const clientName = nameMatch[1].trim();
-        const commission = parseFloat(commissionMatch[1]);
+        const commission = parseFloat(decimalsAfterUSD[3]); // Tercer decimal = Comisión
         
         // Validar que no sea un total o resumen
         if (commission > 0 && !clientName.includes('TOTAL') && clientName.length > 5) {
