@@ -530,7 +530,7 @@ export async function previewMapping(options: PreviewMappingOptions) {
   let dataRows: any[] = [];
   
   try {
-    const fileExtension = fileName.toLowerCase().split('.').pop();
+    let fileExtension = fileName.toLowerCase().split('.').pop();
     
     // Si es PDF y NO es un insurer con parser especializado, usar OCR genérico
     if (fileExtension === 'pdf') {
@@ -550,7 +550,7 @@ export async function previewMapping(options: PreviewMappingOptions) {
       log('PDF convertido a XLSX con OCR exitosamente');
       // Reemplazar el buffer con el XLSX generado y continuar con parseo normal
       fileBuffer = ocrResult.xlsxBuffer;
-      // Continuar al parseo de XLSX abajo
+      fileExtension = 'xlsx'; // Actualizar extensión para que el parseo continúe como XLSX
     }
     
     if (fileExtension === 'csv') {
