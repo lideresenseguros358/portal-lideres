@@ -30,6 +30,8 @@ export default function TestsTab({ insurerId }: TestsTabProps) {
         // Leer el archivo como ArrayBuffer
         let arrayBuffer = await testFile.arrayBuffer();
         let fileName = testFile.name;
+
+        const invertNegatives = localStorage.getItem(`invert_negatives_${insurerId}`) === 'true';
         
         // IMPORTANTE: NO aplicar OCR genérico a PDFs
         // BANESCO y SURA tienen parsers especializados que manejan PDFs directamente
@@ -42,6 +44,7 @@ export default function TestsTab({ insurerId }: TestsTabProps) {
           targetField: target,
           fileBuffer: arrayBuffer,
           fileName: fileName,
+          invertNegatives,
         });
         
         setTestResult(result);

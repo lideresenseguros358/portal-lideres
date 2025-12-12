@@ -102,7 +102,7 @@ export const POLICY_FORMATS: Record<InsurerSlug, PolicyFormatConfig> = {
     normalize: false,
     examples: ['1-1-10001234-0', '2-3-10005678-1'],
     parserRule: 'partial',
-    parserInputs: [0, 1, 2], // Primeros 3 inputs (índices 0, 1, 2)
+    parserInputs: [2], // Solo el tercer input (índice 2)
   },
   'mb': {
     insurer: 'MB',

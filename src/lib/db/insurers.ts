@@ -417,10 +417,11 @@ export interface PreviewMappingOptions {
   insurerId: string;
   fileBuffer: ArrayBuffer;
   fileName: string;
+  invertNegatives?: boolean;
 }
 
 export async function previewMapping(options: PreviewMappingOptions) {
-  const { targetField, insurerId, fileName } = options;
+  const { targetField, insurerId, fileName, invertNegatives = false } = options;
   let fileBuffer = options.fileBuffer; // Let para poder reasignar si se convierte PDF a XLSX
   
   // Array para capturar logs y mostrar en UI
@@ -457,7 +458,7 @@ export async function previewMapping(options: PreviewMappingOptions) {
           previewRows: previewRows.map(row => ({
             policy_number: row.policy_number,
             client_name: row.client_name,
-            gross_amount: row.gross_amount
+            gross_amount: invertNegatives ? (Number(row.gross_amount) || 0) * -1 : row.gross_amount
           })),
           originalHeaders: ['Póliza', 'Asegurado', 'Comisión'],
           normalizedHeaders: ['policy_number', 'client_name', 'gross_amount'],
@@ -504,7 +505,7 @@ export async function previewMapping(options: PreviewMappingOptions) {
           previewRows: previewRows.map(row => ({
             policy_number: row.policy_number,
             client_name: row.client_name,
-            gross_amount: row.gross_amount
+            gross_amount: invertNegatives ? (Number(row.gross_amount) || 0) * -1 : row.gross_amount
           })),
           originalHeaders: ['Póliza', 'Asegurado', 'Comisión'],
           normalizedHeaders: ['policy_number', 'client_name', 'gross_amount'],
@@ -551,7 +552,7 @@ export async function previewMapping(options: PreviewMappingOptions) {
           previewRows: previewRows.map(row => ({
             policy_number: row.policy_number,
             client_name: row.client_name,
-            gross_amount: row.gross_amount
+            gross_amount: invertNegatives ? (Number(row.gross_amount) || 0) * -1 : row.gross_amount
           })),
           originalHeaders: ['No. de Póliza', 'Nombre Asegurado', 'Comisión Generada'],
           normalizedHeaders: ['policy_number', 'client_name', 'gross_amount'],
@@ -594,7 +595,7 @@ export async function previewMapping(options: PreviewMappingOptions) {
           previewRows: previewRows.map(row => ({
             policy_number: row.policy_number,
             client_name: row.client_name,
-            gross_amount: row.gross_amount
+            gross_amount: invertNegatives ? (Number(row.gross_amount) || 0) * -1 : row.gross_amount
           })),
           originalHeaders: ['Póliza', 'Asegurado', 'Monto C. Pagado'],
           normalizedHeaders: ['policy_number', 'client_name', 'gross_amount'],
@@ -637,7 +638,7 @@ export async function previewMapping(options: PreviewMappingOptions) {
           previewRows: previewRows.map(row => ({
             policy_number: row.policy_number,
             client_name: row.client_name,
-            gross_amount: row.gross_amount
+            gross_amount: invertNegatives ? (Number(row.gross_amount) || 0) * -1 : row.gross_amount
           })),
           originalHeaders: ['Póliza', 'Asegurado', 'Comisión'],
           normalizedHeaders: ['policy_number', 'client_name', 'gross_amount'],
@@ -680,7 +681,7 @@ export async function previewMapping(options: PreviewMappingOptions) {
           previewRows: previewRows.map(row => ({
             policy_number: row.policy_number,
             client_name: row.client_name,
-            gross_amount: row.gross_amount
+            gross_amount: invertNegatives ? (Number(row.gross_amount) || 0) * -1 : row.gross_amount
           })),
           originalHeaders: ['Póliza', 'Cliente', 'Saldo'],
           normalizedHeaders: ['policy_number', 'client_name', 'gross_amount'],
@@ -692,6 +693,49 @@ export async function previewMapping(options: PreviewMappingOptions) {
         return {
           success: false,
           error: `Error al parsear archivo de GENERAL: ${error instanceof Error ? error.message : 'Error desconocido'}`,
+          debugLogs
+        };
+      }
+    }
+
+    // PARSER ESPECIAL PARA OPTIMA
+    if (insurer?.name?.toUpperCase().includes('OPTIMA')) {
+      log('Detectado OPTIMA - Usando parser especial');
+      try {
+        const fileExtension = fileName.toLowerCase().split('.').pop();
+        let optimaRows: any[] = [];
+
+        if (fileExtension === 'pdf') {
+          log('OPTIMA PDF detectado - Usando parser directo de PDF');
+          const { parseOptimaPDF } = await import('@/lib/parsers/optima-parser');
+          optimaRows = await parseOptimaPDF(fileBuffer);
+        } else {
+          log('OPTIMA XLSX detectado - Usando parseo normal');
+          optimaRows = [];
+        }
+
+        log(`OPTIMA Parser extrajo ${optimaRows.length} filas totales`);
+
+        const previewRows = optimaRows.slice(0, 5);
+        log(`Mostrando ${previewRows.length} filas de muestra en preview`);
+
+        return {
+          success: true,
+          previewRows: previewRows.map(row => ({
+            policy_number: row.policy_number,
+            client_name: row.client_name,
+            gross_amount: invertNegatives ? (Number(row.gross_amount) || 0) * -1 : row.gross_amount
+          })),
+          originalHeaders: ['Póliza', 'Asegurado', 'Ganados'],
+          normalizedHeaders: ['policy_number', 'client_name', 'gross_amount'],
+          rules: [],
+          debugLogs
+        };
+      } catch (error) {
+        log(`ERROR en parser OPTIMA: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+        return {
+          success: false,
+          error: `Error al parsear archivo de OPTIMA: ${error instanceof Error ? error.message : 'Error desconocido'}`,
           debugLogs
         };
       }
@@ -1014,6 +1058,10 @@ export async function previewMapping(options: PreviewMappingOptions) {
         processedRow.gross_amount = parseFloat(String(value || '0').replace(/[^\d.-]/g, ''));
       } else {
         processedRow.gross_amount = 0;
+      }
+
+      if (invertNegatives) {
+        processedRow.gross_amount = Number(processedRow.gross_amount || 0) * -1;
       }
       
       // Agregar policy_number y client_name desde normalizedRow

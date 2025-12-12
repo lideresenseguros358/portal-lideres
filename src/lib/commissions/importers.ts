@@ -208,6 +208,35 @@ async function parseXlsxFile(file: File, mappingRules: MappingRule[] = [], inver
         throw new Error('Error al parsear archivo de GENERAL: ' + (error instanceof Error ? error.message : 'Error desconocido'));
       }
     }
+
+    // PARSER ESPECIAL PARA OPTIMA
+    if (insurer?.name?.toUpperCase().includes('OPTIMA')) {
+      console.log('[PARSER] Detectado OPTIMA - Usando parser especial');
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const fileExtension = file.name.toLowerCase().split('.').pop();
+
+        if (fileExtension !== 'pdf') {
+          console.log('[OPTIMA] Archivo no PDF - usando previewMapping/manual');
+        } else {
+          console.log('[OPTIMA] PDF detectado - Usando parser directo de PDF');
+          const { parseOptimaPDF } = await import('@/lib/parsers/optima-parser');
+          const optimaRows = await parseOptimaPDF(arrayBuffer);
+
+          console.log('[OPTIMA PARSER] Extraídas', optimaRows.length, 'filas');
+
+          return optimaRows.map(row => ({
+            policy_number: row.policy_number,
+            client_name: row.client_name,
+            commission_amount: row.gross_amount,
+            raw_row: row
+          }));
+        }
+      } catch (error) {
+        console.error('[OPTIMA PARSER] Error:', error);
+        throw new Error('Error al parsear archivo de OPTIMA: ' + (error instanceof Error ? error.message : 'Error desconocido'));
+      }
+    }
   }
   
   // Si tenemos insurerId (y NO es SURA), usar previewMapping para consistencia

@@ -19,6 +19,7 @@ import { calculateDiscounts } from '@/lib/commissions/rules';
 import { buildBankACH } from '@/lib/commissions/bankACH';
 import { parseCsvXlsx } from '@/lib/commissions/importers';
 import { processDocumentOCR } from '@/lib/services/vision-ocr';
+import { getInsurerSlug, getPolicySearchTerm } from '@/lib/utils/policy-number';
 
 type FortnightRow = Tables<'fortnights'>;
 type FortnightIns = TablesInsert<'fortnights'>;
@@ -130,7 +131,8 @@ export async function actionUploadImport(formData: FormData) {
       .eq('id', parsed.insurer_id)
       .single();
     
-    const invertNegatives = (insurerData as any)?.invert_negatives || false;
+    // Prioridad: valor enviado por UI (FormData) > config en BD
+    const invertNegatives = parsed.invert_negatives === 'true' ? true : ((insurerData as any)?.invert_negatives || false);
     const useMultiColumns = (insurerData as any)?.use_multi_commission_columns || false;
     console.log('[SERVER] Invert negatives from insurer config:', invertNegatives);
     console.log('[SERVER] Use multi commission columns (ASSA):', useMultiColumns);
@@ -162,18 +164,58 @@ export async function actionUploadImport(formData: FormData) {
     console.log('[SERVER] Saved total_amount:', importRecord.total_amount, 'for import:', importRecord.id);
 
     // 2. Buscar pólizas existentes para identificar broker y porcentaje
+    // Para aseguradoras con "parserRule: partial", el número real de póliza para match puede ser solo un grupo.
     const policyNumbers = rows.map(r => r.policy_number).filter(Boolean) as string[];
-    const { data: existingPolicies } = await supabase
-      .from('policies')
-      .select(`
-        policy_number, 
-        broker_id, 
-        client_id, 
-        percent_override,
-        clients(national_id),
-        brokers!inner(percent_default)
-      `)
-      .in('policy_number', policyNumbers.length > 0 ? policyNumbers : ['__NONE__']);
+    const insurerSlug = getInsurerSlug(insurerName);
+    const usesPartialMatch = insurerSlug ? getPolicySearchTerm(insurerSlug, '1-1-1') !== '1-1-1' : false;
+
+    let existingPolicies: any[] = [];
+    if (policyNumbers.length > 0 && insurerSlug && usesPartialMatch) {
+      const searchTerms = Array.from(
+        new Set(
+          policyNumbers
+            .map(pn => getPolicySearchTerm(insurerSlug, pn))
+            .map(t => String(t || '').trim())
+            .filter(Boolean)
+        )
+      );
+
+      const batchSize = 40;
+      for (let i = 0; i < searchTerms.length; i += batchSize) {
+        const batch = searchTerms.slice(i, i + batchSize);
+        const orClause = batch
+          .map(term => `policy_number.ilike.%${term.replace(/%/g, '')}%`)
+          .join(',');
+
+        const { data } = await supabase
+          .from('policies')
+          .select(`
+            policy_number,
+            broker_id,
+            client_id,
+            percent_override,
+            clients(national_id),
+            brokers!inner(percent_default)
+          `)
+          .or(orClause);
+
+        existingPolicies.push(...(data || []));
+      }
+    } else {
+      const { data } = await supabase
+        .from('policies')
+        .select(`
+          policy_number, 
+          broker_id, 
+          client_id, 
+          percent_override,
+          clients(national_id),
+          brokers!inner(percent_default)
+        `)
+        .in('policy_number', policyNumbers.length > 0 ? policyNumbers : ['__NONE__']);
+
+      existingPolicies = data || [];
+    }
 
     const policyMap = new Map<string, { 
       broker_id: string | null; 
@@ -194,12 +236,43 @@ export async function actionUploadImport(formData: FormData) {
       });
     });
 
+    const findPolicyData = (rawPolicyNumber: string | null) => {
+      if (!rawPolicyNumber) return { matchedPolicyNumber: null as string | null, policyData: null as any };
+
+      // 1) Exact match
+      const exact = policyMap.get(rawPolicyNumber);
+      if (exact) return { matchedPolicyNumber: rawPolicyNumber, policyData: exact };
+
+      // 2) Match parcial por aseguradora (ANCON/ACERTA/MB/FEDPA/REGIONAL/OPTIMA/ALIADO/UNIVIVIR/BANESCO)
+      if (insurerSlug && usesPartialMatch) {
+        const term = getPolicySearchTerm(insurerSlug, rawPolicyNumber);
+        if (term) {
+          const candidates = (existingPolicies || []).filter((p: any) => String(p.policy_number || '').includes(String(term)));
+          if (candidates.length === 1) {
+            const pn = String(candidates[0].policy_number);
+            return { matchedPolicyNumber: pn, policyData: policyMap.get(pn) || null };
+          }
+          if (candidates.length > 1) {
+            // Preferir coincidencia exacta en algún segmento del número (cuando esté separado por '-')
+            const preferred = candidates.find((p: any) => {
+              const parts = String(p.policy_number || '').split('-');
+              return parts.includes(String(term));
+            }) || candidates[0];
+            const pn = preferred ? String(preferred.policy_number) : null;
+            return { matchedPolicyNumber: pn, policyData: pn ? (policyMap.get(pn) || null) : null };
+          }
+        }
+      }
+
+      return { matchedPolicyNumber: rawPolicyNumber, policyData: null };
+    };
+
     // 3. Separar: comm_items (identificados con broker) y pending_items (sin identificar)
     const itemsToInsert: CommItemIns[] = [];
     const pendingItemsToInsert: any[] = [];
 
     for (const row of rows) {
-      const policyData = row.policy_number ? policyMap.get(row.policy_number) : null;
+      const { matchedPolicyNumber, policyData } = findPolicyData(row.policy_number || null);
       
       // Si existe póliza con broker identificado, va a comm_items
       if (policyData && policyData.broker_id) {
@@ -214,7 +287,7 @@ export async function actionUploadImport(formData: FormData) {
         itemsToInsert.push({
           import_id: importRecord.id,
           insurer_id: parsed.insurer_id,
-          policy_number: row.policy_number || 'UNKNOWN',
+          policy_number: matchedPolicyNumber || row.policy_number || 'UNKNOWN',
           gross_amount: grossAmount,  // ← Aplicado el porcentaje
           insured_name: row.client_name || 'UNKNOWN',
           raw_row: row.raw_row,
@@ -224,7 +297,7 @@ export async function actionUploadImport(formData: FormData) {
         // Sin broker identificado: va a pending_items con commission_raw (NO calculado con %)
         pendingItemsToInsert.push({
           insured_name: row.client_name || null,
-          policy_number: row.policy_number || 'UNKNOWN',
+          policy_number: matchedPolicyNumber || row.policy_number || 'UNKNOWN',
           insurer_id: parsed.insurer_id,
           commission_raw: row.commission_amount || 0, // RAW, no calculado
           fortnight_id: parsed.fortnight_id,
