@@ -567,6 +567,135 @@ export async function previewMapping(options: PreviewMappingOptions) {
         };
       }
     }
+
+    // PARSER ESPECIAL PARA REGIONAL
+    if (insurer?.name?.toUpperCase().includes('REGIONAL')) {
+      log('Detectado REGIONAL - Usando parser especial');
+      try {
+        const fileExtension = fileName.toLowerCase().split('.').pop();
+        let regionalRows: any[] = [];
+
+        if (fileExtension === 'pdf') {
+          log('REGIONAL PDF detectado - Usando parser directo de PDF');
+          const { parseRegionalPDF } = await import('@/lib/parsers/regional-parser');
+          regionalRows = await parseRegionalPDF(fileBuffer);
+        } else {
+          log('REGIONAL XLSX detectado - Usando parseo normal');
+          regionalRows = [];
+        }
+
+        log(`REGIONAL Parser extrajo ${regionalRows.length} filas totales`);
+
+        const previewRows = regionalRows.slice(0, 5);
+        log(`Mostrando ${previewRows.length} filas de muestra en preview`);
+
+        return {
+          success: true,
+          previewRows: previewRows.map(row => ({
+            policy_number: row.policy_number,
+            client_name: row.client_name,
+            gross_amount: row.gross_amount
+          })),
+          originalHeaders: ['Póliza', 'Asegurado', 'Monto C. Pagado'],
+          normalizedHeaders: ['policy_number', 'client_name', 'gross_amount'],
+          rules: [],
+          debugLogs
+        };
+      } catch (error) {
+        log(`ERROR en parser REGIONAL: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+        return {
+          success: false,
+          error: `Error al parsear archivo de REGIONAL: ${error instanceof Error ? error.message : 'Error desconocido'}`,
+          debugLogs
+        };
+      }
+    }
+
+    // PARSER ESPECIAL PARA ACERTA
+    if (insurer?.name?.toUpperCase().includes('ACERTA')) {
+      log('Detectado ACERTA - Usando parser especial');
+      try {
+        const fileExtension = fileName.toLowerCase().split('.').pop();
+        let acertaRows: any[] = [];
+
+        if (fileExtension === 'pdf') {
+          log('ACERTA PDF detectado - Usando parser directo de PDF');
+          const { parseAcertaPDF } = await import('@/lib/parsers/acerta-parser');
+          acertaRows = await parseAcertaPDF(fileBuffer);
+        } else {
+          log('ACERTA XLSX detectado - Usando parseo normal');
+          acertaRows = [];
+        }
+
+        log(`ACERTA Parser extrajo ${acertaRows.length} filas totales`);
+
+        const previewRows = acertaRows.slice(0, 5);
+        log(`Mostrando ${previewRows.length} filas de muestra en preview`);
+
+        return {
+          success: true,
+          previewRows: previewRows.map(row => ({
+            policy_number: row.policy_number,
+            client_name: row.client_name,
+            gross_amount: row.gross_amount
+          })),
+          originalHeaders: ['Póliza', 'Asegurado', 'Comisión'],
+          normalizedHeaders: ['policy_number', 'client_name', 'gross_amount'],
+          rules: [],
+          debugLogs
+        };
+      } catch (error) {
+        log(`ERROR en parser ACERTA: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+        return {
+          success: false,
+          error: `Error al parsear archivo de ACERTA: ${error instanceof Error ? error.message : 'Error desconocido'}`,
+          debugLogs
+        };
+      }
+    }
+
+    // PARSER ESPECIAL PARA GENERAL
+    if (insurer?.name?.toUpperCase().includes('GENERAL')) {
+      log('Detectado GENERAL - Usando parser especial');
+      try {
+        const fileExtension = fileName.toLowerCase().split('.').pop();
+        let generalRows: any[] = [];
+
+        if (fileExtension === 'pdf') {
+          log('GENERAL PDF detectado - Usando parser directo de PDF');
+          const { parseGeneralPDF } = await import('@/lib/parsers/general-parser');
+          generalRows = await parseGeneralPDF(fileBuffer);
+        } else {
+          log('GENERAL XLSX detectado - Usando parseo normal');
+          generalRows = [];
+        }
+
+        log(`GENERAL Parser extrajo ${generalRows.length} filas totales`);
+
+        const previewRows = generalRows.slice(0, 5);
+        log(`Mostrando ${previewRows.length} filas de muestra en preview`);
+
+        return {
+          success: true,
+          previewRows: previewRows.map(row => ({
+            policy_number: row.policy_number,
+            client_name: row.client_name,
+            gross_amount: row.gross_amount
+          })),
+          originalHeaders: ['Póliza', 'Cliente', 'Saldo'],
+          normalizedHeaders: ['policy_number', 'client_name', 'gross_amount'],
+          rules: [],
+          debugLogs
+        };
+      } catch (error) {
+        log(`ERROR en parser GENERAL: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+        return {
+          success: false,
+          error: `Error al parsear archivo de GENERAL: ${error instanceof Error ? error.message : 'Error desconocido'}`,
+          debugLogs
+        };
+      }
+    }
   }
   
   // Obtener reglas de mapeo para el campo objetivo

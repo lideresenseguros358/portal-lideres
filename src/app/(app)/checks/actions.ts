@@ -1227,7 +1227,7 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
 
     console.log('📋 [actionMarkPaymentsAsPaidNew] Referencias a validar:', referenceNumbers);
 
-    const transferMap = new Map<string, any>();
+    const transferMap = new Map<string, any[]>();
 
     if (referenceNumbers.length > 0) {
       console.log('🔍 [actionMarkPaymentsAsPaidNew] Buscando referencias en bank_transfers...');
@@ -1240,7 +1240,9 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
 
       (transfersData || []).forEach((transfer: any) => {
         const key = String(transfer.reference_number);
-        transferMap.set(key, transfer);
+        const list = transferMap.get(key) || [];
+        list.push(transfer);
+        transferMap.set(key, list);
       });
       
       console.log('✅ [actionMarkPaymentsAsPaidNew] Transferencias encontradas en BD:', transferMap.size);
@@ -1400,10 +1402,19 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
 
       // Skip can_be_paid check for DESCUENTO A CORREDOR
       if (!isDescuentoCorredor && !payment.can_be_paid) {
-        return {
-          ok: false as const,
-          error: `El pago "${payment.client_name}" tiene referencias inválidas. Actualice el historial de banco primero.`
-        };
+        const allRefsExistInBank = (refs || [])
+          .map((r: any) => String(r.reference_number))
+          .filter(Boolean)
+          .every((refNum: string) => transferMap.has(refNum));
+
+        if (!allRefsExistInBank) {
+          return {
+            ok: false as const,
+            error: `El pago "${payment.client_name}" tiene referencias inválidas. Actualice el historial de banco primero.`
+          };
+        }
+
+        console.log('ℹ️ [actionMarkPaymentsAsPaidNew] can_be_paid=false pero referencias existen en banco. Continuando...');
       }
 
       const paidAt = new Date().toISOString();
@@ -1411,131 +1422,153 @@ export async function actionMarkPaymentsAsPaidNew(paymentIds: string[]) {
       // Solo procesar referencias normales si NO es descuento a corredor
       if (!isDescuentoCorredor) {
         console.log('📊 [actionMarkPaymentsAsPaidNew] Procesando', refs.length, 'referencia(s) normal(es)...');
-        
+
+        const usedTransferIdsByRef = new Map<string, Set<string>>();
+
         for (const ref of refs) {
-        const referenceNumber = String(ref.reference_number);
-        console.log('🔑 [actionMarkPaymentsAsPaidNew] Buscando referencia:', referenceNumber);
-        console.log('📝 [actionMarkPaymentsAsPaidNew] Datos completos del ref:', ref);
+          const referenceNumber = String(ref.reference_number);
+          console.log('🔑 [actionMarkPaymentsAsPaidNew] Buscando referencia:', referenceNumber);
+          console.log('📝 [actionMarkPaymentsAsPaidNew] Datos completos del ref:', ref);
+          
+          const candidates = transferMap.get(referenceNumber) || [];
+          if (candidates.length === 0) {
+            console.error('❌ [actionMarkPaymentsAsPaidNew] Referencia no encontrada en transferMap:', referenceNumber);
+            return {
+              ok: false as const,
+              error: `La referencia "${referenceNumber}" no existe en el historial de banco.`
+            };
+          }
+
+          const usedIds = usedTransferIdsByRef.get(referenceNumber) || new Set<string>();
+          const refBankAmount = Number(ref.amount || 0);
+
+          const availableCandidates = candidates.filter((t: any) => !usedIds.has(String(t.id)));
+          const exactMatches = availableCandidates.filter((t: any) => Number(t.amount || 0) === refBankAmount);
+          const pickFrom = exactMatches.length > 0 ? exactMatches : availableCandidates;
+          const transfer = pickFrom[0];
+
+          if (!transfer) {
+            return {
+              ok: false as const,
+              error: `La referencia "${referenceNumber}" no tiene una transferencia disponible para conciliar.`
+            };
+          }
+
+          usedIds.add(String(transfer.id));
+          usedTransferIdsByRef.set(referenceNumber, usedIds);
         
-        const transfer = transferMap.get(referenceNumber);
+          console.log('✅ [actionMarkPaymentsAsPaidNew] Transfer encontrado:', {
+            ref: referenceNumber,
+            amount: transfer.amount,
+            used: transfer.used_amount,
+            remaining: transfer.remaining_amount,
+            status: transfer.status
+          });
 
-        if (!transfer) {
-          console.error('❌ [actionMarkPaymentsAsPaidNew] Referencia no encontrada en transferMap:', referenceNumber);
-          return {
-            ok: false as const,
-            error: `La referencia "${referenceNumber}" no existe en el historial de banco.`
-          };
-        }
-        
-        console.log('✅ [actionMarkPaymentsAsPaidNew] Transfer encontrado:', {
-          ref: referenceNumber,
-          amount: transfer.amount,
-          used: transfer.used_amount,
-          remaining: transfer.remaining_amount,
-          status: transfer.status
-        });
+          const detailKey = `${payment.id}:${transfer.id}`;
+          if (existingDetailKeys.has(detailKey)) {
+            console.error('❌ [actionMarkPaymentsAsPaidNew] Pago ya conciliado:', detailKey);
+            return {
+              ok: false as const,
+              error: `El pago "${payment.client_name}" ya fue conciliado con la referencia ${referenceNumber}.`
+            };
+          }
 
-        const detailKey = `${payment.id}:${transfer.id}`;
-        if (existingDetailKeys.has(detailKey)) {
-          console.error('❌ [actionMarkPaymentsAsPaidNew] Pago ya conciliado:', detailKey);
-          return {
-            ok: false as const,
-            error: `El pago "${payment.client_name}" ya fue conciliado con la referencia ${referenceNumber}.`
-          };
-        }
+          const amountToUse = Number(ref.amount_to_use ?? 0) || 0;
+          console.log('💵 [actionMarkPaymentsAsPaidNew] Monto a usar:', amountToUse);
+          
+          if (amountToUse <= 0) {
+            console.log('⚠️ [actionMarkPaymentsAsPaidNew] Monto 0 o negativo, saltando...');
+            continue;
+          }
 
-        const amountToUse = Number(ref.amount_to_use) || 0;
-        console.log('💵 [actionMarkPaymentsAsPaidNew] Monto a usar:', amountToUse);
-        
-        if (amountToUse <= 0) {
-          console.log('⚠️ [actionMarkPaymentsAsPaidNew] Monto 0 o negativo, saltando...');
-          continue;
-        }
+          const transferAmount = Number(transfer.amount) || 0;
+          const transferUsed = Number(transfer.used_amount || 0);
+          const transferRemaining = transfer.remaining_amount !== null && transfer.remaining_amount !== undefined
+            ? Number(transfer.remaining_amount)
+            : Math.max(transferAmount - transferUsed, 0);
+          
+          console.log('📊 [actionMarkPaymentsAsPaidNew] Validando saldo:', {
+            total: transferAmount,
+            usado: transferUsed,
+            disponible: transferRemaining,
+            aUsar: amountToUse,
+            tolerance: AMOUNT_TOLERANCE
+          });
 
-        const transferAmount = Number(transfer.amount) || 0;
-        const transferUsed = Number(transfer.used_amount || 0);
-        const transferRemaining = transfer.remaining_amount !== null && transfer.remaining_amount !== undefined
-          ? Number(transfer.remaining_amount)
-          : Math.max(transferAmount - transferUsed, 0);
-        
-        console.log('📊 [actionMarkPaymentsAsPaidNew] Validando saldo:', {
-          total: transferAmount,
-          usado: transferUsed,
-          disponible: transferRemaining,
-          aUsar: amountToUse,
-          tolerance: AMOUNT_TOLERANCE
-        });
+          if (amountToUse > transferRemaining + AMOUNT_TOLERANCE) {
+            console.error('❌ [actionMarkPaymentsAsPaidNew] Saldo insuficiente!');
+            return {
+              ok: false as const,
+              error: `La referencia ${referenceNumber} no tiene saldo suficiente (disponible ${transferRemaining.toFixed(2)}).`
+            };
+          }
+          
+          console.log('✅ [actionMarkPaymentsAsPaidNew] Saldo suficiente, continuando...');
 
-        if (amountToUse > transferRemaining + AMOUNT_TOLERANCE) {
-          console.error('❌ [actionMarkPaymentsAsPaidNew] Saldo insuficiente!');
-          return {
-            ok: false as const,
-            error: `La referencia ${referenceNumber} no tiene saldo suficiente (disponible ${transferRemaining.toFixed(2)}).`
-          };
-        }
-        
-        console.log('✅ [actionMarkPaymentsAsPaidNew] Saldo suficiente, continuando...');
+          const previousUsed = Number(transfer.used_amount || 0);
+          const newUsedAmount = previousUsed + amountToUse;
+          const newRemainingAmount = Math.max(transferAmount - newUsedAmount, 0);
+          const newStatus = determineTransferStatus(transferAmount, newUsedAmount, newRemainingAmount);
+          
+          console.log('📊 [actionMarkPaymentsAsPaidNew] Cálculos de actualización:', {
+            previousUsed,
+            newUsedAmount,
+            newRemainingAmount,
+            newStatus
+          });
 
-        const previous = transferMap.get(referenceNumber) || transfer;
-        const previousUsed = Number(previous.used_amount || 0);
-        const newUsedAmount = previousUsed + amountToUse;
-        const newRemainingAmount = Math.max(transferAmount - newUsedAmount, 0);
-        const newStatus = determineTransferStatus(transferAmount, newUsedAmount, newRemainingAmount);
-        
-        console.log('📊 [actionMarkPaymentsAsPaidNew] Cálculos de actualización:', {
-          previousUsed,
-          newUsedAmount,
-          newRemainingAmount,
-          newStatus
-        });
+          console.log('💾 [actionMarkPaymentsAsPaidNew] Insertando payment_details...');
+          const { error: detailError } = await supabase
+            .from('payment_details')
+            .insert([{
+              bank_transfer_id: transfer.id,
+              payment_id: payment.id,
+              policy_number: payment.policy_number,
+              insurer_name: payment.insurer_name,
+              client_name: payment.client_name,
+              purpose: payment.purpose,
+              amount_used: amountToUse,
+              paid_at: paidAt,
+            }] satisfies TablesInsert<'payment_details'>[]);
 
-        console.log('💾 [actionMarkPaymentsAsPaidNew] Insertando payment_details...');
-        const { error: detailError } = await supabase
-          .from('payment_details')
-          .insert([{
-            bank_transfer_id: transfer.id,
-            payment_id: payment.id,
-            policy_number: payment.policy_number,
-            insurer_name: payment.insurer_name,
-            client_name: payment.client_name,
-            purpose: payment.purpose,
-            amount_used: amountToUse,
-            paid_at: paidAt,
-          }] satisfies TablesInsert<'payment_details'>[]);
+          if (detailError) {
+            console.error('❌ [actionMarkPaymentsAsPaidNew] Error insertando payment_details:', detailError);
+            throw detailError;
+          }
+          console.log('✅ [actionMarkPaymentsAsPaidNew] Payment_details insertado');
 
-        if (detailError) {
-          console.error('❌ [actionMarkPaymentsAsPaidNew] Error insertando payment_details:', detailError);
-          throw detailError;
-        }
-        console.log('✅ [actionMarkPaymentsAsPaidNew] Payment_details insertado');
+          // remaining_amount y status son columnas generadas, solo actualizar used_amount
+          console.log('🔄 [actionMarkPaymentsAsPaidNew] Actualizando bank_transfers...');
+          const { error: transferUpdateError } = await supabase
+            .from('bank_transfers')
+            .update({
+              used_amount: newUsedAmount,
+            } satisfies TablesUpdate<'bank_transfers'>)
+            .eq('id', transfer.id);
 
-        // remaining_amount y status son columnas generadas, solo actualizar used_amount
-        console.log('🔄 [actionMarkPaymentsAsPaidNew] Actualizando bank_transfers...');
-        const { error: transferUpdateError } = await supabase
-          .from('bank_transfers')
-          .update({
+          if (transferUpdateError) {
+            console.error('❌ [actionMarkPaymentsAsPaidNew] Error actualizando bank_transfers:', transferUpdateError);
+            throw transferUpdateError;
+          }
+          
+          console.log('✅ [actionMarkPaymentsAsPaidNew] Bank_transfers actualizado');
+
+          const updatedTransfer = {
+            ...transfer,
             used_amount: newUsedAmount,
-          } satisfies TablesUpdate<'bank_transfers'>)
-          .eq('id', transfer.id);
+            remaining_amount: newRemainingAmount,
+            status: newStatus,
+          };
 
-        if (transferUpdateError) {
-          console.error('❌ [actionMarkPaymentsAsPaidNew] Error actualizando bank_transfers:', transferUpdateError);
-          throw transferUpdateError;
-        }
-        
-        console.log('✅ [actionMarkPaymentsAsPaidNew] Bank_transfers actualizado');
+          const refTransfers = transferMap.get(referenceNumber) || [];
+          const updatedList = refTransfers.map((t: any) => (t.id === transfer.id ? updatedTransfer : t));
+          transferMap.set(referenceNumber, updatedList);
+          
+          console.log('💾 [actionMarkPaymentsAsPaidNew] TransferMap actualizado en memoria');
+          console.log('✅ [actionMarkPaymentsAsPaidNew] Referencia procesada completamente\n');
 
-        transferMap.set(referenceNumber, {
-          ...transfer,
-          used_amount: newUsedAmount,
-          remaining_amount: newRemainingAmount,
-          status: newStatus,
-        });
-        
-        console.log('💾 [actionMarkPaymentsAsPaidNew] TransferMap actualizado en memoria');
-        console.log('✅ [actionMarkPaymentsAsPaidNew] Referencia procesada completamente\n');
-
-        existingDetailKeys.add(detailKey);
+          existingDetailKeys.add(detailKey);
         }
       } // Fin de if (!isDescuentoCorredor)
 

@@ -66,6 +66,16 @@ export async function actionUploadImport(formData: FormData) {
     const supabase = getSupabaseAdmin();
     
     console.log('[SERVER] Parsing file...');
+
+    const { data: insurerForFile } = await supabase
+      .from('insurers')
+      .select('name')
+      .eq('id', parsed.insurer_id)
+      .single();
+
+    const insurerName = String((insurerForFile as any)?.name || '').toUpperCase();
+    const isPdfWithSpecialParser = file.name.toLowerCase().endsWith('.pdf') &&
+      (insurerName.includes('BANESCO') || insurerName.includes('MERCANTIL') || insurerName.includes('SURA') || insurerName.includes('REGIONAL') || insurerName.includes('ACERTA') || insurerName.includes('GENERAL'));
     
     // Helper to check if file requires OCR
     const requiresOCR = (fileName: string): boolean => {
@@ -78,7 +88,7 @@ export async function actionUploadImport(formData: FormData) {
     let processedFile: File = file;
     const needsOCR = requiresOCR(file.name);
     
-    if (needsOCR) {
+    if (needsOCR && !isPdfWithSpecialParser) {
       console.log('[SERVER] File requires OCR processing:', file.name);
       
       // Procesar con OCR

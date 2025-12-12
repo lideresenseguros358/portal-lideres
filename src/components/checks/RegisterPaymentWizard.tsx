@@ -823,11 +823,17 @@ export default function RegisterPaymentWizardNew({
     } catch (error: any) {
       console.error('Error inesperado:', error);
       toast.error('Error inesperado', { description: error.message });
+    } finally {
       setLoading(false);
     }
   };
 
-  const totalBankReferences = references.reduce((sum, ref) => sum + (parseFloat(ref.amount) || 0), 0);
+  const totalBankReferences = references.reduce((sum, ref) => {
+    const amountToUse = parseFloat(String((ref as any).amount_to_use ?? ''));
+    const amount = parseFloat(String((ref as any).amount ?? ''));
+    const value = Number.isFinite(amountToUse) ? amountToUse : (Number.isFinite(amount) ? amount : 0);
+    return sum + value;
+  }, 0);
   const amountToPay = parseFloat(formData.amount_to_pay) || 0;
   const remainder = totalBankReferences - amountToPay;
   const stillNeeded = Math.max(amountToPay - totalBankReferences, 0);

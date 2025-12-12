@@ -173,7 +173,7 @@ export const POLICY_FORMATS: Record<InsurerSlug, PolicyFormatConfig> = {
     insurer: 'ACERTA',
     slug: 'acerta',
     inputCount: 3,
-    inputTypes: ['numeric', 'numeric', 'numeric'],
+    inputTypes: ['mixed', 'numeric', 'numeric'],
     joinWith: '-',
     normalize: false,
     examples: ['10-100001234-0', '12-200002345-1'],

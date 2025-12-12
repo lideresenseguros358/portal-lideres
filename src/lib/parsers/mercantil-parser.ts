@@ -30,7 +30,12 @@ export async function parseMercantilPDF(fileBuffer: ArrayBuffer): Promise<Mercan
   
   // Regex para detectar líneas de datos de MERCANTIL
   // Formato: "2-8-163 Factura 146315 ... 17.52 ... JOSE ANTONIO PRADO DUÑA"
-  const policyRegex = /^(\d{1,4}-\d{1,5}-\d{1,8})\s+/;
+  // IMPORTANTE: el texto viene “pegado” y la línea también incluye No. Egreso tipo "2-1-47268USD".
+  // Para evitar confundir No. Egreso con póliza, usamos contexto:
+  // la póliza es el patrón X-Y-Z que va antes del % (20.00/25.00/50.00) y del nombre.
+  // Ej: "...20252-8-103 20.00JOSE..." => póliza = 2-8-103
+  const policyByYearRegex = /20\d{2}(\d{1,4}-\d{1,5}-\d{1,8})(?=\s*\d{1,3}\.\d{2}\s*[A-ZÑÁÉÍÓÚÜ])/;
+  const policyByContextRegex = /(?:^|[^\d\/])(\d{1,4}-\d{1,5}-\d{1,8})(?=\s*\d{1,3}\.\d{2}\s*[A-ZÑÁÉÍÓÚÜ])/;
   
   for (const line of lines) {
     // Saltar headers, resumen y totales
@@ -41,28 +46,35 @@ export async function parseMercantilPDF(fileBuffer: ArrayBuffer): Promise<Mercan
       continue;
     }
     
-    const policyMatch = line.match(policyRegex);
+    // 1) Prioridad: patrón pegado a año (20xx + póliza)
+    //    Esto evita que se capture "252-..." desde "20252-..."
+    const policyMatch = line.match(policyByYearRegex) || line.match(policyByContextRegex);
     if (policyMatch && policyMatch[1]) {
-      const policyNumber = policyMatch[1];
+      const rawPolicyNumber = policyMatch[1];
+      const parts = rawPolicyNumber.split('-');
+      const firstPart = parts[0] ? String(parseInt(parts[0], 10)) : parts[0];
+      const policyNumber = [firstPart, ...parts.slice(1)].filter(Boolean).join('-');
       
       console.log(`[MERCANTIL PDF] Procesando línea con póliza: ${policyNumber}`);
       console.log(`[MERCANTIL PDF] Línea completa: ${line.substring(0, 150)}`);
-      
-      // Buscar el nombre del asegurado (MAYÚSCULAS antes de USD)
-      // En MERCANTIL: "... Recibos Cobrados JOSE ANTONIO PRADO DUÑA USD 17.52 20.00 3.56 ..."
-      const nameMatch = line.match(/([A-Z][A-Z\s]{10,}?)\s+USD/);
-      
-      // Buscar comisión: TERCER decimal después de USD
-      // Formato: "USD 17.52 20.00 3.56" donde 3.56 es la comisión
-      // Capturamos los 3 decimales después de USD
-      const decimalsAfterUSD = line.match(/USD\s+(\d+\.\d{2})\s+(\d+\.\d{2})\s+(\d+\.\d{2})/);
-      
+
+      const lineFromPolicy = line.slice(Math.max(0, line.indexOf(rawPolicyNumber)));
+
+      // Extraer comisión en formato pegado al No. de ingreso: "3.56296102" => comisión=3.56
+      // En el texto real, esto aparece justo antes de un No. egreso tipo "2-1-47268" y luego "USD"
+      const commissionAndIngresoMatch = lineFromPolicy.match(/\b(\d+\.\d{2})(?=\d{4,}\s+\d{1,4}-\d{1,4}-\d{3,}\s*USD\b)/);
+
+      // Nombre suele estar después del % (20.00/25.00/50.00) y antes de la comisión pegada al ingreso
+      const nameMatch = commissionAndIngresoMatch
+        ? lineFromPolicy.match(/\b\d{1,3}\.\d{2}\s*([A-ZÑÁÉÍÓÚÜ\s]{5,}?)(?=\s*\d+\.\d{2}\d{4,})/)
+        : null;
+
       console.log(`[MERCANTIL PDF] Nombre detectado: ${nameMatch ? nameMatch[1] : 'NO ENCONTRADO'}`);
-      console.log(`[MERCANTIL PDF] Decimales después de USD: ${decimalsAfterUSD ? decimalsAfterUSD.slice(1).join(', ') : 'NO ENCONTRADOS'}`);
-      
-      if (nameMatch && nameMatch[1] && decimalsAfterUSD && decimalsAfterUSD[3]) {
+      console.log(`[MERCANTIL PDF] Comisión detectada: ${commissionAndIngresoMatch ? commissionAndIngresoMatch[1] : 'NO ENCONTRADA'}`);
+
+      if (nameMatch && nameMatch[1] && commissionAndIngresoMatch && commissionAndIngresoMatch[1]) {
         const clientName = nameMatch[1].trim();
-        const commission = parseFloat(decimalsAfterUSD[3]); // Tercer decimal = Comisión
+        const commission = parseFloat(commissionAndIngresoMatch[1]);
         
         // Validar que no sea un total o resumen
         if (commission > 0 && !clientName.includes('TOTAL') && clientName.length > 5) {

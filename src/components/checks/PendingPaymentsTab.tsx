@@ -85,7 +85,7 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
         });
         
         // Obtener información de bank_transfers
-        const transfersMap = new Map<string, any>();
+        const transfersMap = new Map<string, any[]>();
         if (allReferenceNumbers.size > 0) {
           const { data: transfers } = await supabase
             .from('bank_transfers')
@@ -93,18 +93,51 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
             .in('reference_number', Array.from(allReferenceNumbers));
           
           transfers?.forEach(transfer => {
-            transfersMap.set(transfer.reference_number, transfer);
+            const refNum = transfer.reference_number;
+            const list = transfersMap.get(refNum) || [];
+            list.push(transfer);
+            transfersMap.set(refNum, list);
           });
         }
         
         // Enriquecer payment_references con remaining_amount
         validPayments.forEach((payment: any) => {
+          const usedTransfersByRef = new Map<string, Set<string>>();
+
           payment.payment_references?.forEach((ref: any) => {
-            const transfer = transfersMap.get(ref.reference_number);
-            if (transfer) {
-              ref.bank_remaining_amount = transfer.remaining_amount ?? 
-                Math.max((transfer.amount || 0) - (transfer.used_amount || 0), 0);
-            }
+            const refNum = String(ref.reference_number || '');
+            if (!refNum) return;
+
+            const candidates = transfersMap.get(refNum) || [];
+            if (candidates.length === 0) return;
+
+            const alreadyUsed = usedTransfersByRef.get(refNum) || new Set<string>();
+            const refAmount = Number(ref.amount || 0);
+
+            const selectable = candidates
+              .filter((t: any) => !alreadyUsed.has(`${t.reference_number}:${t.amount}:${t.used_amount}:${t.remaining_amount}`))
+              .map((t: any) => {
+                const remaining = t.remaining_amount ?? Math.max((t.amount || 0) - (t.used_amount || 0), 0);
+                const transferAmount = Number(t.amount || 0);
+                const diff = Math.abs(transferAmount - refAmount);
+                return { t, remaining: Number(remaining || 0), diff };
+              });
+
+            // Match por cercanía de monto (tolerancia) para evitar problemas de decimales
+            const AMOUNT_MATCH_TOLERANCE = 0.01;
+            const closeMatches = selectable.filter(x => x.diff <= AMOUNT_MATCH_TOLERANCE);
+            const pickFrom = closeMatches.length > 0 ? closeMatches : selectable;
+
+            const best = pickFrom
+              .sort((a, b) => {
+                if (a.diff !== b.diff) return a.diff - b.diff;
+                return b.remaining - a.remaining;
+              })[0];
+            if (!best) return;
+
+            ref.bank_remaining_amount = best.remaining;
+            alreadyUsed.add(`${best.t.reference_number}:${best.t.amount}:${best.t.used_amount}:${best.t.remaining_amount}`);
+            usedTransfersByRef.set(refNum, alreadyUsed);
           });
         });
         
@@ -331,24 +364,25 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
       
       // Si el pago tiene múltiples referencias, tratarlo como un grupo especial
       if (refs.length > 1) {
-        // Calcular totales de todas las referencias
-        const refsMap = new Map<string, { amount: number; remaining: number }>();
-        refs.forEach((ref: any) => {
-          const refNum = ref.reference_number;
+        // IMPORTANTE: NO deduplicar por reference_number.
+        // Un pago puede tener 2+ filas de referencias y deben sumar todas para el total.
+        const refsList = refs
+          .map((r: any) => String(r.reference_number || ''))
+          .filter(Boolean);
+
+        const totalBankAmount = refs.reduce((sum: number, ref: any) => {
+          return sum + parseFloat(ref.amount || '0');
+        }, 0);
+
+        const totalBankRemaining = refs.reduce((sum: number, ref: any) => {
           const amount = parseFloat(ref.amount || '0');
-          // Obtener remaining disponible real
           const remaining = ref.bank_remaining_amount !== undefined && ref.bank_remaining_amount !== null
             ? parseFloat(String(ref.bank_remaining_amount))
             : amount;
-          
-          if (!refsMap.has(refNum)) {
-            refsMap.set(refNum, { amount, remaining });
-          }
-        });
-        
-        const totalBankAmount = Array.from(refsMap.values()).reduce((sum, item) => sum + item.amount, 0);
-        const totalBankRemaining = Array.from(refsMap.values()).reduce((sum, item) => sum + item.remaining, 0);
-        const allRefsLabel = Array.from(refsMap.keys()).join(' + ');
+          return sum + remaining;
+        }, 0);
+
+        const allRefsLabel = refsList.join(' + ');
         const isDescuento = isDescuentoACorredor(payment);
         const paymentAmount = parseFloat(payment.amount_to_pay || '0');
         
@@ -358,7 +392,7 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
           reference_number: allRefsLabel,
           bank_amount: totalBankAmount,
           total_pending: isDescuento ? 0 : paymentAmount,
-          remaining: totalBankRemaining - paymentAmount, // Disponible - Pendiente
+          remaining: totalBankAmount - paymentAmount, // Banco (total) - Pendiente
           payments: [payment],
           allAreDescuentoCorredor: isDescuento,
           isBatch: false,
@@ -601,22 +635,24 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
         const refs = payment.payment_references || [];
         
         if (refs.length > 1) {
-          const refsMap = new Map<string, { amount: number; remaining: number }>();
-          refs.forEach((ref: any) => {
-            const refNum = ref.reference_number;
+          // IMPORTANTE: NO deduplicar por reference_number.
+          const refsList = refs
+            .map((r: any) => String(r.reference_number || ''))
+            .filter(Boolean);
+
+          const totalBankAmount = refs.reduce((sum: number, ref: any) => {
+            return sum + parseFloat(ref.amount || '0');
+          }, 0);
+
+          const totalBankRemaining = refs.reduce((sum: number, ref: any) => {
             const amount = parseFloat(ref.amount || '0');
             const remaining = ref.bank_remaining_amount !== undefined && ref.bank_remaining_amount !== null
               ? parseFloat(String(ref.bank_remaining_amount))
               : amount;
-            
-            if (!refsMap.has(refNum)) {
-              refsMap.set(refNum, { amount, remaining });
-            }
-          });
-          
-          const totalBankAmount = Array.from(refsMap.values()).reduce((sum, item) => sum + item.amount, 0);
-          const totalBankRemaining = Array.from(refsMap.values()).reduce((sum, item) => sum + item.remaining, 0);
-          const allRefsLabel = Array.from(refsMap.keys()).join(' + ');
+            return sum + remaining;
+          }, 0);
+
+          const allRefsLabel = refsList.join(' + ');
           const isDescuento = isDescuentoACorredor(payment);
           const paymentAmount = parseFloat(payment.amount_to_pay || '0');
           
@@ -625,7 +661,7 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
             reference_number: allRefsLabel,
             bank_amount: totalBankAmount,
             total_pending: isDescuento ? 0 : paymentAmount,
-            remaining: totalBankRemaining - paymentAmount,
+            remaining: totalBankAmount - paymentAmount,
             payments: [payment],
             allAreDescuentoCorredor: isDescuento,
             isBatch: false,
@@ -1329,7 +1365,7 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
             <p className="text-3xl font-bold text-blue-600 font-mono">
               ${(() => {
                 // Deduplicar referencias para no sumar la misma transferencia múltiples veces
-                const uniqueReferences = new Map<string, number>();
+                const uniqueReferences = new Map<string, { bankAmount: number; usedAmount: number }>();
                 let totalDescuentosCorredor = 0;
                 
                 payments.forEach(p => {
@@ -1344,16 +1380,30 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
                     // Para pagos normales, solo sumar referencias conciliadas
                     p.payment_references?.forEach((ref: any) => {
                       const refNum = ref.reference_number;
-                      const amount = Number(ref.amount || 0);
+                      const bankAmount = Number(ref.amount || 0);
+                      const usedAmount = Number(ref.amount_to_use ?? ref.amount ?? 0);
                       // Solo sumar si está conciliada (exists_in_bank)
-                      if (!uniqueReferences.has(refNum) && amount > 0 && ref.exists_in_bank) {
-                        uniqueReferences.set(refNum, amount);
+                      if (ref.exists_in_bank && bankAmount > 0) {
+                        const prev = uniqueReferences.get(refNum);
+                        if (!prev) {
+                          uniqueReferences.set(refNum, {
+                            bankAmount,
+                            usedAmount: Math.max(usedAmount, 0)
+                          });
+                        } else {
+                          uniqueReferences.set(refNum, {
+                            bankAmount: Math.max(prev.bankAmount, bankAmount),
+                            usedAmount: prev.usedAmount + Math.max(usedAmount, 0)
+                          });
+                        }
                       }
                     });
                   }
                 });
                 
-                const totalReferencias = Array.from(uniqueReferences.values()).reduce((sum, amount) => sum + amount, 0);
+                const totalReferencias = Array.from(uniqueReferences.values()).reduce((sum, ref) => {
+                  return sum + Math.min(ref.usedAmount, ref.bankAmount);
+                }, 0);
                 const total = totalReferencias + totalDescuentosCorredor;
                 return total.toFixed(2);
               })()}

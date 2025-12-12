@@ -121,6 +121,93 @@ async function parseXlsxFile(file: File, mappingRules: MappingRule[] = [], inver
         throw new Error('Error al parsear archivo de MERCANTIL: ' + (error instanceof Error ? error.message : 'Error desconocido'));
       }
     }
+
+    // PARSER ESPECIAL PARA REGIONAL
+    if (insurer?.name?.toUpperCase().includes('REGIONAL')) {
+      console.log('[PARSER] Detectado REGIONAL - Usando parser especial');
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const fileExtension = file.name.toLowerCase().split('.').pop();
+
+        if (fileExtension !== 'pdf') {
+          console.log('[REGIONAL] Archivo no PDF - usando previewMapping/manual');
+        } else {
+          console.log('[REGIONAL] PDF detectado - Usando parser directo de PDF');
+          const { parseRegionalPDF } = await import('@/lib/parsers/regional-parser');
+          const regionalRows = await parseRegionalPDF(arrayBuffer);
+
+          console.log('[REGIONAL PARSER] Extraídas', regionalRows.length, 'filas');
+
+          return regionalRows.map(row => ({
+            policy_number: row.policy_number,
+            client_name: row.client_name,
+            commission_amount: row.gross_amount,
+            raw_row: row
+          }));
+        }
+      } catch (error) {
+        console.error('[REGIONAL PARSER] Error:', error);
+        throw new Error('Error al parsear archivo de REGIONAL: ' + (error instanceof Error ? error.message : 'Error desconocido'));
+      }
+    }
+
+    // PARSER ESPECIAL PARA ACERTA
+    if (insurer?.name?.toUpperCase().includes('ACERTA')) {
+      console.log('[PARSER] Detectado ACERTA - Usando parser especial');
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const fileExtension = file.name.toLowerCase().split('.').pop();
+
+        if (fileExtension !== 'pdf') {
+          console.log('[ACERTA] Archivo no PDF - usando previewMapping/manual');
+        } else {
+          console.log('[ACERTA] PDF detectado - Usando parser directo de PDF');
+          const { parseAcertaPDF } = await import('@/lib/parsers/acerta-parser');
+          const acertaRows = await parseAcertaPDF(arrayBuffer);
+
+          console.log('[ACERTA PARSER] Extraídas', acertaRows.length, 'filas');
+
+          return acertaRows.map(row => ({
+            policy_number: row.policy_number,
+            client_name: row.client_name,
+            commission_amount: row.gross_amount,
+            raw_row: row
+          }));
+        }
+      } catch (error) {
+        console.error('[ACERTA PARSER] Error:', error);
+        throw new Error('Error al parsear archivo de ACERTA: ' + (error instanceof Error ? error.message : 'Error desconocido'));
+      }
+    }
+
+    // PARSER ESPECIAL PARA GENERAL
+    if (insurer?.name?.toUpperCase().includes('GENERAL')) {
+      console.log('[PARSER] Detectado GENERAL - Usando parser especial');
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const fileExtension = file.name.toLowerCase().split('.').pop();
+
+        if (fileExtension !== 'pdf') {
+          console.log('[GENERAL] Archivo no PDF - usando previewMapping/manual');
+        } else {
+          console.log('[GENERAL] PDF detectado - Usando parser directo de PDF');
+          const { parseGeneralPDF } = await import('@/lib/parsers/general-parser');
+          const generalRows = await parseGeneralPDF(arrayBuffer);
+
+          console.log('[GENERAL PARSER] Extraídas', generalRows.length, 'filas');
+
+          return generalRows.map(row => ({
+            policy_number: row.policy_number,
+            client_name: row.client_name,
+            commission_amount: row.gross_amount,
+            raw_row: row
+          }));
+        }
+      } catch (error) {
+        console.error('[GENERAL PARSER] Error:', error);
+        throw new Error('Error al parsear archivo de GENERAL: ' + (error instanceof Error ? error.message : 'Error desconocido'));
+      }
+    }
   }
   
   // Si tenemos insurerId (y NO es SURA), usar previewMapping para consistencia
