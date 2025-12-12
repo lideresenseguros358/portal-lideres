@@ -76,7 +76,7 @@ async function extractTextFromImage(imageBuffer: Buffer): Promise<string> {
  * Extrae texto de un PDF usando estrategia de fallback
  * Flujo: Intenta texto nativo primero, luego iLovePDF si falla
  */
-async function extractTextFromPDF(pdfBuffer: Buffer): Promise<string> {
+export async function extractTextFromPDF(pdfBuffer: Buffer): Promise<string> {
   try {
     const { extractText } = await import('unpdf');
     

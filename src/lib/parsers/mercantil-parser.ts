@@ -1,0 +1,179 @@
+import { extractTextFromPDF } from '@/lib/services/vision-ocr';
+
+interface MercantilRow {
+  policy_number: string;
+  client_name: string;
+  gross_amount: number;
+}
+
+/**
+ * Parser especializado para PDFs de MERCANTIL
+ * Similar a BANESCO - extrae texto del PDF y parsea con regex
+ */
+export async function parseMercantilPDF(fileBuffer: ArrayBuffer): Promise<MercantilRow[]> {
+  console.log('[MERCANTIL PDF] Iniciando parseo directo de PDF');
+  
+  // Convertir ArrayBuffer a Buffer
+  const buffer = Buffer.from(fileBuffer);
+  
+  // Extraer texto del PDF
+  const text = await extractTextFromPDF(buffer);
+  
+  console.log('[MERCANTIL PDF] ===== TEXTO EXTRAÍDO =====');
+  console.log(text);
+  console.log('[MERCANTIL PDF] ===== FIN TEXTO =====');
+  
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  console.log(`[MERCANTIL PDF] Total líneas: ${lines.length}`);
+  
+  const rows: MercantilRow[] = [];
+  
+  // Regex para detectar líneas de datos de MERCANTIL
+  // Formato: "2-8-163 Factura 146315 ... 17.52 ... JOSE ANTONIO PRADO DUÑA"
+  const policyRegex = /^(\d{1,4}-\d{1,5}-\d{1,8})\s+/;
+  
+  for (const line of lines) {
+    // Saltar headers, resumen y totales
+    if (line.includes('No. de Póliza') || line.includes('RESUMEN') || 
+        line.includes('COMISIONES POR RAMO') || line.includes('CONSOLIDADO') ||
+        line.includes('Total de comisiones') || line.includes('DESCUENTOS') ||
+        line.includes('Monto a pagar') || line.includes('Comisión a liquidar')) {
+      continue;
+    }
+    
+    const policyMatch = line.match(policyRegex);
+    if (policyMatch && policyMatch[1]) {
+      const policyNumber = policyMatch[1];
+      
+      console.log(`[MERCANTIL PDF] Procesando línea con póliza: ${policyNumber}`);
+      console.log(`[MERCANTIL PDF] Línea completa: ${line.substring(0, 150)}`);
+      
+      // Buscar el nombre del asegurado (MAYÚSCULAS al final o antes de USD/Recibos)
+      // En MERCANTIL: "... 3.56 ... JOSE ANTONIO PRADO DUÑA USD 17.52 ..."
+      const nameMatch = line.match(/([A-Z\s]{10,}(?:DE\s+[A-Z]+)?)\s+(?:USD|Recibos|$)/);
+      
+      // Buscar comisión: último decimal antes de USD o al final
+      // En algunos casos puede estar después del nombre
+      const commissionMatch = line.match(/(\d+\.\d{2})\s*(?:USD|$)/);
+      
+      console.log(`[MERCANTIL PDF] Nombre detectado: ${nameMatch ? nameMatch[1] : 'NO ENCONTRADO'}`);
+      console.log(`[MERCANTIL PDF] Comisión detectada: ${commissionMatch ? commissionMatch[1] : 'NO ENCONTRADA'}`);
+      
+      if (nameMatch && nameMatch[1] && commissionMatch && commissionMatch[1]) {
+        const clientName = nameMatch[1].trim();
+        const commission = parseFloat(commissionMatch[1]);
+        
+        // Validar que no sea un total o resumen
+        if (commission > 0 && !clientName.includes('TOTAL') && clientName.length > 5) {
+          console.log(`[MERCANTIL PDF] ✅ Encontrado: Póliza=${policyNumber}, Cliente=${clientName}, Comisión=${commission}`);
+          rows.push({
+            policy_number: policyNumber,
+            client_name: clientName,
+            gross_amount: commission
+          });
+        } else {
+          console.log(`[MERCANTIL PDF] ⏭️ Rechazado (validación): ${clientName} - ${commission}`);
+        }
+      } else {
+        console.log(`[MERCANTIL PDF] ⏭️ No se encontró nombre o comisión en la línea`);
+      }
+    }
+  }
+  
+  console.log(`[MERCANTIL PDF] Total filas extraídas: ${rows.length}`);
+  return rows;
+}
+
+/**
+ * Parser para archivos Excel de MERCANTIL (si se convierte manualmente)
+ * Similar estructura a BANESCO Excel
+ */
+export function parseMercantilExcel(fileBuffer: ArrayBuffer): MercantilRow[] {
+  console.log('[MERCANTIL PARSER] Iniciando parseo de archivo MERCANTIL Excel');
+  
+  const XLSX = require('xlsx');
+  const workbook = XLSX.read(fileBuffer, { type: 'array' });
+  const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+  
+  if (!firstSheet['!ref']) {
+    console.log('[MERCANTIL PARSER] ❌ Hoja vacía');
+    return [];
+  }
+  
+  console.log('[MERCANTIL PARSER] Rango:', firstSheet['!ref']);
+  
+  // Buscar fila de header
+  let headerRow = -1;
+  for (let i = 0; i < 20; i++) {
+    const cell = firstSheet[`A${i + 1}`];
+    if (cell && typeof cell.v === 'string' && cell.v.includes('No. de Póliza')) {
+      headerRow = i;
+      console.log('[MERCANTIL PARSER] ✅ Header encontrado en fila:', i + 1);
+      break;
+    }
+  }
+  
+  if (headerRow === -1) {
+    console.log('[MERCANTIL PARSER] ❌ No se encontró el header');
+    return [];
+  }
+  
+  const rows: MercantilRow[] = [];
+  
+  // Procesar filas de datos (después del header)
+  for (let i = headerRow + 1; i < 1000; i++) {
+    const cellA = firstSheet[`A${i + 1}`];
+    if (!cellA || !cellA.v) break;
+    
+    const cellValue = String(cellA.v).trim();
+    
+    // Saltar totales y resúmenes
+    if (cellValue.includes('RESUMEN') || cellValue.includes('Total') || 
+        cellValue.includes('COMISIONES') || cellValue.includes('CONSOLIDADO')) {
+      break;
+    }
+    
+    // Buscar póliza en la primera columna
+    const policyMatch = cellValue.match(/^(\d{1,4}-\d{1,5}-\d{1,8})/);
+    if (policyMatch && policyMatch[1]) {
+      const policyNumber = policyMatch[1];
+      
+      // Buscar nombre y comisión en las columnas siguientes
+      let clientName = '';
+      let commission = 0;
+      
+      // Iterar por las columnas para encontrar el nombre y la comisión
+      for (let col = 1; col < 20; col++) {
+        const colLetter = String.fromCharCode(65 + col); // B, C, D...
+        const cell = firstSheet[`${colLetter}${i + 1}`];
+        
+        if (cell && cell.v) {
+          const value = String(cell.v).trim();
+          
+          // Detectar nombre (mayúsculas, más de 10 caracteres)
+          if (!clientName && /^[A-Z\s]{10,}$/.test(value)) {
+            clientName = value;
+          }
+          
+          // Detectar comisión (número decimal)
+          const numMatch = value.match(/^(\d+\.?\d*)$/);
+          if (numMatch && numMatch[1] && parseFloat(numMatch[1]) > 0.01) {
+            commission = parseFloat(numMatch[1]);
+          }
+        }
+      }
+      
+      if (clientName && commission > 0) {
+        console.log(`[MERCANTIL PARSER]   ✅ VÁLIDA - Póliza: ${policyNumber}, Cliente: ${clientName}, Comisión: ${commission}`);
+        rows.push({
+          policy_number: policyNumber,
+          client_name: clientName,
+          gross_amount: commission
+        });
+      }
+    }
+  }
+  
+  console.log('[MERCANTIL PARSER] Total extraído:', rows.length, 'filas');
+  return rows;
+}

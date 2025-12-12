@@ -520,6 +520,53 @@ export async function previewMapping(options: PreviewMappingOptions) {
         };
       }
     }
+    
+    // PARSER ESPECIAL PARA MERCANTIL (similar a BANESCO)
+    if (insurer?.name?.toUpperCase().includes('MERCANTIL')) {
+      log('Detectado MERCANTIL - Usando parser especial');
+      try {
+        const fileExtension = fileName.toLowerCase().split('.').pop();
+        let mercantilRows: any[] = [];
+        
+        // Si es PDF, usar parser directo de PDF
+        if (fileExtension === 'pdf') {
+          log('MERCANTIL PDF detectado - Usando parser directo de PDF');
+          const { parseMercantilPDF } = await import('@/lib/parsers/mercantil-parser');
+          mercantilRows = await parseMercantilPDF(fileBuffer);
+        } else {
+          // Si es XLSX, usar parser de Excel
+          log('MERCANTIL XLSX detectado - Usando parser de Excel');
+          const { parseMercantilExcel } = await import('@/lib/parsers/mercantil-parser');
+          mercantilRows = parseMercantilExcel(fileBuffer);
+        }
+        
+        log(`MERCANTIL Parser extrajo ${mercantilRows.length} filas totales`);
+        
+        // En preview (editar mapeos), solo mostrar 5 filas de muestra
+        const previewRows = mercantilRows.slice(0, 5);
+        log(`Mostrando ${previewRows.length} filas de muestra en preview`);
+        
+        return {
+          success: true,
+          previewRows: previewRows.map(row => ({
+            policy_number: row.policy_number,
+            client_name: row.client_name,
+            gross_amount: row.gross_amount
+          })),
+          originalHeaders: ['No. de Póliza', 'Nombre Asegurado', 'Comisión Generada'],
+          normalizedHeaders: ['policy_number', 'client_name', 'gross_amount'],
+          rules: [],
+          debugLogs
+        };
+      } catch (error) {
+        log(`ERROR en parser MERCANTIL: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+        return {
+          success: false,
+          error: `Error al parsear archivo de MERCANTIL: ${error instanceof Error ? error.message : 'Error desconocido'}`,
+          debugLogs
+        };
+      }
+    }
   }
   
   // Obtener reglas de mapeo para el campo objetivo

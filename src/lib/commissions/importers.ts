@@ -87,6 +87,40 @@ async function parseXlsxFile(file: File, mappingRules: MappingRule[] = [], inver
         throw new Error('Error al parsear archivo de BANESCO: ' + (error instanceof Error ? error.message : 'Error desconocido'));
       }
     }
+    
+    // PARSER ESPECIAL PARA MERCANTIL (similar a BANESCO)
+    if (insurer?.name?.toUpperCase().includes('MERCANTIL')) {
+      console.log('[PARSER] Detectado MERCANTIL - Usando parser especial');
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const fileExtension = file.name.toLowerCase().split('.').pop();
+        let mercantilRows: any[] = [];
+        
+        // Si es PDF, usar parser directo de PDF
+        if (fileExtension === 'pdf') {
+          console.log('[MERCANTIL] PDF detectado - Usando parser directo de PDF');
+          const { parseMercantilPDF } = await import('@/lib/parsers/mercantil-parser');
+          mercantilRows = await parseMercantilPDF(arrayBuffer);
+        } else {
+          // Si es XLSX, usar parser de Excel
+          console.log('[MERCANTIL] XLSX detectado - Usando parser de Excel');
+          const { parseMercantilExcel } = await import('@/lib/parsers/mercantil-parser');
+          mercantilRows = parseMercantilExcel(arrayBuffer);
+        }
+        
+        console.log('[MERCANTIL PARSER] Extraídas', mercantilRows.length, 'filas');
+        
+        return mercantilRows.map(row => ({
+          policy_number: row.policy_number,
+          client_name: row.client_name,
+          commission_amount: row.gross_amount,
+          raw_row: row
+        }));
+      } catch (error) {
+        console.error('[MERCANTIL PARSER] Error:', error);
+        throw new Error('Error al parsear archivo de MERCANTIL: ' + (error instanceof Error ? error.message : 'Error desconocido'));
+      }
+    }
   }
   
   // Si tenemos insurerId (y NO es SURA), usar previewMapping para consistencia
