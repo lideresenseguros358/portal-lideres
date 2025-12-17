@@ -158,6 +158,42 @@ export default function ImportForm({ insurers, draftFortnightId, onImport }: Pro
           </div>
         )}
 
+        {/* BANCO: Selector de Grupos Bancarios */}
+        {selectedInsurer && availableGroups.length > 0 && (
+          <div className="field">
+            <label>
+              <FaUniversity className="inline mr-2" />
+              Grupos Bancarios Disponibles (Opcional)
+            </label>
+            <p className="help-text mb-2">
+              Vincula este reporte con transferencias bancarias ya conciliadas
+            </p>
+            {loadingGroups ? (
+              <p className="text-sm text-gray-500">Cargando grupos...</p>
+            ) : (
+              <div className="groups-list">
+                {availableGroups.map(group => (
+                  <label key={group.id} className="group-checkbox">
+                    <input
+                      type="checkbox"
+                      checked={selectedGroups.includes(group.id)}
+                      onChange={(e) => {
+                        if (e.target.checked) {
+                          setSelectedGroups([...selectedGroups, group.id]);
+                        } else {
+                          setSelectedGroups(selectedGroups.filter(id => id !== group.id));
+                        }
+                      }}
+                    />
+                    <span className="group-name">{group.name}</span>
+                    <span className="group-amount">${group.total_amount?.toFixed(2) || '0.00'}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="dropzone" onClick={() => document.getElementById('file-upload')?.click()}>
           <FaUpload className="dropzone-icon" />
           <p className="dropzone-label">

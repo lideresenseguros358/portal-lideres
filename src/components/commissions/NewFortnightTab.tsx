@@ -179,7 +179,7 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
     }
     
     try {
-      // Obtener imports con is_life_insurance
+      // Obtener imports actuales (solo los que existen)
       const { data: imports, error: importsError } = await supabaseClient()
         .from('comm_imports')
         .select('id, total_amount, is_life_insurance')
@@ -195,14 +195,15 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
       
       // Para cada import, calcular ganancia de oficina
       for (const imp of imports || []) {
-        // Obtener comisiones desde fortnight_details (datos procesados)
-        const { data: details } = await supabaseClient()
-          .from('fortnight_details')
-          .select('commission_calculated')
-          .eq('source_import_id', imp.id);
+        // Obtener comisiones desde comm_items directamente (más confiable)
+        const { data: items } = await supabaseClient()
+          .from('comm_items')
+          .select('gross_amount')
+          .eq('import_id', imp.id)
+          .not('broker_id', 'is', null);
         
-        const totalComisionesBrokers = (details || []).reduce((sum, detail) => {
-          return sum + Math.abs(Number(detail.commission_calculated) || 0);
+        const totalComisionesBrokers = (items || []).reduce((sum, item) => {
+          return sum + Math.abs(Number(item.gross_amount) || 0);
         }, 0);
         
         const totalReporte = Math.abs(Number(imp.total_amount) || 0);
@@ -480,14 +481,14 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
       <QueuedAdjustmentsPreview />
 
       {/* Section 1: Import Reports */}
-      <div className="bg-white rounded-xl shadow-lg border-2 border-gray-100 overflow-hidden">
-        <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-4 border-b-2 border-gray-200">
-          <h3 className="text-lg font-bold text-[#010139] flex items-center gap-2">
+      <Card className="shadow-lg overflow-hidden">
+        <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100 border-b-2 border-gray-200">
+          <CardTitle className="text-[#010139] flex items-center gap-2">
             <FaFileImport />
             1. Importar Reportes
-          </h3>
-        </div>
-        <div className="p-6">
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <ImportForm 
               insurers={insurers}
@@ -503,18 +504,18 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
               onDelete={handleDeleteImport} 
             />
           </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
       {/* Section 2: Office Total Visualization */}
-      <div className="bg-white rounded-xl shadow-lg border-2 border-gray-100 overflow-hidden">
-        <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-4 border-b-2 border-gray-200">
-          <h3 className="text-lg font-bold text-[#010139] flex items-center gap-2">
+      <Card className="shadow-lg overflow-hidden">
+        <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100 border-b-2 border-gray-200">
+          <CardTitle className="text-[#010139] flex items-center gap-2">
             <FaChartPie />
             2. Total Oficina
-          </h3>
-        </div>
-        <div className="p-6">
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div>
               <h4 className="text-sm font-semibold text-gray-600 mb-3">Distribución de Comisiones</h4>
@@ -564,11 +565,11 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
               </div>
             </div>
           </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
       {/* Section 3: Totales por Tipo */}
-      <Card className="shadow-lg">
+      <Card className="shadow-lg overflow-hidden">
         <CardHeader>
           <CardTitle className="text-[#010139]">3. Totales por Tipo de Seguro</CardTitle>
         </CardHeader>
