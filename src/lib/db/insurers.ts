@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { getSupabaseServer, type Tables, type TablesInsert, type TablesUpdate } from '@/lib/supabase/server';
+import { getInsurerSlug } from '@/lib/utils/policy-number';
 
 type InsurerRow = Tables<'insurers'>;
 type InsurerIns = TablesInsert<'insurers'>;
@@ -440,6 +441,118 @@ export async function previewMapping(options: PreviewMappingOptions) {
       .select('name')
       .eq('id', insurerId)
       .single();
+
+    const insurerSlug = getInsurerSlug(String((insurer as any)?.name || ''));
+    log('Insurer name:', String((insurer as any)?.name || ''));
+    log('Insurer slug:', insurerSlug);
+
+    // PARSER ESPECIAL PARA ASSISTCARD (JPG/PNG con OCR)
+    if (insurerSlug === 'assistcard') {
+      log('Detectado ASSISTCARD - Usando parser especial');
+      try {
+        const fileExtension = fileName.toLowerCase().split('.').pop();
+        const isImage = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tiff', 'tif'].includes(fileExtension || '');
+
+        if (!isImage) {
+          log('ASSISTCARD: archivo no imagen - usando parseo normal');
+        } else {
+          const { parseAssistcardImage } = await import('@/lib/parsers/assistcard-parser');
+          const rows = await parseAssistcardImage(fileBuffer, fileName);
+
+          log(`ASSISTCARD Parser extrajo ${rows.length} filas totales`);
+
+          const previewRows = rows;
+          log(`Mostrando TODAS las ${previewRows.length} filas en preview`);
+
+          return {
+            success: true,
+            previewRows: previewRows.map(row => ({
+              policy_number: row.policy_number,
+              client_name: row.client_name,
+              gross_amount: invertNegatives ? (Number(row.gross_amount) || 0) * -1 : row.gross_amount
+            })),
+            originalHeaders: ['Voucher', 'Nombre Pax', 'Commission'],
+            normalizedHeaders: ['policy_number', 'client_name', 'gross_amount'],
+            rules: [],
+            debugLogs
+          };
+        }
+      } catch (error) {
+        log(`ERROR en parser ASSISTCARD: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+        return {
+          success: false,
+          error: `Error al parsear archivo de ASSISTCARD: ${error instanceof Error ? error.message : 'Error desconocido'}`,
+          debugLogs
+        };
+      }
+    }
+
+    // PARSER ESPECIAL PARA IFS (PDF con tabla)
+    if (insurerSlug === 'ifs') {
+      log('Detectado IFS - Usando parser especial');
+      try {
+        const fileExtension = fileName.toLowerCase().split('.').pop();
+        if (fileExtension !== 'pdf') {
+          log('IFS: archivo no PDF - usando parseo normal');
+        } else {
+          const { parseIFSPDF } = await import('@/lib/parsers/ifs-parser');
+          const rows = await parseIFSPDF(fileBuffer);
+
+          // Enriquecer client_name desde BD cuando el PDF usa fuentes embebidas (glyphs)
+          const missingPolicies = Array.from(
+            new Set(
+              rows
+                .filter(r => !r.client_name)
+                .map(r => r.policy_number)
+                .filter(Boolean)
+            )
+          );
+
+          const policyToClient = new Map<string, string>();
+          if (missingPolicies.length > 0) {
+            const { data: policyRows } = await supabase
+              .from('policies')
+              .select('policy_number, clients(name)')
+              .in('policy_number', missingPolicies);
+
+            (policyRows || []).forEach((p: any) => {
+              const pn = String(p?.policy_number || '');
+              const cn = String(p?.clients?.name || '');
+              if (pn && cn) policyToClient.set(pn, cn);
+            });
+          }
+
+          const enrichedRows = rows.map(r => ({
+            ...r,
+            client_name: r.client_name || policyToClient.get(r.policy_number) || null,
+          }));
+
+          log(`IFS Parser extrajo ${enrichedRows.length} filas totales`);
+          const previewRows = enrichedRows;
+          log(`Mostrando TODAS las ${previewRows.length} filas en preview`);
+
+          return {
+            success: true,
+            previewRows: previewRows.map(row => ({
+              policy_number: row.policy_number,
+              client_name: row.client_name,
+              gross_amount: invertNegatives ? (Number(row.gross_amount) || 0) * -1 : row.gross_amount
+            })),
+            originalHeaders: ['Póliza', 'Cliente', 'Comisión'],
+            normalizedHeaders: ['policy_number', 'client_name', 'gross_amount'],
+            rules: [],
+            debugLogs
+          };
+        }
+      } catch (error) {
+        log(`ERROR en parser IFS: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+        return {
+          success: false,
+          error: `Error al parsear archivo de IFS: ${error instanceof Error ? error.message : 'Error desconocido'}`,
+          debugLogs
+        };
+      }
+    }
     
     if (insurer?.name?.toUpperCase().includes('SURA')) {
       log('Detectado SURA - Usando parser especial');
@@ -449,9 +562,9 @@ export async function previewMapping(options: PreviewMappingOptions) {
         
         log(`SURA Parser extrajo ${suraRows.length} filas totales`);
         
-        // En preview (editar mapeos), solo mostrar 5 filas de muestra
-        const previewRows = suraRows.slice(0, 5);
-        log(`Mostrando ${previewRows.length} filas de muestra en preview`);
+        // Mostrar todas las filas en preview
+        const previewRows = suraRows;
+        log(`Mostrando TODAS las ${previewRows.length} filas en preview`);
         
         return {
           success: true,
@@ -496,9 +609,9 @@ export async function previewMapping(options: PreviewMappingOptions) {
         
         log(`BANESCO Parser extrajo ${banescoRows.length} filas totales`);
         
-        // En preview (editar mapeos), solo mostrar 5 filas de muestra
-        const previewRows = banescoRows.slice(0, 5);
-        log(`Mostrando ${previewRows.length} filas de muestra en preview`);
+        // Mostrar todas las filas en preview
+        const previewRows = banescoRows;
+        log(`Mostrando TODAS las ${previewRows.length} filas en preview`);
         
         return {
           success: true,
@@ -543,9 +656,9 @@ export async function previewMapping(options: PreviewMappingOptions) {
         
         log(`MERCANTIL Parser extrajo ${mercantilRows.length} filas totales`);
         
-        // En preview (editar mapeos), solo mostrar 5 filas de muestra
-        const previewRows = mercantilRows.slice(0, 5);
-        log(`Mostrando ${previewRows.length} filas de muestra en preview`);
+        // Mostrar todas las filas en preview
+        const previewRows = mercantilRows;
+        log(`Mostrando TODAS las ${previewRows.length} filas en preview`);
         
         return {
           success: true,
@@ -587,8 +700,8 @@ export async function previewMapping(options: PreviewMappingOptions) {
 
         log(`REGIONAL Parser extrajo ${regionalRows.length} filas totales`);
 
-        const previewRows = regionalRows.slice(0, 5);
-        log(`Mostrando ${previewRows.length} filas de muestra en preview`);
+        const previewRows = regionalRows;
+        log(`Mostrando TODAS las ${previewRows.length} filas en preview`);
 
         return {
           success: true,
@@ -630,8 +743,8 @@ export async function previewMapping(options: PreviewMappingOptions) {
 
         log(`ACERTA Parser extrajo ${acertaRows.length} filas totales`);
 
-        const previewRows = acertaRows.slice(0, 5);
-        log(`Mostrando ${previewRows.length} filas de muestra en preview`);
+        const previewRows = acertaRows;
+        log(`Mostrando TODAS las ${previewRows.length} filas en preview`);
 
         return {
           success: true,
@@ -673,8 +786,8 @@ export async function previewMapping(options: PreviewMappingOptions) {
 
         log(`GENERAL Parser extrajo ${generalRows.length} filas totales`);
 
-        const previewRows = generalRows.slice(0, 5);
-        log(`Mostrando ${previewRows.length} filas de muestra en preview`);
+        const previewRows = generalRows;
+        log(`Mostrando TODAS las ${previewRows.length} filas en preview`);
 
         return {
           success: true,
@@ -716,8 +829,8 @@ export async function previewMapping(options: PreviewMappingOptions) {
 
         log(`OPTIMA Parser extrajo ${optimaRows.length} filas totales`);
 
-        const previewRows = optimaRows.slice(0, 5);
-        log(`Mostrando ${previewRows.length} filas de muestra en preview`);
+        const previewRows = optimaRows;
+        log(`Mostrando TODAS las ${previewRows.length} filas en preview`);
 
         return {
           success: true,
@@ -736,6 +849,262 @@ export async function previewMapping(options: PreviewMappingOptions) {
         return {
           success: false,
           error: `Error al parsear archivo de OPTIMA: ${error instanceof Error ? error.message : 'Error desconocido'}`,
+          debugLogs
+        };
+      }
+    }
+
+    // PARSER ESPECIAL PARA MB (MAPFRE BANCO)
+    if (insurer?.name?.toUpperCase() === 'MB' || insurer?.name?.toUpperCase().includes('MAPFRE BANCO')) {
+      log('Detectado MB (Mapfre Banco) - Usando parser especial');
+      try {
+        const fileExtension = fileName.toLowerCase().split('.').pop();
+        let mbRows: any[] = [];
+
+        if (fileExtension === 'pdf') {
+          log('MB PDF detectado - Usando parser directo de PDF');
+          const { parseMBPDF } = await import('@/lib/parsers/mb-parser');
+          mbRows = await parseMBPDF(fileBuffer);
+        } else {
+          log('MB XLSX detectado - Usando parseo normal');
+          mbRows = [];
+        }
+
+        log(`MB Parser extrajo ${mbRows.length} filas totales`);
+
+        const previewRows = mbRows;
+        log(`Mostrando TODAS las ${previewRows.length} filas en preview`);
+
+        return {
+          success: true,
+          previewRows: previewRows.map(row => ({
+            policy_number: row.policy_number,
+            client_name: row.client_name,
+            gross_amount: invertNegatives ? (Number(row.gross_amount) || 0) * -1 : row.gross_amount
+          })),
+          originalHeaders: ['Póliza', 'Asegurado', 'Ganados'],
+          normalizedHeaders: ['policy_number', 'client_name', 'gross_amount'],
+          rules: [],
+          debugLogs
+        };
+      } catch (error) {
+        log(`ERROR en parser MB: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+        return {
+          success: false,
+          error: `Error al parsear archivo de MB: ${error instanceof Error ? error.message : 'Error desconocido'}`,
+          debugLogs
+        };
+      }
+    }
+
+    // PARSER ESPECIAL PARA ALIADO
+    if (insurer?.name?.toUpperCase() === 'ALIADO' || insurer?.name?.toUpperCase().includes('ALIADO')) {
+      log('Detectado ALIADO - Usando parser especial');
+      try {
+        const fileExtension = fileName.toLowerCase().split('.').pop();
+        let aliadoRows: any[] = [];
+
+        if (fileExtension === 'pdf') {
+          log('ALIADO PDF detectado - Usando parser directo de PDF');
+          const { parseAliadoPDF } = await import('@/lib/parsers/aliado-parser');
+          aliadoRows = await parseAliadoPDF(fileBuffer);
+        } else {
+          log('ALIADO XLSX detectado - Usando parseo normal');
+          aliadoRows = [];
+        }
+
+        log(`ALIADO Parser extrajo ${aliadoRows.length} filas totales`);
+
+        const previewRows = aliadoRows;
+        log(`Mostrando TODAS las ${previewRows.length} filas en preview`);
+
+        return {
+          success: true,
+          previewRows: previewRows.map(row => ({
+            policy_number: row.policy_number,
+            client_name: row.client_name,
+            gross_amount: invertNegatives ? (Number(row.gross_amount) || 0) * -1 : row.gross_amount
+          })),
+          originalHeaders: ['Póliza', 'Asegurado', 'Ganados'],
+          normalizedHeaders: ['policy_number', 'client_name', 'gross_amount'],
+          rules: [],
+          debugLogs
+        };
+      } catch (error) {
+        log(`ERROR en parser ALIADO: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+        return {
+          success: false,
+          error: `Error al parsear archivo de ALIADO: ${error instanceof Error ? error.message : 'Error desconocido'}`,
+          debugLogs
+        };
+      }
+    }
+
+    // PARSER ESPECIAL PARA PALIG (PAN AMERICAN LIFE)
+    if (insurer?.name?.toUpperCase() === 'PALIG' || insurer?.name?.toUpperCase().includes('PAN AMERICAN')) {
+      log('Detectado PALIG - Usando parser especial');
+      try {
+        const fileExtension = fileName.toLowerCase().split('.').pop();
+        let paligRows: any[] = [];
+
+        if (fileExtension === 'pdf') {
+          log('PALIG PDF detectado - Usando parser directo de PDF');
+          const { parsePaligPDF } = await import('@/lib/parsers/palig-parser');
+          paligRows = await parsePaligPDF(fileBuffer);
+        } else {
+          log('PALIG XLSX detectado - Usando parseo normal');
+          paligRows = [];
+        }
+
+        log(`PALIG Parser extrajo ${paligRows.length} filas totales`);
+        log(`Mostrando TODAS las ${paligRows.length} filas en preview`);
+
+        return {
+          success: true,
+          previewRows: paligRows.map(row => ({
+            policy_number: row.policy_number,
+            client_name: row.client_name,
+            gross_amount: invertNegatives ? (Number(row.gross_amount) || 0) * -1 : row.gross_amount
+          })),
+          originalHeaders: ['Póliza / Cert', 'Referencia', 'Total'],
+          normalizedHeaders: ['policy_number', 'client_name', 'gross_amount'],
+          rules: [],
+          debugLogs
+        };
+      } catch (error) {
+        log(`ERROR en parser PALIG: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+        return {
+          success: false,
+          error: `Error al parsear archivo de PALIG: ${error instanceof Error ? error.message : 'Error desconocido'}`,
+          debugLogs
+        };
+      }
+    }
+
+    // PARSER ESPECIAL PARA VUMI (LA REGIONAL)
+    if (insurer?.name?.toUpperCase() === 'VUMI' || insurer?.name?.toUpperCase().includes('REGIONAL')) {
+      log('Detectado VUMI - Usando parser especial');
+      try {
+        const fileExtension = fileName.toLowerCase().split('.').pop();
+        let vumiRows: any[] = [];
+
+        if (fileExtension === 'pdf') {
+          log('VUMI PDF detectado - Usando parser directo de PDF');
+          const { parseVumiPDF } = await import('@/lib/parsers/vumi-parser');
+          vumiRows = await parseVumiPDF(fileBuffer);
+        } else {
+          log('VUMI XLSX detectado - Usando parseo normal');
+          vumiRows = [];
+        }
+
+        log(`VUMI Parser extrajo ${vumiRows.length} filas totales`);
+
+        const previewRows = vumiRows;
+        log(`Mostrando TODAS las ${previewRows.length} filas en preview`);
+
+        return {
+          success: true,
+          previewRows: previewRows.map(row => ({
+            policy_number: row.policy_number,
+            client_name: row.client_name,
+            gross_amount: invertNegatives ? (Number(row.gross_amount) || 0) * -1 : row.gross_amount
+          })),
+          originalHeaders: ['Número de póliza', 'Titular de la póliza', 'Monto de comisión'],
+          normalizedHeaders: ['policy_number', 'client_name', 'gross_amount'],
+          rules: [],
+          debugLogs
+        };
+      } catch (error) {
+        log(`ERROR en parser VUMI: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+        return {
+          success: false,
+          error: `Error al parsear archivo de VUMI: ${error instanceof Error ? error.message : 'Error desconocido'}`,
+          debugLogs
+        };
+      }
+    }
+
+    // PARSER ESPECIAL PARA UNIVIVIR
+    if (insurer?.name?.toUpperCase().includes('UNIVIVIR')) {
+      log('Detectado UNIVIVIR - Usando parser especial');
+      try {
+        const fileExtension = fileName.toLowerCase().split('.').pop();
+        let univivirRows: any[] = [];
+
+        if (fileExtension === 'pdf') {
+          log('UNIVIVIR PDF detectado - Usando parser directo de PDF');
+          const { parseUniVivirPDF } = await import('@/lib/parsers/univivir-parser');
+          univivirRows = await parseUniVivirPDF(fileBuffer);
+        } else {
+          log('UNIVIVIR XLSX detectado - Usando parseo normal');
+          univivirRows = [];
+        }
+
+        log(`UNIVIVIR Parser extrajo ${univivirRows.length} filas totales`);
+
+        const previewRows = univivirRows;
+        log(`Mostrando TODAS las ${previewRows.length} filas en preview`);
+
+        return {
+          success: true,
+          previewRows: previewRows.map(row => ({
+            policy_number: row.policy_number,
+            client_name: row.client_name,
+            gross_amount: invertNegatives ? (Number(row.gross_amount) || 0) * -1 : row.gross_amount
+          })),
+          originalHeaders: ['Ramo', 'Nro. Póliza', 'Asegurado', 'Comisión'],
+          normalizedHeaders: ['policy_number', 'client_name', 'gross_amount'],
+          rules: [],
+          debugLogs
+        };
+      } catch (error) {
+        log(`ERROR en parser UNIVIVIR: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+        return {
+          success: false,
+          error: `Error al parsear archivo de UNIVIVIR: ${error instanceof Error ? error.message : 'Error desconocido'}`,
+          debugLogs
+        };
+      }
+    }
+
+    // PARSER ESPECIAL PARA WW MEDICAL
+    if (insurerSlug === 'ww-medical') {
+      log('Detectado WW MEDICAL - Usando parser especial');
+      try {
+        const fileExtension = fileName.toLowerCase().split('.').pop();
+        let wwRows: any[] = [];
+
+        if (fileExtension === 'pdf') {
+          log('WW MEDICAL PDF detectado - Usando parser directo de PDF');
+          const { parseWWMedicalPDF } = await import('@/lib/parsers/ww-medical-parser');
+          wwRows = await parseWWMedicalPDF(fileBuffer);
+        } else {
+          log('WW MEDICAL XLSX detectado - Usando parseo normal');
+          wwRows = [];
+        }
+
+        log(`WW MEDICAL Parser extrajo ${wwRows.length} filas totales`);
+
+        const previewRows = wwRows;
+        log(`Mostrando TODAS las ${previewRows.length} filas en preview`);
+
+        return {
+          success: true,
+          previewRows: previewRows.map(row => ({
+            policy_number: row.policy_number,
+            client_name: row.client_name,
+            gross_amount: invertNegatives ? (Number(row.gross_amount) || 0) * -1 : row.gross_amount
+          })),
+          originalHeaders: ['Póliza', 'Cliente', 'Comisiones /'],
+          normalizedHeaders: ['policy_number', 'client_name', 'gross_amount'],
+          rules: [],
+          debugLogs
+        };
+      } catch (error) {
+        log(`ERROR en parser WW MEDICAL: ${error instanceof Error ? error.message : 'Error desconocido'}`);
+        return {
+          success: false,
+          error: `Error al parsear archivo de WW MEDICAL: ${error instanceof Error ? error.message : 'Error desconocido'}`,
           debugLogs
         };
       }
@@ -1150,18 +1519,17 @@ export async function previewMapping(options: PreviewMappingOptions) {
   
   log(`Filas válidas: ${validRows.length} de ${processedRows.length}`);
   
-  // Tomar solo las primeras 5 filas válidas para el preview
-  const previewLimit = 5;
-  const previewRows = validRows.slice(0, previewLimit);
+  // Mostrar TODAS las filas válidas en el preview
+  const previewRows = validRows;
   
-  log(`Preview mostrará ${previewRows.length} filas (máximo ${previewLimit})`);
+  log(`Preview mostrará TODAS las ${previewRows.length} filas`);
   
   return {
     success: true,
     originalHeaders: headers,
     normalizedHeaders,
     displayHeaders: displayFields, // Solo los campos que se deben mostrar en el preview
-    previewRows: previewRows, // Solo primeras 5 filas VÁLIDAS
+    previewRows: previewRows, // TODAS las filas VÁLIDAS
     totalValidRows: validRows.length, // Total de filas válidas en el archivo
     totalRows: processedRows.length, // Total de filas procesadas
     rules,

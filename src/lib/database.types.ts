@@ -511,6 +511,183 @@ export type Database = {
         }
         Relationships: []
       }
+      bank_cutoffs: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          end_date: string
+          id: string
+          notes: string | null
+          start_date: string
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          end_date: string
+          id?: string
+          notes?: string | null
+          start_date: string
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          end_date?: string
+          id?: string
+          notes?: string | null
+          start_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bank_cutoffs_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bank_group_imports: {
+        Row: {
+          amount_assigned: number
+          created_at: string | null
+          group_id: string
+          id: string
+          import_id: string
+        }
+        Insert: {
+          amount_assigned: number
+          created_at?: string | null
+          group_id: string
+          id?: string
+          import_id: string
+        }
+        Update: {
+          amount_assigned?: number
+          created_at?: string | null
+          group_id?: string
+          id?: string
+          import_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bank_group_imports_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "bank_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bank_group_imports_import_id_fkey"
+            columns: ["import_id"]
+            isOneToOne: false
+            referencedRelation: "comm_imports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bank_group_transfers: {
+        Row: {
+          created_at: string | null
+          group_id: string
+          id: string
+          transfer_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          group_id: string
+          id?: string
+          transfer_id: string
+        }
+        Update: {
+          created_at?: string | null
+          group_id?: string
+          id?: string
+          transfer_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bank_group_transfers_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "bank_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bank_group_transfers_transfer_id_fkey"
+            columns: ["transfer_id"]
+            isOneToOne: true
+            referencedRelation: "bank_transfers_comm"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bank_groups: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          fortnight_paid_id: string | null
+          group_template: string
+          id: string
+          insurer_id: string | null
+          is_life_insurance: boolean | null
+          name: string
+          paid_at: string | null
+          status: string | null
+          total_amount: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          fortnight_paid_id?: string | null
+          group_template: string
+          id?: string
+          insurer_id?: string | null
+          is_life_insurance?: boolean | null
+          name: string
+          paid_at?: string | null
+          status?: string | null
+          total_amount?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          fortnight_paid_id?: string | null
+          group_template?: string
+          id?: string
+          insurer_id?: string | null
+          is_life_insurance?: boolean | null
+          name?: string
+          paid_at?: string | null
+          status?: string | null
+          total_amount?: number | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bank_groups_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bank_groups_fortnight_paid_id_fkey"
+            columns: ["fortnight_paid_id"]
+            isOneToOne: false
+            referencedRelation: "fortnights"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bank_groups_insurer_id_fkey"
+            columns: ["insurer_id"]
+            isOneToOne: false
+            referencedRelation: "insurers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bank_transfers: {
         Row: {
           amount: number
@@ -552,6 +729,66 @@ export type Database = {
           used_amount?: number | null
         }
         Relationships: []
+      }
+      bank_transfers_comm: {
+        Row: {
+          amount: number
+          created_at: string | null
+          cutoff_id: string | null
+          date: string
+          description_raw: string
+          id: string
+          insurer_assigned_id: string | null
+          notes_internal: string | null
+          reference_number: string
+          status: string | null
+          transfer_type: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          amount: number
+          created_at?: string | null
+          cutoff_id?: string | null
+          date: string
+          description_raw: string
+          id?: string
+          insurer_assigned_id?: string | null
+          notes_internal?: string | null
+          reference_number: string
+          status?: string | null
+          transfer_type?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          amount?: number
+          created_at?: string | null
+          cutoff_id?: string | null
+          date?: string
+          description_raw?: string
+          id?: string
+          insurer_assigned_id?: string | null
+          notes_internal?: string | null
+          reference_number?: string
+          status?: string | null
+          transfer_type?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bank_transfers_comm_cutoff_id_fkey"
+            columns: ["cutoff_id"]
+            isOneToOne: false
+            referencedRelation: "bank_cutoffs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bank_transfers_comm_insurer_assigned_id_fkey"
+            columns: ["insurer_assigned_id"]
+            isOneToOne: false
+            referencedRelation: "insurers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       broker_assistants: {
         Row: {
@@ -4368,6 +4605,10 @@ export type Database = {
           row_number: number
           success: boolean
         }[]
+      }
+      calculate_bank_group_total: {
+        Args: { p_group_id: string }
+        Returns: number
       }
       clean_expired_is_tokens: { Args: never; Returns: undefined }
       cleanup_old_notification_hashes: { Args: never; Returns: undefined }

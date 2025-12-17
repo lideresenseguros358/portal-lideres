@@ -75,8 +75,23 @@ export async function actionUploadImport(formData: FormData) {
       .single();
 
     const insurerName = String((insurerForFile as any)?.name || '').toUpperCase();
+    const slug = getInsurerSlug(insurerName);
     const isPdfWithSpecialParser = file.name.toLowerCase().endsWith('.pdf') &&
-      (insurerName.includes('BANESCO') || insurerName.includes('MERCANTIL') || insurerName.includes('SURA') || insurerName.includes('REGIONAL') || insurerName.includes('ACERTA') || insurerName.includes('GENERAL'));
+      (
+        slug === 'banesco' ||
+        slug === 'mercantil' ||
+        slug === 'sura' ||
+        slug === 'regional' ||
+        slug === 'acerta' ||
+        slug === 'general' ||
+        slug === 'univivir' ||
+        slug === 'ww-medical' ||
+        slug === 'ifs'
+      );
+
+    const isAssistcardImage =
+      slug === 'assistcard' &&
+      ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tiff', 'tif'].includes(file.name.toLowerCase().split('.').pop() || '');
     
     // Helper to check if file requires OCR
     const requiresOCR = (fileName: string): boolean => {
@@ -90,6 +105,9 @@ export async function actionUploadImport(formData: FormData) {
     const needsOCR = requiresOCR(file.name);
     
     if (needsOCR && !isPdfWithSpecialParser) {
+      if (isAssistcardImage) {
+        console.log('[SERVER] ASSISTCARD image detected - skipping generic OCR-to-XLSX conversion');
+      } else {
       console.log('[SERVER] File requires OCR processing:', file.name);
       
       // Procesar con OCR
@@ -114,6 +132,7 @@ export async function actionUploadImport(formData: FormData) {
       });
       
       console.log('[SERVER] XLSX file created from OCR:', processedFile.name);
+      }
     }
     
     // Get insurer mapping rules (including multi-column support for ASSA)
@@ -2187,7 +2206,7 @@ export async function actionDeleteAdvance(advanceId: string) {
         
         // Verificar que realmente contienen el advance_id en los metadata
         const validPaymentIds: string[] = [];
-        pendingPayments.forEach(p => {
+        (pendingPayments || []).forEach(p => {
           try {
             const metadata = typeof p.notes === 'string' ? JSON.parse(p.notes) : p.notes;
             if (metadata?.advance_id === advanceId) {
@@ -2232,32 +2251,16 @@ export async function actionDeleteAdvance(advanceId: string) {
       
       revalidatePath('/(app)/commissions');
       return { 
-        ok: true as const,
-        message: 'Adelanto eliminado completamente (sin historial de pagos)',
+        ok: true as const
       };
     }
     
-    // 4. Si SÍ tiene historial: Cambiar status a PAID
-    // Esto lo mueve de "Deudas Activas" a "Deudas Saldadas"
-    const { error: updateError } = await supabase
-      .from('advances')
-      .update({ status: 'PAID' })
-      .eq('id', advanceId);
-    
-    if (updateError) {
-      return {
-        ok: false as const,
-        error: `Error al marcar como saldado: ${updateError.message}`,
-      };
-    }
-    
-    revalidatePath('/(app)/commissions');
-    return { 
-      ok: true as const,
-      message: 'Adelanto movido a "Deudas Saldadas" (tiene historial de pagos)',
+    // Si llegamos aquí, no se cumplió ninguna condición anterior
+    return {
+      ok: false as const,
+      error: 'El adelanto tiene historial de pagos y no se puede eliminar',
     };
   } catch (error) {
-    console.error('[actionDeleteAdvance] Error:', error);
     return {
       ok: false as const,
       error: error instanceof Error ? error.message : 'Error desconocido al eliminar adelanto',
@@ -2860,22 +2863,13 @@ export async function actionGetPendingItems() {
     // 2. Buscar en comm_items (comisiones del bulk upload)
     // TANTO MASTER COMO BROKER ven items SIN broker_id (sin identificar)
     // Los brokers pueden "marcar mío" seleccionándolos y enviando reporte de ajuste
-    const result = await supabase
+    let commQuery = supabase
       .from('comm_items')
-      .select(`
-        id,
-        insured_name,
-        policy_number,
-        gross_amount,
-        created_at,
-        broker_id,
-        insurers ( name )
-      `)
-      .is('broker_id', null)  // Todos ven items SIN broker asignado
+      .select('*, insurers(id, name)')
+      .is('broker_id', null)
       .order('created_at', { ascending: true });
     
-    const commData = result.data;
-    const commError = result.error;
+    const { data: commData, error: commError } = await commQuery;
 
     if (commError) {
       console.error('[actionGetPendingItems] Error comm_items:', commError);
@@ -3175,7 +3169,7 @@ export async function actionDeleteDraft(fortnightId: string) {
       .delete()
       .eq('fortnight_id', fortnightId);
 
-    // Finally, delete the fortnight itself
+    // Delete fortnight
     console.log('[actionDeleteDraft] Eliminando fortnight...');
     const { error: deleteError } = await supabase
       .from('fortnights')
@@ -3188,6 +3182,7 @@ export async function actionDeleteDraft(fortnightId: string) {
     }
 
     console.log('[actionDeleteDraft] ✓ Borrador eliminado exitosamente');
+    revalidatePath('/commissions');
     revalidatePath('/(app)/commissions');
     return { ok: true as const };
   } catch (error) {

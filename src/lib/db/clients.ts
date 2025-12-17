@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { getSupabaseServer, type Tables, type TablesInsert, type TablesUpdate } from '@/lib/supabase/server';
+import { getInsurerSlug, normalizePolicyNumber } from '@/lib/utils/policy-number';
 
 type ClientRow = Tables<"clients">;
 type ClientIns = TablesInsert<"clients">;
@@ -184,8 +185,26 @@ export async function createClientWithPolicy(clientData: unknown, policyData: un
   if (!newClient) throw new Error('Fallo al crear el cliente');
 
   // Create policy
+  let policyNumber = policyParsed.policy_number;
+  if (policyParsed.insurer_id && policyParsed.policy_number) {
+    const { data: insurer } = await supabase
+      .from('insurers')
+      .select('name')
+      .eq('id', policyParsed.insurer_id)
+      .single();
+
+    const insurerSlug = getInsurerSlug(String((insurer as any)?.name || ''));
+    if (insurerSlug === 'univivir') {
+      const digits = String(policyParsed.policy_number).match(/\d+/g) || [];
+      const ramo = digits.length >= 3 ? (digits[1] || '') : (digits[0] || '');
+      const poliza = digits.length >= 3 ? (digits[2] || '') : (digits[1] || '');
+      policyNumber = normalizePolicyNumber('univivir', ['01', ramo, poliza]);
+    }
+  }
+
   const policyPayload = {
     ...policyParsed,
+    policy_number: policyNumber,
     client_id: newClient.id,
     broker_id: brokerId,
   };

@@ -59,9 +59,28 @@ interface OCRResult {
 async function extractTextFromImage(imageBuffer: Buffer): Promise<string> {
   const client = getVisionClient();
   
-  const [result] = await client.textDetection({
-    image: { content: imageBuffer },
-  });
+  let result: any;
+  try {
+    [result] = await client.textDetection({
+      image: { content: imageBuffer },
+    });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    if (
+      msg.includes('PERMISSION_DENIED') &&
+      (msg.toLowerCase().includes('billing') || msg.toLowerCase().includes('enable billing'))
+    ) {
+      throw new Error(
+        '[VISION_BILLING_REQUIRED] Google Cloud Vision OCR requiere que el proyecto tenga Billing habilitado.\n\n' +
+          'Opciones:\n' +
+          '1) Habilitar Billing en el proyecto de Google Cloud usado por las credenciales.\n' +
+          '2) Usar credenciales de otro proyecto que ya tenga Billing (actualizando keys/gcloud-key.json o GOOGLE_APPLICATION_CREDENTIALS_JSON).\n' +
+          '3) Alternativa sin OCR: exportar el reporte a Excel/CSV y subirlo en ese formato.\n\n' +
+          `Detalle técnico: ${msg}`
+      );
+    }
+    throw error;
+  }
   
   const detections = result.textAnnotations;
   if (!detections || detections.length === 0) {
@@ -70,6 +89,47 @@ async function extractTextFromImage(imageBuffer: Buffer): Promise<string> {
   
   // El primer resultado contiene todo el texto detectado
   return detections[0]?.description || '';
+}
+
+export async function extractTextFromImageBuffer(fileBuffer: ArrayBuffer): Promise<string> {
+  const buffer = Buffer.from(fileBuffer);
+  
+  try {
+    // Usar siempre textDetection (funciona para imágenes y PDFs simples)
+    return await extractTextFromImage(buffer);
+  } catch (error) {
+    throw new Error('Error extracting text: ' + (error instanceof Error ? error.message : 'Unknown error'));
+  }
+}
+
+async function extractTextFromPDFVision(pdfBuffer: Buffer): Promise<string> {
+  const client = getVisionClient();
+  
+  console.log('[VISION-PDF] Procesando PDF con Google Vision API...');
+  
+  try {
+    // Para PDFs, usar documentTextDetection que está optimizado para documentos
+    const [result] = await client.documentTextDetection({
+      image: {
+        content: pdfBuffer.toString('base64'),
+      },
+    });
+    
+    const fullText = result.fullTextAnnotation;
+    
+    if (!fullText || !fullText.text) {
+      console.log('[VISION-PDF] No se detectó texto en el PDF');
+      return '';
+    }
+    
+    console.log(`[VISION-PDF] ✅ Texto extraído del PDF: ${fullText.text.length} caracteres`);
+    return fullText.text;
+    
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error('[VISION-PDF] Error:', errorMessage);
+    throw new Error(`Error al procesar PDF con Vision API: ${errorMessage}`);
+  }
 }
 
 /**
@@ -177,8 +237,8 @@ function structureTextToTable(text: string): any[][] {
       }
       
       // Buscar donde termina el asegurado y empieza el recibo
-      // Patrones de recibo: ACH, VC, BG, GB, TCR seguidos de números
-      const reciboMatch = restOfLine.match(/(ACH|VC|BG|GB|TCR|232-)\d+/);
+      // Patrones de recibo: ACH, VC, BG, GB, TCR seguidos de números, o simplemente 6-8 dígitos
+      const reciboMatch = restOfLine.match(/(ACH|VC|BG|GB|TCR|232-)\d+|\b\d{6,8}\b/);
       
       if (reciboMatch && reciboMatch.index !== undefined) {
         // Asegurado es todo antes del recibo

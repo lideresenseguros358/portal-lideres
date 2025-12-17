@@ -197,7 +197,7 @@ export const POLICY_FORMATS: Record<InsurerSlug, PolicyFormatConfig> = {
     inputTypes: ['numeric', 'numeric', 'numeric'],
     joinWith: '-',
     normalize: false,
-    examples: ['01-09-12345', '02-10-67890'],
+    examples: ['01-009-22514', '01-001-12345'],
     parserRule: 'partial',
     parserInputs: [2], // Solo el tercer input (índice 2)
   },
@@ -234,11 +234,11 @@ export const POLICY_FORMATS: Record<InsurerSlug, PolicyFormatConfig> = {
   'ww-medical': {
     insurer: 'WW MEDICAL',
     slug: 'ww-medical',
-    inputCount: 3,
-    inputTypes: ['text', 'numeric', 'numeric'],
-    joinWith: '-',
+    inputCount: 1,
+    inputTypes: ['mixed'],
+    joinWith: '',
     normalize: false,
-    examples: ['WP69-16-123456', 'WM70-18-234567'],
+    examples: ['WP69-20-11267', 'WPSR-03391'],
     parserRule: 'full',
   },
   'mercantil': {
@@ -284,6 +284,26 @@ export function normalizePolicyNumber(insurerSlug: InsurerSlug, parts: string[])
   if (!config) return parts.join('-');
 
   let normalizedParts = [...parts];
+
+  if (insurerSlug === 'ww-medical') {
+    const raw = String(normalizedParts[0] ?? '');
+    return raw.replace(/\s+/g, '').toUpperCase();
+  }
+
+  // Normalización especial UNIVIVIR:
+  // - Primer grupo siempre es 01
+  // - Segundo grupo (ramo) siempre 3 dígitos
+  // - Tercer grupo (nro póliza) sin ceros a la izquierda
+  if (insurerSlug === 'univivir') {
+    const ramoRaw = String(normalizedParts[1] ?? '').replace(/\D/g, '');
+    const polRaw = String(normalizedParts[2] ?? '').replace(/\D/g, '');
+
+    const ramo = (ramoRaw || '').padStart(3, '0').slice(-3);
+    const poliza = removeLeadingZeros(polRaw);
+
+    if (!ramo || !poliza) return ['01', ramo, poliza].filter(Boolean).join('-');
+    return `01-${ramo}-${poliza}`;
+  }
 
   // Remover ceros a la izquierda si aplica
   if (config.removeLeadingZeros) {
@@ -393,13 +413,38 @@ export function getPolicyFormatConfig(insurerSlug: InsurerSlug): PolicyFormatCon
  */
 export function getInsurerSlug(insurerName: string): InsurerSlug | null {
   const normalized = insurerName.toUpperCase().trim();
-  
+
+  if (!normalized) return null;
+
+  const compact = normalized.replace(/[^A-Z0-9]/g, '');
+
+  const aliases: Array<{ slug: InsurerSlug; matches: string[] }> = [
+    { slug: 'ww-medical', matches: ['WW MEDICAL', 'WORLDWIDE MEDICAL', 'WWMEDICAL', 'WORLDWIDEMEDICAL'] },
+  ];
+
+  for (const entry of aliases) {
+    if (
+      entry.matches.some(m => normalized.includes(m.toUpperCase().trim())) ||
+      entry.matches.some(m => compact.includes(m.toUpperCase().replace(/[^A-Z0-9]/g, '')))
+    ) {
+      return entry.slug;
+    }
+  }
+
   // Buscar en las configuraciones
   for (const [slug, config] of Object.entries(POLICY_FORMATS)) {
-    if (config.insurer.toUpperCase() === normalized) {
+    const configName = config.insurer.toUpperCase().trim();
+    if (configName && configName === normalized) {
       return slug as InsurerSlug;
     }
   }
-  
+
+  for (const [slug, config] of Object.entries(POLICY_FORMATS)) {
+    const configName = config.insurer.toUpperCase().trim();
+    if (configName && (normalized.includes(configName) || compact.includes(configName.replace(/[^A-Z0-9]/g, '')))) {
+      return slug as InsurerSlug;
+    }
+  }
+
   return null;
 }

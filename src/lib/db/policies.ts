@@ -3,6 +3,7 @@
 import { z } from 'zod';
 import { getSupabaseServer, type Tables, type TablesInsert, type TablesUpdate } from '@/lib/supabase/server';
 import { getAuthContext } from './context';
+import { getInsurerSlug, normalizePolicyNumber } from '@/lib/utils/policy-number';
 
 type PolicyRow = Tables<'policies'>;
 type PolicyIns = TablesInsert<'policies'>;
@@ -66,7 +67,26 @@ export async function createPolicy(rawData: unknown) {
   const brokerId = ctx.role === 'master' ? parsed.broker_id ?? ctx.brokerId : ctx.brokerId;
   if (!brokerId) throw new Error('No se encontró broker asociado para la póliza');
 
-  const payload = toInsert(parsed, brokerId);
+  // Normalizar policy_number según aseguradora (server-side)
+  let normalizedParsed = parsed;
+  if (parsed.insurer_id && parsed.policy_number) {
+    const { data: insurer } = await supabase
+      .from('insurers')
+      .select('name')
+      .eq('id', parsed.insurer_id)
+      .single();
+
+    const insurerSlug = getInsurerSlug(String((insurer as any)?.name || ''));
+    if (insurerSlug === 'univivir') {
+      const digits = String(parsed.policy_number).match(/\d+/g) || [];
+      const ramo = digits.length >= 3 ? (digits[1] || '') : (digits[0] || '');
+      const poliza = digits.length >= 3 ? (digits[2] || '') : (digits[1] || '');
+      const normalized = normalizePolicyNumber('univivir', ['01', ramo, poliza]);
+      normalizedParsed = { ...parsed, policy_number: normalized };
+    }
+  }
+
+  const payload = toInsert(normalizedParsed, brokerId);
 
   const { data, error } = await supabase
     .from('policies')
@@ -86,7 +106,34 @@ export async function updatePolicy(policyId: string, rawData: unknown) {
     delete (parsed as Record<string, unknown>).broker_id;
   }
 
-  const payload = toUpdate(parsed);
+  // Normalizar policy_number según aseguradora (server-side)
+  const parsedAny = parsed as any;
+  if (parsedAny.policy_number && (parsedAny.insurer_id || true)) {
+    const { data: current } = await supabase
+      .from('policies')
+      .select('insurer_id')
+      .eq('id', policyId)
+      .single();
+
+    const insurerId = String(parsedAny.insurer_id || (current as any)?.insurer_id || '');
+    if (insurerId) {
+      const { data: insurer } = await supabase
+        .from('insurers')
+        .select('name')
+        .eq('id', insurerId)
+        .single();
+
+      const insurerSlug = getInsurerSlug(String((insurer as any)?.name || ''));
+      if (insurerSlug === 'univivir') {
+        const digits = String(parsedAny.policy_number).match(/\d+/g) || [];
+        const ramo = digits.length >= 3 ? (digits[1] || '') : (digits[0] || '');
+        const poliza = digits.length >= 3 ? (digits[2] || '') : (digits[1] || '');
+        parsedAny.policy_number = normalizePolicyNumber('univivir', ['01', ramo, poliza]);
+      }
+    }
+  }
+
+  const payload = toUpdate(parsedAny);
 
   const { data, error } = await supabase
     .from('policies')

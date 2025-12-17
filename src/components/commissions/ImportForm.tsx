@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FaUpload } from 'react-icons/fa';
+import { FaUpload, FaUniversity } from 'react-icons/fa';
 import { actionUploadImport } from '@/app/(app)/commissions/actions';
+import { actionGetBankGroups } from '@/app/(app)/commissions/banco-actions';
 import { useRouter } from 'next/navigation';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import ConfirmDialog from '@/components/shared/ConfirmDialog';
@@ -21,6 +22,33 @@ export default function ImportForm({ insurers, draftFortnightId, onImport }: Pro
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [isLifeInsurance, setIsLifeInsurance] = useState(false);
+  const [availableGroups, setAvailableGroups] = useState<any[]>([]);
+  const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
+  const [loadingGroups, setLoadingGroups] = useState(false);
+
+  // Cargar grupos bancarios cuando se selecciona aseguradora
+  useEffect(() => {
+    if (!selectedInsurer) {
+      setAvailableGroups([]);
+      setSelectedGroups([]);
+      return;
+    }
+
+    const loadGroups = async () => {
+      setLoadingGroups(true);
+      const result = await actionGetBankGroups({
+        status: 'OK_CONCILIADO',
+        insurerId: selectedInsurer,
+      });
+      
+      if (result.ok) {
+        setAvailableGroups(result.data || []);
+      }
+      setLoadingGroups(false);
+    };
+
+    loadGroups();
+  }, [selectedInsurer]);
 
   const handleFileUpload = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,6 +83,7 @@ export default function ImportForm({ insurers, draftFortnightId, onImport }: Pro
     formData.append('total_amount', totalAmount);
     formData.append('fortnight_id', draftFortnightId);
     formData.append('is_life_insurance', String(isLifeInsurance));
+    formData.append('bank_group_ids', JSON.stringify(selectedGroups));
     
     // Get invert_negatives setting from localStorage
     const invertNegatives = localStorage.getItem(`invert_negatives_${selectedInsurer}`) === 'true';
@@ -69,6 +98,7 @@ export default function ImportForm({ insurers, draftFortnightId, onImport }: Pro
         setSelectedInsurer('');
         setTotalAmount('');
         setIsLifeInsurance(false);
+        setSelectedGroups([]);
         onImport();
       } else {
         console.error('Import error:', result.error);
@@ -248,6 +278,47 @@ export default function ImportForm({ insurers, draftFortnightId, onImport }: Pro
         .btn-primary:disabled {
           background: #ccc;
           cursor: not-allowed;
+        }
+        .groups-list {
+          border: 1px solid #d0d5dd;
+          border-radius: 8px;
+          padding: 12px;
+          max-height: 200px;
+          overflow-y: auto;
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+        .group-checkbox {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 8px;
+          border-radius: 6px;
+          cursor: pointer;
+          transition: background 0.2s;
+        }
+        .group-checkbox:hover {
+          background: #f3f4f6;
+        }
+        .group-checkbox input[type="checkbox"] {
+          width: 18px;
+          height: 18px;
+        }
+        .group-name {
+          flex: 1;
+          font-size: 14px;
+          color: #374151;
+        }
+        .group-amount {
+          font-size: 14px;
+          font-weight: 600;
+          color: #8aaa19;
+        }
+        .help-text {
+          margin-top: 8px;
+          font-size: 12px;
+          color: #6b7280;
         }
       `}</style>
       

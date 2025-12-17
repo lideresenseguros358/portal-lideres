@@ -15,6 +15,15 @@ interface ILovePDFCredentials {
 }
 
 /**
+ * Extrae CSV detailed directamente desde el PDF SIN aplicar OCR (sin pdfocr).
+ * Útil para PDFs con fuentes embebidas donde extractores locales devuelven glyphs.
+ */
+export async function extractPDFToDetailedCSV(pdfBuffer: Buffer): Promise<Buffer> {
+  console.log('=== INICIO: PDF → Extract(detailed CSV) (sin OCR) ===');
+  return extractTextToCSV(pdfBuffer);
+}
+
+/**
  * Interfaz para la respuesta de autenticación
  */
 interface AuthResponse {
@@ -379,6 +388,137 @@ export async function convertPDFToExcel(pdfBuffer: Buffer): Promise<Buffer> {
     console.error('=== ❌ ERROR en proceso completo ===');
     console.error(errorMessage);
     throw new Error(`Error en proceso PDF → OCR → CSV: ${errorMessage}`);
+  }
+}
+
+/**
+ * Convierte PDF a imagen JPG usando iLovePDF
+ * @param pdfBuffer Buffer del PDF a convertir
+ * @returns Buffer de la imagen JPG de la primera página
+ */
+export async function convertPDFToImage(pdfBuffer: Buffer): Promise<Buffer> {
+  console.log('[iLovePDF-PDFtoJPG] Iniciando conversión PDF → imagen JPG');
+  console.log(`[iLovePDF-PDFtoJPG] Tamaño del PDF: ${pdfBuffer.length} bytes`);
+
+  try {
+    // 1. Obtener token
+    const token = await getAuthToken();
+
+    // 2. Iniciar tarea pdfjpg
+    console.log('[iLovePDF-PDFtoJPG] Iniciando tarea pdfjpg...');
+    const startResponse = await fetch(`${ILOVEPDF_API_URL}/start/pdfjpg`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+
+    if (!startResponse.ok) {
+      const error = await startResponse.text();
+      throw new Error(`Error al iniciar tarea: ${error}`);
+    }
+
+    const startData = await startResponse.json() as StartResponse;
+    const { server, task } = startData;
+    console.log('[iLovePDF-PDFtoJPG] ✅ Tarea iniciada:', task);
+
+    const serverUrl = server.startsWith('http') ? server : `https://${server}`;
+
+    // 3. Subir archivo PDF
+    console.log('[iLovePDF-PDFtoJPG] Subiendo PDF...');
+    const formData = new FormData();
+    formData.append('task', task);
+    formData.append('file', new Blob([new Uint8Array(pdfBuffer)]), 'document.pdf');
+
+    const uploadResponse = await fetch(`${serverUrl}/v1/upload`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+      body: formData,
+    });
+
+    if (!uploadResponse.ok) {
+      const error = await uploadResponse.text();
+      throw new Error(`Error al subir archivo: ${error}`);
+    }
+
+    const uploadData = await uploadResponse.json() as UploadResponse;
+    console.log('[iLovePDF-PDFtoJPG] ✅ Archivo subido');
+
+    // 4. Procesar conversión a JPG (solo primera página)
+    console.log('[iLovePDF-PDFtoJPG] Procesando conversión a JPG...');
+    const processResponse = await fetch(`${serverUrl}/v1/process`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        task: task,
+        pdfjpg_mode: 'pages', // Convertir cada página a imagen
+      }),
+    });
+
+    if (!processResponse.ok) {
+      const error = await processResponse.text();
+      throw new Error(`Error al procesar: ${error}`);
+    }
+
+    const processData = await processResponse.json() as ProcessResponse;
+    console.log('[iLovePDF-PDFtoJPG] ✅ Conversión completada');
+
+    // 5. Descargar archivo ZIP con las imágenes
+    console.log('[iLovePDF-PDFtoJPG] Descargando imágenes...');
+    const downloadResponse = await fetch(`${serverUrl}/v1/download/${task}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+
+    if (!downloadResponse.ok) {
+      const error = await downloadResponse.text();
+      throw new Error(`Error al descargar: ${error}`);
+    }
+
+    const zipBuffer = await downloadResponse.arrayBuffer();
+    console.log('[iLovePDF-PDFtoJPG] ✅ ZIP descargado exitosamente');
+
+    // 6. Extraer la primera imagen del ZIP
+    const JSZip = (await import('jszip')).default;
+    const zip = await JSZip.loadAsync(zipBuffer);
+    
+    // Buscar el primer archivo JPG en el ZIP
+    const jpgFiles = Object.keys(zip.files).filter(name => 
+      name.toLowerCase().endsWith('.jpg') || name.toLowerCase().endsWith('.jpeg')
+    );
+
+    if (jpgFiles.length === 0) {
+      throw new Error('No se encontraron imágenes JPG en el archivo ZIP');
+    }
+
+    const firstImageName = jpgFiles[0];
+    if (!firstImageName) {
+      throw new Error('Error al obtener el nombre de la imagen');
+    }
+
+    console.log(`[iLovePDF-PDFtoJPG] Extrayendo primera imagen: ${firstImageName}`);
+    
+    const zipFile = zip.files[firstImageName];
+    if (!zipFile) {
+      throw new Error(`No se encontró el archivo ${firstImageName} en el ZIP`);
+    }
+
+    const imageBuffer = await zipFile.async('nodebuffer');
+    console.log(`[iLovePDF-PDFtoJPG] ✅ Imagen extraída: ${imageBuffer.length} bytes`);
+
+    return imageBuffer;
+
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
+    console.error('[iLovePDF-PDFtoJPG] ❌ Error:', errorMessage);
+    throw new Error(`Error al convertir PDF a imagen: ${errorMessage}`);
   }
 }
 

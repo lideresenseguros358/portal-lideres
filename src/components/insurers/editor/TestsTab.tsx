@@ -130,7 +130,7 @@ export default function TestsTab({ insurerId }: TestsTabProps) {
                   {/* Preview de Datos */}
                   {testResult.data.previewRows && testResult.data.previewRows.length > 0 && (
                     <div className="preview-section">
-                      <h4><FaTable /> Preview de Datos (Primeras {testResult.data.previewRows.length} filas)</h4>
+                      <h4><FaTable /> Preview de Datos ({testResult.data.previewRows.length} filas)</h4>
                       <div className="table-wrapper">
                         <table className="preview-table">
                           <thead>

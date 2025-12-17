@@ -4,6 +4,7 @@ import type { ParsedRow } from './schemas';
 import * as XLSX from 'xlsx';
 import { previewMapping } from '@/lib/db/insurers';
 import { parseSuraExcel } from '@/lib/parsers/sura-parser';
+import { getInsurerSlug } from '@/lib/utils/policy-number';
 
 type CommImportRow = Tables<'comm_imports'>;
 type CommItemRow = Tables<'comm_items'>;
@@ -33,6 +34,8 @@ async function parseXlsxFile(file: File, mappingRules: MappingRule[] = [], inver
       .select('name')
       .eq('id', insurerId)
       .single();
+
+    const insurerSlug = getInsurerSlug(String((insurer as any)?.name || ''));
     
     if (insurer?.name?.toUpperCase().includes('SURA')) {
       console.log('[PARSER] Detectado SURA - Usando parser especial');
@@ -51,6 +54,64 @@ async function parseXlsxFile(file: File, mappingRules: MappingRule[] = [], inver
       } catch (error) {
         console.error('[SURA PARSER] Error:', error);
         throw new Error('Error al parsear archivo de SURA: ' + (error instanceof Error ? error.message : 'Error desconocido'));
+      }
+    }
+
+    // PARSER ESPECIAL PARA WW MEDICAL
+    if (insurerSlug === 'ww-medical') {
+      console.log('[PARSER] Detectado WW MEDICAL - Usando parser especial');
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const fileExtension = file.name.toLowerCase().split('.').pop();
+
+        if (fileExtension !== 'pdf') {
+          console.log('[WW MEDICAL] Archivo no PDF - usando previewMapping/manual');
+        } else {
+          console.log('[WW MEDICAL] PDF detectado - Usando parser directo de PDF');
+          const { parseWWMedicalPDF } = await import('@/lib/parsers/ww-medical-parser');
+          const wwRows = await parseWWMedicalPDF(arrayBuffer);
+
+          console.log('[WW MEDICAL PARSER] Extraídas', wwRows.length, 'filas');
+
+          return wwRows.map(row => ({
+            policy_number: row.policy_number,
+            client_name: row.client_name,
+            commission_amount: row.gross_amount,
+            raw_row: row
+          }));
+        }
+      } catch (error) {
+        console.error('[WW MEDICAL PARSER] Error:', error);
+        throw new Error('Error al parsear archivo de WW MEDICAL: ' + (error instanceof Error ? error.message : 'Error desconocido'));
+      }
+    }
+
+    // PARSER ESPECIAL PARA UNIVIVIR
+    if (insurer?.name?.toUpperCase().includes('UNIVIVIR')) {
+      console.log('[PARSER] Detectado UNIVIVIR - Usando parser especial');
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const fileExtension = file.name.toLowerCase().split('.').pop();
+
+        if (fileExtension !== 'pdf') {
+          console.log('[UNIVIVIR] Archivo no PDF - usando previewMapping/manual');
+        } else {
+          console.log('[UNIVIVIR] PDF detectado - Usando parser directo de PDF');
+          const { parseUniVivirPDF } = await import('@/lib/parsers/univivir-parser');
+          const univivirRows = await parseUniVivirPDF(arrayBuffer);
+
+          console.log('[UNIVIVIR PARSER] Extraídas', univivirRows.length, 'filas');
+
+          return univivirRows.map(row => ({
+            policy_number: row.policy_number,
+            client_name: row.client_name,
+            commission_amount: row.gross_amount,
+            raw_row: row
+          }));
+        }
+      } catch (error) {
+        console.error('[UNIVIVIR PARSER] Error:', error);
+        throw new Error('Error al parsear archivo de UNIVIVIR: ' + (error instanceof Error ? error.message : 'Error desconocido'));
       }
     }
     
@@ -235,6 +296,122 @@ async function parseXlsxFile(file: File, mappingRules: MappingRule[] = [], inver
       } catch (error) {
         console.error('[OPTIMA PARSER] Error:', error);
         throw new Error('Error al parsear archivo de OPTIMA: ' + (error instanceof Error ? error.message : 'Error desconocido'));
+      }
+    }
+
+    // PARSER ESPECIAL PARA MB (MAPFRE BANCO)
+    if (insurer?.name?.toUpperCase() === 'MB' || insurer?.name?.toUpperCase().includes('MAPFRE BANCO')) {
+      console.log('[PARSER] Detectado MB (Mapfre Banco) - Usando parser especial');
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const fileExtension = file.name.toLowerCase().split('.').pop();
+
+        if (fileExtension !== 'pdf') {
+          console.log('[MB] Archivo no PDF - usando previewMapping/manual');
+        } else {
+          console.log('[MB] PDF detectado - Usando parser directo de PDF');
+          const { parseMBPDF } = await import('@/lib/parsers/mb-parser');
+          const mbRows = await parseMBPDF(arrayBuffer);
+
+          console.log('[MB PARSER] Extraídas', mbRows.length, 'filas');
+
+          return mbRows.map(row => ({
+            policy_number: row.policy_number,
+            client_name: row.client_name,
+            commission_amount: row.gross_amount,
+            raw_row: row
+          }));
+        }
+      } catch (error) {
+        console.error('[MB PARSER] Error:', error);
+        throw new Error('Error al parsear archivo de MB: ' + (error instanceof Error ? error.message : 'Error desconocido'));
+      }
+    }
+
+    // PARSER ESPECIAL PARA ALIADO
+    if (insurer?.name?.toUpperCase() === 'ALIADO' || insurer?.name?.toUpperCase().includes('ALIADO')) {
+      console.log('[PARSER] Detectado ALIADO - Usando parser especial');
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const fileExtension = file.name.toLowerCase().split('.').pop();
+
+        if (fileExtension !== 'pdf') {
+          console.log('[ALIADO] Archivo no PDF - usando previewMapping/manual');
+        } else {
+          console.log('[ALIADO] PDF detectado - Usando parser directo de PDF');
+          const { parseAliadoPDF } = await import('@/lib/parsers/aliado-parser');
+          const aliadoRows = await parseAliadoPDF(arrayBuffer);
+
+          console.log('[ALIADO PARSER] Extraídas', aliadoRows.length, 'filas');
+
+          return aliadoRows.map(row => ({
+            policy_number: row.policy_number,
+            client_name: row.client_name,
+            commission_amount: row.gross_amount,
+            raw_row: row
+          }));
+        }
+      } catch (error) {
+        console.error('[ALIADO PARSER] Error:', error);
+        throw new Error('Error al parsear archivo de ALIADO: ' + (error instanceof Error ? error.message : 'Error desconocido'));
+      }
+    }
+
+    // PARSER ESPECIAL PARA PALIG (PAN AMERICAN LIFE)
+    if (insurer?.name?.toUpperCase() === 'PALIG' || insurer?.name?.toUpperCase().includes('PAN AMERICAN')) {
+      console.log('[PARSER] Detectado PALIG - Usando parser especial');
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const fileExtension = file.name.toLowerCase().split('.').pop();
+
+        if (fileExtension !== 'pdf') {
+          console.log('[PALIG] Archivo no PDF - usando previewMapping/manual');
+        } else {
+          console.log('[PALIG] PDF detectado - Usando parser directo de PDF');
+          const { parsePaligPDF } = await import('@/lib/parsers/palig-parser');
+          const paligRows = await parsePaligPDF(arrayBuffer);
+
+          console.log('[PALIG PARSER] Extraídas', paligRows.length, 'filas');
+
+          return paligRows.map(row => ({
+            policy_number: row.policy_number,
+            client_name: row.client_name,
+            commission_amount: row.gross_amount,
+            raw_row: row
+          }));
+        }
+      } catch (error) {
+        console.error('[PALIG PARSER] Error:', error);
+        throw new Error('Error al parsear archivo de PALIG: ' + (error instanceof Error ? error.message : 'Error desconocido'));
+      }
+    }
+
+    // PARSER ESPECIAL PARA VUMI (LA REGIONAL)
+    if (insurer?.name?.toUpperCase() === 'VUMI' || insurer?.name?.toUpperCase().includes('REGIONAL')) {
+      console.log('[PARSER] Detectado VUMI - Usando parser especial');
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const fileExtension = file.name.toLowerCase().split('.').pop();
+
+        if (fileExtension !== 'pdf') {
+          console.log('[VUMI] Archivo no PDF - usando previewMapping/manual');
+        } else {
+          console.log('[VUMI] PDF detectado - Usando parser directo de PDF');
+          const { parseVumiPDF } = await import('@/lib/parsers/vumi-parser');
+          const vumiRows = await parseVumiPDF(arrayBuffer);
+
+          console.log('[VUMI PARSER] Extraídas', vumiRows.length, 'filas');
+
+          return vumiRows.map(row => ({
+            policy_number: row.policy_number,
+            client_name: row.client_name,
+            commission_amount: row.gross_amount,
+            raw_row: row
+          }));
+        }
+      } catch (error) {
+        console.error('[VUMI PARSER] Error:', error);
+        throw new Error('Error al parsear archivo de VUMI: ' + (error instanceof Error ? error.message : 'Error desconocido'));
       }
     }
   }
@@ -480,6 +657,72 @@ export async function parseCsvXlsx(file: File, mappingRules: MappingRule[] = [],
   console.log('[PARSER] Starting to parse file:', file.name);
   console.log('[PARSER] Use multi columns (ASSA):', useMultiColumns);
   console.log('[PARSER] Insurer ID:', insurerId);
+
+  if (insurerId) {
+    const fileExtension = file.name.toLowerCase().split('.').pop();
+    const isImage = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tiff', 'tif'].includes(fileExtension || '');
+    const isPdf = fileExtension === 'pdf';
+
+    const supabase = getSupabaseAdmin();
+    const { data: insurer } = await supabase
+      .from('insurers')
+      .select('name')
+      .eq('id', insurerId)
+      .single();
+
+    const insurerSlug = getInsurerSlug(String((insurer as any)?.name || ''));
+
+    if (insurerSlug === 'assistcard' && isImage) {
+      console.log('[PARSER] Detectado ASSISTCARD (imagen) - Usando parser especial');
+      const arrayBuffer = await file.arrayBuffer();
+      const { parseAssistcardImage } = await import('@/lib/parsers/assistcard-parser');
+      const parsed = await parseAssistcardImage(arrayBuffer, file.name);
+
+      return parsed.map(r => ({
+        policy_number: r.policy_number,
+        client_name: r.client_name,
+        commission_amount: r.gross_amount,
+        raw_row: r,
+      }));
+    }
+
+    if (insurerSlug === 'ifs' && isPdf) {
+      console.log('[PARSER] Detectado IFS (PDF) - Usando parser especial');
+      const arrayBuffer = await file.arrayBuffer();
+      const { parseIFSPDF } = await import('@/lib/parsers/ifs-parser');
+      const parsed = await parseIFSPDF(arrayBuffer);
+
+      const missingPolicies = Array.from(
+        new Set(
+          parsed
+            .filter(r => !r.client_name)
+            .map(r => r.policy_number)
+            .filter(Boolean)
+        )
+      );
+
+      const policyToClient = new Map<string, string>();
+      if (missingPolicies.length > 0) {
+        const { data: policyRows } = await supabase
+          .from('policies')
+          .select('policy_number, clients(name)')
+          .in('policy_number', missingPolicies);
+
+        (policyRows || []).forEach((p: any) => {
+          const pn = String(p?.policy_number || '');
+          const cn = String(p?.clients?.name || '');
+          if (pn && cn) policyToClient.set(pn, cn);
+        });
+      }
+
+      return parsed.map(r => ({
+        policy_number: r.policy_number,
+        client_name: r.client_name || policyToClient.get(r.policy_number) || null,
+        commission_amount: r.gross_amount,
+        raw_row: r,
+      }));
+    }
+  }
   
   // Check if it's XLSX
   if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
@@ -605,44 +848,29 @@ export async function extractPdfWithVision(file: File): Promise<ParsedRow[]> {
 /**
  * Insert import and items into database
  */
-export async function upsertImport(
-  insurerId: string,
-  periodLabel: string,
-  rows: ParsedRow[],
-  userId: string
+export async function insertCommissionBatch(
+  fortnightId: string,
+  importData: CommImportRow,
+  items: ParsedRow[],
+  bankGroupIds: string[] = []
 ): Promise<{ importId: string; insertedCount: number }> {
   const supabase = getSupabaseAdmin();
   
-  // Create import record
-  const { data: importData, error: importError } = await supabase
-    .from('comm_imports')
-    .insert([{
-      insurer_id: insurerId,
-      period_label: periodLabel,
-      uploaded_by: userId,
-    } satisfies CommImportIns])
-    .select()
-    .single<CommImportRow>();
-  
-  if (importError || !importData) {
-    throw new Error(`Error creating import: ${importError?.message || 'Unknown error'}`);
-  }
-  
   // Prepare items for insertion
-  const items: CommItemIns[] = rows.map(row => ({
+  const commItems: CommItemIns[] = items.map(row => ({
     import_id: importData.id,
     policy_number: row.policy_number || 'UNKNOWN',
-    insured_name: row.client_name || undefined, // Corrected property
-    gross_amount: row.commission_amount, // Corrected property
-    insurer_id: insurerId,
-    broker_id: undefined, // Initially unassigned
+    insured_name: row.client_name || undefined,
+    gross_amount: row.commission_amount,
+    insurer_id: importData.insurer_id,
+    broker_id: undefined,
     raw_row: row.raw_row,
   }));
   
   // Insert items
   const { data: itemsData, error: itemsError } = await supabase
     .from('comm_items')
-    .insert(items);
+    .insert(commItems);
   
   if (itemsError) {
     // Rollback import on error
@@ -650,8 +878,34 @@ export async function upsertImport(
     throw new Error(`Error creating items: ${itemsError.message}`);
   }
   
+  // Link BANCO groups with comm_imports after successful import
+  if (bankGroupIds.length > 0) {
+    console.log(`[BANCO] Vinculando ${bankGroupIds.length} grupos bancarios con import ${importData.id}`);
+    
+    for (const groupId of bankGroupIds) {
+      // Obtener total del grupo
+      const { data: groupData } = await supabase
+        .from('bank_groups')
+        .select('total_amount')
+        .eq('id', groupId)
+        .single();
+
+      if (groupData) {
+        await supabase
+          .from('bank_group_imports')
+          .insert({
+            group_id: groupId,
+            import_id: importData.id,
+            amount_assigned: groupData.total_amount || 0,
+          });
+        
+        console.log(`[BANCO] Grupo ${groupId} vinculado con monto $${groupData.total_amount}`);
+      }
+    }
+  }
+
   return {
     importId: importData.id,
-    insertedCount: items.length,
+    insertedCount: commItems.length,
   };
 }

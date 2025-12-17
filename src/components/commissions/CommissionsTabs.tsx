@@ -1,13 +1,14 @@
 'use client';
 
 import { useState } from 'react';
-import { FaEye, FaPlus, FaDollarSign, FaExclamationTriangle, FaChartLine, FaCircle } from 'react-icons/fa';
+import { FaEye, FaPlus, FaDollarSign, FaExclamationTriangle, FaChartLine, FaCircle, FaUniversity } from 'react-icons/fa';
 import { PreviewTab } from './PreviewTab';
 import BrokerPreviewTab from './broker/BrokerPreviewTab';
 import AdjustmentsTab from './AdjustmentsTab';
 import { YTDTab } from './YTDTab';
 import { AdvancesTab } from './AdvancesTab';
 import NewFortnightTab from './NewFortnightTab';
+import BancoTab from './banco/BancoTab';
 
 interface InitialData {
   draftFortnight: any;
@@ -31,6 +32,7 @@ export default function CommissionsTabs({ initialData }: { initialData: InitialD
   const MASTER_TABS = [
     { id: 'preview', label: 'Historial', badge: 0, icon: FaEye },
     { id: 'new-fortnight', label: 'Nueva Quincena', badge: 0, priority: !!draftFortnight, icon: FaPlus },
+    { id: 'banco', label: 'BANCO', badge: 0, icon: FaUniversity },
     { id: 'advances', label: 'Adelantos', badge: 0, icon: FaDollarSign },
     { id: 'adjustments', label: 'Ajustes', badge: pendingCount, icon: FaExclamationTriangle },
     { id: 'ytd', label: 'Acumulado', badge: 0, icon: FaChartLine },
@@ -124,38 +126,31 @@ export default function CommissionsTabs({ initialData }: { initialData: InitialD
 
       {/* Tab Content */}
       <div className="transition-all duration-300">
-        {activeTab === 'preview' && (
-          role === 'broker' && brokerId ? (
-            <BrokerPreviewTab brokerId={brokerId} />
-          ) : (
-            <PreviewTab role={role} brokerId={brokerId || undefined} />
-          )
+        {activeTab === 'preview' && role === 'master' && (
+          <PreviewTab role={role} brokerId={brokerId || undefined} />
         )}
-        {activeTab === 'new-fortnight' && (
-          <NewFortnightTab 
-            key={`fortnight-${refreshKey}`}
-            role={role} 
-            brokerId={brokerId} 
-            draftFortnight={draftFortnight} 
-            insurers={validInsurers} 
-            brokers={validBrokers} 
-            onFortnightCreated={handleFortnightCreated} 
+        {activeTab === 'preview' && role === 'broker' && brokerId && (
+          <BrokerPreviewTab brokerId={brokerId} />
+        )}
+        {activeTab === 'new-fortnight' && role === 'master' && (
+          <NewFortnightTab
+            key={refreshKey}
+            role={role}
+            brokerId={brokerId}
+            draftFortnight={draftFortnight}
+            insurers={validInsurers}
+            brokers={validBrokers}
+            onFortnightCreated={handleFortnightCreated}
           />
+        )}
+        {activeTab === 'banco' && role === 'master' && (
+          <BancoTab role={role} insurers={validInsurers} />
         )}
         {activeTab === 'advances' && (
-          <AdvancesTab 
-            role={role} 
-            brokerId={brokerId} 
-            brokers={validBrokers}
-          />
+          <AdvancesTab role={role} brokerId={brokerId} brokers={validBrokers} />
         )}
         {activeTab === 'adjustments' && (
-          <AdjustmentsTab 
-            role={role} 
-            brokerId={brokerId} 
-            brokers={validBrokers}
-            onPendingCountChange={handlePendingCountChange}
-          />
+          <AdjustmentsTab role={role} brokerId={brokerId} brokers={validBrokers} onPendingCountChange={handlePendingCountChange} />
         )}
         {activeTab === 'ytd' && (
           <YTDTab role={role} brokerId={brokerId} />
