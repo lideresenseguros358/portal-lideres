@@ -49,10 +49,10 @@ export default function BancoTab({ role, insurers }: BancoTabProps) {
     loadLastCutoff();
   }, []);
 
-  // Cargar cortes
+  // Cargar cortes (solo al montar, no en cada refreshKey para evitar conflictos)
   useEffect(() => {
     loadCutoffs();
-  }, [refreshKey]);
+  }, []);
 
   // Cargar transferencias cuando cambia el corte o filtros
   useEffect(() => {
@@ -68,14 +68,16 @@ export default function BancoTab({ role, insurers }: BancoTabProps) {
     }
   };
 
-  const loadCutoffs = async () => {
+  const loadCutoffs = async (forceSelectLatest = false) => {
     setLoading(true);
     const result = await actionGetBankCutoffs();
     if (result.ok) {
       setCutoffs(result.data || []);
-      // Seleccionar el último corte por defecto
-      if (result.data && result.data.length > 0 && !selectedCutoff) {
-        setSelectedCutoff(result.data[0].id);
+      // Seleccionar el último corte por defecto O si se fuerza (después de importar)
+      if (result.data && result.data.length > 0) {
+        if (!selectedCutoff || forceSelectLatest) {
+          setSelectedCutoff(result.data[0].id);
+        }
       }
     } else {
       toast.error('Error al cargar cortes');
@@ -100,10 +102,11 @@ export default function BancoTab({ role, insurers }: BancoTabProps) {
     setLoading(false);
   };
 
-  const handleImportSuccess = () => {
+  const handleImportSuccess = async () => {
     setShowImportModal(false);
-    setRefreshKey(prev => prev + 1);
-    loadLastCutoff();
+    await loadLastCutoff();
+    await loadCutoffs(true); // Forzar selección del nuevo corte
+    setRefreshKey(prev => prev + 1); // Esto recargará las transferencias
     toast.success('Corte bancario importado exitosamente');
   };
 
