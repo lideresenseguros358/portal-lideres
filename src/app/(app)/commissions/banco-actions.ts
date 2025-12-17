@@ -68,18 +68,30 @@ export async function actionImportBankCutoff(
     }
 
     // 2. Obtener referencias existentes para evitar duplicados
+    console.log('[BANCO] Verificando duplicados...');
     const references = transfers.map(t => t.reference_number);
-    const { data: existingTransfers } = await supabase
+    const { data: existingTransfers, error: checkError } = await supabase
       .from('bank_transfers_comm')
       .select('reference_number')
       .in('reference_number', references);
 
+    if (checkError) {
+      console.error('[BANCO] ❌ Error verificando duplicados:', checkError);
+      if (checkError.code === '42P01') {
+        return { ok: false, error: 'TABLA NO EXISTE: Ejecuta la migración SQL primero. Ver: supabase/migrations/20241217_banco_conciliacion.sql' };
+      }
+    }
+
     const existingRefs = new Set(existingTransfers?.map(t => t.reference_number) || []);
+    console.log('[BANCO] Referencias duplicadas encontradas:', existingRefs.size);
 
     // 3. Filtrar transferencias nuevas
     const newTransfers = transfers.filter(t => !existingRefs.has(t.reference_number));
+    console.log('[BANCO] Transferencias nuevas a insertar:', newTransfers.length);
+    console.log('[BANCO] Transferencias duplicadas omitidas:', transfers.length - newTransfers.length);
 
     if (newTransfers.length === 0) {
+      console.log('[BANCO] ⚠️ No hay transferencias nuevas para insertar');
       return {
         ok: true,
         data: {
@@ -91,26 +103,37 @@ export async function actionImportBankCutoff(
     }
 
     // 4. Insertar transferencias nuevas
+    console.log('[BANCO] Insertando', newTransfers.length, 'transferencias...');
+    const transfersToInsert = newTransfers.map(t => ({
+      cutoff_id: cutoff.id,
+      date: t.date,
+      reference_number: t.reference_number,
+      description_raw: t.description,
+      amount: t.credit,
+      status: 'SIN_CLASIFICAR' as BankTransferStatus,
+      transfer_type: 'PENDIENTE' as TransferType,
+    }));
+
+    console.log('[BANCO] Muestra de datos a insertar:', JSON.stringify(transfersToInsert[0], null, 2));
+
     const { error: insertError } = await supabase
       .from('bank_transfers_comm')
-      .insert(
-        newTransfers.map(t => ({
-          cutoff_id: cutoff.id,
-          date: t.date,
-          reference_number: t.reference_number,
-          description_raw: t.description,
-          amount: t.credit,
-          status: 'SIN_CLASIFICAR' as BankTransferStatus,
-          transfer_type: 'PENDIENTE' as TransferType,
-        }))
-      );
+      .insert(transfersToInsert);
 
     if (insertError) {
-      console.error('[BANCO] Error insertando transferencias:', insertError);
-      return { ok: false, error: 'Error al importar transferencias' };
+      console.error('[BANCO] ❌ Error insertando transferencias - Código:', insertError.code);
+      console.error('[BANCO] ❌ Error insertando transferencias - Mensaje:', insertError.message);
+      console.error('[BANCO] ❌ Error completo:', JSON.stringify(insertError, null, 2));
+      if (insertError.code === '42P01') {
+        return { ok: false, error: 'TABLA NO EXISTE: Ejecuta la migración SQL primero. Ver: supabase/migrations/20241217_banco_conciliacion.sql' };
+      }
+      return { ok: false, error: `Error al importar transferencias: ${insertError.message}` };
     }
 
+    console.log('[BANCO] ✅ Transferencias insertadas exitosamente');
     revalidatePath('/commissions');
+
+    console.log('[BANCO] 🎉 Importación completada - Nuevas:', newTransfers.length, 'Duplicadas:', transfers.length - newTransfers.length);
 
     return {
       ok: true,
@@ -120,9 +143,10 @@ export async function actionImportBankCutoff(
         skipped: transfers.length - newTransfers.length,
       },
     };
-  } catch (error) {
-    console.error('[BANCO] Error en actionImportBankCutoff:', error);
-    return { ok: false, error: 'Error inesperado al importar corte bancario' };
+  } catch (error: any) {
+    console.error('[BANCO] ❌ Error CRÍTICO en actionImportBankCutoff:', error);
+    console.error('[BANCO] ❌ Stack:', error.stack);
+    return { ok: false, error: `Error inesperado: ${error.message}` };
   }
 }
 
