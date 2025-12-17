@@ -2929,9 +2929,10 @@ export async function actionGetDraftDetails(fortnightId: string) {
         gross_amount,
         insured_name,
         brokers (id, name),
-        insurers (id, name)
+        insurers (id, name),
+        comm_imports!inner(period_label)
       `)
-      .eq('fortnight_id', fortnightId)
+      .eq('comm_imports.period_label', fortnightId)
       .not('broker_id', 'is', null);
 
     if (error) throw error;
