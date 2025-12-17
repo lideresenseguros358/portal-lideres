@@ -1,14 +1,13 @@
 'use client';
 
 /**
- * BANCO Tab - Conciliación bancaria para comisiones
+ * Módulo Banco - Conciliación bancaria para comisiones
  * Solo accesible para rol MASTER
+ * Diseño inspirado en módulo de Cheques para uniformidad
  */
 
 import { useState, useEffect } from 'react';
-import { FaFileImport, FaFilter, FaSearch, FaPlus, FaFolderOpen } from 'react-icons/fa';
-import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
+import { FaFileImport, FaExchangeAlt, FaLayerGroup, FaInfoCircle } from 'react-icons/fa';
 import { actionGetBankCutoffs, actionGetBankTransfers, actionGetLastCutoff } from '@/app/(app)/commissions/banco-actions';
 import ImportBankCutoffModal from './ImportBankCutoffModal';
 import TransfersTable from './TransfersTable';
@@ -21,6 +20,7 @@ interface BancoTabProps {
 }
 
 export default function BancoTab({ role, insurers }: BancoTabProps) {
+  const [activeTab, setActiveTab] = useState<'transfers' | 'groups'>('transfers');
   const [showImportModal, setShowImportModal] = useState(false);
   const [cutoffs, setCutoffs] = useState<any[]>([]);
   const [transfers, setTransfers] = useState<any[]>([]);
@@ -117,137 +117,157 @@ export default function BancoTab({ role, insurers }: BancoTabProps) {
   const selectedCutoffData = cutoffs.find(c => c.id === selectedCutoff);
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-        <div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-[#010139] flex items-center gap-3">
-            🏦 BANCO
-          </h2>
-          <p className="text-gray-600 mt-1">
-            Conciliación bancaria - Transferencias y grupos para comisiones
-          </p>
-          
-          {/* Info del último corte */}
-          {lastCutoffInfo && (
-            <div className="mt-3 bg-blue-50 border-2 border-blue-200 rounded-lg p-3 text-sm">
-              <p className="font-semibold text-blue-900">📌 Último corte procesado:</p>
-              <p className="text-blue-700">
-                Hasta el <strong>{new Date(lastCutoffInfo.endDate).toLocaleDateString('es-PA')}</strong>
-              </p>
-              <p className="text-blue-600 mt-1">
-                Rango sugerido para próximo corte: {' '}
-                <strong>
-                  {new Date(lastCutoffInfo.suggestedStart).toLocaleDateString('es-PA')} 
-                  {' '} - {' '}
-                  {new Date(lastCutoffInfo.suggestedEnd).toLocaleDateString('es-PA')}
-                </strong>
-              </p>
-            </div>
-          )}
+    <div>
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="mb-6 sm:mb-8">
+          <h1 className="text-3xl sm:text-4xl font-bold text-[#010139] mb-2">🏦 Banco</h1>
+          <p className="text-gray-600 text-base sm:text-lg">Conciliación bancaria de transferencias recibidas</p>
         </div>
-
-        <Button
-          onClick={() => setShowImportModal(true)}
-          className="bg-[#8AAA19] hover:bg-[#010139] text-white"
-        >
-          <FaFileImport className="mr-2 text-white" />
-          Importar Corte Bancario
-        </Button>
-      </div>
-
-      {/* Selector de corte */}
-      <Card className="bg-white shadow-lg border-2 border-gray-200 p-4">
-        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-          <div className="flex items-center gap-2">
-            <FaFolderOpen className="text-[#010139]" size={20} />
-            <label className="font-semibold text-gray-700">Corte:</label>
-          </div>
-          
-          <select
-            value={selectedCutoff || ''}
-            onChange={(e) => setSelectedCutoff(e.target.value)}
-            className="flex-1 px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-[#8AAA19]"
+        {/* Tab Navigation */}
+        <div className="bg-white rounded-2xl shadow-lg p-2 mb-6 flex gap-2">
+          <button
+            onClick={() => setActiveTab('transfers')}
+            className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-semibold transition-all ${
+              activeTab === 'transfers'
+                ? 'bg-gradient-to-r from-[#010139] to-[#020270] text-white shadow-lg'
+                : 'text-gray-600 hover:bg-gray-100'
+            }`}
           >
-            <option value="">Seleccionar corte...</option>
-            {cutoffs.map(cutoff => (
-              <option key={cutoff.id} value={cutoff.id}>
-                {new Date(cutoff.start_date).toLocaleDateString('es-PA')} - {new Date(cutoff.end_date).toLocaleDateString('es-PA')}
-                {cutoff.notes && ` (${cutoff.notes})`}
-              </option>
-            ))}
-          </select>
+            <FaExchangeAlt size={16} />
+            <span className="text-sm">Transferencias</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('groups')}
+            className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-semibold transition-all ${
+              activeTab === 'groups'
+                ? 'bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white shadow-lg'
+                : 'text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            <FaLayerGroup size={16} />
+            <span className="text-sm">Grupos Bancarios</span>
+          </button>
+        </div>
 
-          {selectedCutoffData && (
-            <div className="text-sm text-gray-600">
-              <span className="font-semibold">Creado:</span>{' '}
-              {new Date(selectedCutoffData.created_at).toLocaleDateString('es-PA')}
+        {/* Tab Content */}
+        <div className="transition-all duration-300">
+          {/* TAB: Transferencias */}
+          <div className={activeTab === 'transfers' ? 'block' : 'hidden'}>
+            {/* Instructivo */}
+            <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 mb-6">
+              <div className="flex items-start gap-3">
+                <FaInfoCircle className="text-blue-600 mt-1 flex-shrink-0" size={18} />
+                <div className="text-sm text-blue-900">
+                  <p className="font-semibold mb-1">💡 ¿Cómo funciona?</p>
+                  <ul className="space-y-1 text-blue-800">
+                    <li>• <strong>Importa</strong> el extracto bancario (Excel o CSV)</li>
+                    <li>• <strong>Clasifica</strong> las transferencias por aseguradora y tipo</li>
+                    <li>• <strong>Crea grupos</strong> para vincular con reportes de comisiones</li>
+                    <li>• Al cerrar quincena, los grupos se marcan como PAGADO automáticamente</li>
+                  </ul>
+                </div>
+              </div>
             </div>
-          )}
-        </div>
-      </Card>
 
-      {/* Filtros */}
-      <Card className="bg-white shadow-lg border-2 border-gray-200 p-4">
-        <div className="flex flex-col sm:flex-row gap-4">
-          {/* Estado */}
-          <div className="flex-1">
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              <FaFilter className="inline mr-2" />
-              Estado
-            </label>
-            <select
-              value={filters.status}
-              onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
-              className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-[#8AAA19]"
-            >
-              <option value="all">Todos</option>
-              <option value="SIN_CLASIFICAR">Sin clasificar</option>
-              <option value="PENDIENTE">Pendiente</option>
-              <option value="OK_CONCILIADO">OK Conciliado</option>
-              <option value="PAGADO">Pagado</option>
-            </select>
-          </div>
+            {/* Botón Importar */}
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-start sm:items-center justify-between mb-6">
+              <div className="flex-1">
+                <h2 className="text-xl sm:text-2xl font-bold text-[#010139]">Transferencias Bancarias</h2>
+                <p className="text-sm sm:text-base text-gray-600">Clasificación y conciliación de pagos recibidos</p>
+              </div>
+              
+              <button
+                onClick={() => setShowImportModal(true)}
+                className="flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-[#010139] to-[#020270] text-white rounded-xl hover:shadow-lg transition-all transform hover:scale-105 font-medium text-sm sm:text-base"
+              >
+                <FaFileImport />
+                Importar Corte
+              </button>
+            </div>
 
-          {/* Aseguradora */}
-          <div className="flex-1">
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Aseguradora
-            </label>
-            <select
-              value={filters.insurerId}
-              onChange={(e) => setFilters(prev => ({ ...prev, insurerId: e.target.value }))}
-              className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-[#8AAA19]"
-            >
-              <option value="">Todas</option>
-              {insurers.map(ins => (
-                <option key={ins.id} value={ins.id}>{ins.name}</option>
-              ))}
-            </select>
-          </div>
+            {/* Info del último corte */}
+            {lastCutoffInfo && (
+              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-xl p-4 mb-6">
+                <p className="font-semibold text-blue-900 mb-2">📌 Último corte procesado</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <span className="text-blue-700">Hasta el:</span>{' '}
+                    <strong className="text-blue-900">{new Date(lastCutoffInfo.endDate).toLocaleDateString('es-PA')}</strong>
+                  </div>
+                  <div>
+                    <span className="text-blue-700">Próximo sugerido:</span>{' '}
+                    <strong className="text-blue-900">
+                      {new Date(lastCutoffInfo.suggestedStart).toLocaleDateString('es-PA')} - {new Date(lastCutoffInfo.suggestedEnd).toLocaleDateString('es-PA')}
+                    </strong>
+                  </div>
+                </div>
+              </div>
+            )}
 
-          {/* Búsqueda */}
-          <div className="flex-1">
-            <label className="block text-sm font-semibold text-gray-700 mb-2">
-              <FaSearch className="inline mr-2" />
-              Buscar
-            </label>
-            <input
-              type="text"
-              placeholder="Referencia, descripción..."
-              value={filters.search}
-              onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
-              className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-[#8AAA19]"
-            />
-          </div>
-        </div>
-      </Card>
+            {/* Selector de Corte + Filtros */}
+            <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 border-2 border-gray-100 mb-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="w-full">
+                  <label className="block text-xs sm:text-sm font-semibold text-gray-600 mb-2 uppercase">Corte Bancario</label>
+                  <select
+                    value={selectedCutoff || ''}
+                    onChange={(e) => setSelectedCutoff(e.target.value)}
+                    className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition-colors text-sm sm:text-base"
+                  >
+                    <option value="">-- Selecciona --</option>
+                    {cutoffs.map(cutoff => (
+                      <option key={cutoff.id} value={cutoff.id}>
+                        {new Date(cutoff.start_date).toLocaleDateString('es-PA')} - {new Date(cutoff.end_date).toLocaleDateString('es-PA')}
+                      </option>
+                    ))}
+                  </select>
+                </div>
 
-      {/* Vista principal: Transferencias + Grupos */}
-      {selectedCutoff ? (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Transferencias (2/3) */}
-          <div className="lg:col-span-2">
+                <div className="w-full">
+                  <label className="block text-xs sm:text-sm font-semibold text-gray-600 mb-2 uppercase">Estado</label>
+                  <select
+                    value={filters.status}
+                    onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
+                    className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition-colors text-sm sm:text-base"
+                  >
+                    <option value="all">TODOS</option>
+                    <option value="SIN_CLASIFICAR">SIN CLASIFICAR</option>
+                    <option value="PENDIENTE">PENDIENTE</option>
+                    <option value="OK_CONCILIADO">OK CONCILIADO</option>
+                    <option value="PAGADO">PAGADO</option>
+                  </select>
+                </div>
+
+                <div className="w-full">
+                  <label className="block text-xs sm:text-sm font-semibold text-gray-600 mb-2 uppercase">Aseguradora</label>
+                  <select
+                    value={filters.insurerId}
+                    onChange={(e) => setFilters(prev => ({ ...prev, insurerId: e.target.value }))}
+                    className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition-colors text-sm sm:text-base"
+                  >
+                    <option value="">Todas</option>
+                    {insurers.map(ins => (
+                      <option key={ins.id} value={ins.id}>{ins.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="w-full">
+                  <label className="block text-xs sm:text-sm font-semibold text-gray-600 mb-2 uppercase">Buscar</label>
+                  <input
+                    type="text"
+                    placeholder="Referencia o descripción..."
+                    value={filters.search}
+                    onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
+                    className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition-colors text-sm sm:text-base"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Vista principal: Transferencias + Grupos */}
+            {/* Tabla de Transferencias */}
             <TransfersTable
               transfers={transfers}
               loading={loading}
@@ -256,30 +276,24 @@ export default function BancoTab({ role, insurers }: BancoTabProps) {
             />
           </div>
 
-          {/* Grupos (1/3) */}
-          <div className="lg:col-span-1">
+          {/* TAB: Grupos Bancarios */}
+          <div className={activeTab === 'groups' ? 'block' : 'hidden'}>
             <GroupsPanel
               insurers={insurers}
               onRefresh={handleRefresh}
             />
           </div>
         </div>
-      ) : (
-        <Card className="bg-white shadow-lg border-2 border-dashed border-gray-300 p-12 text-center">
-          <FaFolderOpen className="text-gray-300 text-6xl mx-auto mb-4" />
-          <p className="text-gray-600 text-lg">Selecciona un corte bancario para ver las transferencias</p>
-          <p className="text-gray-500 text-sm mt-2">o importa un nuevo corte desde el botón superior</p>
-        </Card>
-      )}
 
-      {/* Modal de importación */}
-      {showImportModal && (
-        <ImportBankCutoffModal
-          onClose={() => setShowImportModal(false)}
-          onSuccess={handleImportSuccess}
-          lastCutoffInfo={lastCutoffInfo}
-        />
-      )}
+        {/* Modal de Importar */}
+        {showImportModal && (
+          <ImportBankCutoffModal
+            onClose={() => setShowImportModal(false)}
+            onSuccess={handleImportSuccess}
+            lastCutoffInfo={lastCutoffInfo}
+          />
+        )}
+      </div>
     </div>
   );
 }

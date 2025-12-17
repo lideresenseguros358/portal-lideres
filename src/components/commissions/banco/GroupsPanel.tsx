@@ -1,10 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FaPlus, FaTrash, FaChevronDown, FaChevronRight } from 'react-icons/fa';
-import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { actionGetBankGroups, actionCreateBankGroup } from '@/app/(app)/commissions/banco-actions';
+import { FaPlus, FaChevronDown, FaChevronRight, FaInfoCircle, FaLayerGroup } from 'react-icons/fa';
+import { actionGetBankGroups } from '@/app/(app)/commissions/banco-actions';
 import type { GroupTemplate, GroupStatus } from '@/app/(app)/commissions/banco-actions';
 import CreateGroupModal from './CreateGroupModal';
 import { toast } from 'sonner';
@@ -94,43 +92,63 @@ export default function GroupsPanel({ insurers, onRefresh }: GroupsPanelProps) {
   };
 
   return (
-    <div className="space-y-4">
-      {/* Header */}
-      <Card className="bg-white shadow-lg border-2 border-gray-200 p-4">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-bold text-lg text-[#010139]">Grupos Bancarios</h3>
-          <Button
-            onClick={handleCreateGroup}
-            className="bg-[#8AAA19] hover:bg-[#010139] text-white"
-            size="sm"
-          >
-            <FaPlus className="mr-2 text-white" />
-            Crear Grupo
-          </Button>
+    <div className="space-y-6">
+      {/* Instructivo */}
+      <div className="bg-green-50 border-2 border-green-200 rounded-xl p-4">
+        <div className="flex items-start gap-3">
+          <FaInfoCircle className="text-green-600 mt-1 flex-shrink-0" size={18} />
+          <div className="text-sm text-green-900">
+            <p className="font-semibold mb-1">💡 ¿Qué son los grupos bancarios?</p>
+            <ul className="space-y-1 text-green-800">
+              <li>• <strong>Agrupa</strong> varias transferencias del mismo reporte</li>
+              <li>• <strong>Vincula</strong> grupos con imports en "Nueva Quincena"</li>
+              <li>• <strong>Marca OK_CONCILIADO</strong> cuando estén listos para vincular</li>
+              <li>• Al cerrar quincena, se marcan como PAGADO automáticamente</li>
+            </ul>
+          </div>
         </div>
+      </div>
 
-        {/* Filtros */}
-        <div className="grid grid-cols-1 gap-3">
-          <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">Estado</label>
+      {/* Header con botón crear */}
+      <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 items-start sm:items-center justify-between">
+        <div className="flex-1">
+          <h2 className="text-xl sm:text-2xl font-bold text-[#010139]">Grupos Bancarios</h2>
+          <p className="text-sm sm:text-base text-gray-600">Agrupa transferencias para vincular con reportes</p>
+        </div>
+        
+        <button
+          onClick={handleCreateGroup}
+          className="flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 sm:py-3 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-xl hover:shadow-lg transition-all transform hover:scale-105 font-medium text-sm sm:text-base"
+        >
+          <FaPlus />
+          Crear Grupo
+        </button>
+      </div>
+
+      {/* Filtros */}
+      <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 border-2 border-gray-100">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+
+          <div className="w-full">
+            <label className="block text-xs sm:text-sm font-semibold text-gray-600 mb-2 uppercase">Estado</label>
             <select
               value={filters.status}
               onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
-              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg text-sm focus:outline-none focus:border-[#8AAA19]"
+              className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition-colors text-sm sm:text-base"
             >
-              <option value="all">Todos</option>
-              <option value="EN_PROCESO">En proceso</option>
-              <option value="OK_CONCILIADO">OK Conciliado</option>
-              <option value="PAGADO">Pagado</option>
+              <option value="all">TODOS</option>
+              <option value="EN_PROCESO">EN PROCESO</option>
+              <option value="OK_CONCILIADO">OK CONCILIADO</option>
+              <option value="PAGADO">PAGADO</option>
             </select>
           </div>
 
-          <div>
-            <label className="block text-xs font-semibold text-gray-700 mb-1">Aseguradora</label>
+          <div className="w-full">
+            <label className="block text-xs sm:text-sm font-semibold text-gray-600 mb-2 uppercase">Aseguradora</label>
             <select
               value={filters.insurerId}
               onChange={(e) => setFilters(prev => ({ ...prev, insurerId: e.target.value }))}
-              className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg text-sm focus:outline-none focus:border-[#8AAA19]"
+              className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition-colors text-sm sm:text-base"
             >
               <option value="">Todas</option>
               {insurers.map(ins => (
@@ -139,40 +157,44 @@ export default function GroupsPanel({ insurers, onRefresh }: GroupsPanelProps) {
             </select>
           </div>
         </div>
-      </Card>
+      </div>
 
       {/* Lista de grupos */}
-      <Card className="bg-white shadow-lg border-2 border-gray-200">
+      <div className="bg-white rounded-xl shadow-lg overflow-hidden border-2 border-gray-100">
         {loading ? (
-          <div className="p-8 text-center">
-            <p className="text-gray-600">Cargando grupos...</p>
+          <div className="p-12 text-center text-gray-500">
+            <div className="animate-spin w-8 h-8 border-4 border-[#8AAA19] border-t-transparent rounded-full mx-auto mb-4"></div>
+            Cargando grupos...
           </div>
         ) : groups.length === 0 ? (
-          <div className="p-8 text-center">
-            <p className="text-gray-600 text-sm">No hay grupos creados</p>
-            <p className="text-gray-500 text-xs mt-1">Crea un grupo para agrupar transferencias</p>
+          <div className="p-12 text-center text-gray-500">
+            <FaLayerGroup className="text-gray-300 text-6xl mx-auto mb-4" />
+            <p className="text-lg mb-2">No hay grupos bancarios</p>
+            <p className="text-sm">Crea tu primer grupo para comenzar a organizar transferencias</p>
           </div>
         ) : (
-          <div className="divide-y">
+          <div className="divide-y divide-gray-200">
             {groups.map(group => (
-              <div key={group.id} className="p-4">
+              <div key={group.id} className="transition-all">
                 {/* Header del grupo */}
                 <div 
-                  className="flex items-center justify-between cursor-pointer hover:bg-gray-50 p-2 rounded"
+                  className="flex items-center justify-between cursor-pointer hover:bg-gray-50 p-4 sm:p-5 transition-colors"
                   onClick={() => toggleGroup(group.id)}
                 >
-                  <div className="flex items-center gap-2">
-                    {expandedGroups.has(group.id) ? (
-                      <FaChevronDown className="text-gray-400" size={12} />
-                    ) : (
-                      <FaChevronRight className="text-gray-400" size={12} />
-                    )}
-                    <div>
-                      <div className="font-semibold text-sm text-gray-900">{group.name}</div>
-                      <div className="flex items-center gap-2 mt-1">
+                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                    <div className="flex-shrink-0">
+                      {expandedGroups.has(group.id) ? (
+                        <FaChevronDown className="text-gray-400" size={14} />
+                      ) : (
+                        <FaChevronRight className="text-gray-400" size={14} />
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-sm sm:text-base text-gray-900 mb-1 truncate">{group.name}</div>
+                      <div className="flex flex-wrap items-center gap-2">
                         {getTemplateBadge(group.group_template)}
                         {group.is_life_insurance !== null && (
-                          <span className={`px-2 py-0.5 rounded text-xs ${group.is_life_insurance ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800'}`}>
+                          <span className={`px-2 py-0.5 rounded text-xs font-medium ${group.is_life_insurance ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800'}`}>
                             {group.is_life_insurance ? 'VIDA' : 'NO VIDA'}
                           </span>
                         )}
@@ -180,60 +202,66 @@ export default function GroupsPanel({ insurers, onRefresh }: GroupsPanelProps) {
                     </div>
                   </div>
                   
-                  <div className="text-right">
-                    <div className="font-bold text-[#8AAA19]">
+                  <div className="text-right flex-shrink-0 ml-3">
+                    <div className="font-bold text-base sm:text-lg text-[#8AAA19] font-mono mb-1">
                       ${group.total_amount?.toFixed(2) || '0.00'}
                     </div>
-                    <div className="mt-1">{getStatusBadge(group.status)}</div>
+                    <div>{getStatusBadge(group.status)}</div>
                   </div>
                 </div>
 
                 {/* Detalles expandidos */}
                 {expandedGroups.has(group.id) && (
-                  <div className="mt-3 pl-6 border-l-2 border-gray-200">
-                    <div className="text-xs text-gray-600 space-y-1">
-                      <div>
-                        <span className="font-semibold">Aseguradora:</span> {group.insurers?.name || 'N/A'}
+                  <div className="px-4 sm:px-5 pb-4 bg-gray-50 border-t">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-4">
+                      <div className="bg-white rounded-lg p-3 border border-gray-200">
+                        <div className="text-xs text-gray-500 mb-1 uppercase">Aseguradora</div>
+                        <div className="text-sm font-semibold text-gray-900">{group.insurers?.name || 'Sin asignar'}</div>
                       </div>
-                      <div>
-                        <span className="font-semibold">Transferencias:</span> {group.transfers?.length || 0}
+                      <div className="bg-white rounded-lg p-3 border border-gray-200">
+                        <div className="text-xs text-gray-500 mb-1 uppercase">Transferencias</div>
+                        <div className="text-sm font-semibold text-gray-900">{group.transfers?.length || 0} incluidas</div>
                       </div>
                       {group.fortnight_paid_id && (
-                        <div>
-                          <span className="font-semibold">Quincena pagada:</span>{' '}
-                          {group.fortnights ? (
-                            <>
-                              {new Date(group.fortnights.period_start).toLocaleDateString('es-PA')} -{' '}
-                              {new Date(group.fortnights.period_end).toLocaleDateString('es-PA')}
-                            </>
-                          ) : (
-                            group.fortnight_paid_id
+                        <div className="bg-green-50 rounded-lg p-3 border border-green-200 sm:col-span-2">
+                          <div className="text-xs text-green-700 mb-1 uppercase">Quincena Pagada</div>
+                          <div className="text-sm font-semibold text-green-900">
+                            {group.fortnights ? (
+                              <>
+                                {new Date(group.fortnights.period_start).toLocaleDateString('es-PA')} -{' '}
+                                {new Date(group.fortnights.period_end).toLocaleDateString('es-PA')}
+                              </>
+                            ) : (
+                              'ID: ' + group.fortnight_paid_id
+                            )}
+                          </div>
+                          {group.paid_at && (
+                            <div className="text-xs text-green-600 mt-1">
+                              Marcado el: {new Date(group.paid_at).toLocaleDateString('es-PA')}
+                            </div>
                           )}
-                        </div>
-                      )}
-                      {group.paid_at && (
-                        <div>
-                          <span className="font-semibold">Fecha de pago:</span>{' '}
-                          {new Date(group.paid_at).toLocaleDateString('es-PA')}
                         </div>
                       )}
                     </div>
 
                     {/* Lista de transferencias del grupo */}
                     {group.transfers && group.transfers.length > 0 && (
-                      <div className="mt-3">
-                        <div className="text-xs font-semibold text-gray-700 mb-2">Transferencias incluidas:</div>
-                        <div className="space-y-1">
+                      <div className="mt-4">
+                        <div className="text-xs font-semibold text-gray-700 mb-3 uppercase">Transferencias en este grupo</div>
+                        <div className="grid grid-cols-1 gap-2">
                           {group.transfers.map((gt: any) => (
-                            <div key={gt.transfer_id} className="bg-gray-50 p-2 rounded text-xs">
+                            <div key={gt.transfer_id} className="bg-white p-3 rounded-lg border border-gray-200 hover:border-[#8AAA19] transition-colors">
                               <div className="flex justify-between items-start">
-                                <div>
-                                  <div className="font-mono">{gt.bank_transfers_comm?.reference_number}</div>
-                                  <div className="text-gray-500 text-[11px]">
-                                    {gt.bank_transfers_comm?.description_raw?.substring(0, 40)}...
+                                <div className="flex-1 min-w-0 pr-3">
+                                  <div className="font-mono text-xs text-gray-600 mb-1">{gt.bank_transfers_comm?.reference_number}</div>
+                                  <div className="text-xs text-gray-800 truncate">
+                                    {gt.bank_transfers_comm?.description_raw}
+                                  </div>
+                                  <div className="text-[11px] text-gray-500 mt-1">
+                                    {new Date(gt.bank_transfers_comm?.date).toLocaleDateString('es-PA')}
                                   </div>
                                 </div>
-                                <div className="font-bold text-[#8AAA19]">
+                                <div className="font-bold text-sm text-[#8AAA19] font-mono flex-shrink-0">
                                   ${gt.bank_transfers_comm?.amount?.toFixed(2)}
                                 </div>
                               </div>
@@ -248,7 +276,7 @@ export default function GroupsPanel({ insurers, onRefresh }: GroupsPanelProps) {
             ))}
           </div>
         )}
-      </Card>
+      </div>
 
       {/* Modal de crear grupo */}
       {showCreateModal && (
