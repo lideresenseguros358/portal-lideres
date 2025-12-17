@@ -2931,6 +2931,7 @@ export async function actionGetDraftDetails(fortnightId: string) {
         brokers (id, name),
         insurers (id, name)
       `)
+      .eq('fortnight_id', fortnightId)
       .not('broker_id', 'is', null);
 
     if (error) throw error;
