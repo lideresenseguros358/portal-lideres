@@ -859,6 +859,7 @@ export async function insertCommissionBatch(
   // Prepare items for insertion
   const commItems: CommItemIns[] = items.map(row => ({
     import_id: importData.id,
+    fortnight_id: fortnightId,
     policy_number: row.policy_number || 'UNKNOWN',
     insured_name: row.client_name || undefined,
     gross_amount: row.commission_amount,
