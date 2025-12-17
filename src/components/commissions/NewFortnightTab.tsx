@@ -230,10 +230,25 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
       return;
     }
     
+    // Primero obtener IDs de imports de esta quincena
+    const { data: imports } = await supabaseClient()
+      .from('comm_imports')
+      .select('id')
+      .eq('period_label', draftFortnight.id);
+    
+    if (!imports || imports.length === 0) {
+      setBrokerCommissionsTotal(0);
+      return;
+    }
+    
+    const importIds = imports.map(i => i.id);
+    
+    // Luego obtener comm_items de esos imports
     const { data: items } = await supabaseClient()
       .from('comm_items')
-      .select('gross_amount, import_id, comm_imports!inner(period_label)')
-      .eq('comm_imports.period_label', draftFortnight.id);
+      .select('gross_amount')
+      .in('import_id', importIds)
+      .not('broker_id', 'is', null);
     
     const total = (items || []).reduce((sum, item) => sum + Math.abs(item.gross_amount), 0);
     setBrokerCommissionsTotal(total);
@@ -481,7 +496,7 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
       <QueuedAdjustmentsPreview />
 
       {/* Section 1: Import Reports */}
-      <Card className="shadow-lg overflow-hidden">
+      <Card className="bg-white shadow-lg overflow-hidden">
         <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100 border-b-2 border-gray-200">
           <CardTitle className="text-[#010139] flex items-center gap-2">
             <FaFileImport />
@@ -508,7 +523,7 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
       </Card>
 
       {/* Section 2: Office Total Visualization */}
-      <Card className="shadow-lg overflow-hidden">
+      <Card className="bg-white shadow-lg overflow-hidden">
         <CardHeader className="bg-gradient-to-r from-gray-50 to-gray-100 border-b-2 border-gray-200">
           <CardTitle className="text-[#010139] flex items-center gap-2">
             <FaChartPie />
@@ -569,7 +584,7 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
       </Card>
 
       {/* Section 3: Totales por Tipo */}
-      <Card className="shadow-lg overflow-hidden">
+      <Card className="bg-white shadow-lg overflow-hidden">
         <CardHeader>
           <CardTitle className="text-[#010139]">3. Totales por Tipo de Seguro</CardTitle>
         </CardHeader>
@@ -594,7 +609,7 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
       </Card>
 
       {/* Section 4: Corredores y Adelantos */}
-      <Card className="shadow-lg">
+      <Card className="bg-white shadow-lg">
         <CardHeader>
           <CardTitle className="text-[#010139]">4. Comisiones por Corredor</CardTitle>
         </CardHeader>
@@ -610,7 +625,7 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
       </Card>
 
       {/* Section 5: Generación de Pagos */}
-      <Card className="shadow-lg">
+      <Card className="bg-white shadow-lg">
         <CardHeader>
           <CardTitle className="text-[#010139]">5. Generar Archivo Banco</CardTitle>
         </CardHeader>

@@ -2922,6 +2922,22 @@ export async function actionGetPendingItems() {
 export async function actionGetDraftDetails(fortnightId: string) {
   try {
     const supabase = getSupabaseAdmin();
+    
+    // Primero obtener IDs de imports de esta quincena
+    const { data: imports, error: importsError } = await supabase
+      .from('comm_imports')
+      .select('id')
+      .eq('period_label', fortnightId);
+    
+    if (importsError) throw importsError;
+    
+    if (!imports || imports.length === 0) {
+      return { ok: true as const, data: [] };
+    }
+    
+    const importIds = imports.map(i => i.id);
+    
+    // Luego obtener comm_items de esos imports
     const { data, error } = await supabase
       .from('comm_items')
       .select(`
@@ -2929,10 +2945,9 @@ export async function actionGetDraftDetails(fortnightId: string) {
         gross_amount,
         insured_name,
         brokers (id, name),
-        insurers (id, name),
-        comm_imports!inner(period_label)
+        insurers (id, name)
       `)
-      .eq('comm_imports.period_label', fortnightId)
+      .in('import_id', importIds)
       .not('broker_id', 'is', null);
 
     if (error) throw error;
