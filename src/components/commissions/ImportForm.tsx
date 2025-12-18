@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { FaUpload, FaUniversity } from 'react-icons/fa';
 import { actionUploadImport } from '@/app/(app)/commissions/actions';
-import { actionGetBankGroups } from '@/app/(app)/commissions/banco-actions';
+import { actionGetBankGroups, actionGetBankTransfers } from '@/app/(app)/commissions/banco-actions';
 import { useRouter } from 'next/navigation';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import ConfirmDialog from '@/components/shared/ConfirmDialog';
@@ -22,32 +22,63 @@ export default function ImportForm({ insurers, draftFortnightId, onImport }: Pro
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [isLifeInsurance, setIsLifeInsurance] = useState(false);
-  const [availableGroups, setAvailableGroups] = useState<any[]>([]);
-  const [selectedGroups, setSelectedGroups] = useState<string[]>([]);
-  const [loadingGroups, setLoadingGroups] = useState(false);
+  const [availableOptions, setAvailableOptions] = useState<Array<{type: 'transfer' | 'group', id: string, name: string, amount: number}>>([]);
+  const [selectedOption, setSelectedOption] = useState<string>('');
+  const [loadingOptions, setLoadingOptions] = useState(false);
 
-  // Cargar grupos bancarios cuando se selecciona aseguradora
+  // Cargar transfers y grupos bancarios cuando se selecciona aseguradora
   useEffect(() => {
     if (!selectedInsurer) {
-      setAvailableGroups([]);
-      setSelectedGroups([]);
+      setAvailableOptions([]);
+      setSelectedOption('');
       return;
     }
 
-    const loadGroups = async () => {
-      setLoadingGroups(true);
-      const result = await actionGetBankGroups({
+    const loadBankOptions = async () => {
+      setLoadingOptions(true);
+      const options: Array<{type: 'transfer' | 'group', id: string, name: string, amount: number}> = [];
+      
+      // Cargar transfers individuales (SIN_CLASIFICAR, PENDIENTE, OK_CONCILIADO)
+      const transfersResult = await actionGetBankTransfers({
+        insurerId: selectedInsurer,
+      });
+      
+      if (transfersResult.ok) {
+        const validTransfers = (transfersResult.data || []).filter(
+          (t: any) => t.status !== 'PAGADO'
+        );
+        validTransfers.forEach((t: any) => {
+          options.push({
+            type: 'transfer',
+            id: t.id,
+            name: `${t.reference_number} - ${t.description_raw?.substring(0, 40) || 'Sin descripción'}`,
+            amount: t.amount
+          });
+        });
+      }
+      
+      // Cargar grupos bancarios
+      const groupsResult = await actionGetBankGroups({
         status: 'OK_CONCILIADO',
         insurerId: selectedInsurer,
       });
       
-      if (result.ok) {
-        setAvailableGroups(result.data || []);
+      if (groupsResult.ok) {
+        (groupsResult.data || []).forEach((g: any) => {
+          options.push({
+            type: 'group',
+            id: g.id,
+            name: `${g.name} (${g.transfers?.length || 0} transfers)`,
+            amount: g.total_amount || 0
+          });
+        });
       }
-      setLoadingGroups(false);
+      
+      setAvailableOptions(options);
+      setLoadingOptions(false);
     };
 
-    loadGroups();
+    loadBankOptions();
   }, [selectedInsurer]);
 
   const handleFileUpload = async (e: React.FormEvent) => {
@@ -83,7 +114,17 @@ export default function ImportForm({ insurers, draftFortnightId, onImport }: Pro
     formData.append('total_amount', totalAmount);
     formData.append('fortnight_id', draftFortnightId);
     formData.append('is_life_insurance', String(isLifeInsurance));
-    formData.append('bank_group_ids', JSON.stringify(selectedGroups));
+    // Enviar transfer/grupo seleccionado si existe
+    if (selectedOption) {
+      const option = availableOptions.find(o => o.id === selectedOption);
+      if (option) {
+        if (option.type === 'group') {
+          formData.append('bank_group_ids', JSON.stringify([option.id]));
+        } else {
+          formData.append('bank_transfer_id', option.id);
+        }
+      }
+    }
     
     // Get invert_negatives setting from localStorage
     const invertNegatives = localStorage.getItem(`invert_negatives_${selectedInsurer}`) === 'true';
@@ -98,7 +139,7 @@ export default function ImportForm({ insurers, draftFortnightId, onImport }: Pro
         setSelectedInsurer('');
         setTotalAmount('');
         setIsLifeInsurance(false);
-        setSelectedGroups([]);
+        setSelectedOption('');
         onImport();
       } else {
         console.error('Import error:', result.error);
@@ -158,38 +199,48 @@ export default function ImportForm({ insurers, draftFortnightId, onImport }: Pro
           </div>
         )}
 
-        {/* BANCO: Selector de Grupos Bancarios */}
-        {selectedInsurer && availableGroups.length > 0 && (
+        {/* BANCO: Selector de Transfer/Grupo */}
+        {selectedInsurer && availableOptions.length > 0 && (
           <div className="field">
             <label>
               <FaUniversity className="inline mr-2" />
-              Grupos Bancarios Disponibles (Opcional)
+              Vincular con Transfer Bancaria (Opcional)
             </label>
             <p className="help-text mb-2">
-              Vincula este reporte con transferencias bancarias ya conciliadas
+              Selecciona una transferencia o grupo para autocompletar el monto y vincular el pago
             </p>
-            {loadingGroups ? (
-              <p className="text-sm text-gray-500">Cargando grupos...</p>
+            {loadingOptions ? (
+              <p className="text-sm text-gray-500">Cargando opciones...</p>
             ) : (
-              <div className="groups-list">
-                {availableGroups.map(group => (
-                  <label key={group.id} className="group-checkbox">
-                    <input
-                      type="checkbox"
-                      checked={selectedGroups.includes(group.id)}
-                      onChange={(e) => {
-                        if (e.target.checked) {
-                          setSelectedGroups([...selectedGroups, group.id]);
-                        } else {
-                          setSelectedGroups(selectedGroups.filter(id => id !== group.id));
-                        }
-                      }}
-                    />
-                    <span className="group-name">{group.name}</span>
-                    <span className="group-amount">${group.total_amount?.toFixed(2) || '0.00'}</span>
-                  </label>
-                ))}
-              </div>
+              <select
+                value={selectedOption}
+                onChange={(e) => {
+                  setSelectedOption(e.target.value);
+                  const option = availableOptions.find(o => o.id === e.target.value);
+                  if (option) {
+                    setTotalAmount(option.amount.toFixed(2));
+                  }
+                }}
+                className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition-colors"
+              >
+                <option value="">Sin vincular (manual)</option>
+                <optgroup label="Transferencias Individuales">
+                  {availableOptions.filter(o => o.type === 'transfer').map(option => (
+                    <option key={option.id} value={option.id}>
+                      {option.name} - ${option.amount.toFixed(2)}
+                    </option>
+                  ))}
+                </optgroup>
+                {availableOptions.some(o => o.type === 'group') && (
+                  <optgroup label="Grupos de Transferencias">
+                    {availableOptions.filter(o => o.type === 'group').map(option => (
+                      <option key={option.id} value={option.id}>
+                        {option.name} - ${option.amount.toFixed(2)}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+              </select>
             )}
           </div>
         )}
