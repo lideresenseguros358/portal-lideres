@@ -16,7 +16,7 @@ import type { BankTransferCommRow } from '@/lib/banco/bancoParser';
 
 export type BankTransferStatus = 'SIN_CLASIFICAR' | 'PENDIENTE' | 'OK_CONCILIADO' | 'PAGADO';
 export type TransferType = 'REPORTE' | 'BONO' | 'OTRO' | 'PENDIENTE';
-export type GroupTemplate = 'NORMAL' | 'ASSA_CODIGOS' | 'ASSA_PJ750' | 'ASSA_PJ750_1' | 'ASSA_PJ750_6' | 'ASSA_PJ750_9';
+export type GroupTemplate = 'NORMAL' | 'ASSA_CODIGOS';
 export type GroupStatus = 'EN_PROCESO' | 'OK_CONCILIADO' | 'PAGADO';
 
 interface ActionResult<T = any> {
@@ -194,7 +194,7 @@ export async function actionGetBankCutoffs(filters?: {
 }
 
 // ============================================
-// 3. OBTENER TRANSFERENCIAS
+// 3. OBTENER TRANSFERENCIAS DE UN CORTE
 // ============================================
 
 export async function actionGetBankTransfers(filters?: {
@@ -216,9 +216,10 @@ export async function actionGetBankTransfers(filters?: {
       .select(`
         *,
         insurers:insurer_assigned_id (id, name),
-        bank_cutoffs:cutoff_id (start_date, end_date)
-      `)
-      .order('date', { ascending: false });
+        bank_cutoffs:cutoff_id (start_date, end_date),
+        bank_transfer_imports (id),
+        bank_group_transfers!left (group_id)
+      `);
 
     if (filters?.cutoffId) {
       query = query.eq('cutoff_id', filters.cutoffId);
@@ -250,6 +251,13 @@ export async function actionGetBankTransfers(filters?: {
         t.notes_internal?.toLowerCase().includes(searchLower)
       );
     }
+
+    // Ordenar alfabéticamente por descripción
+    transfers = transfers.sort((a, b) => {
+      const descA = (a.description_raw || '').toLowerCase();
+      const descB = (b.description_raw || '').toLowerCase();
+      return descA.localeCompare(descB);
+    });
 
     return { ok: true, data: transfers };
   } catch (error) {
@@ -314,16 +322,31 @@ export async function actionCreateBankGroup(
   isLifeInsurance?: boolean
 ): Promise<ActionResult<{ groupId: string }>> {
   try {
+    console.log('[BANCO] actionCreateBankGroup llamada con:', { name, template, insurerId, isLifeInsurance });
+    
     const { role } = await getAuthContext();
     if (role !== 'master') {
+      console.log('[BANCO] Acceso denegado - rol:', role);
       return { ok: false, error: 'Acceso denegado' };
     }
 
     const supabase = await getSupabaseServer();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
+      console.log('[BANCO] Usuario no autenticado');
       return { ok: false, error: 'No autenticado' };
     }
+
+    console.log('[BANCO] Usuario autenticado:', user.id);
+    console.log('[BANCO] Insertando grupo con datos:', {
+      name,
+      group_template: template,
+      insurer_id: insurerId,
+      is_life_insurance: isLifeInsurance,
+      status: 'EN_PROCESO',
+      total_amount: 0,
+      created_by: user.id,
+    });
 
     const { data: group, error } = await supabase
       .from('bank_groups')
@@ -341,8 +364,11 @@ export async function actionCreateBankGroup(
 
     if (error) {
       console.error('[BANCO] Error creando grupo:', error);
-      return { ok: false, error: 'Error al crear grupo' };
+      console.error('[BANCO] Detalles del error:', JSON.stringify(error, null, 2));
+      return { ok: false, error: `Error al crear grupo: ${error.message || 'desconocido'}` };
     }
+
+    console.log('[BANCO] Grupo creado exitosamente:', group.id);
 
     revalidatePath('/commissions');
     return { ok: true, data: { groupId: group.id } };
@@ -493,9 +519,9 @@ export async function actionGetBankGroups(filters?: {
       .select(`
         *,
         insurers:insurer_id (id, name),
-        fortnights:fortnight_paid_id (id, period_start, period_end)
-      `)
-      .order('created_at', { ascending: false });
+        fortnights:fortnight_paid_id (id, period_start, period_end),
+        bank_group_imports (id)
+      `);
 
     if (filters?.status && filters.status !== 'all') {
       query = query.eq('status', filters.status);
@@ -531,7 +557,14 @@ export async function actionGetBankGroups(filters?: {
       })
     );
 
-    return { ok: true, data: groupsWithTransfers };
+    // Ordenar alfabéticamente por nombre
+    const sortedGroups = groupsWithTransfers.sort((a, b) => {
+      const nameA = (a.name || '').toLowerCase();
+      const nameB = (b.name || '').toLowerCase();
+      return nameA.localeCompare(nameB);
+    });
+
+    return { ok: true, data: sortedGroups };
   } catch (error) {
     console.error('[BANCO] Error en actionGetBankGroups:', error);
     return { ok: false, error: 'Error inesperado' };
@@ -621,14 +654,13 @@ export async function actionGetLastCutoff(): Promise<ActionResult<{ endDate: str
       return { ok: true, data: null };
     }
 
-    // Calcular fechas sugeridas
+    // Calcular fechas sugeridas (rango de 15 días)
     const lastEndDate = new Date(data.end_date);
     const suggestedStart = new Date(lastEndDate);
     suggestedStart.setDate(suggestedStart.getDate() + 1);
 
-    const today = new Date();
-    const suggestedEnd = new Date(today);
-    suggestedEnd.setDate(suggestedEnd.getDate() - 1);
+    const suggestedEnd = new Date(suggestedStart);
+    suggestedEnd.setDate(suggestedEnd.getDate() + 14); // +14 días para completar 15 días de rango
 
     return {
       ok: true,
@@ -640,6 +672,389 @@ export async function actionGetLastCutoff(): Promise<ActionResult<{ endDate: str
     };
   } catch (error) {
     console.error('[BANCO] Error en actionGetLastCutoff:', error);
+    return { ok: false, error: 'Error inesperado' };
+  }
+}
+
+// ============================================
+// 10. AUTO-ASIGNAR ASEGURADORA DESDE NUEVA QUINCENA
+// ============================================
+
+/**
+ * Auto-asignar aseguradora a transferencia bancaria desde Nueva Quincena
+ * Se llama cuando se importa un reporte vinculado a una transferencia sin aseguradora
+ */
+export async function actionAutoAssignInsurerToTransfer(
+  transferId: string,
+  insurerId: string
+): Promise<ActionResult> {
+  try {
+    const { role } = await getAuthContext();
+    if (role !== 'master') {
+      return { ok: false, error: 'Acceso denegado' };
+    }
+
+    const supabase = await getSupabaseServer();
+
+    // Verificar que la transferencia no tenga aseguradora asignada
+    const { data: transfer } = await supabase
+      .from('bank_transfers_comm')
+      .select('insurer_assigned_id')
+      .eq('id', transferId)
+      .single();
+
+    if (!transfer) {
+      return { ok: false, error: 'Transferencia no encontrada' };
+    }
+
+    // Solo asignar si no tiene aseguradora
+    if (transfer.insurer_assigned_id) {
+      console.log(`[BANCO] Transferencia ${transferId} ya tiene aseguradora asignada`);
+      return { ok: true }; // No es error, simplemente ya tiene aseguradora
+    }
+
+    // Asignar aseguradora
+    const { error } = await supabase
+      .from('bank_transfers_comm')
+      .update({ insurer_assigned_id: insurerId })
+      .eq('id', transferId);
+
+    if (error) {
+      console.error('[BANCO] Error auto-asignando aseguradora a transferencia:', error);
+      return { ok: false, error: 'Error al asignar aseguradora' };
+    }
+
+    console.log(`[BANCO] ✅ Aseguradora ${insurerId} auto-asignada a transferencia ${transferId}`);
+    revalidatePath('/commissions');
+    return { ok: true };
+  } catch (error) {
+    console.error('[BANCO] Error en actionAutoAssignInsurerToTransfer:', error);
+    return { ok: false, error: 'Error inesperado' };
+  }
+}
+
+/**
+ * Auto-asignar aseguradora a grupo bancario desde Nueva Quincena
+ * Se llama cuando se importa un reporte vinculado a un grupo sin aseguradora
+ */
+export async function actionAutoAssignInsurerToGroup(
+  groupId: string,
+  insurerId: string
+): Promise<ActionResult> {
+  try {
+    const { role } = await getAuthContext();
+    if (role !== 'master') {
+      return { ok: false, error: 'Acceso denegado' };
+    }
+
+    const supabase = await getSupabaseServer();
+
+    // Verificar que el grupo no tenga aseguradora asignada
+    const { data: group } = await supabase
+      .from('bank_groups')
+      .select('insurer_id')
+      .eq('id', groupId)
+      .single();
+
+    if (!group) {
+      return { ok: false, error: 'Grupo no encontrado' };
+    }
+
+    // Solo asignar si no tiene aseguradora
+    if (group.insurer_id) {
+      console.log(`[BANCO] Grupo ${groupId} ya tiene aseguradora asignada`);
+      return { ok: true }; // No es error, simplemente ya tiene aseguradora
+    }
+
+    // Asignar aseguradora
+    const { error } = await supabase
+      .from('bank_groups')
+      .update({ insurer_id: insurerId })
+      .eq('id', groupId);
+
+    if (error) {
+      console.error('[BANCO] Error auto-asignando aseguradora a grupo:', error);
+      return { ok: false, error: 'Error al asignar aseguradora' };
+    }
+
+    console.log(`[BANCO] ✅ Aseguradora ${insurerId} auto-asignada a grupo ${groupId}`);
+    revalidatePath('/commissions');
+    return { ok: true };
+  } catch (error) {
+    console.error('[BANCO] Error en actionAutoAssignInsurerToGroup:', error);
+    return { ok: false, error: 'Error inesperado' };
+  }
+}
+
+// ============================================
+// 11. OBTENER TRANSFERENCIAS PENDIENTES (TODOS LOS CORTES)
+// ============================================
+
+export async function actionGetPendingTransfersAllCutoffs(): Promise<ActionResult<any[]>> {
+  try {
+    const { role } = await getAuthContext();
+    if (role !== 'master') {
+      return { ok: false, error: 'Acceso denegado' };
+    }
+
+    const supabase = await getSupabaseServer();
+
+    // Obtener transferencias PENDIENTES u OK_CONCILIADO que NO tienen vínculos permanentes
+    const { data, error } = await supabase
+      .from('bank_transfers_comm')
+      .select(`
+        *,
+        insurers:insurer_assigned_id (id, name),
+        bank_cutoffs:cutoff_id (id, start_date, end_date),
+        bank_transfer_imports!left (id, is_temporary)
+      `)
+      .in('status', ['PENDIENTE', 'OK_CONCILIADO'])
+      .order('date', { ascending: false });
+
+    if (error) {
+      console.error('[BANCO] Error obteniendo transferencias pendientes:', error);
+      return { ok: false, error: 'Error al cargar transferencias pendientes' };
+    }
+
+    // Filtrar las que NO tienen imports permanentes
+    const pendingTransfers = (data || []).filter((t: any) => {
+      const imports = t.bank_transfer_imports || [];
+      // Incluir si NO tiene imports o SOLO tiene imports temporales
+      return imports.length === 0 || imports.every((imp: any) => imp.is_temporary === true);
+    });
+
+    return { ok: true, data: pendingTransfers };
+  } catch (error) {
+    console.error('[BANCO] Error en actionGetPendingTransfersAllCutoffs:', error);
+    return { ok: false, error: 'Error inesperado' };
+  }
+}
+
+// ============================================
+// 12. OBTENER GRUPOS PENDIENTES
+// ============================================
+
+export async function actionGetPendingGroupsAll(excludeCutoffId?: string): Promise<ActionResult<any[]>> {
+  try {
+    const { role } = await getAuthContext();
+    if (role !== 'master') {
+      return { ok: false, error: 'Acceso denegado' };
+    }
+
+    const supabase = await getSupabaseServer();
+
+    // Obtener grupos EN_PROCESO u OK_CONCILIADO que NO tienen vínculos permanentes
+    // Y que NO son del corte actual (son históricos)
+    const { data, error } = await supabase
+      .from('bank_groups')
+      .select(`
+        *,
+        insurers:insurer_id (id, name),
+        bank_group_imports!left (id, is_temporary),
+        bank_group_transfers!left (id, bank_transfers_comm!inner(cutoff_id))
+      `)
+      .in('status', ['EN_PROCESO', 'OK_CONCILIADO'])
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('[BANCO] Error obteniendo grupos pendientes:', error);
+      return { ok: false, error: 'Error al cargar grupos pendientes' };
+    }
+
+    // Filtrar los que NO tienen imports permanentes Y NO son del corte actual
+    const pendingGroups = (data || []).filter((g: any) => {
+      const imports = g.bank_group_imports || [];
+      const hasNoImports = imports.length === 0 || imports.every((imp: any) => imp.is_temporary === true);
+      
+      // Si excludeCutoffId está presente, excluir grupos de ese corte
+      if (excludeCutoffId && g.bank_group_transfers && g.bank_group_transfers.length > 0) {
+        const isFromCurrentCutoff = g.bank_group_transfers.some((gt: any) => 
+          gt.bank_transfers_comm?.cutoff_id === excludeCutoffId
+        );
+        if (isFromCurrentCutoff) return false; // Excluir grupos del corte actual
+      }
+      
+      return hasNoImports;
+    });
+
+    return { ok: true, data: pendingGroups };
+  } catch (error) {
+    console.error('[BANCO] Error en actionGetPendingGroupsAll:', error);
+    return { ok: false, error: 'Error inesperado' };
+  }
+}
+
+// ============================================
+// 15. OBTENER TODAS LAS TRANSFERENCIAS Y GRUPOS DISPONIBLES PARA NUEVA QUINCENA
+// ============================================
+
+export async function actionGetAvailableForImport(): Promise<ActionResult<{
+  transfers: any[];
+  groups: any[];
+}>> {
+  try {
+    const { role } = await getAuthContext();
+    if (role !== 'master') {
+      return { ok: false, error: 'Acceso denegado' };
+    }
+
+    const supabase = await getSupabaseServer();
+
+    // Obtener TODAS las transferencias que NO están PAGADAS
+    const { data: transfers, error: transfersError } = await supabase
+      .from('bank_transfers_comm')
+      .select(`
+        *,
+        insurers:insurer_assigned_id (id, name),
+        bank_cutoffs:cutoff_id (start_date, end_date),
+        bank_transfer_imports!left (id, is_temporary),
+        bank_group_transfers!left (group_id)
+      `)
+      .neq('status', 'PAGADO')
+      .order('description_raw', { ascending: true }); // Orden alfabético
+
+    if (transfersError) {
+      console.error('[BANCO] Error obteniendo transferencias disponibles:', transfersError);
+      return { ok: false, error: 'Error al cargar transferencias' };
+    }
+
+    // Obtener TODOS los grupos que NO están PAGADOS
+    const { data: groups, error: groupsError } = await supabase
+      .from('bank_groups')
+      .select(`
+        *,
+        insurers:insurer_id (id, name),
+        bank_group_imports!left (id, is_temporary)
+      `)
+      .neq('status', 'PAGADO')
+      .order('name', { ascending: true }); // Orden alfabético
+
+    if (groupsError) {
+      console.error('[BANCO] Error obteniendo grupos disponibles:', groupsError);
+      return { ok: false, error: 'Error al cargar grupos' };
+    }
+
+    // Filtrar transferencias que:
+    // 1. NO están en grupos
+    // 2. NO tienen imports permanentes (solo disponibles si no han sido importadas o solo tienen temporales)
+    const transfersNotInGroups = (transfers || []).filter((t: any) => {
+      const groupTransfers = t.bank_group_transfers || [];
+      const imports = t.bank_transfer_imports || [];
+      
+      // Si está en un grupo, no mostrar
+      if (groupTransfers.length > 0) return false;
+      
+      // Si tiene imports NO temporales, no mostrar (ya fue usada permanentemente)
+      const hasPermanentImport = imports.some((imp: any) => !imp.is_temporary);
+      if (hasPermanentImport) return false;
+      
+      return true;
+    });
+
+    // Filtrar grupos que NO tienen imports permanentes
+    const availableGroups = (groups || []).filter((g: any) => {
+      const imports = g.bank_group_imports || [];
+      
+      // Si tiene imports NO temporales, no mostrar (ya fue usada permanentemente)
+      const hasPermanentImport = imports.some((imp: any) => !imp.is_temporary);
+      if (hasPermanentImport) return false;
+      
+      return true;
+    });
+
+    return { 
+      ok: true, 
+      data: {
+        transfers: transfersNotInGroups,
+        groups: availableGroups
+      }
+    };
+  } catch (error) {
+    console.error('[BANCO] Error en actionGetAvailableForImport:', error);
+    return { ok: false, error: 'Error inesperado' };
+  }
+}
+
+// ============================================
+// 13. OBTENER GRUPOS DE UN CORTE ESPECÍFICO
+// ============================================
+
+export async function actionGetBankGroupsByCutoff(cutoffId: string): Promise<ActionResult<any[]>> {
+  try {
+    const { role } = await getAuthContext();
+    if (role !== 'master') {
+      return { ok: false, error: 'Acceso denegado' };
+    }
+
+    const supabase = await getSupabaseServer();
+
+    // Obtener grupos que tienen transferencias del corte actual
+    const { data, error } = await supabase
+      .from('bank_groups')
+      .select(`
+        *,
+        insurers:insurer_id (id, name),
+        bank_group_transfers!inner (
+          id,
+          bank_transfers_comm!inner (
+            id,
+            cutoff_id,
+            date,
+            reference_number,
+            description_raw,
+            amount,
+            status,
+            transfer_type,
+            insurer_assigned_id
+          )
+        )
+      `)
+      .eq('bank_group_transfers.bank_transfers_comm.cutoff_id', cutoffId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('[BANCO] Error obteniendo grupos del corte:', error);
+      return { ok: false, error: 'Error al cargar grupos' };
+    }
+
+    return { ok: true, data: data || [] };
+  } catch (error) {
+    console.error('[BANCO] Error en actionGetBankGroups:', error);
+    return { ok: false, error: 'Error inesperado' };
+  }
+}
+
+// ============================================
+// 14. MARCAR TRANSFERENCIA COMO OK (TEMPORAL)
+// ============================================
+
+export async function actionMarkTransferAsOkTemporary(
+  transferId: string,
+  fortnightId: string
+): Promise<ActionResult> {
+  try {
+    const { role } = await getAuthContext();
+    if (role !== 'master') {
+      return { ok: false, error: 'Acceso denegado' };
+    }
+
+    const supabase = await getSupabaseServer();
+
+    // Actualizar status a OK_CONCILIADO (temporal, se revertirá si se descarta)
+    const { error } = await supabase
+      .from('bank_transfers_comm')
+      .update({ status: 'OK_CONCILIADO' })
+      .eq('id', transferId);
+
+    if (error) {
+      console.error('[BANCO] Error actualizando transferencia:', error);
+      return { ok: false, error: 'Error al actualizar transferencia' };
+    }
+
+    console.log(`[BANCO] ✅ Transferencia ${transferId} marcada como OK_CONCILIADO (temporal)`);
+    return { ok: true };
+  } catch (error) {
+    console.error('[BANCO] Error en actionMarkTransferAsOkTemporary:', error);
     return { ok: false, error: 'Error inesperado' };
   }
 }

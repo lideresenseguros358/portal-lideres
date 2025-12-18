@@ -78,11 +78,7 @@ export default function GroupsPanel({ insurers, onRefresh }: GroupsPanelProps) {
   const getTemplateBadge = (template: GroupTemplate) => {
     const labels: Record<GroupTemplate, string> = {
       NORMAL: 'Normal',
-      ASSA_CODIGOS: 'ASSA Códigos',
-      ASSA_PJ750: 'ASSA PJ750',
-      ASSA_PJ750_1: 'ASSA PJ750-1',
-      ASSA_PJ750_6: 'ASSA PJ750-6',
-      ASSA_PJ750_9: 'ASSA PJ750-9',
+      ASSA_CODIGOS: 'Códigos ASSA',
     };
     return (
       <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded text-xs font-medium">

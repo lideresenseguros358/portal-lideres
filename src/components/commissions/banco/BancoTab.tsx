@@ -8,9 +8,11 @@
 
 import { useState, useEffect } from 'react';
 import { FaFileImport, FaInfoCircle } from 'react-icons/fa';
-import { actionGetBankCutoffs, actionGetBankTransfers, actionGetLastCutoff } from '@/app/(app)/commissions/banco-actions';
+import { actionGetBankCutoffs, actionGetBankTransfers, actionGetLastCutoff, actionGetBankGroupsByCutoff } from '@/app/(app)/commissions/banco-actions';
 import ImportBankCutoffModal from './ImportBankCutoffModal';
 import TransfersTable from './TransfersTable';
+import GroupsTable from './GroupsTable';
+import PendingTransfersView from './PendingTransfersView';
 import { toast } from 'sonner';
 
 interface BancoTabProps {
@@ -23,8 +25,10 @@ export default function BancoTab({ role, insurers }: BancoTabProps) {
   const [showImportModal, setShowImportModal] = useState(false);
   const [cutoffs, setCutoffs] = useState<any[]>([]);
   const [transfers, setTransfers] = useState<any[]>([]);
+  const [groups, setGroups] = useState<any[]>([]);
   const [selectedCutoff, setSelectedCutoff] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingGroups, setLoadingGroups] = useState(false);
   const [lastCutoffInfo, setLastCutoffInfo] = useState<any>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   
@@ -53,10 +57,11 @@ export default function BancoTab({ role, insurers }: BancoTabProps) {
     loadCutoffs();
   }, []);
 
-  // Cargar transferencias cuando cambia el corte o filtros
+  // Cargar transferencias y grupos cuando cambia el corte o filtros
   useEffect(() => {
     if (selectedCutoff) {
       loadTransfers();
+      loadGroups();
     }
   }, [selectedCutoff, filters, refreshKey]);
 
@@ -82,6 +87,20 @@ export default function BancoTab({ role, insurers }: BancoTabProps) {
       toast.error('Error al cargar cortes');
     }
     setLoading(false);
+  };
+
+  const loadGroups = async () => {
+    if (!selectedCutoff) return;
+    
+    setLoadingGroups(true);
+    const result = await actionGetBankGroupsByCutoff(selectedCutoff);
+    
+    if (result.ok) {
+      setGroups(result.data || []);
+    } else {
+      toast.error('Error al cargar grupos');
+    }
+    setLoadingGroups(false);
   };
 
   const loadTransfers = async () => {
@@ -111,6 +130,7 @@ export default function BancoTab({ role, insurers }: BancoTabProps) {
 
   const handleRefresh = () => {
     setRefreshKey(prev => prev + 1);
+    loadGroups(); // Refrescar grupos también
   };
 
   const selectedCutoffData = cutoffs.find(c => c.id === selectedCutoff);
@@ -178,6 +198,9 @@ export default function BancoTab({ role, insurers }: BancoTabProps) {
               </div>
             )}
 
+            {/* Vista de Transferencias Pendientes - SIEMPRE VISIBLE */}
+            <PendingTransfersView excludeCutoffId={selectedCutoff || undefined} />
+
             {/* Selector de Corte + Filtros */}
             <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 border-2 border-gray-100 mb-6">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -238,6 +261,12 @@ export default function BancoTab({ role, insurers }: BancoTabProps) {
                 </div>
               </div>
             </div>
+
+            {/* Grupos de Transferencias - Expandibles */}
+            <GroupsTable
+              groups={groups}
+              loading={loadingGroups}
+            />
 
             {/* Tabla de Transferencias con funcionalidad de agrupación integrada */}
             <TransfersTable

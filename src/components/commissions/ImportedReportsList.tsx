@@ -8,10 +8,11 @@ interface Report {
   total_amount: number;
   created_at: string;
   items_count: number;
-  broker_commissions?: number; // Mock data for now
+  broker_commissions?: number;
   office_total?: number;
   office_percentage?: number;
   is_life_insurance?: boolean;
+  is_assa_codigos?: boolean; // Reportes de Códigos ASSA (PJ750-xxx)
 }
 
 interface Props {
@@ -29,12 +30,13 @@ export default function ImportedReportsList({ reports, onDelete }: Props) {
   }
   
   // Calculate totals for each report
-  // Total Oficina = Total Reporte (porque aún no hay items identificados con broker)
   const reportsWithTotals = reports.map(report => {
-    // Broker commissions = 0 porque todos están sin identificar (broker_id = NULL)
-    const brokerCommissions = 0;
-    const officeTotal = report.total_amount;
-    const officePercentage = 100; // 100% oficina porque nada está identificado
+    // broker_commissions ya viene calculado desde NewFortnightTab
+    const brokerCommissions = report.broker_commissions || 0;
+    const officeTotal = report.total_amount - brokerCommissions;
+    const officePercentage = report.total_amount > 0 
+      ? (officeTotal / report.total_amount) * 100 
+      : 0;
     return {
       ...report,
       broker_commissions: brokerCommissions,
@@ -71,9 +73,10 @@ export default function ImportedReportsList({ reports, onDelete }: Props) {
                 <div className="total-item">
                   <span className="label">Total Oficina:</span>
                   <span className="value text-[#8AAA19]">${report.office_total?.toLocaleString()}</span>
-                  <span className={`percentage ${report.office_percentage && report.office_percentage <= 20 ? 'low' : 'normal'}`}>
+                  {/* No mostrar warning para Códigos ASSA (es normal que oficina sea 0%) */}
+                  <span className={`percentage ${!report.is_assa_codigos && report.office_percentage && report.office_percentage <= 20 ? 'low' : 'normal'}`}>
                     {report.office_percentage?.toFixed(1)}%
-                    {report.office_percentage && report.office_percentage <= 20 && (
+                    {!report.is_assa_codigos && report.office_percentage && report.office_percentage <= 20 && (
                       <FaExclamationTriangle className="warning-icon" />
                     )}
                   </span>

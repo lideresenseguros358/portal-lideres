@@ -20,6 +20,14 @@ import { buildBankACH } from '@/lib/commissions/bankACH';
 import { parseCsvXlsx } from '@/lib/commissions/importers';
 import { processDocumentOCR } from '@/lib/services/vision-ocr';
 import { getInsurerSlug, getPolicySearchTerm } from '@/lib/utils/policy-number';
+import { processAssaCodigosImport } from './assa-codigos-processor';
+
+// Type for action results
+interface ActionResult<T = any> {
+  ok: boolean;
+  data?: T;
+  error?: string;
+}
 
 type FortnightRow = Tables<'fortnights'>;
 type FortnightIns = TablesInsert<'fortnights'>;
@@ -60,16 +68,32 @@ export async function actionUploadImport(formData: FormData) {
 
     console.log('[SERVER] FormData:', { ...rawData, fileName: file?.name });
 
-    // Validate input
-    const parsed = UploadImportSchema.parse(rawData);
-    console.log('[SERVER] Validation passed:', parsed);
-
+    // Detectar ASSA_CODIGOS ANTES de validar (no es un UUID válido)
+    const isAssaCodigos = rawData.insurer_id === 'ASSA_CODIGOS';
+    
     if (!file) {
       return { ok: false as const, error: 'Archivo requerido' };
     }
 
     const { userId } = await getAuthContext();
     const supabase = getSupabaseAdmin();
+    
+    // Manejar ASSA_CODIGOS sin validación de schema (no tiene insurer_id UUID)
+    if (isAssaCodigos) {
+      console.log('[SERVER] Detected ASSA_CODIGOS import');
+      const parsedSpecial = {
+        fortnight_id: rawData.fortnight_id,
+        total_amount: rawData.total_amount,
+        insurer_id: 'ASSA_CODIGOS',
+        invert_negatives: rawData.invert_negatives,
+        is_life_insurance: rawData.is_life_insurance,
+      };
+      return await processAssaCodigosImport(file, parsedSpecial, userId, supabase, bankTransferId, bankGroupIds);
+    }
+
+    // Validate input para aseguradoras normales
+    const parsed = UploadImportSchema.parse(rawData);
+    console.log('[SERVER] Validation passed:', parsed);
     
     console.log('[SERVER] Parsing file...');
 
@@ -348,58 +372,95 @@ export async function actionUploadImport(formData: FormData) {
       console.log('[SERVER] Items inserted successfully');
     }
 
-    // 5. Insert pending_items (no identificados)
+    // 5. Insert draft_unidentified_items (no identificados - zona de trabajo temporal)
+    // NO insertamos en pending_items hasta confirmar PAGADO
     if (pendingItemsToInsert.length > 0) {
-      const { error: pendingError } = await supabase
-        .from('pending_items')
-        .insert(pendingItemsToInsert);
+      const draftItems = pendingItemsToInsert.map(item => ({
+        fortnight_id: item.fortnight_id,
+        import_id: item.import_id,
+        insurer_id: item.insurer_id,
+        policy_number: item.policy_number,
+        insured_name: item.insured_name,
+        commission_raw: item.commission_raw,
+        raw_row: item.raw_row || null,
+        temp_assigned_broker_id: null,
+      }));
+
+      const { error: draftError } = await (supabase as any)
+        .from('draft_unidentified_items')
+        .insert(draftItems);
       
-      if (pendingError) {
-        console.error('[SERVER] Error inserting pending items:', pendingError);
-        // No fallar el import completo, solo logear
-        console.log('[SERVER] Continuing despite pending items errors');
+      if (draftError) {
+        console.error('[SERVER] Error inserting draft unidentified:', draftError);
+        console.log('[SERVER] Continuing despite draft items errors');
       } else {
-        console.log('[SERVER] Pending items inserted successfully');
+        console.log('[SERVER] Draft unidentified items inserted successfully');
       }
     }
 
-    // 6. BANCO: Vincular transfer individual o grupos con el import
+    // 6. BANCO: Vincular transfer individual o grupos con el import (TEMPORAL)
     if (bankTransferId) {
-      console.log('[BANCO] Vinculando transfer individual con import:', bankTransferId);
+      console.log('[BANCO] Vinculando transfer individual con import (temporal):', bankTransferId);
+      
+      // Obtener cutoff_id de la transferencia para tracking de origen
+      const { data: transferData } = await supabase
+        .from('bank_transfers_comm')
+        .select('cutoff_id, bank_cutoffs:cutoff_id(start_date, end_date)')
+        .eq('id', bankTransferId)
+        .single();
+      
+      const cutoffOrigin = transferData?.cutoff_id;
+      const cutoffDates = transferData?.bank_cutoffs as any;
+      const originNote = cutoffDates 
+        ? `Origen: Corte ${new Date(cutoffDates.start_date).toLocaleDateString('es-PA')} - ${new Date(cutoffDates.end_date).toLocaleDateString('es-PA')}`
+        : 'Origen: Sin corte';
+      
       const { error: transferLinkError } = await (supabase as any)
         .from('bank_transfer_imports')
         .insert({
           transfer_id: bankTransferId,
           import_id: importRecord.id,
           amount_assigned: parseFloat(parsed.total_amount),
+          cutoff_origin_id: cutoffOrigin,
+          fortnight_paid_id: null, // Se llenará al confirmar pago
+          notes: originNote,
+          is_temporary: true, // Temporal hasta confirmar quincena
         });
       
       if (transferLinkError) {
         console.error('[BANCO] Error vinculando transfer:', transferLinkError);
       } else {
-        console.log('[BANCO] Transfer vinculada exitosamente');
+        console.log('[BANCO] Transfer vinculada exitosamente (temporal)');
       }
     }
 
     if (bankGroupIds.length > 0) {
-      console.log('[BANCO] Vinculando grupos bancarios con import:', bankGroupIds);
+      console.log('[BANCO] Vinculando grupos bancarios con import (temporal):', bankGroupIds);
       for (const groupId of bankGroupIds) {
         const { data: groupData } = await supabase
           .from('bank_groups')
-          .select('total_amount')
+          .select('total_amount, created_at')
           .eq('id', groupId)
           .single();
 
         if (groupData) {
-          await supabase
+          const originNote = groupData.created_at 
+            ? `Origen: Grupo creado ${new Date(groupData.created_at).toLocaleDateString('es-PA')}`
+            : 'Origen: Grupo bancario';
+          
+          await (supabase as any)
             .from('bank_group_imports')
             .insert({
               group_id: groupId,
               import_id: importRecord.id,
               amount_assigned: groupData.total_amount || 0,
+              cutoff_origin_id: null, // Grupos no tienen cutoff específico
+              fortnight_paid_id: null, // Se llenará al confirmar pago
+              notes: originNote,
+              is_temporary: true, // Temporal hasta confirmar quincena
             });
           
-          console.log('[BANCO] Grupo vinculado:', groupId);
+          console.log('[BANCO] Grupo vinculado (temporal):', groupId);
         }
       }
     }
@@ -3225,6 +3286,48 @@ export async function actionDeleteDraft(fortnightId: string) {
       .delete()
       .eq('fortnight_id', fortnightId);
 
+    // REVERTIR VÍNCULOS BANCO TEMPORALES
+    console.log('[actionDeleteDraft] Revirtiendo vínculos banco temporales...');
+    if (imports && imports.length > 0) {
+      const importIds = imports.map(i => i.id);
+      
+      // Obtener transferencias con vínculos temporales para revertir estado
+      const { data: tempTransfers } = await (supabase as any)
+        .from('bank_transfer_imports')
+        .select('transfer_id')
+        .in('import_id', importIds)
+        .eq('is_temporary', true);
+      
+      if (tempTransfers && tempTransfers.length > 0) {
+        const transferIds = tempTransfers.map((t: any) => t.transfer_id);
+        
+        // Revertir transferencias marcadas como OK temporalmente a PENDIENTE
+        await supabase
+          .from('bank_transfers_comm')
+          .update({ status: 'PENDIENTE' })
+          .in('id', transferIds)
+          .eq('status', 'OK_CONCILIADO'); // Solo revertir las que están en OK
+        
+        console.log(`[actionDeleteDraft] ✓ ${transferIds.length} transferencias revertidas a PENDIENTE`);
+      }
+      
+      // Eliminar vínculos temporales de transfers
+      await (supabase as any)
+        .from('bank_transfer_imports')
+        .delete()
+        .in('import_id', importIds)
+        .eq('is_temporary', true);
+      
+      // Eliminar vínculos temporales de groups (no se revierten estados de grupos)
+      await (supabase as any)
+        .from('bank_group_imports')
+        .delete()
+        .in('import_id', importIds)
+        .eq('is_temporary', true);
+      
+      console.log('[actionDeleteDraft] ✓ Vínculos banco temporales eliminados');
+    }
+    
     // Delete advance_logs that reference this fortnight (CRITICAL: must be before fortnight deletion)
     console.log('[actionDeleteDraft] Eliminando advance_logs...');
     await supabase
@@ -3260,35 +3363,140 @@ export async function actionDeleteDraft(fortnightId: string) {
 // Export bank CSV without closing fortnight
 export async function actionExportBankCsv(fortnightId: string) {
   try {
+    console.log('[actionExportBankCsv] Inicio para quincena:', fortnightId);
     const supabase = getSupabaseAdmin();
 
-    // Recalculate first
-    await actionRecalculateFortnight(fortnightId);
-
-    // Get fortnight with totals
+    // Get fortnight info
+    console.log('[actionExportBankCsv] Obteniendo datos de quincena...');
     const { data: fortnight, error: fError } = await supabase
       .from('fortnights')
-      .select(`
-        *,
-        fortnight_broker_totals (
-          *,
-          brokers (*)
-        )
-      `)
+      .select('*')
       .eq('id', fortnightId)
       .single();
 
-    if (fError || !fortnight) throw new Error('Quincena no encontrada');
+    if (fError || !fortnight) {
+      console.error('[actionExportBankCsv] Error obteniendo quincena:', fError);
+      throw new Error('Quincena no encontrada');
+    }
 
-    // Generate CSV excluding brokers with net <= 0
-    const totals = (fortnight as any).fortnight_broker_totals || [];
-    const filteredTotals = totals.filter((t: any) => {
-      const net = t.gross_amount - (t.discount_amount || 0);
-      return net > 0;
+    // Get imports for this fortnight
+    const { data: imports } = await supabase
+      .from('comm_imports')
+      .select('id')
+      .eq('period_label', fortnightId);
+    
+    if (!imports || imports.length === 0) {
+      return {
+        ok: true as const,
+        bankACH: '',
+        achErrors: [],
+        achValidCount: 0,
+        achTotalAmount: 0,
+      };
+    }
+    
+    const importIds = imports.map(i => i.id);
+    
+    // Get comm_items and sum by broker (IGUAL QUE LA UI)
+    const { data: items } = await supabase
+      .from('comm_items')
+      .select(`
+        broker_id,
+        gross_amount,
+        brokers (*)
+      `)
+      .in('import_id', importIds)
+      .not('broker_id', 'is', null);
+    
+    if (!items || items.length === 0) {
+      return {
+        ok: true as const,
+        bankACH: '',
+        achErrors: [],
+        achValidCount: 0,
+        achTotalAmount: 0,
+      };
+    }
+    
+    // Agrupar por broker y sumar (EXACTAMENTE igual que BrokerTotals.tsx)
+    const brokerGroups = items.reduce((acc: any, item: any) => {
+      const brokerId = item.broker_id;
+      if (!acc[brokerId]) {
+        acc[brokerId] = {
+          broker_id: brokerId,
+          broker: item.brokers,
+          gross_amount: 0,
+          net_amount: 0
+        };
+      }
+      acc[brokerId].gross_amount += Math.abs(Number(item.gross_amount) || 0);
+      return acc;
+    }, {});
+    
+    // Get retention status from fortnight_broker_totals
+    const { data: brokerTotals } = await supabase
+      .from('fortnight_broker_totals')
+      .select('broker_id, is_retained')
+      .eq('fortnight_id', fortnightId);
+    
+    // Apply retention and calculate net (gross - 0 descuentos for now)
+    const totalsArray = Object.values(brokerGroups).map((bg: any) => {
+      const total = brokerTotals?.find(bt => bt.broker_id === bg.broker_id);
+      return {
+        ...bg,
+        is_retained: total?.is_retained || false,
+        net_amount: bg.gross_amount // Por ahora sin descuentos
+      };
     });
+    
+    // Filter: net > 0 AND not retained
+    const filteredTotals = totalsArray.filter((t: any) => {
+      console.log(`[actionExportBankCsv] Broker ${t.broker?.name}:`, {
+        gross_amount: t.gross_amount,
+        net_amount: t.net_amount,
+        retained: t.is_retained
+      });
+      return t.net_amount > 0 && !t.is_retained;
+    });
+    
+    console.log('[actionExportBankCsv] Totales filtrados:', filteredTotals.length);
 
-    const fortnightLabel = `PAGO QUINCENA ${fortnight.period_start} AL ${fortnight.period_end}`;
-    const achResult = await buildBankACH(filteredTotals, fortnightLabel);
+    if (filteredTotals.length === 0) {
+      return {
+        ok: true as const,
+        bankACH: '',
+        achErrors: [],
+        achValidCount: 0,
+        achTotalAmount: 0,
+      };
+    }
+
+    const totalsWithBroker = filteredTotals;
+
+    // Generar label: Q1/Q2 MES AÑO - DD/MM/YYYY
+    const endDate = new Date(fortnight.period_end);
+    const day = endDate.getDate();
+    const month = endDate.getMonth();
+    const year = endDate.getFullYear();
+    
+    const quincena = day <= 15 ? 'Q1' : 'Q2';
+    const meses = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
+    const mesNombre = meses[month];
+    
+    const now = new Date();
+    const fechaDescarga = `${String(now.getDate()).padStart(2, '0')}/${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`;
+    
+    const fortnightLabel = `${quincena} ${mesNombre} ${year} - ${fechaDescarga}`;
+    console.log('[actionExportBankCsv] Generando ACH con label:', fortnightLabel);
+    console.log('[actionExportBankCsv] Primer broker a procesar:', totalsWithBroker[0]?.broker?.name);
+    const achResult = await buildBankACH(totalsWithBroker, fortnightLabel);
+
+    console.log('[actionExportBankCsv] ACH generado:', {
+      contentLength: achResult.content.length,
+      validCount: achResult.validCount,
+      errors: achResult.errors.length,
+      totalAmount: achResult.totalAmount
+    });
 
     return {
       ok: true as const,
@@ -3298,6 +3506,7 @@ export async function actionExportBankCsv(fortnightId: string) {
       achTotalAmount: achResult.totalAmount,
     };
   } catch (error) {
+    console.error('[actionExportBankCsv] Error:', error);
     return {
       ok: false as const,
       error: error instanceof Error ? error.message : 'Error desconocido',
@@ -3620,7 +3829,139 @@ export async function actionPayFortnight(fortnight_id: string) {
     const achResult = await buildBankACH(filteredTotals, fortnightLabel);
     const csvContent = achResult.content;
     
-    // 6. Cambiar status a PAID
+    // 6. MIGRAR ITEMS TEMPORALES DE ZONA DE TRABAJO
+    console.log('[actionPayFortnight] Migrando items temporales...');
+    
+    const { data: draftItems, error: draftError } = await (supabase as any)
+      .from('draft_unidentified_items')
+      .select(`
+        id,
+        policy_number,
+        insured_name,
+        commission_raw,
+        insurer_id,
+        temp_assigned_broker_id,
+        import_id,
+        raw_row,
+        brokers ( percent_default )
+      `)
+      .eq('fortnight_id', fortnight_id);
+    
+    if (draftError) {
+      console.error('[actionPayFortnight] Error cargando draft items:', draftError);
+      throw draftError;
+    }
+    
+    if (draftItems && draftItems.length > 0) {
+      const identified = draftItems.filter((item: any) => item.temp_assigned_broker_id);
+      const unidentified = draftItems.filter((item: any) => !item.temp_assigned_broker_id);
+      
+      console.log(`[actionPayFortnight] Draft items - Identificados: ${identified.length}, Sin identificar: ${unidentified.length}`);
+      
+      // 6.1 Migrar identificados a comm_items (como si el parser los hubiera encontrado)
+      if (identified.length > 0) {
+        const commItemsToInsert = identified.map((item: any) => {
+          const percent = (item.brokers as any)?.percent_default || 1.0;
+          const grossAmount = item.commission_raw * percent;
+          
+          return {
+            import_id: item.import_id,
+            insurer_id: item.insurer_id,
+            policy_number: item.policy_number,
+            gross_amount: grossAmount,
+            insured_name: item.insured_name || 'UNKNOWN',
+            raw_row: item.raw_row,
+            broker_id: item.temp_assigned_broker_id,
+            fortnight_id: fortnight_id,
+          };
+        });
+        
+        const { error: commInsertError } = await supabase
+          .from('comm_items')
+          .insert(commItemsToInsert);
+        
+        if (commInsertError) {
+          console.error('[actionPayFortnight] Error insertando comm_items identificados:', commInsertError);
+          throw commInsertError;
+        }
+        
+        console.log(`[actionPayFortnight] ✅ ${identified.length} items identificados migrados a comm_items`);
+        
+        // Registrar en preliminar para cada cliente identificado
+        for (const item of identified) {
+          try {
+            const { data: existingPolicy } = await supabase
+              .from('policies')
+              .select('id, client_id')
+              .eq('policy_number', item.policy_number)
+              .single();
+            
+            if (existingPolicy) {
+              // Verificar si ya existe en preliminar
+              const { data: existingPrelim } = await (supabase as any)
+                .from('preliminar')
+                .select('id')
+                .eq('client_id', existingPolicy.client_id)
+                .eq('broker_id', item.temp_assigned_broker_id)
+                .single();
+              
+              if (!existingPrelim) {
+                await (supabase as any)
+                  .from('preliminar')
+                  .insert({
+                    client_id: existingPolicy.client_id,
+                    broker_id: item.temp_assigned_broker_id,
+                    notes: 'Identificado en zona de trabajo de Nueva Quincena'
+                  });
+                
+                console.log(`[actionPayFortnight] Cliente ${item.policy_number} registrado en preliminar`);
+              }
+            }
+          } catch (prelimError) {
+            console.error('[actionPayFortnight] Error registrando en preliminar:', prelimError);
+            // No fallar el proceso completo
+          }
+        }
+      }
+      
+      // 6.2 Migrar sin identificar a pending_items (ajustes)
+      if (unidentified.length > 0) {
+        const pendingItemsToInsert = unidentified.map((item: any) => ({
+          insured_name: item.insured_name,
+          policy_number: item.policy_number,
+          insurer_id: item.insurer_id,
+          commission_raw: item.commission_raw,
+          fortnight_id: fortnight_id,
+          import_id: item.import_id,
+          status: 'open',
+          assigned_broker_id: null,
+        }));
+        
+        const { error: pendingInsertError } = await supabase
+          .from('pending_items')
+          .insert(pendingItemsToInsert);
+        
+        if (pendingInsertError) {
+          console.error('[actionPayFortnight] Error insertando pending_items:', pendingInsertError);
+          // No fallar, solo logear
+        } else {
+          console.log(`[actionPayFortnight] ✅ ${unidentified.length} items sin identificar migrados a pending_items (ajustes)`);
+        }
+      }
+      
+      // 6.3 Limpiar draft_unidentified_items
+      const { error: deleteError } = await (supabase as any)
+        .from('draft_unidentified_items')
+        .delete()
+        .eq('fortnight_id', fortnight_id);
+      
+      if (deleteError) {
+        console.error('[actionPayFortnight] Error limpiando draft items:', deleteError);
+        // No fallar
+      }
+    }
+    
+    // 7. Cambiar status a PAID
     const { error: updateError } = await supabase
       .from('fortnights')
       .update({ status: 'PAID' } satisfies FortnightUpd)
@@ -3628,7 +3969,7 @@ export async function actionPayFortnight(fortnight_id: string) {
     
     if (updateError) throw updateError;
     
-    // 6.1 NUEVO: Guardar detalle completo en fortnight_details
+    // 7.1 NUEVO: Guardar detalle completo en fortnight_details
     console.log('[actionPayFortnight] Guardando detalle en fortnight_details...');
     
     const { data: commItems, error: itemsError } = await supabase
@@ -3719,7 +4060,94 @@ export async function actionPayFortnight(fortnight_id: string) {
       console.log('[actionPayFortnight] ⚠️ No hay comm_items para guardar en fortnight_details');
     }
     
-    // 6.5 NUEVO: Marcar reportes de ajustes como pagados
+    // 6.5 NUEVO: CONFIRMAR VÍNCULOS BANCO TEMPORALES Y ACTUALIZAR A PAGADO
+    console.log('[actionPayFortnight] Confirmando vínculos banco temporales...');
+    
+    // Obtener imports de esta quincena
+    const { data: quincenaImports } = await supabase
+      .from('comm_imports')
+      .select('id')
+      .eq('period_label', fortnight_id);
+    
+    if (quincenaImports && quincenaImports.length > 0) {
+      const importIds = quincenaImports.map((i: any) => i.id);
+      
+      // Confirmar bank_transfer_imports temporales
+      const { data: tempTransferLinks } = await (supabase as any)
+        .from('bank_transfer_imports')
+        .select('transfer_id, cutoff_origin_id, notes')
+        .in('import_id', importIds)
+        .eq('is_temporary', true);
+      
+      if (tempTransferLinks && tempTransferLinks.length > 0) {
+        // Actualizar vínculos a permanentes
+        const { error: confirmError } = await (supabase as any)
+          .from('bank_transfer_imports')
+          .update({
+            is_temporary: false,
+            fortnight_paid_id: fortnight_id,
+            notes: (supabase as any).raw(`notes || ' | Pagado en quincena: ' || '${fortnight_id}'`)
+          })
+          .in('import_id', importIds)
+          .eq('is_temporary', true);
+        
+        if (confirmError) {
+          console.error('[actionPayFortnight] Error confirmando transfer links:', confirmError);
+        }
+        
+        // Actualizar transferencias a PAGADO
+        const transferIds = tempTransferLinks.map((t: any) => t.transfer_id);
+        const { error: updateTransferError } = await supabase
+          .from('bank_transfers_comm')
+          .update({ status: 'PAGADO' })
+          .in('id', transferIds);
+        
+        if (updateTransferError) {
+          console.error('[actionPayFortnight] Error actualizando transferencias a PAGADO:', updateTransferError);
+        } else {
+          console.log(`[actionPayFortnight] ✅ ${transferIds.length} transferencias actualizadas a PAGADO`);
+        }
+      }
+      
+      // Confirmar bank_group_imports temporales
+      const { data: tempGroupLinks } = await (supabase as any)
+        .from('bank_group_imports')
+        .select('group_id, notes')
+        .in('import_id', importIds)
+        .eq('is_temporary', true);
+      
+      if (tempGroupLinks && tempGroupLinks.length > 0) {
+        // Actualizar vínculos a permanentes
+        const { error: confirmGroupError } = await (supabase as any)
+          .from('bank_group_imports')
+          .update({
+            is_temporary: false,
+            fortnight_paid_id: fortnight_id,
+            notes: (supabase as any).raw(`notes || ' | Pagado en quincena: ' || '${fortnight_id}'`)
+          })
+          .in('import_id', importIds)
+          .eq('is_temporary', true);
+        
+        if (confirmGroupError) {
+          console.error('[actionPayFortnight] Error confirmando group links:', confirmGroupError);
+        }
+        
+        // Actualizar grupos a PAGADO
+        const groupIds = tempGroupLinks.map((g: any) => g.group_id);
+        const { error: updateGroupError } = await supabase
+          .from('bank_groups')
+          .update({ status: 'PAGADO' })
+          .in('id', groupIds);
+        
+        if (updateGroupError) {
+          console.error('[actionPayFortnight] Error actualizando grupos a PAGADO:', updateGroupError);
+        } else {
+          console.log(`[actionPayFortnight] ✅ ${groupIds.length} grupos actualizados a PAGADO`);
+        }
+      }
+    }
+    
+    // 6.6 NUEVO: Marcar reportes de ajustes como pagados
     console.log('[actionPayFortnight] Marcando reportes de ajustes...');
     const { data: adjustmentReports, error: adjError } = await supabase
       .from('adjustment_reports')
@@ -4830,6 +5258,122 @@ export async function actionGetBrokerCommissionDetails(fortnightId: string, brok
     return {
       ok: false as const,
       error: error instanceof Error ? error.message : 'Error al obtener detalles de comisiones',
+    };
+  }
+}
+
+// ========================================
+// DRAFT UNIDENTIFIED ITEMS (Zona de trabajo)
+// ========================================
+
+/**
+ * Obtener items sin identificar de la zona de trabajo (draft)
+ */
+export async function actionGetDraftUnidentified(fortnightId: string): Promise<ActionResult<any[]>> {
+  try {
+    const { role } = await getAuthContext();
+    if (role !== 'master') {
+      return { ok: false, error: 'Acceso denegado' };
+    }
+
+    const supabase = getSupabaseAdmin();
+
+    const { data, error } = await (supabase as any)
+      .from('draft_unidentified_items')
+      .select(`
+        id,
+        policy_number,
+        insured_name,
+        commission_raw,
+        temp_assigned_broker_id,
+        temp_assigned_at,
+        created_at,
+        insurers ( id, name ),
+        brokers ( id, name )
+      `)
+      .eq('fortnight_id', fortnightId)
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      console.error('[actionGetDraftUnidentified] Error:', error);
+      return { ok: false, error: 'Error al cargar sin identificar' };
+    }
+
+    return { ok: true, data: data || [] };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : 'Error inesperado',
+    };
+  }
+}
+
+/**
+ * Identificar temporalmente un cliente en zona de trabajo
+ */
+export async function actionTempIdentifyClient(itemId: string, brokerId: string): Promise<ActionResult> {
+  try {
+    const { role } = await getAuthContext();
+    if (role !== 'master') {
+      return { ok: false, error: 'Acceso denegado' };
+    }
+
+    const supabase = getSupabaseAdmin();
+
+    const { error } = await (supabase as any)
+      .from('draft_unidentified_items')
+      .update({
+        temp_assigned_broker_id: brokerId,
+        temp_assigned_at: new Date().toISOString(),
+      })
+      .eq('id', itemId);
+
+    if (error) {
+      console.error('[actionTempIdentifyClient] Error:', error);
+      return { ok: false, error: 'Error al identificar cliente' };
+    }
+
+    revalidatePath('/commissions');
+    return { ok: true };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : 'Error inesperado',
+    };
+  }
+}
+
+/**
+ * Regresar cliente a sin identificar en zona de trabajo
+ */
+export async function actionTempUnidentifyClient(itemId: string): Promise<ActionResult> {
+  try {
+    const { role } = await getAuthContext();
+    if (role !== 'master') {
+      return { ok: false, error: 'Acceso denegado' };
+    }
+
+    const supabase = getSupabaseAdmin();
+
+    const { error } = await (supabase as any)
+      .from('draft_unidentified_items')
+      .update({
+        temp_assigned_broker_id: null,
+        temp_assigned_at: null,
+      })
+      .eq('id', itemId);
+
+    if (error) {
+      console.error('[actionTempUnidentifyClient] Error:', error);
+      return { ok: false, error: 'Error al desidentificar cliente' };
+    }
+
+    revalidatePath('/commissions');
+    return { ok: true };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : 'Error inesperado',
     };
   }
 }

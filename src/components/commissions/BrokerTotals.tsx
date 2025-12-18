@@ -13,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { FaChevronDown, FaChevronRight, FaHandHoldingUsd, FaUndo, FaMinus } from 'react-icons/fa';
+import { FaChevronDown, FaChevronRight, FaHandHoldingUsd, FaUndo, FaMinus, FaEllipsisV } from 'react-icons/fa';
 import DiscountModal from './DiscountModal';
 
 // Types
@@ -47,14 +47,18 @@ interface Props {
   onManageAdvances: (brokerId: string) => void;
   brokerTotals?: Array<{ broker_id: string; is_retained?: boolean }>;
   onRetentionChange?: () => void;
+  onTotalNetChange?: (totalNet: number) => void;
+  recalculationKey?: number; // Key para forzar recarga de datos
 }
 
-export default function BrokerTotals({ draftFortnightId, onManageAdvances, brokerTotals = [], onRetentionChange = () => {} }: Props) {
+export default function BrokerTotals({ draftFortnightId, onManageAdvances, brokerTotals = [], onRetentionChange = () => {}, onTotalNetChange, recalculationKey = 0 }: Props) {
   const [details, setDetails] = useState<CommItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isInitialLoad, setIsInitialLoad] = useState(true); // Solo mostrar spinner en primera carga
   const [expandedBrokers, setExpandedBrokers] = useState<Set<string>>(new Set());
   const [expandedInsurers, setExpandedInsurers] = useState<Set<string>>(new Set());
   const [brokerDiscounts, setBrokerDiscounts] = useState<Record<string, number>>({});
+  const [openMenuBroker, setOpenMenuBroker] = useState<string | null>(null);
   const [discountModalData, setDiscountModalData] = useState<{
     brokerId: string;
     brokerName: string;
@@ -63,7 +67,11 @@ export default function BrokerTotals({ draftFortnightId, onManageAdvances, broke
 
   useEffect(() => {
     const loadDetails = async () => {
-      setLoading(true);
+      // Solo mostrar loading en la primera carga, luego actualizar en background
+      if (isInitialLoad) {
+        setLoading(true);
+      }
+      
       const result = await actionGetDraftDetails(draftFortnightId);
       if (result.ok) {
         setDetails(result.data || []);
@@ -73,12 +81,20 @@ export default function BrokerTotals({ draftFortnightId, onManageAdvances, broke
         // TODO: Cargar desde fortnight_broker_totals cuando esté disponible
         setBrokerDiscounts(discounts);
       } else {
-        toast.error('Error al cargar detalles de la quincena', { description: result.error });
+        // Solo mostrar error si es la primera carga
+        if (isInitialLoad) {
+          toast.error('Error al cargar detalles de la quincena', { description: result.error });
+        }
       }
-      setLoading(false);
+      
+      if (isInitialLoad) {
+        setLoading(false);
+        setIsInitialLoad(false);
+      }
     };
     loadDetails();
-  }, [draftFortnightId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftFortnightId, recalculationKey]);
 
   const groupedData = useMemo(() => {
     const grouped = details.reduce<GroupedData>((acc, item) => {
@@ -106,7 +122,7 @@ export default function BrokerTotals({ draftFortnightId, onManageAdvances, broke
         };
       }
 
-      // Use Math.abs to ensure positive commission values
+      // SUMAR comm_items directamente
       const grossAmount = Math.abs(item.gross_amount);
       acc[brokerId]!.total_gross += grossAmount;
       acc[brokerId]!.insurers[insurerId]!.total_gross += grossAmount;
@@ -140,6 +156,17 @@ export default function BrokerTotals({ draftFortnightId, onManageAdvances, broke
     setExpandedInsurers(newSet);
   };
 
+  // Calcular y emitir total neto - Se ejecuta cada vez que groupedData cambia
+  useEffect(() => {
+    if (onTotalNetChange) {
+      const totalNet = Object.keys(groupedData).length > 0
+        ? Object.values(groupedData).reduce((sum, broker) => sum + broker.total_net, 0)
+        : 0;
+      onTotalNetChange(totalNet);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupedData]);
+
   const handleRetainPayment = async (brokerId: string, isCurrentlyRetained: boolean) => {
     const action = isCurrentlyRetained ? actionUnretainBrokerPayment : actionRetainBrokerPayment;
     const result = await action({
@@ -166,15 +193,17 @@ export default function BrokerTotals({ draftFortnightId, onManageAdvances, broke
           <TableHeader>
             <TableRow className="bg-gradient-to-r from-gray-50 to-gray-100 border-b-2 border-gray-200">
               <TableHead className="w-12"></TableHead>
-              <TableHead className="font-bold text-gray-700">Corredor / Aseguradora</TableHead>
-              <TableHead className="text-right font-bold text-gray-700">Comisión Bruta</TableHead>
-              <TableHead className="text-right font-bold text-red-700">Descuentos</TableHead>
-              <TableHead className="text-right font-bold text-[#8AAA19] text-base">NETO A PAGAR</TableHead>
-              <TableHead className="text-center font-bold text-gray-700">Acciones</TableHead>
+              <TableHead className="font-semibold text-gray-700">Corredor / Aseguradora</TableHead>
+              <TableHead className="text-right font-semibold text-gray-700">Comisión Bruta</TableHead>
+              <TableHead className="text-right font-semibold text-red-700">Descuentos</TableHead>
+              <TableHead className="text-right font-semibold text-[#8AAA19] text-base">Neto a Pagar</TableHead>
+              <TableHead className="text-center font-semibold text-gray-700 w-20">Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {Object.entries(groupedData).map(([brokerId, brokerData]) => (
+            {Object.entries(groupedData)
+              .sort(([, a], [, b]) => a.broker_name.localeCompare(b.broker_name))
+              .map(([brokerId, brokerData]) => (
               <>
                 <TableRow key={brokerId} className={`font-semibold transition-colors ${brokerData.is_retained ? 'bg-red-50 hover:bg-red-100 border-l-4 border-red-500' : 'bg-blue-50/50 hover:bg-blue-100/50 border-l-4 border-blue-500'}`}>
                   <TableCell className="py-4">
@@ -205,43 +234,69 @@ export default function BrokerTotals({ draftFortnightId, onManageAdvances, broke
                     {brokerData.total_net.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
                   </TableCell>
                   <TableCell className="text-center py-4">
-                    <div className="flex flex-col sm:flex-row justify-center gap-2">
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => onManageAdvances(brokerId)}
-                        className="bg-white hover:bg-[#010139] hover:text-white border-[#010139] text-[#010139] font-medium transition-all"
-                      >
-                        💰 Adelantos
-                      </Button>
+                    <div className="relative">
                       <Button
+                        variant="ghost"
                         size="sm"
-                        variant="outline"
-                        onClick={() => handleRetainPayment(brokerId, brokerData.is_retained)}
-                        className={brokerData.is_retained 
-                          ? 'bg-red-100 border-red-600 text-red-700 hover:bg-red-200 font-medium' 
-                          : 'bg-white border-gray-400 text-gray-700 hover:bg-red-50 hover:border-red-500 hover:text-red-700 font-medium'
-                        }
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setOpenMenuBroker(openMenuBroker === brokerId ? null : brokerId);
+                        }}
+                        className="p-2 hover:bg-gray-100 rounded-lg"
                       >
-                        {brokerData.is_retained ? (
-                          <><FaUndo className="mr-1" /> Liberar</>
-                        ) : (
-                          <><FaHandHoldingUsd className="mr-1" /> Retener</>
-                        )}
+                        <FaEllipsisV className="text-gray-600" />
                       </Button>
-                      {!brokerData.is_retained && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setDiscountModalData({
-                            brokerId,
-                            brokerName: brokerData.broker_name,
-                            grossAmount: brokerData.total_gross
-                          })}
-                          className="bg-white border-orange-400 text-orange-700 hover:bg-orange-50 hover:border-orange-500 font-medium"
-                        >
-                          <FaMinus className="mr-1" /> Descontar
-                        </Button>
+                      {openMenuBroker === brokerId && (
+                        <>
+                          <div 
+                            className="fixed inset-0 z-[100]" 
+                            onClick={() => setOpenMenuBroker(null)}
+                          />
+                          <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-[101]">
+                            <button
+                              onClick={() => {
+                                onManageAdvances(brokerId);
+                                setOpenMenuBroker(null);
+                              }}
+                              className="w-full text-left px-4 py-2.5 hover:bg-gray-50 flex items-center gap-3 text-sm text-gray-700"
+                            >
+                              💰 Adelantos
+                            </button>
+                            <button
+                              onClick={() => {
+                                handleRetainPayment(brokerId, brokerData.is_retained);
+                                setOpenMenuBroker(null);
+                              }}
+                              className={`w-full text-left px-4 py-2.5 hover:bg-gray-50 flex items-center gap-3 text-sm ${
+                                brokerData.is_retained ? 'text-green-600' : 'text-red-600'
+                              }`}
+                            >
+                              {brokerData.is_retained ? (
+                                <><FaUndo size={14} /> Liberar Pago</>
+                              ) : (
+                                <><FaHandHoldingUsd size={14} /> Retener Pago</>
+                              )}
+                            </button>
+                            {!brokerData.is_retained && (
+                              <>
+                                <div className="border-t border-gray-100 my-1"></div>
+                                <button
+                                  onClick={() => {
+                                    setDiscountModalData({
+                                      brokerId,
+                                      brokerName: brokerData.broker_name,
+                                      grossAmount: brokerData.total_gross
+                                    });
+                                    setOpenMenuBroker(null);
+                                  }}
+                                  className="w-full text-left px-4 py-2.5 hover:bg-orange-50 flex items-center gap-3 text-sm text-orange-700"
+                                >
+                                  <FaMinus size={14} /> Aplicar Descuento
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </>
                       )}
                     </div>
                   </TableCell>

@@ -9,6 +9,7 @@ import BrokerTotals from './BrokerTotals';
 import CreateFortnightManager from './CreateFortnightManager';
 import AdvancesModal from './AdvancesModal';
 import { QueuedAdjustmentsPreview } from './QueuedAdjustmentsPreview';
+import DraftUnidentifiedTable from './DraftUnidentifiedTable';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
@@ -101,20 +102,32 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
       return;
     }
 
-    // Get items count for each import
+    // Get items count and commission totals for each import
     const reportsWithDetails = await Promise.all(
       imports.map(async (imp: any) => {
         const { data: items } = await supabaseClient()
           .from('comm_items')
-          .select('id')
+          .select('id, gross_amount, broker_id, policy_number')
           .eq('import_id', imp.id);
+        
+        // Calculate broker commissions (items with broker_id assigned)
+        const brokerCommissions = (items || [])
+          .filter(item => item.broker_id !== null)
+          .reduce((sum, item) => sum + Math.abs(Number(item.gross_amount) || 0), 0);
+        
+        // Detectar si es un reporte de Códigos ASSA (cuando todos los items tienen códigos PJ750-xxx)
+        const isAssaCodigos = (items || []).length > 0 && (items || []).every(item => 
+          item.policy_number?.startsWith('PJ750-') || item.policy_number === 'PJ750'
+        );
         
         return {
           id: imp.id,
           insurer_name: imp.insurers?.name || 'Desconocido',
-          total_amount: imp.total_amount || 0, // Use total_amount from database
+          total_amount: imp.total_amount || 0,
           items_count: items?.length || 0,
+          broker_commissions: brokerCommissions,
           created_at: imp.created_at,
+          is_assa_codigos: isAssaCodigos,
         };
       })
     );
@@ -167,6 +180,14 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
   
   // State para totales de brokers
   const [brokerCommissionsTotal, setBrokerCommissionsTotal] = useState(0);
+  const [totalNetToPay, setTotalNetToPay] = useState(0);
+  const [brokerTotalsData, setBrokerTotalsData] = useState<Array<{
+    broker_id: string;
+    gross_amount: number;
+    discount_amount: number;
+    net_amount: number;
+    is_retained: boolean;
+  }>>([]);
   
   // State para totales por ramo
   const [ramosTotals, setRamosTotals] = useState({ vida: 0, generales: 0 });
@@ -223,35 +244,39 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
     }
   }, [draftFortnight]);
 
-  // Cargar total de comisiones de brokers
-  const loadBrokerCommissionsTotal = useCallback(async () => {
+  // Cargar totales de brokers desde fortnight_broker_totals (fuente única de verdad)
+  const loadBrokerTotals = useCallback(async () => {
     if (!draftFortnight) {
       setBrokerCommissionsTotal(0);
+      setBrokerTotalsData([]);
       return;
     }
     
-    // Primero obtener IDs de imports de esta quincena
-    const { data: imports } = await supabaseClient()
-      .from('comm_imports')
-      .select('id')
-      .eq('period_label', draftFortnight.id);
+    // Obtener totales desde fortnight_broker_totals
+    const { data: totals } = await supabaseClient()
+      .from('fortnight_broker_totals')
+      .select('broker_id, gross_amount, net_amount, is_retained')
+      .eq('fortnight_id', draftFortnight.id);
     
-    if (!imports || imports.length === 0) {
+    if (!totals || totals.length === 0) {
       setBrokerCommissionsTotal(0);
+      setBrokerTotalsData([]);
       return;
     }
     
-    const importIds = imports.map(i => i.id);
+    // Calcular discount_amount como gross - net
+    const totalsWithDiscounts = totals.map(t => ({
+      broker_id: t.broker_id,
+      gross_amount: t.gross_amount || 0,
+      net_amount: t.net_amount || 0,
+      discount_amount: (t.gross_amount || 0) - (t.net_amount || 0),
+      is_retained: t.is_retained || false
+    }));
     
-    // Luego obtener comm_items de esos imports
-    const { data: items } = await supabaseClient()
-      .from('comm_items')
-      .select('gross_amount')
-      .in('import_id', importIds)
-      .not('broker_id', 'is', null);
-    
-    const total = (items || []).reduce((sum, item) => sum + Math.abs(item.gross_amount), 0);
+    // Calcular total de comisiones brutas
+    const total = totalsWithDiscounts.reduce((sum, t) => sum + t.gross_amount, 0);
     setBrokerCommissionsTotal(total);
+    setBrokerTotalsData(totalsWithDiscounts);
   }, [draftFortnight]);
 
   // Calculate office total
@@ -269,10 +294,39 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
   useEffect(() => {
     if (draftFortnight) {
       loadImportedReports();
-      loadBrokerCommissionsTotal();
+      loadBrokerTotals();
       loadRamosTotals();
     }
-  }, [draftFortnight, loadImportedReports, loadBrokerCommissionsTotal, loadRamosTotals]);
+  }, [draftFortnight, loadImportedReports, loadBrokerTotals, loadRamosTotals]);
+
+  // Auto-refresh: Recargar datos cada 4 segundos para mantener todo actualizado en tiempo real
+  // Sin flickering: solo actualiza state sin forzar re-render completo
+  useEffect(() => {
+    if (!draftFortnight) return;
+
+    const refreshData = async () => {
+      // Solo refrescar si no hay modales abiertos o acciones en progreso
+      if (isModalOpen || isGeneratingCSV || isClosingFortnight || isDiscarding || isTogglingNotify) {
+        return;
+      }
+
+      // Refrescar datos silenciosamente (sin logs para evitar spam en consola)
+      await Promise.all([
+        loadImportedReports(),
+        loadBrokerTotals(),
+        loadRamosTotals(),
+      ]);
+      
+      // Forzar recalculación de BrokerTotals sin hacer ruido
+      setRecalculationKey(prev => prev + 1);
+    };
+
+    // Luego ejecutar cada 4 segundos
+    const intervalId = setInterval(refreshData, 4000);
+
+    // Limpiar al desmontar o cuando cambie draftFortnight
+    return () => clearInterval(intervalId);
+  }, [draftFortnight, isModalOpen, isGeneratingCSV, isClosingFortnight, isDiscarding, isTogglingNotify, loadImportedReports, loadBrokerTotals, loadRamosTotals]);
 
   const handleToggleNotify = async () => {
     if (!draftFortnight) return;
@@ -346,40 +400,86 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
   };
 
   const handleExportACH = async () => {
-    if (!draftFortnight) return;
+    if (!draftFortnight) {
+      toast.error('No hay quincena en borrador');
+      return;
+    }
     
     setIsGeneratingCSV(true);
+    console.log('=== INICIO DESCARGA TXT ===');
+    console.log('Quincena ID:', draftFortnight.id);
+    
     try {
       const result: any = await actionExportBankCsv(draftFortnight.id);
       
-      if (result.ok) {
-        const content = result.bankACH || result.data?.csvContent || '';
-        const errors = result.achErrors || [];
-        const validCount = result.achValidCount || 0;
-        
-        if (content) {
-          const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-          const link = document.createElement('a');
-          link.href = URL.createObjectURL(blob);
-          const fecha = new Date().toISOString().split('T')[0]?.replace(/-/g, '') || 'sin_fecha';
-          link.download = `PAGOS_COMISIONES_${fecha}.txt`;
-          link.click();
-          URL.revokeObjectURL(link.href);
-          
-          if (errors.length > 0) {
-            toast.warning(`Archivo ACH generado con ${validCount} registros. ${errors.length} broker(s) excluidos por falta de datos bancarios.`);
-          } else {
-            toast.success(`Archivo ACH generado exitosamente con ${validCount} registros.`);
-          }
-        } else {
-          toast.error('No se pudo generar el archivo ACH');
-        }
-      } else {
-        toast.error(result.error || 'Error al generar archivo ACH');
+      console.log('Resultado de actionExportBankCsv:', {
+        ok: result.ok,
+        hasContent: !!(result.bankACH),
+        contentLength: result.bankACH?.length || 0,
+        validCount: result.achValidCount,
+        errors: result.achErrors?.length || 0,
+        error: result.error
+      });
+      
+      if (!result.ok) {
+        console.error('ERROR en actionExportBankCsv:', result.error);
+        toast.error(result.error || 'Error al generar archivo TXT');
+        setIsGeneratingCSV(false);
+        return;
       }
+      
+      const content = result.bankACH || '';
+      const errors = result.achErrors || [];
+      const validCount = result.achValidCount || 0;
+      const totalAmount = result.achTotalAmount || 0;
+      
+      if (!content || content.trim().length === 0) {
+        console.warn('Contenido vacío generado');
+        toast.warning('No hay pagos para generar. Verifica que haya brokers con monto neto > 0 y no retenidos.');
+        setIsGeneratingCSV(false);
+        return;
+      }
+      
+      // Método alternativo de descarga usando data URL
+      console.log('Generando descarga con', content.length, 'caracteres');
+      const fecha = new Date().toISOString().split('T')[0]?.replace(/-/g, '') || 'sin_fecha';
+      const fileName = `PAGOS_COMISIONES_${fecha}.txt`;
+      
+      // Crear elemento de descarga
+      const element = document.createElement('a');
+      const file = new Blob([content], { type: 'text/plain;charset=utf-8' });
+      element.href = URL.createObjectURL(file);
+      element.download = fileName;
+      element.style.display = 'none';
+      
+      // Agregar al DOM, hacer click y remover
+      document.body.appendChild(element);
+      console.log('Ejecutando descarga...');
+      element.click();
+      
+      // Limpiar después de un delay
+      setTimeout(() => {
+        document.body.removeChild(element);
+        URL.revokeObjectURL(element.href);
+        console.log('Descarga completada y limpieza realizada');
+      }, 100);
+      
+      // Mostrar mensaje de éxito
+      if (errors.length > 0) {
+        toast.warning(`Archivo TXT generado con ${validCount} pago(s). ${errors.length} broker(s) excluidos.`, {
+          duration: 5000
+        });
+      } else {
+        toast.success(`✅ TXT descargado: ${validCount} pago(s) por $${totalAmount.toFixed(2)}`, {
+          duration: 4000
+        });
+      }
+      
+      console.log('=== FIN DESCARGA TXT ===');
+      
     } catch (err) {
-      console.error('Error exporting ACH:', err);
-      toast.error('Error inesperado al generar archivo ACH');
+      console.error('ERROR CRÍTICO en handleExportACH:', err);
+      toast.error('Error inesperado al generar archivo TXT');
     } finally {
       setIsGeneratingCSV(false);
     }
@@ -439,17 +539,16 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
 
   return (
     <div className="space-y-6">
-      {/* Header con acciones principales */}
-      <div className="bg-gradient-to-r from-yellow-50 to-orange-50 border-2 border-yellow-300 rounded-2xl p-4 sm:p-6 shadow-lg">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+      {/* Header Banner con período y estado */}
+      <div className="bg-gradient-to-r from-[#010139] to-[#020270] text-white rounded-xl shadow-lg p-4 sm:p-6 mb-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex-1">
-            <div className="flex items-center gap-3 flex-wrap mb-2">
-              <span className="inline-flex items-center gap-2 px-3 py-1 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-full text-xs font-bold shadow-md">
-                <FaCircle size={6} className="animate-pulse" />
-                LIVE
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-xs sm:text-sm uppercase tracking-wider bg-white/20 px-3 py-1 rounded-full font-semibold">
+                Quincena en Borrador
               </span>
             </div>
-            <p className="text-gray-700 font-medium">
+            <p className="text-gray-200 font-medium">
               {formatFortnightPeriod(draftFortnight.period_start, draftFortnight.period_end)}
             </p>
             <div className="flex items-center gap-2 mt-3">
@@ -465,35 +564,75 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
                 {notifyBrokers ? <FaCheck size={12} /> : null}
                 {isTogglingNotify ? 'Guardando...' : notifyBrokers ? 'Notificaciones ON' : 'Notificaciones OFF'}
               </button>
-              <p className="text-xs text-gray-600">
+              <p className="text-xs text-gray-300">
                 {notifyBrokers ? 'Se enviarán correos al cerrar' : 'No se enviarán notificaciones'}
               </p>
             </div>
           </div>
-          
-          <div className="flex flex-col sm:flex-row gap-2">
+        </div>
+      </div>
+
+      {/* Sticky Bar - Acciones principales */}
+      <div className="sticky top-[60px] sm:top-[72px] z-[100] bg-gradient-to-r from-blue-50 to-white border-2 border-[#8AAA19] rounded-lg p-3 sm:p-4 shadow-lg mb-6">
+        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3">
+          {/* Info de total neto */}
+          <div className="flex-1">
+            <p className="font-bold text-[#010139] text-base sm:text-lg">
+              Total Neto a Pagar
+            </p>
+            <p className="text-sm text-gray-600">
+              <span className="font-bold text-2xl text-[#8AAA19]">
+                ${totalNetToPay.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            </p>
+          </div>
+
+          {/* Botones de acción */}
+          <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setShowDiscardConfirm(true)}
               disabled={isDiscarding}
-              className="flex items-center justify-center gap-2 px-4 py-2.5 bg-white border-2 border-red-300 text-red-600 rounded-xl hover:bg-red-50 font-medium transition-all text-sm"
+              className="flex items-center gap-2 px-4 py-2 bg-white text-red-600 border-2 border-red-300 rounded-lg hover:bg-red-50 hover:border-red-400 transition font-medium text-sm shadow-sm"
             >
-              <FaTrash />
+              <FaTrash size={14} />
               {isDiscarding ? 'Eliminando...' : 'Descartar'}
             </button>
+            
+            <button
+              onClick={handleExportACH}
+              disabled={isGeneratingCSV || !draftFortnight}
+              className="flex items-center gap-2 px-4 py-2 bg-[#010139] text-white border-2 border-[#010139] rounded-lg hover:bg-[#020270] hover:border-[#020270] transition font-medium text-sm shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <FaFileDownload size={14} />
+              {isGeneratingCSV ? 'Generando...' : 'Descargar TXT'}
+            </button>
+            
             <button
               onClick={() => setShowCloseConfirm(true)}
               disabled={isClosingFortnight || importedReports.length === 0}
-              className="flex items-center justify-center gap-2 px-6 py-2.5 bg-gradient-to-r from-[#010139] to-[#020270] text-white rounded-xl hover:shadow-lg font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm sm:text-base"
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white border-2 border-green-600 rounded-lg hover:bg-green-700 hover:border-green-700 transition font-semibold text-sm shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              <FaMoneyCheckAlt />
-              {isClosingFortnight ? 'Cerrando...' : 'Cerrar y Pagar'}
+              <FaCheckCircle size={14} />
+              {isClosingFortnight ? 'Procesando...' : 'Pagar'}
             </button>
           </div>
         </div>
       </div>
 
+      {/* ... */}
       {/* Ajustes en Cola para esta Quincena */}
       <QueuedAdjustmentsPreview />
+
+      {/* Sin Identificar - Zona de Trabajo */}
+      <DraftUnidentifiedTable 
+        fortnightId={draftFortnight.id}
+        brokers={brokers}
+        recalculationKey={recalculationKey}
+        onUpdate={() => {
+          loadBrokerTotals();
+          forceRecalculate();
+        }}
+      />
 
       {/* Section 1: Import Reports */}
       <Card className="bg-white shadow-lg overflow-hidden">
@@ -510,7 +649,7 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
               draftFortnightId={draftFortnight.id}
               onImport={() => {
                 loadImportedReports();
-                loadBrokerCommissionsTotal();
+                loadBrokerTotals();
                 forceRecalculate();
               }}
             />
@@ -615,49 +754,15 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
         </CardHeader>
         <CardContent>
           <BrokerTotals 
-            draftFortnightId={draftFortnight.id} 
+            draftFortnightId={draftFortnight.id}
+            brokerTotals={brokerTotalsData}
             onManageAdvances={(brokerId: string) => {
               setSelectedBroker({ id: brokerId, name: 'Corredor' });
               setIsModalOpen(true);
             }}
+            onTotalNetChange={(totalNet) => setTotalNetToPay(totalNet)}
+            recalculationKey={recalculationKey}
           />
-        </CardContent>
-      </Card>
-
-      {/* Section 5: Generación de Pagos */}
-      <Card className="bg-white shadow-lg">
-        <CardHeader>
-          <CardTitle className="text-[#010139]">5. Generar Archivo Banco</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <p className="text-sm text-gray-600">
-              Descarga el archivo ACH (formato oficial) para carga masiva de pagos en Banca en Línea Comercial de Banco General.
-            </p>
-            <div className="flex flex-wrap gap-2 sm:gap-3">
-              <Button
-                onClick={handleExportACH}
-                disabled={isGeneratingCSV}
-                className="bg-[#010139] hover:bg-[#020270] text-white flex-1 sm:flex-initial"
-                title="Exportar pagos en formato ACH Banco General"
-              >
-                <FaFileDownload className="mr-2" />
-                <span className="hidden sm:inline">{isGeneratingCSV ? 'Generando archivo ACH...' : 'Descargar Banco General (ACH)'}</span>
-                <span className="sm:hidden">{isGeneratingCSV ? 'Generando...' : 'ACH Banco'}</span>
-              </Button>
-              <Button
-                onClick={() => setShowCloseConfirm(true)}
-                className="bg-green-600 hover:bg-green-700 text-white flex-1 sm:flex-initial"
-              >
-                <FaCheckCircle className="mr-2" />
-                <span className="hidden sm:inline">Marcar como Pagado</span>
-                <span className="sm:hidden">Pagado</span>
-              </Button>
-            </div>
-            <p className="text-xs text-gray-500">
-              * Al marcar como pagado, la quincena se cerrará y se enviarán notificaciones a los corredores.
-            </p>
-          </div>
         </CardContent>
       </Card>
 

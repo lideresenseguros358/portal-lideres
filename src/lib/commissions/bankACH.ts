@@ -81,14 +81,21 @@ export async function buildBankACH(
   for (const total of totalsByBroker) {
     // Skip if net amount is 0 or negative
     const netAmount = Number(total.net_amount) || 0;
-    if (netAmount <= 0) continue;
+    if (netAmount <= 0) {
+      console.log(`[buildBankACH] Broker ${total.broker?.name} RECHAZADO: net <= 0 (${netAmount})`);
+      continue;
+    }
     
     const broker = total.broker;
-    if (!broker) continue;
+    if (!broker) {
+      console.log(`[buildBankACH] Total sin broker asociado`);
+      continue;
+    }
     
     // Validar datos del broker
     const validation = validateBrokerForACH(broker);
     if (!validation.valid) {
+      console.log(`[buildBankACH] Broker ${broker.name} RECHAZADO por validación:`, validation.errors);
       errors.push({
         brokerId: broker.id,
         brokerName: broker.name || 'DESCONOCIDO',
@@ -96,6 +103,9 @@ export async function buildBankACH(
       });
       continue; // Skip this broker
     }
+    
+    console.log(`[buildBankACH] Broker ${broker.name} APROBADO - Generando línea ACH`);
+
     
     // Extraer y normalizar datos del broker según formato ACH oficial
     // NOTA: bank_route está conectado con tabla ach_banks via foreign key,
@@ -137,6 +147,14 @@ export async function buildBankACH(
     totalAmount += netAmount;
     sequenceId++;
   }
+  
+  // Ordenar registros alfabéticamente por nombre del beneficiario
+  records.sort((a, b) => a.nombre_beneficiario.localeCompare(b.nombre_beneficiario));
+  
+  // Re-numerar IDs después de ordenar
+  records.forEach((record, index) => {
+    record.id_beneficiario = String(index + 1).padStart(3, '0');
+  });
   
   // Generar contenido del archivo
   const lines = records.map(generateACHLine);

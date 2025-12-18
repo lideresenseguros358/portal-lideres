@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { FaTimes } from 'react-icons/fa';
 import { toast } from 'sonner';
 import { actionCreateBankGroup } from '@/app/(app)/commissions/banco-actions';
@@ -9,26 +9,32 @@ import type { GroupTemplate } from '@/app/(app)/commissions/banco-actions';
 interface CreateGroupModalProps {
   insurers: { id: string; name: string }[];
   onClose: () => void;
-  onSuccess: () => void;
+  onSuccess: (groupId: string) => void;
 }
 
 const GROUP_TEMPLATES: { value: GroupTemplate; label: string; requiresLifeFlag: boolean }[] = [
-  { value: 'NORMAL', label: 'Normal (Aseguradora estándar)', requiresLifeFlag: false },
-  { value: 'ASSA_CODIGOS', label: 'ASSA - Códigos', requiresLifeFlag: true },
-  { value: 'ASSA_PJ750', label: 'ASSA - PJ750', requiresLifeFlag: true },
-  { value: 'ASSA_PJ750_1', label: 'ASSA - PJ750-1', requiresLifeFlag: true },
-  { value: 'ASSA_PJ750_6', label: 'ASSA - PJ750-6', requiresLifeFlag: true },
-  { value: 'ASSA_PJ750_9', label: 'ASSA - PJ750-9', requiresLifeFlag: true },
+  { value: 'NORMAL', label: 'Normal', requiresLifeFlag: false },
+  { value: 'ASSA_CODIGOS', label: 'Códigos ASSA', requiresLifeFlag: true },
 ];
 
 export default function CreateGroupModal({ insurers, onClose, onSuccess }: CreateGroupModalProps) {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
-    name: '',
+    name: '', // Opcional - anotación
     template: 'NORMAL' as GroupTemplate,
     insurerId: '',
     isLifeInsurance: undefined as boolean | undefined,
   });
+
+  // Auto-seleccionar ASSA cuando se elige Códigos ASSA
+  const assaInsurer = insurers.find(i => i.name.toUpperCase().includes('ASSA'));
+  
+  // Efecto para auto-seleccionar ASSA en Códigos ASSA
+  useEffect(() => {
+    if (formData.template === 'ASSA_CODIGOS' && assaInsurer) {
+      setFormData(prev => ({ ...prev, insurerId: assaInsurer.id }));
+    }
+  }, [formData.template, assaInsurer]);
 
   const selectedTemplate = GROUP_TEMPLATES.find(t => t.value === formData.template);
   const requiresLifeFlag = selectedTemplate?.requiresLifeFlag || false;
@@ -36,13 +42,9 @@ export default function CreateGroupModal({ insurers, onClose, onSuccess }: Creat
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!formData.name.trim()) {
-      toast.error('El nombre del grupo es requerido');
-      return;
-    }
-
+    // ASEGURADORA OBLIGATORIA
     if (!formData.insurerId) {
-      toast.error('Selecciona una aseguradora');
+      toast.error('Debes seleccionar una aseguradora');
       return;
     }
 
@@ -51,19 +53,27 @@ export default function CreateGroupModal({ insurers, onClose, onSuccess }: Creat
       return;
     }
 
+    // Usar aseguradora como nombre del grupo
+    const insurerName = insurers.find(i => i.id === formData.insurerId)?.name || 'Grupo';
+    const groupName = formData.name.trim() 
+      ? `${insurerName} - ${formData.name.trim()}` 
+      : insurerName;
+
     setLoading(true);
 
     try {
+      console.log('[UI] Creando grupo con:', { groupName, template: formData.template, insurerId: formData.insurerId });
+      
       const result = await actionCreateBankGroup(
-        formData.name,
+        groupName,
         formData.template,
         formData.insurerId,
         requiresLifeFlag ? formData.isLifeInsurance : undefined
       );
 
-      if (result.ok) {
+      if (result.ok && result.data?.groupId) {
         toast.success('Grupo creado exitosamente');
-        onSuccess();
+        onSuccess(result.data.groupId); // Pasar groupId al callback
       } else {
         toast.error('Error al crear grupo', { description: result.error });
       }
@@ -95,19 +105,21 @@ export default function CreateGroupModal({ insurers, onClose, onSuccess }: Creat
 
         {/* Content */}
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          {/* Nombre */}
+          {/* Nombre (Opcional) */}
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">
-              Nombre del Grupo *
+              Anotación (Opcional)
             </label>
             <input
               type="text"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              placeholder="Ej: SURA Diciembre 2024"
+              placeholder="Ej: Pagos Diciembre, Quincena 1..."
               className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-[#8AAA19]"
-              required
             />
+            <p className="text-xs text-gray-500 mt-1">
+              El nombre del grupo será la aseguradora. Esto es solo una nota adicional.
+            </p>
           </div>
 
           {/* Plantilla */}
@@ -141,7 +153,8 @@ export default function CreateGroupModal({ insurers, onClose, onSuccess }: Creat
             <select
               value={formData.insurerId}
               onChange={(e) => setFormData({ ...formData, insurerId: e.target.value })}
-              className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-[#8AAA19]"
+              disabled={formData.template === 'ASSA_CODIGOS'}
+              className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-[#8AAA19] disabled:bg-gray-100 disabled:cursor-not-allowed"
               required
             >
               <option value="">Seleccionar...</option>
@@ -149,6 +162,11 @@ export default function CreateGroupModal({ insurers, onClose, onSuccess }: Creat
                 <option key={ins.id} value={ins.id}>{ins.name}</option>
               ))}
             </select>
+            {formData.template === 'ASSA_CODIGOS' && (
+              <p className="text-xs text-blue-600 mt-1">
+                ✓ ASSA seleccionada automáticamente para Códigos ASSA
+              </p>
+            )}
           </div>
 
           {/* VIDA / NO VIDA (solo para ASSA) */}
@@ -185,7 +203,10 @@ export default function CreateGroupModal({ insurers, onClose, onSuccess }: Creat
           {/* Info */}
           <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
             <p className="text-sm text-blue-800">
-              💡 <strong>Grupos ASSA:</strong> Requieren clasificación VIDA/NO VIDA. No mezclar diferentes tipos de PJ.
+              💡 <strong>Códigos ASSA:</strong> Detecta automáticamente licencias de brokers en reportes.
+            </p>
+            <p className="text-sm text-blue-800 mt-1">
+              <strong>Normal:</strong> Agrupa transferencias de cualquier aseguradora.
             </p>
           </div>
 

@@ -585,45 +585,6 @@ export type Database = {
           },
         ]
       }
-      bank_transfer_imports: {
-        Row: {
-          amount_assigned: number
-          created_at: string | null
-          id: string
-          import_id: string
-          transfer_id: string
-        }
-        Insert: {
-          amount_assigned: number
-          created_at?: string | null
-          id?: string
-          import_id: string
-          transfer_id: string
-        }
-        Update: {
-          amount_assigned?: number
-          created_at?: string | null
-          id?: string
-          import_id?: string
-          transfer_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "bank_transfer_imports_transfer_id_fkey"
-            columns: ["transfer_id"]
-            isOneToOne: false
-            referencedRelation: "bank_transfers_comm"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "bank_transfer_imports_import_id_fkey"
-            columns: ["import_id"]
-            isOneToOne: false
-            referencedRelation: "comm_imports"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       bank_group_transfers: {
         Row: {
           created_at: string | null

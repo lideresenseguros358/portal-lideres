@@ -32,7 +32,7 @@ export default function CommissionsTabs({ initialData }: { initialData: InitialD
   const MASTER_TABS = [
     { id: 'preview', label: 'Historial', badge: 0, icon: FaEye },
     { id: 'new-fortnight', label: 'Nueva Quincena', badge: 0, priority: !!draftFortnight, icon: FaPlus },
-    { id: 'banco', label: 'BANCO', badge: 0, icon: FaUniversity },
+    { id: 'banco', label: 'Banco', badge: 0, icon: FaUniversity },
     { id: 'advances', label: 'Adelantos', badge: 0, icon: FaDollarSign },
     { id: 'adjustments', label: 'Ajustes', badge: pendingCount, icon: FaExclamationTriangle },
     { id: 'ytd', label: 'Acumulado', badge: 0, icon: FaChartLine },

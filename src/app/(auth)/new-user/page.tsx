@@ -65,11 +65,11 @@ export default function NewUserWizard() {
 
   // Validación Paso 2
   const validateStep2 = () => {
-    if (!personalData.nombre) {
+    if (!personalData.nombre.trim()) {
       setError("El nombre completo es obligatorio");
       return false;
     }
-    if (!personalData.cedula || !personalData.fecha_nacimiento || !personalData.telefono) {
+    if (!personalData.cedula.trim() || !personalData.fecha_nacimiento.trim() || !personalData.telefono.trim()) {
       setError("Cédula, fecha de nacimiento y teléfono son obligatorios");
       return false;
     }
@@ -285,7 +285,7 @@ export default function NewUserWizard() {
                 required
               />
 
-              <div>
+              <div className="w-full min-w-0 overflow-hidden">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Fecha de Nacimiento <span className="text-red-500">*</span>
                 </label>
@@ -374,7 +374,7 @@ export default function NewUserWizard() {
               {/* Código ASSA - Solo para AGENTE */}
               {personalData.broker_type === 'agente' && (
                 <>
-                  <div>
+                  <div className="w-full min-w-0">
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Código ASSA (Opcional)
                     </label>
@@ -388,7 +388,7 @@ export default function NewUserWizard() {
                   </div>
 
                   {/* Fecha Vencimiento Carnet - Solo para AGENTE */}
-                  <div>
+                  <div className="w-full min-w-0 overflow-hidden">
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Fecha Carnet (Opcional)
                     </label>

@@ -120,8 +120,8 @@ export default function ConfirmDialog({
             </p>
           </div>
 
-          {/* Botones */}
-          <div className={`flex gap-3 ${isConfirmDialog ? 'justify-end' : 'justify-center'}`}>
+          {/* Botones - Siempre centrados */}
+          <div className="flex gap-3 justify-center">
             {isConfirmDialog && (
               <button
                 onClick={onClose}

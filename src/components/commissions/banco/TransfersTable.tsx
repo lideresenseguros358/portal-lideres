@@ -2,8 +2,9 @@
 
 import { useState } from 'react';
 import { FaEdit, FaCheckCircle, FaClock, FaCircle, FaLock, FaSave, FaTimes, FaLayerGroup } from 'react-icons/fa';
-import { actionUpdateBankTransfer, actionCreateBankGroup, actionAddTransferToGroup } from '@/app/(app)/commissions/banco-actions';
+import { actionUpdateBankTransfer, actionAddTransferToGroup } from '@/app/(app)/commissions/banco-actions';
 import type { BankTransferStatus, TransferType } from '@/app/(app)/commissions/banco-actions';
+import CreateGroupModal from './CreateGroupModal';
 import { toast } from 'sonner';
 
 interface TransfersTableProps {
@@ -17,11 +18,8 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editData, setEditData] = useState<any>({});
   const [selectedTransfers, setSelectedTransfers] = useState<Set<string>>(new Set());
-  const [showGroupModal, setShowGroupModal] = useState(false);
-  const [groupName, setGroupName] = useState('');
-  const [groupTemplate, setGroupTemplate] = useState<'NORMAL' | 'ASSA_CODIGOS'>('NORMAL');
-  const [groupInsurer, setGroupInsurer] = useState('');
-  const [creatingGroup, setCreatingGroup] = useState(false);
+  const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
+  const [addingToGroup, setAddingToGroup] = useState(false);
 
   const getStatusBadge = (status: BankTransferStatus) => {
     const badges = {
@@ -102,44 +100,17 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
     }
   };
 
-  const handleOpenGroupModal = () => {
+  const handleOpenCreateGroupModal = () => {
     if (selectedTransfers.size === 0) {
       toast.error('Selecciona al menos una transferencia');
       return;
     }
-    setShowGroupModal(true);
+    setShowCreateGroupModal(true);
   };
 
-  const handleCreateGroup = async () => {
-    if (!groupName.trim()) {
-      toast.error('Ingresa un nombre para el grupo');
-      return;
-    }
-
-    setCreatingGroup(true);
+  const handleGroupCreated = async (groupId: string) => {
+    setAddingToGroup(true);
     
-    // Crear el grupo
-    const createResult = await actionCreateBankGroup(
-      groupName.trim(),
-      groupTemplate,
-      groupInsurer || '',
-      groupTemplate === 'ASSA_CODIGOS' ? true : undefined
-    );
-
-    if (!createResult.ok) {
-      toast.error('Error al crear grupo', { description: createResult.error });
-      setCreatingGroup(false);
-      return;
-    }
-
-    const groupId = createResult.data?.groupId;
-    
-    if (!groupId) {
-      toast.error('Error: No se obtuvo el ID del grupo');
-      setCreatingGroup(false);
-      return;
-    }
-
     // Agregar todas las transferencias seleccionadas al grupo
     const transferIds = Array.from(selectedTransfers);
     let success = true;
@@ -153,14 +124,11 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
       }
     }
 
-    setCreatingGroup(false);
+    setAddingToGroup(false);
 
     if (success) {
-      toast.success(`Grupo "${groupName}" creado con ${transferIds.length} transferencia(s)`);
-      setShowGroupModal(false);
-      setGroupName('');
-      setGroupTemplate('NORMAL');
-      setGroupInsurer('');
+      toast.success(`Grupo creado con ${transferIds.length} transferencia(s)`);
+      setShowCreateGroupModal(false);
       setSelectedTransfers(new Set());
       onRefresh();
     }
@@ -190,6 +158,47 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
 
   return (
     <>
+    {/* Sticky Bar - Agrupar transferencias */}
+    {selectedTransfers.size > 0 && (
+      <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-r from-[#010139] to-[#020270] text-white shadow-2xl z-50 border-t-4 border-[#8AAA19]">
+        <div className="max-w-7xl mx-auto px-4 py-4">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+            {/* Info */}
+            <div className="flex items-center gap-3">
+              <FaLayerGroup className="text-[#8AAA19]" size={24} />
+              <div>
+                <p className="font-semibold text-lg">
+                  {selectedTransfers.size} transferencia(s) seleccionada(s)
+                </p>
+                <p className="text-xs text-gray-300">
+                  Haz clic en "Crear Grupo" para configurar tipo y aseguradora
+                </p>
+              </div>
+            </div>
+            
+            {/* Botones */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => setSelectedTransfers(new Set())}
+                className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 border-2 border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition font-medium text-sm shadow-sm"
+              >
+                <FaTimes size={14} />
+                Cancelar
+              </button>
+              
+              <button
+                onClick={handleOpenCreateGroupModal}
+                className="flex items-center gap-2 px-6 py-2 bg-[#8AAA19] text-white border-2 border-[#8AAA19] rounded-lg hover:bg-[#010139] hover:border-[#010139] transition font-semibold text-sm shadow-sm"
+              >
+                <FaLayerGroup size={14} />
+                Crear Grupo
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )}
+
     <div className="bg-white rounded-xl shadow-lg overflow-hidden border-2 border-gray-100">
       {/* Header con controles de selección */}
       <div className="p-4 sm:p-6 bg-gradient-to-r from-gray-50 to-white border-b-2 border-gray-100">
@@ -206,15 +215,6 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
                 {selectedTransfers.size > 0 ? `${selectedTransfers.size} seleccionada(s)` : 'Seleccionar todas'}
               </span>
             </div>
-            {selectedTransfers.size > 0 && (
-              <button
-                onClick={handleOpenGroupModal}
-                className="flex items-center gap-2 px-4 py-2 bg-[#8AAA19] text-white rounded-lg hover:bg-[#010139] transition font-medium text-sm"
-              >
-                <FaLayerGroup size={14} />
-                Agrupar ({selectedTransfers.size})
-              </button>
-            )}
           </div>
           <div className="text-right">
             <p className="text-xs sm:text-sm text-gray-600">Total</p>
@@ -439,85 +439,12 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
     </div>
 
     {/* Modal Crear Grupo */}
-    {showGroupModal && (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
-          <h3 className="text-xl font-bold text-[#010139] mb-4 flex items-center gap-2">
-            <FaLayerGroup />
-            Crear Grupo de Transferencias
-          </h3>
-          
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Nombre del Grupo</label>
-              <input
-                type="text"
-                value={groupName}
-                onChange={(e) => setGroupName(e.target.value)}
-                placeholder="Ej: Códigos ASSA, Reportes Diciembre, etc."
-                className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Tipo de Grupo</label>
-              <select
-                value={groupTemplate}
-                onChange={(e) => setGroupTemplate(e.target.value as any)}
-                className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none"
-              >
-                <option value="NORMAL">Normal</option>
-                <option value="ASSA_CODIGOS">ASSA Códigos</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Aseguradora (Opcional)</label>
-              <select
-                value={groupInsurer}
-                onChange={(e) => setGroupInsurer(e.target.value)}
-                className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none"
-              >
-                <option value="">Todas</option>
-                {insurers.map(ins => (
-                  <option key={ins.id} value={ins.id}>{ins.name}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="bg-blue-50 border-l-4 border-blue-500 p-3 rounded">
-              <p className="text-xs text-blue-800">
-                📌 Se agruparán <strong>{selectedTransfers.size} transferencia(s)</strong> por un total de{' '}
-                <strong className="text-[#8AAA19]">
-                  ${transfers.filter(t => selectedTransfers.has(t.id)).reduce((sum, t) => sum + t.amount, 0).toFixed(2)}
-                </strong>
-              </p>
-            </div>
-          </div>
-
-          <div className="flex gap-3 mt-6">
-            <button
-              onClick={() => {
-                setShowGroupModal(false);
-                setGroupName('');
-                setGroupTemplate('NORMAL');
-                setGroupInsurer('');
-              }}
-              disabled={creatingGroup}
-              className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-medium disabled:opacity-50"
-            >
-              Cancelar
-            </button>
-            <button
-              onClick={handleCreateGroup}
-              disabled={creatingGroup || !groupName.trim()}
-              className="flex-1 px-4 py-2 bg-[#8AAA19] text-white rounded-lg hover:bg-[#010139] transition font-medium disabled:opacity-50 flex items-center justify-center gap-2"
-            >
-              {creatingGroup ? 'Creando...' : 'Crear Grupo'}
-            </button>
-          </div>
-        </div>
-      </div>
+    {showCreateGroupModal && (
+      <CreateGroupModal
+        insurers={insurers}
+        onClose={() => setShowCreateGroupModal(false)}
+        onSuccess={handleGroupCreated}
+      />
     )}
     </>
   );
