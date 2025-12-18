@@ -7,11 +7,10 @@
  */
 
 import { useState, useEffect } from 'react';
-import { FaFileImport, FaExchangeAlt, FaLayerGroup, FaInfoCircle } from 'react-icons/fa';
+import { FaFileImport, FaInfoCircle } from 'react-icons/fa';
 import { actionGetBankCutoffs, actionGetBankTransfers, actionGetLastCutoff } from '@/app/(app)/commissions/banco-actions';
 import ImportBankCutoffModal from './ImportBankCutoffModal';
 import TransfersTable from './TransfersTable';
-import GroupsPanel from './GroupsPanel';
 import { toast } from 'sonner';
 
 interface BancoTabProps {
@@ -20,7 +19,7 @@ interface BancoTabProps {
 }
 
 export default function BancoTab({ role, insurers }: BancoTabProps) {
-  const [activeTab, setActiveTab] = useState<'transfers' | 'groups'>('transfers');
+  // activeTab eliminado - solo transfers ahora
   const [showImportModal, setShowImportModal] = useState(false);
   const [cutoffs, setCutoffs] = useState<any[]>([]);
   const [transfers, setTransfers] = useState<any[]>([]);
@@ -124,36 +123,10 @@ export default function BancoTab({ role, insurers }: BancoTabProps) {
           <h1 className="text-3xl sm:text-4xl font-bold text-[#010139] mb-2">🏦 Banco</h1>
           <p className="text-gray-600 text-base sm:text-lg">Conciliación bancaria de transferencias recibidas</p>
         </div>
-        {/* Tab Navigation */}
-        <div className="bg-white rounded-2xl shadow-lg p-2 mb-6 flex gap-2">
-          <button
-            onClick={() => setActiveTab('transfers')}
-            className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-semibold transition-all ${
-              activeTab === 'transfers'
-                ? 'bg-gradient-to-r from-[#010139] to-[#020270] text-white shadow-lg'
-                : 'text-gray-600 hover:bg-gray-100'
-            }`}
-          >
-            <FaExchangeAlt size={16} />
-            <span className="text-sm">Transferencias</span>
-          </button>
-          <button
-            onClick={() => setActiveTab('groups')}
-            className={`flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-semibold transition-all ${
-              activeTab === 'groups'
-                ? 'bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white shadow-lg'
-                : 'text-gray-600 hover:bg-gray-100'
-            }`}
-          >
-            <FaLayerGroup size={16} />
-            <span className="text-sm">Grupos Bancarios</span>
-          </button>
-        </div>
+        {/* Tab Navigation eliminado - solo vista de Transfers */}
 
-        {/* Tab Content */}
-        <div className="transition-all duration-300">
-          {/* TAB: Transferencias */}
-          <div className={activeTab === 'transfers' ? 'block' : 'hidden'}>
+        {/* Content */}
+        <div>
             {/* Instructivo */}
             <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 mb-6">
               <div className="flex items-start gap-3">
@@ -266,23 +239,13 @@ export default function BancoTab({ role, insurers }: BancoTabProps) {
               </div>
             </div>
 
-            {/* Vista principal: Transferencias + Grupos */}
-            {/* Tabla de Transferencias */}
+            {/* Tabla de Transferencias con funcionalidad de agrupación integrada */}
             <TransfersTable
               transfers={transfers}
               loading={loading}
               insurers={insurers}
               onRefresh={handleRefresh}
             />
-          </div>
-
-          {/* TAB: Grupos Bancarios */}
-          <div className={activeTab === 'groups' ? 'block' : 'hidden'}>
-            <GroupsPanel
-              insurers={insurers}
-              onRefresh={handleRefresh}
-            />
-          </div>
         </div>
 
         {/* Modal de Importar */}

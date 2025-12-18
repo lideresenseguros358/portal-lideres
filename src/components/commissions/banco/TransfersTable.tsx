@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { FaEdit, FaCheckCircle, FaClock, FaCircle, FaLock, FaSave, FaTimes, FaChevronDown, FaChevronRight } from 'react-icons/fa';
-import { actionUpdateBankTransfer } from '@/app/(app)/commissions/banco-actions';
+import { FaEdit, FaCheckCircle, FaClock, FaCircle, FaLock, FaSave, FaTimes, FaLayerGroup } from 'react-icons/fa';
+import { actionUpdateBankTransfer, actionCreateBankGroup, actionAddTransferToGroup } from '@/app/(app)/commissions/banco-actions';
 import type { BankTransferStatus, TransferType } from '@/app/(app)/commissions/banco-actions';
 import { toast } from 'sonner';
 
@@ -16,6 +16,12 @@ interface TransfersTableProps {
 export default function TransfersTable({ transfers, loading, insurers, onRefresh }: TransfersTableProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editData, setEditData] = useState<any>({});
+  const [selectedTransfers, setSelectedTransfers] = useState<Set<string>>(new Set());
+  const [showGroupModal, setShowGroupModal] = useState(false);
+  const [groupName, setGroupName] = useState('');
+  const [groupTemplate, setGroupTemplate] = useState<'NORMAL' | 'ASSA_CODIGOS'>('NORMAL');
+  const [groupInsurer, setGroupInsurer] = useState('');
+  const [creatingGroup, setCreatingGroup] = useState(false);
 
   const getStatusBadge = (status: BankTransferStatus) => {
     const badges = {
@@ -78,6 +84,88 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
     setEditData({});
   };
 
+  const handleSelectTransfer = (transferId: string) => {
+    const newSelection = new Set(selectedTransfers);
+    if (newSelection.has(transferId)) {
+      newSelection.delete(transferId);
+    } else {
+      newSelection.add(transferId);
+    }
+    setSelectedTransfers(newSelection);
+  };
+
+  const handleSelectAll = () => {
+    if (selectedTransfers.size === transfers.length) {
+      setSelectedTransfers(new Set());
+    } else {
+      setSelectedTransfers(new Set(transfers.map(t => t.id)));
+    }
+  };
+
+  const handleOpenGroupModal = () => {
+    if (selectedTransfers.size === 0) {
+      toast.error('Selecciona al menos una transferencia');
+      return;
+    }
+    setShowGroupModal(true);
+  };
+
+  const handleCreateGroup = async () => {
+    if (!groupName.trim()) {
+      toast.error('Ingresa un nombre para el grupo');
+      return;
+    }
+
+    setCreatingGroup(true);
+    
+    // Crear el grupo
+    const createResult = await actionCreateBankGroup(
+      groupName.trim(),
+      groupTemplate,
+      groupInsurer || '',
+      groupTemplate === 'ASSA_CODIGOS' ? true : undefined
+    );
+
+    if (!createResult.ok) {
+      toast.error('Error al crear grupo', { description: createResult.error });
+      setCreatingGroup(false);
+      return;
+    }
+
+    const groupId = createResult.data?.groupId;
+    
+    if (!groupId) {
+      toast.error('Error: No se obtuvo el ID del grupo');
+      setCreatingGroup(false);
+      return;
+    }
+
+    // Agregar todas las transferencias seleccionadas al grupo
+    const transferIds = Array.from(selectedTransfers);
+    let success = true;
+
+    for (const transferId of transferIds) {
+      const addResult = await actionAddTransferToGroup(groupId, transferId);
+      if (!addResult.ok) {
+        toast.error(`Error al agregar transfer ${transferId}`);
+        success = false;
+        break;
+      }
+    }
+
+    setCreatingGroup(false);
+
+    if (success) {
+      toast.success(`Grupo "${groupName}" creado con ${transferIds.length} transferencia(s)`);
+      setShowGroupModal(false);
+      setGroupName('');
+      setGroupTemplate('NORMAL');
+      setGroupInsurer('');
+      setSelectedTransfers(new Set());
+      onRefresh();
+    }
+  };
+
   if (loading) {
     return (
       <div className="bg-white rounded-xl shadow-lg overflow-hidden border-2 border-gray-100">
@@ -101,23 +189,47 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
   }
 
   return (
+    <>
     <div className="bg-white rounded-xl shadow-lg overflow-hidden border-2 border-gray-100">
-      {/* Resumen Desktop */}
-      <div className="hidden sm:flex items-center justify-between p-4 sm:p-6 bg-gradient-to-r from-gray-50 to-white border-b-2 border-gray-100">
-        <div>
-          <h3 className="font-bold text-base sm:text-lg text-[#010139]">
-            Transferencias Bancarias
-          </h3>
-          <p className="text-xs sm:text-sm text-gray-600 mt-1">
-            {transfers.length} transferencia{transfers.length !== 1 ? 's' : ''} encontrada{transfers.length !== 1 ? 's' : ''}
-          </p>
+      {/* Header con controles de selección */}
+      <div className="p-4 sm:p-6 bg-gradient-to-r from-gray-50 to-white border-b-2 border-gray-100">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={selectedTransfers.size === transfers.length && transfers.length > 0}
+                onChange={handleSelectAll}
+                className="w-4 h-4 text-[#8AAA19] border-2 border-gray-300 rounded focus:ring-[#8AAA19]"
+              />
+              <span className="text-sm text-gray-600">
+                {selectedTransfers.size > 0 ? `${selectedTransfers.size} seleccionada(s)` : 'Seleccionar todas'}
+              </span>
+            </div>
+            {selectedTransfers.size > 0 && (
+              <button
+                onClick={handleOpenGroupModal}
+                className="flex items-center gap-2 px-4 py-2 bg-[#8AAA19] text-white rounded-lg hover:bg-[#010139] transition font-medium text-sm"
+              >
+                <FaLayerGroup size={14} />
+                Agrupar ({selectedTransfers.size})
+              </button>
+            )}
+          </div>
+          <div className="text-right">
+            <p className="text-xs sm:text-sm text-gray-600">Total</p>
+            <p className="text-xl sm:text-2xl font-bold text-[#8AAA19] font-mono">
+              ${transfers.reduce((sum, t) => sum + t.amount, 0).toFixed(2)}
+            </p>
+          </div>
         </div>
-        <div className="text-right">
-          <p className="text-xs sm:text-sm text-gray-600">Total</p>
-          <p className="text-xl sm:text-2xl font-bold text-[#8AAA19] font-mono">
-            ${transfers.reduce((sum, t) => sum + t.amount, 0).toFixed(2)}
-          </p>
-        </div>
+      </div>
+
+      {/* Resumen Info */}
+      <div className="hidden sm:flex items-center justify-between px-4 sm:px-6 py-2 bg-blue-50 border-b border-blue-100">
+        <p className="text-xs text-blue-700">
+          💡 <strong>Tip:</strong> Selecciona varias transferencias para crear un grupo y vincularlo con reportes
+        </p>
       </div>
 
       {/* Vista Desktop - Tabla */}
@@ -125,6 +237,14 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
         <table className="w-full">
           <thead className="bg-gray-100 border-b-2 border-gray-200">
             <tr>
+              <th className="px-3 py-3 text-center text-xs font-semibold text-gray-700 uppercase w-12">
+                <input
+                  type="checkbox"
+                  checked={selectedTransfers.size === transfers.length && transfers.length > 0}
+                  onChange={handleSelectAll}
+                  className="w-4 h-4 text-[#8AAA19] border-2 border-gray-300 rounded focus:ring-[#8AAA19]"
+                />
+              </th>
               <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Fecha</th>
               <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Referencia</th>
               <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Descripción</th>
@@ -141,6 +261,15 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
                 {editingId === transfer.id ? (
                   <>
                     {/* Modo edición */}
+                    <td className="px-3 py-3 text-center">
+                      <input
+                        type="checkbox"
+                        checked={selectedTransfers.has(transfer.id)}
+                        onChange={() => handleSelectTransfer(transfer.id)}
+                        disabled
+                        className="w-4 h-4 text-[#8AAA19] border-2 border-gray-300 rounded focus:ring-[#8AAA19] disabled:opacity-30"
+                      />
+                    </td>
                     <td className="px-3 py-3 text-xs text-gray-700">{new Date(transfer.date).toLocaleDateString('es-PA')}</td>
                     <td className="px-3 py-3 font-mono text-xs text-gray-700">{transfer.reference_number}</td>
                     <td className="px-3 py-3">
@@ -203,6 +332,15 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
                 ) : (
                   <>
                     {/* Modo vista */}
+                    <td className="px-3 py-3 text-center">
+                      <input
+                        type="checkbox"
+                        checked={selectedTransfers.has(transfer.id)}
+                        onChange={() => handleSelectTransfer(transfer.id)}
+                        disabled={transfer.status === 'PAGADO'}
+                        className="w-4 h-4 text-[#8AAA19] border-2 border-gray-300 rounded focus:ring-[#8AAA19] disabled:opacity-30 cursor-pointer"
+                      />
+                    </td>
                     <td className="px-3 py-3 text-xs text-gray-700">{new Date(transfer.date).toLocaleDateString('es-PA')}</td>
                     <td className="px-3 py-3 font-mono text-xs text-gray-700">{transfer.reference_number}</td>
                     <td className="px-3 py-3">
@@ -299,5 +437,88 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
         </div>
       </div>
     </div>
+
+    {/* Modal Crear Grupo */}
+    {showGroupModal && (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+          <h3 className="text-xl font-bold text-[#010139] mb-4 flex items-center gap-2">
+            <FaLayerGroup />
+            Crear Grupo de Transferencias
+          </h3>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Nombre del Grupo</label>
+              <input
+                type="text"
+                value={groupName}
+                onChange={(e) => setGroupName(e.target.value)}
+                placeholder="Ej: Códigos ASSA, Reportes Diciembre, etc."
+                className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Tipo de Grupo</label>
+              <select
+                value={groupTemplate}
+                onChange={(e) => setGroupTemplate(e.target.value as any)}
+                className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+              >
+                <option value="NORMAL">Normal</option>
+                <option value="ASSA_CODIGOS">ASSA Códigos</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Aseguradora (Opcional)</label>
+              <select
+                value={groupInsurer}
+                onChange={(e) => setGroupInsurer(e.target.value)}
+                className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+              >
+                <option value="">Todas</option>
+                {insurers.map(ins => (
+                  <option key={ins.id} value={ins.id}>{ins.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="bg-blue-50 border-l-4 border-blue-500 p-3 rounded">
+              <p className="text-xs text-blue-800">
+                📌 Se agruparán <strong>{selectedTransfers.size} transferencia(s)</strong> por un total de{' '}
+                <strong className="text-[#8AAA19]">
+                  ${transfers.filter(t => selectedTransfers.has(t.id)).reduce((sum, t) => sum + t.amount, 0).toFixed(2)}
+                </strong>
+              </p>
+            </div>
+          </div>
+
+          <div className="flex gap-3 mt-6">
+            <button
+              onClick={() => {
+                setShowGroupModal(false);
+                setGroupName('');
+                setGroupTemplate('NORMAL');
+                setGroupInsurer('');
+              }}
+              disabled={creatingGroup}
+              className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-medium disabled:opacity-50"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={handleCreateGroup}
+              disabled={creatingGroup || !groupName.trim()}
+              className="flex-1 px-4 py-2 bg-[#8AAA19] text-white rounded-lg hover:bg-[#010139] transition font-medium disabled:opacity-50 flex items-center justify-center gap-2"
+            >
+              {creatingGroup ? 'Creando...' : 'Crear Grupo'}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }
