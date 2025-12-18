@@ -52,6 +52,11 @@ export async function actionUploadImport(formData: FormData) {
       invert_negatives: String(formData.get('invert_negatives') || 'false'),
       is_life_insurance: String(formData.get('is_life_insurance') || 'false'),
     };
+    
+    // Extraer bank_transfer_id o bank_group_ids del FormData
+    const bankTransferId = formData.get('bank_transfer_id') as string | null;
+    const bankGroupIdsStr = formData.get('bank_group_ids') as string | null;
+    const bankGroupIds = bankGroupIdsStr ? JSON.parse(bankGroupIdsStr) : [];
 
     console.log('[SERVER] FormData:', { ...rawData, fileName: file?.name });
 
@@ -355,6 +360,47 @@ export async function actionUploadImport(formData: FormData) {
         console.log('[SERVER] Continuing despite pending items errors');
       } else {
         console.log('[SERVER] Pending items inserted successfully');
+      }
+    }
+
+    // 6. BANCO: Vincular transfer individual o grupos con el import
+    if (bankTransferId) {
+      console.log('[BANCO] Vinculando transfer individual con import:', bankTransferId);
+      const { error: transferLinkError } = await (supabase as any)
+        .from('bank_transfer_imports')
+        .insert({
+          transfer_id: bankTransferId,
+          import_id: importRecord.id,
+          amount_assigned: parseFloat(parsed.total_amount),
+        });
+      
+      if (transferLinkError) {
+        console.error('[BANCO] Error vinculando transfer:', transferLinkError);
+      } else {
+        console.log('[BANCO] Transfer vinculada exitosamente');
+      }
+    }
+
+    if (bankGroupIds.length > 0) {
+      console.log('[BANCO] Vinculando grupos bancarios con import:', bankGroupIds);
+      for (const groupId of bankGroupIds) {
+        const { data: groupData } = await supabase
+          .from('bank_groups')
+          .select('total_amount')
+          .eq('id', groupId)
+          .single();
+
+        if (groupData) {
+          await supabase
+            .from('bank_group_imports')
+            .insert({
+              group_id: groupId,
+              import_id: importRecord.id,
+              amount_assigned: groupData.total_amount || 0,
+            });
+          
+          console.log('[BANCO] Grupo vinculado:', groupId);
+        }
       }
     }
 
