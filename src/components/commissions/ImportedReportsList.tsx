@@ -120,13 +120,21 @@ export default function ImportedReportsList({ reports, onDelete }: Props) {
         .report-item {
           display: flex;
           align-items: flex-start;
-          gap: 16px;
+          gap: 12px;
           background: white;
-          padding: 16px;
+          padding: 12px;
           border-radius: 8px;
           box-shadow: 0 1px 3px rgba(0,0,0,0.05);
           border-left: 3px solid transparent;
           transition: all 0.2s;
+          min-width: 0;
+          overflow: hidden;
+        }
+        @media (min-width: 640px) {
+          .report-item {
+            padding: 16px;
+            gap: 16px;
+          }
         }
         .report-item:hover {
           box-shadow: 0 4px 6px rgba(0,0,0,0.1);
@@ -136,7 +144,8 @@ export default function ImportedReportsList({ reports, onDelete }: Props) {
           color: #8aaa19;
         }
         .report-details {
-          flex-grow: 1;
+          flex: 1;
+          min-width: 0;
           display: flex;
           flex-direction: column;
           gap: 8px;

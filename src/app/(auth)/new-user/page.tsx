@@ -65,14 +65,35 @@ export default function NewUserWizard() {
 
   // Validación Paso 2
   const validateStep2 = () => {
-    if (!personalData.nombre.trim()) {
+    console.log('[Wizard] Validando paso 2:', {
+      nombre: personalData.nombre,
+      cedula: personalData.cedula,
+      fecha_nacimiento: personalData.fecha_nacimiento,
+      telefono: personalData.telefono
+    });
+    
+    if (!personalData.nombre || personalData.nombre.trim() === '') {
+      console.log('[Wizard] Error: Nombre vacío');
       setError("El nombre completo es obligatorio");
       return false;
     }
-    if (!personalData.cedula.trim() || !personalData.fecha_nacimiento.trim() || !personalData.telefono.trim()) {
-      setError("Cédula, fecha de nacimiento y teléfono son obligatorios");
+    if (!personalData.cedula || personalData.cedula.trim() === '') {
+      console.log('[Wizard] Error: Cédula vacía');
+      setError("La cédula es obligatoria");
       return false;
     }
+    if (!personalData.fecha_nacimiento || personalData.fecha_nacimiento.trim() === '') {
+      console.log('[Wizard] Error: Fecha nacimiento vacía');
+      setError("La fecha de nacimiento es obligatoria");
+      return false;
+    }
+    if (!personalData.telefono || personalData.telefono.trim() === '') {
+      console.log('[Wizard] Error: Teléfono vacío');
+      setError("El teléfono es obligatorio");
+      return false;
+    }
+    
+    console.log('[Wizard] Paso 2 validado correctamente');
     setError(null);
     return true;
   };
@@ -119,10 +140,15 @@ export default function NewUserWizard() {
 
   // Siguiente paso
   const handleNext = () => {
-    if (step === 1 && validateStep1()) {
-      setStep(2);
-    } else if (step === 2 && validateStep2()) {
-      setStep(3);
+    console.log('[Wizard] handleNext - step actual:', step);
+    if (step === 1) {
+      if (validateStep1()) {
+        setStep(2);
+      }
+    } else if (step === 2) {
+      if (validateStep2()) {
+        setStep(3);
+      }
     }
   };
 
@@ -285,7 +311,7 @@ export default function NewUserWizard() {
                 required
               />
 
-              <div className="w-full min-w-0 overflow-hidden">
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Fecha de Nacimiento <span className="text-red-500">*</span>
                 </label>
@@ -293,7 +319,7 @@ export default function NewUserWizard() {
                   type="date"
                   value={personalData.fecha_nacimiento}
                   onChange={(e) => setPersonalData({ ...personalData, fecha_nacimiento: e.target.value })}
-                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#010139] focus:outline-none"
+                  className="w-full max-w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#010139] focus:outline-none"
                   required
                 />
               </div>
@@ -374,7 +400,7 @@ export default function NewUserWizard() {
               {/* Código ASSA - Solo para AGENTE */}
               {personalData.broker_type === 'agente' && (
                 <>
-                  <div className="w-full min-w-0">
+                  <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Código ASSA (Opcional)
                     </label>
@@ -382,13 +408,13 @@ export default function NewUserWizard() {
                       type="text"
                       value={personalData.assa_code}
                       onChange={(e) => setPersonalData({ ...personalData, assa_code: e.target.value.toUpperCase() })}
-                      className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#010139] focus:outline-none"
+                      className="w-full max-w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#010139] focus:outline-none"
                       placeholder="PJ750-XX"
                     />
                   </div>
 
                   {/* Fecha Vencimiento Carnet - Solo para AGENTE */}
-                  <div className="w-full min-w-0 overflow-hidden">
+                  <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Fecha Carnet (Opcional)
                     </label>
@@ -396,7 +422,7 @@ export default function NewUserWizard() {
                       type="date"
                       value={personalData.carnet_expiry_date}
                       onChange={(e) => setPersonalData({ ...personalData, carnet_expiry_date: e.target.value })}
-                      className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#010139] focus:outline-none"
+                      className="w-full max-w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#010139] focus:outline-none"
                     />
                   </div>
                 </>

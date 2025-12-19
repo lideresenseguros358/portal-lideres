@@ -588,29 +588,38 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
           </div>
 
           {/* Botones de acción */}
-          <div className="flex flex-wrap gap-2">
+          <div className="flex gap-2">
+            {/* Descartar - Solo icono en mobile */}
             <button
               onClick={() => setShowDiscardConfirm(true)}
               disabled={isDiscarding}
-              className="flex items-center gap-2 px-4 py-2 bg-white text-red-600 border-2 border-red-300 rounded-lg hover:bg-red-50 hover:border-red-400 transition font-medium text-sm shadow-sm"
+              className="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-white text-red-600 border-2 border-red-300 rounded-lg hover:bg-red-50 hover:border-red-400 transition font-medium text-sm shadow-sm"
+              title="Descartar"
             >
               <FaTrash size={14} />
-              {isDiscarding ? 'Eliminando...' : 'Descartar'}
+              <span className="hidden sm:inline">
+                {isDiscarding ? 'Eliminando...' : 'Descartar'}
+              </span>
             </button>
             
+            {/* Descargar TXT - Solo icono en mobile */}
             <button
               onClick={handleExportACH}
               disabled={isGeneratingCSV || !draftFortnight}
-              className="flex items-center gap-2 px-4 py-2 bg-[#010139] text-white border-2 border-[#010139] rounded-lg hover:bg-[#020270] hover:border-[#020270] transition font-medium text-sm shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex items-center justify-center gap-2 px-3 sm:px-4 py-2 bg-[#010139] text-white border-2 border-[#010139] rounded-lg hover:bg-[#020270] hover:border-[#020270] transition font-medium text-sm shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Descargar TXT"
             >
               <FaFileDownload size={14} />
-              {isGeneratingCSV ? 'Generando...' : 'Descargar TXT'}
+              <span className="hidden sm:inline">
+                {isGeneratingCSV ? 'Generando...' : 'Descargar TXT'}
+              </span>
             </button>
             
+            {/* Pagar - Siempre con texto */}
             <button
               onClick={() => setShowCloseConfirm(true)}
               disabled={isClosingFortnight || importedReports.length === 0}
-              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white border-2 border-green-600 rounded-lg hover:bg-green-700 hover:border-green-700 transition font-semibold text-sm shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white border-2 border-green-600 rounded-lg hover:bg-green-700 hover:border-green-700 transition font-semibold text-sm shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <FaCheckCircle size={14} />
               {isClosingFortnight ? 'Procesando...' : 'Pagar'}

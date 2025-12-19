@@ -188,7 +188,171 @@ export default function BrokerTotals({ draftFortnightId, onManageAdvances, broke
 
   return (
     <div className="w-full">
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+      {/* Vista Mobile - Cards */}
+      <div className="block lg:hidden space-y-3">
+        {Object.entries(groupedData)
+          .sort(([, a], [, b]) => a.broker_name.localeCompare(b.broker_name))
+          .map(([brokerId, brokerData]) => (
+            <div key={brokerId} className={`rounded-lg border-l-4 overflow-hidden ${
+              brokerData.is_retained 
+                ? 'bg-red-50 border-red-500' 
+                : 'bg-blue-50/50 border-blue-500'
+            }`}>
+              {/* Header del Broker */}
+              <div className="p-4 space-y-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => toggleBroker(brokerId)}
+                        className="p-1 h-auto"
+                      >
+                        {expandedBrokers.has(brokerId) ? <FaChevronDown size={14} /> : <FaChevronRight size={14} />}
+                      </Button>
+                      <h3 className="font-bold text-[#010139] text-sm">{brokerData.broker_name}</h3>
+                      {brokerData.is_retained && (
+                        <span className="text-xs bg-red-600 text-white px-2 py-0.5 rounded-full font-semibold">RET</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="relative flex-shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOpenMenuBroker(openMenuBroker === brokerId ? null : brokerId);
+                      }}
+                      className="p-2 h-auto"
+                    >
+                      <FaEllipsisV size={14} className="text-gray-600" />
+                    </Button>
+                    {openMenuBroker === brokerId && (
+                      <>
+                        <div 
+                          className="fixed inset-0 z-[100]" 
+                          onClick={() => setOpenMenuBroker(null)}
+                        />
+                        <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-[101]">
+                          <button
+                            onClick={() => {
+                              onManageAdvances(brokerId);
+                              setOpenMenuBroker(null);
+                            }}
+                            className="w-full text-left px-4 py-2.5 hover:bg-gray-50 flex items-center gap-3 text-sm text-gray-700"
+                          >
+                            💰 Adelantos
+                          </button>
+                          <button
+                            onClick={() => {
+                              handleRetainPayment(brokerId, brokerData.is_retained);
+                              setOpenMenuBroker(null);
+                            }}
+                            className={`w-full text-left px-4 py-2.5 hover:bg-gray-50 flex items-center gap-3 text-sm ${
+                              brokerData.is_retained ? 'text-green-600' : 'text-red-600'
+                            }`}
+                          >
+                            {brokerData.is_retained ? (
+                              <><FaUndo size={14} /> Liberar Pago</>
+                            ) : (
+                              <><FaHandHoldingUsd size={14} /> Retener Pago</>
+                            )}
+                          </button>
+                          {!brokerData.is_retained && (
+                            <>
+                              <div className="border-t border-gray-100 my-1"></div>
+                              <button
+                                onClick={() => {
+                                  setDiscountModalData({
+                                    brokerId,
+                                    brokerName: brokerData.broker_name,
+                                    grossAmount: brokerData.total_gross
+                                  });
+                                  setOpenMenuBroker(null);
+                                }}
+                                className="w-full text-left px-4 py-2.5 hover:bg-orange-50 flex items-center gap-3 text-sm text-orange-700"
+                              >
+                                <FaMinus size={14} /> Aplicar Descuento
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Montos */}
+                <div className="grid grid-cols-3 gap-2 text-xs">
+                  <div>
+                    <div className="text-gray-600 mb-1">Bruta</div>
+                    <div className="font-mono font-semibold text-gray-800">
+                      ${brokerData.total_gross.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-red-600 mb-1">Desc.</div>
+                    <div className="font-mono font-semibold text-red-700">
+                      -${brokerData.total_discounts.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[#8AAA19] mb-1">Neto</div>
+                    <div className="font-mono font-bold text-[#8AAA19] text-base">
+                      ${brokerData.total_net.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Aseguradoras expandidas */}
+              {expandedBrokers.has(brokerId) && (
+                <div className="border-t border-gray-200 bg-white">
+                  {Object.entries(brokerData.insurers).map(([insurerId, insurerData]) => (
+                    <div key={insurerId} className="border-b border-gray-100 last:border-b-0">
+                      <div className="p-3 flex items-center justify-between">
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            onClick={() => toggleInsurer(insurerId)} 
+                            className="p-1 h-auto flex-shrink-0"
+                          >
+                            {expandedInsurers.has(insurerId) ? <FaChevronDown size={12} /> : <FaChevronRight size={12} />}
+                          </Button>
+                          <span className="text-sm font-semibold text-gray-700 truncate">{insurerData.insurer_name}</span>
+                        </div>
+                        <span className="text-sm font-mono text-gray-700 flex-shrink-0">
+                          ${insurerData.total_gross.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                        </span>
+                      </div>
+                      {expandedInsurers.has(insurerId) && (
+                        <div className="px-3 pb-3 space-y-1">
+                          {insurerData.clients.map((client, index) => (
+                            <div key={index} className="flex items-center justify-between text-xs bg-gray-50 p-2 rounded">
+                              <span className="text-gray-600 flex-1 min-w-0 truncate">
+                                <span className="inline-block w-1 h-1 bg-gray-400 rounded-full mr-2"></span>
+                                {client.name}
+                              </span>
+                              <span className="font-mono text-gray-700 ml-2 flex-shrink-0">
+                                ${client.gross.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+      </div>
+
+      {/* Vista Desktop - Tabla */}
+      <div className="hidden lg:block bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow className="bg-gradient-to-r from-gray-50 to-gray-100 border-b-2 border-gray-200">

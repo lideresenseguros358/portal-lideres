@@ -162,10 +162,12 @@ export default function NationalIdInput({
 
   // Actualizar el valor cuando cambien las partes de la cédula
   useEffect(() => {
-    if (!isInitialMount.current && documentType === 'cedula') {
+    if (documentType === 'cedula' && hasInitialized.current) {
       const fullCedula = [cedulaPart1, cedulaPart2, cedulaPart3]
         .filter(part => part) // Eliminar partes vacías
         .join('-');
+      
+      console.log('[NationalIdInput] Actualizando cédula:', fullCedula);
       
       if (fullCedula !== lastValueRef.current) {
         lastValueRef.current = fullCedula;
@@ -176,7 +178,9 @@ export default function NationalIdInput({
 
   // Actualizar el valor cuando cambie el campo único
   useEffect(() => {
-    if (!isInitialMount.current && (documentType === 'pasaporte' || documentType === 'ruc')) {
+    if ((documentType === 'pasaporte' || documentType === 'ruc') && hasInitialized.current) {
+      console.log('[NationalIdInput] Actualizando pasaporte/RUC:', singleValue);
+      
       if (singleValue !== lastValueRef.current) {
         lastValueRef.current = singleValue;
         onChange(singleValue);
@@ -192,10 +196,12 @@ export default function NationalIdInput({
     setCedulaPart3('');
     setSingleValue('');
     lastValueRef.current = '';
+    hasInitialized.current = true; // Marcar como inicializado
     onChange('');
   };
 
   const handleCedulaPart2Change = (e: React.ChangeEvent<HTMLInputElement>) => {
+    hasInitialized.current = true; // Marcar como inicializado al primer cambio
     const val = e.target.value.replace(/\D/g, ''); // Solo números
     if (val.length <= 4) {
       setCedulaPart2(val);
@@ -203,6 +209,7 @@ export default function NationalIdInput({
   };
 
   const handleCedulaPart3Change = (e: React.ChangeEvent<HTMLInputElement>) => {
+    hasInitialized.current = true; // Marcar como inicializado al primer cambio
     const val = e.target.value.replace(/\D/g, ''); // Solo números
     if (val.length <= 5) {
       setCedulaPart3(val);
@@ -210,6 +217,7 @@ export default function NationalIdInput({
   };
 
   const handleSingleValueChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    hasInitialized.current = true; // Marcar como inicializado al primer cambio
     setSingleValue(e.target.value);
   };
 
@@ -252,6 +260,7 @@ export default function NationalIdInput({
                 value={cedulaPart1} 
                 onValueChange={(val) => {
                   console.log('[NationalIdInput] Select onChange:', val);
+                  hasInitialized.current = true; // Marcar como inicializado al seleccionar provincia
                   setCedulaPart1(val);
                 }}
                 key={`provincia-${cedulaPart1}`}
