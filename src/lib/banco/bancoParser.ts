@@ -99,15 +99,23 @@ function parseBankCommXLSX(file: File): Promise<BankTransferCommRow[]> {
         
         const jsonData: any[] = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
         
-        // Encontrar encabezado
+        // Encontrar encabezado - buscar fila que tenga TODAS las columnas clave
         let headerIndex = -1;
-        for (let i = 0; i < Math.min(10, jsonData.length); i++) {
+        for (let i = 0; i < Math.min(15, jsonData.length); i++) {
           const row = jsonData[i];
-          if (Array.isArray(row) && row.some((cell: any) => 
-            String(cell).toLowerCase().includes('fecha') || 
-            String(cell).toLowerCase().includes('referencia')
-          )) {
+          if (!Array.isArray(row)) continue;
+          
+          const rowStr = row.map((cell: any) => String(cell || '').toLowerCase().trim()).join('|');
+          
+          // Verificar que tenga las columnas clave: Fecha, Referencia, Descripción, Crédito
+          const hasFecha = rowStr.includes('fecha');
+          const hasReferencia = rowStr.includes('referencia');
+          const hasDescripcion = rowStr.includes('descri');
+          const hasCredito = rowStr.includes('crédito') || rowStr.includes('credito');
+          
+          if (hasFecha && hasReferencia && hasDescripcion && hasCredito) {
             headerIndex = i;
+            console.log(`[BANCO PARSER] Header encontrado en fila ${i}`);
             break;
           }
         }
