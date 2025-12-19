@@ -130,6 +130,7 @@ export default function BancoTab({ role, insurers }: BancoTabProps) {
 
   const handleRefresh = () => {
     setRefreshKey(prev => prev + 1);
+    loadCutoffs(); // Refrescar lista de cortes (elimina cortes vacíos)
     loadGroups(); // Refrescar grupos también
   };
 
