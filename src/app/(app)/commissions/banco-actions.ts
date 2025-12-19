@@ -1058,3 +1058,132 @@ export async function actionMarkTransferAsOkTemporary(
     return { ok: false, error: 'Error inesperado' };
   }
 }
+
+// ============================================
+// 16. ELIMINAR GRUPO BANCARIO
+// ============================================
+
+export async function actionDeleteBankGroup(groupId: string): Promise<ActionResult> {
+  try {
+    const { role } = await getAuthContext();
+    if (role !== 'master') {
+      return { ok: false, error: 'No autorizado' };
+    }
+
+    const supabase = await getSupabaseServer();
+
+    // Verificar si el grupo tiene transferencias pagadas
+    const { data: group, error: groupError } = await (supabase as any)
+      .from('bank_groups_comm')
+      .select('status')
+      .eq('id', groupId)
+      .single();
+
+    if (groupError || !group) {
+      return { ok: false, error: 'Grupo no encontrado' };
+    }
+
+    if (group.status === 'PAGADO') {
+      return { ok: false, error: 'No se puede eliminar un grupo con transferencias pagadas' };
+    }
+
+    // Eliminar relaciones grupo-transferencias (CASCADE debería hacerlo, pero lo hacemos explícito)
+    const { error: relError } = await (supabase as any)
+      .from('bank_group_transfers')
+      .delete()
+      .eq('group_id', groupId);
+
+    if (relError) {
+      console.error('[BANCO] Error eliminando relaciones:', relError);
+      return { ok: false, error: 'Error al eliminar relaciones del grupo' };
+    }
+
+    // Eliminar grupo
+    const { error: deleteError } = await (supabase as any)
+      .from('bank_groups_comm')
+      .delete()
+      .eq('id', groupId);
+
+    if (deleteError) {
+      console.error('[BANCO] Error eliminando grupo:', deleteError);
+      return { ok: false, error: 'Error al eliminar grupo' };
+    }
+
+    revalidatePath('/commissions');
+    console.log(`[BANCO] ✅ Grupo ${groupId} eliminado`);
+    return { ok: true };
+  } catch (error) {
+    console.error('[BANCO] Error en actionDeleteBankGroup:', error);
+    return { ok: false, error: 'Error inesperado' };
+  }
+}
+
+// ============================================
+// 17. ELIMINAR TRANSFERENCIA BANCARIA
+// ============================================
+
+export async function actionDeleteBankTransfer(transferId: string): Promise<ActionResult> {
+  try {
+    const { role } = await getAuthContext();
+    if (role !== 'master') {
+      return { ok: false, error: 'No autorizado' };
+    }
+
+    const supabase = await getSupabaseServer();
+
+    // Verificar si la transferencia está pagada
+    const { data: transfer, error: transferError } = await supabase
+      .from('bank_transfers_comm')
+      .select('status')
+      .eq('id', transferId)
+      .single();
+
+    if (transferError || !transfer) {
+      return { ok: false, error: 'Transferencia no encontrada' };
+    }
+
+    if (transfer.status === 'PAGADO') {
+      return { ok: false, error: 'No se puede eliminar una transferencia pagada (vinculada a quincena cerrada)' };
+    }
+
+    // Eliminar anotaciones asociadas (si existen)
+    const { error: annotationsError } = await (supabase as any)
+      .from('bank_transfer_annotations')
+      .delete()
+      .eq('transfer_id', transferId);
+
+    if (annotationsError) {
+      console.error('[BANCO] Error eliminando anotaciones:', annotationsError);
+      // No fallamos por esto, continuamos
+    }
+
+    // Eliminar relación con grupo (si existe)
+    const { error: groupRelError } = await (supabase as any)
+      .from('bank_group_transfers')
+      .delete()
+      .eq('transfer_id', transferId);
+
+    if (groupRelError) {
+      console.error('[BANCO] Error eliminando relación con grupo:', groupRelError);
+      // No fallamos por esto, continuamos
+    }
+
+    // Eliminar transferencia
+    const { error: deleteError } = await supabase
+      .from('bank_transfers_comm')
+      .delete()
+      .eq('id', transferId);
+
+    if (deleteError) {
+      console.error('[BANCO] Error eliminando transferencia:', deleteError);
+      return { ok: false, error: 'Error al eliminar transferencia' };
+    }
+
+    revalidatePath('/commissions');
+    console.log(`[BANCO] ✅ Transferencia ${transferId} eliminada con sus anotaciones`);
+    return { ok: true };
+  } catch (error) {
+    console.error('[BANCO] Error en actionDeleteBankTransfer:', error);
+    return { ok: false, error: 'Error inesperado' };
+  }
+}

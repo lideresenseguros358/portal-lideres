@@ -262,22 +262,23 @@ export default function BancoTab({ role, insurers }: BancoTabProps) {
               </div>
             </div>
 
-            {/* Grupos de Transferencias - Expandibles */}
+            {/* Grupos de Transferencias */}
             <GroupsTable
               groups={groups}
               loading={loadingGroups}
+              onGroupDeleted={() => setRefreshKey(prev => prev + 1)}
             />
 
-            {/* Tabla de Transferencias con funcionalidad de agrupación integrada */}
+            {/* Tabla de Transferencias */}
             <TransfersTable
               transfers={transfers}
               loading={loading}
               insurers={insurers}
-              onRefresh={handleRefresh}
+              onRefresh={() => setRefreshKey(prev => prev + 1)}
             />
         </div>
 
-        {/* Modal de Importar */}
+        {/* Modal de Importación */}
         {showImportModal && (
           <ImportBankCutoffModal
             onClose={() => setShowImportModal(false)}

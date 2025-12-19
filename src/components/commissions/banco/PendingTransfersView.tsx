@@ -13,6 +13,7 @@ export default function PendingTransfersView({ excludeCutoffId }: PendingTransfe
   const [groups, setGroups] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
+  const [totalPending, setTotalPending] = useState<number | null>(null);
 
   useEffect(() => {
     loadPending();
@@ -34,37 +35,39 @@ export default function PendingTransfersView({ excludeCutoffId }: PendingTransfe
       setGroups(groupsResult.data || []);
     }
     
+    // Calcular total DESPUÉS de tener los datos
+    const total = (transfersResult.data || []).reduce((sum: number, t: any) => sum + (t.amount || 0), 0) + 
+                  (groupsResult.data || []).reduce((sum: number, g: any) => sum + (g.total_amount || 0), 0);
+    setTotalPending(total);
+    
     setLoading(false);
   };
 
-  const totalPending = transfers.reduce((sum, t) => sum + (t.amount || 0), 0) + 
-                       groups.reduce((sum, g) => sum + (g.total_amount || 0), 0);
-
   return (
-    <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 rounded-xl p-4 mb-6">
+    <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 rounded-xl p-3 sm:p-4 mb-6">
       {/* Header siempre visible */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-0 sm:justify-between">
         <div className="flex items-center gap-3 flex-1">
-          <FaClock className="text-amber-600" size={24} />
-          <div>
-            <h3 className="font-bold text-amber-900 text-lg">Transferencias Pendientes</h3>
-            <p className="text-sm text-amber-700">
+          <FaClock className="text-amber-600 flex-shrink-0" size={20} />
+          <div className="min-w-0">
+            <h3 className="font-bold text-amber-900 text-base sm:text-lg">Transferencias Pendientes</h3>
+            <p className="text-xs sm:text-sm text-amber-700">
               Disponibles para vincular en Nueva Quincena
             </p>
           </div>
         </div>
         
-        <div className="flex items-center gap-4">
-          <div className="text-right">
+        <div className="flex items-center justify-between sm:justify-end gap-3 sm:gap-4">
+          <div className="text-left sm:text-right">
             <p className="text-xs text-amber-700 uppercase font-semibold">Total Disponible</p>
-            <p className="text-2xl font-bold text-amber-900">
-              ${totalPending.toFixed(2)}
+            <p className="text-xl sm:text-2xl font-bold text-amber-900">
+              {totalPending !== null ? `$${totalPending.toFixed(2)}` : 'Cargando...'}
             </p>
           </div>
           
           <button
             onClick={() => setExpanded(!expanded)}
-            className="p-2 hover:bg-amber-100 rounded-lg transition"
+            className="p-2 hover:bg-amber-100 rounded-lg transition flex-shrink-0"
           >
             {expanded ? <FaChevronDown className="text-amber-700" /> : <FaChevronRight className="text-amber-700" />}
           </button>

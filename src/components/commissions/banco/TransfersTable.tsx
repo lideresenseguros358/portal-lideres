@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { FaEdit, FaCheckCircle, FaClock, FaCircle, FaLock, FaSave, FaTimes, FaLayerGroup } from 'react-icons/fa';
-import { actionUpdateBankTransfer, actionAddTransferToGroup } from '@/app/(app)/commissions/banco-actions';
+import { FaEdit, FaCheckCircle, FaClock, FaCircle, FaLock, FaSave, FaTimes, FaLayerGroup, FaTrash } from 'react-icons/fa';
+import { actionUpdateBankTransfer, actionAddTransferToGroup, actionDeleteBankTransfer } from '@/app/(app)/commissions/banco-actions';
 import type { BankTransferStatus, TransferType } from '@/app/(app)/commissions/banco-actions';
 import CreateGroupModal from './CreateGroupModal';
 import { toast } from 'sonner';
@@ -20,6 +20,7 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
   const [selectedTransfers, setSelectedTransfers] = useState<Set<string>>(new Set());
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
   const [addingToGroup, setAddingToGroup] = useState(false);
+  const [deletingTransfers, setDeletingTransfers] = useState<Set<string>>(new Set());
 
   const getStatusBadge = (status: BankTransferStatus) => {
     const badges = {
@@ -131,6 +132,34 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
       setShowCreateGroupModal(false);
       setSelectedTransfers(new Set());
       onRefresh();
+    }
+  };
+
+  const handleDeleteTransfer = async (transferId: string, status: string, description: string) => {
+    if (status === 'PAGADO') {
+      toast.error('No se puede eliminar', {
+        description: 'Esta transferencia está vinculada a una quincena cerrada'
+      });
+      return;
+    }
+
+    if (!confirm(`¿Eliminar transferencia?\n\n${description}\n\nEsto eliminará la transferencia y todas sus anotaciones asociadas.`)) {
+      return;
+    }
+
+    setDeletingTransfers(prev => new Set(prev).add(transferId));
+    const result = await actionDeleteBankTransfer(transferId);
+    setDeletingTransfers(prev => {
+      const next = new Set(prev);
+      next.delete(transferId);
+      return next;
+    });
+
+    if (result.ok) {
+      toast.success('Transferencia eliminada', { description: 'Se eliminaron todas las anotaciones asociadas' });
+      onRefresh();
+    } else {
+      toast.error('Error al eliminar', { description: result.error });
     }
   };
 
