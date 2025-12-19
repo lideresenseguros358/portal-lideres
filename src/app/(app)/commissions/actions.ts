@@ -2764,6 +2764,17 @@ export async function actionDeleteImport(importId: string) {
       throw new Error(`Error eliminando importación: ${importError.message}`);
     }
 
+    // Eliminar fortnight_broker_totals de la quincena para limpiar datos
+    console.log('[actionDeleteImport] Limpiando fortnight_broker_totals...');
+    const { error: totalsDeleteError } = await supabase
+      .from('fortnight_broker_totals')
+      .delete()
+      .eq('fortnight_id', importData.period_label);
+    
+    if (totalsDeleteError) {
+      console.error('[actionDeleteImport] Error eliminando totales:', totalsDeleteError);
+    }
+
     // Recalcular totales de la quincena para actualizar fortnight_broker_totals
     console.log('[actionDeleteImport] Recalculando totales de quincena...');
     const recalcResult = await actionRecalculateFortnight(importData.period_label);
