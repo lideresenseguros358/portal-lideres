@@ -3537,8 +3537,16 @@ export async function actionRecalculateFortnight(fortnight_id: string) {
       .eq('period_label', fortnight_id);
     
     if (importsError) throw importsError;
+    
+    // Si no hay imports, limpiar fortnight_broker_totals y retornar
     if (!imports || imports.length === 0) {
-      return { ok: true as const, data: { message: 'No hay imports en este draft' } };
+      console.log('[actionRecalculateFortnight] No hay imports, limpiando totales...');
+      await supabase
+        .from('fortnight_broker_totals')
+        .delete()
+        .eq('fortnight_id', fortnight_id);
+      
+      return { ok: true as const, data: { message: 'No hay imports, totales limpiados' } };
     }
     
     const importIds = imports.map(i => i.id);
