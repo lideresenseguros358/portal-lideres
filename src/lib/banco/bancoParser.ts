@@ -99,6 +99,15 @@ function parseBankCommXLSX(file: File): Promise<BankTransferCommRow[]> {
         
         const jsonData: any[] = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
         
+        console.log(`[BANCO PARSER] ========== INICIANDO PARSE ==========`);
+        console.log(`[BANCO PARSER] Total de filas en Excel: ${jsonData.length}`);
+        console.log(`[BANCO PARSER] Primeras 10 filas:`);
+        jsonData.slice(0, 10).forEach((row, idx) => {
+          if (Array.isArray(row)) {
+            console.log(`  Fila ${idx}: [${row.slice(0, 5).map(c => String(c || '').substring(0, 30)).join(' | ')}]`);
+          }
+        });
+        
         // Encontrar encabezado - buscar fila que tenga TODAS las columnas clave
         let headerIndex = -1;
         for (let i = 0; i < Math.min(15, jsonData.length); i++) {
@@ -113,18 +122,22 @@ function parseBankCommXLSX(file: File): Promise<BankTransferCommRow[]> {
           const hasDescripcion = rowStr.includes('descri');
           const hasCredito = rowStr.includes('crédito') || rowStr.includes('credito');
           
+          console.log(`[BANCO PARSER] Fila ${i} check: Fecha=${hasFecha} Ref=${hasReferencia} Desc=${hasDescripcion} Cred=${hasCredito}`);
+          
           if (hasFecha && hasReferencia && hasDescripcion && hasCredito) {
             headerIndex = i;
-            console.log(`[BANCO PARSER] Header encontrado en fila ${i}`);
+            console.log(`[BANCO PARSER] ✅ Header encontrado en fila ${i}`);
             break;
           }
         }
         
         if (headerIndex === -1) {
-          throw new Error('No se encontró el encabezado en el archivo');
+          console.error('[BANCO PARSER] ❌ No se encontró el encabezado en las primeras 15 filas');
+          throw new Error('No se encontró el encabezado en el archivo. Verifica que tenga las columnas: Fecha, Referencia, Descripción, Crédito');
         }
         
         const headers = jsonData[headerIndex].map((h: any) => String(h || '').toLowerCase().trim());
+        console.log(`[BANCO PARSER] Headers detectados:`, headers);
 
         const headerMap: HeaderMap = {
           dateIdx: headers.findIndex((h: string) => h.includes('fecha')),
@@ -136,12 +149,21 @@ function parseBankCommXLSX(file: File): Promise<BankTransferCommRow[]> {
           creditIdx: headers.findIndex((h: string) => h.includes('crédito') || h.includes('credito')),
         };
 
+        console.log(`[BANCO PARSER] Índices de columnas:`, headerMap);
+        
         if (headerMap.dateIdx === -1 || headerMap.ref1Idx === -1 || headerMap.creditIdx === -1 || headerMap.descIdx === -1) {
+          console.error('[BANCO PARSER] ❌ Columnas faltantes:', {
+            fecha: headerMap.dateIdx === -1 ? 'NO ENCONTRADA' : 'OK',
+            referencia: headerMap.ref1Idx === -1 ? 'NO ENCONTRADA' : 'OK',
+            descripcion: headerMap.descIdx === -1 ? 'NO ENCONTRADA' : 'OK',
+            credito: headerMap.creditIdx === -1 ? 'NO ENCONTRADA' : 'OK'
+          });
           throw new Error('Columnas requeridas no encontradas: Fecha, Referencia 1, Descripción, Crédito');
         }
         
         const transfers: BankTransferCommRow[] = [];
         
+        console.log(`[BANCO PARSER] Parseando ${jsonData.length - headerIndex - 1} filas de datos...`);
         for (let i = headerIndex + 1; i < jsonData.length; i++) {
           const row = jsonData[i];
           if (!Array.isArray(row) || row.length === 0) continue;
@@ -158,6 +180,7 @@ function parseBankCommXLSX(file: File): Promise<BankTransferCommRow[]> {
           }
         }
         
+        console.log(`[BANCO PARSER] ✅ ${transfers.length} transferencias parseadas exitosamente`);
         resolve(transfers);
       } catch (error) {
         reject(error);
