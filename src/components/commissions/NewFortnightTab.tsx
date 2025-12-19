@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { supabaseClient } from '@/lib/supabase/client';
 import { actionDeleteImport, actionRecalculateFortnight, actionDeleteDraft, actionPayFortnight, actionExportBankCsv, actionToggleNotify } from '@/app/(app)/commissions/actions';
 import ImportForm from './ImportForm';
@@ -284,8 +284,8 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
     setBrokerTotalsData(totalsWithDiscounts);
   }, [draftFortnight]);
 
-  // Calculate office total
-  const officeTotal = useCallback(() => {
+  // Calculate office total - usar useMemo para que se recalcule automáticamente
+  const officeTotal = useMemo(() => {
     const totalImported = importedReports.reduce((sum, r) => sum + r.total_amount, 0);
     const brokerCommissions = brokerCommissionsTotal;
     return {
@@ -536,10 +536,9 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
     return <CreateFortnightManager onFortnightCreated={onFortnightCreated} />;
   }
 
-  const office = officeTotal();
   const pieData = [
-    { name: 'Comisiones Corredores', value: office.brokerCommissions, color: '#8AAA19' },
-    { name: 'Ganancia Oficina', value: office.officeProfit, color: '#010139' },
+    { name: 'Comisiones Corredores', value: officeTotal.brokerCommissions, color: '#8AAA19' },
+    { name: 'Ganancia Oficina', value: officeTotal.officeProfit, color: '#010139' },
   ];
 
   return (
@@ -713,22 +712,22 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
               <div className="p-4 bg-gray-50 rounded-lg">
                 <p className="text-sm text-gray-600">Total Importado</p>
                 <p className="text-2xl font-bold text-[#010139]">
-                  ${office.totalImported.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                  ${officeTotal.totalImported.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                 </p>
               </div>
               <div className="p-4 bg-gray-50 rounded-lg">
                 <p className="text-sm text-gray-600">Comisiones Corredores</p>
                 <p className="text-2xl font-bold text-[#8AAA19]">
-                  ${office.brokerCommissions.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                  ${officeTotal.brokerCommissions.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                 </p>
               </div>
               <div className="p-4 bg-[#010139]/10 rounded-lg">
                 <p className="text-sm text-gray-600">Ganancia Oficina</p>
                 <p className="text-2xl font-bold text-[#010139]">
-                  ${office.officeProfit.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                  ${officeTotal.officeProfit.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                 </p>
                 <p className="text-sm text-gray-500 mt-1">
-                  {office.percentage.toFixed(1)}% del total
+                  {officeTotal.percentage.toFixed(1)}% del total
                 </p>
               </div>
             </div>

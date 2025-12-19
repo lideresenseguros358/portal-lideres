@@ -13,7 +13,8 @@ export default function PendingTransfersView({ excludeCutoffId }: PendingTransfe
   const [groups, setGroups] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
-  const [totalPending, setTotalPending] = useState<number | null>(null);
+  const [totalPending, setTotalPending] = useState<number>(0);
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
 
   useEffect(() => {
     loadPending();
@@ -39,6 +40,7 @@ export default function PendingTransfersView({ excludeCutoffId }: PendingTransfe
     const total = (transfersResult.data || []).reduce((sum: number, t: any) => sum + (t.amount || 0), 0) + 
                   (groupsResult.data || []).reduce((sum: number, g: any) => sum + (g.total_amount || 0), 0);
     setTotalPending(total);
+    setIsInitialLoad(false);
     
     setLoading(false);
   };
@@ -61,7 +63,7 @@ export default function PendingTransfersView({ excludeCutoffId }: PendingTransfe
           <div className="text-left sm:text-right">
             <p className="text-xs text-amber-700 uppercase font-semibold">Total Disponible</p>
             <p className="text-xl sm:text-2xl font-bold text-amber-900">
-              {totalPending !== null ? `$${totalPending.toFixed(2)}` : 'Cargando...'}
+              {isInitialLoad ? 'Cargando...' : `$${totalPending.toFixed(2)}`}
             </p>
           </div>
           

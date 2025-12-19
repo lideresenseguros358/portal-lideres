@@ -1132,10 +1132,10 @@ export async function actionDeleteBankTransfer(transferId: string): Promise<Acti
 
     const supabase = await getSupabaseServer();
 
-    // Verificar si la transferencia está pagada
+    // Verificar si la transferencia está pagada y obtener cutoff_id
     const { data: transfer, error: transferError } = await supabase
       .from('bank_transfers_comm')
-      .select('status')
+      .select('status, cutoff_id')
       .eq('id', transferId)
       .single();
 
@@ -1146,6 +1146,8 @@ export async function actionDeleteBankTransfer(transferId: string): Promise<Acti
     if (transfer.status === 'PAGADO') {
       return { ok: false, error: 'No se puede eliminar una transferencia pagada (vinculada a quincena cerrada)' };
     }
+
+    const cutoffId = transfer.cutoff_id;
 
     // Eliminar anotaciones asociadas (si existen)
     const { error: annotationsError } = await (supabase as any)
@@ -1178,6 +1180,29 @@ export async function actionDeleteBankTransfer(transferId: string): Promise<Acti
     if (deleteError) {
       console.error('[BANCO] Error eliminando transferencia:', deleteError);
       return { ok: false, error: 'Error al eliminar transferencia' };
+    }
+
+    // Verificar si quedan transferencias en el corte
+    if (cutoffId) {
+      const { data: remainingTransfers, error: checkError } = await supabase
+        .from('bank_transfers_comm')
+        .select('id')
+        .eq('cutoff_id', cutoffId)
+        .limit(1);
+
+      if (!checkError && remainingTransfers && remainingTransfers.length === 0) {
+        // No quedan transferencias, eliminar el corte
+        const { error: cutoffDeleteError } = await supabase
+          .from('bank_cutoffs')
+          .delete()
+          .eq('id', cutoffId);
+
+        if (cutoffDeleteError) {
+          console.error('[BANCO] Error eliminando corte vacío:', cutoffDeleteError);
+        } else {
+          console.log(`[BANCO] ✅ Corte ${cutoffId} eliminado (sin transferencias)`);
+        }
+      }
     }
 
     revalidatePath('/commissions');
