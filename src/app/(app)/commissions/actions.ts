@@ -2764,6 +2764,14 @@ export async function actionDeleteImport(importId: string) {
       throw new Error(`Error eliminando importación: ${importError.message}`);
     }
 
+    // Recalcular totales de la quincena para actualizar fortnight_broker_totals
+    console.log('[actionDeleteImport] Recalculando totales de quincena...');
+    const recalcResult = await actionRecalculateFortnight(importData.period_label);
+    if (!recalcResult.ok) {
+      console.error('[actionDeleteImport] Error recalculando:', recalcResult.error);
+      // No fallamos por esto, pero lo loggeamos
+    }
+
     console.log('[actionDeleteImport] ✓ Import eliminado exitosamente');
     revalidatePath('/(app)/commissions');
     return { ok: true as const };
