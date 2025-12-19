@@ -1074,12 +1074,13 @@ export async function actionDeleteBankGroup(groupId: string): Promise<ActionResu
 
     // Verificar si el grupo tiene transferencias pagadas
     const { data: group, error: groupError } = await (supabase as any)
-      .from('bank_groups_comm')
+      .from('bank_groups')
       .select('status')
       .eq('id', groupId)
       .single();
 
     if (groupError || !group) {
+      console.error('[BANCO] Error obteniendo grupo:', groupError);
       return { ok: false, error: 'Grupo no encontrado' };
     }
 
@@ -1100,7 +1101,7 @@ export async function actionDeleteBankGroup(groupId: string): Promise<ActionResu
 
     // Eliminar grupo
     const { error: deleteError } = await (supabase as any)
-      .from('bank_groups_comm')
+      .from('bank_groups')
       .delete()
       .eq('id', groupId);
 

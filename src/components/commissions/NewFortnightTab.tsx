@@ -152,7 +152,12 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
       
       if (result.ok) {
         toast.success('Importación eliminada.');
-        await loadImportedReports();
+        // Recargar TODOS los datos para actualizar contadores en tiempo real
+        await Promise.all([
+          loadImportedReports(),
+          loadBrokerTotals(),
+          loadRamosTotals()
+        ]);
         forceRecalculate();
       } else {
         toast.error('Error al eliminar importación', { description: result.error });

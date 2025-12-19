@@ -135,32 +135,59 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
     }
   };
 
-  const handleDeleteTransfer = async (transferId: string, status: string, description: string) => {
-    if (status === 'PAGADO') {
+  const handleDeleteSelectedTransfers = async () => {
+    if (selectedTransfers.size === 0) {
+      toast.error('Selecciona al menos una transferencia');
+      return;
+    }
+
+    // Verificar si alguna está PAGADA
+    const selectedArray = Array.from(selectedTransfers);
+    const paidTransfers = transfers.filter(t => selectedArray.includes(t.id) && t.status === 'PAGADO');
+    
+    if (paidTransfers.length > 0) {
       toast.error('No se puede eliminar', {
-        description: 'Esta transferencia está vinculada a una quincena cerrada'
+        description: `${paidTransfers.length} transferencia(s) están vinculadas a quincenas cerradas`
       });
       return;
     }
 
-    if (!confirm(`¿Eliminar transferencia?\n\n${description}\n\nEsto eliminará la transferencia y todas sus anotaciones asociadas.`)) {
+    if (!confirm(`¿Eliminar ${selectedTransfers.size} transferencia(s) seleccionada(s)?\n\nEsto eliminará las transferencias y todas sus anotaciones asociadas.`)) {
       return;
     }
 
-    setDeletingTransfers(prev => new Set(prev).add(transferId));
-    const result = await actionDeleteBankTransfer(transferId);
-    setDeletingTransfers(prev => {
-      const next = new Set(prev);
-      next.delete(transferId);
-      return next;
-    });
+    let successCount = 0;
+    let errorCount = 0;
 
-    if (result.ok) {
-      toast.success('Transferencia eliminada', { description: 'Se eliminaron todas las anotaciones asociadas' });
-      onRefresh();
-    } else {
-      toast.error('Error al eliminar', { description: result.error });
+    for (const transferId of selectedArray) {
+      setDeletingTransfers(prev => new Set(prev).add(transferId));
+      const result = await actionDeleteBankTransfer(transferId);
+      setDeletingTransfers(prev => {
+        const next = new Set(prev);
+        next.delete(transferId);
+        return next;
+      });
+
+      if (result.ok) {
+        successCount++;
+      } else {
+        errorCount++;
+      }
     }
+
+    setSelectedTransfers(new Set());
+
+    if (errorCount === 0) {
+      toast.success(`${successCount} transferencia(s) eliminada(s)`, { 
+        description: 'Se eliminaron todas las anotaciones asociadas' 
+      });
+    } else {
+      toast.warning(`${successCount} eliminada(s), ${errorCount} error(es)`, {
+        description: 'Algunas transferencias no pudieron eliminarse'
+      });
+    }
+
+    onRefresh();
   };
 
   if (loading) {
@@ -213,6 +240,14 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
               >
                 <FaTimes size={14} />
                 Cancelar
+              </button>
+              
+              <button
+                onClick={handleDeleteSelectedTransfers}
+                className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white border-2 border-red-600 rounded-lg hover:bg-red-700 hover:border-red-700 transition font-medium text-sm shadow-sm"
+              >
+                <FaTrash size={14} />
+                Eliminar
               </button>
               
               <button
@@ -387,24 +422,14 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
                     </td>
                     <td className="px-3 py-3">{getStatusBadge(transfer.status)}</td>
                     <td className="px-3 py-3 text-center">
-                      <div className="flex items-center justify-center gap-2">
-                        <button
-                          onClick={() => handleEdit(transfer)}
-                          disabled={transfer.status === 'PAGADO'}
-                          className="p-2 text-[#010139] hover:bg-blue-50 rounded-lg transition disabled:opacity-30 disabled:cursor-not-allowed"
-                          title={transfer.status === 'PAGADO' ? 'No se puede editar (PAGADO)' : 'Editar transferencia'}
-                        >
-                          <FaEdit size={16} />
-                        </button>
-                        <button
-                          onClick={() => handleDeleteTransfer(transfer.id, transfer.status, transfer.description_raw)}
-                          disabled={deletingTransfers.has(transfer.id)}
-                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition disabled:opacity-50"
-                          title="Eliminar transferencia"
-                        >
-                          <FaTrash size={14} />
-                        </button>
-                      </div>
+                      <button
+                        onClick={() => handleEdit(transfer)}
+                        disabled={transfer.status === 'PAGADO'}
+                        className="p-2 text-[#010139] hover:bg-blue-50 rounded-lg transition disabled:opacity-30 disabled:cursor-not-allowed"
+                        title={transfer.status === 'PAGADO' ? 'No se puede editar (PAGADO)' : 'Editar transferencia'}
+                      >
+                        <FaEdit size={16} />
+                      </button>
                     </td>
                   </>
                 )}
@@ -450,20 +475,19 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
                 {transfer.insurers?.name || <span className="italic">Sin asiguradora</span>}
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
+                <input
+                  type="checkbox"
+                  checked={selectedTransfers.has(transfer.id)}
+                  onChange={() => handleSelectTransfer(transfer.id)}
+                  disabled={transfer.status === 'PAGADO'}
+                  className="w-4 h-4 text-[#8AAA19] border-2 border-gray-300 rounded focus:ring-[#8AAA19] disabled:opacity-30"
+                />
                 <button
                   onClick={() => handleEdit(transfer)}
                   disabled={transfer.status === 'PAGADO'}
                   className="px-3 py-1.5 bg-[#010139] text-white rounded-lg hover:bg-[#020270] transition disabled:opacity-30 disabled:cursor-not-allowed text-xs font-medium"
                 >
                   {transfer.status === 'PAGADO' ? '🔒' : 'Editar'}
-                </button>
-                <button
-                  onClick={() => handleDeleteTransfer(transfer.id, transfer.status, transfer.description_raw)}
-                  disabled={deletingTransfers.has(transfer.id)}
-                  className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition disabled:opacity-50"
-                  title="Eliminar"
-                >
-                  <FaTrash size={12} />
                 </button>
               </div>
             </div>
