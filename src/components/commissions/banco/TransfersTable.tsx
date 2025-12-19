@@ -387,14 +387,24 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
                     </td>
                     <td className="px-3 py-3">{getStatusBadge(transfer.status)}</td>
                     <td className="px-3 py-3 text-center">
-                      <button
-                        onClick={() => handleEdit(transfer)}
-                        disabled={transfer.status === 'PAGADO'}
-                        className="p-2 text-[#010139] hover:bg-blue-50 rounded-lg transition disabled:opacity-30 disabled:cursor-not-allowed"
-                        title={transfer.status === 'PAGADO' ? 'No se puede editar (PAGADO)' : 'Editar transferencia'}
-                      >
-                        <FaEdit size={16} />
-                      </button>
+                      <div className="flex items-center justify-center gap-2">
+                        <button
+                          onClick={() => handleEdit(transfer)}
+                          disabled={transfer.status === 'PAGADO'}
+                          className="p-2 text-[#010139] hover:bg-blue-50 rounded-lg transition disabled:opacity-30 disabled:cursor-not-allowed"
+                          title={transfer.status === 'PAGADO' ? 'No se puede editar (PAGADO)' : 'Editar transferencia'}
+                        >
+                          <FaEdit size={16} />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteTransfer(transfer.id, transfer.status, transfer.description_raw)}
+                          disabled={deletingTransfers.has(transfer.id)}
+                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition disabled:opacity-50"
+                          title="Eliminar transferencia"
+                        >
+                          <FaTrash size={14} />
+                        </button>
+                      </div>
                     </td>
                   </>
                 )}
@@ -435,17 +445,27 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
               </div>
             )}
 
-            <div className="flex items-center justify-between text-xs">
-              <div className="text-gray-600">
+            <div className="flex items-center justify-between text-xs gap-2">
+              <div className="text-gray-600 flex-1 min-w-0 truncate">
                 {transfer.insurers?.name || <span className="italic">Sin asiguradora</span>}
               </div>
-              <button
-                onClick={() => handleEdit(transfer)}
-                disabled={transfer.status === 'PAGADO'}
-                className="px-3 py-1.5 bg-[#010139] text-white rounded-lg hover:bg-[#020270] transition disabled:opacity-30 disabled:cursor-not-allowed text-xs font-medium"
-              >
-                {transfer.status === 'PAGADO' ? '🔒 Bloqueado' : 'Editar'}
-              </button>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <button
+                  onClick={() => handleEdit(transfer)}
+                  disabled={transfer.status === 'PAGADO'}
+                  className="px-3 py-1.5 bg-[#010139] text-white rounded-lg hover:bg-[#020270] transition disabled:opacity-30 disabled:cursor-not-allowed text-xs font-medium"
+                >
+                  {transfer.status === 'PAGADO' ? '🔒' : 'Editar'}
+                </button>
+                <button
+                  onClick={() => handleDeleteTransfer(transfer.id, transfer.status, transfer.description_raw)}
+                  disabled={deletingTransfers.has(transfer.id)}
+                  className="p-1.5 text-red-600 hover:bg-red-50 rounded-lg transition disabled:opacity-50"
+                  title="Eliminar"
+                >
+                  <FaTrash size={12} />
+                </button>
+              </div>
             </div>
           </div>
         ))}

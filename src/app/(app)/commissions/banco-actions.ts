@@ -935,29 +935,29 @@ export async function actionGetAvailableForImport(): Promise<ActionResult<{
     }
 
     // Filtrar transferencias que:
-    // 1. NO están en grupos
-    // 2. NO tienen imports permanentes (solo disponibles si no han sido importadas o solo tienen temporales)
+    // 1. NO están en grupos (los grupos se muestran arriba, no duplicar)
+    // 2. NO tienen imports (temporales ni permanentes - una vez usada, no debe aparecer más)
     const transfersNotInGroups = (transfers || []).filter((t: any) => {
       const groupTransfers = t.bank_group_transfers || [];
       const imports = t.bank_transfer_imports || [];
       
-      // Si está en un grupo, no mostrar
+      // Si está en un grupo, no mostrar (se muestra como grupo)
       if (groupTransfers.length > 0) return false;
       
-      // Si tiene imports NO temporales, no mostrar (ya fue usada permanentemente)
-      const hasPermanentImport = imports.some((imp: any) => !imp.is_temporary);
-      if (hasPermanentImport) return false;
+      // Si tiene CUALQUIER import (temporal o permanente), no mostrar
+      // Una vez seleccionada para un import, debe desaparecer del dropdown
+      if (imports.length > 0) return false;
       
       return true;
     });
 
-    // Filtrar grupos que NO tienen imports permanentes
+    // Filtrar grupos que NO tienen imports (temporales ni permanentes)
     const availableGroups = (groups || []).filter((g: any) => {
       const imports = g.bank_group_imports || [];
       
-      // Si tiene imports NO temporales, no mostrar (ya fue usada permanentemente)
-      const hasPermanentImport = imports.some((imp: any) => !imp.is_temporary);
-      if (hasPermanentImport) return false;
+      // Si tiene CUALQUIER import (temporal o permanente), no mostrar
+      // Una vez seleccionado para un import, debe desaparecer del dropdown
+      if (imports.length > 0) return false;
       
       return true;
     });
