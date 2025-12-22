@@ -548,9 +548,10 @@ export function AdvancesManagementModal({
                   ) : (
                     <div className="space-y-3">
                       {allAdvances.map((advance) => {
-                        // Monto inicial = MAX entre amount y total_paid (lógica más robusta)
-                        const initialAmount = Math.max(advance.amount, advance.total_paid || 0);
-                        const remainingBalance = Math.max(0, initialAmount - (advance.total_paid || 0));
+                        // Deuda inicial = saldo actual (amount) + lo que ya se pagó (total_paid)
+                        const initialAmount = advance.amount + (advance.total_paid || 0);
+                        // Saldo restante = amount (ya que amount es el saldo actual en BD)
+                        const remainingBalance = advance.amount;
                         const statusColor = 
                           advance.status === 'paid' ? 'bg-green-100 text-green-800' :
                           advance.status === 'partial' ? 'bg-yellow-100 text-yellow-800' :
