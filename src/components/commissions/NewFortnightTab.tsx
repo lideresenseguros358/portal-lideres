@@ -316,6 +316,10 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
     
     console.log('[NewFortnightTab] 💰 Adelantos PENDING:', advancesByBroker);
     
+    // VERIFICAR: Suma total de adelantos
+    const totalAdelantos = Object.values(advancesByBroker).reduce((sum, amt) => sum + amt, 0);
+    console.log('[NewFortnightTab] 💰 SUMA TOTAL DE ADELANTOS:', totalAdelantos);
+    
     // 5. Crear totalsData
     const totalsData = Object.keys(brokerGroups).map(brokerId => {
       const gross = brokerGroups[brokerId] || 0;
@@ -331,7 +335,10 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
     
     // 6. Calcular total de comisiones brutas
     const total = totalsData.reduce((sum, t) => sum + t.gross_amount, 0);
-    console.log('[NewFortnightTab] ✅ TOTAL COMISIONES CORREDORES:', total);
+    const totalNeto = totalsData.reduce((sum, t) => sum + t.net_amount, 0);
+    console.log('[NewFortnightTab] ✅ TOTAL COMISIONES CORREDORES (BRUTO):', total);
+    console.log('[NewFortnightTab] ✅ TOTAL NETO (BRUTO - ADELANTOS):', totalNeto);
+    console.log('[NewFortnightTab] ✅ VERIFICACIÓN: Total - Adelantos =', total - totalAdelantos, '(debe ser igual a Total Neto)');
     setBrokerCommissionsTotal(total);
     setBrokerTotalsData(totalsData);
   }, [draftFortnight]);
