@@ -5398,7 +5398,6 @@ export async function actionTempIdentifyClient(itemId: string, brokerId: string)
         insured_name: item.insured_name || 'UNKNOWN',
         raw_row: item.raw_row,
         broker_id: brokerId,
-        fortnight_id: item.fortnight_id,
       });
 
     if (commInsertError) {
