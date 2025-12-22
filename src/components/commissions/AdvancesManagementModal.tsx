@@ -548,7 +548,9 @@ export function AdvancesManagementModal({
                   ) : (
                     <div className="space-y-3">
                       {allAdvances.map((advance) => {
-                        const remainingBalance = Math.max(0, advance.amount - (advance.total_paid || 0));
+                        // Si amount es 0 pero hay pagos, usar total_paid como monto inicial
+                        const initialAmount = advance.amount > 0 ? advance.amount : (advance.total_paid || 0);
+                        const remainingBalance = Math.max(0, initialAmount - (advance.total_paid || 0));
                         const statusColor = 
                           advance.status === 'paid' ? 'bg-green-100 text-green-800' :
                           advance.status === 'partial' ? 'bg-yellow-100 text-yellow-800' :
@@ -585,7 +587,7 @@ export function AdvancesManagementModal({
                                 <div className="grid grid-cols-3 gap-4 mt-3">
                                   <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
                                     <span className="text-xs text-gray-600 block mb-1">Monto Inicial</span>
-                                    <span className="font-bold text-lg text-gray-800">${advance.amount.toFixed(2)}</span>
+                                    <span className="font-bold text-lg text-gray-800">${initialAmount.toFixed(2)}</span>
                                   </div>
                                   <div className="bg-green-50 rounded-lg p-3 border border-green-200">
                                     <span className="text-xs text-green-700 block mb-1">Pagado</span>
