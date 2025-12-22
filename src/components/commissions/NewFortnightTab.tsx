@@ -294,6 +294,10 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
       return acc;
     }, {} as Record<string, number>);
     
+    console.log('[NewFortnightTab] 📊 Items obtenidos:', items.length);
+    console.log('[NewFortnightTab] 📊 Brokers con comisiones:', Object.keys(brokerGroups));
+    console.log('[NewFortnightTab] 📊 Totales por broker:', brokerGroups);
+    
     // 4. Cargar adelantos PENDING por broker
     const { data: advances } = await supabaseClient()
       .from('advances')
@@ -304,6 +308,8 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
       acc[adv.broker_id] = (acc[adv.broker_id] || 0) + adv.amount;
       return acc;
     }, {} as Record<string, number>);
+    
+    console.log('[NewFortnightTab] 💰 Adelantos PENDING:', advancesByBroker);
     
     // 5. Crear totalsData
     const totalsData = Object.keys(brokerGroups).map(brokerId => {
@@ -320,6 +326,7 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
     
     // 6. Calcular total de comisiones brutas
     const total = totalsData.reduce((sum, t) => sum + t.gross_amount, 0);
+    console.log('[NewFortnightTab] ✅ TOTAL COMISIONES CORREDORES:', total);
     setBrokerCommissionsTotal(total);
     setBrokerTotalsData(totalsData);
   }, [draftFortnight]);
