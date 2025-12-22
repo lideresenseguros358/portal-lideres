@@ -410,10 +410,13 @@ export async function actionUploadImport(formData: FormData) {
         temp_assigned_broker_id: null,
       }));
 
-      console.log(`[SERVER][${insurerName}] Insertando en draft_unidentified_items...`);
-      const { error: draftError } = await (supabase as any)
+      console.log(`[SERVER][${insurerName}] Insertando en draft_unidentified_items con ON CONFLICT DO NOTHING...`);
+      const { error: draftError, count } = await (supabase as any)
         .from('draft_unidentified_items')
-        .insert(draftItems);
+        .upsert(draftItems, { 
+          onConflict: 'fortnight_id,import_id,policy_number,insured_name',
+          ignoreDuplicates: true 
+        });
       
       if (draftError) {
         console.error(`[SERVER][${insurerName}] ❌ ERROR insertando draft unidentified:`, draftError);
@@ -425,7 +428,7 @@ export async function actionUploadImport(formData: FormData) {
         });
         console.log(`[SERVER][${insurerName}] Continuando a pesar del error...`);
       } else {
-        console.log(`[SERVER][${insurerName}] ✅ ${draftItems.length} items insertados en draft_unidentified_items`);
+        console.log(`[SERVER][${insurerName}] ✅ ${draftItems.length} items procesados en draft_unidentified_items (duplicados ignorados)`);
       }
     } else {
       console.log(`[SERVER][${insurerName}] ℹ️ No hay items sin identificar para insertar (todos fueron identificados con broker)`);
