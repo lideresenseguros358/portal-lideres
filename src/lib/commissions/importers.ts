@@ -726,8 +726,10 @@ export async function parseCsvXlsx(file: File, mappingRules: MappingRule[] = [],
     }
   }
   
-  // Check if it's XLSX
-  if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+  // Check if it's XLSX or PDF (PDF parsers are in parseXlsxFile)
+  const fileExtension = file.name.toLowerCase().split('.').pop();
+  if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls') || fileExtension === 'pdf') {
+    console.log(`[PARSER] Detectado archivo ${fileExtension?.toUpperCase()} - Usando parseXlsxFile con parsers personalizados`);
     return parseXlsxFile(file, mappingRules, invertNegatives, useMultiColumns, insurerId);
   }
   
