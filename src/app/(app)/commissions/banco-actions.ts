@@ -900,15 +900,27 @@ export async function actionGetAvailableForImport(): Promise<ActionResult<{
 
     const supabase = await getSupabaseServer();
 
-    // Obtener TODAS las transferencias que NO están PAGADAS
+    // PRIMERO: Obtener IDs de transferencias que están agrupadas
+    const { data: groupedTransferIds, error: groupedError } = await supabase
+      .from('bank_group_transfers')
+      .select('transfer_id');
+    
+    if (groupedError) {
+      console.error('[BANCO] Error obteniendo transferencias agrupadas:', groupedError);
+      return { ok: false, error: 'Error al cargar transferencias agrupadas' };
+    }
+    
+    const groupedIds = new Set((groupedTransferIds || []).map((gt: any) => gt.transfer_id));
+    console.log('[BANCO] 🔍 DEBUG: Transferencias agrupadas (IDs):', Array.from(groupedIds));
+
+    // SEGUNDO: Obtener TODAS las transferencias que NO están PAGADAS
     const { data: transfers, error: transfersError } = await supabase
       .from('bank_transfers_comm')
       .select(`
         *,
         insurers:insurer_assigned_id (id, name),
         bank_cutoffs:cutoff_id (start_date, end_date),
-        bank_transfer_imports!left (id, is_temporary),
-        bank_group_transfers!bank_group_transfers_transfer_id_fkey (id, group_id, transfer_id)
+        bank_transfer_imports!left (id, is_temporary)
       `)
       .neq('status', 'PAGADO')
       .order('description_raw', { ascending: true }); // Orden alfabético
@@ -936,43 +948,21 @@ export async function actionGetAvailableForImport(): Promise<ActionResult<{
 
     console.log('[BANCO] 🔍 DEBUG: Total transferencias obtenidas:', transfers?.length);
     console.log('[BANCO] 🔍 DEBUG: Total grupos obtenidos:', groups?.length);
-    
-    // Diagnóstico: mostrar primeras 3 transferencias
-    if (transfers && transfers.length > 0) {
-      console.log('[BANCO] 🔍 DEBUG: Primeras 3 transferencias:', transfers.slice(0, 3).map((t: any) => ({
-        id: t.id,
-        description: t.description_raw?.substring(0, 30),
-        groupTransfers: t.bank_group_transfers?.length || 0,
-        imports: t.bank_transfer_imports?.length || 0,
-        importsData: t.bank_transfer_imports
-      })));
-    }
-    
-    // Diagnóstico: mostrar primeros 3 grupos
-    if (groups && groups.length > 0) {
-      console.log('[BANCO] 🔍 DEBUG: Primeros 3 grupos:', groups.slice(0, 3).map((g: any) => ({
-        id: g.id,
-        name: g.name,
-        imports: g.bank_group_imports?.length || 0,
-        importsData: g.bank_group_imports
-      })));
-    }
+    console.log('[BANCO] 🔍 DEBUG: Total IDs agrupados:', groupedIds.size);
 
     // Filtrar transferencias que:
-    // 1. NO están en grupos (si están agrupadas, solo se muestra el grupo)
+    // 1. NO están en grupos (usando Set de IDs agrupados)
     // 2. NO tienen NINGÚN import (temporal o permanente - una vez usada desaparece)
     const transfersNotInGroups = (transfers || []).filter((t: any) => {
-      const groupTransfers = t.bank_group_transfers || [];
       const imports = t.bank_transfer_imports || [];
       
-      // Si está en un grupo, no mostrar (se muestra como grupo)
-      if (groupTransfers.length > 0) {
+      // Si está en un grupo (verificar con Set de IDs), no mostrar
+      if (groupedIds.has(t.id)) {
         console.log(`[BANCO] ❌ Excluir transfer ${t.id} - está en grupo`);
         return false;
       }
       
       // Si tiene CUALQUIER import (temporal o permanente), no mostrar
-      // Una vez seleccionada para un import, desaparece del dropdown
       if (imports.length > 0) {
         console.log(`[BANCO] ❌ Excluir transfer ${t.id} - tiene ${imports.length} imports`);
         return false;
