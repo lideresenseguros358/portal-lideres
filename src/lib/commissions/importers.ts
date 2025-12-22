@@ -37,6 +37,8 @@ async function parseXlsxFile(file: File, mappingRules: MappingRule[] = [], inver
 
     const insurerSlug = getInsurerSlug(String((insurer as any)?.name || ''));
     
+    console.log(`[PARSER] Insurer detectado: "${insurer?.name}" (slug: ${insurerSlug})`);
+    
     if (insurer?.name?.toUpperCase().includes('SURA')) {
       console.log('[PARSER] Detectado SURA - Usando parser especial');
       try {
