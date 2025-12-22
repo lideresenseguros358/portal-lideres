@@ -116,6 +116,23 @@ export default function ImportedReportsList({ reports, onDelete }: Props) {
           display: flex;
           flex-direction: column;
           gap: 12px;
+          max-height: 480px;
+          overflow-y: auto;
+          padding-right: 8px;
+        }
+        .list-content::-webkit-scrollbar {
+          width: 8px;
+        }
+        .list-content::-webkit-scrollbar-track {
+          background: #f1f1f1;
+          border-radius: 10px;
+        }
+        .list-content::-webkit-scrollbar-thumb {
+          background: #8AAA19;
+          border-radius: 10px;
+        }
+        .list-content::-webkit-scrollbar-thumb:hover {
+          background: #010139;
         }
         .report-item {
           display: flex;
