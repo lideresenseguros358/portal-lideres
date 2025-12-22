@@ -935,8 +935,8 @@ export async function actionGetAvailableForImport(): Promise<ActionResult<{
     }
 
     // Filtrar transferencias que:
-    // 1. NO están en grupos (los grupos se muestran arriba, no duplicar)
-    // 2. NO tienen imports PERMANENTES (pero SÍ pueden tener imports temporales de otras quincenas)
+    // 1. NO están en grupos (si están agrupadas, solo se muestra el grupo)
+    // 2. NO tienen NINGÚN import (temporal o permanente - una vez usada desaparece)
     const transfersNotInGroups = (transfers || []).filter((t: any) => {
       const groupTransfers = t.bank_group_transfers || [];
       const imports = t.bank_transfer_imports || [];
@@ -944,24 +944,20 @@ export async function actionGetAvailableForImport(): Promise<ActionResult<{
       // Si está en un grupo, no mostrar (se muestra como grupo)
       if (groupTransfers.length > 0) return false;
       
-      // Si tiene imports PERMANENTES (is_temporary = false o null), no mostrar
-      // PERO: Si solo tiene imports TEMPORALES (is_temporary = true), SÍ mostrar
-      // Esto permite que transferencias pendientes de otras quincenas estén disponibles
-      const hasPermanentImport = imports.some((imp: any) => !imp.is_temporary);
-      if (hasPermanentImport) return false;
+      // Si tiene CUALQUIER import (temporal o permanente), no mostrar
+      // Una vez seleccionada para un import, desaparece del dropdown
+      if (imports.length > 0) return false;
       
       return true;
     });
 
-    // Filtrar grupos que NO tienen imports PERMANENTES (pero SÍ pueden tener imports temporales)
+    // Filtrar grupos que NO tienen NINGÚN import (temporal o permanente)
     const availableGroups = (groups || []).filter((g: any) => {
       const imports = g.bank_group_imports || [];
       
-      // Si tiene imports PERMANENTES (is_temporary = false o null), no mostrar
-      // PERO: Si solo tiene imports TEMPORALES (is_temporary = true), SÍ mostrar
-      // Esto permite que grupos pendientes de otras quincenas estén disponibles
-      const hasPermanentImport = imports.some((imp: any) => !imp.is_temporary);
-      if (hasPermanentImport) return false;
+      // Si tiene CUALQUIER import (temporal o permanente), no mostrar
+      // Una vez seleccionado para un import, desaparece del dropdown
+      if (imports.length > 0) return false;
       
       return true;
     });
