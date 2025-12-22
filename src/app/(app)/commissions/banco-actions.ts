@@ -908,7 +908,7 @@ export async function actionGetAvailableForImport(): Promise<ActionResult<{
         insurers:insurer_assigned_id (id, name),
         bank_cutoffs:cutoff_id (start_date, end_date),
         bank_transfer_imports!left (id, is_temporary),
-        bank_group_transfers!left (group_id)
+        bank_group_transfers!left (id, group_id, transfer_id)
       `)
       .neq('status', 'PAGADO')
       .order('description_raw', { ascending: true }); // Orden alfabético
