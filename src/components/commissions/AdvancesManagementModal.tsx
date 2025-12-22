@@ -75,12 +75,9 @@ export function AdvancesManagementModal({
         // Guardar todos los adelantos para el historial
         setAllAdvances((result.data || []) as Advance[]);
         
-        // Filtrar adelantos con saldo pendiente (que no estén completamente pagados)
+        // Filtrar adelantos con saldo > 0 (amount en BD ya es el saldo actual)
         const filteredAdvances = (result.data || []).filter(
-          (a: any) => {
-            const remaining = a.amount - (a.total_paid || 0);
-            return remaining > 0;
-          }
+          (a: any) => a.amount > 0
         );
         
         console.log('[AdvancesManagementModal] Filtered advances (with balance):', filteredAdvances.length);
