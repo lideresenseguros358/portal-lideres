@@ -13,8 +13,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { FaChevronDown, FaChevronRight, FaHandHoldingUsd, FaUndo, FaMinus, FaEllipsisV } from 'react-icons/fa';
-import DiscountModal from './DiscountModal';
+import { FaChevronDown, FaChevronRight, FaHandHoldingUsd, FaUndo, FaEllipsisV, FaMoneyBillWave } from 'react-icons/fa';
+import { AdvancesManagementModal } from './AdvancesManagementModal';
 
 // Types
 interface CommItem {
@@ -58,12 +58,13 @@ export default function BrokerTotals({ draftFortnightId, onManageAdvances, broke
   const [expandedBrokers, setExpandedBrokers] = useState<Set<string>>(new Set());
   const [expandedInsurers, setExpandedInsurers] = useState<Set<string>>(new Set());
   const [brokerDiscounts, setBrokerDiscounts] = useState<Record<string, number>>({});
-  const [openMenuBroker, setOpenMenuBroker] = useState<string | null>(null);
-  const [discountModalData, setDiscountModalData] = useState<{
+  const [managementModal, setManagementModal] = useState<{
+    isOpen: boolean;
     brokerId: string;
     brokerName: string;
     grossAmount: number;
   } | null>(null);
+  const [openMenuBroker, setOpenMenuBroker] = useState<string | null>(null);
 
   useEffect(() => {
     const loadDetails = async () => {
@@ -76,8 +77,26 @@ export default function BrokerTotals({ draftFortnightId, onManageAdvances, broke
       if (result.ok) {
         setDetails(result.data || []);
         
-        // NO cargar adelantos en borrador - solo se aplican al PAGAR la quincena
-        setBrokerDiscounts({});
+        // Cargar descuentos temporales desde fortnight_discounts
+        try {
+          const response = await fetch(`/api/commissions/fortnight-discounts?fortnight_id=${draftFortnightId}`);
+          const discountsData = await response.json();
+          
+          if (discountsData.ok) {
+            // Agrupar descuentos por broker_id
+            const discountsByBroker: Record<string, number> = {};
+            (discountsData.data || []).forEach((d: any) => {
+              if (!discountsByBroker[d.broker_id]) {
+                discountsByBroker[d.broker_id] = 0;
+              }
+              discountsByBroker[d.broker_id] += d.amount;
+            });
+            setBrokerDiscounts(discountsByBroker);
+          }
+        } catch (error) {
+          console.error('Error loading temporary discounts:', error);
+          setBrokerDiscounts({});
+        }
       } else {
         // Solo mostrar error si es la primera carga
         if (isInitialLoad) {
@@ -233,16 +252,22 @@ export default function BrokerTotals({ draftFortnightId, onManageAdvances, broke
                           className="fixed inset-0 z-[100]" 
                           onClick={() => setOpenMenuBroker(null)}
                         />
-                        <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-[101]">
+                        <div className="absolute right-0 top-full mt-1 w-56 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-[101]">
                           <button
                             onClick={() => {
-                              onManageAdvances(brokerId);
+                              setManagementModal({
+                                isOpen: true,
+                                brokerId,
+                                brokerName: brokerData.broker_name,
+                                grossAmount: brokerData.total_gross
+                              });
                               setOpenMenuBroker(null);
                             }}
-                            className="w-full text-left px-4 py-2.5 hover:bg-gray-50 flex items-center gap-3 text-sm text-gray-700"
+                            className="w-full text-left px-4 py-2.5 hover:bg-[#8AAA19]/10 flex items-center gap-3 text-sm text-[#8AAA19] font-semibold"
                           >
-                            💰 Adelantos
+                            <FaMoneyBillWave size={14} /> Gestionar Adelantos
                           </button>
+                          <div className="border-t border-gray-100 my-1"></div>
                           <button
                             onClick={() => {
                               handleRetainPayment(brokerId, brokerData.is_retained);
@@ -258,24 +283,6 @@ export default function BrokerTotals({ draftFortnightId, onManageAdvances, broke
                               <><FaHandHoldingUsd size={14} /> Retener Pago</>
                             )}
                           </button>
-                          {!brokerData.is_retained && (
-                            <>
-                              <div className="border-t border-gray-100 my-1"></div>
-                              <button
-                                onClick={() => {
-                                  setDiscountModalData({
-                                    brokerId,
-                                    brokerName: brokerData.broker_name,
-                                    grossAmount: brokerData.total_gross
-                                  });
-                                  setOpenMenuBroker(null);
-                                }}
-                                className="w-full text-left px-4 py-2.5 hover:bg-orange-50 flex items-center gap-3 text-sm text-orange-700"
-                              >
-                                <FaMinus size={14} /> Aplicar Descuento
-                              </button>
-                            </>
-                          )}
                         </div>
                       </>
                     )}
@@ -414,16 +421,22 @@ export default function BrokerTotals({ draftFortnightId, onManageAdvances, broke
                             className="fixed inset-0 z-[100]" 
                             onClick={() => setOpenMenuBroker(null)}
                           />
-                          <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-[101]">
+                          <div className="absolute right-0 top-full mt-1 w-56 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-[101]">
                             <button
                               onClick={() => {
-                                onManageAdvances(brokerId);
+                                setManagementModal({
+                                  isOpen: true,
+                                  brokerId,
+                                  brokerName: brokerData.broker_name,
+                                  grossAmount: brokerData.total_gross
+                                });
                                 setOpenMenuBroker(null);
                               }}
-                              className="w-full text-left px-4 py-2.5 hover:bg-gray-50 flex items-center gap-3 text-sm text-gray-700"
+                              className="w-full text-left px-4 py-2.5 hover:bg-[#8AAA19]/10 flex items-center gap-3 text-sm text-[#8AAA19] font-semibold"
                             >
-                              💰 Adelantos
+                              <FaMoneyBillWave size={14} /> Gestionar Adelantos
                             </button>
+                            <div className="border-t border-gray-100 my-1"></div>
                             <button
                               onClick={() => {
                                 handleRetainPayment(brokerId, brokerData.is_retained);
@@ -439,24 +452,6 @@ export default function BrokerTotals({ draftFortnightId, onManageAdvances, broke
                                 <><FaHandHoldingUsd size={14} /> Retener Pago</>
                               )}
                             </button>
-                            {!brokerData.is_retained && (
-                              <>
-                                <div className="border-t border-gray-100 my-1"></div>
-                                <button
-                                  onClick={() => {
-                                    setDiscountModalData({
-                                      brokerId,
-                                      brokerName: brokerData.broker_name,
-                                      grossAmount: brokerData.total_gross
-                                    });
-                                    setOpenMenuBroker(null);
-                                  }}
-                                  className="w-full text-left px-4 py-2.5 hover:bg-orange-50 flex items-center gap-3 text-sm text-orange-700"
-                                >
-                                  <FaMinus size={14} /> Aplicar Descuento
-                                </button>
-                              </>
-                            )}
                           </div>
                         </>
                       )}
@@ -511,17 +506,17 @@ export default function BrokerTotals({ draftFortnightId, onManageAdvances, broke
       </div>
 
       {/* Modal de Descuentos */}
-      {discountModalData && (
-        <DiscountModal
-          isOpen={true}
-          onClose={() => setDiscountModalData(null)}
-          brokerId={discountModalData.brokerId}
-          brokerName={discountModalData.brokerName}
+      {managementModal?.isOpen && (
+        <AdvancesManagementModal
+          isOpen={managementModal.isOpen}
+          onClose={() => setManagementModal(null)}
+          brokerId={managementModal.brokerId}
+          brokerName={managementModal.brokerName}
           fortnightId={draftFortnightId}
-          grossAmount={discountModalData.grossAmount}
-          onSuccess={() => {
-            setDiscountModalData(null);
-            // Recargar datos
+          grossAmount={managementModal.grossAmount}
+          onDiscountsApplied={() => {
+            setManagementModal(null);
+            // Forzar recarga de datos
             onRetentionChange();
           }}
         />
