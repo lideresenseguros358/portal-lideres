@@ -249,7 +249,7 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
     }
   }, [draftFortnight]);
 
-  // Cargar totales de brokers desde fortnight_broker_totals (fuente única de verdad)
+  // SIMPLIFICADO: Calcular totales directo desde comm_items (fuente única de verdad)
   const loadBrokerTotals = useCallback(async () => {
     if (!draftFortnight) {
       setBrokerCommissionsTotal(0);
@@ -257,31 +257,71 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
       return;
     }
     
-    // Obtener totales desde fortnight_broker_totals
-    const { data: totals } = await supabaseClient()
-      .from('fortnight_broker_totals')
-      .select('broker_id, gross_amount, net_amount, is_retained')
-      .eq('fortnight_id', draftFortnight.id);
+    // 1. Obtener imports de esta quincena
+    const { data: imports } = await supabaseClient()
+      .from('comm_imports')
+      .select('id')
+      .eq('period_label', draftFortnight.id);
     
-    if (!totals || totals.length === 0) {
+    if (!imports || imports.length === 0) {
       setBrokerCommissionsTotal(0);
       setBrokerTotalsData([]);
       return;
     }
     
-    // Calcular discount_amount como gross - net
-    const totalsWithDiscounts = totals.map(t => ({
-      broker_id: t.broker_id,
-      gross_amount: t.gross_amount || 0,
-      net_amount: t.net_amount || 0,
-      discount_amount: (t.gross_amount || 0) - (t.net_amount || 0),
-      is_retained: t.is_retained || false
-    }));
+    const importIds = imports.map(i => i.id);
     
-    // Calcular total de comisiones brutas
-    const total = totalsWithDiscounts.reduce((sum, t) => sum + t.gross_amount, 0);
+    // 2. Obtener comm_items de estos imports
+    const { data: items } = await supabaseClient()
+      .from('comm_items')
+      .select('broker_id, gross_amount')
+      .in('import_id', importIds)
+      .not('broker_id', 'is', null);
+    
+    if (!items || items.length === 0) {
+      setBrokerCommissionsTotal(0);
+      setBrokerTotalsData([]);
+      return;
+    }
+    
+    // 3. Agrupar por broker
+    const brokerGroups = items.reduce((acc, item) => {
+      const brokerId = item.broker_id!;
+      if (!acc[brokerId]) {
+        acc[brokerId] = 0;
+      }
+      acc[brokerId] += Math.abs(item.gross_amount);
+      return acc;
+    }, {} as Record<string, number>);
+    
+    // 4. Cargar adelantos PENDING por broker
+    const { data: advances } = await supabaseClient()
+      .from('advances')
+      .select('broker_id, amount')
+      .eq('status', 'PENDING');
+    
+    const advancesByBroker = (advances || []).reduce((acc, adv) => {
+      acc[adv.broker_id] = (acc[adv.broker_id] || 0) + adv.amount;
+      return acc;
+    }, {} as Record<string, number>);
+    
+    // 5. Crear totalsData
+    const totalsData = Object.keys(brokerGroups).map(brokerId => {
+      const gross = brokerGroups[brokerId] || 0;
+      const discount = advancesByBroker[brokerId] || 0;
+      return {
+        broker_id: brokerId,
+        gross_amount: gross,
+        discount_amount: discount,
+        net_amount: gross - discount,
+        is_retained: false
+      };
+    });
+    
+    // 6. Calcular total de comisiones brutas
+    const total = totalsData.reduce((sum, t) => sum + t.gross_amount, 0);
     setBrokerCommissionsTotal(total);
-    setBrokerTotalsData(totalsWithDiscounts);
+    setBrokerTotalsData(totalsData);
   }, [draftFortnight]);
 
   // Calculate office total - usar useMemo para que se recalcule automáticamente

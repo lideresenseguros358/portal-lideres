@@ -76,18 +76,18 @@ export default function BrokerTotals({ draftFortnightId, onManageAdvances, broke
       if (result.ok) {
         setDetails(result.data || []);
         
-        // Cargar descuentos reales desde fortnight_broker_totals
+        // SIMPLIFICADO: Cargar adelantos PENDING directamente por broker
         const { supabaseClient } = await import('@/lib/supabase/client');
-        const { data: totals } = await supabaseClient()
-          .from('fortnight_broker_totals')
-          .select('broker_id, gross_amount, net_amount')
-          .eq('fortnight_id', draftFortnightId);
+        const { data: advances } = await supabaseClient()
+          .from('advances')
+          .select('broker_id, amount')
+          .eq('status', 'PENDING');
         
+        // Agrupar adelantos por broker
         const discounts: Record<string, number> = {};
-        if (totals) {
-          totals.forEach(t => {
-            // Descuento = bruto - neto
-            discounts[t.broker_id] = (t.gross_amount || 0) - (t.net_amount || 0);
+        if (advances) {
+          advances.forEach(adv => {
+            discounts[adv.broker_id] = (discounts[adv.broker_id] || 0) + adv.amount;
           });
         }
         setBrokerDiscounts(discounts);
