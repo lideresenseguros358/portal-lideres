@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
 
     const supabase = getSupabaseAdmin();
     let query = supabase
-      .from('fortnight_discounts' as any)
+      .from('fortnight_discounts')
       .select('*')
       .eq('fortnight_id', fortnight_id)
       .eq('applied', false); // Solo descuentos NO aplicados (aún en borrador)
@@ -92,7 +92,7 @@ export async function POST(request: NextRequest) {
 
     // 2. Eliminar descuentos anteriores de este broker en esta quincena
     await supabase
-      .from('fortnight_discounts' as any)
+      .from('fortnight_discounts')
       .delete()
       .eq('fortnight_id', fortnight_id)
       .eq('broker_id', broker_id)
@@ -109,7 +109,7 @@ export async function POST(request: NextRequest) {
       }));
 
       const { error: insertError } = await supabase
-        .from('fortnight_discounts' as any)
+        .from('fortnight_discounts')
         .insert(records);
 
       if (insertError) {
@@ -145,7 +145,7 @@ export async function DELETE(request: NextRequest) {
     const supabase = getSupabaseAdmin();
 
     const { error } = await supabase
-      .from('fortnight_discounts' as any)
+      .from('fortnight_discounts')
       .delete()
       .eq('id', id)
       .eq('applied', false); // Solo se pueden eliminar descuentos NO aplicados

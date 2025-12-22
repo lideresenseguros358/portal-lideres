@@ -14,6 +14,7 @@ interface Advance {
   total_paid?: number;
   last_payment_date?: string | null;
   is_recurring?: boolean;
+  payment_logs?: Array<{ date: string; amount: number }>;
 }
 
 interface TemporaryDiscount {
@@ -42,6 +43,7 @@ export function AdvancesManagementModal({
 }: Props) {
   const [activeTab, setActiveTab] = useState<'manage' | 'history'>('manage');
   const [advances, setAdvances] = useState<Advance[]>([]);
+  const [allAdvances, setAllAdvances] = useState<Advance[]>([]); // Para historial completo
   const [temporaryDiscounts, setTemporaryDiscounts] = useState<Map<string, number>>(new Map());
   const [existingDiscounts, setExistingDiscounts] = useState<TemporaryDiscount[]>([]);
   const [loading, setLoading] = useState(false);
@@ -60,15 +62,29 @@ export function AdvancesManagementModal({
     setLoading(true);
     try {
       // 1. Cargar adelantos activos del broker (filtrado por status se hace en el componente)
+      console.log('[AdvancesManagementModal] Loading advances for broker:', brokerId);
       const result = await actionGetAdvances(brokerId);
 
+      console.log('[AdvancesManagementModal] Result:', result);
+      
       if (result.ok) {
-        // Filtrar solo pending y partial
+        console.log('[AdvancesManagementModal] Total advances:', result.data?.length);
+        console.log('[AdvancesManagementModal] Sample data:', result.data?.[0]);
+        
+        // Guardar todos los adelantos para el historial
+        setAllAdvances((result.data || []) as Advance[]);
+        
+        // Filtrar solo pending y partial para gestión
         const filteredAdvances = (result.data || []).filter(
           (a: any) => a.status === 'pending' || a.status === 'partial'
         );
+        
+        console.log('[AdvancesManagementModal] Filtered advances (pending/partial):', filteredAdvances.length);
+        console.log('[AdvancesManagementModal] Filtered data:', filteredAdvances);
+        
         setAdvances(filteredAdvances as Advance[]);
       } else {
+        console.error('[AdvancesManagementModal] Error loading advances:', result.error);
         toast.error('Error al cargar adelantos');
       }
 
@@ -510,12 +526,90 @@ export function AdvancesManagementModal({
               )}
 
               {activeTab === 'history' && (
-                <div className="text-center py-12 text-gray-500">
-                  <FaHistory size={48} className="mx-auto mb-4 opacity-50" />
-                  <p>Historial completo de adelantos</p>
-                  <p className="text-sm mt-2">
-                    Para ver el historial detallado, visita la sección "Adelantos" en el menú principal
-                  </p>
+                <div className="space-y-4">
+                  <h3 className="text-lg font-bold text-[#010139]">
+                    Historial Completo ({allAdvances.length})
+                  </h3>
+
+                  {allAdvances.length === 0 ? (
+                    <div className="text-center py-12 text-gray-500">
+                      <FaHistory size={48} className="mx-auto mb-4 opacity-50" />
+                      <p>No hay adelantos registrados para este corredor</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {allAdvances.map((advance) => {
+                        const remainingBalance = advance.amount - (advance.total_paid || 0);
+                        const statusColor = 
+                          advance.status === 'paid' ? 'bg-green-100 text-green-800' :
+                          advance.status === 'partial' ? 'bg-yellow-100 text-yellow-800' :
+                          'bg-blue-100 text-blue-800';
+                        const statusText = 
+                          advance.status === 'paid' ? 'Saldado' :
+                          advance.status === 'partial' ? 'Parcial' :
+                          'Pendiente';
+
+                        return (
+                          <div
+                            key={advance.id}
+                            className="border-2 border-gray-200 rounded-lg p-4 hover:border-gray-300 transition-all"
+                          >
+                            <div className="flex items-start justify-between mb-2">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <p className="font-semibold text-[#010139]">{advance.reason}</p>
+                                  <span className={`text-xs px-2 py-1 rounded ${statusColor}`}>
+                                    {statusText}
+                                  </span>
+                                  {advance.is_recurring && (
+                                    <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">
+                                      Recurrente
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="grid grid-cols-3 gap-4 text-sm mt-2">
+                                  <div>
+                                    <span className="text-gray-600">Total: </span>
+                                    <span className="font-semibold">${advance.amount.toFixed(2)}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-600">Pagado: </span>
+                                    <span className="font-semibold text-green-700">${(advance.total_paid || 0).toFixed(2)}</span>
+                                  </div>
+                                  <div>
+                                    <span className="text-gray-600">Saldo: </span>
+                                    <span className="font-semibold text-blue-700">${remainingBalance.toFixed(2)}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            <div className="flex items-center gap-4 text-xs text-gray-500 mt-3 pt-3 border-t border-gray-200">
+                              <span>Creado: {new Date(advance.created_at).toLocaleDateString('es-PA')}</span>
+                              {advance.last_payment_date && (
+                                <span>Último pago: {new Date(advance.last_payment_date).toLocaleDateString('es-PA')}</span>
+                              )}
+                            </div>
+
+                            {/* Historial de pagos */}
+                            {advance.payment_logs && advance.payment_logs.length > 0 && (
+                              <div className="mt-3 pt-3 border-t border-gray-200">
+                                <p className="text-xs font-semibold text-gray-700 mb-2">Pagos realizados:</p>
+                                <div className="space-y-1">
+                                  {advance.payment_logs.map((log, idx) => (
+                                    <div key={idx} className="flex justify-between text-xs text-gray-600">
+                                      <span>{new Date(log.date).toLocaleDateString('es-PA')}</span>
+                                      <span className="font-mono">${log.amount.toFixed(2)}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
             </>

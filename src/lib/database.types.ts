@@ -2560,6 +2560,61 @@ export type Database = {
           },
         ]
       }
+      fortnight_discounts: {
+        Row: {
+          advance_id: string
+          amount: number
+          applied: boolean
+          broker_id: string
+          created_at: string
+          fortnight_id: string
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          advance_id: string
+          amount: number
+          applied?: boolean
+          broker_id: string
+          created_at?: string
+          fortnight_id: string
+          id?: string
+          updated_at?: string
+        }
+        Update: {
+          advance_id?: string
+          amount?: number
+          applied?: boolean
+          broker_id?: string
+          created_at?: string
+          fortnight_id?: string
+          id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fortnight_discounts_advance_id_fkey"
+            columns: ["advance_id"]
+            isOneToOne: false
+            referencedRelation: "advances"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fortnight_discounts_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fortnight_discounts_fortnight_id_fkey"
+            columns: ["fortnight_id"]
+            isOneToOne: false
+            referencedRelation: "fortnights"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fortnights: {
         Row: {
           created_at: string
