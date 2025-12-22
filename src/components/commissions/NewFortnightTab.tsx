@@ -219,6 +219,8 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
       let vida = 0;
       let generales = 0;
       
+      console.log('[loadRamosTotals] 📊 Imports encontrados:', imports?.length);
+      
       // Para cada import, calcular ganancia de oficina
       for (const imp of imports || []) {
         // Obtener comisiones desde comm_items directamente (más confiable)
@@ -235,6 +237,8 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
         const totalReporte = Math.abs(Number(imp.total_amount) || 0);
         const gananciaOficina = totalReporte - totalComisionesBrokers;
         
+        console.log(`[loadRamosTotals] Import ${imp.id.substring(0, 8)}: Total=${totalReporte}, Comisiones=${totalComisionesBrokers}, Ganancia=${gananciaOficina}, isVida=${imp.is_life_insurance}`);
+        
         // Clasificar según is_life_insurance
         if (imp.is_life_insurance) {
           vida += gananciaOficina;
@@ -243,6 +247,7 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
         }
       }
       
+      console.log('[loadRamosTotals] ✅ VIDA:', vida, 'GENERALES:', generales, 'TOTAL:', vida + generales);
       setRamosTotals({ vida, generales });
     } catch (error) {
       console.error('Error calculating ramos totals:', error);
