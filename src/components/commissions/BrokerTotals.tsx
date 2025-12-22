@@ -79,22 +79,8 @@ export default function BrokerTotals({ draftFortnightId, onManageAdvances, broke
         console.log('[BrokerTotals] 📊 Items obtenidos:', (result.data || []).length);
         console.log('[BrokerTotals] 📊 Sample items:', (result.data || []).slice(0, 3));
         
-        // SIMPLIFICADO: Cargar adelantos PENDING directamente por broker
-        const { supabaseClient } = await import('@/lib/supabase/client');
-        const { data: advances } = await supabaseClient()
-          .from('advances')
-          .select('broker_id, amount')
-          .eq('status', 'PENDING');
-        
-        // Agrupar adelantos por broker
-        const discounts: Record<string, number> = {};
-        if (advances) {
-          advances.forEach(adv => {
-            discounts[adv.broker_id] = (discounts[adv.broker_id] || 0) + adv.amount;
-          });
-        }
-        console.log('[BrokerTotals] 💰 Adelantos PENDING:', discounts);
-        setBrokerDiscounts(discounts);
+        // NO cargar adelantos en borrador - solo se aplican al PAGAR la quincena
+        setBrokerDiscounts({});
       } else {
         // Solo mostrar error si es la primera carga
         if (isInitialLoad) {

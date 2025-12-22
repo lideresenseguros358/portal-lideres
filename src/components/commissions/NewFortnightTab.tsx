@@ -303,42 +303,22 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
     console.log('[NewFortnightTab] 📊 Brokers con comisiones:', Object.keys(brokerGroups));
     console.log('[NewFortnightTab] 📊 Totales por broker:', brokerGroups);
     
-    // 4. Cargar adelantos PENDING por broker
-    const { data: advances } = await supabaseClient()
-      .from('advances')
-      .select('broker_id, amount')
-      .eq('status', 'PENDING');
-    
-    const advancesByBroker = (advances || []).reduce((acc, adv) => {
-      acc[adv.broker_id] = (acc[adv.broker_id] || 0) + adv.amount;
-      return acc;
-    }, {} as Record<string, number>);
-    
-    console.log('[NewFortnightTab] 💰 Adelantos PENDING:', advancesByBroker);
-    
-    // VERIFICAR: Suma total de adelantos
-    const totalAdelantos = Object.values(advancesByBroker).reduce((sum, amt) => sum + amt, 0);
-    console.log('[NewFortnightTab] 💰 SUMA TOTAL DE ADELANTOS:', totalAdelantos);
-    
-    // 5. Crear totalsData
+    // 4. Crear totalsData SIN adelantos (solo se aplican al PAGAR la quincena)
     const totalsData = Object.keys(brokerGroups).map(brokerId => {
       const gross = brokerGroups[brokerId] || 0;
-      const discount = advancesByBroker[brokerId] || 0;
       return {
         broker_id: brokerId,
         gross_amount: gross,
-        discount_amount: discount,
-        net_amount: gross - discount,
+        discount_amount: 0, // Sin descuentos en borrador
+        net_amount: gross, // Neto = Bruto en borrador
         is_retained: false
       };
     });
     
-    // 6. Calcular total de comisiones brutas
+    // 5. Calcular total de comisiones
     const total = totalsData.reduce((sum, t) => sum + t.gross_amount, 0);
-    const totalNeto = totalsData.reduce((sum, t) => sum + t.net_amount, 0);
-    console.log('[NewFortnightTab] ✅ TOTAL COMISIONES CORREDORES (BRUTO):', total);
-    console.log('[NewFortnightTab] ✅ TOTAL NETO (BRUTO - ADELANTOS):', totalNeto);
-    console.log('[NewFortnightTab] ✅ VERIFICACIÓN: Total - Adelantos =', total - totalAdelantos, '(debe ser igual a Total Neto)');
+    console.log('[NewFortnightTab] ✅ TOTAL COMISIONES CORREDORES:', total);
+    console.log('[NewFortnightTab] ✅ TOTAL NETO A PAGAR:', total, '(igual al bruto, sin descuentos en borrador)');
     setBrokerCommissionsTotal(total);
     setBrokerTotalsData(totalsData);
   }, [draftFortnight]);
