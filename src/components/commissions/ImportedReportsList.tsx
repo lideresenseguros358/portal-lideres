@@ -145,7 +145,6 @@ export default function ImportedReportsList({ reports, onDelete }: Props) {
           border-left: 3px solid transparent;
           transition: all 0.2s;
           min-width: 0;
-          overflow: hidden;
         }
         @media (min-width: 640px) {
           .report-item {
