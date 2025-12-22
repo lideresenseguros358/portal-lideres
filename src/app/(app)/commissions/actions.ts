@@ -115,7 +115,12 @@ export async function actionUploadImport(formData: FormData) {
         slug === 'general' ||
         slug === 'univivir' ||
         slug === 'ww-medical' ||
-        slug === 'ifs'
+        slug === 'ifs' ||
+        slug === 'optima' ||
+        slug === 'mb' ||
+        slug === 'aliado' ||
+        slug === 'palig' ||
+        slug === 'vumi'
       );
 
     const isAssistcardImage =
