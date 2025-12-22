@@ -186,12 +186,17 @@ export async function actionUploadImport(formData: FormData) {
     console.log('[SERVER] Use multi commission columns (ASSA):', useMultiColumns);
     
     const rows = await parseCsvXlsx(processedFile, mappingRules || [], invertNegatives, useMultiColumns, parsed.insurer_id);
-    console.log('[SERVER] Parsed rows:', rows.length);
-    console.log('[SERVER] First 3 rows:', rows.slice(0, 3).map(r => ({
+    console.log(`[SERVER][${insurerName}] ========== RESULTADO PARSER ==========`);
+    console.log(`[SERVER][${insurerName}] Total filas parseadas: ${rows.length}`);
+    console.log(`[SERVER][${insurerName}] Primeras 3 filas:`, rows.slice(0, 3).map(r => ({
       policy: r.policy_number,
       client: r.client_name,
       amount: r.commission_amount
     })));
+    
+    if (rows.length === 0) {
+      console.error(`[SERVER][${insurerName}] ❌ PARSER NO EXTRAJO NINGUNA FILA - Revisar parser`);
+    }
 
     // 1. Create the comm_imports record with user-entered total_amount and life insurance flag
     const { data: importRecord, error: importError } = await supabase
@@ -356,8 +361,25 @@ export async function actionUploadImport(formData: FormData) {
       }
     }
 
-    console.log('[SERVER] Items to insert (identified):', itemsToInsert.length);
-    console.log('[SERVER] Pending items (unidentified):', pendingItemsToInsert.length);
+    console.log(`[SERVER][${insurerName}] ========== SEPARACIÓN IDENTIFICADOS/SIN IDENTIFICAR ==========`);
+    console.log(`[SERVER][${insurerName}] Items identificados (con broker): ${itemsToInsert.length}`);
+    console.log(`[SERVER][${insurerName}] Items sin identificar: ${pendingItemsToInsert.length}`);
+    
+    if (itemsToInsert.length > 0) {
+      console.log(`[SERVER][${insurerName}] Muestra de identificados:`, itemsToInsert.slice(0, 2).map(i => ({
+        policy: i.policy_number,
+        broker: i.broker_id,
+        amount: i.gross_amount
+      })));
+    }
+    
+    if (pendingItemsToInsert.length > 0) {
+      console.log(`[SERVER][${insurerName}] Muestra de sin identificar:`, pendingItemsToInsert.slice(0, 2).map(i => ({
+        policy: i.policy_number,
+        name: i.insured_name,
+        amount: i.commission_raw
+      })));
+    }
 
     // 4. Insert comm_items (con cédula)
     if (itemsToInsert.length > 0) {
@@ -375,6 +397,8 @@ export async function actionUploadImport(formData: FormData) {
     // 5. Insert draft_unidentified_items (no identificados - zona de trabajo temporal)
     // NO insertamos en pending_items hasta confirmar PAGADO
     if (pendingItemsToInsert.length > 0) {
+      console.log(`[SERVER][${insurerName}] Preparando ${pendingItemsToInsert.length} items para draft_unidentified_items...`);
+      
       const draftItems = pendingItemsToInsert.map(item => ({
         fortnight_id: item.fortnight_id,
         import_id: item.import_id,
@@ -386,16 +410,25 @@ export async function actionUploadImport(formData: FormData) {
         temp_assigned_broker_id: null,
       }));
 
+      console.log(`[SERVER][${insurerName}] Insertando en draft_unidentified_items...`);
       const { error: draftError } = await (supabase as any)
         .from('draft_unidentified_items')
         .insert(draftItems);
       
       if (draftError) {
-        console.error('[SERVER] Error inserting draft unidentified:', draftError);
-        console.log('[SERVER] Continuing despite draft items errors');
+        console.error(`[SERVER][${insurerName}] ❌ ERROR insertando draft unidentified:`, draftError);
+        console.error(`[SERVER][${insurerName}] Error details:`, {
+          code: draftError.code,
+          message: draftError.message,
+          details: draftError.details,
+          hint: draftError.hint
+        });
+        console.log(`[SERVER][${insurerName}] Continuando a pesar del error...`);
       } else {
-        console.log('[SERVER] Draft unidentified items inserted successfully');
+        console.log(`[SERVER][${insurerName}] ✅ ${draftItems.length} items insertados en draft_unidentified_items`);
       }
+    } else {
+      console.log(`[SERVER][${insurerName}] ℹ️ No hay items sin identificar para insertar (todos fueron identificados con broker)`);
     }
 
     // 6. BANCO: Vincular transfer individual o grupos con el import (TEMPORAL)
