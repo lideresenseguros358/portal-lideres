@@ -934,6 +934,30 @@ export async function actionGetAvailableForImport(): Promise<ActionResult<{
       return { ok: false, error: 'Error al cargar grupos' };
     }
 
+    console.log('[BANCO] 🔍 DEBUG: Total transferencias obtenidas:', transfers?.length);
+    console.log('[BANCO] 🔍 DEBUG: Total grupos obtenidos:', groups?.length);
+    
+    // Diagnóstico: mostrar primeras 3 transferencias
+    if (transfers && transfers.length > 0) {
+      console.log('[BANCO] 🔍 DEBUG: Primeras 3 transferencias:', transfers.slice(0, 3).map((t: any) => ({
+        id: t.id,
+        description: t.description_raw?.substring(0, 30),
+        groupTransfers: t.bank_group_transfers?.length || 0,
+        imports: t.bank_transfer_imports?.length || 0,
+        importsData: t.bank_transfer_imports
+      })));
+    }
+    
+    // Diagnóstico: mostrar primeros 3 grupos
+    if (groups && groups.length > 0) {
+      console.log('[BANCO] 🔍 DEBUG: Primeros 3 grupos:', groups.slice(0, 3).map((g: any) => ({
+        id: g.id,
+        name: g.name,
+        imports: g.bank_group_imports?.length || 0,
+        importsData: g.bank_group_imports
+      })));
+    }
+
     // Filtrar transferencias que:
     // 1. NO están en grupos (si están agrupadas, solo se muestra el grupo)
     // 2. NO tienen NINGÚN import (temporal o permanente - una vez usada desaparece)
@@ -942,12 +966,19 @@ export async function actionGetAvailableForImport(): Promise<ActionResult<{
       const imports = t.bank_transfer_imports || [];
       
       // Si está en un grupo, no mostrar (se muestra como grupo)
-      if (groupTransfers.length > 0) return false;
+      if (groupTransfers.length > 0) {
+        console.log(`[BANCO] ❌ Excluir transfer ${t.id} - está en grupo`);
+        return false;
+      }
       
       // Si tiene CUALQUIER import (temporal o permanente), no mostrar
       // Una vez seleccionada para un import, desaparece del dropdown
-      if (imports.length > 0) return false;
+      if (imports.length > 0) {
+        console.log(`[BANCO] ❌ Excluir transfer ${t.id} - tiene ${imports.length} imports`);
+        return false;
+      }
       
+      console.log(`[BANCO] ✅ Incluir transfer ${t.id} - disponible`);
       return true;
     });
 
@@ -957,8 +988,12 @@ export async function actionGetAvailableForImport(): Promise<ActionResult<{
       
       // Si tiene CUALQUIER import (temporal o permanente), no mostrar
       // Una vez seleccionado para un import, desaparece del dropdown
-      if (imports.length > 0) return false;
+      if (imports.length > 0) {
+        console.log(`[BANCO] ❌ Excluir grupo ${g.id} (${g.name}) - tiene ${imports.length} imports`);
+        return false;
+      }
       
+      console.log(`[BANCO] ✅ Incluir grupo ${g.id} (${g.name}) - disponible`);
       return true;
     });
 
