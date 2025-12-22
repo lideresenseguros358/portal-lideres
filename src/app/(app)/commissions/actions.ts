@@ -3926,36 +3926,12 @@ export async function actionPayFortnight(fortnight_id: string) {
       
       console.log(`[actionPayFortnight] Draft items - Identificados: ${identified.length}, Sin identificar: ${unidentified.length}`);
       
-      // 6.1 Migrar identificados a comm_items (como si el parser los hubiera encontrado)
+      // 6.1 Registrar identificados en preliminar
+      // NOTA: Ya están en comm_items (insertados al momento de identificar manualmente)
       if (identified.length > 0) {
-        const commItemsToInsert = identified.map((item: any) => {
-          const percent = (item.brokers as any)?.percent_default || 1.0;
-          const grossAmount = item.commission_raw * percent;
-          
-          return {
-            import_id: item.import_id,
-            insurer_id: item.insurer_id,
-            policy_number: item.policy_number,
-            gross_amount: grossAmount,
-            insured_name: item.insured_name || 'UNKNOWN',
-            raw_row: item.raw_row,
-            broker_id: item.temp_assigned_broker_id,
-            fortnight_id: fortnight_id,
-          };
-        });
+        console.log(`[actionPayFortnight] Procesando ${identified.length} items identificados (ya en comm_items)...`);
         
-        const { error: commInsertError } = await supabase
-          .from('comm_items')
-          .insert(commItemsToInsert);
-        
-        if (commInsertError) {
-          console.error('[actionPayFortnight] Error insertando comm_items identificados:', commInsertError);
-          throw commInsertError;
-        }
-        
-        console.log(`[actionPayFortnight] ✅ ${identified.length} items identificados migrados a comm_items`);
-        
-        // Registrar en preliminar para cada cliente identificado
+        // Solo registrar en preliminar para cada cliente identificado
         for (const item of identified) {
           try {
             const { data: existingPolicy } = await supabase
@@ -5378,6 +5354,7 @@ export async function actionGetDraftUnidentified(fortnightId: string): Promise<A
 
 /**
  * Identificar temporalmente un cliente en zona de trabajo
+ * NUEVO: Al identificar, inserta inmediatamente en comm_items para que aparezca en listado del corredor
  */
 export async function actionTempIdentifyClient(itemId: string, brokerId: string): Promise<ActionResult> {
   try {
@@ -5388,7 +5365,51 @@ export async function actionTempIdentifyClient(itemId: string, brokerId: string)
 
     const supabase = getSupabaseAdmin();
 
-    const { error } = await (supabase as any)
+    // 1. Obtener el item completo
+    const { data: item, error: fetchError } = await (supabase as any)
+      .from('draft_unidentified_items')
+      .select('*, brokers!temp_assigned_broker_id(*)')
+      .eq('id', itemId)
+      .single();
+
+    if (fetchError || !item) {
+      console.error('[actionTempIdentifyClient] Error obteniendo item:', fetchError);
+      return { ok: false, error: 'Item no encontrado' };
+    }
+
+    // 2. Obtener percent_default del broker
+    const { data: broker } = await supabase
+      .from('brokers')
+      .select('percent_default')
+      .eq('id', brokerId)
+      .single();
+
+    const percent = broker?.percent_default || 1.0;
+    const grossAmount = item.commission_raw * percent;
+
+    // 3. Insertar en comm_items (como si el parser lo hubiera identificado)
+    const { error: commInsertError } = await supabase
+      .from('comm_items')
+      .insert({
+        import_id: item.import_id,
+        insurer_id: item.insurer_id,
+        policy_number: item.policy_number,
+        gross_amount: grossAmount,
+        insured_name: item.insured_name || 'UNKNOWN',
+        raw_row: item.raw_row,
+        broker_id: brokerId,
+        fortnight_id: item.fortnight_id,
+      });
+
+    if (commInsertError) {
+      console.error('[actionTempIdentifyClient] Error insertando en comm_items:', commInsertError);
+      return { ok: false, error: 'Error al insertar comisión' };
+    }
+
+    console.log(`[actionTempIdentifyClient] ✅ Item insertado en comm_items para broker ${brokerId}`);
+
+    // 4. Marcar como identificado en draft
+    const { error: updateError } = await (supabase as any)
       .from('draft_unidentified_items')
       .update({
         temp_assigned_broker_id: brokerId,
@@ -5396,10 +5417,13 @@ export async function actionTempIdentifyClient(itemId: string, brokerId: string)
       })
       .eq('id', itemId);
 
-    if (error) {
-      console.error('[actionTempIdentifyClient] Error:', error);
-      return { ok: false, error: 'Error al identificar cliente' };
+    if (updateError) {
+      console.error('[actionTempIdentifyClient] Error actualizando draft:', updateError);
+      // No fallar, ya insertamos en comm_items
     }
+
+    // 5. Recalcular totales de la quincena para actualizar listado del corredor
+    await actionRecalculateFortnight(item.fortnight_id);
 
     revalidatePath('/commissions');
     return { ok: true };
@@ -5413,6 +5437,7 @@ export async function actionTempIdentifyClient(itemId: string, brokerId: string)
 
 /**
  * Regresar cliente a sin identificar en zona de trabajo
+ * NUEVO: Al desidentificar, elimina de comm_items para que no aparezca en listado del corredor
  */
 export async function actionTempUnidentifyClient(itemId: string): Promise<ActionResult> {
   try {
@@ -5423,7 +5448,37 @@ export async function actionTempUnidentifyClient(itemId: string): Promise<Action
 
     const supabase = getSupabaseAdmin();
 
-    const { error } = await (supabase as any)
+    // 1. Obtener el item para saber qué eliminar de comm_items
+    const { data: item, error: fetchError } = await (supabase as any)
+      .from('draft_unidentified_items')
+      .select('*')
+      .eq('id', itemId)
+      .single();
+
+    if (fetchError || !item) {
+      console.error('[actionTempUnidentifyClient] Error obteniendo item:', fetchError);
+      return { ok: false, error: 'Item no encontrado' };
+    }
+
+    // 2. Eliminar de comm_items (por import_id + policy_number + broker)
+    if (item.temp_assigned_broker_id) {
+      const { error: deleteError } = await supabase
+        .from('comm_items')
+        .delete()
+        .eq('import_id', item.import_id)
+        .eq('policy_number', item.policy_number)
+        .eq('broker_id', item.temp_assigned_broker_id);
+
+      if (deleteError) {
+        console.error('[actionTempUnidentifyClient] Error eliminando de comm_items:', deleteError);
+        return { ok: false, error: 'Error al eliminar comisión' };
+      }
+
+      console.log(`[actionTempUnidentifyClient] ✅ Item eliminado de comm_items`);
+    }
+
+    // 3. Marcar como no identificado en draft
+    const { error: updateError } = await (supabase as any)
       .from('draft_unidentified_items')
       .update({
         temp_assigned_broker_id: null,
@@ -5431,10 +5486,13 @@ export async function actionTempUnidentifyClient(itemId: string): Promise<Action
       })
       .eq('id', itemId);
 
-    if (error) {
-      console.error('[actionTempUnidentifyClient] Error:', error);
-      return { ok: false, error: 'Error al desidentificar cliente' };
+    if (updateError) {
+      console.error('[actionTempUnidentifyClient] Error actualizando draft:', updateError);
+      return { ok: false, error: 'Error al actualizar estado' };
     }
+
+    // 4. Recalcular totales de la quincena para actualizar listado del corredor
+    await actionRecalculateFortnight(item.fortnight_id);
 
     revalidatePath('/commissions');
     return { ok: true };
