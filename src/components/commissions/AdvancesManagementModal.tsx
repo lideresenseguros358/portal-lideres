@@ -548,8 +548,8 @@ export function AdvancesManagementModal({
                   ) : (
                     <div className="space-y-3">
                       {allAdvances.map((advance) => {
-                        // Si amount es 0 pero hay pagos, usar total_paid como monto inicial
-                        const initialAmount = advance.amount > 0 ? advance.amount : (advance.total_paid || 0);
+                        // Monto inicial = MAX entre amount y total_paid (lógica más robusta)
+                        const initialAmount = Math.max(advance.amount, advance.total_paid || 0);
                         const remainingBalance = Math.max(0, initialAmount - (advance.total_paid || 0));
                         const statusColor = 
                           advance.status === 'paid' ? 'bg-green-100 text-green-800' :
