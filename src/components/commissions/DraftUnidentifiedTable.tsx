@@ -178,7 +178,7 @@ export default function DraftUnidentifiedTable({ fortnightId, brokers, onUpdate,
                                 <div>
                                   <p className="text-xs text-gray-500 mb-1">Comisión</p>
                                   <p className="font-mono font-bold text-[#8AAA19] text-sm">
-                                    ${item.commission_raw.toFixed(2)}
+                                    ${((item.insurers as any)?.invert_negatives ? -item.commission_raw : item.commission_raw).toFixed(2)}
                                   </p>
                                 </div>
                               </div>
@@ -238,7 +238,7 @@ export default function DraftUnidentifiedTable({ fortnightId, brokers, onUpdate,
                                 <div>
                                   <p className="text-xs text-gray-500 mb-1">Comisión</p>
                                   <p className="font-mono font-bold text-[#8AAA19] text-sm">
-                                    ${item.commission_raw.toFixed(2)}
+                                    ${((item.insurers as any)?.invert_negatives ? -item.commission_raw : item.commission_raw).toFixed(2)}
                                   </p>
                                 </div>
                                 <div>

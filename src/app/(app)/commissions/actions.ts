@@ -5332,7 +5332,7 @@ export async function actionGetDraftUnidentified(fortnightId: string): Promise<A
         temp_assigned_broker_id,
         temp_assigned_at,
         created_at,
-        insurers ( id, name ),
+        insurers ( id, name, invert_negatives ),
         brokers ( id, name )
       `)
       .eq('fortnight_id', fortnightId)
