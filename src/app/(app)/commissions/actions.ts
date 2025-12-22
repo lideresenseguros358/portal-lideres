@@ -5387,6 +5387,11 @@ export async function actionTempIdentifyClient(itemId: string, brokerId: string)
     const percent = broker?.percent_default || 1.0;
     const grossAmount = item.commission_raw * percent;
 
+    console.log(`[actionTempIdentifyClient] 💰 Cálculo comisión:`);
+    console.log(`  - commission_raw: ${item.commission_raw}`);
+    console.log(`  - percent_default: ${broker?.percent_default} (usando: ${percent})`);
+    console.log(`  - gross_amount calculado: ${grossAmount}`);
+
     // 3. Insertar en comm_items (como si el parser lo hubiera identificado)
     const { error: commInsertError } = await supabase
       .from('comm_items')
