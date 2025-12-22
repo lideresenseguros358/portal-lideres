@@ -153,16 +153,14 @@ export default function DraftUnidentifiedTable({ fortnightId, brokers, onUpdate,
               {/* Detalles expandibles */}
               {isExpanded && (
                 <div className="mt-4 space-y-4">
-                  {/* Contenedor de 2 columnas en PC */}
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                    {/* Sin Identificar */}
-                    {unidentifiedItems.length > 0 && (
-                      <div>
+                  {/* Sin Identificar */}
+                  {unidentifiedItems.length > 0 && (
+                    <div>
                       <h4 className="font-semibold text-red-700 mb-3 flex items-center gap-2">
                         <FaExclamationTriangle />
                         Pendientes de Identificar ({unidentifiedItems.length})
                       </h4>
-                      <div className="space-y-3">
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                         {unidentifiedItems.map(item => (
                           <div key={item.id} className="bg-white p-3 sm:p-4 rounded-lg border-2 border-red-200">
                             <div className="flex flex-col gap-3">
@@ -213,16 +211,16 @@ export default function DraftUnidentifiedTable({ fortnightId, brokers, onUpdate,
                         ))}
                       </div>
                     </div>
-                    )}
+                  )}
 
-                    {/* Identificados Temporalmente */}
-                    {identifiedItems.length > 0 && (
-                      <div>
+                  {/* Identificados Temporalmente */}
+                  {identifiedItems.length > 0 && (
+                    <div>
                       <h4 className="font-semibold text-blue-700 mb-3 flex items-center gap-2">
                         <FaCheckCircle />
                         Identificados Temporalmente ({identifiedItems.length})
                       </h4>
-                      <div className="space-y-3">
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                         {identifiedItems.map(item => (
                           <div key={item.id} className="bg-white p-3 sm:p-4 rounded-lg border-2 border-blue-200">
                             <div className="flex flex-col gap-3">
@@ -264,8 +262,7 @@ export default function DraftUnidentifiedTable({ fortnightId, brokers, onUpdate,
                         ))}
                       </div>
                     </div>
-                    )}
-                  </div>
+                  )}
 
                   {/* Nota informativa */}
                   <div className="bg-blue-50 border-l-4 border-blue-500 p-3 rounded-r-lg">
