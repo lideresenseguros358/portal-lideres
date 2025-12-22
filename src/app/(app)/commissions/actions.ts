@@ -5425,7 +5425,8 @@ export async function actionTempIdentifyClient(itemId: string, brokerId: string)
     // 5. Recalcular totales de la quincena para actualizar listado del corredor
     await actionRecalculateFortnight(item.fortnight_id);
 
-    revalidatePath('/commissions');
+    // NOTA: No usar revalidatePath aquí - interfiere con recalculationKey
+    // El componente se recarga automáticamente cuando onUpdate() incrementa recalculationKey
     return { ok: true };
   } catch (error) {
     return {
@@ -5494,7 +5495,8 @@ export async function actionTempUnidentifyClient(itemId: string): Promise<Action
     // 4. Recalcular totales de la quincena para actualizar listado del corredor
     await actionRecalculateFortnight(item.fortnight_id);
 
-    revalidatePath('/commissions');
+    // NOTA: No usar revalidatePath aquí - interfiere con recalculationKey
+    // El componente se recarga automáticamente cuando onUpdate() incrementa recalculationKey
     return { ok: true };
   } catch (error) {
     return {
