@@ -153,9 +153,11 @@ export default function DraftUnidentifiedTable({ fortnightId, brokers, onUpdate,
               {/* Detalles expandibles */}
               {isExpanded && (
                 <div className="mt-4 space-y-4">
-                  {/* Sin Identificar */}
-                  {unidentifiedItems.length > 0 && (
-                    <div>
+                  {/* Contenedor de 2 columnas en PC */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {/* Sin Identificar */}
+                    {unidentifiedItems.length > 0 && (
+                      <div>
                       <h4 className="font-semibold text-red-700 mb-3 flex items-center gap-2">
                         <FaExclamationTriangle />
                         Pendientes de Identificar ({unidentifiedItems.length})
@@ -211,11 +213,11 @@ export default function DraftUnidentifiedTable({ fortnightId, brokers, onUpdate,
                         ))}
                       </div>
                     </div>
-                  )}
+                    )}
 
-                  {/* Identificados Temporalmente */}
-                  {identifiedItems.length > 0 && (
-                    <div>
+                    {/* Identificados Temporalmente */}
+                    {identifiedItems.length > 0 && (
+                      <div>
                       <h4 className="font-semibold text-blue-700 mb-3 flex items-center gap-2">
                         <FaCheckCircle />
                         Identificados Temporalmente ({identifiedItems.length})
@@ -262,7 +264,8 @@ export default function DraftUnidentifiedTable({ fortnightId, brokers, onUpdate,
                         ))}
                       </div>
                     </div>
-                  )}
+                    )}
+                  </div>
 
                   {/* Nota informativa */}
                   <div className="bg-blue-50 border-l-4 border-blue-500 p-3 rounded-r-lg">
