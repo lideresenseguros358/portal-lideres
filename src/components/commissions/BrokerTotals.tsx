@@ -76,9 +76,20 @@ export default function BrokerTotals({ draftFortnightId, onManageAdvances, broke
       if (result.ok) {
         setDetails(result.data || []);
         
-        // Calcular descuentos por corredor desde fortnight_broker_totals
+        // Cargar descuentos reales desde fortnight_broker_totals
+        const { supabaseClient } = await import('@/lib/supabase/client');
+        const { data: totals } = await supabaseClient()
+          .from('fortnight_broker_totals')
+          .select('broker_id, gross_amount, net_amount')
+          .eq('fortnight_id', draftFortnightId);
+        
         const discounts: Record<string, number> = {};
-        // TODO: Cargar desde fortnight_broker_totals cuando esté disponible
+        if (totals) {
+          totals.forEach(t => {
+            // Descuento = bruto - neto
+            discounts[t.broker_id] = (t.gross_amount || 0) - (t.net_amount || 0);
+          });
+        }
         setBrokerDiscounts(discounts);
       } else {
         // Solo mostrar error si es la primera carga
