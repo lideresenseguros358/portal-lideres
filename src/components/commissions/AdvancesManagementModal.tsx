@@ -70,17 +70,21 @@ export function AdvancesManagementModal({
       if (result.ok) {
         console.log('[AdvancesManagementModal] Total advances:', result.data?.length);
         console.log('[AdvancesManagementModal] Sample data:', result.data?.[0]);
+        console.log('[AdvancesManagementModal] All status:', result.data?.map((a: any) => ({ id: a.id.substring(0, 8), status: a.status, amount: a.amount })));
         
         // Guardar todos los adelantos para el historial
         setAllAdvances((result.data || []) as Advance[]);
         
-        // Filtrar solo pending y partial para gestión
+        // Filtrar adelantos con saldo pendiente (que no estén completamente pagados)
         const filteredAdvances = (result.data || []).filter(
-          (a: any) => a.status === 'pending' || a.status === 'partial'
+          (a: any) => {
+            const remaining = a.amount - (a.total_paid || 0);
+            return remaining > 0;
+          }
         );
         
-        console.log('[AdvancesManagementModal] Filtered advances (pending/partial):', filteredAdvances.length);
-        console.log('[AdvancesManagementModal] Filtered data:', filteredAdvances);
+        console.log('[AdvancesManagementModal] Filtered advances (with balance):', filteredAdvances.length);
+        console.log('[AdvancesManagementModal] Filtered data:', filteredAdvances.map((a: any) => ({ id: a.id.substring(0, 8), amount: a.amount, paid: a.total_paid, remaining: a.amount - (a.total_paid || 0) })));
         
         setAdvances(filteredAdvances as Advance[]);
       } else {
@@ -259,50 +263,50 @@ export function AdvancesManagementModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[9999] p-4">
       <div className="bg-white rounded-lg shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col">
         {/* Header */}
-        <div className="standard-modal-header">
+        <div className="bg-[#010139] px-6 py-4 rounded-t-lg flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-[#010139]">
+            <h2 className="text-2xl font-bold text-white">
               Gestión de Adelantos
             </h2>
-            <p className="text-sm text-gray-600 mt-1">
+            <p className="text-sm text-white/80 mt-1">
               {brokerName} • Bruto: ${grossAmount.toFixed(2)}
             </p>
           </div>
           <button
             onClick={onClose}
             disabled={saving}
-            className="text-gray-500 hover:text-gray-700"
+            className="text-white hover:text-white/80 transition-colors"
           >
             <FaTimes size={24} />
           </button>
         </div>
 
         {/* Tabs */}
-        <div className="border-b border-gray-200 px-6">
-          <div className="flex gap-4">
+        <div className="border-b border-gray-200 bg-gray-50 px-6">
+          <div className="flex gap-2">
             <button
               onClick={() => setActiveTab('manage')}
-              className={`px-4 py-3 font-semibold border-b-2 transition-colors ${
+              className={`px-6 py-3 font-semibold transition-all rounded-t-lg ${
                 activeTab === 'manage'
-                  ? 'border-[#8AAA19] text-[#8AAA19]'
-                  : 'border-transparent text-gray-600 hover:text-gray-800'
+                  ? 'bg-white text-[#010139] border-t-2 border-x-2 border-[#8AAA19]'
+                  : 'text-gray-600 hover:text-gray-800 hover:bg-gray-100'
               }`}
             >
-              Gestionar Adelantos
+              💰 Adelantos Activos
             </button>
             <button
               onClick={() => setActiveTab('history')}
-              className={`px-4 py-3 font-semibold border-b-2 transition-colors ${
+              className={`px-6 py-3 font-semibold transition-all rounded-t-lg ${
                 activeTab === 'history'
-                  ? 'border-[#8AAA19] text-[#8AAA19]'
-                  : 'border-transparent text-gray-600 hover:text-gray-800'
+                  ? 'bg-white text-[#010139] border-t-2 border-x-2 border-[#8AAA19]'
+                  : 'text-gray-600 hover:text-gray-800 hover:bg-gray-100'
               }`}
             >
               <FaHistory className="inline mr-2" />
-              Historial
+              Historial Completo
             </button>
           </div>
         </div>
@@ -527,9 +531,14 @@ export function AdvancesManagementModal({
 
               {activeTab === 'history' && (
                 <div className="space-y-4">
-                  <h3 className="text-lg font-bold text-[#010139]">
-                    Historial Completo ({allAdvances.length})
-                  </h3>
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-xl font-bold text-[#010139]">
+                      Historial Completo
+                    </h3>
+                    <span className="text-sm text-gray-600 bg-gray-100 px-3 py-1 rounded-full">
+                      {allAdvances.length} adelanto{allAdvances.length !== 1 ? 's' : ''}
+                    </span>
+                  </div>
 
                   {allAdvances.length === 0 ? (
                     <div className="text-center py-12 text-gray-500">
@@ -552,33 +561,39 @@ export function AdvancesManagementModal({
                         return (
                           <div
                             key={advance.id}
-                            className="border-2 border-gray-200 rounded-lg p-4 hover:border-gray-300 transition-all"
+                            className={`border-2 rounded-lg p-4 transition-all ${
+                              advance.status === 'paid'
+                                ? 'border-green-200 bg-green-50/30'
+                                : remainingBalance > 0
+                                ? 'border-blue-200 bg-blue-50/30'
+                                : 'border-gray-200'
+                            } hover:shadow-md`}
                           >
                             <div className="flex items-start justify-between mb-2">
                               <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <p className="font-semibold text-[#010139]">{advance.reason}</p>
-                                  <span className={`text-xs px-2 py-1 rounded ${statusColor}`}>
-                                    {statusText}
-                                  </span>
+                                <div className="flex items-center gap-2 mb-2">
+                                  <p className="font-bold text-[#010139] text-lg">{advance.reason}</p>
                                   {advance.is_recurring && (
-                                    <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded">
-                                      Recurrente
+                                    <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded font-semibold">
+                                      🔁 Recurrente
                                     </span>
                                   )}
                                 </div>
-                                <div className="grid grid-cols-3 gap-4 text-sm mt-2">
-                                  <div>
-                                    <span className="text-gray-600">Total: </span>
-                                    <span className="font-semibold">${advance.amount.toFixed(2)}</span>
+                                <span className={`text-xs px-3 py-1 rounded-full font-bold ${statusColor}`}>
+                                  {statusText}
+                                </span>
+                                <div className="grid grid-cols-3 gap-4 mt-3">
+                                  <div className="bg-white rounded-lg p-3 border border-gray-200">
+                                    <span className="text-xs text-gray-600 block mb-1">Monto Total</span>
+                                    <span className="font-bold text-lg text-gray-800">${advance.amount.toFixed(2)}</span>
                                   </div>
-                                  <div>
-                                    <span className="text-gray-600">Pagado: </span>
-                                    <span className="font-semibold text-green-700">${(advance.total_paid || 0).toFixed(2)}</span>
+                                  <div className="bg-green-50 rounded-lg p-3 border border-green-200">
+                                    <span className="text-xs text-green-700 block mb-1">Pagado</span>
+                                    <span className="font-bold text-lg text-green-700">${(advance.total_paid || 0).toFixed(2)}</span>
                                   </div>
-                                  <div>
-                                    <span className="text-gray-600">Saldo: </span>
-                                    <span className="font-semibold text-blue-700">${remainingBalance.toFixed(2)}</span>
+                                  <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
+                                    <span className="text-xs text-blue-700 block mb-1">Saldo</span>
+                                    <span className="font-bold text-lg text-blue-700">${remainingBalance.toFixed(2)}</span>
                                   </div>
                                 </div>
                               </div>
