@@ -43,7 +43,7 @@ export default function DiscountModal({
 
   const loadAdvances = async () => {
     try {
-      const response = await fetch(`/api/advances?broker_id=${brokerId}&status=PENDING,PARTIAL`);
+      const response = await fetch(`/api/commissions/advances?broker_id=${brokerId}&status=PENDING,PARTIAL`);
       const data = await response.json();
       if (data.ok) {
         setAdvances(data.data || []);
