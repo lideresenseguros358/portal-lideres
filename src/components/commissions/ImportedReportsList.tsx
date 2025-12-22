@@ -116,7 +116,7 @@ export default function ImportedReportsList({ reports, onDelete }: Props) {
           display: flex;
           flex-direction: column;
           gap: 12px;
-          max-height: 480px;
+          max-height: 680px;
           overflow-y: auto;
           padding-right: 8px;
         }
