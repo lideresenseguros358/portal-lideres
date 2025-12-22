@@ -20,10 +20,10 @@ export async function GET(request: NextRequest) {
     
     // Filtrar por status si se proporciona (puede ser múltiples separados por coma)
     if (status) {
-      const statuses = status.split(',').map(s => s.trim());
-      if (statuses.length === 1) {
+      const statuses = status.split(',').map(s => s.trim()).filter(Boolean);
+      if (statuses.length === 1 && statuses[0]) {
         query = query.eq('status', statuses[0]);
-      } else {
+      } else if (statuses.length > 1) {
         query = query.in('status', statuses);
       }
     }

@@ -219,7 +219,6 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
       let vida = 0;
       let generales = 0;
       
-      console.log('[loadRamosTotals] 📊 Imports encontrados:', imports?.length);
       
       // Para cada import, calcular ganancia de oficina
       for (const imp of imports || []) {
@@ -237,7 +236,6 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
         const totalReporte = Math.abs(Number(imp.total_amount) || 0);
         const gananciaOficina = totalReporte - totalComisionesBrokers;
         
-        console.log(`[loadRamosTotals] Import ${imp.id.substring(0, 8)}: Total=${totalReporte}, Comisiones=${totalComisionesBrokers}, Ganancia=${gananciaOficina}, isVida=${imp.is_life_insurance}`);
         
         // Clasificar según is_life_insurance
         if (imp.is_life_insurance) {
@@ -247,7 +245,6 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
         }
       }
       
-      console.log('[loadRamosTotals] ✅ VIDA:', vida, 'GENERALES:', generales, 'TOTAL:', vida + generales);
       setRamosTotals({ vida, generales });
     } catch (error) {
       console.error('Error calculating ramos totals:', error);
@@ -299,9 +296,6 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
       return acc;
     }, {} as Record<string, number>);
     
-    console.log('[NewFortnightTab] 📊 Items obtenidos:', items.length);
-    console.log('[NewFortnightTab] 📊 Brokers con comisiones:', Object.keys(brokerGroups));
-    console.log('[NewFortnightTab] 📊 Totales por broker:', brokerGroups);
     
     // 4. Crear totalsData SIN adelantos (solo se aplican al PAGAR la quincena)
     const totalsData = Object.keys(brokerGroups).map(brokerId => {
@@ -317,8 +311,6 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
     
     // 5. Calcular total de comisiones
     const total = totalsData.reduce((sum, t) => sum + t.gross_amount, 0);
-    console.log('[NewFortnightTab] ✅ TOTAL COMISIONES CORREDORES:', total);
-    console.log('[NewFortnightTab] ✅ TOTAL NETO A PAGAR:', total, '(igual al bruto, sin descuentos en borrador)');
     setBrokerCommissionsTotal(total);
     setBrokerTotalsData(totalsData);
   }, [draftFortnight]);

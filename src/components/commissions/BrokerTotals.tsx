@@ -76,9 +76,6 @@ export default function BrokerTotals({ draftFortnightId, onManageAdvances, broke
       if (result.ok) {
         setDetails(result.data || []);
         
-        console.log('[BrokerTotals] 📊 Items obtenidos:', (result.data || []).length);
-        console.log('[BrokerTotals] 📊 Sample items:', (result.data || []).slice(0, 3));
-        
         // NO cargar adelantos en borrador - solo se aplican al PAGAR la quincena
         setBrokerDiscounts({});
       } else {
@@ -163,15 +160,6 @@ export default function BrokerTotals({ draftFortnightId, onManageAdvances, broke
       const totalNet = Object.keys(groupedData).length > 0
         ? Object.values(groupedData).reduce((sum, broker) => sum + broker.total_net, 0)
         : 0;
-      console.log('[BrokerTotals] ✅ TOTAL NETO A PAGAR:', totalNet);
-      console.log('[BrokerTotals] 📊 Desglose por broker:', 
-        Object.entries(groupedData).map(([id, data]) => ({
-          broker: data.broker_name,
-          gross: data.total_gross,
-          discounts: data.total_discounts,
-          net: data.total_net
-        }))
-      );
       onTotalNetChange(totalNet);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
