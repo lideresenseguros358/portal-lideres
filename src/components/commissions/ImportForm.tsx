@@ -486,27 +486,7 @@ export default function ImportForm({ insurers, draftFortnightId, onImport }: Pro
     <div className="import-form-container">
       <h3 className="section-title">1. Importar Reportes</h3>
       <form onSubmit={handleFileUpload} className="form-content">
-        <div className="field">
-          <label htmlFor="insurer">Aseguradora / Tipo de Reporte</label>
-          <select
-            id="insurer"
-            value={selectedInsurer}
-            onChange={(e) => setSelectedInsurer(e.target.value)}
-            required
-          >
-            <option value="">Seleccionar...</option>
-            <optgroup label="📋 Aseguradoras">
-              {insurers.map((ins) => (
-                <option key={ins.id} value={ins.id}>{ins.name}</option>
-              ))}
-            </optgroup>
-            <optgroup label="🔢 Reportes Especiales">
-              <option value="ASSA_CODIGOS">Códigos ASSA (PJ750-xxx)</option>
-            </optgroup>
-          </select>
-        </div>
-        
-        {/* BANCO: Selector de Transfer/Grupo - ANTES DEL MONTO */}
+        {/* BANCO: Selector de Transfer/Grupo - PRIMERO */}
         <div className="field">
           <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
             <FaUniversity className="text-blue-600" />
@@ -538,7 +518,20 @@ export default function ImportForm({ insurers, draftFortnightId, onImport }: Pro
                   setSelectedOption(e.target.value);
                   const option = availableOptions.find(o => o.id === e.target.value);
                   if (option) {
+                    // Auto-completar monto
                     setTotalAmount(option.amount.toFixed(2));
+                    
+                    // Auto-rellenar aseguradora si la transferencia/grupo ya tiene una asignada
+                    if (option.hasInsurer && option.insurerName) {
+                      const insurer = insurers.find(ins => ins.name === option.insurerName);
+                      if (insurer) {
+                        setSelectedInsurer(insurer.id);
+                        console.log('[IMPORT] Auto-rellenando aseguradora:', insurer.name);
+                      }
+                    }
+                  } else {
+                    // Si deselecciona, limpiar
+                    setTotalAmount('');
                   }
                 }}
                 className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all text-sm"
@@ -580,6 +573,32 @@ export default function ImportForm({ insurers, draftFortnightId, onImport }: Pro
                 </div>
               )}
             </>
+          )}
+        </div>
+
+        {/* ASEGURADORA - Después de transferencia */}
+        <div className="field">
+          <label htmlFor="insurer">Aseguradora / Tipo de Reporte</label>
+          <select
+            id="insurer"
+            value={selectedInsurer}
+            onChange={(e) => setSelectedInsurer(e.target.value)}
+            required
+          >
+            <option value="">Seleccionar...</option>
+            <optgroup label="📋 Aseguradoras">
+              {insurers.map((ins) => (
+                <option key={ins.id} value={ins.id}>{ins.name}</option>
+              ))}
+            </optgroup>
+            <optgroup label="🔢 Reportes Especiales">
+              <option value="ASSA_CODIGOS">Códigos ASSA (PJ750-xxx)</option>
+            </optgroup>
+          </select>
+          {selectedOption && availableOptions.find(o => o.id === selectedOption)?.hasInsurer && (
+            <p className="text-xs text-green-700 mt-2 bg-green-50 border border-green-200 rounded p-2">
+              ✅ Auto-rellenado desde la transferencia bancaria
+            </p>
           )}
         </div>
 
