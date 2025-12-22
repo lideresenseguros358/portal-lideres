@@ -29,67 +29,57 @@ export async function parseMercantilPDF(fileBuffer: ArrayBuffer): Promise<Mercan
   const rows: MercantilRow[] = [];
   
   // Regex para detectar líneas de datos de MERCANTIL
-  // Formato: "2-8-163 Factura 146315 ... 17.52 ... JOSE ANTONIO PRADO DUÑA"
-  // IMPORTANTE: el texto viene “pegado” y la línea también incluye No. Egreso tipo "2-1-47268USD".
-  // Para evitar confundir No. Egreso con póliza, usamos contexto:
-  // la póliza es el patrón X-Y-Z que va antes del % (20.00/25.00/50.00) y del nombre.
-  // Ej: "...20252-8-103 20.00JOSE..." => póliza = 2-8-103
-  const policyByYearRegex = /20\d{2}(\d{1,4}-\d{1,5}-\d{1,8})(?=\s*\d{1,3}\.\d{2}\s*[A-ZÑÁÉÍÓÚÜ])/;
-  const policyByContextRegex = /(?:^|[^\d\/])(\d{1,4}-\d{1,5}-\d{1,8})(?=\s*\d{1,3}\.\d{2}\s*[A-ZÑÁÉÍÓÚÜ])/;
+  // Formato NUEVO: "2032 Factura 178120... 26.9820.00134.90ERIC ABDEL CHICHACORecibos Cobrados"
+  // Póliza: número simple al inicio
+  // Comisión pegada: XX.YY antes del nombre
+  // Nombre: letras mayúsculas antes de "Recibos Cobrados" o "USD"
   
   for (const line of lines) {
     // Saltar headers, resumen y totales
     if (line.includes('No. de Póliza') || line.includes('RESUMEN') || 
         line.includes('COMISIONES POR RAMO') || line.includes('CONSOLIDADO') ||
         line.includes('Total de comisiones') || line.includes('DESCUENTOS') ||
+        line.includes('Total por Ramo') ||
         line.includes('Monto a pagar') || line.includes('Comisión a liquidar')) {
       continue;
     }
     
-    // 1) Prioridad: patrón pegado a año (20xx + póliza)
-    //    Esto evita que se capture "252-..." desde "20252-..."
-    const policyMatch = line.match(policyByYearRegex) || line.match(policyByContextRegex);
-    if (policyMatch && policyMatch[1]) {
-      const rawPolicyNumber = policyMatch[1];
-      const parts = rawPolicyNumber.split('-');
-      const firstPart = parts[0] ? String(parseInt(parts[0], 10)) : parts[0];
-      const policyNumber = [firstPart, ...parts.slice(1)].filter(Boolean).join('-');
+    // Buscar líneas con "Factura" (indica línea de datos)
+    if (!line.includes('Factura')) continue;
+    
+    // 1) Extraer número de póliza (primeros dígitos de la línea)
+    const policyMatch = line.match(/^(\d{2,6})\s+Factura/);
+    if (!policyMatch || !policyMatch[1]) continue;
+    
+    const policyNumber = policyMatch[1];
+    console.log(`[MERCANTIL PDF] Procesando póliza: ${policyNumber}`);
+    console.log(`[MERCANTIL PDF] Línea: ${line.substring(0, 200)}`);
+    
+    // 2) Extraer comisión y nombre (formato: "XX.YYZZ.ZZ###.##NOMBRE DEL CLIENTERecibos")
+    // La comisión es el primer XX.YY que aparece antes del nombre
+    // El nombre son las letras mayúsculas que aparecen antes de "Recibos Cobrados" o "USD"
+    
+    // Buscar la última ocurrencia de dígitos pegados antes del nombre
+    // Formato: "26.9820.00134.90ERIC ABDEL CHICHACO"
+    const dataMatch = line.match(/(\d+\.\d{2})\d+\.\d{2}\d+\.\d{2}([A-ZÑÁÉÍÓÚÜ][A-ZÑÁÉÍÓÚÜ\s]{4,}?)(?:Recibos|USD)/);
+    
+    if (dataMatch && dataMatch[1] && dataMatch[2]) {
+      const commission = parseFloat(dataMatch[1]);
+      const clientName = dataMatch[2].trim();
       
-      console.log(`[MERCANTIL PDF] Procesando línea con póliza: ${policyNumber}`);
-      console.log(`[MERCANTIL PDF] Línea completa: ${line.substring(0, 150)}`);
-
-      const lineFromPolicy = line.slice(Math.max(0, line.indexOf(rawPolicyNumber)));
-
-      // Extraer comisión en formato pegado al No. de ingreso: "3.56296102" => comisión=3.56
-      // En el texto real, esto aparece justo antes de un No. egreso tipo "2-1-47268" y luego "USD"
-      const commissionAndIngresoMatch = lineFromPolicy.match(/\b(\d+\.\d{2})(?=\d{4,}\s+\d{1,4}-\d{1,4}-\d{3,}\s*USD\b)/);
-
-      // Nombre suele estar después del % (20.00/25.00/50.00) y antes de la comisión pegada al ingreso
-      const nameMatch = commissionAndIngresoMatch
-        ? lineFromPolicy.match(/\b\d{1,3}\.\d{2}\s*([A-ZÑÁÉÍÓÚÜ\s]{5,}?)(?=\s*\d+\.\d{2}\d{4,})/)
-        : null;
-
-      console.log(`[MERCANTIL PDF] Nombre detectado: ${nameMatch ? nameMatch[1] : 'NO ENCONTRADO'}`);
-      console.log(`[MERCANTIL PDF] Comisión detectada: ${commissionAndIngresoMatch ? commissionAndIngresoMatch[1] : 'NO ENCONTRADA'}`);
-
-      if (nameMatch && nameMatch[1] && commissionAndIngresoMatch && commissionAndIngresoMatch[1]) {
-        const clientName = nameMatch[1].trim();
-        const commission = parseFloat(commissionAndIngresoMatch[1]);
-        
-        // Validar que no sea un total o resumen
-        if (commission > 0 && !clientName.includes('TOTAL') && clientName.length > 5) {
-          console.log(`[MERCANTIL PDF] ✅ Encontrado: Póliza=${policyNumber}, Cliente=${clientName}, Comisión=${commission}`);
-          rows.push({
-            policy_number: policyNumber,
-            client_name: clientName,
-            gross_amount: commission
-          });
-        } else {
-          console.log(`[MERCANTIL PDF] ⏭️ Rechazado (validación): ${clientName} - ${commission}`);
-        }
+      // Validar
+      if (commission > 0 && clientName.length > 3 && !clientName.includes('TOTAL')) {
+        console.log(`[MERCANTIL PDF] ✅ Extraído: Póliza=${policyNumber}, Cliente=${clientName}, Comisión=${commission}`);
+        rows.push({
+          policy_number: policyNumber,
+          client_name: clientName,
+          gross_amount: commission
+        });
       } else {
-        console.log(`[MERCANTIL PDF] ⏭️ No se encontró nombre o comisión en la línea`);
+        console.log(`[MERCANTIL PDF] ⏭️ Rechazado (validación): ${clientName} - ${commission}`);
       }
+    } else {
+      console.log(`[MERCANTIL PDF] ⏭️ No se pudo extraer comisión/nombre`);
     }
   }
   
