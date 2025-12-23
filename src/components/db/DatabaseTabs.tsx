@@ -617,6 +617,16 @@ const ClientsListView = ({ clients, onView, onEdit, onDelete, role, selectedClie
                   <td className="ct-td ct-td-acciones">
                     <div className="relative overflow-visible flex justify-center">
                       <button
+                        ref={(el) => {
+                          if (el && openMenuClient === client.id) {
+                            const rect = el.getBoundingClientRect();
+                            const menu = document.getElementById(`menu-client-table-${client.id}`);
+                            if (menu) {
+                              menu.style.top = `${rect.bottom + 4}px`;
+                              menu.style.right = `${window.innerWidth - rect.right}px`;
+                            }
+                          }
+                        }}
                         onClick={(e) => {
                           e.stopPropagation();
                           setOpenMenuClient(openMenuClient === client.id ? null : client.id);
@@ -632,7 +642,7 @@ const ClientsListView = ({ clients, onView, onEdit, onDelete, role, selectedClie
                             className="fixed inset-0 z-[100]" 
                             onClick={() => setOpenMenuClient(null)}
                           />
-                          <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-[101]">
+                          <div id={`menu-client-table-${client.id}`} className="fixed w-48 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-[101]">
                             <button
                               onClick={() => {
                                 toggleClient(client.id);
