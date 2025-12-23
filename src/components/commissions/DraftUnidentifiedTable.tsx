@@ -153,7 +153,7 @@ export default function DraftUnidentifiedTable({ fortnightId, brokers, onUpdate,
 
               {/* Detalles expandibles */}
               {isExpanded && (
-                <div className="mt-4 space-y-4">
+                <div className="mt-4 space-y-6">
                   {/* Sin Identificar */}
                   {unidentifiedItems.length > 0 && (
                     <div>
@@ -161,7 +161,7 @@ export default function DraftUnidentifiedTable({ fortnightId, brokers, onUpdate,
                         <FaExclamationTriangle />
                         Pendientes de Identificar ({unidentifiedItems.length})
                       </h4>
-                      <div className="space-y-2">
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                         {unidentifiedItems.map(item => (
                           <div key={item.id} className="bg-white rounded-lg border-2 border-red-200">
                             {/* Línea compacta */}
@@ -230,7 +230,7 @@ export default function DraftUnidentifiedTable({ fortnightId, brokers, onUpdate,
                         <FaCheckCircle />
                         Identificados Temporalmente ({identifiedItems.length})
                       </h4>
-                      <div className="space-y-2">
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                         {identifiedItems.map(item => (
                           <div key={item.id} className="bg-white rounded-lg border-2 border-blue-200">
                             {/* Línea compacta */}
