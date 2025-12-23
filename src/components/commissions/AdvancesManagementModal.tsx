@@ -445,7 +445,9 @@ export function AdvancesManagementModal({
                       {advances.map((advance) => {
                         const isSelected = temporaryDiscounts.has(advance.id);
                         const selectedAmount = temporaryDiscounts.get(advance.id) || 0;
-                        const remainingBalance = advance.amount - (advance.total_paid || 0);
+                        // Usar misma lógica que historial: Total = amount + total_paid, Saldo = amount
+                        const initialAmount = advance.amount + (advance.total_paid || 0);
+                        const remainingBalance = advance.amount;
 
                         return (
                           <div
@@ -478,7 +480,7 @@ export function AdvancesManagementModal({
                                       )}
                                     </p>
                                     <p className="text-sm text-gray-600 mt-1">
-                                      Total: ${advance.amount.toFixed(2)} | 
+                                      Total: ${initialAmount.toFixed(2)} | 
                                       Pagado: ${(advance.total_paid || 0).toFixed(2)} | 
                                       Saldo: <span className="font-semibold">${remainingBalance.toFixed(2)}</span>
                                     </p>
