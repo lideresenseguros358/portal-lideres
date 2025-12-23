@@ -443,54 +443,132 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
       <div className="lg:hidden divide-y divide-gray-200">
         {transfers.map((transfer) => (
           <div key={transfer.id} className="p-4 hover:bg-gray-50 transition-colors">
-            <div className="flex items-start justify-between mb-3">
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-1">
-                  {getStatusBadge(transfer.status)}
-                  {getTypeBadge(transfer.transfer_type)}
+            {editingId === transfer.id ? (
+              /* Modo Edición Mobile */
+              <div className="space-y-3">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    {getStatusBadge(transfer.status)}
+                    <span className="text-xs text-gray-500">Ref: {transfer.reference_number}</span>
+                  </div>
+                  <div className="text-lg font-bold text-[#8AAA19] font-mono">
+                    ${transfer.amount.toFixed(2)}
+                  </div>
                 </div>
-                <div className="text-xs text-gray-500 mt-1">
-                  {new Date(transfer.date).toLocaleDateString('es-PA')} • Ref: {transfer.reference_number}
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="text-lg font-bold text-[#8AAA19] font-mono">
-                  ${transfer.amount.toFixed(2)}
-                </div>
-              </div>
-            </div>
 
-            <div className="text-sm text-gray-800 font-medium mb-2">
-              {transfer.description_raw}
-            </div>
+                <div className="text-sm text-gray-800 font-medium mb-3">
+                  {transfer.description_raw}
+                </div>
 
-            {transfer.notes_internal && (
-              <div className="text-xs text-gray-500 mb-2">
-                📝 {transfer.notes_internal}
+                <div className="space-y-2">
+                  <label className="block text-xs font-semibold text-gray-700">Notas Internas</label>
+                  <input
+                    type="text"
+                    placeholder="Agregar notas..."
+                    value={editData.notesInternal}
+                    onChange={(e) => setEditData({ ...editData, notesInternal: e.target.value })}
+                    className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg text-sm focus:border-[#8AAA19] focus:outline-none"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-xs font-semibold text-gray-700">Aseguradora</label>
+                  <select
+                    value={editData.insurerAssignedId}
+                    onChange={(e) => setEditData({ ...editData, insurerAssignedId: e.target.value })}
+                    className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg text-sm focus:border-[#8AAA19] focus:outline-none"
+                  >
+                    <option value="">Sin asignar</option>
+                    {insurers.map((ins) => (
+                      <option key={ins.id} value={ins.id}>{ins.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-xs font-semibold text-gray-700">Tipo</label>
+                  <select
+                    value={editData.transferType}
+                    onChange={(e) => setEditData({ ...editData, transferType: e.target.value })}
+                    className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg text-sm focus:border-[#8AAA19] focus:outline-none"
+                  >
+                    <option value="REPORTE">Reporte</option>
+                    <option value="PENDIENTE">Pendiente</option>
+                    <option value="INTERESES">Intereses</option>
+                    <option value="OTROS">Otros</option>
+                  </select>
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <button
+                    onClick={() => handleSave(transfer.id)}
+                    className="flex-1 px-4 py-2.5 bg-[#8AAA19] text-white rounded-lg hover:bg-[#7a9916] transition font-medium text-sm"
+                  >
+                    <FaSave className="inline mr-2" />
+                    Guardar
+                  </button>
+                  <button
+                    onClick={handleCancel}
+                    className="flex-1 px-4 py-2.5 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition font-medium text-sm"
+                  >
+                    <FaTimes className="inline mr-2" />
+                    Cancelar
+                  </button>
+                </div>
               </div>
+            ) : (
+              /* Vista Normal Mobile */
+              <>
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      {getStatusBadge(transfer.status)}
+                      {getTypeBadge(transfer.transfer_type)}
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1">
+                      {new Date(transfer.date).toLocaleDateString('es-PA')} • Ref: {transfer.reference_number}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-lg font-bold text-[#8AAA19] font-mono">
+                      ${transfer.amount.toFixed(2)}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="text-sm text-gray-800 font-medium mb-2">
+                  {transfer.description_raw}
+                </div>
+
+                {transfer.notes_internal && (
+                  <div className="text-xs text-gray-500 mb-2">
+                    📝 {transfer.notes_internal}
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between text-xs gap-2">
+                  <div className="text-gray-600 flex-1 min-w-0 truncate">
+                    {transfer.insurers?.name || <span className="italic">Sin asiguradora</span>}
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={selectedTransfers.has(transfer.id)}
+                      onChange={() => handleSelectTransfer(transfer.id)}
+                      disabled={transfer.status === 'PAGADO'}
+                      className="w-4 h-4 text-[#8AAA19] border-2 border-gray-300 rounded focus:ring-[#8AAA19] disabled:opacity-30"
+                    />
+                    <button
+                      onClick={() => handleEdit(transfer)}
+                      disabled={transfer.status === 'PAGADO'}
+                      className="px-3 py-1.5 bg-[#010139] text-white rounded-lg hover:bg-[#020270] transition disabled:opacity-30 disabled:cursor-not-allowed text-xs font-medium"
+                    >
+                      {transfer.status === 'PAGADO' ? '🔒' : 'Editar'}
+                    </button>
+                  </div>
+                </div>
+              </>
             )}
-
-            <div className="flex items-center justify-between text-xs gap-2">
-              <div className="text-gray-600 flex-1 min-w-0 truncate">
-                {transfer.insurers?.name || <span className="italic">Sin asiguradora</span>}
-              </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <input
-                  type="checkbox"
-                  checked={selectedTransfers.has(transfer.id)}
-                  onChange={() => handleSelectTransfer(transfer.id)}
-                  disabled={transfer.status === 'PAGADO'}
-                  className="w-4 h-4 text-[#8AAA19] border-2 border-gray-300 rounded focus:ring-[#8AAA19] disabled:opacity-30"
-                />
-                <button
-                  onClick={() => handleEdit(transfer)}
-                  disabled={transfer.status === 'PAGADO'}
-                  className="px-3 py-1.5 bg-[#010139] text-white rounded-lg hover:bg-[#020270] transition disabled:opacity-30 disabled:cursor-not-allowed text-xs font-medium"
-                >
-                  {transfer.status === 'PAGADO' ? '🔒' : 'Editar'}
-                </button>
-              </div>
-            </div>
           </div>
         ))}
       </div>
