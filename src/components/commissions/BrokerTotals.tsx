@@ -514,9 +514,27 @@ export default function BrokerTotals({ draftFortnightId, onManageAdvances, broke
           brokerName={managementModal.brokerName}
           fortnightId={draftFortnightId}
           grossAmount={managementModal.grossAmount}
-          onDiscountsApplied={() => {
-            setManagementModal(null);
-            // Forzar recarga de datos
+          onDiscountsApplied={async () => {
+            // Recargar descuentos temporales inmediatamente
+            try {
+              const response = await fetch(`/api/commissions/fortnight-discounts?fortnight_id=${draftFortnightId}`);
+              const discountsData = await response.json();
+              
+              if (discountsData.ok) {
+                const discountsByBroker: Record<string, number> = {};
+                (discountsData.data || []).forEach((d: any) => {
+                  if (!discountsByBroker[d.broker_id]) {
+                    discountsByBroker[d.broker_id] = 0;
+                  }
+                  discountsByBroker[d.broker_id] += d.amount;
+                });
+                setBrokerDiscounts(discountsByBroker);
+              }
+            } catch (error) {
+              console.error('Error reloading discounts:', error);
+            }
+            
+            // Forzar recarga completa
             onRetentionChange();
           }}
         />

@@ -73,14 +73,8 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // Calcular saldo del adelanto
-      const { data: logs } = await supabase
-        .from('advance_logs')
-        .select('amount')
-        .eq('advance_id', discount.advance_id);
-
-      const totalPaid = (logs || []).reduce((sum, log) => sum + log.amount, 0);
-      const remainingBalance = advance.amount - totalPaid;
+      // amount en BD ya es el saldo actual
+      const remainingBalance = advance.amount;
 
       if (discount.amount > remainingBalance) {
         return NextResponse.json(
