@@ -221,9 +221,11 @@ export async function actionUploadImport(formData: FormData) {
     
     console.log('[SERVER] Saved total_amount:', importRecord.total_amount, 'for import:', importRecord.id);
 
-    // 2. Buscar pólizas existentes para identificar broker y porcentaje
-    // Para aseguradoras con "parserRule: partial", el número real de póliza para match puede ser solo un grupo.
+    // 2. Buscar pólizas existentes Y clientes por nombre para matching en dos niveles
+    // Nivel 1: Match por número de póliza
+    // Nivel 2: Match por nombre exacto del cliente (para pólizas nuevas)
     const policyNumbers = rows.map(r => r.policy_number).filter(Boolean) as string[];
+    const clientNames = Array.from(new Set(rows.map(r => r.client_name?.trim().toUpperCase()).filter(Boolean))) as string[];
     const insurerSlug = getInsurerSlug(insurerName);
     const usesPartialMatch = insurerSlug ? getPolicySearchTerm(insurerSlug, '1-1-1') !== '1-1-1' : false;
 
@@ -294,21 +296,70 @@ export async function actionUploadImport(formData: FormData) {
       });
     });
 
-    const findPolicyData = (rawPolicyNumber: string | null) => {
-      if (!rawPolicyNumber) return { matchedPolicyNumber: null as string | null, policyData: null as any };
+    // Buscar clientes existentes por nombre exacto (para matching nivel 2)
+    let existingClients: any[] = [];
+    if (clientNames.length > 0) {
+      const { data: clientsData } = await supabase
+        .from('clients')
+        .select(`
+          id,
+          name,
+          broker_id,
+          brokers!inner(percent_default)
+        `)
+        .in('name', clientNames);
+      
+      existingClients = clientsData || [];
+    }
 
-      // 1) Exact match
+    const clientsMap = new Map<string, {
+      client_id: string;
+      broker_id: string | null;
+      percent: number;
+    }>();
+    
+    existingClients.forEach((c: any) => {
+      const percent = c.brokers?.percent_default ?? 1.0;
+      clientsMap.set(c.name.trim().toUpperCase(), {
+        client_id: c.id,
+        broker_id: c.broker_id,
+        percent: percent,
+      });
+    });
+
+    console.log(`[SERVER][${insurerName}] Clientes encontrados para matching: ${clientsMap.size}`);
+
+    const findPolicyData = (rawPolicyNumber: string | null, clientName: string | null) => {
+      if (!rawPolicyNumber) return { 
+        matchedPolicyNumber: null as string | null, 
+        policyData: null as any,
+        clientData: null as any,
+        matchType: 'none' as 'policy' | 'client' | 'none'
+      };
+
+      // NIVEL 1: Match por número de póliza
+      // 1A) Exact match
       const exact = policyMap.get(rawPolicyNumber);
-      if (exact) return { matchedPolicyNumber: rawPolicyNumber, policyData: exact };
+      if (exact) return { 
+        matchedPolicyNumber: rawPolicyNumber, 
+        policyData: exact,
+        clientData: null,
+        matchType: 'policy' as const
+      };
 
-      // 2) Match parcial por aseguradora (ANCON/ACERTA/MB/FEDPA/REGIONAL/OPTIMA/ALIADO/UNIVIVIR/BANESCO)
+      // 1B) Match parcial por aseguradora (ANCON/ACERTA/MB/FEDPA/REGIONAL/OPTIMA/ALIADO/UNIVIVIR/BANESCO)
       if (insurerSlug && usesPartialMatch) {
         const term = getPolicySearchTerm(insurerSlug, rawPolicyNumber);
         if (term) {
           const candidates = (existingPolicies || []).filter((p: any) => String(p.policy_number || '').includes(String(term)));
           if (candidates.length === 1) {
             const pn = String(candidates[0].policy_number);
-            return { matchedPolicyNumber: pn, policyData: policyMap.get(pn) || null };
+            return { 
+              matchedPolicyNumber: pn, 
+              policyData: policyMap.get(pn) || null,
+              clientData: null,
+              matchType: 'policy' as const
+            };
           }
           if (candidates.length > 1) {
             // Preferir coincidencia exacta en algún segmento del número (cuando esté separado por '-')
@@ -317,58 +368,123 @@ export async function actionUploadImport(formData: FormData) {
               return parts.includes(String(term));
             }) || candidates[0];
             const pn = preferred ? String(preferred.policy_number) : null;
-            return { matchedPolicyNumber: pn, policyData: pn ? (policyMap.get(pn) || null) : null };
+            return { 
+              matchedPolicyNumber: pn, 
+              policyData: pn ? (policyMap.get(pn) || null) : null,
+              clientData: null,
+              matchType: 'policy' as const
+            };
           }
         }
       }
 
-      return { matchedPolicyNumber: rawPolicyNumber, policyData: null };
+      // NIVEL 2: Match por nombre exacto del cliente (póliza nueva)
+      if (clientName) {
+        const normalizedClientName = clientName.trim().toUpperCase();
+        const clientMatch = clientsMap.get(normalizedClientName);
+        if (clientMatch) {
+          console.log(`[SERVER][${insurerName}] ✅ Match por CLIENTE: ${clientName} → Broker identificado, Póliza NUEVA`);
+          return {
+            matchedPolicyNumber: rawPolicyNumber,
+            policyData: null, // No hay póliza existente
+            clientData: clientMatch, // Datos del cliente encontrado
+            matchType: 'client' as const
+          };
+        }
+      }
+
+      return { 
+        matchedPolicyNumber: rawPolicyNumber, 
+        policyData: null,
+        clientData: null,
+        matchType: 'none' as const
+      };
     };
 
-    // 3. Separar: comm_items (identificados con broker) y pending_items (sin identificar)
+    // 3. Separar en 3 categorías:
+    // A) comm_items: Póliza existente con broker identificado
+    // B) pending_items con client_id: Cliente identificado pero póliza NUEVA (ir a preliminar de pólizas)
+    // C) pending_items sin client_id: Completamente sin identificar
     const itemsToInsert: CommItemIns[] = [];
     const pendingItemsToInsert: any[] = [];
+    let policyMatchCount = 0;
+    let clientMatchCount = 0;
+    let noMatchCount = 0;
 
     for (const row of rows) {
-      const { matchedPolicyNumber, policyData } = findPolicyData(row.policy_number || null);
+      const { matchedPolicyNumber, policyData, clientData, matchType } = findPolicyData(row.policy_number || null, row.client_name || null);
       
-      // Si existe póliza con broker identificado, va a comm_items
-      if (policyData && policyData.broker_id) {
-        // CALCULAR comisión del broker aplicando el porcentaje
-        // percent_default es DECIMAL (0.82 = 82%)
+      // CASO A: Match por póliza → Póliza existente con broker
+      if (matchType === 'policy' && policyData && policyData.broker_id) {
+        policyMatchCount++;
         const commissionRaw = row.commission_amount || 0;
         const percent = policyData.percent;
         const grossAmount = commissionRaw * percent;
-        
-        console.log(`[CALC] Policy ${row.policy_number}: Raw=${commissionRaw}, Percent=${percent}, Gross=${grossAmount}`);
         
         itemsToInsert.push({
           import_id: importRecord.id,
           insurer_id: parsed.insurer_id,
           policy_number: matchedPolicyNumber || row.policy_number || 'UNKNOWN',
-          gross_amount: grossAmount,  // ← Aplicado el porcentaje
+          gross_amount: grossAmount,
           insured_name: row.client_name || 'UNKNOWN',
           raw_row: row.raw_row,
           broker_id: policyData.broker_id,
         });
-      } else {
-        // Sin broker identificado: va a pending_items con commission_raw (NO calculado con %)
+      }
+      // CASO B: Match por cliente → Cliente existente pero PÓLIZA NUEVA (preliminar)
+      else if (matchType === 'client' && clientData && clientData.broker_id) {
+        clientMatchCount++;
+        const commissionRaw = row.commission_amount || 0;
+        const percent = clientData.percent;
+        const grossAmount = commissionRaw * percent;
+        
+        // Va a comm_items pero también necesita registrarse como póliza preliminar
+        itemsToInsert.push({
+          import_id: importRecord.id,
+          insurer_id: parsed.insurer_id,
+          policy_number: matchedPolicyNumber || row.policy_number || 'UNKNOWN',
+          gross_amount: grossAmount,
+          insured_name: row.client_name || 'UNKNOWN',
+          raw_row: row.raw_row,
+          broker_id: clientData.broker_id,
+        });
+        
+        // TAMBIÉN agregar a pending_items para que aparezca en "Preliminar de Pólizas"
         pendingItemsToInsert.push({
           insured_name: row.client_name || null,
           policy_number: matchedPolicyNumber || row.policy_number || 'UNKNOWN',
           insurer_id: parsed.insurer_id,
-          commission_raw: row.commission_amount || 0, // RAW, no calculado
+          commission_raw: commissionRaw,
+          fortnight_id: parsed.fortnight_id,
+          import_id: importRecord.id,
+          status: 'preliminary_policy', // Nuevo estado para distinguir
+          assigned_broker_id: clientData.broker_id,
+          client_id: clientData.client_id, // Cliente identificado
+        });
+      }
+      // CASO C: Sin match → Completamente sin identificar
+      else {
+        noMatchCount++;
+        pendingItemsToInsert.push({
+          insured_name: row.client_name || null,
+          policy_number: matchedPolicyNumber || row.policy_number || 'UNKNOWN',
+          insurer_id: parsed.insurer_id,
+          commission_raw: row.commission_amount || 0,
           fortnight_id: parsed.fortnight_id,
           import_id: importRecord.id,
           status: 'open',
           assigned_broker_id: null,
+          client_id: null,
         });
       }
     }
 
-    console.log(`[SERVER][${insurerName}] ========== SEPARACIÓN IDENTIFICADOS/SIN IDENTIFICAR ==========`);
-    console.log(`[SERVER][${insurerName}] Items identificados (con broker): ${itemsToInsert.length}`);
-    console.log(`[SERVER][${insurerName}] Items sin identificar: ${pendingItemsToInsert.length}`);
+    console.log(`[SERVER][${insurerName}] ========== RESULTADO DEL MATCHING ==========`);
+    console.log(`[SERVER][${insurerName}] ✅ Match por PÓLIZA: ${policyMatchCount}`);
+    console.log(`[SERVER][${insurerName}] 🆕 Match por CLIENTE (póliza nueva): ${clientMatchCount}`);
+    console.log(`[SERVER][${insurerName}] ❌ Sin identificar: ${noMatchCount}`);
+    console.log(`[SERVER][${insurerName}] Total comm_items: ${itemsToInsert.length}`);
+    console.log(`[SERVER][${insurerName}] Total pending_items: ${pendingItemsToInsert.length}`);
     
     if (itemsToInsert.length > 0) {
       console.log(`[SERVER][${insurerName}] Muestra de identificados:`, itemsToInsert.slice(0, 2).map(i => ({
