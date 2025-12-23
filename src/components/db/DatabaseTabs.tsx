@@ -7,6 +7,7 @@ import { Eye, Edit3, Trash2, ChevronDown, ChevronUp, FileDown, FileSpreadsheet, 
 import { toast } from 'sonner';
 import Modal from '@/components/Modal';
 import ClientForm from './ClientForm';
+import ClientDetailsModal from './ClientDetailsModal';
 import ClientsByMonth from './ClientsByMonth';
 import ClientPolicyWizard from './ClientPolicyWizard';
 import PreliminaryClientsTab from './PreliminaryClientsTab';
@@ -1435,9 +1436,12 @@ export default function DatabaseTabs({
         />
       )}
       {modal === 'view-client' && clientToEdit && (
-        <Modal title="Ver Detalles del Cliente" onClose={() => router.push('/db?tab=clients')}>
-          <ClientForm client={clientToEdit} onClose={() => router.push('/db?tab=clients', { scroll: false })} readOnly={true} />
-        </Modal>
+        <ClientDetailsModal
+          client={clientToEdit}
+          onClose={() => router.push('/db?tab=clients', { scroll: false })}
+          onEdit={() => router.push(`/db?tab=clients&modal=edit-client&editClient=${clientToEdit.id}`, { scroll: false })}
+          onOpenExpediente={() => setExpedienteUploadModalOpen(true)}
+        />
       )}
       {modal === 'edit-client' && clientToEdit && (
         <Modal title="Editar Cliente" onClose={() => router.push('/db?tab=clients')}>
