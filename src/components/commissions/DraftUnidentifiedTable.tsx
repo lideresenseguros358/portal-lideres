@@ -33,6 +33,7 @@ export default function DraftUnidentifiedTable({ fortnightId, brokers, onUpdate,
   const [isExpanded, setIsExpanded] = useState(false);
   const [selectedBroker, setSelectedBroker] = useState<Record<string, string>>({});
   const [processing, setProcessing] = useState<string | null>(null);
+  const [assigningItem, setAssigningItem] = useState<string | null>(null);
 
   const loadItems = async () => {
     // Solo mostrar loading en la primera carga
@@ -160,34 +161,44 @@ export default function DraftUnidentifiedTable({ fortnightId, brokers, onUpdate,
                         <FaExclamationTriangle />
                         Pendientes de Identificar ({unidentifiedItems.length})
                       </h4>
-                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                      <div className="space-y-2">
                         {unidentifiedItems.map(item => (
-                          <div key={item.id} className="bg-white p-3 sm:p-4 rounded-lg border-2 border-red-200">
-                            <div className="flex flex-col gap-3">
-                              {/* Info en columnas responsive */}
-                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                                <div>
-                                  <p className="text-xs text-gray-500 mb-1">Póliza / Cliente</p>
-                                  <p className="font-semibold text-gray-900 text-sm break-words">{item.policy_number}</p>
-                                  <p className="text-sm text-gray-600 break-words">{item.insured_name || 'Sin nombre'}</p>
-                                </div>
-                                <div>
-                                  <p className="text-xs text-gray-500 mb-1">Aseguradora</p>
-                                  <p className="font-medium text-gray-900 text-sm break-words">{item.insurers?.name || 'N/A'}</p>
-                                </div>
-                                <div>
-                                  <p className="text-xs text-gray-500 mb-1">Comisión</p>
-                                  <p className="font-mono font-bold text-[#8AAA19] text-sm">
-                                    ${((item.insurers as any)?.invert_negatives ? -item.commission_raw : item.commission_raw).toFixed(2)}
-                                  </p>
-                                </div>
+                          <div key={item.id} className="bg-white rounded-lg border-2 border-red-200">
+                            {/* Línea compacta */}
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-2 p-3">
+                              {/* Cliente */}
+                              <div className="flex-1 min-w-0">
+                                <p className="font-semibold text-gray-900 text-sm truncate">{item.insured_name || 'Sin nombre'}</p>
                               </div>
-                              {/* Acciones en fila separada */}
-                              <div className="flex flex-col sm:flex-row gap-2 pt-2 border-t border-gray-200">
+                              {/* Aseguradora */}
+                              <div className="flex-shrink-0">
+                                <p className="text-sm text-gray-600">{item.insurers?.name || 'N/A'}</p>
+                              </div>
+                              {/* Comisión */}
+                              <div className="flex-shrink-0">
+                                <p className="font-mono font-bold text-[#8AAA19] text-sm">
+                                  ${((item.insurers as any)?.invert_negatives ? -item.commission_raw : item.commission_raw).toFixed(2)}
+                                </p>
+                              </div>
+                              {/* Botón Asignar */}
+                              <div className="flex-shrink-0">
+                                <button
+                                  onClick={() => setAssigningItem(assigningItem === item.id ? null : item.id)}
+                                  disabled={processing === item.id}
+                                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white rounded-lg text-sm font-semibold transition-colors flex items-center gap-2 whitespace-nowrap"
+                                >
+                                  <FaUser className="text-white" size={12} />
+                                  {processing === item.id ? 'Procesando...' : 'Asignar'}
+                                </button>
+                              </div>
+                            </div>
+                            {/* Selector desplegable */}
+                            {assigningItem === item.id && (
+                              <div className="px-3 pb-3 flex flex-col sm:flex-row gap-2">
                                 <select
                                   value={selectedBroker[item.id] || ''}
                                   onChange={(e) => setSelectedBroker({ ...selectedBroker, [item.id]: e.target.value })}
-                                  className="w-full sm:flex-1 px-3 py-2 border-2 border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                                  className="flex-1 px-3 py-2 border-2 border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
                                   disabled={processing === item.id}
                                 >
                                   <option value="">Seleccionar corredor...</option>
@@ -200,13 +211,12 @@ export default function DraftUnidentifiedTable({ fortnightId, brokers, onUpdate,
                                 <button
                                   onClick={() => handleIdentify(item.id)}
                                   disabled={!selectedBroker[item.id] || processing === item.id}
-                                  className="w-full sm:w-auto px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2 whitespace-nowrap"
+                                  className="px-4 py-2 bg-[#8AAA19] hover:bg-[#7a9515] disabled:bg-gray-300 text-white rounded-lg text-sm font-semibold transition-colors whitespace-nowrap"
                                 >
-                                  <FaUser size={12} />
-                                  {processing === item.id ? 'Procesando...' : 'Identificar'}
+                                  ✓ Confirmar
                                 </button>
                               </div>
-                            </div>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -220,41 +230,40 @@ export default function DraftUnidentifiedTable({ fortnightId, brokers, onUpdate,
                         <FaCheckCircle />
                         Identificados Temporalmente ({identifiedItems.length})
                       </h4>
-                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                      <div className="space-y-2">
                         {identifiedItems.map(item => (
-                          <div key={item.id} className="bg-white p-3 sm:p-4 rounded-lg border-2 border-blue-200">
-                            <div className="flex flex-col gap-3">
-                              {/* Info en columnas responsive */}
-                              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                                <div>
-                                  <p className="text-xs text-gray-500 mb-1">Póliza / Cliente</p>
-                                  <p className="font-semibold text-gray-900 text-sm break-words">{item.policy_number}</p>
-                                  <p className="text-sm text-gray-600 break-words">{item.insured_name || 'Sin nombre'}</p>
-                                </div>
-                                <div>
-                                  <p className="text-xs text-gray-500 mb-1">Aseguradora</p>
-                                  <p className="font-medium text-gray-900 text-sm break-words">{item.insurers?.name || 'N/A'}</p>
-                                </div>
-                                <div>
-                                  <p className="text-xs text-gray-500 mb-1">Comisión</p>
-                                  <p className="font-mono font-bold text-[#8AAA19] text-sm">
-                                    ${((item.insurers as any)?.invert_negatives ? -item.commission_raw : item.commission_raw).toFixed(2)}
-                                  </p>
-                                </div>
-                                <div>
-                                  <p className="text-xs text-gray-500 mb-1">Asignado a</p>
-                                  <p className="font-bold text-blue-700 text-sm break-words">{item.brokers?.name || 'N/A'}</p>
-                                </div>
+                          <div key={item.id} className="bg-white rounded-lg border-2 border-blue-200">
+                            {/* Línea compacta */}
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-2 p-3">
+                              {/* Cliente */}
+                              <div className="flex-1 min-w-0">
+                                <p className="font-semibold text-gray-900 text-sm truncate">{item.insured_name || 'Sin nombre'}</p>
                               </div>
-                              {/* Acción en fila separada */}
-                              <div className="flex pt-2 border-t border-gray-200">
+                              {/* Aseguradora */}
+                              <div className="flex-shrink-0">
+                                <p className="text-sm text-gray-600">{item.insurers?.name || 'N/A'}</p>
+                              </div>
+                              {/* Comisión */}
+                              <div className="flex-shrink-0">
+                                <p className="font-mono font-bold text-[#8AAA19] text-sm">
+                                  ${((item.insurers as any)?.invert_negatives ? -item.commission_raw : item.commission_raw).toFixed(2)}
+                                </p>
+                              </div>
+                              {/* Corredor asignado */}
+                              <div className="flex-shrink-0">
+                                <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                                  {item.brokers?.name || 'N/A'}
+                                </span>
+                              </div>
+                              {/* Botón Desasignar */}
+                              <div className="flex-shrink-0">
                                 <button
                                   onClick={() => handleUnidentify(item.id)}
                                   disabled={processing === item.id}
-                                  className="w-full sm:w-auto px-4 py-2 border-2 border-red-300 text-red-600 hover:bg-red-50 disabled:bg-gray-100 disabled:text-gray-400 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2"
+                                  className="px-4 py-2 border-2 border-red-300 text-red-600 hover:bg-red-50 disabled:bg-gray-100 disabled:text-gray-400 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2 whitespace-nowrap"
                                 >
                                   <FaUndo size={12} />
-                                  {processing === item.id ? 'Procesando...' : 'Desidentificar'}
+                                  {processing === item.id ? 'Procesando...' : 'Desasignar'}
                                 </button>
                               </div>
                             </div>
