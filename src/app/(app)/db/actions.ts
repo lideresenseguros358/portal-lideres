@@ -19,6 +19,90 @@ export async function actionCreateClientWithPolicy(clientData: unknown, policyDa
   }
 }
 
+// Buscar clientes duplicados por cédula
+export async function actionFindDuplicateByNationalId(nationalId: string, excludeClientId?: string) {
+  try {
+    const supabase = await getSupabaseServer();
+    
+    if (!nationalId || !nationalId.trim()) {
+      return { ok: true as const, data: null };
+    }
+
+    let query = supabase
+      .from('clients')
+      .select(`
+        *,
+        policies (
+          id,
+          policy_number,
+          insurer_id,
+          ramo,
+          status,
+          insurers (
+            name
+          )
+        )
+      `)
+      .eq('national_id', nationalId.trim().toUpperCase());
+    
+    if (excludeClientId) {
+      query = query.neq('id', excludeClientId);
+    }
+
+    const { data, error } = await query.single();
+    
+    if (error) {
+      if (error.code === 'PGRST116') {
+        // No hay duplicados
+        return { ok: true as const, data: null };
+      }
+      return { ok: false as const, error: error.message };
+    }
+    
+    return { ok: true as const, data: data as ClientWithPolicies };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : 'Error desconocido'
+    };
+  }
+}
+
+// Fusionar clientes: mover todas las pólizas de sourceClientId a targetClientId
+export async function actionMergeClients(sourceClientId: string, targetClientId: string) {
+  try {
+    const supabase = await getSupabaseServer();
+    
+    // 1. Mover todas las pólizas del cliente origen al cliente destino
+    const { error: updateError } = await supabase
+      .from('policies')
+      .update({ client_id: targetClientId })
+      .eq('client_id', sourceClientId);
+    
+    if (updateError) {
+      return { ok: false as const, error: `Error moviendo pólizas: ${updateError.message}` };
+    }
+    
+    // 2. Eliminar el cliente origen (ahora sin pólizas)
+    const { error: deleteError } = await supabase
+      .from('clients')
+      .delete()
+      .eq('id', sourceClientId);
+    
+    if (deleteError) {
+      return { ok: false as const, error: `Error eliminando duplicado: ${deleteError.message}` };
+    }
+    
+    revalidatePath('/(app)/db');
+    return { ok: true as const };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : 'Error desconocido'
+    };
+  }
+}
+
 export async function actionLoadMoreClients(offset: number, limit: number = 100, searchQuery?: string) {
   try {
     const supabase = await getSupabaseServer();

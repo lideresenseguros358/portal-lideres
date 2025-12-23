@@ -3,13 +3,15 @@
 import { useEffect, useState, useMemo, useCallback, memo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FaTimes, FaPlus, FaEdit, FaTrash, FaFolderPlus } from "react-icons/fa";
-import { actionCreateClientWithPolicy } from '@/app/(app)/db/actions';
+import { actionCreateClientWithPolicy, actionFindDuplicateByNationalId, actionMergeClients } from '@/app/(app)/db/actions';
 import type { Tables } from "@/lib/supabase/client";
 import { toUppercasePayload, createUppercaseHandler, uppercaseInputClass } from '@/lib/utils/uppercase';
 import ExpedienteManager from '@/components/expediente/ExpedienteManager';
 import { POLICY_TYPES, checkSpecialOverride } from '@/lib/constants/policy-types';
 import NationalIdInput from '@/components/ui/NationalIdInput';
 import PolicyNumberInput from '@/components/ui/PolicyNumberInput';
+import MergeDuplicateModal from './MergeDuplicateModal';
+import { toast } from 'sonner';
 
 import { ClientWithPolicies } from '@/types/db';
 
@@ -50,6 +52,12 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
   const [internalExpedienteModalOpen, setInternalExpedienteModalOpen] = useState(false);
   const expedienteModalOpen = externalExpedienteModalOpen !== undefined ? externalExpedienteModalOpen : internalExpedienteModalOpen;
   
+  // Estados para detección de duplicados
+  const [duplicateClient, setDuplicateClient] = useState<any>(null);
+  const [showMergeModal, setShowMergeModal] = useState(false);
+  const [checkingDuplicate, setCheckingDuplicate] = useState(false);
+  const [mergingClients, setMergingClients] = useState(false);
+  
   const handleExpedienteModalChange = useCallback((open: boolean) => {
     if (onExpedienteModalChange) {
       onExpedienteModalChange(open);
@@ -85,8 +93,67 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
     }
   }, [editPolicyId, client]);
 
+  // Detectar duplicados al cambiar la cédula
+  const checkForDuplicates = useCallback(async (nationalId: string) => {
+    if (!client || !nationalId || !nationalId.trim()) {
+      setDuplicateClient(null);
+      return;
+    }
+    
+    // Si la cédula no cambió, no verificar
+    if (nationalId.trim().toUpperCase() === client.national_id?.trim().toUpperCase()) {
+      setDuplicateClient(null);
+      return;
+    }
+    
+    setCheckingDuplicate(true);
+    try {
+      const result = await actionFindDuplicateByNationalId(nationalId, client.id);
+      if (result.ok && result.data) {
+        setDuplicateClient(result.data);
+        setShowMergeModal(true);
+      } else {
+        setDuplicateClient(null);
+      }
+    } catch (error) {
+      console.error('Error checking duplicates:', error);
+    } finally {
+      setCheckingDuplicate(false);
+    }
+  }, [client]);
+  
+  // Fusionar clientes
+  const handleMergeClients = async () => {
+    if (!client || !duplicateClient) return;
+    
+    setMergingClients(true);
+    try {
+      const result = await actionMergeClients(client.id, duplicateClient.id);
+      if (result.ok) {
+        toast.success('Clientes fusionados exitosamente');
+        setShowMergeModal(false);
+        onClose();
+        // Refrescar página
+        window.location.href = '/db?tab=clients';
+      } else {
+        toast.error(result.error || 'Error al fusionar clientes');
+      }
+    } catch (error) {
+      toast.error('Error inesperado al fusionar');
+    } finally {
+      setMergingClients(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Si hay duplicado detectado, mostrar modal primero
+    if (duplicateClient && client) {
+      setShowMergeModal(true);
+      return;
+    }
+    
     setLoading(true);
     setError("");
 
@@ -221,11 +288,25 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
               </div>
 
               {/* Cédula y Teléfono - 2 columnas */}
-              <NationalIdInput
-                value={formData.national_id}
-                onChange={(value) => setFormData({ ...formData, national_id: value })}
-                label="Documento de Identidad"
-              />
+              <div className="relative">
+                <NationalIdInput
+                  value={formData.national_id}
+                  onChange={(value) => {
+                    setFormData({ ...formData, national_id: value });
+                    // Detectar duplicados si estamos editando un cliente
+                    if (client && value && value.trim()) {
+                      checkForDuplicates(value);
+                    }
+                  }}
+                  label="Documento de Identidad"
+                />
+                {checkingDuplicate && (
+                  <div className="absolute right-2 top-9 text-xs text-gray-500 flex items-center gap-1">
+                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-[#8AAA19]"></div>
+                    Verificando...
+                  </div>
+                )}
+              </div>
 
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1.5">
@@ -463,6 +544,29 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
             setEditingPolicy(null);
             router.refresh();
           }}
+        />
+      )}
+      
+      {/* Modal de fusión de duplicados */}
+      {showMergeModal && duplicateClient && client && (
+        <MergeDuplicateModal
+          currentClient={{
+            id: client.id,
+            name: formData.name,
+            national_id: formData.national_id,
+            policies_count: policies.length
+          }}
+          duplicateClient={duplicateClient}
+          onConfirm={handleMergeClients}
+          onCancel={() => {
+            setShowMergeModal(false);
+            setDuplicateClient(null);
+            // Revertir la cédula al valor original
+            if (client.national_id) {
+              setFormData({ ...formData, national_id: client.national_id });
+            }
+          }}
+          loading={mergingClients}
         />
       )}
     </div>
