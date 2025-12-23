@@ -34,6 +34,7 @@ export async function PUT(
       national_id: body.national_id?.trim().toUpperCase() || null,
       email: body.email?.trim() || null,
       phone: body.phone?.trim() || null,
+      birth_date: body.birth_date || null,
       active: body.active ?? true,
     };
 
