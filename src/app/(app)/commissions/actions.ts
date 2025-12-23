@@ -3499,13 +3499,31 @@ export async function actionExportBankCsv(fortnightId: string) {
       .select('broker_id, is_retained')
       .eq('fortnight_id', fortnightId);
     
-    // Apply retention and calculate net (gross - 0 descuentos for now)
+    // Get temporary discounts from fortnight_discounts
+    const { data: discounts } = await supabase
+      .from('fortnight_discounts')
+      .select('broker_id, amount')
+      .eq('fortnight_id', fortnightId)
+      .eq('applied', false);
+    
+    // Group discounts by broker_id
+    const discountsByBroker: Record<string, number> = {};
+    (discounts || []).forEach((d: any) => {
+      if (!discountsByBroker[d.broker_id]) {
+        discountsByBroker[d.broker_id] = 0;
+      }
+      discountsByBroker[d.broker_id] += d.amount;
+    });
+    
+    // Apply retention and calculate net (gross - discounts)
     const totalsArray = Object.values(brokerGroups).map((bg: any) => {
       const total = brokerTotals?.find(bt => bt.broker_id === bg.broker_id);
+      const discount = discountsByBroker[bg.broker_id] || 0;
       return {
         ...bg,
         is_retained: total?.is_retained || false,
-        net_amount: bg.gross_amount // Por ahora sin descuentos
+        discount_amount: discount,
+        net_amount: bg.gross_amount - discount
       };
     });
     
