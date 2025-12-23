@@ -103,6 +103,8 @@ export function formatDateForDisplay(dateString: string | null | undefined): str
 
 /**
  * Formatea fecha para display con nombre de mes en español
+ * IMPORTANTE: USA new Date() con zona horaria - para fechas de pólizas/eventos
+ * Para fechas de nacimiento u otras date-only, usar formatDateLongNoTimezone
  * 
  * @param dateString - Fecha en formato "YYYY-MM-DD"
  * @returns string en formato "dd de mes de yyyy"
@@ -122,6 +124,38 @@ export function formatDateLongSpanish(dateString: string | null | undefined): st
       month: 'long',
       year: 'numeric'
     });
+  } catch {
+    return dateString;
+  }
+}
+
+/**
+ * Formatea fecha SIN conversión de zona horaria (parse manual)
+ * CRÍTICO: Usar para fechas date-only como birth_date, issue_date, etc.
+ * NO usa new Date() para evitar cambios por timezone
+ * 
+ * @param dateString - Fecha en formato "YYYY-MM-DD"
+ * @returns string en formato "dd de mes de yyyy"
+ */
+export function formatDateLongNoTimezone(dateString: string | null | undefined): string {
+  if (!dateString) return '—';
+  
+  try {
+    const parts = dateString.split('-');
+    if (parts.length !== 3) return dateString;
+    
+    const [year, month, day] = parts;
+    if (!year || !month || !day) return dateString;
+    
+    const monthNames = [
+      'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+      'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'
+    ];
+    
+    const monthIndex = parseInt(month) - 1;
+    if (monthIndex < 0 || monthIndex > 11) return dateString;
+    
+    return `${parseInt(day)} de ${monthNames[monthIndex]} de ${year}`;
   } catch {
     return dateString;
   }

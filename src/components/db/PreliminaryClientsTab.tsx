@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { FaExclamationTriangle, FaEdit, FaSave, FaTimes, FaTrash, FaCheckCircle, FaCalendar, FaUser, FaFileAlt, FaBuilding } from 'react-icons/fa';
+import { formatDateForDisplay } from '@/lib/utils/dates';
 import { getTodayLocalDate, addOneYearToDate } from '@/lib/utils/dates';
 import { toast } from 'sonner';
 import { actionGetPreliminaryClients, actionUpdatePreliminaryClient, actionDeletePreliminaryClient, actionTriggerMigration } from '@/app/(app)/db/preliminary-actions';
@@ -354,16 +355,7 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
                       </div>
                       <div>
                         <p className="text-xs text-gray-500 mb-1">Fecha de Nacimiento</p>
-                        <p className="font-semibold text-sm">
-                          {client.birth_date ? (() => {
-                            try {
-                              const [year, month, day] = client.birth_date.split('-');
-                              return `${day}/${month}/${year}`;
-                            } catch {
-                              return client.birth_date;
-                            }
-                          })() : '—'}
-                        </p>
+                        <p className="font-semibold text-sm">{formatDateForDisplay(client.birth_date)}</p>
                       </div>
                       <div>
                         <p className="text-xs text-gray-500 mb-1">Aseguradora</p>

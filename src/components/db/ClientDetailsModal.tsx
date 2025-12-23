@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { FaTimes, FaEdit, FaFolderOpen, FaExclamationCircle, FaDollarSign, FaUser, FaIdCard, FaEnvelope, FaPhone, FaBirthdayCake, FaFileAlt, FaBuilding, FaCalendarAlt, FaCheckCircle, FaTimesCircle, FaClock, FaEye } from 'react-icons/fa';
+import { formatDateLongNoTimezone } from '@/lib/utils/dates';
 import Modal from '@/components/Modal';
 import { ClientWithPolicies } from '@/types/db';
 import { supabaseClient } from '@/lib/supabase/client';
@@ -58,25 +59,6 @@ export default function ClientDetailsModal({ client, onClose, onEdit, onOpenExpe
   const [loadingMorosidad, setLoadingMorosidad] = useState(false);
   const [loadingComisiones, setLoadingComisiones] = useState(false);
   const [loadingFortnight, setLoadingFortnight] = useState(false);
-
-  // Formatear fecha SIN conversión de zona horaria (para birth_date)
-  const formatDateNoTimezone = (date: string | null) => {
-    if (!date) return 'N/A';
-    try {
-      // Parse manual para evitar cambios por timezone
-      const parts = date.split('-');
-      if (parts.length !== 3) return date;
-      const [year, month, day] = parts;
-      if (!year || !month || !day) return date;
-      const monthNames = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
-                         'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
-      const monthIndex = parseInt(month) - 1;
-      if (monthIndex < 0 || monthIndex > 11) return date;
-      return `${parseInt(day)} de ${monthNames[monthIndex]} de ${year}`;
-    } catch {
-      return date;
-    }
-  };
 
   // Formatear fecha con zona horaria (para otras fechas como renewal_date)
   const formatDate = (date: string | null) => {
@@ -308,7 +290,7 @@ export default function ClientDetailsModal({ client, onClose, onEdit, onOpenExpe
                 <FaBirthdayCake className="text-[#010139] mt-1 flex-shrink-0" />
                 <div>
                   <p className="text-xs text-gray-600 font-medium">Fecha de Nacimiento</p>
-                  <p className="text-sm font-semibold text-gray-900">{formatDateNoTimezone((client as any).birth_date)}</p>
+                  <p className="text-sm font-semibold text-gray-900">{formatDateLongNoTimezone((client as any).birth_date)}</p>
                 </div>
               </div>
               <div className="flex items-start gap-3">
