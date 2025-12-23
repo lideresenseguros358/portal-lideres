@@ -311,7 +311,7 @@ export default function NewUserWizard() {
                 required
               />
 
-              <div>
+              <div className="w-full max-w-full overflow-hidden">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Fecha de Nacimiento <span className="text-red-500">*</span>
                 </label>
@@ -319,7 +319,8 @@ export default function NewUserWizard() {
                   type="date"
                   value={personalData.fecha_nacimiento}
                   onChange={(e) => setPersonalData({ ...personalData, fecha_nacimiento: e.target.value })}
-                  className="w-full max-w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#010139] focus:outline-none"
+                  className="w-full max-w-full px-3 py-2 sm:px-4 text-sm sm:text-base border-2 border-gray-300 rounded-lg focus:border-[#010139] focus:outline-none transition"
+                  style={{ WebkitAppearance: 'none' }}
                   required
                 />
               </div>
@@ -348,27 +349,29 @@ export default function NewUserWizard() {
                   type="button"
                   onClick={() => setPersonalData({ ...personalData, broker_type: 'corredor' })}
                   className={`
-                    flex-1 px-6 py-3 rounded-lg font-semibold transition-all
+                    flex-1 px-6 py-3 rounded-lg font-semibold transition-all flex items-center justify-center gap-2
                     ${personalData.broker_type === 'corredor'
                       ? 'bg-[#010139] text-white shadow-lg scale-105'
                       : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-[#8AAA19]'
                     }
                   `}
                 >
-                  📋 Corredor
+                  <span>📋</span>
+                  <span>Corredor</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setPersonalData({ ...personalData, broker_type: 'agente' })}
                   className={`
-                    flex-1 px-6 py-3 rounded-lg font-semibold transition-all
+                    flex-1 px-6 py-3 rounded-lg font-semibold transition-all flex items-center justify-center gap-2
                     ${personalData.broker_type === 'agente'
                       ? 'bg-[#8AAA19] text-white shadow-lg scale-105'
                       : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-[#8AAA19]'
                     }
                   `}
                 >
-                  🎫 Agente
+                  <span>🎫</span>
+                  <span>Agente</span>
                 </button>
               </div>
               <p className="text-xs text-gray-600 mt-2">
@@ -414,7 +417,7 @@ export default function NewUserWizard() {
                   </div>
 
                   {/* Fecha Vencimiento Carnet - Solo para AGENTE */}
-                  <div>
+                  <div className="w-full max-w-full overflow-hidden">
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Fecha Carnet (Opcional)
                     </label>
@@ -422,7 +425,8 @@ export default function NewUserWizard() {
                       type="date"
                       value={personalData.carnet_expiry_date}
                       onChange={(e) => setPersonalData({ ...personalData, carnet_expiry_date: e.target.value })}
-                      className="w-full max-w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#010139] focus:outline-none"
+                      className="w-full max-w-full px-3 py-2 sm:px-4 text-sm sm:text-base border-2 border-gray-300 rounded-lg focus:border-[#010139] focus:outline-none transition"
+                      style={{ WebkitAppearance: 'none' }}
                     />
                   </div>
                 </>
