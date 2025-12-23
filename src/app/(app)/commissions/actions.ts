@@ -2477,14 +2477,73 @@ export async function actionRetainBrokerPayment(payload: {
   try {
     const supabase = getSupabaseAdmin();
     
-    // Marcar como retenido en fortnight_broker_totals
-    const { error } = await supabase
+    // Verificar si existe el registro
+    const { data: existing } = await supabase
       .from('fortnight_broker_totals')
-      .update({ is_retained: true } satisfies TablesUpdate<'fortnight_broker_totals'>)
+      .select('*')
       .eq('fortnight_id', payload.fortnight_id)
-      .eq('broker_id', payload.broker_id);
+      .eq('broker_id', payload.broker_id)
+      .single();
     
-    if (error) throw error;
+    if (existing) {
+      // Si existe, solo actualizar is_retained
+      const { error } = await supabase
+        .from('fortnight_broker_totals')
+        .update({ is_retained: true } satisfies TablesUpdate<'fortnight_broker_totals'>)
+        .eq('fortnight_id', payload.fortnight_id)
+        .eq('broker_id', payload.broker_id);
+      
+      if (error) throw error;
+    } else {
+      // Si no existe, calcular totales y crear registro
+      const { data: imports } = await supabase
+        .from('comm_imports')
+        .select('id')
+        .eq('period_label', payload.fortnight_id);
+      
+      if (!imports || imports.length === 0) {
+        throw new Error('No hay imports para esta quincena');
+      }
+      
+      const importIds = imports.map(i => i.id);
+      
+      // Obtener comm_items del broker
+      const { data: items } = await supabase
+        .from('comm_items')
+        .select('gross_amount')
+        .in('import_id', importIds)
+        .eq('broker_id', payload.broker_id);
+      
+      const grossAmount = (items || []).reduce((sum, item) => sum + (Number(item.gross_amount) || 0), 0);
+      
+      // Obtener descuentos temporales
+      const { data: discounts } = await supabase
+        .from('fortnight_discounts')
+        .select('amount')
+        .eq('fortnight_id', payload.fortnight_id)
+        .eq('broker_id', payload.broker_id)
+        .eq('applied', false);
+      
+      const discountAmount = (discounts || []).reduce((sum, d) => sum + d.amount, 0);
+      const netAmount = grossAmount - discountAmount;
+      
+      // Crear registro con is_retained: true
+      const { error } = await supabase
+        .from('fortnight_broker_totals')
+        .insert([{
+          fortnight_id: payload.fortnight_id,
+          broker_id: payload.broker_id,
+          gross_amount: grossAmount,
+          net_amount: netAmount,
+          is_retained: true,
+          discounts_json: {
+            adelantos: [],
+            total: discountAmount
+          }
+        }]);
+      
+      if (error) throw error;
+    }
     
     revalidatePath('/(app)/commissions');
     return { ok: true as const };
