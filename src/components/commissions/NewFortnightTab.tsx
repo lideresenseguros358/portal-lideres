@@ -296,6 +296,16 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
       return acc;
     }, {} as Record<string, number>);
     
+    // 3.5. Obtener estado de retención desde fortnight_broker_totals
+    const { data: retentionData } = await supabaseClient()
+      .from('fortnight_broker_totals')
+      .select('broker_id, is_retained')
+      .eq('fortnight_id', draftFortnight.id);
+    
+    const retentionMap = (retentionData || []).reduce((acc, item) => {
+      acc[item.broker_id] = item.is_retained || false;
+      return acc;
+    }, {} as Record<string, boolean>);
     
     // 4. Crear totalsData SIN adelantos (solo se aplican al PAGAR la quincena)
     const totalsData = Object.keys(brokerGroups).map(brokerId => {
@@ -305,7 +315,7 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
         gross_amount: gross,
         discount_amount: 0, // Sin descuentos en borrador
         net_amount: gross, // Neto = Bruto en borrador
-        is_retained: false
+        is_retained: retentionMap[brokerId] || false // Usar estado real de BD
       };
     });
     
