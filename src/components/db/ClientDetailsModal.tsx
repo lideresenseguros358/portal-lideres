@@ -59,6 +59,26 @@ export default function ClientDetailsModal({ client, onClose, onEdit, onOpenExpe
   const [loadingComisiones, setLoadingComisiones] = useState(false);
   const [loadingFortnight, setLoadingFortnight] = useState(false);
 
+  // Formatear fecha SIN conversión de zona horaria (para birth_date)
+  const formatDateNoTimezone = (date: string | null) => {
+    if (!date) return 'N/A';
+    try {
+      // Parse manual para evitar cambios por timezone
+      const parts = date.split('-');
+      if (parts.length !== 3) return date;
+      const [year, month, day] = parts;
+      if (!year || !month || !day) return date;
+      const monthNames = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+                         'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+      const monthIndex = parseInt(month) - 1;
+      if (monthIndex < 0 || monthIndex > 11) return date;
+      return `${parseInt(day)} de ${monthNames[monthIndex]} de ${year}`;
+    } catch {
+      return date;
+    }
+  };
+
+  // Formatear fecha con zona horaria (para otras fechas como renewal_date)
   const formatDate = (date: string | null) => {
     if (!date) return 'N/A';
     return new Date(date).toLocaleDateString('es-PA', { 
@@ -288,7 +308,7 @@ export default function ClientDetailsModal({ client, onClose, onEdit, onOpenExpe
                 <FaBirthdayCake className="text-[#010139] mt-1 flex-shrink-0" />
                 <div>
                   <p className="text-xs text-gray-600 font-medium">Fecha de Nacimiento</p>
-                  <p className="text-sm font-semibold text-gray-900">{formatDate((client as any).birth_date)}</p>
+                  <p className="text-sm font-semibold text-gray-900">{formatDateNoTimezone((client as any).birth_date)}</p>
                 </div>
               </div>
               <div className="flex items-start gap-3">
