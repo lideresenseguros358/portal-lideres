@@ -4118,14 +4118,41 @@ export async function actionPayFortnight(fortnight_id: string) {
       
       console.log(`[actionPayFortnight] Draft items - Identificados: ${identified.length}, Sin identificar: ${unidentified.length}`);
       
-      // 6.1 Registrar identificados en preliminar
-      // NOTA: Ya están en comm_items (insertados al momento de identificar manualmente)
+      // 6.1 MIGRAR IDENTIFICADOS a comm_items y registrar en preliminar
       if (identified.length > 0) {
-        console.log(`[actionPayFortnight] Procesando ${identified.length} items identificados (ya en comm_items)...`);
+        console.log(`[actionPayFortnight] Migrando ${identified.length} items identificados a comm_items...`);
         
-        // Solo registrar en preliminar para cada cliente identificado
         for (const item of identified) {
           try {
+            // Calcular comisión
+            const percentDefault = item.brokers?.percent_default || 1.0;
+            const grossAmount = item.commission_raw * percentDefault;
+            
+            // Verificar si ya existe en comm_items
+            const { data: existingItem } = await supabase
+              .from('comm_items')
+              .select('id')
+              .eq('import_id', item.import_id)
+              .eq('policy_number', item.policy_number)
+              .eq('broker_id', item.temp_assigned_broker_id)
+              .single();
+            
+            if (!existingItem) {
+              // Insertar en comm_items
+              await supabase.from('comm_items').insert({
+                import_id: item.import_id,
+                policy_number: item.policy_number,
+                insured_name: item.insured_name,
+                broker_id: item.temp_assigned_broker_id,
+                insurer_id: item.insurer_id,
+                gross_amount: grossAmount,
+                raw_row: item.raw_row
+              });
+              
+              console.log(`[actionPayFortnight] Item ${item.policy_number} insertado en comm_items`);
+            }
+            
+            // Registrar en preliminar
             const { data: existingPolicy } = await supabase
               .from('policies')
               .select('id, client_id')
@@ -4133,7 +4160,6 @@ export async function actionPayFortnight(fortnight_id: string) {
               .single();
             
             if (existingPolicy) {
-              // Verificar si ya existe en preliminar
               const { data: existingPrelim } = await (supabase as any)
                 .from('preliminar')
                 .select('id')
@@ -4153,9 +4179,8 @@ export async function actionPayFortnight(fortnight_id: string) {
                 console.log(`[actionPayFortnight] Cliente ${item.policy_number} registrado en preliminar`);
               }
             }
-          } catch (prelimError) {
-            console.error('[actionPayFortnight] Error registrando en preliminar:', prelimError);
-            // No fallar el proceso completo
+          } catch (itemError) {
+            console.error('[actionPayFortnight] Error migrando item identificado:', itemError);
           }
         }
       }
@@ -4427,6 +4452,26 @@ export async function actionPayFortnight(fortnight_id: string) {
           console.error('[actionPayFortnight] Error actualizando grupos a PAGADO:', updateGroupError);
         } else {
           console.log(`[actionPayFortnight] ✅ ${groupIds.length} grupos actualizados a PAGADO`);
+          
+          // CRÍTICO: Actualizar TODAS las transferencias que pertenecen a estos grupos
+          const { data: groupTransfers } = await (supabase as any)
+            .from('bank_group_transfers')
+            .select('transfer_id')
+            .in('group_id', groupIds);
+          
+          if (groupTransfers && groupTransfers.length > 0) {
+            const groupTransferIds = groupTransfers.map((gt: any) => gt.transfer_id);
+            const { error: updateGroupTransfersError } = await supabase
+              .from('bank_transfers_comm')
+              .update({ status: 'PAGADO' })
+              .in('id', groupTransferIds);
+            
+            if (updateGroupTransfersError) {
+              console.error('[actionPayFortnight] Error actualizando transferencias de grupos:', updateGroupTransfersError);
+            } else {
+              console.log(`[actionPayFortnight] ✅ ${groupTransferIds.length} transferencias de grupos actualizadas a PAGADO`);
+            }
+          }
         }
       }
     }
@@ -4470,6 +4515,7 @@ export async function actionPayFortnight(fortnight_id: string) {
       let totalDiscount = 0;
 
       for (const adv of discounts.adelantos) {
+        // Crear log del adelanto
         await supabase.from('advance_logs').insert([{
           advance_id: adv.advance_id,
           amount: adv.amount,
@@ -4497,7 +4543,35 @@ export async function actionPayFortnight(fortnight_id: string) {
             .eq('id', adv.advance_id);
         }
 
-        totalDiscount += Number(adv.amount) || 0;
+        totalDiscount += adv.amount;
+        
+        // Actualizar status del adelanto
+        const { data: currentAdvance } = await supabase
+          .from('advances')
+          .select('amount')
+          .eq('id', adv.advance_id)
+          .single();
+        
+        if (currentAdvance) {
+          const { data: totalPaid } = await supabase
+            .from('advance_logs')
+            .select('amount')
+            .eq('advance_id', adv.advance_id);
+          
+          const sumPaid = (totalPaid || []).reduce((s: number, log: any) => s + log.amount, 0);
+          
+          if (sumPaid >= currentAdvance.amount) {
+            await supabase
+              .from('advances')
+              .update({ status: 'PAID' })
+              .eq('id', adv.advance_id);
+          } else if (sumPaid > 0) {
+            await supabase
+              .from('advances')
+              .update({ status: 'PARTIAL' })
+              .eq('id', adv.advance_id);
+          }
+        }
       }
 
       if (totalDiscount <= 0) {
