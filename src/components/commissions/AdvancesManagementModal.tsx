@@ -689,7 +689,7 @@ export function AdvancesManagementModal({
               </button>
               <button
                 onClick={handleSaveDiscounts}
-                disabled={saving || temporaryDiscounts.size === 0 || getTotalDiscounts() > grossAmount}
+                disabled={saving || getTotalDiscounts() > grossAmount}
                 className="standard-modal-button-primary"
               >
                 {saving ? (
