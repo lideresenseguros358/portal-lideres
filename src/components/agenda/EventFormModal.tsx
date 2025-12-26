@@ -192,32 +192,36 @@ export default function EventFormModal({
           userId,
         });
       } else if (showMultipleDates && multipleDates.length > 0) {
-        // Create multiple events
-        const results = await Promise.all(
-          multipleDates.map(date => 
-            actionCreateEvent({
-              title: title.trim(),
-              details: details.trim(),
-              start_at: isAllDay ? `${date}T00:00:00` : `${date}T${startTime}:00`,
-              end_at: isAllDay ? `${date}T23:59:59` : `${date}T${endTime}:00`,
-              is_all_day: isAllDay,
-              modality,
-              zoom_url: (modality === 'virtual' || modality === 'hibrida') ? zoomUrl.trim() : undefined,
-              zoom_code: zoomCode.trim() || undefined,
-              location_name: (modality === 'presencial' || modality === 'hibrida') ? locationName.trim() : undefined,
-              maps_url: mapsUrl.trim() || undefined,
-              allow_rsvp: allowRsvp,
-              audience,
-              selected_brokers: audience === 'SELECTED' ? selectedBrokers : undefined,
-              userId,
-            })
-          )
-        );
+        // Create multiple events (incluye fecha inicial + fechas adicionales)
+        const allDates = [startDate, ...multipleDates];
+        const results = [];
+        let successCount = 0;
         
-        const successCount = results.filter(r => r.ok).length;
+        // Crear eventos secuencialmente para no saturar el servidor
+        for (const date of allDates) {
+          const eventResult = await actionCreateEvent({
+            title: title.trim(),
+            details: details.trim(),
+            start_at: isAllDay ? `${date}T00:00:00` : `${date}T${startTime}:00`,
+            end_at: isAllDay ? `${date}T23:59:59` : `${date}T${endTime}:00`,
+            is_all_day: isAllDay,
+            modality,
+            zoom_url: (modality === 'virtual' || modality === 'hibrida') ? zoomUrl.trim() : undefined,
+            zoom_code: zoomCode.trim() || undefined,
+            location_name: (modality === 'presencial' || modality === 'hibrida') ? locationName.trim() : undefined,
+            maps_url: mapsUrl.trim() || undefined,
+            allow_rsvp: allowRsvp,
+            audience,
+            selected_brokers: audience === 'SELECTED' ? selectedBrokers : undefined,
+            userId,
+          });
+          results.push(eventResult);
+          if (eventResult.ok) successCount++;
+        }
+        
         result = {
           ok: successCount > 0,
-          message: `${successCount} de ${multipleDates.length} eventos creados exitosamente`,
+          message: `${successCount} de ${allDates.length} eventos creados exitosamente`,
         };
       } else {
         // Create single event
@@ -742,11 +746,11 @@ export default function EventFormModal({
             type="submit"
             form="event-form"
             disabled={submitting}
-            className="px-4 py-2 bg-gradient-to-r from-[#010139] to-[#020270] text-white rounded-lg hover:shadow-lg font-semibold transition-all disabled:opacity-50 flex items-center gap-2"
+            className="px-4 py-2 bg-gradient-to-r from-[#010139] to-[#020270] text-white rounded-lg hover:shadow-lg font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 min-w-[140px]"
           >
             {submitting ? (
               <>
-                <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full"></div>
+                <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
                 <span>{isEditing ? 'Actualizando...' : 'Creando...'}</span>
               </>
             ) : (
