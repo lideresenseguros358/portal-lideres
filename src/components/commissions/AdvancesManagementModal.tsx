@@ -95,12 +95,14 @@ export function AdvancesManagementModal({
       const discountsData = await response.json();
       
       if (discountsData.ok) {
-        setExistingDiscounts(discountsData.data || []);
+        // Filtrar solo descuentos válidos (positivos)
+        const validDiscounts = (discountsData.data || []).filter((d: TemporaryDiscount) => d.amount > 0);
+        setExistingDiscounts(validDiscounts);
         
         // Inicializar mapa de descuentos temporales Y inputs
         const discountsMap = new Map<string, number>();
         const inputsMap = new Map<string, string>();
-        (discountsData.data || []).forEach((d: TemporaryDiscount) => {
+        validDiscounts.forEach((d: TemporaryDiscount) => {
           discountsMap.set(d.advance_id, d.amount);
           inputsMap.set(d.advance_id, d.amount.toFixed(2));
         });
@@ -177,7 +179,8 @@ export function AdvancesManagementModal({
     const remaining = grossAmount - getTotalDiscounts() + (temporaryDiscounts.get(advanceId) || 0);
     
     // Validar que no exceda el máximo del adelanto ni el bruto disponible
-    const validAmount = Math.min(Math.max(0, amount), maxAmount, remaining);
+    // Asegurar que siempre sea positivo
+    const validAmount = Math.max(0, Math.min(amount, maxAmount, remaining));
     
     const newDiscountsMap = new Map(temporaryDiscounts);
     newDiscountsMap.set(advanceId, validAmount);
@@ -193,12 +196,12 @@ export function AdvancesManagementModal({
 
     setSaving(true);
     try {
-      // Filtrar solo descuentos con monto > 0
+      // Filtrar solo descuentos con monto > 0 y asegurar valores positivos
       const discountsArray = Array.from(temporaryDiscounts.entries())
         .filter(([_, amount]) => amount > 0)
         .map(([advance_id, amount]) => ({
           advance_id,
-          amount
+          amount: Math.abs(amount) // Asegurar que sea positivo
         }));
 
       const response = await fetch('/api/commissions/fortnight-discounts', {
@@ -359,7 +362,7 @@ export function AdvancesManagementModal({
                     <div className="bg-red-50 rounded-lg p-3 sm:p-4">
                       <p className="text-xs sm:text-sm text-red-700 font-semibold">Descuentos</p>
                       <p className="text-lg sm:text-2xl font-bold text-red-900 font-mono break-all">
-                        -${getTotalDiscounts().toFixed(2)}
+                        -${Math.abs(getTotalDiscounts()).toFixed(2)}
                       </p>
                     </div>
                     <div className="bg-green-50 rounded-lg p-3 sm:p-4">
@@ -678,7 +681,7 @@ export function AdvancesManagementModal({
             <div>
               {temporaryDiscounts.size > 0 && (
                 <p className="text-sm text-gray-600">
-                  {temporaryDiscounts.size} adelanto(s) seleccionado(s) • Total: ${getTotalDiscounts().toFixed(2)}
+                  {temporaryDiscounts.size} adelanto(s) seleccionado(s) • Total: ${Math.abs(getTotalDiscounts()).toFixed(2)}
                 </p>
               )}
             </div>
