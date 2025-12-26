@@ -4248,7 +4248,30 @@ export async function actionPayFortnight(fortnight_id: string) {
     }
     
     if (commItems && commItems.length > 0) {
-      const detailsToInsert = commItems.map((item: any) => {
+      // AGRUPAR por policy_number + broker_id para evitar duplicados
+      // (puede haber múltiples comm_items con el mismo policy_number y broker)
+      const groupedItems = new Map<string, any>();
+      
+      for (const item of commItems) {
+        const key = `${item.policy_number || 'NO_POLICY'}_${item.broker_id}`;
+        
+        if (groupedItems.has(key)) {
+          // Ya existe - sumar las comisiones
+          const existing = groupedItems.get(key);
+          existing.gross_amount += item.gross_amount;
+          existing.count += 1;
+        } else {
+          // Primer item con este policy_number + broker_id
+          groupedItems.set(key, {
+            ...item,
+            count: 1
+          });
+        }
+      }
+      
+      console.log(`[actionPayFortnight] Items agrupados: ${commItems.length} → ${groupedItems.size}`);
+      
+      const detailsToInsert = Array.from(groupedItems.values()).map((item: any) => {
         // Determinar porcentaje aplicado (solo usar broker percent_default)
         const percentApplied = item.brokers?.percent_default ?? 1.0;
         
@@ -4261,12 +4284,9 @@ export async function actionPayFortnight(fortnight_id: string) {
         // Extraer código ASSA del broker si corresponde
         let assaCodeToSave = null;
         if (isAssaCode && item.brokers?.assa_code) {
-          // Verificar si el policy_number contiene el código ASSA del broker
-          // Formato esperado: PJ750-1-123456 donde PJ750-1 es el código del broker
           const policyNumber = item.policy_number || '';
           const brokerAssaCode = item.brokers.assa_code;
           
-          // Si el policy_number empieza con el código del broker, guardarlo
           if (policyNumber.startsWith(brokerAssaCode)) {
             assaCodeToSave = brokerAssaCode;
           }
@@ -4276,11 +4296,11 @@ export async function actionPayFortnight(fortnight_id: string) {
           fortnight_id: fortnight_id,
           broker_id: item.broker_id,
           insurer_id: item.insurer_id,
-          policy_id: null, // No tenemos relación directa con policies
-          client_id: null, // No tenemos relación directa con policies
+          policy_id: null,
+          client_id: null,
           policy_number: item.policy_number,
           client_name: item.insured_name || 'Sin nombre',
-          ramo: null, // No tenemos relación directa con policies
+          ramo: null,
           commission_raw: commissionRaw,
           percent_applied: percentApplied,
           commission_calculated: item.gross_amount,
