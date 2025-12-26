@@ -52,7 +52,7 @@ const capitalizeText = (text: string) => {
 /**
  * Export single broker commission report to PDF
  */
-export function exportBrokerToPDF(
+export async function exportBrokerToPDF(
   broker: BrokerDetail,
   fortnightLabel: string,
   discounts?: { total: number; details: Array<{ reason: string; amount: number }> }
@@ -70,12 +70,27 @@ export function exportBrokerToPDF(
   
   // Logo más pequeño con proporción 2:1 (típico logo horizontal)
   try {
-    const img = new Image();
-    img.src = '/logo_alternativo.png';
-    // Logo pequeño sin distorsión
-    doc.addImage(img, 'PNG', 14, 12, 24, 12);
+    // Cargar imagen de forma asíncrona
+    await new Promise<void>((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          doc.addImage(img, 'PNG', 14, 12, 24, 12);
+          resolve();
+        } catch (e) {
+          console.warn('Error adding logo to PDF:', e);
+          resolve(); // Continuar sin logo
+        }
+      };
+      img.onerror = () => {
+        console.warn('Error loading logo image');
+        resolve(); // Continuar sin logo
+      };
+      img.src = '/logo_alternativo.png';
+    });
   } catch (e) {
-    // Si falla, solo mostrar texto
+    console.warn('Error processing logo:', e);
+    // Continuar sin logo
   }
   
   doc.setTextColor(255, 255, 255);

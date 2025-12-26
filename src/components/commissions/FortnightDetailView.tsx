@@ -583,9 +583,9 @@ export default function FortnightDetailView({ fortnightId, fortnightData }: Fort
               <div className="flex gap-3">
                 <Button
                   className="flex-1 bg-red-600 hover:bg-red-700 text-white"
-                  onClick={() => {
+                  onClick={async () => {
                     const transformedBroker = transformBrokerForExport(downloadBrokerModal.broker);
-                    exportBrokerToPDF(transformedBroker as any, downloadBrokerModal.label);
+                    await exportBrokerToPDF(transformedBroker as any, downloadBrokerModal.label);
                     setDownloadBrokerModal(null);
                   }}
                 >

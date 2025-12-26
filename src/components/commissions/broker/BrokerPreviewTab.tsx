@@ -236,7 +236,7 @@ export default function BrokerPreviewTab({ brokerId }: Props) {
     setExpandedInsurers(newExpanded);
   };
 
-  const handleDownload = (fortnightId: string, fortnightLabel: string, format: 'pdf' | 'xlsx') => {
+  const handleDownload = async (fortnightId: string, fortnightLabel: string, format: 'pdf' | 'xlsx') => {
     const details = fortnightDetails[fortnightId];
     if (!details) {
       toast.error('No hay detalles disponibles para descargar');
@@ -281,7 +281,7 @@ export default function BrokerPreviewTab({ brokerId }: Props) {
       } : undefined;
 
       if (format === 'pdf') {
-        exportBrokerToPDF(transformedBroker as any, fortnightLabel, discounts);
+        await exportBrokerToPDF(transformedBroker as any, fortnightLabel, discounts);
         toast.success('PDF generado correctamente');
       } else {
         exportBrokerToExcel(transformedBroker as any, fortnightLabel, discounts);

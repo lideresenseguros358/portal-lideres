@@ -139,7 +139,7 @@ export function BrokerDetailSection({ fortnightId, fortnightLabel, brokers, role
       console.log('Generando reporte...', format, details);
 
       if (format === 'pdf') {
-        exportBrokerToPDF(details, fortnightLabel, broker.discounts_json);
+        await exportBrokerToPDF(details, fortnightLabel, broker.discounts_json);
       } else {
         exportBrokerToExcel(details, fortnightLabel, broker.discounts_json);
       }
