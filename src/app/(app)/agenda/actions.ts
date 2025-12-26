@@ -196,80 +196,94 @@ export async function actionCreateEvent(payload: {
       const eventTime = payload.is_all_day ? undefined : new Date(payload.start_at).toLocaleTimeString('es-PA', { hour: '2-digit', minute: '2-digit' });
       const isForAllBrokers = payload.audience === 'ALL';
       
-      // Obtener lista de brokers a notificar
-      let brokersToNotify: any[] = [];
-      
       if (isForAllBrokers) {
-        // Notificar a TODOS los brokers
-        const { data: allBrokers } = await supabase
-          .from('brokers')
-          .select('id, name, p_id')
-          .eq('active', true);
+        // EVENTO PARA TODOS: Crear UNA SOLA notificación
+        const notificationData = {
+          type: 'agenda_event' as const,
+          target: 'ALL' as const,
+          title: `📅 Nuevo Evento: ${payload.title}`,
+          body: `${payload.title} - ${eventDate}${eventTime ? ` a las ${eventTime}` : ''}`,
+          brokerId: undefined, // Sin broker específico
+          meta: {
+            event_id: event.id,
+            event_title: payload.title,
+            event_date: eventDate,
+            event_time: eventTime,
+            modality: payload.modality,
+          },
+          entityId: `agenda-${event.id}-all`,
+        };
         
-        brokersToNotify = allBrokers || [];
+        const notifResult = await createNotification(notificationData);
+        console.log(`[actionCreateEvent] ✅ Notificación ALL creada para evento ${event.id}`);
+        
+        // Email solo al master (opcional, si quieren que master reciba email)
+        // Los brokers verán la notificación en la campanita
+        
       } else if (payload.selected_brokers && payload.selected_brokers.length > 0) {
-        // Notificar solo a brokers seleccionados
+        // EVENTO PARA BROKERS SELECCIONADOS: Crear notificación individual por broker
         const { data: selectedBrokers } = await supabase
           .from('brokers')
           .select('id, name, p_id')
           .in('id', payload.selected_brokers);
         
-        brokersToNotify = selectedBrokers || [];
-      }
-      
-      // Enviar notificación a cada broker
-      for (const broker of brokersToNotify) {
-        try {
-          const notificationData = {
-            type: 'agenda_event' as const,
-            target: isForAllBrokers ? 'ALL' as const : 'BROKER' as const,
-            title: `📅 Nuevo Evento: ${payload.title}`,
-            body: `${payload.title} - ${eventDate}${eventTime ? ` a las ${eventTime}` : ''}`,
-            brokerId: broker.p_id,
-            meta: {
-              event_id: event.id,
-              event_title: payload.title,
-              event_date: eventDate,
-              event_time: eventTime,
-              modality: payload.modality,
-            },
-            entityId: `agenda-${event.id}-${broker.id}`,
-          };
-          
-          // Crear notificación
-          const notifResult = await createNotification(notificationData);
-          
-          // Enviar email
-          if (notifResult.success && !notifResult.isDuplicate) {
-            const { data: profile } = await supabase
-              .from('profiles')
-              .select('email')
-              .eq('id', broker.p_id)
-              .single();
+        const brokersToNotify = selectedBrokers || [];
+        
+        for (const broker of brokersToNotify) {
+          try {
+            const notificationData = {
+              type: 'agenda_event' as const,
+              target: 'BROKER' as const,
+              title: `📅 Nuevo Evento: ${payload.title}`,
+              body: `${payload.title} - ${eventDate}${eventTime ? ` a las ${eventTime}` : ''}`,
+              brokerId: broker.p_id,
+              meta: {
+                event_id: event.id,
+                event_title: payload.title,
+                event_date: eventDate,
+                event_time: eventTime,
+                modality: payload.modality,
+              },
+              entityId: `agenda-${event.id}-${broker.id}`,
+            };
             
-            if (profile?.email) {
-              await sendNotificationEmail({
-                type: 'agenda_event',
-                to: profile.email,
-                data: {
-                  brokerName: broker.name || 'Broker',
-                  eventTitle: payload.title,
-                  eventDescription: payload.details,
-                  eventDate,
-                  eventTime,
-                  eventLocation: payload.location_name,
-                  eventType: 'new',
-                  assignedBrokers: isForAllBrokers ? undefined : brokersToNotify.map(b => b.name),
-                  isForAllBrokers,
-                },
-                notificationId: notifResult.notificationId,
-              });
+            // Crear notificación
+            const notifResult = await createNotification(notificationData);
+            
+            // Enviar email
+            if (notifResult.success && !notifResult.isDuplicate) {
+              const { data: profile } = await supabase
+                .from('profiles')
+                .select('email')
+                .eq('id', broker.p_id)
+                .single();
+              
+              if (profile?.email) {
+                await sendNotificationEmail({
+                  type: 'agenda_event',
+                  to: profile.email,
+                  data: {
+                    brokerName: broker.name || 'Broker',
+                    eventTitle: payload.title,
+                    eventDescription: payload.details,
+                    eventDate,
+                    eventTime,
+                    eventLocation: payload.location_name,
+                    eventType: 'new',
+                    assignedBrokers: brokersToNotify.map(b => b.name),
+                    isForAllBrokers: false,
+                  },
+                  notificationId: notifResult.notificationId,
+                });
+              }
             }
+          } catch (brokerNotifError) {
+            console.error(`[actionCreateEvent] Error notificando a broker ${broker.id}:`, brokerNotifError);
+            // No fallar si la notificación falla
           }
-        } catch (brokerNotifError) {
-          console.error(`[actionCreateEvent] Error notificando a broker ${broker.id}:`, brokerNotifError);
-          // No fallar si la notificación falla
         }
+        
+        console.log(`[actionCreateEvent] ✅ ${brokersToNotify.length} notificaciones SELECTED creadas para evento ${event.id}`);
       }
     } catch (notifError) {
       console.error('[actionCreateEvent] Error en sistema de notificaciones:', notifError);
@@ -366,17 +380,29 @@ export async function actionUpdateEvent(params: {
         const eventTime = isAllDay ? undefined : new Date(startAt).toLocaleTimeString('es-PA', { hour: '2-digit', minute: '2-digit' });
         const isForAllBrokers = audience === 'ALL';
         
-        // Obtener lista de brokers a notificar
-        let brokersToNotify: any[] = [];
-        
         if (isForAllBrokers) {
-          const { data: allBrokers } = await supabase
-            .from('brokers')
-            .select('id, name, p_id')
-            .eq('active', true);
+          // EVENTO PARA TODOS: Crear UNA SOLA notificación
+          const notificationData = {
+            type: 'agenda_event' as const,
+            target: 'ALL' as const,
+            title: `🔄 Evento Reprogramado: ${title}`,
+            body: `${title} - Nueva fecha: ${eventDate}${eventTime ? ` a las ${eventTime}` : ''}`,
+            brokerId: undefined,
+            meta: {
+              event_id: params.id,
+              event_title: title,
+              event_date: eventDate,
+              event_time: eventTime,
+              date_changed: true,
+            },
+            entityId: `agenda-update-${params.id}-all-${eventDate}`,
+          };
           
-          brokersToNotify = allBrokers || [];
+          const notifResult = await createNotification(notificationData);
+          console.log(`[actionUpdateEvent] ✅ Notificación ALL creada para evento actualizado ${params.id}`);
+          
         } else {
+          // EVENTO PARA BROKERS SELECCIONADOS
           const brokerIds = params.payload.selected_brokers || [];
           if (brokerIds.length > 0) {
             const { data: selectedBrokers } = await supabase
@@ -384,59 +410,60 @@ export async function actionUpdateEvent(params: {
               .select('id, name, p_id')
               .in('id', brokerIds);
             
-            brokersToNotify = selectedBrokers || [];
-          }
-        }
-        
-        // Enviar notificación a cada broker
-        for (const broker of brokersToNotify) {
-          try {
-            const notificationData = {
-              type: 'agenda_event' as const,
-              target: isForAllBrokers ? 'ALL' as const : 'BROKER' as const,
-              title: `🔄 Evento Reprogramado: ${title}`,
-              body: `${title} - Nueva fecha: ${eventDate}${eventTime ? ` a las ${eventTime}` : ''}`,
-              brokerId: broker.p_id,
-              meta: {
-                event_id: params.id,
-                event_title: title,
-                event_date: eventDate,
-                event_time: eventTime,
-                date_changed: true,
-              },
-              entityId: `agenda-update-${params.id}-${broker.id}-${eventDate}`,
-            };
+            const brokersToNotify = selectedBrokers || [];
             
-            const notifResult = await createNotification(notificationData);
-            
-            if (notifResult.success && !notifResult.isDuplicate) {
-              const { data: profile } = await supabase
-                .from('profiles')
-                .select('email')
-                .eq('id', broker.p_id)
-                .single();
-              
-              if (profile?.email) {
-                await sendNotificationEmail({
-                  type: 'agenda_event',
-                  to: profile.email,
-                  data: {
-                    brokerName: broker.name || 'Broker',
-                    eventTitle: title,
-                    eventDescription: details,
-                    eventDate,
-                    eventTime,
-                    eventLocation: locationName,
-                    eventType: 'updated',
-                    assignedBrokers: isForAllBrokers ? undefined : brokersToNotify.map(b => b.name),
-                    isForAllBrokers,
+            for (const broker of brokersToNotify) {
+              try {
+                const notificationData = {
+                  type: 'agenda_event' as const,
+                  target: 'BROKER' as const,
+                  title: `🔄 Evento Reprogramado: ${title}`,
+                  body: `${title} - Nueva fecha: ${eventDate}${eventTime ? ` a las ${eventTime}` : ''}`,
+                  brokerId: broker.p_id,
+                  meta: {
+                    event_id: params.id,
+                    event_title: title,
+                    event_date: eventDate,
+                    event_time: eventTime,
+                    date_changed: true,
                   },
-                  notificationId: notifResult.notificationId,
-                });
+                  entityId: `agenda-update-${params.id}-${broker.id}-${eventDate}`,
+                };
+                
+                const notifResult = await createNotification(notificationData);
+                
+                if (notifResult.success && !notifResult.isDuplicate) {
+                  const { data: profile } = await supabase
+                    .from('profiles')
+                    .select('email')
+                    .eq('id', broker.p_id)
+                    .single();
+                  
+                  if (profile?.email) {
+                    await sendNotificationEmail({
+                      type: 'agenda_event',
+                      to: profile.email,
+                      data: {
+                        brokerName: broker.name || 'Broker',
+                        eventTitle: title,
+                        eventDescription: details,
+                        eventDate,
+                        eventTime,
+                        eventLocation: locationName,
+                        eventType: 'updated',
+                        assignedBrokers: brokersToNotify.map(b => b.name),
+                        isForAllBrokers: false,
+                      },
+                      notificationId: notifResult.notificationId,
+                    });
+                  }
+                }
+              } catch (brokerNotifError) {
+                console.error(`[actionUpdateEvent] Error notificando a broker ${broker.id}:`, brokerNotifError);
               }
             }
-          } catch (brokerNotifError) {
-            console.error(`[actionUpdateEvent] Error notificando a broker ${broker.id}:`, brokerNotifError);
+            
+            console.log(`[actionUpdateEvent] ✅ ${brokersToNotify.length} notificaciones SELECTED creadas para evento actualizado ${params.id}`);
           }
         }
       } catch (notifError) {
