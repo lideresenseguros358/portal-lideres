@@ -172,15 +172,8 @@ export function AdvancesManagementModal({
     // Si no es un número válido, solo actualizar el input pero no el Map
     if (isNaN(amount)) return;
     
-    const advance = advances.find(a => a.id === advanceId);
-    if (!advance) return;
-    
-    const maxAmount = advance.amount - (advance.total_paid || 0);
-    const remaining = grossAmount - getTotalDiscounts() + (temporaryDiscounts.get(advanceId) || 0);
-    
-    // Validar que no exceda el máximo del adelanto ni el bruto disponible
-    // Asegurar que siempre sea positivo
-    const validAmount = Math.max(0, Math.min(amount, maxAmount, remaining));
+    // Validación simple: solo que sea positivo
+    const validAmount = Math.max(0, amount);
     
     const newDiscountsMap = new Map(temporaryDiscounts);
     newDiscountsMap.set(advanceId, validAmount);
