@@ -4034,8 +4034,8 @@ export async function actionPayFortnight(fortnight_id: string) {
         // Obtener detalle de comisiones por aseguradora para este broker
         const { data: commItems, error: itemsError } = await supabase
           .from('comm_items')
-          .select('*, comm_imports(insurer_id, insurers(name))')
-          .eq('fortnight_id', fortnight_id)
+          .select('*, comm_imports!inner(insurer_id, period_label, insurers(name))')
+          .eq('comm_imports.period_label', fortnight_id)
           .eq('broker_id', bt.broker_id);
         
         if (itemsError) throw itemsError;
