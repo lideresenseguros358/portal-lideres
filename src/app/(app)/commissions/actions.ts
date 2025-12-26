@@ -4208,17 +4208,7 @@ export async function actionPayFortnight(fortnight_id: string) {
       }
     }
     
-    // 7. Cambiar status a PAID
-    console.log('[actionPayFortnight] STEP 7: Cambiando status a PAID...');
-    const { error: updateError } = await supabase
-      .from('fortnights')
-      .update({ status: 'PAID' } satisfies FortnightUpd)
-      .eq('id', fortnight_id);
-    
-    if (updateError) throw updateError;
-    console.log('[actionPayFortnight] ✅ STEP 7 completado');
-    
-    // 7.1 NUEVO: Guardar detalle completo en fortnight_details
+    // 7. Guardar detalle completo en fortnight_details
     console.log('[actionPayFortnight] Guardando detalle en fortnight_details...');
     
     // Obtener imports de esta quincena
@@ -4592,7 +4582,19 @@ export async function actionPayFortnight(fortnight_id: string) {
       }
     }
     
-    console.log('[actionPayFortnight] ✅ TODAS LAS ETAPAS COMPLETADAS');
+    // FINAL: Cambiar status a PAID (SOLO después de guardar todo)
+    console.log('[actionPayFortnight] STEP FINAL: Cambiando status a PAID...');
+    const { error: updateError } = await supabase
+      .from('fortnights')
+      .update({ status: 'PAID' } satisfies FortnightUpd)
+      .eq('id', fortnight_id);
+    
+    if (updateError) {
+      console.error('[actionPayFortnight] ❌ ERROR al cambiar status:', updateError);
+      throw updateError;
+    }
+    
+    console.log('[actionPayFortnight] ✅ TODAS LAS ETAPAS COMPLETADAS - Status cambiado a PAID');
     revalidatePath('/(app)/commissions');
     return { 
       ok: true as const, 
