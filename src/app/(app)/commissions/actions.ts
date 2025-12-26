@@ -4309,6 +4309,39 @@ export async function actionPayFortnight(fortnight_id: string) {
       }
       
       console.log(`[actionPayFortnight] ✅ ${detailsToInsert.length} detalles guardados en fortnight_details`);
+      
+      // CRÍTICO: Recalcular fortnight_broker_totals con datos AGRUPADOS reales
+      console.log('[actionPayFortnight] Recalculando totales desde fortnight_details...');
+      
+      // Agrupar por broker_id desde fortnight_details
+      const brokerTotalsFromDetails = detailsToInsert.reduce((acc: Record<string, number>, item: any) => {
+        const brokerId = item.broker_id;
+        if (!acc[brokerId]) {
+          acc[brokerId] = 0;
+        }
+        acc[brokerId] += item.commission_calculated;
+        return acc;
+      }, {});
+      
+      // Actualizar fortnight_broker_totals con los valores CORRECTOS
+      for (const [brokerId, grossAmount] of Object.entries(brokerTotalsFromDetails)) {
+        // Obtener descuentos de este broker
+        const brokerTotal = brokerTotals.find((bt: any) => bt.broker_id === brokerId);
+        const discountsJson = brokerTotal?.discounts_json as any;
+        const discounts = discountsJson?.total || 0;
+        const netAmount = grossAmount - discounts;
+        
+        await supabase
+          .from('fortnight_broker_totals')
+          .update({
+            gross_amount: grossAmount,
+            net_amount: netAmount
+          })
+          .eq('fortnight_id', fortnight_id)
+          .eq('broker_id', brokerId);
+      }
+      
+      console.log('[actionPayFortnight] ✅ fortnight_broker_totals recalculado desde fortnight_details');
     } else {
       console.log('[actionPayFortnight] ⚠️ No hay comm_items para guardar en fortnight_details');
     }
