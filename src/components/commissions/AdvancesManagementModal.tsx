@@ -45,6 +45,7 @@ export function AdvancesManagementModal({
   const [advances, setAdvances] = useState<Advance[]>([]);
   const [allAdvances, setAllAdvances] = useState<Advance[]>([]); // Para historial completo
   const [temporaryDiscounts, setTemporaryDiscounts] = useState<Map<string, number>>(new Map());
+  const [inputValues, setInputValues] = useState<Map<string, string>>(new Map()); // State local para inputs
   const [existingDiscounts, setExistingDiscounts] = useState<TemporaryDiscount[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -96,12 +97,15 @@ export function AdvancesManagementModal({
       if (discountsData.ok) {
         setExistingDiscounts(discountsData.data || []);
         
-        // Inicializar mapa de descuentos temporales
+        // Inicializar mapa de descuentos temporales Y inputs
         const discountsMap = new Map<string, number>();
+        const inputsMap = new Map<string, string>();
         (discountsData.data || []).forEach((d: TemporaryDiscount) => {
           discountsMap.set(d.advance_id, d.amount);
+          inputsMap.set(d.advance_id, d.amount.toFixed(2));
         });
         setTemporaryDiscounts(discountsMap);
+        setInputValues(inputsMap);
       }
     } catch (error) {
       console.error('Error loading data:', error);
@@ -128,33 +132,42 @@ export function AdvancesManagementModal({
 
   // Manejar selección/deselección de adelanto
   const handleToggleAdvance = (advanceId: string, maxAmount: number) => {
-    const newMap = new Map(temporaryDiscounts);
+    const newDiscountsMap = new Map(temporaryDiscounts);
+    const newInputsMap = new Map(inputValues);
     
-    if (newMap.has(advanceId)) {
-      newMap.delete(advanceId);
+    if (newDiscountsMap.has(advanceId)) {
+      newDiscountsMap.delete(advanceId);
+      newInputsMap.delete(advanceId);
     } else {
       // Por defecto aplicar el monto completo o lo que queda del bruto
       const remaining = grossAmount - getTotalDiscounts();
       const amountToApply = Math.min(maxAmount, remaining);
-      newMap.set(advanceId, amountToApply);
+      newDiscountsMap.set(advanceId, amountToApply);
+      newInputsMap.set(advanceId, amountToApply.toFixed(2));
     }
     
-    setTemporaryDiscounts(newMap);
+    setTemporaryDiscounts(newDiscountsMap);
+    setInputValues(newInputsMap);
   };
 
   // Cambiar monto de descuento
   const handleAmountChange = (advanceId: string, value: string) => {
-    // Permitir campo vacío para que el usuario pueda borrar y escribir libremente
+    // Actualizar input local inmediatamente (permite edición libre)
+    const newInputsMap = new Map(inputValues);
+    newInputsMap.set(advanceId, value);
+    setInputValues(newInputsMap);
+    
+    // Si está vacío, setear a 0 en el Map de descuentos
     if (value === '' || value === '-') {
-      const newMap = new Map(temporaryDiscounts);
-      newMap.set(advanceId, 0);
-      setTemporaryDiscounts(newMap);
+      const newDiscountsMap = new Map(temporaryDiscounts);
+      newDiscountsMap.set(advanceId, 0);
+      setTemporaryDiscounts(newDiscountsMap);
       return;
     }
     
     const amount = parseFloat(value);
     
-    // Si no es un número válido, no hacer nada (mantener el valor anterior)
+    // Si no es un número válido, solo actualizar el input pero no el Map
     if (isNaN(amount)) return;
     
     const advance = advances.find(a => a.id === advanceId);
@@ -166,9 +179,9 @@ export function AdvancesManagementModal({
     // Validar que no exceda el máximo del adelanto ni el bruto disponible
     const validAmount = Math.min(Math.max(0, amount), maxAmount, remaining);
     
-    const newMap = new Map(temporaryDiscounts);
-    newMap.set(advanceId, validAmount);
-    setTemporaryDiscounts(newMap);
+    const newDiscountsMap = new Map(temporaryDiscounts);
+    newDiscountsMap.set(advanceId, validAmount);
+    setTemporaryDiscounts(newDiscountsMap);
   };
 
   // Guardar descuentos temporales
@@ -180,10 +193,13 @@ export function AdvancesManagementModal({
 
     setSaving(true);
     try {
-      const discountsArray = Array.from(temporaryDiscounts.entries()).map(([advance_id, amount]) => ({
-        advance_id,
-        amount
-      }));
+      // Filtrar solo descuentos con monto > 0
+      const discountsArray = Array.from(temporaryDiscounts.entries())
+        .filter(([_, amount]) => amount > 0)
+        .map(([advance_id, amount]) => ({
+          advance_id,
+          amount
+        }));
 
       const response = await fetch('/api/commissions/fortnight-discounts', {
         method: 'POST',
@@ -459,6 +475,7 @@ export function AdvancesManagementModal({
                       {advances.map((advance) => {
                         const isSelected = temporaryDiscounts.has(advance.id);
                         const selectedAmount = temporaryDiscounts.get(advance.id) || 0;
+                        const inputValue = inputValues.get(advance.id) || '';
                         // Usar misma lógica que historial: Total = amount + total_paid, Saldo = amount
                         const initialAmount = advance.amount + (advance.total_paid || 0);
                         const remainingBalance = advance.amount;
@@ -524,11 +541,11 @@ export function AdvancesManagementModal({
                                 <div className="w-32">
                                   <label className="block text-xs text-gray-600 mb-1">Aplicar:</label>
                                   <input
-                                    type="number"
-                                    value={selectedAmount}
+                                    type="text"
+                                    inputMode="decimal"
+                                    value={inputValue}
                                     onChange={(e) => handleAmountChange(advance.id, e.target.value)}
-                                    max={remainingBalance}
-                                    step="0.01"
+                                    placeholder="0.00"
                                     className="w-full border-2 border-[#8AAA19] rounded px-2 py-1 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#8AAA19]"
                                   />
                                 </div>
