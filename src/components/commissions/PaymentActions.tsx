@@ -36,20 +36,11 @@ export default function PaymentActions({ draftFortnightId, initialNotifyState, o
     setPaying(true);
     const result = await actionPayFortnight(draftFortnightId);
     
-    if (result.ok && result.data?.csv) {
-      const blob = new Blob([result.data.csv], { type: 'text/csv' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      
-      await success(`Quincena cerrada exitosamente.\n${result.data.brokers_paid} brokers pagados por $${result.data.total_paid.toFixed(2)}`, 'Éxito');
+    if (result.ok) {
+      await success('Quincena cerrada exitosamente', 'Éxito');
       window.location.reload();
     } else {
-      await showAlert(`Error: ${result.ok ? 'No se pudo generar CSV' : (result as any).error}`, 'Error al cerrar quincena', 'error');
+      await showAlert(`Error: ${(result as any).error}`, 'Error al cerrar quincena', 'error');
     }
     setPaying(false);
   };

@@ -543,21 +543,6 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
       console.log('Result from actionPayFortnight:', result);
       
       if (result.ok) {
-        // Download ACH file automatically
-        if (result.data?.csv) {
-          const blob = new Blob([result.data.csv], { type: 'text/plain;charset=utf-8' });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          const fecha = new Date().toISOString().split('T')[0]?.replace(/-/g, '') || 'sin_fecha';
-          a.download = `PAGOS_COMISIONES_${fecha}.txt`;
-          a.style.display = 'none';
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
-        }
-        
         toast.success('Quincena cerrada exitosamente');
         setDraftFortnight(null);
         onFortnightCreated(null as any);

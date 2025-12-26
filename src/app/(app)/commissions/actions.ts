@@ -4085,19 +4085,8 @@ export async function actionPayFortnight(fortnight_id: string) {
     }
     console.log('[actionPayFortnight] ✅ STEP 4 completado');
     
-    // 5. Generar CSV Banco (solo brokers con neto > 0 Y NO retenidos)
-    console.log('[actionPayFortnight] STEP 5: Generando CSV...');
-    const filteredTotals = brokerTotals
-      .filter(bt => bt.net_amount > 0 && !bt.is_retained)
-      .map(bt => ({
-        ...bt,
-        broker: bt.brokers as any
-      }));
-    
-    // Generar label con período de la quincena
-    const fortnightLabel = `PAGO COMISIONES ${formatFortnightLabel(fortnight.period_start, fortnight.period_end)}`.toUpperCase();
-    const achResult = await buildBankACH(filteredTotals, fortnightLabel);
-    const csvContent = achResult.content;
+    // 5. CSV/TXT eliminado - ahora se genera individualmente desde botón específico
+    console.log('[actionPayFortnight] STEP 5: CSV omitido (se genera individualmente)');
     console.log('[actionPayFortnight] ✅ STEP 5 completado');
     
     // 6. MIGRAR ITEMS TEMPORALES DE ZONA DE TRABAJO
@@ -4278,17 +4267,17 @@ export async function actionPayFortnight(fortnight_id: string) {
         // Calcular commission_raw (reverso del cálculo)
         const commissionRaw = item.gross_amount / percentApplied;
         
-        // Detectar si es código ASSA
-        const isAssaCode = item.policy_number?.startsWith('PJ750') || false;
-        
-        // Extraer código ASSA del broker si corresponde
+        // Detectar si es código ASSA y extraer código del broker
         let assaCodeToSave = null;
-        if (isAssaCode && item.brokers?.assa_code) {
+        let isAssaCode = false;
+        
+        if (item.policy_number?.startsWith('PJ750') && item.brokers?.assa_code) {
           const policyNumber = item.policy_number || '';
           const brokerAssaCode = item.brokers.assa_code;
           
           if (policyNumber.startsWith(brokerAssaCode)) {
             assaCodeToSave = brokerAssaCode;
+            isAssaCode = true; // Solo TRUE si tiene código
           }
         }
         
@@ -4619,9 +4608,6 @@ export async function actionPayFortnight(fortnight_id: string) {
     return { 
       ok: true as const, 
       data: { 
-        csv: csvContent,
-        brokers_paid: filteredTotals.length,
-        total_paid: filteredTotals.reduce((s, r) => s + r.net_amount, 0),
         brokers_notified: brokersToNotify.length,
       } 
     };
