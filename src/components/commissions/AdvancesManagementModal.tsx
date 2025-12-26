@@ -319,22 +319,22 @@ export function AdvancesManagementModal({
               {activeTab === 'manage' && (
                 <div className="space-y-6">
                   {/* Resumen de descuentos */}
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="bg-blue-50 rounded-lg p-4">
-                      <p className="text-sm text-blue-700 font-semibold">Bruto</p>
-                      <p className="text-2xl font-bold text-blue-900 font-mono">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+                    <div className="bg-blue-50 rounded-lg p-3 sm:p-4">
+                      <p className="text-xs sm:text-sm text-blue-700 font-semibold">Bruto</p>
+                      <p className="text-lg sm:text-2xl font-bold text-blue-900 font-mono break-all">
                         ${grossAmount.toFixed(2)}
                       </p>
                     </div>
-                    <div className="bg-red-50 rounded-lg p-4">
-                      <p className="text-sm text-red-700 font-semibold">Descuentos</p>
-                      <p className="text-2xl font-bold text-red-900 font-mono">
+                    <div className="bg-red-50 rounded-lg p-3 sm:p-4">
+                      <p className="text-xs sm:text-sm text-red-700 font-semibold">Descuentos</p>
+                      <p className="text-lg sm:text-2xl font-bold text-red-900 font-mono break-all">
                         -${getTotalDiscounts().toFixed(2)}
                       </p>
                     </div>
-                    <div className="bg-green-50 rounded-lg p-4">
-                      <p className="text-sm text-green-700 font-semibold">Neto</p>
-                      <p className="text-2xl font-bold text-green-900 font-mono">
+                    <div className="bg-green-50 rounded-lg p-3 sm:p-4">
+                      <p className="text-xs sm:text-sm text-green-700 font-semibold">Neto</p>
+                      <p className="text-lg sm:text-2xl font-bold text-green-900 font-mono break-all">
                         ${getNetAmount().toFixed(2)}
                       </p>
                     </div>
