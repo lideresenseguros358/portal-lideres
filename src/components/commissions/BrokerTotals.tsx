@@ -234,7 +234,7 @@ export default function BrokerTotals({ draftFortnightId, onManageAdvances, broke
                       )}
                     </div>
                   </div>
-                  <div className="relative flex-shrink-0">
+                  <div className="relative flex-shrink-0 overflow-visible">
                     <Button
                       variant="ghost"
                       size="sm"
@@ -403,7 +403,7 @@ export default function BrokerTotals({ draftFortnightId, onManageAdvances, broke
                     {brokerData.total_net.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
                   </TableCell>
                   <TableCell className="text-center py-4">
-                    <div className="relative">
+                    <div className="relative overflow-visible">
                       <Button
                         variant="ghost"
                         size="sm"
