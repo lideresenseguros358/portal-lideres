@@ -4221,7 +4221,20 @@ export async function actionPayFortnight(fortnight_id: string) {
     // 7.1 NUEVO: Guardar detalle completo en fortnight_details
     console.log('[actionPayFortnight] Guardando detalle en fortnight_details...');
     
-    const { data: commItems, error: itemsError } = await supabase
+    // Obtener imports de esta quincena
+    const { data: fnImports } = await supabase
+      .from('comm_imports')
+      .select('id')
+      .eq('period_label', fortnight_id);
+    
+    const importIds = (fnImports || []).map((i: any) => i.id);
+    
+    if (importIds.length === 0) {
+      console.log('[actionPayFortnight] ⚠️ No hay imports para guardar en fortnight_details');
+      // No es un error crítico, continuar
+    }
+    
+    const { data: commItems, error: itemsError } = importIds.length > 0 ? await supabase
       .from('comm_items')
       .select(`
         id,
@@ -4231,19 +4244,13 @@ export async function actionPayFortnight(fortnight_id: string) {
         insurer_id,
         gross_amount,
         import_id,
-        policies!left (
-          id,
-          percent_override,
-          ramo,
-          client_id
-        ),
         brokers!inner (
           id,
           percent_default,
           assa_code
         )
       `)
-      .eq('fortnight_id', fortnight_id);
+      .in('import_id', importIds) : { data: null, error: null };
     
     if (itemsError) {
       console.error('[actionPayFortnight] Error obteniendo comm_items:', itemsError);
@@ -4252,10 +4259,8 @@ export async function actionPayFortnight(fortnight_id: string) {
     
     if (commItems && commItems.length > 0) {
       const detailsToInsert = commItems.map((item: any) => {
-        // Determinar porcentaje aplicado
-        const percentApplied = item.policies?.percent_override ?? 
-                              item.brokers?.percent_default ?? 
-                              1.0;
+        // Determinar porcentaje aplicado (solo usar broker percent_default)
+        const percentApplied = item.brokers?.percent_default ?? 1.0;
         
         // Calcular commission_raw (reverso del cálculo)
         const commissionRaw = item.gross_amount / percentApplied;
@@ -4281,11 +4286,11 @@ export async function actionPayFortnight(fortnight_id: string) {
           fortnight_id: fortnight_id,
           broker_id: item.broker_id,
           insurer_id: item.insurer_id,
-          policy_id: item.policies?.id || null,
-          client_id: item.policies?.client_id || null,
+          policy_id: null, // No tenemos relación directa con policies
+          client_id: null, // No tenemos relación directa con policies
           policy_number: item.policy_number,
           client_name: item.insured_name || 'Sin nombre',
-          ramo: item.policies?.ramo || null,
+          ramo: null, // No tenemos relación directa con policies
           commission_raw: commissionRaw,
           percent_applied: percentApplied,
           commission_calculated: item.gross_amount,
