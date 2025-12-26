@@ -4540,54 +4540,9 @@ export async function actionPayFortnight(fortnight_id: string) {
           applied_by: userId,
         } satisfies AdvanceLogIns]);
 
-        const { data: advance } = await supabase
-          .from('advances')
-          .select('amount, status')
-          .eq('id', adv.advance_id)
-          .single();
-
-        if (advance) {
-          const newAmount = (advance as any).amount - adv.amount;
-          const newStatus = newAmount <= 0 ? 'PAID' : 'PARTIAL';
-
-          await supabase
-            .from('advances')
-            .update({
-              amount: Math.max(0, newAmount),
-              status: newStatus,
-            } satisfies TablesUpdate<'advances'>)
-            .eq('id', adv.advance_id);
-        }
-
         totalDiscount += adv.amount;
         
-        // Actualizar status del adelanto
-        const { data: currentAdvance } = await supabase
-          .from('advances')
-          .select('amount')
-          .eq('id', adv.advance_id)
-          .single();
-        
-        if (currentAdvance) {
-          const { data: totalPaid } = await supabase
-            .from('advance_logs')
-            .select('amount')
-            .eq('advance_id', adv.advance_id);
-          
-          const sumPaid = (totalPaid || []).reduce((s: number, log: any) => s + log.amount, 0);
-          
-          if (sumPaid >= currentAdvance.amount) {
-            await supabase
-              .from('advances')
-              .update({ status: 'PAID' })
-              .eq('id', adv.advance_id);
-          } else if (sumPaid > 0) {
-            await supabase
-              .from('advances')
-              .update({ status: 'PARTIAL' })
-              .eq('id', adv.advance_id);
-          }
-        }
+        console.log(`[actionPayFortnight]   💵 Adelanto ${adv.advance_id}: $${adv.amount} descontado`);
       }
 
       if (totalDiscount <= 0) {
@@ -4712,7 +4667,7 @@ export async function actionPayFortnight(fortnight_id: string) {
       }
     }
     
-    // FINAL: Cambiar status a PAID (SOLO después de guardar todo)
+    // FINAL: Cambiar status a PAID
     console.log('[actionPayFortnight] STEP FINAL: Cambiando status a PAID...');
     const { error: updateError } = await supabase
       .from('fortnights')
@@ -4724,7 +4679,29 @@ export async function actionPayFortnight(fortnight_id: string) {
       throw updateError;
     }
     
-    console.log('[actionPayFortnight] ✅ TODAS LAS ETAPAS COMPLETADAS - Status cambiado a PAID');
+    // Verificar valores guardados en fortnight_broker_totals
+    console.log('[actionPayFortnight] ========== VERIFICACIÓN FINAL ==========');
+    const { data: savedTotals } = await supabase
+      .from('fortnight_broker_totals')
+      .select('broker_id, gross_amount, net_amount, discounts_json, brokers(name)')
+      .eq('fortnight_id', fortnight_id);
+    
+    if (savedTotals && savedTotals.length > 0) {
+      const totalGross = savedTotals.reduce((sum, bt) => sum + (bt.gross_amount || 0), 0);
+      const totalNet = savedTotals.reduce((sum, bt) => sum + (bt.net_amount || 0), 0);
+      
+      console.log('[actionPayFortnight] 📊 VALORES GUARDADOS EN fortnight_broker_totals:');
+      console.log(`[actionPayFortnight]   Total Bruto: $${totalGross.toFixed(2)}`);
+      console.log(`[actionPayFortnight]   Total Neto: $${totalNet.toFixed(2)}`);
+      console.log('[actionPayFortnight] 📋 Por corredor:');
+      
+      for (const bt of savedTotals) {
+        const brokerName = (bt.brokers as any)?.name || 'N/A';
+        console.log(`[actionPayFortnight]   - ${brokerName}: Bruto $${(bt.gross_amount || 0).toFixed(2)} → Neto $${(bt.net_amount || 0).toFixed(2)}`);
+      }
+    }
+    
+    console.log('[actionPayFortnight] ✅✅✅ TODAS LAS ETAPAS COMPLETADAS - Status PAID');
     revalidatePath('/(app)/commissions');
     return { 
       ok: true as const, 
