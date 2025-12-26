@@ -4338,8 +4338,7 @@ export async function actionPayFortnight(fortnight_id: string) {
           .from('bank_transfer_imports')
           .update({
             is_temporary: false,
-            fortnight_paid_id: fortnight_id,
-            notes: (supabase as any).raw(`notes || ' | Pagado en quincena: ' || '${fortnight_id}'`)
+            fortnight_paid_id: fortnight_id
           })
           .in('import_id', importIds)
           .eq('is_temporary', true);
@@ -4375,8 +4374,7 @@ export async function actionPayFortnight(fortnight_id: string) {
           .from('bank_group_imports')
           .update({
             is_temporary: false,
-            fortnight_paid_id: fortnight_id,
-            notes: (supabase as any).raw(`notes || ' | Pagado en quincena: ' || '${fortnight_id}'`)
+            fortnight_paid_id: fortnight_id
           })
           .in('import_id', importIds)
           .eq('is_temporary', true);
