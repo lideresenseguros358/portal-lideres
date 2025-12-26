@@ -3984,6 +3984,7 @@ export async function actionPayFortnight(fortnight_id: string) {
     const { userId } = await getAuthContext();
     
     // 1. Verificar que existe el draft
+    console.log('[actionPayFortnight] STEP 1: Verificando draft...');
     const { data: fortnight, error: fnError } = await supabase
       .from('fortnights')
       .select('id, status, notify_brokers, period_start, period_end')
@@ -3995,14 +3996,18 @@ export async function actionPayFortnight(fortnight_id: string) {
     if (fortnight.status === 'PAID') {
       return { ok: false as const, error: 'Esta quincena ya fue pagada' };
     }
+    console.log('[actionPayFortnight] ✅ STEP 1 completado');
     
     // 2. Recalcular automáticamente (seguridad)
+    console.log('[actionPayFortnight] STEP 2: Recalculando...');
     const recalcResult = await actionRecalculateFortnight(fortnight_id);
     if (!recalcResult.ok) {
       return { ok: false as const, error: 'Error al recalcular: ' + recalcResult.error };
     }
+    console.log('[actionPayFortnight] ✅ STEP 2 completado');
     
     // 3. Obtener totales por broker
+    console.log('[actionPayFortnight] STEP 3: Obteniendo totales...');
     const { data: brokerTotals, error: totalsError } = await supabase
       .from('fortnight_broker_totals')
       .select(`
@@ -4020,8 +4025,10 @@ export async function actionPayFortnight(fortnight_id: string) {
     if (!brokerTotals || brokerTotals.length === 0) {
       return { ok: false as const, error: 'No hay totales calculados' };
     }
+    console.log('[actionPayFortnight] ✅ STEP 3 completado - Totales:', brokerTotals.length);
     
     // 4. Crear registros de retained_commissions para pagos retenidos
+    console.log('[actionPayFortnight] STEP 4: Procesando retenciones...');
     for (const bt of brokerTotals) {
       if (bt.is_retained) {
         // Obtener detalle de comisiones por aseguradora para este broker
@@ -4076,8 +4083,10 @@ export async function actionPayFortnight(fortnight_id: string) {
         if (retainedError) throw retainedError;
       }
     }
+    console.log('[actionPayFortnight] ✅ STEP 4 completado');
     
     // 5. Generar CSV Banco (solo brokers con neto > 0 Y NO retenidos)
+    console.log('[actionPayFortnight] STEP 5: Generando CSV...');
     const filteredTotals = brokerTotals
       .filter(bt => bt.net_amount > 0 && !bt.is_retained)
       .map(bt => ({
@@ -4089,6 +4098,7 @@ export async function actionPayFortnight(fortnight_id: string) {
     const fortnightLabel = `PAGO COMISIONES ${formatFortnightLabel(fortnight.period_start, fortnight.period_end)}`.toUpperCase();
     const achResult = await buildBankACH(filteredTotals, fortnightLabel);
     const csvContent = achResult.content;
+    console.log('[actionPayFortnight] ✅ STEP 5 completado');
     
     // 6. MIGRAR ITEMS TEMPORALES DE ZONA DE TRABAJO
     console.log('[actionPayFortnight] Migrando items temporales...');
@@ -4199,12 +4209,14 @@ export async function actionPayFortnight(fortnight_id: string) {
     }
     
     // 7. Cambiar status a PAID
+    console.log('[actionPayFortnight] STEP 7: Cambiando status a PAID...');
     const { error: updateError } = await supabase
       .from('fortnights')
       .update({ status: 'PAID' } satisfies FortnightUpd)
       .eq('id', fortnight_id);
     
     if (updateError) throw updateError;
+    console.log('[actionPayFortnight] ✅ STEP 7 completado');
     
     // 7.1 NUEVO: Guardar detalle completo en fortnight_details
     console.log('[actionPayFortnight] Guardando detalle en fortnight_details...');
@@ -4413,6 +4425,7 @@ export async function actionPayFortnight(fortnight_id: string) {
     }
     
     // 7. Marcar adelantos como aplicados (crear logs)
+    console.log('[actionPayFortnight] STEP 7.5: Marcando adelantos...');
     for (const bt of brokerTotals) {
       const discounts = bt.discounts_json as any;
       if (!discounts?.adelantos || !Array.isArray(discounts.adelantos) || discounts.adelantos.length === 0) {
@@ -4505,6 +4518,7 @@ export async function actionPayFortnight(fortnight_id: string) {
         throw pendingError;
       }
     }
+    console.log('[actionPayFortnight] ✅ STEP 7.5 completado');
     
     // 8. Notificar brokers que reciben pago (AMBAS: email + campanita)
     // Solo notificar a brokers que:
@@ -4573,6 +4587,7 @@ export async function actionPayFortnight(fortnight_id: string) {
       }
     }
     
+    console.log('[actionPayFortnight] ✅ TODAS LAS ETAPAS COMPLETADAS');
     revalidatePath('/(app)/commissions');
     return { 
       ok: true as const, 
@@ -4584,6 +4599,7 @@ export async function actionPayFortnight(fortnight_id: string) {
       } 
     };
   } catch (error) {
+    console.error('[actionPayFortnight] ❌ ERROR:', error);
     return {
       ok: false as const,
       error: error instanceof Error ? error.message : 'Error al pagar quincena',

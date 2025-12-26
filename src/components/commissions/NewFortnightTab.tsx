@@ -540,6 +540,8 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
       
       const result = await actionPayFortnight(draftFortnight.id);
       
+      console.log('Result from actionPayFortnight:', result);
+      
       if (result.ok) {
         // Download ACH file automatically
         if (result.data?.csv) {
