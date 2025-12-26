@@ -3738,6 +3738,8 @@ export async function actionRecalculateFortnight(fortnight_id: string) {
     const supabase = getSupabaseAdmin();
     const { userId } = await getAuthContext();
     
+    console.log('[actionRecalculateFortnight] ========== INICIO RECALCULATE ==========');
+    
     // 1. Obtener todos los imports del draft
     const { data: imports, error: importsError } = await supabase
       .from('comm_imports')
@@ -3745,6 +3747,8 @@ export async function actionRecalculateFortnight(fortnight_id: string) {
       .eq('period_label', fortnight_id);
     
     if (importsError) throw importsError;
+    
+    console.log(`[actionRecalculateFortnight] 📦 Imports encontrados: ${imports?.length || 0}`);
     
     // Si no hay imports, limpiar fortnight_broker_totals y retornar
     if (!imports || imports.length === 0) {
@@ -3758,6 +3762,7 @@ export async function actionRecalculateFortnight(fortnight_id: string) {
     }
     
     const importIds = imports.map(i => i.id);
+    console.log('[actionRecalculateFortnight] Import IDs:', importIds);
     
     // 2. Obtener todos los comm_items del draft
     const { data: items, error: itemsError } = await supabase
@@ -3767,6 +3772,8 @@ export async function actionRecalculateFortnight(fortnight_id: string) {
       .not('broker_id', 'is', null);
     
     if (itemsError) throw itemsError;
+    
+    console.log(`[actionRecalculateFortnight] 💰 Comm_items encontrados: ${items?.length || 0}`);
     
     // 3. Agrupar por broker
     const brokerTotals = (items || []).reduce((acc, item) => {
@@ -3866,6 +3873,18 @@ export async function actionRecalculateFortnight(fortnight_id: string) {
     });
     
     // 6. Calcular totales y crear/actualizar fortnight_broker_totals
+    console.log(`[actionRecalculateFortnight] 📊 Brokers agrupados: ${Object.keys(brokerTotals).length}`);
+    
+    const totalGrossCalculated = Object.values(brokerTotals).reduce((s, t) => s + t.gross, 0);
+    console.log(`[actionRecalculateFortnight] 💵 Total BRUTO calculado: $${totalGrossCalculated.toFixed(2)}`);
+    
+    // Mostrar muestra de 5 brokers
+    const sampleBrokers = Object.entries(brokerTotals).slice(0, 5);
+    console.log('[actionRecalculateFortnight] 📋 Muestra de brokers (primeros 5):');
+    sampleBrokers.forEach(([brokerId, totals]) => {
+      console.log(`[actionRecalculateFortnight]   - Broker ${brokerId}: $${totals.gross.toFixed(2)} (${totals.items_count} items)`);
+    });
+    
     const upsertPromises = Object.entries(brokerTotals).map(async ([brokerId, totals]) => {
       const advances = brokerAdvances[brokerId] || [];
       const totalDiscounts = advances.reduce((sum, adv) => sum + adv.amount, 0);
@@ -3903,12 +3922,15 @@ export async function actionRecalculateFortnight(fortnight_id: string) {
     
     await Promise.all(upsertPromises);
     
+    console.log('[actionRecalculateFortnight] ✅ fortnight_broker_totals actualizado');
+    console.log('[actionRecalculateFortnight] ========== FIN RECALCULATE ==========');
+    
     revalidatePath('/(app)/commissions');
     return { 
       ok: true as const, 
       data: { 
         brokers_count: Object.keys(brokerTotals).length,
-        total_gross: Object.values(brokerTotals).reduce((s, t) => s + t.gross, 0),
+        total_gross: totalGrossCalculated,
       } 
     };
   } catch (error) {
