@@ -185,13 +185,6 @@ export function AdvancesManagementModal({
     const newDiscountsMap = new Map(temporaryDiscounts);
     newDiscountsMap.set(advanceId, validAmount);
     setTemporaryDiscounts(newDiscountsMap);
-    
-    // Sincronizar inputValue con el validAmount si es diferente
-    if (validAmount !== amount) {
-      const newInputsMapSync = new Map(inputValues);
-      newInputsMapSync.set(advanceId, validAmount.toFixed(2));
-      setInputValues(newInputsMapSync);
-    }
   };
 
   // Guardar descuentos temporales
