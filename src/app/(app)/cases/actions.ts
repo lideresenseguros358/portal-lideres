@@ -196,15 +196,30 @@ export async function actionCreateCase(payload: {
       return { ok: false as const, error: 'No autenticado' };
     }
 
-    // Check if user is master
+    // Check user role
     const { data: profile } = await supabase
       .from('profiles')
       .select('role')
       .eq('id', user.id)
       .single();
 
-    if (profile?.role !== 'master') {
-      return { ok: false as const, error: 'Solo Master puede crear casos manualmente' };
+    // If user is broker, they can only create cases for themselves
+    if (profile?.role === 'broker') {
+      // Get broker's ID
+      const { data: broker } = await supabase
+        .from('brokers')
+        .select('id')
+        .eq('p_id', user.id)
+        .single();
+      
+      if (!broker) {
+        return { ok: false as const, error: 'Broker no encontrado' };
+      }
+      
+      // Ensure broker is creating case for themselves
+      if (payload.broker_id !== broker.id) {
+        return { ok: false as const, error: 'Solo puedes crear casos para ti mismo' };
+      }
     }
 
     // Calculate SLA date

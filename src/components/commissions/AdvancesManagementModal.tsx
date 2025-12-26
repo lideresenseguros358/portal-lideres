@@ -144,13 +144,27 @@ export function AdvancesManagementModal({
 
   // Cambiar monto de descuento
   const handleAmountChange = (advanceId: string, value: string) => {
-    const amount = parseFloat(value) || 0;
-    const advance = advances.find(a => a.id === advanceId);
+    // Permitir campo vacío para que el usuario pueda borrar y escribir libremente
+    if (value === '' || value === '-') {
+      const newMap = new Map(temporaryDiscounts);
+      newMap.set(advanceId, 0);
+      setTemporaryDiscounts(newMap);
+      return;
+    }
     
+    const amount = parseFloat(value);
+    
+    // Si no es un número válido, no hacer nada (mantener el valor anterior)
+    if (isNaN(amount)) return;
+    
+    const advance = advances.find(a => a.id === advanceId);
     if (!advance) return;
     
     const maxAmount = advance.amount - (advance.total_paid || 0);
-    const validAmount = Math.min(Math.max(0, amount), maxAmount);
+    const remaining = grossAmount - getTotalDiscounts() + (temporaryDiscounts.get(advanceId) || 0);
+    
+    // Validar que no exceda el máximo del adelanto ni el bruto disponible
+    const validAmount = Math.min(Math.max(0, amount), maxAmount, remaining);
     
     const newMap = new Map(temporaryDiscounts);
     newMap.set(advanceId, validAmount);
