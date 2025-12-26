@@ -3046,7 +3046,7 @@ export async function actionGetClosedFortnights(year: number, month: number, for
     if (fError) throw fError;
 
     // SIMPLIFICADO: Solo leer lo que ya está guardado, NO recalcular
-    const formattedData = (fortnights || []).map((f: any) => {
+    const formattedData = await Promise.all((fortnights || []).map(async (f: any) => {
       const brokerTotals = f.fortnight_broker_totals || [];
       const fortnightStart = new Date(f.period_start);
 
@@ -3062,6 +3062,14 @@ export async function actionGetClosedFortnights(year: number, month: number, for
       const total_paid_gross = brokerTotals.reduce((sum: number, bt: any) => sum + (Number(bt.gross_amount) || 0), 0);
       const total_paid_net = brokerTotals.reduce((sum: number, bt: any) => sum + (Number(bt.net_amount) || 0), 0);
       
+      // CRÍTICO: Calcular total_imported desde comm_imports de ESTA quincena
+      const { data: fnImports } = await supabase
+        .from('comm_imports')
+        .select('total_amount')
+        .eq('period_label', f.id);
+      
+      const total_imported = (fnImports || []).reduce((sum, imp) => sum + (Number(imp.total_amount) || 0), 0);
+      
       // Determinar quincena correctamente según el día de inicio
       const startDay = fortnightStart.getUTCDate();
       const fortnightNum = startDay <= 15 ? 1 : 2;
@@ -3070,10 +3078,10 @@ export async function actionGetClosedFortnights(year: number, month: number, for
         id: f.id,
         label: `Q${fortnightNum} - ${fortnightStart.toLocaleString('es-PA', { month: 'short', timeZone: 'UTC' })}. ${fortnightStart.getUTCFullYear()}`,
         fortnight_number: fortnightNum,
-        total_imported: f.total_imported || 0,
+        total_imported,
         total_paid_net,
         total_paid_gross,
-        total_office_profit: (f.total_imported || 0) - total_paid_net,
+        total_office_profit: total_imported - total_paid_net,
         totalsByInsurer: [],
         brokers: filteredBrokers.map((bt: any) => ({
           broker_id: bt.broker_id,
@@ -3083,7 +3091,7 @@ export async function actionGetClosedFortnights(year: number, month: number, for
           discounts_json: bt.discounts_json,
         })).sort((a: any, b: any) => b.net_amount - a.net_amount),
       };
-    });
+    }));
 
     return { ok: true as const, data: formattedData.filter(Boolean) };
   } catch (error) {
