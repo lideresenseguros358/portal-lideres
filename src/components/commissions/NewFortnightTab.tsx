@@ -834,7 +834,7 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
       
       {/* Close Confirmation Dialog */}
       <Dialog open={showCloseConfirm} onOpenChange={setShowCloseConfirm}>
-        <DialogContent>
+        <DialogContent className="z-[150]">
           <DialogHeader>
             <DialogTitle className="text-[#010139]">Confirmar Cierre de Quincena</DialogTitle>
             <DialogDescription>
