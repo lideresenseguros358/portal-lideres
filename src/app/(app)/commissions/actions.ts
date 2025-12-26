@@ -4053,6 +4053,7 @@ export async function actionPayFortnight(fortnight_id: string) {
     console.log('[actionPayFortnight] ✅ STEP 5 completado');
     
     // 6. MIGRAR ITEMS TEMPORALES DE ZONA DE TRABAJO
+    console.log('[actionPayFortnight] ========== INICIO DRAFT ITEMS ==========');
     console.log('[actionPayFortnight] Migrando items temporales...');
     
     const { data: draftItems, error: draftError } = await (supabase as any)
@@ -4070,8 +4071,10 @@ export async function actionPayFortnight(fortnight_id: string) {
       `)
       .eq('fortnight_id', fortnight_id);
     
+    console.log(`[actionPayFortnight] 🔍 Draft items encontrados: ${draftItems?.length || 0}`);
+    
     if (draftError) {
-      console.error('[actionPayFortnight] Error cargando draft items:', draftError);
+      console.error('[actionPayFortnight] ❌ Error cargando draft items:', draftError);
       throw draftError;
     }
     
@@ -4381,6 +4384,7 @@ export async function actionPayFortnight(fortnight_id: string) {
     }
     
     // 6.5 NUEVO: CONFIRMAR VÍNCULOS BANCO TEMPORALES Y ACTUALIZAR A PAGADO
+    // CRÍTICO: Esto debe ejecutarse SIEMPRE, independiente de si hay commItems o no
     console.log('[actionPayFortnight] ========== INICIO BANCO ==========');
     console.log('[actionPayFortnight] Confirmando vínculos banco temporales...');
     
