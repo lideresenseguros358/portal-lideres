@@ -292,7 +292,7 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
       if (!acc[brokerId]) {
         acc[brokerId] = 0;
       }
-      acc[brokerId] += Math.abs(item.gross_amount);
+      acc[brokerId] += Number(item.gross_amount) || 0; // CRÍTICO: NO usar Math.abs() para respetar negativos
       return acc;
     }, {} as Record<string, number>);
     
