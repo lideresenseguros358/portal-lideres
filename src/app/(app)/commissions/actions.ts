@@ -3045,54 +3045,10 @@ export async function actionGetClosedFortnights(year: number, month: number, for
 
     if (fError) throw fError;
 
-    // Get all comm_items for the entire month in one go
-    const { data: allCommItems, error: itemsError } = await supabase
-      .from('comm_items')
-      .select('gross_amount, insurer_id, insurers(name), created_at')
-      .gte('created_at', startDate)
-      .lte('created_at', endDate);
-
-    if (itemsError) throw itemsError;
-
-    // Get comm_imports para totales de aseguradoras
-    const { data: commImports, error: importsError } = await supabase
-      .from('comm_imports')
-      .select('total_amount, insurer_id, insurers(name)');
-
-    if (importsError) {
-      console.error('Error loading comm_imports:', importsError);
-    }
-
+    // SIMPLIFICADO: Solo leer lo que ya está guardado, NO recalcular
     const formattedData = (fortnights || []).map((f: any) => {
       const brokerTotals = f.fortnight_broker_totals || [];
       const fortnightStart = new Date(f.period_start);
-      const fortnightEnd = new Date(f.period_end);
-
-      // Filter items for the specific fortnight in memory
-      const commItems = (allCommItems || []).filter(item => {
-        const itemDate = new Date(item.created_at);
-        return itemDate >= fortnightStart && itemDate <= fortnightEnd;
-      });
-
-      // Totales simples
-      const total_imported = (commImports || []).reduce((sum, imp) => sum + (Number(imp.total_amount) || 0), 0);
-      const total_paid_net = brokerTotals.reduce((sum: number, bt: any) => sum + (Number(bt.net_amount) || 0), 0);
-      const total_office_profit = total_imported - total_paid_net;
-
-      // Calcular totales por aseguradora
-      const totalsByInsurer = (commImports || []).reduce((acc, imp) => {
-        if (!imp.insurers) return acc;
-        const insurerName = imp.insurers.name || 'Desconocido';
-        acc[insurerName] = (acc[insurerName] || 0) + (Number(imp.total_amount) || 0);
-        return acc;
-      }, {} as Record<string, number>);
-
-      const paidByInsurer = commItems.reduce((acc, item) => {
-        if (!item.insurers) return acc;
-        const insurerName = item.insurers.name || 'Desconocido';
-        acc[insurerName] = (acc[insurerName] || 0) + (Number(item.gross_amount) || 0);
-        return acc;
-      }, {} as Record<string, number>);
 
       const filteredBrokers = brokerId
         ? brokerTotals.filter((bt: any) => bt.broker_id === brokerId)
@@ -3102,6 +3058,10 @@ export async function actionGetClosedFortnights(year: number, month: number, for
         return null;
       }
 
+      // Calcular totales DESDE fortnight_broker_totals (ya guardados)
+      const total_paid_gross = brokerTotals.reduce((sum: number, bt: any) => sum + (Number(bt.gross_amount) || 0), 0);
+      const total_paid_net = brokerTotals.reduce((sum: number, bt: any) => sum + (Number(bt.net_amount) || 0), 0);
+      
       // Determinar quincena correctamente según el día de inicio
       const startDay = fortnightStart.getUTCDate();
       const fortnightNum = startDay <= 15 ? 1 : 2;
@@ -3110,16 +3070,11 @@ export async function actionGetClosedFortnights(year: number, month: number, for
         id: f.id,
         label: `Q${fortnightNum} - ${fortnightStart.toLocaleString('es-PA', { month: 'short', timeZone: 'UTC' })}. ${fortnightStart.getUTCFullYear()}`,
         fortnight_number: fortnightNum,
-        total_imported,
+        total_imported: f.total_imported || 0,
         total_paid_net,
-        total_paid_gross: brokerTotals.reduce((sum: number, bt: any) => sum + (Number(bt.gross_amount) || 0), 0),
-        total_office_profit,
-        totalsByInsurer: Object.entries(totalsByInsurer).map(([name, total]) => ({ 
-          name, 
-          total, 
-          paid: paidByInsurer[name] || 0,
-          office_total: total - (paidByInsurer[name] || 0)
-        })).sort((a, b) => b.total - a.total),
+        total_paid_gross,
+        total_office_profit: (f.total_imported || 0) - total_paid_net,
+        totalsByInsurer: [],
         brokers: filteredBrokers.map((bt: any) => ({
           broker_id: bt.broker_id,
           broker_name: bt.brokers?.name || 'N/A',
@@ -4120,26 +4075,42 @@ export async function actionPayFortnight(fortnight_id: string) {
       
       // 6.1 MIGRAR IDENTIFICADOS a comm_items y registrar en preliminar
       if (identified.length > 0) {
-        console.log(`[actionPayFortnight] Migrando ${identified.length} items identificados a comm_items...`);
+        console.log('[actionPayFortnight] ========== INICIO IDENTIFICADOS ==========');
+        console.log(`[actionPayFortnight] 🔍 Items identificados: ${identified.length}`);
+        console.log('[actionPayFortnight] Datos de items:', JSON.stringify(identified.map((i: any) => ({
+          policy: i.policy_number,
+          broker: i.temp_assigned_broker_id,
+          insurer: i.insurer_id
+        })), null, 2));
+        
+        let commItemsInserted = 0;
+        let preliminarInserted = 0;
         
         for (const item of identified) {
           try {
+            console.log(`[actionPayFortnight] 📋 Procesando: ${item.policy_number}`);
+            
             // Calcular comisión
             const percentDefault = item.brokers?.percent_default || 1.0;
             const grossAmount = item.commission_raw * percentDefault;
+            console.log(`[actionPayFortnight]   Comisión: ${item.commission_raw} * ${percentDefault} = ${grossAmount}`);
             
             // Verificar si ya existe en comm_items
-            const { data: existingItem } = await supabase
+            const { data: existingItem, error: checkError } = await supabase
               .from('comm_items')
               .select('id')
               .eq('import_id', item.import_id)
               .eq('policy_number', item.policy_number)
               .eq('broker_id', item.temp_assigned_broker_id)
-              .single();
+              .maybeSingle();
+            
+            if (checkError) {
+              console.error(`[actionPayFortnight]   ❌ Error verificando comm_items:`, checkError);
+            }
             
             if (!existingItem) {
               // Insertar en comm_items
-              await supabase.from('comm_items').insert({
+              const { error: insertError } = await supabase.from('comm_items').insert({
                 import_id: item.import_id,
                 policy_number: item.policy_number,
                 insured_name: item.insured_name,
@@ -4149,26 +4120,43 @@ export async function actionPayFortnight(fortnight_id: string) {
                 raw_row: item.raw_row
               });
               
-              console.log(`[actionPayFortnight] Item ${item.policy_number} insertado en comm_items`);
+              if (insertError) {
+                console.error(`[actionPayFortnight]   ❌ Error insertando comm_items:`, insertError);
+              } else {
+                commItemsInserted++;
+                console.log(`[actionPayFortnight]   ✅ Item insertado en comm_items`);
+              }
+            } else {
+              console.log(`[actionPayFortnight]   ℹ️ Ya existe en comm_items`);
             }
             
             // Registrar en preliminar
-            const { data: existingPolicy } = await supabase
+            const { data: existingPolicy, error: policyError } = await supabase
               .from('policies')
               .select('id, client_id')
               .eq('policy_number', item.policy_number)
-              .single();
+              .maybeSingle();
+            
+            if (policyError) {
+              console.error(`[actionPayFortnight]   ❌ Error buscando póliza:`, policyError);
+            }
             
             if (existingPolicy) {
-              const { data: existingPrelim } = await (supabase as any)
+              console.log(`[actionPayFortnight]   📄 Póliza encontrada - Client ID: ${existingPolicy.client_id}`);
+              
+              const { data: existingPrelim, error: prelimError } = await (supabase as any)
                 .from('preliminar')
                 .select('id')
                 .eq('client_id', existingPolicy.client_id)
                 .eq('broker_id', item.temp_assigned_broker_id)
-                .single();
+                .maybeSingle();
+              
+              if (prelimError) {
+                console.error(`[actionPayFortnight]   ❌ Error verificando preliminar:`, prelimError);
+              }
               
               if (!existingPrelim) {
-                await (supabase as any)
+                const { error: prelimInsertError } = await (supabase as any)
                   .from('preliminar')
                   .insert({
                     client_id: existingPolicy.client_id,
@@ -4176,13 +4164,26 @@ export async function actionPayFortnight(fortnight_id: string) {
                     notes: 'Identificado en zona de trabajo de Nueva Quincena'
                   });
                 
-                console.log(`[actionPayFortnight] Cliente ${item.policy_number} registrado en preliminar`);
+                if (prelimInsertError) {
+                  console.error(`[actionPayFortnight]   ❌ Error insertando preliminar:`, prelimInsertError);
+                } else {
+                  preliminarInserted++;
+                  console.log(`[actionPayFortnight]   ✅✅✅ CLIENTE REGISTRADO EN PRELIMINAR ✅✅✅`);
+                }
+              } else {
+                console.log(`[actionPayFortnight]   ℹ️ Ya existe en preliminar`);
               }
+            } else {
+              console.log(`[actionPayFortnight]   ⚠️ Póliza NO encontrada en BD`);
             }
           } catch (itemError) {
-            console.error('[actionPayFortnight] Error migrando item identificado:', itemError);
+            console.error(`[actionPayFortnight]   ❌❌❌ ERROR CRÍTICO:`, itemError);
           }
         }
+        
+        console.log('[actionPayFortnight] ========== RESUMEN IDENTIFICADOS ==========');
+        console.log(`[actionPayFortnight] ✅ comm_items insertados: ${commItemsInserted}/${identified.length}`);
+        console.log(`[actionPayFortnight] ✅ preliminar insertados: ${preliminarInserted}/${identified.length}`);
       }
       
       // 6.2 Migrar sin identificar a pending_items (ajustes)
@@ -4372,6 +4373,7 @@ export async function actionPayFortnight(fortnight_id: string) {
     }
     
     // 6.5 NUEVO: CONFIRMAR VÍNCULOS BANCO TEMPORALES Y ACTUALIZAR A PAGADO
+    console.log('[actionPayFortnight] ========== INICIO BANCO ==========');
     console.log('[actionPayFortnight] Confirmando vínculos banco temporales...');
     
     // Obtener imports de esta quincena
@@ -4380,17 +4382,27 @@ export async function actionPayFortnight(fortnight_id: string) {
       .select('id')
       .eq('period_label', fortnight_id);
     
+    console.log(`[actionPayFortnight] 🔍 Imports encontrados: ${quincenaImports?.length || 0}`);
+    
     if (quincenaImports && quincenaImports.length > 0) {
       const importIds = quincenaImports.map((i: any) => i.id);
+      console.log('[actionPayFortnight] Import IDs:', importIds);
       
       // Confirmar bank_transfer_imports temporales
-      const { data: tempTransferLinks } = await (supabase as any)
+      const { data: tempTransferLinks, error: transferLinksError } = await (supabase as any)
         .from('bank_transfer_imports')
-        .select('transfer_id, cutoff_origin_id, notes')
+        .select('transfer_id, cutoff_origin_id, notes, import_id')
         .in('import_id', importIds)
         .eq('is_temporary', true);
       
+      console.log(`[actionPayFortnight] 🔍 Transfer links temporales: ${tempTransferLinks?.length || 0}`);
+      if (transferLinksError) {
+        console.error('[actionPayFortnight] ❌ Error buscando transfer links:', transferLinksError);
+      }
+      
       if (tempTransferLinks && tempTransferLinks.length > 0) {
+        console.log('[actionPayFortnight] Transfer IDs a marcar PAGADO:', tempTransferLinks.map((t: any) => t.transfer_id));
+        
         // Actualizar vínculos a permanentes
         const { error: confirmError } = await (supabase as any)
           .from('bank_transfer_imports')
@@ -4402,7 +4414,9 @@ export async function actionPayFortnight(fortnight_id: string) {
           .eq('is_temporary', true);
         
         if (confirmError) {
-          console.error('[actionPayFortnight] Error confirmando transfer links:', confirmError);
+          console.error('[actionPayFortnight] ❌ Error confirmando transfer links:', confirmError);
+        } else {
+          console.log('[actionPayFortnight] ✅ Transfer links confirmados como permanentes');
         }
         
         // Actualizar transferencias a PAGADO
@@ -4413,10 +4427,12 @@ export async function actionPayFortnight(fortnight_id: string) {
           .in('id', transferIds);
         
         if (updateTransferError) {
-          console.error('[actionPayFortnight] Error actualizando transferencias a PAGADO:', updateTransferError);
+          console.error('[actionPayFortnight] ❌ Error actualizando transferencias a PAGADO:', updateTransferError);
         } else {
-          console.log(`[actionPayFortnight] ✅ ${transferIds.length} transferencias actualizadas a PAGADO`);
+          console.log(`[actionPayFortnight] ✅✅✅ ${transferIds.length} TRANSFERENCIAS INDIVIDUALES → PAGADO ✅✅✅`);
         }
+      } else {
+        console.log('[actionPayFortnight] ⚠️ No se encontraron transfer links temporales');
       }
       
       // Confirmar bank_group_imports temporales
