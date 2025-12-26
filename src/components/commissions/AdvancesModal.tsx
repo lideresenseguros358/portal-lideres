@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { actionGetAdvances, actionApplyAdvanceDiscount } from '@/app/(app)/commissions/actions';
+import { actionGetAdvances, actionApplyAdvanceDiscount, actionRecalculateFortnight } from '@/app/(app)/commissions/actions';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -100,6 +100,16 @@ export default function AdvancesModal({ isOpen, onClose, onSuccess, brokerId, br
       if (errors.length > 0) {
         toast.error(`${errors.length} descuentos no pudieron ser aplicados.`);
       } else {
+        // CRÍTICO: Recalcular quincena para actualizar fortnight_broker_totals.discounts_json
+        console.log('[AdvancesModal] 🔄 Recalculando quincena para reflejar adelantos...');
+        const recalcResult = await actionRecalculateFortnight(fortnightId);
+        if (!recalcResult.ok) {
+          console.error('[AdvancesModal] Error recalculando:', recalcResult.error);
+          toast.warning('Adelantos aplicados pero error al actualizar totales. Recarga la página.');
+        } else {
+          console.log('[AdvancesModal] ✅ Recalculación exitosa');
+        }
+        
         toast.success('Descuentos aplicados exitosamente.');
         onSuccess();
         onClose();

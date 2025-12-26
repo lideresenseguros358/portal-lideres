@@ -4555,18 +4555,29 @@ export async function actionPayFortnight(fortnight_id: string) {
     }
     
     // 7. Marcar adelantos como aplicados (crear logs)
-    console.log('[actionPayFortnight] STEP 7.5: Marcando adelantos...');
+    console.log('[actionPayFortnight] ========== INICIO ADELANTOS ==========');
+    console.log(`[actionPayFortnight] 📊 Brokers con totales: ${brokerTotals.length}`);
+    
+    let brokersWithAdvances = 0;
+    let totalAdvancesApplied = 0;
+    
     for (const bt of brokerTotals) {
       const discounts = bt.discounts_json as any;
+      console.log(`[actionPayFortnight] 🔍 Broker ${bt.brokers?.name}: discounts_json =`, discounts);
+      
       if (!discounts?.adelantos || !Array.isArray(discounts.adelantos) || discounts.adelantos.length === 0) {
+        console.log(`[actionPayFortnight]   ⚠️ Sin adelantos para ${bt.brokers?.name}`);
         continue;
       }
+
+      brokersWithAdvances++;
+      console.log(`[actionPayFortnight]   ✅ ${bt.brokers?.name} tiene ${discounts.adelantos.length} adelantos`);
 
       let totalDiscount = 0;
 
       for (const adv of discounts.adelantos) {
         // Crear log del adelanto
-        await supabase.from('advance_logs').insert([{
+        const { error: advLogError } = await supabase.from('advance_logs').insert([{
           advance_id: adv.advance_id,
           amount: adv.amount,
           payment_type: 'fortnight',
@@ -4574,9 +4585,14 @@ export async function actionPayFortnight(fortnight_id: string) {
           applied_by: userId,
         } satisfies AdvanceLogIns]);
 
+        if (advLogError) {
+          console.error(`[actionPayFortnight]   ❌ Error creando log adelanto ${adv.advance_id}:`, advLogError);
+        } else {
+          console.log(`[actionPayFortnight]   💵 Adelanto ${adv.advance_id}: $${adv.amount} descontado`);
+          totalAdvancesApplied++;
+        }
+
         totalDiscount += adv.amount;
-        
-        console.log(`[actionPayFortnight]   💵 Adelanto ${adv.advance_id}: $${adv.amount} descontado`);
       }
 
       if (totalDiscount <= 0) {
@@ -4632,7 +4648,9 @@ export async function actionPayFortnight(fortnight_id: string) {
         throw pendingError;
       }
     }
-    console.log('[actionPayFortnight] ✅ STEP 7.5 completado');
+    
+    console.log(`[actionPayFortnight] ✅ ADELANTOS: ${totalAdvancesApplied} logs creados de ${brokersWithAdvances} brokers`);
+    console.log('[actionPayFortnight] ========== FIN ADELANTOS ==========');
     
     // 8. Notificar brokers que reciben pago (AMBAS: email + campanita)
     // Solo notificar a brokers que:
