@@ -17,6 +17,7 @@ interface TransfersTableProps {
 export default function TransfersTable({ transfers, loading, insurers, onRefresh }: TransfersTableProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editData, setEditData] = useState<any>({});
+  const [paymentDate, setPaymentDate] = useState<string>(''); // Para tipo OTRO
   const [selectedTransfers, setSelectedTransfers] = useState<Set<string>>(new Set());
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
   const [addingToGroup, setAddingToGroup] = useState(false);
@@ -65,21 +66,48 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
       insurerAssignedId: transfer.insurer_assigned_id || '',
       transferType: transfer.transfer_type || 'PENDIENTE',
       notesInternal: transfer.notes_internal || '',
-      status: transfer.status || 'SIN_CLASIFICAR',
+      status: transfer.status || 'PENDIENTE',
     });
+    setPaymentDate(''); // Reset fecha al abrir edición
   };
 
   const handleSave = async (transferId: string) => {
-    // Validación: Si tipo es OTRO, requiere nota interna
+    // Validación 1: Si tipo es OTRO, requiere nota interna
     if (editData.transferType === 'OTRO' && !editData.notesInternal?.trim()) {
       toast.error('El tipo OTRO requiere una nota interna obligatoria');
       return;
     }
 
-    const result = await actionUpdateBankTransfer(transferId, editData);
+    // Validación 2: Si tipo es OTRO y status es PAGADO, requiere fecha
+    if (editData.transferType === 'OTRO' && editData.status === 'PAGADO' && !paymentDate?.trim()) {
+      toast.error('Debes especificar la fecha de pago para transferencias tipo OTRO marcadas como PAGADO');
+      return;
+    }
+
+    // Concatenar fecha a notas si tipo=OTRO y hay fecha
+    let finalNotes = editData.notesInternal || '';
+    if (editData.transferType === 'OTRO' && paymentDate?.trim()) {
+      // Formatear fecha de YYYY-MM-DD a DD-MM-YY
+      const dateParts = paymentDate.split('-');
+      if (dateParts.length === 3 && dateParts[0] && dateParts[1] && dateParts[2]) {
+        const year = dateParts[0];
+        const month = dateParts[1];
+        const day = dateParts[2];
+        const shortYear = year.slice(2); // Últimos 2 dígitos del año
+        const formattedDate = `${day}-${month}-${shortYear}`;
+        finalNotes = `${finalNotes} - ${formattedDate}`.trim();
+      }
+    }
+
+    const result = await actionUpdateBankTransfer(transferId, {
+      ...editData,
+      notesInternal: finalNotes,
+    });
+    
     if (result.ok) {
       toast.success('Transferencia actualizada');
       setEditingId(null);
+      setPaymentDate('');
       onRefresh();
     } else {
       toast.error('Error al actualizar', { description: result.error });
@@ -89,6 +117,7 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
   const handleCancel = () => {
     setEditingId(null);
     setEditData({});
+    setPaymentDate('');
   };
 
   const handleSelectTransfer = (transferId: string) => {
@@ -348,11 +377,28 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
                       <div className="text-xs font-medium text-gray-800 mb-1">{transfer.description_raw.substring(0, 50)}...</div>
                       <input
                         type="text"
-                        placeholder="Notas internas..."
+                        placeholder={editData.transferType === 'OTRO' ? 'Notas obligatorias...' : 'Notas internas...'}
                         value={editData.notesInternal}
                         onChange={(e) => setEditData({ ...editData, notesInternal: e.target.value })}
-                        className="w-full px-2 py-1 border-2 border-gray-300 rounded-lg text-xs focus:border-[#8AAA19] focus:outline-none"
+                        className={`w-full px-2 py-1 border-2 rounded-lg text-xs focus:outline-none ${
+                          editData.transferType === 'OTRO' && !editData.notesInternal?.trim()
+                            ? 'border-red-300 focus:border-red-500'
+                            : 'border-gray-300 focus:border-[#8AAA19]'
+                        }`}
                       />
+                      {editData.transferType === 'OTRO' && (
+                        <input
+                          type="date"
+                          value={paymentDate}
+                          onChange={(e) => setPaymentDate(e.target.value)}
+                          placeholder="Fecha pago"
+                          className={`w-full px-2 py-1 border-2 rounded-lg text-xs focus:outline-none mt-1 ${
+                            editData.status === 'PAGADO' && !paymentDate?.trim()
+                              ? 'border-red-300 focus:border-red-500'
+                              : 'border-gray-300 focus:border-[#8AAA19]'
+                          }`}
+                        />
+                      )}
                     </td>
                     <td className="px-3 py-3">
                       <select
@@ -484,6 +530,31 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
                     }`}
                   />
                 </div>
+
+                {/* Input de Fecha - Solo visible cuando tipo=OTRO */}
+                {editData.transferType === 'OTRO' && (
+                  <div className="space-y-2">
+                    <label className="block text-xs font-semibold text-gray-700">
+                      Fecha de Pago {editData.status === 'PAGADO' && <span className="text-red-600">*</span>}
+                    </label>
+                    <input
+                      type="date"
+                      value={paymentDate}
+                      onChange={(e) => setPaymentDate(e.target.value)}
+                      className={`w-full px-3 py-2 border-2 rounded-lg text-sm focus:outline-none ${
+                        editData.status === 'PAGADO' && !paymentDate?.trim()
+                          ? 'border-red-300 focus:border-red-500'
+                          : 'border-gray-300 focus:border-[#8AAA19]'
+                      }`}
+                    />
+                    <p className="text-xs text-gray-500">
+                      {editData.status === 'PAGADO' 
+                        ? '⚠️ Obligatorio si está marcado como PAGADO. Se registrará en notas como DD-MM-YY'
+                        : 'Opcional. Se registrará en notas como DD-MM-YY'
+                      }
+                    </p>
+                  </div>
+                )}
 
                 <div className="space-y-2">
                   <label className="block text-xs font-semibold text-gray-700">Aseguradora</label>
