@@ -14,7 +14,7 @@ import type { BankTransferCommRow } from '@/lib/banco/bancoParser';
 // TIPOS
 // ============================================
 
-export type BankTransferStatus = 'SIN_CLASIFICAR' | 'PENDIENTE' | 'OK_CONCILIADO' | 'PAGADO';
+export type BankTransferStatus = 'SIN_CLASIFICAR' | 'PENDIENTE' | 'OK_CONCILIADO' | 'REPORTADO' | 'PAGADO';
 export type TransferType = 'REPORTE' | 'BONO' | 'OTRO' | 'PENDIENTE';
 export type GroupTemplate = 'NORMAL' | 'ASSA_CODIGOS';
 export type GroupStatus = 'EN_PROCESO' | 'OK_CONCILIADO' | 'PAGADO';
@@ -285,13 +285,28 @@ export async function actionUpdateBankTransfer(
       return { ok: false, error: 'Acceso denegado' };
     }
 
+    // VALIDACIÓN: Si tipo es OTRO, requiere nota interna
+    if (updates.transferType === 'OTRO' && !updates.notesInternal?.trim()) {
+      return { ok: false, error: 'El tipo OTRO requiere una nota interna obligatoria' };
+    }
+
     const supabase = await getSupabaseServer();
 
     const updateData: any = {};
     if (updates.insurerAssignedId !== undefined) updateData.insurer_assigned_id = updates.insurerAssignedId;
     if (updates.transferType !== undefined) updateData.transfer_type = updates.transferType;
     if (updates.notesInternal !== undefined) updateData.notes_internal = updates.notesInternal;
-    if (updates.status !== undefined) updateData.status = updates.status;
+    
+    // LÓGICA AUTOMÁTICA DE STATUS:
+    // - Si tipo es REPORTE o BONO → status = REPORTADO automáticamente
+    // - Si tipo es OTRO → permitir cambio manual de status (usa updates.status si viene)
+    // - Si no viene transferType, usa el status que venga
+    if (updates.transferType === 'REPORTE' || updates.transferType === 'BONO') {
+      updateData.status = 'REPORTADO';
+      console.log(`[BANCO] Cambiando status a REPORTADO automáticamente (tipo: ${updates.transferType})`);
+    } else if (updates.status !== undefined) {
+      updateData.status = updates.status;
+    }
 
     const { error } = await supabase
       .from('bank_transfers_comm')
@@ -364,6 +379,13 @@ export async function actionUpdateGroupTransfers(
     }
     if (updates.transferType !== undefined) {
       updateData.transfer_type = updates.transferType;
+      
+      // LÓGICA AUTOMÁTICA DE STATUS EN MASA:
+      // - Si tipo es REPORTE o BONO → status = REPORTADO automáticamente
+      if (updates.transferType === 'REPORTE' || updates.transferType === 'BONO') {
+        updateData.status = 'REPORTADO';
+        console.log(`[BANCO] Cambiando status de ${transferIds.length} transfers a REPORTADO (tipo: ${updates.transferType})`);
+      }
     }
 
     const { error } = await supabase

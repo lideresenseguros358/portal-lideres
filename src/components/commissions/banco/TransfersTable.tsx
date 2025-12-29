@@ -27,6 +27,7 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
       SIN_CLASIFICAR: { label: 'Sin clasificar', color: 'bg-gray-100 text-gray-800 border-gray-300', icon: FaCircle },
       PENDIENTE: { label: 'Pendiente', color: 'bg-yellow-100 text-yellow-800 border-yellow-300', icon: FaClock },
       OK_CONCILIADO: { label: 'OK Conciliado', color: 'bg-blue-100 text-blue-800 border-blue-300', icon: FaCheckCircle },
+      REPORTADO: { label: 'Reportado', color: 'bg-purple-100 text-purple-800 border-purple-300', icon: FaCheckCircle },
       PAGADO: { label: 'Pagado', color: 'bg-green-100 text-green-800 border-green-300', icon: FaLock },
     };
     const badge = badges[status] || badges.SIN_CLASIFICAR;
@@ -64,10 +65,17 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
       insurerAssignedId: transfer.insurer_assigned_id || '',
       transferType: transfer.transfer_type || 'PENDIENTE',
       notesInternal: transfer.notes_internal || '',
+      status: transfer.status || 'SIN_CLASIFICAR',
     });
   };
 
   const handleSave = async (transferId: string) => {
+    // Validación: Si tipo es OTRO, requiere nota interna
+    if (editData.transferType === 'OTRO' && !editData.notesInternal?.trim()) {
+      toast.error('El tipo OTRO requiere una nota interna obligatoria');
+      return;
+    }
+
     const result = await actionUpdateBankTransfer(transferId, editData);
     if (result.ok) {
       toast.success('Transferencia actualizada');
@@ -461,13 +469,19 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
                 </div>
 
                 <div className="space-y-2">
-                  <label className="block text-xs font-semibold text-gray-700">Notas Internas</label>
+                  <label className="block text-xs font-semibold text-gray-700">
+                    Notas Internas {editData.transferType === 'OTRO' && <span className="text-red-600">*</span>}
+                  </label>
                   <input
                     type="text"
-                    placeholder="Agregar notas..."
+                    placeholder={editData.transferType === 'OTRO' ? 'Obligatorio para tipo OTRO...' : 'Agregar notas...'}
                     value={editData.notesInternal}
                     onChange={(e) => setEditData({ ...editData, notesInternal: e.target.value })}
-                    className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg text-sm focus:border-[#8AAA19] focus:outline-none"
+                    className={`w-full px-3 py-2 border-2 rounded-lg text-sm focus:outline-none ${
+                      editData.transferType === 'OTRO' && !editData.notesInternal?.trim() 
+                        ? 'border-red-300 focus:border-red-500' 
+                        : 'border-gray-300 focus:border-[#8AAA19]'
+                    }`}
                   />
                 </div>
 
@@ -493,10 +507,38 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
                     className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg text-sm focus:border-[#8AAA19] focus:outline-none"
                   >
                     <option value="REPORTE">Reporte</option>
+                    <option value="BONO">Bono</option>
+                    <option value="OTRO">Otro</option>
                     <option value="PENDIENTE">Pendiente</option>
-                    <option value="INTERESES">Intereses</option>
-                    <option value="OTROS">Otros</option>
                   </select>
+                </div>
+
+                {/* Status - Solo editable si tipo es OTRO */}
+                <div className="space-y-2">
+                  <label className="block text-xs font-semibold text-gray-700">
+                    Status {editData.transferType !== 'OTRO' && <span className="text-xs text-gray-500">(automático)</span>}
+                  </label>
+                  <select
+                    value={editData.status}
+                    onChange={(e) => setEditData({ ...editData, status: e.target.value })}
+                    disabled={editData.transferType !== 'OTRO'}
+                    className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg text-sm focus:border-[#8AAA19] focus:outline-none disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  >
+                    <option value="SIN_CLASIFICAR">Sin clasificar</option>
+                    <option value="PENDIENTE">Pendiente</option>
+                    <option value="OK_CONCILIADO">OK Conciliado</option>
+                    <option value="REPORTADO">Reportado</option>
+                    <option value="PAGADO">Pagado</option>
+                  </select>
+                  {editData.transferType === 'REPORTE' && (
+                    <p className="text-xs text-purple-600">✓ Se marcará como REPORTADO automáticamente</p>
+                  )}
+                  {editData.transferType === 'BONO' && (
+                    <p className="text-xs text-purple-600">✓ Se marcará como REPORTADO automáticamente</p>
+                  )}
+                  {editData.transferType === 'OTRO' && !editData.notesInternal?.trim() && (
+                    <p className="text-xs text-red-600">⚠️ Tipo OTRO requiere nota interna obligatoria</p>
+                  )}
                 </div>
 
                 <div className="flex gap-2 pt-2">
