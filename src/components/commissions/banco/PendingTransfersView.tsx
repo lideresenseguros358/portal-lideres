@@ -164,22 +164,38 @@ export default function PendingTransfersView({ excludeCutoffId, currentCutoffId 
                                     ${t.amount.toFixed(2)}
                                   </td>
                                   <td className="px-3 py-2 text-center">
-                                    <button
-                                      onClick={() => {
-                                        if (!currentCutoffId) {
-                                          toast.error('Selecciona un corte bancario primero');
-                                          return;
-                                        }
-                                        setSelectedTransfer(t);
-                                        setShowIncludeModal(true);
-                                      }}
-                                      disabled={!currentCutoffId}
-                                      className="inline-flex items-center gap-1 px-3 py-1.5 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white text-xs font-semibold rounded-lg hover:from-[#010139] hover:to-[#020270] transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                                      title={!currentCutoffId ? 'Selecciona un corte bancario primero' : 'Incluir en quincena actual'}
-                                    >
-                                      <FaPlusCircle size={12} className="text-white" />
-                                      Incluir
-                                    </button>
+                                    {(() => {
+                                      const isSameCutoff = t.cutoff_id === currentCutoffId;
+                                      const isDisabled = !currentCutoffId || isSameCutoff;
+                                      const tooltipText = !currentCutoffId 
+                                        ? 'Selecciona un corte bancario primero'
+                                        : isSameCutoff
+                                        ? 'Esta transferencia ya pertenece al corte actual'
+                                        : 'Incluir en quincena actual';
+                                      
+                                      return (
+                                        <button
+                                          onClick={() => {
+                                            if (!currentCutoffId) {
+                                              toast.error('Selecciona un corte bancario primero');
+                                              return;
+                                            }
+                                            if (isSameCutoff) {
+                                              toast.error('Esta transferencia ya pertenece al corte actual');
+                                              return;
+                                            }
+                                            setSelectedTransfer(t);
+                                            setShowIncludeModal(true);
+                                          }}
+                                          disabled={isDisabled}
+                                          className="inline-flex items-center gap-1 px-3 py-1.5 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white text-xs font-semibold rounded-lg hover:from-[#010139] hover:to-[#020270] transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                          title={tooltipText}
+                                        >
+                                          <FaPlusCircle size={12} className="text-white" />
+                                          Incluir
+                                        </button>
+                                      );
+                                    })()}
                                   </td>
                                 </tr>
                               ))}

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FaChevronDown, FaChevronRight, FaLayerGroup, FaCheckCircle, FaClock, FaLock, FaTrash, FaSave } from 'react-icons/fa';
+import { FaChevronDown, FaChevronRight, FaLayerGroup, FaCheckCircle, FaClock, FaLock, FaTrash, FaSave, FaEdit } from 'react-icons/fa';
 import { toast } from 'sonner';
 import { actionDeleteBankGroup, actionUpdateGroupTransfers } from '@/app/(app)/commissions/banco-actions';
 import type { BankTransferStatus, TransferType } from '@/app/(app)/commissions/banco-actions';
@@ -23,6 +23,7 @@ export default function GroupsTable({ groups, loading, onGroupDeleted }: GroupsT
   const [deletingGroups, setDeletingGroups] = useState<Set<string>>(new Set());
   const [insurers, setInsurers] = useState<Insurer[]>([]);
   const [editingGroups, setEditingGroups] = useState<Set<string>>(new Set());
+  const [showEditMode, setShowEditMode] = useState<Set<string>>(new Set());
   const [groupEdits, setGroupEdits] = useState<Record<string, { insurerId?: string; transferType?: TransferType }>>({});
 
   useEffect(() => {
@@ -198,19 +199,38 @@ export default function GroupsTable({ groups, loading, onGroupDeleted }: GroupsT
                       </p>
                     </div>
                     
-                    <button
-                      onClick={() => handleDeleteGroup(group.id, group.name, group.status)}
-                      disabled={deletingGroups.has(group.id)}
-                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition disabled:opacity-50 flex-shrink-0"
-                      title="Eliminar grupo"
-                    >
-                      <FaTrash size={14} />
-                    </button>
+                    <div className="flex gap-1">
+                      {group.status !== 'PAGADO' && (
+                        <button
+                          onClick={() => {
+                            const newShowEdit = new Set(showEditMode);
+                            if (newShowEdit.has(group.id)) {
+                              newShowEdit.delete(group.id);
+                            } else {
+                              newShowEdit.add(group.id);
+                            }
+                            setShowEditMode(newShowEdit);
+                          }}
+                          className="p-2 text-[#010139] hover:bg-blue-50 rounded-lg transition flex-shrink-0"
+                          title="Editar tipo/aseguradora"
+                        >
+                          <FaEdit size={14} />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleDeleteGroup(group.id, group.name, group.status)}
+                        disabled={deletingGroups.has(group.id)}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition disabled:opacity-50 flex-shrink-0"
+                        title="Eliminar grupo"
+                      >
+                        <FaTrash size={14} />
+                      </button>
+                    </div>
                   </div>
                 </div>
 
-                {/* Segunda fila: Edición en masa (solo si NO está PAGADO) */}
-                {group.status !== 'PAGADO' && (
+                {/* Segunda fila: Edición en masa (solo si NO está PAGADO y en modo edición) */}
+                {group.status !== 'PAGADO' && showEditMode.has(group.id) && (
                   <div className="bg-purple-50 rounded-lg p-3 border border-purple-200">
                     <p className="text-xs font-semibold text-purple-900 mb-2">⚡ Edición en Masa - Aplicar a todas las transferencias:</p>
                     <div className="flex flex-col sm:flex-row gap-2">
