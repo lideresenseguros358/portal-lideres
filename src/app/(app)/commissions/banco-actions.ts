@@ -318,7 +318,7 @@ export async function actionUpdateBankTransfer(
       return { ok: false, error: 'Error al actualizar transferencia' };
     }
 
-    revalidatePath('/commissions');
+    // NO revalidar - dejar que el componente actualice su estado local
     return { ok: true };
   } catch (error) {
     console.error('[BANCO] Error en actionUpdateBankTransfer:', error);
