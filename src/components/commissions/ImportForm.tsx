@@ -54,15 +54,13 @@ export default function ImportForm({ insurers, draftFortnightId, onImport }: Pro
           let cleanDescription = t.description_raw || 'Sin descripción';
           cleanDescription = cleanDescription.replace(/^ACH\s*-\s*/i, '').trim();
           
-          // Tipo de transferencia para mostrar
-          const typeLabel = t.transfer_type === 'REPORTE' ? '📋' : 
-                           t.transfer_type === 'BONO' ? '🎁' : 
-                           t.transfer_type === 'OTRO' ? '📄' : '⏳';
+          // Tipo de transferencia como TEXTO
+          const typeText = t.transfer_type || 'PENDIENTE';
           
           // LÓGICA: Si tiene aseguradora -> mostrar nombre aseguradora, si no -> mostrar descripción
           const displayName = t.insurer_assigned_id && t.insurers?.name 
-            ? `${typeLabel} ${t.insurers.name}` 
-            : `${typeLabel} ${cleanDescription.substring(0, 45)}`;
+            ? `${typeText}: ${t.insurers.name}` 
+            : `${typeText}: ${cleanDescription.substring(0, 40)}`;
           
           options.push({
             type: 'transfer',
@@ -576,21 +574,29 @@ export default function ImportForm({ insurers, draftFortnightId, onImport }: Pro
                   </optgroup>
                 )}
                 {availableOptions.filter(o => o.type === 'transfer').length > 0 && (() => {
-                  // Agrupar transferencias por RANGO DE FECHA DEL CORTE (cutoffOrigin)
-                  const transfersByCutoff = new Map<string, typeof availableOptions>();
+                  // Agrupar transferencias por CORTE y luego por TIPO
+                  const transfersByCutoffAndType = new Map<string, Map<string, typeof availableOptions>>();
+                  
                   availableOptions.filter(o => o.type === 'transfer').forEach(t => {
                     const cutoffKey = t.cutoffOrigin || 'Sin corte';
-                    if (!transfersByCutoff.has(cutoffKey)) {
-                      transfersByCutoff.set(cutoffKey, []);
+                    const typeKey = t.transferType || 'PENDIENTE';
+                    
+                    if (!transfersByCutoffAndType.has(cutoffKey)) {
+                      transfersByCutoffAndType.set(cutoffKey, new Map());
                     }
-                    transfersByCutoff.get(cutoffKey)!.push(t);
+                    
+                    const typesMap = transfersByCutoffAndType.get(cutoffKey)!;
+                    if (!typesMap.has(typeKey)) {
+                      typesMap.set(typeKey, []);
+                    }
+                    
+                    typesMap.get(typeKey)!.push(t);
                   });
                   
                   // Ordenar cortes (más recientes primero)
-                  const sortedCutoffs = Array.from(transfersByCutoff.keys()).sort((a, b) => {
+                  const sortedCutoffs = Array.from(transfersByCutoffAndType.keys()).sort((a, b) => {
                     if (a === 'Sin corte') return 1;
                     if (b === 'Sin corte') return -1;
-                    // Comparar por fecha de inicio del corte
                     const dateA = a.match(/\d{1,2}\/\d{1,2}\/\d{4}/);
                     const dateB = b.match(/\d{1,2}\/\d{1,2}\/\d{4}/);
                     if (dateA && dateB) {
@@ -599,15 +605,25 @@ export default function ImportForm({ insurers, draftFortnightId, onImport }: Pro
                     return 0;
                   });
                   
-                  return sortedCutoffs.map(cutoffLabel => (
-                    <optgroup key={cutoffLabel} label={`📅 ${cutoffLabel}`}>
-                      {transfersByCutoff.get(cutoffLabel)!.map(option => (
-                        <option key={option.id} value={option.id}>
-                          {option.name} - ${option.amount.toFixed(2)}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ));
+                  // Orden de tipos
+                  const typeOrder = ['REPORTE', 'BONO', 'OTRO', 'PENDIENTE'];
+                  
+                  return sortedCutoffs.flatMap(cutoffLabel => {
+                    const typesMap = transfersByCutoffAndType.get(cutoffLabel)!;
+                    const sortedTypes = Array.from(typesMap.keys()).sort((a, b) => {
+                      return typeOrder.indexOf(a) - typeOrder.indexOf(b);
+                    });
+                    
+                    return sortedTypes.map(typeLabel => (
+                      <optgroup key={`${cutoffLabel}-${typeLabel}`} label={`📅 ${cutoffLabel} - ${typeLabel}`}>
+                        {typesMap.get(typeLabel)!.map(option => (
+                          <option key={option.id} value={option.id}>
+                            {option.name} - ${option.amount.toFixed(2)}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ));
+                  });
                 })()}
               </select>
               {selectedOption && (
