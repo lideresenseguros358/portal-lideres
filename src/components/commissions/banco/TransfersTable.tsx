@@ -108,14 +108,15 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
         description: 'Los cambios se guardaron correctamente'
       });
       
-      // Cerrar modo de edición SIN recargar la página
-      // Esto permite editar la siguiente transferencia inmediatamente
+      // Cerrar modo de edición
       setEditingId(null);
       setPaymentDate('');
       
-      // NO llamar onRefresh() aquí para evitar scroll a top
-      // Los cambios ya están guardados en la BD
-      // La página se actualizará cuando el usuario cambie de corte o recargue manualmente
+      // Refrescar para mostrar cambios PERO sin hacer scroll
+      // Usar setTimeout para que se ejecute después del cierre del modo edición
+      setTimeout(() => {
+        onRefresh();
+      }, 50);
     } else {
       toast.error('Error al actualizar', { description: result.error });
     }
