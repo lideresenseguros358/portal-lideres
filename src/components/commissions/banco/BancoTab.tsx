@@ -200,7 +200,10 @@ export default function BancoTab({ role, insurers }: BancoTabProps) {
             )}
 
             {/* Vista de Transferencias Pendientes - SIEMPRE VISIBLE */}
-            <PendingTransfersView excludeCutoffId={selectedCutoff || undefined} />
+            <PendingTransfersView 
+              excludeCutoffId={selectedCutoff || undefined}
+              currentCutoffId={selectedCutoff || undefined}
+            />
 
             {/* Selector de Corte + Filtros */}
             <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 border-2 border-gray-100 mb-6">

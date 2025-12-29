@@ -886,7 +886,7 @@ export async function actionGetPendingTransfersAllCutoffs(): Promise<ActionResul
         bank_cutoffs:cutoff_id (id, start_date, end_date),
         bank_transfer_imports!left (id, is_temporary)
       `)
-      .in('status', ['PENDIENTE', 'REPORTADO'])
+      .eq('status', 'PENDIENTE')
       .order('date', { ascending: false });
 
     if (error) {
@@ -1313,6 +1313,184 @@ export async function actionDeleteBankTransfer(transferId: string): Promise<Acti
     return { ok: true };
   } catch (error) {
     console.error('[BANCO] Error en actionDeleteBankTransfer:', error);
+    return { ok: false, error: 'Error inesperado' };
+  }
+}
+
+// ============================================
+// 15. INCLUIR TRANSFERENCIA PENDIENTE EN QUINCENA ACTUAL
+// ============================================
+
+export async function actionIncludeTransferInCurrentFortnight(
+  transferId: string,
+  currentCutoffId: string,
+  transferType: TransferType,
+  insurerId: string
+): Promise<ActionResult<{ groupId: string }>> {
+  try {
+    const { role } = await getAuthContext();
+    if (role !== 'master') {
+      return { ok: false, error: 'Acceso denegado' };
+    }
+
+    const supabase = await getSupabaseServer();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      return { ok: false, error: 'No autenticado' };
+    }
+
+    // 1. Obtener la transferencia original
+    const { data: transfer, error: transferError } = await supabase
+      .from('bank_transfers_comm')
+      .select('*, bank_cutoffs:cutoff_id(id, start_date, end_date)')
+      .eq('id', transferId)
+      .single();
+
+    if (transferError || !transfer) {
+      return { ok: false, error: 'Transferencia no encontrada' };
+    }
+
+    if (transfer.status !== 'PENDIENTE') {
+      return { ok: false, error: 'Solo se pueden incluir transferencias PENDIENTE' };
+    }
+
+    // 2. Actualizar la transferencia con tipo y aseguradora
+    const { error: updateError } = await supabase
+      .from('bank_transfers_comm')
+      .update({
+        transfer_type: transferType,
+        insurer_assigned_id: insurerId,
+        status: transferType === 'REPORTE' || transferType === 'BONO' ? 'REPORTADO' : 'PENDIENTE',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', transferId);
+
+    if (updateError) {
+      console.error('[BANCO] Error actualizando transferencia:', updateError);
+      return { ok: false, error: 'Error al actualizar transferencia' };
+    }
+
+    // 3. Buscar o crear grupo "Transferencias de otras quincenas" en el corte actual
+    let { data: currentGroup, error: groupError } = await supabase
+      .from('bank_groups')
+      .select('*')
+      .eq('cutoff_id', currentCutoffId)
+      .eq('name', 'Transferencias de otras quincenas')
+      .maybeSingle();
+
+    if (groupError && groupError.code !== 'PGRST116') {
+      console.error('[BANCO] Error buscando grupo:', groupError);
+      return { ok: false, error: 'Error al buscar grupo' };
+    }
+
+    // Crear grupo si no existe
+    if (!currentGroup) {
+      const { data: newGroup, error: createGroupError } = await supabase
+        .from('bank_groups')
+        .insert({
+          name: 'Transferencias de otras quincenas',
+          cutoff_id: currentCutoffId,
+          insurer_id: insurerId,
+          group_template: 'NORMAL',
+          status: 'EN_PROCESO',
+          total_amount: 0,
+          created_by: user.id,
+        })
+        .select()
+        .single();
+
+      if (createGroupError || !newGroup) {
+        console.error('[BANCO] Error creando grupo:', createGroupError);
+        return { ok: false, error: 'Error al crear grupo' };
+      }
+
+      currentGroup = newGroup;
+    }
+
+    // 4. Agregar transferencia al grupo del corte actual
+    const { error: addError } = await supabase
+      .from('bank_group_transfers')
+      .insert({
+        group_id: currentGroup.id,
+        transfer_id: transferId,
+      });
+
+    if (addError) {
+      console.error('[BANCO] Error agregando transferencia al grupo:', addError);
+      return { ok: false, error: 'Error al agregar transferencia al grupo' };
+    }
+
+    // 5. Actualizar total del grupo
+    const { error: updateGroupError } = await supabase
+      .from('bank_groups')
+      .update({
+        total_amount: (currentGroup.total_amount || 0) + transfer.amount,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', currentGroup.id);
+
+    if (updateGroupError) {
+      console.error('[BANCO] Error actualizando total del grupo:', updateGroupError);
+    }
+
+    // 6. Si la transferencia tiene corte original, crear/actualizar grupo "Pagados en otras quincenas"
+    if (transfer.cutoff_id && transfer.cutoff_id !== currentCutoffId) {
+      let { data: originalGroup, error: origGroupError } = await supabase
+        .from('bank_groups')
+        .select('*')
+        .eq('cutoff_id', transfer.cutoff_id)
+        .eq('name', 'Pagados en otras quincenas')
+        .maybeSingle();
+
+      if (origGroupError && origGroupError.code !== 'PGRST116') {
+        console.error('[BANCO] Error buscando grupo original:', origGroupError);
+      }
+
+      // Crear grupo en corte original si no existe
+      if (!originalGroup) {
+        const { data: newOrigGroup, error: createOrigGroupError } = await supabase
+          .from('bank_groups')
+          .insert({
+            name: 'Pagados en otras quincenas',
+            cutoff_id: transfer.cutoff_id,
+            insurer_id: insurerId,
+            group_template: 'NORMAL',
+            status: 'EN_PROCESO',
+            total_amount: 0,
+            created_by: user.id,
+          })
+          .select()
+          .single();
+
+        if (!createOrigGroupError && newOrigGroup) {
+          originalGroup = newOrigGroup;
+        }
+      }
+
+      // Agregar transferencia al grupo del corte original
+      if (originalGroup) {
+        await supabase
+          .from('bank_group_transfers')
+          .insert({
+            group_id: originalGroup.id,
+            transfer_id: transferId,
+          });
+
+        // Actualizar total del grupo original
+        await supabase
+          .from('bank_groups')
+          .update({
+            total_amount: (originalGroup.total_amount || 0) + transfer.amount,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', originalGroup.id);
+      }
+    }
+
+    revalidatePath('/commissions');
+    return { ok: true, data: { groupId: currentGroup.id } };
+  } catch (error) {
+    console.error('[BANCO] Error en actionIncludeTransferInCurrentFortnight:', error);
     return { ok: false, error: 'Error inesperado' };
   }
 }
