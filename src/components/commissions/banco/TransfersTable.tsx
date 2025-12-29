@@ -375,30 +375,31 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
                     <td className="px-3 py-3 font-mono text-xs text-gray-700">{transfer.reference_number}</td>
                     <td className="px-3 py-3">
                       <div className="text-xs font-medium text-gray-800 mb-1">{transfer.description_raw.substring(0, 50)}...</div>
-                      <input
-                        type="text"
-                        placeholder={editData.transferType === 'OTRO' ? 'Notas obligatorias...' : 'Notas internas...'}
-                        value={editData.notesInternal}
-                        onChange={(e) => setEditData({ ...editData, notesInternal: e.target.value })}
-                        className={`w-full px-2 py-1 border-2 rounded-lg text-xs focus:outline-none ${
-                          editData.transferType === 'OTRO' && !editData.notesInternal?.trim()
-                            ? 'border-red-300 focus:border-red-500'
-                            : 'border-gray-300 focus:border-[#8AAA19]'
-                        }`}
-                      />
-                      {editData.transferType === 'OTRO' && (
+                      <div className={editData.transferType === 'OTRO' ? 'grid grid-cols-2 gap-1' : ''}>
                         <input
-                          type="date"
-                          value={paymentDate}
-                          onChange={(e) => setPaymentDate(e.target.value)}
-                          placeholder="Fecha pago"
-                          className={`w-full px-2 py-1 border-2 rounded-lg text-xs focus:outline-none mt-1 ${
-                            editData.status === 'PAGADO' && !paymentDate?.trim()
+                          type="text"
+                          placeholder={editData.transferType === 'OTRO' ? 'Notas...' : 'Notas...'}
+                          value={editData.notesInternal}
+                          onChange={(e) => setEditData({ ...editData, notesInternal: e.target.value })}
+                          className={`w-full px-2 py-1 border-2 rounded text-xs focus:outline-none ${
+                            editData.transferType === 'OTRO' && !editData.notesInternal?.trim()
                               ? 'border-red-300 focus:border-red-500'
                               : 'border-gray-300 focus:border-[#8AAA19]'
                           }`}
                         />
-                      )}
+                        {editData.transferType === 'OTRO' && (
+                          <input
+                            type="date"
+                            value={paymentDate}
+                            onChange={(e) => setPaymentDate(e.target.value)}
+                            className={`w-full px-2 py-1 border-2 rounded text-xs focus:outline-none ${
+                              editData.status === 'PAGADO' && !paymentDate?.trim()
+                                ? 'border-red-300 focus:border-red-500'
+                                : 'border-gray-300 focus:border-[#8AAA19]'
+                            }`}
+                          />
+                        )}
+                      </div>
                     </td>
                     <td className="px-3 py-3">
                       <select
@@ -514,46 +515,48 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
                   {transfer.description_raw}
                 </div>
 
-                <div className="space-y-2">
-                  <label className="block text-xs font-semibold text-gray-700">
-                    Notas Internas {editData.transferType === 'OTRO' && <span className="text-red-600">*</span>}
-                  </label>
-                  <input
-                    type="text"
-                    placeholder={editData.transferType === 'OTRO' ? 'Obligatorio para tipo OTRO...' : 'Agregar notas...'}
-                    value={editData.notesInternal}
-                    onChange={(e) => setEditData({ ...editData, notesInternal: e.target.value })}
-                    className={`w-full px-3 py-2 border-2 rounded-lg text-sm focus:outline-none ${
-                      editData.transferType === 'OTRO' && !editData.notesInternal?.trim() 
-                        ? 'border-red-300 focus:border-red-500' 
-                        : 'border-gray-300 focus:border-[#8AAA19]'
-                    }`}
-                  />
-                </div>
-
-                {/* Input de Fecha - Solo visible cuando tipo=OTRO */}
-                {editData.transferType === 'OTRO' && (
-                  <div className="space-y-2">
+                {/* Notas + Fecha lado a lado cuando tipo=OTRO */}
+                <div className={editData.transferType === 'OTRO' ? 'grid grid-cols-2 gap-2' : 'space-y-2'}>
+                  <div className="space-y-1">
                     <label className="block text-xs font-semibold text-gray-700">
-                      Fecha de Pago {editData.status === 'PAGADO' && <span className="text-red-600">*</span>}
+                      Notas {editData.transferType === 'OTRO' && <span className="text-red-600">*</span>}
                     </label>
                     <input
-                      type="date"
-                      value={paymentDate}
-                      onChange={(e) => setPaymentDate(e.target.value)}
-                      className={`w-full px-3 py-2 border-2 rounded-lg text-sm focus:outline-none ${
-                        editData.status === 'PAGADO' && !paymentDate?.trim()
-                          ? 'border-red-300 focus:border-red-500'
+                      type="text"
+                      placeholder={editData.transferType === 'OTRO' ? 'Obligatorio...' : 'Notas...'}
+                      value={editData.notesInternal}
+                      onChange={(e) => setEditData({ ...editData, notesInternal: e.target.value })}
+                      className={`w-full px-2 py-1.5 border-2 rounded text-xs focus:outline-none ${
+                        editData.transferType === 'OTRO' && !editData.notesInternal?.trim() 
+                          ? 'border-red-300 focus:border-red-500' 
                           : 'border-gray-300 focus:border-[#8AAA19]'
                       }`}
                     />
-                    <p className="text-xs text-gray-500">
-                      {editData.status === 'PAGADO' 
-                        ? '⚠️ Obligatorio si está marcado como PAGADO. Se registrará en notas como DD-MM-YY'
-                        : 'Opcional. Se registrará en notas como DD-MM-YY'
-                      }
-                    </p>
                   </div>
+
+                  {/* Input de Fecha - Solo visible cuando tipo=OTRO */}
+                  {editData.transferType === 'OTRO' && (
+                    <div className="space-y-1">
+                      <label className="block text-xs font-semibold text-gray-700">
+                        Fecha {editData.status === 'PAGADO' && <span className="text-red-600">*</span>}
+                      </label>
+                      <input
+                        type="date"
+                        value={paymentDate}
+                        onChange={(e) => setPaymentDate(e.target.value)}
+                        className={`w-full px-2 py-1.5 border-2 rounded text-xs focus:outline-none ${
+                          editData.status === 'PAGADO' && !paymentDate?.trim()
+                            ? 'border-red-300 focus:border-red-500'
+                            : 'border-gray-300 focus:border-[#8AAA19]'
+                        }`}
+                      />
+                    </div>
+                  )}
+                </div>
+                
+                {/* Mensaje de ayuda */}
+                {editData.transferType === 'OTRO' && editData.status === 'PAGADO' && (
+                  <p className="text-xs text-red-600">⚠️ Fecha obligatoria para tipo OTRO marcado como PAGADO</p>
                 )}
 
                 <div className="space-y-2">
