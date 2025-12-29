@@ -59,10 +59,15 @@ export default function ImportForm({ insurers, draftFortnightId, onImport }: Pro
                            t.transfer_type === 'BONO' ? '🎁' : 
                            t.transfer_type === 'OTRO' ? '📄' : '⏳';
           
+          // LÓGICA: Si tiene aseguradora -> mostrar nombre aseguradora, si no -> mostrar descripción
+          const displayName = t.insurer_assigned_id && t.insurers?.name 
+            ? `${typeLabel} ${t.insurers.name}` 
+            : `${typeLabel} ${cleanDescription.substring(0, 45)}`;
+          
           options.push({
             type: 'transfer',
             id: t.id,
-            name: `${typeLabel} ${cleanDescription.substring(0, 45)}`,
+            name: displayName,
             amount: t.amount,
             insurerName: t.insurers?.name,
             hasInsurer: !!t.insurer_assigned_id,
@@ -571,29 +576,34 @@ export default function ImportForm({ insurers, draftFortnightId, onImport }: Pro
                   </optgroup>
                 )}
                 {availableOptions.filter(o => o.type === 'transfer').length > 0 && (() => {
-                  // Agrupar transferencias por fecha
-                  const transfersByDate = new Map<string, typeof availableOptions>();
+                  // Agrupar transferencias por RANGO DE FECHA DEL CORTE (cutoffOrigin)
+                  const transfersByCutoff = new Map<string, typeof availableOptions>();
                   availableOptions.filter(o => o.type === 'transfer').forEach(t => {
-                    const dateKey = t.date ? new Date(t.date).toLocaleDateString('es-PA') : 'Sin fecha';
-                    if (!transfersByDate.has(dateKey)) {
-                      transfersByDate.set(dateKey, []);
+                    const cutoffKey = t.cutoffOrigin || 'Sin corte';
+                    if (!transfersByCutoff.has(cutoffKey)) {
+                      transfersByCutoff.set(cutoffKey, []);
                     }
-                    transfersByDate.get(dateKey)!.push(t);
+                    transfersByCutoff.get(cutoffKey)!.push(t);
                   });
                   
-                  // Ordenar fechas (más recientes primero)
-                  const sortedDates = Array.from(transfersByDate.keys()).sort((a, b) => {
-                    if (a === 'Sin fecha') return 1;
-                    if (b === 'Sin fecha') return -1;
-                    return new Date(b).getTime() - new Date(a).getTime();
+                  // Ordenar cortes (más recientes primero)
+                  const sortedCutoffs = Array.from(transfersByCutoff.keys()).sort((a, b) => {
+                    if (a === 'Sin corte') return 1;
+                    if (b === 'Sin corte') return -1;
+                    // Comparar por fecha de inicio del corte
+                    const dateA = a.match(/\d{1,2}\/\d{1,2}\/\d{4}/);
+                    const dateB = b.match(/\d{1,2}\/\d{1,2}\/\d{4}/);
+                    if (dateA && dateB) {
+                      return new Date(dateB[0]).getTime() - new Date(dateA[0]).getTime();
+                    }
+                    return 0;
                   });
                   
-                  return sortedDates.map(dateLabel => (
-                    <optgroup key={dateLabel} label={`📅 ${dateLabel}`}>
-                      {transfersByDate.get(dateLabel)!.map(option => (
+                  return sortedCutoffs.map(cutoffLabel => (
+                    <optgroup key={cutoffLabel} label={`📅 ${cutoffLabel}`}>
+                      {transfersByCutoff.get(cutoffLabel)!.map(option => (
                         <option key={option.id} value={option.id}>
                           {option.name} - ${option.amount.toFixed(2)}
-                          {option.hasInsurer ? ` [${option.insurerName}]` : ' [Sin aseguradora]'}
                         </option>
                       ))}
                     </optgroup>
