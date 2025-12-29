@@ -30,7 +30,7 @@ BEGIN
     -- 4. ELIMINAR VÍNCULOS BANCARIOS TEMPORALES
     DELETE FROM bank_transfer_imports
     WHERE import_id IN (
-        SELECT id FROM comm_imports WHERE period_label = v_fortnight_id
+        SELECT id FROM comm_imports WHERE period_label = v_fortnight_id::text
     );
     RAISE NOTICE '✓ Vínculos bancarios temporales eliminados';
 
