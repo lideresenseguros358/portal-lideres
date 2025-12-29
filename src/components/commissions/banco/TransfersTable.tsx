@@ -171,6 +171,39 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
     }
   };
 
+  const handleDeleteSingle = async (transferId: string) => {
+    const transfer = transfers.find(t => t.id === transferId);
+    if (!transfer) return;
+
+    if (transfer.status === 'PAGADO') {
+      toast.error('No se puede eliminar', {
+        description: 'Esta transferencia está vinculada a una quincena cerrada'
+      });
+      return;
+    }
+
+    if (!confirm(`¿Eliminar esta transferencia?\n\nReferencia: ${transfer.reference_number}\nMonto: $${transfer.amount.toFixed(2)}\n\nEsto eliminará la transferencia y todas sus anotaciones asociadas.`)) {
+      return;
+    }
+
+    setDeletingTransfers(prev => new Set(prev).add(transferId));
+    const result = await actionDeleteBankTransfer(transferId);
+    setDeletingTransfers(prev => {
+      const next = new Set(prev);
+      next.delete(transferId);
+      return next;
+    });
+
+    if (result.ok) {
+      toast.success('Transferencia eliminada', { 
+        description: 'Se eliminaron todas las anotaciones asociadas' 
+      });
+      onRefresh();
+    } else {
+      toast.error('Error al eliminar', { description: result.error });
+    }
+  };
+
   const handleDeleteSelectedTransfers = async () => {
     if (selectedTransfers.size === 0) {
       toast.error('Selecciona al menos una transferencia');
@@ -352,7 +385,7 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
               <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Tipo</th>
               <th className="px-3 py-3 text-right text-xs font-semibold text-gray-700 uppercase">Monto</th>
               <th className="px-3 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Estado</th>
-              <th className="px-3 py-3 text-center text-xs font-semibold text-gray-700 uppercase w-24">Acciones</th>
+              <th className="px-3 py-3 text-center text-xs font-semibold text-gray-700 uppercase w-32">Acciones</th>
             </tr>
           </thead>
           <tbody>
@@ -487,15 +520,29 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
                       ${transfer.amount.toFixed(2)}
                     </td>
                     <td className="px-3 py-3">{getStatusBadge(transfer.status)}</td>
-                    <td className="px-3 py-3 text-center">
-                      <button
-                        onClick={() => handleEdit(transfer)}
-                        disabled={transfer.status === 'PAGADO'}
-                        className="p-2 text-[#010139] hover:bg-blue-50 rounded-lg transition disabled:opacity-30 disabled:cursor-not-allowed"
-                        title={transfer.status === 'PAGADO' ? 'No se puede editar (PAGADO)' : 'Editar transferencia'}
-                      >
-                        <FaEdit size={16} />
-                      </button>
+                    <td className="px-3 py-3">
+                      <div className="flex gap-1 justify-center">
+                        <button
+                          onClick={() => handleEdit(transfer)}
+                          disabled={transfer.status === 'PAGADO'}
+                          className="p-2 text-[#010139] hover:bg-blue-50 rounded-lg transition disabled:opacity-30 disabled:cursor-not-allowed"
+                          title={transfer.status === 'PAGADO' ? 'No se puede editar (PAGADO)' : 'Editar tipo/aseguradora'}
+                        >
+                          <FaEdit size={14} />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteSingle(transfer.id)}
+                          disabled={transfer.status === 'PAGADO' || deletingTransfers.has(transfer.id)}
+                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition disabled:opacity-30 disabled:cursor-not-allowed"
+                          title={transfer.status === 'PAGADO' ? 'No se puede eliminar (PAGADO)' : 'Eliminar transferencia'}
+                        >
+                          {deletingTransfers.has(transfer.id) ? (
+                            <div className="animate-spin w-3.5 h-3.5 border-2 border-red-600 border-t-transparent rounded-full" />
+                          ) : (
+                            <FaTrash size={14} />
+                          )}
+                        </button>
+                      </div>
                     </td>
                   </>
                 )}

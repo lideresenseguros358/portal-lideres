@@ -418,31 +418,16 @@ export async function actionCreateBankGroup(
   isLifeInsurance?: boolean
 ): Promise<ActionResult<{ groupId: string }>> {
   try {
-    console.log('[BANCO] actionCreateBankGroup llamada con:', { name, template, insurerId, isLifeInsurance });
-    
     const { role } = await getAuthContext();
     if (role !== 'master') {
-      console.log('[BANCO] Acceso denegado - rol:', role);
       return { ok: false, error: 'Acceso denegado' };
     }
 
     const supabase = await getSupabaseServer();
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
-      console.log('[BANCO] Usuario no autenticado');
       return { ok: false, error: 'No autenticado' };
     }
-
-    console.log('[BANCO] Usuario autenticado:', user.id);
-    console.log('[BANCO] Insertando grupo con datos:', {
-      name,
-      group_template: template,
-      insurer_id: insurerId,
-      is_life_insurance: isLifeInsurance,
-      status: 'EN_PROCESO',
-      total_amount: 0,
-      created_by: user.id,
-    });
 
     const { data: group, error } = await supabase
       .from('bank_groups')
@@ -459,14 +444,11 @@ export async function actionCreateBankGroup(
       .single();
 
     if (error) {
-      console.error('[BANCO] Error creando grupo:', error);
-      console.error('[BANCO] Detalles del error:', JSON.stringify(error, null, 2));
+      console.error('[BANCO] Error creando grupo:', error.message);
       return { ok: false, error: `Error al crear grupo: ${error.message || 'desconocido'}` };
     }
 
-    console.log('[BANCO] Grupo creado exitosamente:', group.id);
-
-    revalidatePath('/commissions');
+    // NO revalidar aquí - dejar que el componente padre lo haga al final
     return { ok: true, data: { groupId: group.id } };
   } catch (error) {
     console.error('[BANCO] Error en actionCreateBankGroup:', error);
