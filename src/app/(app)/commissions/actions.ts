@@ -4177,34 +4177,37 @@ export async function actionPayFortnight(fortnight_id: string) {
             if (existingPolicy) {
               console.log(`[actionPayFortnight]   📄 Póliza encontrada - Client ID: ${existingPolicy.client_id}`);
               
-              const { data: existingPrelim, error: prelimError } = await (supabase as any)
-                .from('preliminar')
+              const { data: existingPrelim, error: prelimError } = await supabase
+                .from('temp_client_import')
                 .select('id')
                 .eq('client_id', existingPolicy.client_id)
                 .eq('broker_id', item.temp_assigned_broker_id)
                 .maybeSingle();
               
               if (prelimError) {
-                console.error(`[actionPayFortnight]   ❌ Error verificando preliminar:`, prelimError);
+                console.error(`[actionPayFortnight]   ❌ Error verificando temp_client_import:`, prelimError);
               }
               
               if (!existingPrelim) {
-                const { error: prelimInsertError } = await (supabase as any)
-                  .from('preliminar')
+                const { error: prelimInsertError } = await supabase
+                  .from('temp_client_import')
                   .insert({
                     client_id: existingPolicy.client_id,
                     broker_id: item.temp_assigned_broker_id,
-                    notes: 'Identificado en zona de trabajo de Nueva Quincena'
+                    policy_number: item.policy_number,
+                    insurer_id: item.insurer_id,
+                    notes: 'Identificado en zona de trabajo de Nueva Quincena',
+                    source: 'draft_identified'
                   });
                 
                 if (prelimInsertError) {
-                  console.error(`[actionPayFortnight]   ❌ Error insertando preliminar:`, prelimInsertError);
+                  console.error(`[actionPayFortnight]   ❌ Error insertando temp_client_import:`, prelimInsertError);
                 } else {
                   preliminarInserted++;
-                  console.log(`[actionPayFortnight]   ✅✅✅ CLIENTE REGISTRADO EN PRELIMINAR ✅✅✅`);
+                  console.log(`[actionPayFortnight]   ✅✅✅ CLIENTE REGISTRADO EN PRELIMINAR (temp_client_import) ✅✅✅`);
                 }
               } else {
-                console.log(`[actionPayFortnight]   ℹ️ Ya existe en preliminar`);
+                console.log(`[actionPayFortnight]   ℹ️ Ya existe en temp_client_import`);
               }
             } else {
               console.log(`[actionPayFortnight]   ⚠️ Póliza NO encontrada en BD`);

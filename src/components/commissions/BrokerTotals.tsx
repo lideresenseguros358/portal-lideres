@@ -139,8 +139,8 @@ export default function BrokerTotals({ draftFortnightId, onManageAdvances, broke
         };
       }
 
-      // SUMAR comm_items directamente
-      const grossAmount = Math.abs(item.gross_amount);
+      // SUMAR comm_items directamente - RESPETAR NEGATIVOS (FEDPA, etc.)
+      const grossAmount = Number(item.gross_amount) || 0; // SIN Math.abs()
       acc[brokerId]!.total_gross += grossAmount;
       acc[brokerId]!.insurers[insurerId]!.total_gross += grossAmount;
       acc[brokerId]!.insurers[insurerId]!.clients.push({
