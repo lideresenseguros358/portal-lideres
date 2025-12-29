@@ -1,10 +1,16 @@
 'use client';
 
-import { useState } from 'react';
-import { FaChevronDown, FaChevronRight, FaLayerGroup, FaCheckCircle, FaClock, FaLock, FaTrash } from 'react-icons/fa';
+import { useState, useEffect } from 'react';
+import { FaChevronDown, FaChevronRight, FaLayerGroup, FaCheckCircle, FaClock, FaLock, FaTrash, FaSave } from 'react-icons/fa';
 import { toast } from 'sonner';
-import { actionDeleteBankGroup } from '@/app/(app)/commissions/banco-actions';
-import type { BankTransferStatus } from '@/app/(app)/commissions/banco-actions';
+import { actionDeleteBankGroup, actionUpdateGroupTransfers } from '@/app/(app)/commissions/banco-actions';
+import type { BankTransferStatus, TransferType } from '@/app/(app)/commissions/banco-actions';
+import { supabaseClient } from '@/lib/supabase/client';
+
+interface Insurer {
+  id: string;
+  name: string;
+}
 
 interface GroupsTableProps {
   groups: any[];
@@ -15,6 +21,21 @@ interface GroupsTableProps {
 export default function GroupsTable({ groups, loading, onGroupDeleted }: GroupsTableProps) {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [deletingGroups, setDeletingGroups] = useState<Set<string>>(new Set());
+  const [insurers, setInsurers] = useState<Insurer[]>([]);
+  const [editingGroups, setEditingGroups] = useState<Set<string>>(new Set());
+  const [groupEdits, setGroupEdits] = useState<Record<string, { insurerId?: string; transferType?: TransferType }>>({});
+
+  useEffect(() => {
+    const loadInsurers = async () => {
+      const { data } = await supabaseClient()
+        .from('insurers')
+        .select('id, name')
+        .eq('active', true)
+        .order('name');
+      if (data) setInsurers(data);
+    };
+    loadInsurers();
+  }, []);
 
   const toggleGroup = (groupId: string) => {
     const newExpanded = new Set(expandedGroups);
@@ -24,6 +45,37 @@ export default function GroupsTable({ groups, loading, onGroupDeleted }: GroupsT
       newExpanded.add(groupId);
     }
     setExpandedGroups(newExpanded);
+  };
+
+  const handleSaveGroupEdits = async (groupId: string, groupName: string) => {
+    const edits = groupEdits[groupId];
+    if (!edits || (!edits.insurerId && !edits.transferType)) {
+      toast.error('No hay cambios para guardar');
+      return;
+    }
+
+    setEditingGroups(prev => new Set(prev).add(groupId));
+    const result = await actionUpdateGroupTransfers(groupId, {
+      insurerAssignedId: edits.insurerId,
+      transferType: edits.transferType,
+    });
+    setEditingGroups(prev => {
+      const next = new Set(prev);
+      next.delete(groupId);
+      return next;
+    });
+
+    if (result.ok) {
+      toast.success('Grupo actualizado', { description: `Todas las transferencias de "${groupName}" han sido actualizadas` });
+      setGroupEdits(prev => {
+        const next = { ...prev };
+        delete next[groupId];
+        return next;
+      });
+      onGroupDeleted?.(); // Refresh data
+    } else {
+      toast.error('Error al actualizar', { description: result.error });
+    }
   };
 
   const handleDeleteGroup = async (groupId: string, groupName: string, status: string) => {
@@ -109,7 +161,9 @@ export default function GroupsTable({ groups, loading, onGroupDeleted }: GroupsT
           return (
             <div key={group.id} className="hover:bg-gray-50">
               {/* Header del grupo */}
-              <div className="px-3 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row gap-3 sm:gap-4 sm:items-center">
+              <div className="px-3 sm:px-6 py-3 sm:py-4 flex flex-col gap-3">
+                {/* Primera fila: Info y expansión */}
+                <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 sm:items-center">
                 <button
                   onClick={() => toggleGroup(group.id)}
                   className="flex items-center gap-3 sm:gap-4 flex-1 text-left min-w-0"
@@ -135,24 +189,71 @@ export default function GroupsTable({ groups, loading, onGroupDeleted }: GroupsT
                   </div>
                 </button>
 
-                {/* Monto y acciones */}
-                <div className="flex items-center justify-between sm:justify-end gap-3">
-                  <div className="text-left sm:text-right">
-                    <p className="text-xs text-gray-500 uppercase font-semibold">Total</p>
-                    <p className="text-lg sm:text-xl font-bold text-purple-900">
-                      ${totalAmount.toFixed(2)}
-                    </p>
+                  {/* Monto y acciones */}
+                  <div className="flex items-center justify-between sm:justify-end gap-3">
+                    <div className="text-left sm:text-right">
+                      <p className="text-xs text-gray-500 uppercase font-semibold">Total</p>
+                      <p className="text-lg sm:text-xl font-bold text-purple-900">
+                        ${totalAmount.toFixed(2)}
+                      </p>
+                    </div>
+                    
+                    <button
+                      onClick={() => handleDeleteGroup(group.id, group.name, group.status)}
+                      disabled={deletingGroups.has(group.id)}
+                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition disabled:opacity-50 flex-shrink-0"
+                      title="Eliminar grupo"
+                    >
+                      <FaTrash size={14} />
+                    </button>
                   </div>
-                  
-                  <button
-                    onClick={() => handleDeleteGroup(group.id, group.name, group.status)}
-                    disabled={deletingGroups.has(group.id)}
-                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition disabled:opacity-50 flex-shrink-0"
-                    title="Eliminar grupo"
-                  >
-                    <FaTrash size={14} />
-                  </button>
                 </div>
+
+                {/* Segunda fila: Edición en masa (solo si NO está PAGADO) */}
+                {group.status !== 'PAGADO' && (
+                  <div className="bg-purple-50 rounded-lg p-3 border border-purple-200">
+                    <p className="text-xs font-semibold text-purple-900 mb-2">⚡ Edición en Masa - Aplicar a todas las transferencias:</p>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <select
+                        value={groupEdits[group.id]?.transferType || ''}
+                        onChange={(e) => setGroupEdits(prev => ({
+                          ...prev,
+                          [group.id]: { ...prev[group.id], transferType: (e.target.value as TransferType) || undefined }
+                        }))}
+                        className="flex-1 px-3 py-2 border border-purple-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 bg-white"
+                        disabled={editingGroups.has(group.id)}
+                      >
+                        <option value="">Cambiar tipo...</option>
+                        <option value="REPORTE">Reporte</option>
+                        <option value="BONO">Bono</option>
+                        <option value="OTRO">Otro</option>
+                        <option value="PENDIENTE">Pendiente</option>
+                      </select>
+                      <select
+                        value={groupEdits[group.id]?.insurerId || ''}
+                        onChange={(e) => setGroupEdits(prev => ({
+                          ...prev,
+                          [group.id]: { ...prev[group.id], insurerId: e.target.value || undefined }
+                        }))}
+                        className="flex-1 px-3 py-2 border border-purple-300 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 bg-white"
+                        disabled={editingGroups.has(group.id)}
+                      >
+                        <option value="">Asignar aseguradora...</option>
+                        {insurers.map(ins => (
+                          <option key={ins.id} value={ins.id}>{ins.name}</option>
+                        ))}
+                      </select>
+                      <button
+                        onClick={() => handleSaveGroupEdits(group.id, group.name)}
+                        disabled={editingGroups.has(group.id) || (!groupEdits[group.id]?.insurerId && !groupEdits[group.id]?.transferType)}
+                        className="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-300 text-white rounded-lg text-sm font-semibold transition flex items-center gap-2 whitespace-nowrap"
+                      >
+                        <FaSave size={12} />
+                        {editingGroups.has(group.id) ? 'Guardando...' : 'Aplicar'}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Transferencias del grupo - expandible */}

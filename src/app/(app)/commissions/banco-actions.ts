@@ -312,6 +312,80 @@ export async function actionUpdateBankTransfer(
 }
 
 // ============================================
+// 4.1 ACTUALIZAR TRANSFERENCIAS DE GRUPO EN MASA
+// ============================================
+
+export async function actionUpdateGroupTransfers(
+  groupId: string,
+  updates: {
+    insurerAssignedId?: string;
+    transferType?: TransferType;
+  }
+): Promise<ActionResult> {
+  try {
+    const { role } = await getAuthContext();
+    if (role !== 'master') {
+      return { ok: false, error: 'Acceso denegado' };
+    }
+
+    const supabase = await getSupabaseServer();
+
+    // 1. Verificar que el grupo no esté PAGADO
+    const { data: group } = await supabase
+      .from('bank_groups')
+      .select('status')
+      .eq('id', groupId)
+      .single();
+
+    if (!group) {
+      return { ok: false, error: 'Grupo no encontrado' };
+    }
+
+    if (group.status === 'PAGADO') {
+      return { ok: false, error: 'No se puede modificar un grupo PAGADO' };
+    }
+
+    // 2. Obtener IDs de todas las transferencias del grupo
+    const { data: groupTransfers } = await supabase
+      .from('bank_group_transfers')
+      .select('transfer_id')
+      .eq('group_id', groupId);
+
+    if (!groupTransfers || groupTransfers.length === 0) {
+      return { ok: false, error: 'El grupo no tiene transferencias' };
+    }
+
+    const transferIds = groupTransfers.map(gt => gt.transfer_id);
+
+    // 3. Actualizar todas las transferencias del grupo
+    const updateData: any = {};
+    if (updates.insurerAssignedId !== undefined) {
+      updateData.insurer_assigned_id = updates.insurerAssignedId || null;
+    }
+    if (updates.transferType !== undefined) {
+      updateData.transfer_type = updates.transferType;
+    }
+
+    const { error } = await supabase
+      .from('bank_transfers_comm')
+      .update(updateData)
+      .in('id', transferIds);
+
+    if (error) {
+      console.error('[BANCO] Error actualizando transferencias del grupo:', error);
+      return { ok: false, error: 'Error al actualizar transferencias' };
+    }
+
+    revalidatePath('/commissions');
+    console.log(`[BANCO] ✅ ${transferIds.length} transferencias del grupo actualizadas`);
+    return { ok: true };
+  } catch (error) {
+    console.error('[BANCO] Error en actionUpdateGroupTransfers:', error);
+    return { ok: false, error: 'Error inesperado' };
+  }
+}
+
+// ============================================
 // 5. CREAR GRUPO BANCARIO
 // ============================================
 
