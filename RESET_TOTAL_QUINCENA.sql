@@ -90,7 +90,7 @@ BEGIN
     IF v_import_ids IS NOT NULL AND array_length(v_import_ids, 1) > 0 THEN
         -- Obtener IDs de transfers vinculadas a esta quincena
         UPDATE bank_transfers_comm
-        SET status = 'pending'
+        SET status = 'SIN_CLASIFICAR'
         WHERE id IN (
             SELECT DISTINCT transfer_id 
             FROM bank_transfer_imports
@@ -99,7 +99,7 @@ BEGIN
         );
         
         GET DIAGNOSTICS v_deleted_count = ROW_COUNT;
-        RAISE NOTICE '✓ [6/13] bank_transfers_comm reseteadas a pending: %', v_deleted_count;
+        RAISE NOTICE '✓ [6/13] bank_transfers_comm reseteadas a SIN_CLASIFICAR: %', v_deleted_count;
     ELSE
         RAISE NOTICE '✓ [6/13] No hay transfers para resetear';
     END IF;
@@ -108,12 +108,12 @@ BEGIN
     -- PASO 7: RESETEAR BANK_GROUPS
     -- ==========================================
     UPDATE bank_groups
-    SET status = 'pending', 
+    SET status = 'EN_PROCESO', 
         fortnight_paid_id = NULL
     WHERE fortnight_paid_id = v_fortnight_id;
     
     GET DIAGNOSTICS v_deleted_count = ROW_COUNT;
-    RAISE NOTICE '✓ [7/13] bank_groups reseteados: %', v_deleted_count;
+    RAISE NOTICE '✓ [7/13] bank_groups reseteados a EN_PROCESO: %', v_deleted_count;
 
     -- ==========================================
     -- PASO 8: ELIMINAR BANK_TRANSFER_IMPORTS
