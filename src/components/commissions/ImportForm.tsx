@@ -22,7 +22,7 @@ export default function ImportForm({ insurers, draftFortnightId, onImport }: Pro
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [isLifeInsurance, setIsLifeInsurance] = useState(false);
-  const [availableOptions, setAvailableOptions] = useState<Array<{type: 'transfer' | 'group', id: string, name: string, amount: number, insurerName?: string, hasInsurer: boolean, cutoffOrigin?: string, status?: string}>>([]);
+  const [availableOptions, setAvailableOptions] = useState<Array<{type: 'transfer' | 'group', id: string, name: string, amount: number, insurerName?: string, hasInsurer: boolean, cutoffOrigin?: string, status?: string, date?: string, transferType?: string}>>([]);
   const [selectedOption, setSelectedOption] = useState<string>('');
   const [loadingOptions, setLoadingOptions] = useState(false);
   
@@ -38,27 +38,38 @@ export default function ImportForm({ insurers, draftFortnightId, onImport }: Pro
   // Función centralizada para cargar opciones bancarias
   const loadBankOptions = useCallback(async () => {
     setLoadingOptions(true);
-    const options: Array<{type: 'transfer' | 'group', id: string, name: string, amount: number, insurerName?: string, hasInsurer: boolean, cutoffOrigin?: string, status?: string}> = [];
+    const options: Array<{type: 'transfer' | 'group', id: string, name: string, amount: number, insurerName?: string, hasInsurer: boolean, cutoffOrigin?: string, status?: string, date?: string, transferType?: string}> = [];
     
     try {
       const result = await actionGetAvailableForImport();
       
       if (result.ok && result.data) {
-        // Transferencias individuales - Ya vienen ordenadas alfabéticamente del backend
+        // Transferencias individuales - ordenadas por fecha
         (result.data.transfers || []).forEach((t: any) => {
           const cutoffInfo = t.bank_cutoffs 
             ? `Corte ${new Date(t.bank_cutoffs.start_date).toLocaleDateString('es-PA')} - ${new Date(t.bank_cutoffs.end_date).toLocaleDateString('es-PA')}`
             : 'Sin corte';
           
+          // Limpiar descripción: quitar "ACH -" o "ACH-"
+          let cleanDescription = t.description_raw || 'Sin descripción';
+          cleanDescription = cleanDescription.replace(/^ACH\s*-\s*/i, '').trim();
+          
+          // Tipo de transferencia para mostrar
+          const typeLabel = t.transfer_type === 'REPORTE' ? '📋' : 
+                           t.transfer_type === 'BONO' ? '🎁' : 
+                           t.transfer_type === 'OTRO' ? '📄' : '⏳';
+          
           options.push({
             type: 'transfer',
             id: t.id,
-            name: `${t.description_raw?.substring(0, 50) || 'Sin descripción'}`,
+            name: `${typeLabel} ${cleanDescription.substring(0, 45)}`,
             amount: t.amount,
             insurerName: t.insurers?.name,
             hasInsurer: !!t.insurer_assigned_id,
             cutoffOrigin: cutoffInfo,
-            status: t.status
+            status: t.status,
+            date: t.date,
+            transferType: t.transfer_type
           });
         });
         
@@ -223,6 +234,17 @@ export default function ImportForm({ insurers, draftFortnightId, onImport }: Pro
         if (i === pendingReports.length - 1 && selectedOption) {
           const option = availableOptions.find(o => o.id === selectedOption);
           if (option) {
+            // Auto-asignar aseguradora si no tiene
+            if (!option.hasInsurer && report.insurerId) {
+              console.log('[BATCH] Auto-asignando aseguradora a', option.type, selectedOption);
+              if (option.type === 'group') {
+                await actionAutoAssignInsurerToGroup(option.id, report.insurerId);
+              } else {
+                await actionAutoAssignInsurerToTransfer(option.id, report.insurerId);
+              }
+            }
+            
+            // Vincular
             if (option.type === 'group') {
               formData.append('bank_group_ids', JSON.stringify([option.id]));
             } else {
@@ -397,7 +419,7 @@ export default function ImportForm({ insurers, draftFortnightId, onImport }: Pro
                     La transferencia seleccionada está en estado <strong>PENDIENTE</strong>.
                   </p>
                   <p class="text-sm text-gray-700 mb-4">
-                    ¿Desea marcarla como <strong>OK Conciliado</strong> temporalmente para esta quincena?
+                    ¿Desea marcarla como <strong>REPORTADO</strong> temporalmente para esta quincena?
                   </p>
                   <p class="text-xs text-blue-600 mb-4">
                     💡 El cambio será temporal hasta que se confirme el pago de la quincena.
@@ -407,7 +429,7 @@ export default function ImportForm({ insurers, draftFortnightId, onImport }: Pro
                       Cancelar
                     </button>
                     <button id="confirm-btn" class="flex-1 px-4 py-2 bg-[#8AAA19] text-white rounded-lg hover:bg-[#010139]">
-                      Sí, Marcar como OK
+                      Sí, Marcar como REPORTADO
                     </button>
                   </div>
                 </div>
@@ -542,23 +564,41 @@ export default function ImportForm({ insurers, draftFortnightId, onImport }: Pro
                     {availableOptions.filter(o => o.type === 'group').map(option => (
                       <option key={option.id} value={option.id}>
                         {option.name} - ${option.amount.toFixed(2)}
-                        {option.status === 'PENDIENTE' ? ' ⏳' : option.status === 'OK_CONCILIADO' ? ' ✓' : option.status === 'EN_PROCESO' ? ' 🔄' : ''}
+                        {option.status === 'PENDIENTE' ? ' ⏳' : option.status === 'EN_PROCESO' ? ' 🔄' : ''}
                         {option.hasInsurer ? ` [${option.insurerName}]` : ' [Sin aseguradora]'}
                       </option>
                     ))}
                   </optgroup>
                 )}
-                {availableOptions.filter(o => o.type === 'transfer').length > 0 && (
-                  <optgroup label="💵 Transferencias Individuales">
-                    {availableOptions.filter(o => o.type === 'transfer').map(option => (
-                      <option key={option.id} value={option.id}>
-                        {option.name} - ${option.amount.toFixed(2)}
-                        {option.cutoffOrigin ? ` [${option.cutoffOrigin}]` : ''}
-                        {option.status === 'PENDIENTE' ? ' ⏳' : option.status === 'OK_CONCILIADO' ? ' ✓' : ''}
-                      </option>
-                    ))}
-                  </optgroup>
-                )}
+                {availableOptions.filter(o => o.type === 'transfer').length > 0 && (() => {
+                  // Agrupar transferencias por fecha
+                  const transfersByDate = new Map<string, typeof availableOptions>();
+                  availableOptions.filter(o => o.type === 'transfer').forEach(t => {
+                    const dateKey = t.date ? new Date(t.date).toLocaleDateString('es-PA') : 'Sin fecha';
+                    if (!transfersByDate.has(dateKey)) {
+                      transfersByDate.set(dateKey, []);
+                    }
+                    transfersByDate.get(dateKey)!.push(t);
+                  });
+                  
+                  // Ordenar fechas (más recientes primero)
+                  const sortedDates = Array.from(transfersByDate.keys()).sort((a, b) => {
+                    if (a === 'Sin fecha') return 1;
+                    if (b === 'Sin fecha') return -1;
+                    return new Date(b).getTime() - new Date(a).getTime();
+                  });
+                  
+                  return sortedDates.map(dateLabel => (
+                    <optgroup key={dateLabel} label={`📅 ${dateLabel}`}>
+                      {transfersByDate.get(dateLabel)!.map(option => (
+                        <option key={option.id} value={option.id}>
+                          {option.name} - ${option.amount.toFixed(2)}
+                          {option.hasInsurer ? ` [${option.insurerName}]` : ' [Sin aseguradora]'}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ));
+                })()}
               </select>
               {selectedOption && (
                 <div className="mt-2 p-3 bg-green-50 border border-green-200 rounded-lg">

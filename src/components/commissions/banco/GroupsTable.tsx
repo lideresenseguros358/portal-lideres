@@ -110,7 +110,6 @@ export default function GroupsTable({ groups, loading, onGroupDeleted }: GroupsT
     const badges = {
       SIN_CLASIFICAR: { label: 'Sin clasificar', color: 'bg-gray-100 text-gray-800', icon: FaClock },
       PENDIENTE: { label: 'Pendiente', color: 'bg-yellow-100 text-yellow-800', icon: FaClock },
-      OK_CONCILIADO: { label: 'OK', color: 'bg-blue-100 text-blue-800', icon: FaCheckCircle },
       REPORTADO: { label: 'Reportado', color: 'bg-purple-100 text-purple-800', icon: FaCheckCircle },
       PAGADO: { label: 'Pagado', color: 'bg-green-100 text-green-800', icon: FaLock },
       EN_PROCESO: { label: 'En Proceso', color: 'bg-yellow-100 text-yellow-800', icon: FaClock },

@@ -3504,7 +3504,7 @@ export async function actionDeleteDraft(fortnightId: string) {
           .from('bank_transfers_comm')
           .update({ status: 'PENDIENTE' })
           .in('id', transferIds)
-          .eq('status', 'OK_CONCILIADO'); // Solo revertir las que están en OK
+          .eq('status', 'REPORTADO'); // Solo revertir las que están en REPORTADO
         
         console.log(`[actionDeleteDraft] ✓ ${transferIds.length} transferencias revertidas a PENDIENTE`);
       }

@@ -27,7 +27,6 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
     const badges = {
       SIN_CLASIFICAR: { label: 'Sin clasificar', color: 'bg-gray-100 text-gray-800 border-gray-300', icon: FaCircle },
       PENDIENTE: { label: 'Pendiente', color: 'bg-yellow-100 text-yellow-800 border-yellow-300', icon: FaClock },
-      OK_CONCILIADO: { label: 'OK Conciliado', color: 'bg-blue-100 text-blue-800 border-blue-300', icon: FaCheckCircle },
       REPORTADO: { label: 'Reportado', color: 'bg-purple-100 text-purple-800 border-purple-300', icon: FaCheckCircle },
       PAGADO: { label: 'Pagado', color: 'bg-green-100 text-green-800 border-green-300', icon: FaLock },
     };
@@ -437,7 +436,6 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
                       >
                         <option value="SIN_CLASIFICAR">Sin clasificar</option>
                         <option value="PENDIENTE">Pendiente</option>
-                        <option value="OK_CONCILIADO">OK Conciliado</option>
                         <option value="REPORTADO">Reportado</option>
                         <option value="PAGADO">Pagado</option>
                       </select>
@@ -613,7 +611,6 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
                   >
                     <option value="SIN_CLASIFICAR">Sin clasificar</option>
                     <option value="PENDIENTE">Pendiente</option>
-                    <option value="OK_CONCILIADO">OK Conciliado</option>
                     <option value="REPORTADO">Reportado</option>
                     <option value="PAGADO">Pagado</option>
                   </select>

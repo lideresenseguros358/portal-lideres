@@ -231,7 +231,6 @@ export default function BancoTab({ role, insurers }: BancoTabProps) {
                     <option value="all">TODOS</option>
                     <option value="SIN_CLASIFICAR">SIN CLASIFICAR</option>
                     <option value="PENDIENTE">PENDIENTE</option>
-                    <option value="OK_CONCILIADO">OK CONCILIADO</option>
                     <option value="PAGADO">PAGADO</option>
                   </select>
                 </div>

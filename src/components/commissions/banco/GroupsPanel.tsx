@@ -64,7 +64,6 @@ export default function GroupsPanel({ insurers, onRefresh }: GroupsPanelProps) {
   const getStatusBadge = (status: GroupStatus) => {
     const badges = {
       EN_PROCESO: { label: 'En proceso', color: 'bg-yellow-100 text-yellow-800 border-yellow-300' },
-      OK_CONCILIADO: { label: 'OK Conciliado', color: 'bg-blue-100 text-blue-800 border-blue-300' },
       PAGADO: { label: 'Pagado', color: 'bg-green-100 text-green-800 border-green-300' },
     };
     const badge = badges[status] || badges.EN_PROCESO;
@@ -98,7 +97,6 @@ export default function GroupsPanel({ insurers, onRefresh }: GroupsPanelProps) {
             <ul className="space-y-1 text-green-800">
               <li>• <strong>Agrupa</strong> varias transferencias del mismo reporte</li>
               <li>• <strong>Vincula</strong> grupos con imports en "Nueva Quincena"</li>
-              <li>• <strong>Marca OK_CONCILIADO</strong> cuando estén listos para vincular</li>
               <li>• Al cerrar quincena, se marcan como PAGADO automáticamente</li>
             </ul>
           </div>
@@ -134,7 +132,6 @@ export default function GroupsPanel({ insurers, onRefresh }: GroupsPanelProps) {
             >
               <option value="all">TODOS</option>
               <option value="EN_PROCESO">EN PROCESO</option>
-              <option value="OK_CONCILIADO">OK CONCILIADO</option>
               <option value="PAGADO">PAGADO</option>
             </select>
           </div>

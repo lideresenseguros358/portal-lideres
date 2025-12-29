@@ -14,10 +14,10 @@ import type { BankTransferCommRow } from '@/lib/banco/bancoParser';
 // TIPOS
 // ============================================
 
-export type BankTransferStatus = 'SIN_CLASIFICAR' | 'PENDIENTE' | 'OK_CONCILIADO' | 'REPORTADO' | 'PAGADO';
+export type BankTransferStatus = 'SIN_CLASIFICAR' | 'PENDIENTE' | 'REPORTADO' | 'PAGADO';
 export type TransferType = 'REPORTE' | 'BONO' | 'OTRO' | 'PENDIENTE';
 export type GroupTemplate = 'NORMAL' | 'ASSA_CODIGOS';
-export type GroupStatus = 'EN_PROCESO' | 'OK_CONCILIADO' | 'PAGADO';
+export type GroupStatus = 'EN_PROCESO' | 'PAGADO';
 
 interface ActionResult<T = any> {
   ok: boolean;
@@ -895,7 +895,7 @@ export async function actionGetPendingTransfersAllCutoffs(): Promise<ActionResul
 
     const supabase = await getSupabaseServer();
 
-    // Obtener transferencias PENDIENTES u OK_CONCILIADO que NO tienen vínculos permanentes
+    // Obtener transferencias PENDIENTES que NO tienen vínculos permanentes
     const { data, error } = await supabase
       .from('bank_transfers_comm')
       .select(`
@@ -904,7 +904,7 @@ export async function actionGetPendingTransfersAllCutoffs(): Promise<ActionResul
         bank_cutoffs:cutoff_id (id, start_date, end_date),
         bank_transfer_imports!left (id, is_temporary)
       `)
-      .in('status', ['PENDIENTE', 'OK_CONCILIADO'])
+      .in('status', ['PENDIENTE', 'REPORTADO'])
       .order('date', { ascending: false });
 
     if (error) {
@@ -939,7 +939,7 @@ export async function actionGetPendingGroupsAll(excludeCutoffId?: string): Promi
 
     const supabase = await getSupabaseServer();
 
-    // Obtener grupos EN_PROCESO u OK_CONCILIADO que NO tienen vínculos permanentes
+    // Obtener grupos EN_PROCESO que NO tienen vínculos permanentes
     // Y que NO son del corte actual (son históricos)
     const { data, error } = await supabase
       .from('bank_groups')
@@ -949,7 +949,7 @@ export async function actionGetPendingGroupsAll(excludeCutoffId?: string): Promi
         bank_group_imports!left (id, is_temporary),
         bank_group_transfers!left (id, bank_transfers_comm!inner(cutoff_id))
       `)
-      .in('status', ['EN_PROCESO', 'OK_CONCILIADO'])
+      .eq('status', 'EN_PROCESO')
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -1161,21 +1161,21 @@ export async function actionMarkTransferAsOkTemporary(
 
     const supabase = await getSupabaseServer();
 
-    // Actualizar status a OK_CONCILIADO (temporal, se revertirá si se descarta)
+    // Marcar como REPORTADO temporalmente (se revertirá si se descarta)
     const { error } = await supabase
       .from('bank_transfers_comm')
-      .update({ status: 'OK_CONCILIADO' })
+      .update({ status: 'REPORTADO' })
       .eq('id', transferId);
 
     if (error) {
-      console.error('[BANCO] Error actualizando transferencia:', error);
+      console.error('[BANCO] Error al actualizar transferencia:', error);
       return { ok: false, error: 'Error al actualizar transferencia' };
     }
 
-    console.log(`[BANCO] ✅ Transferencia ${transferId} marcada como OK_CONCILIADO (temporal)`);
+    console.log(`[BANCO] ✅ Transferencia ${transferId} marcada como REPORTADO (temporal)`);
     return { ok: true };
   } catch (error) {
-    console.error('[BANCO] Error en actionMarkTransferAsOkTemporary:', error);
+    console.error('[BANCO] Error en actionMarkTransferAsReportedTemporary:', error);
     return { ok: false, error: 'Error inesperado' };
   }
 }
