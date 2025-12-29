@@ -428,7 +428,20 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
                     <td className="px-3 py-3 text-right font-bold text-[#8AAA19] font-mono text-sm">
                       ${transfer.amount.toFixed(2)}
                     </td>
-                    <td className="px-3 py-3">{getStatusBadge(transfer.status)}</td>
+                    <td className="px-3 py-3">
+                      <select
+                        value={editData.status}
+                        onChange={(e) => setEditData({ ...editData, status: e.target.value })}
+                        disabled={editData.transferType !== 'OTRO'}
+                        className="w-full px-2 py-1 border-2 border-gray-300 rounded-lg text-xs focus:border-[#8AAA19] focus:outline-none disabled:bg-gray-100 disabled:cursor-not-allowed"
+                      >
+                        <option value="SIN_CLASIFICAR">Sin clasificar</option>
+                        <option value="PENDIENTE">Pendiente</option>
+                        <option value="OK_CONCILIADO">OK Conciliado</option>
+                        <option value="REPORTADO">Reportado</option>
+                        <option value="PAGADO">Pagado</option>
+                      </select>
+                    </td>
                     <td className="px-3 py-3">
                       <div className="flex gap-1 justify-center">
                         <button
