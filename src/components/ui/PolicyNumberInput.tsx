@@ -17,6 +17,7 @@ interface PolicyNumberInputProps {
   required?: boolean;
   error?: string;
   className?: string;
+  hasError?: boolean;
 }
 
 export default function PolicyNumberInput({
@@ -26,7 +27,8 @@ export default function PolicyNumberInput({
   label = 'Número de Póliza',
   required = false,
   error,
-  className = ''
+  className = '',
+  hasError = false
 }: PolicyNumberInputProps) {
   const isInitialMount = useRef(true);
   const lastValueRef = useRef(value);
@@ -103,7 +105,9 @@ export default function PolicyNumberInput({
           type="text"
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none h-11 font-mono"
+          className={`w-full px-4 py-2 border-2 rounded-lg focus:outline-none h-11 font-mono ${
+            hasError ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
+          }`}
           placeholder="Número de póliza"
         />
         {error && <p className="text-xs text-red-600 mt-2">⚠️ {error}</p>}
@@ -133,7 +137,9 @@ export default function PolicyNumberInput({
             type="text"
             value={inputs[0] || ''}
             onChange={(e) => handleInputChange(0, e.target.value)}
-            className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none h-11 font-mono"
+            className={`w-full px-4 py-2 border-2 rounded-lg focus:outline-none h-11 font-mono ${
+              hasError ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
+            }`}
             placeholder={config.examples[0] || 'Número de póliza'}
           />
         </div>
@@ -151,7 +157,9 @@ export default function PolicyNumberInput({
                     value={inputs[index] || ''} 
                     onValueChange={(val) => handleInputChange(index, val)}
                   >
-                    <SelectTrigger className="w-full border-2 border-gray-300 focus:border-[#8AAA19] h-11">
+                    <SelectTrigger className={`w-full border-2 h-11 ${
+                      hasError ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
+                    }`}>
                       <SelectValue placeholder="Selecciona" />
                     </SelectTrigger>
                     <SelectContent>
@@ -174,7 +182,9 @@ export default function PolicyNumberInput({
                       const val = e.target.value.replace(/\D/g, ''); // Solo números
                       handleInputChange(index, val);
                     }}
-                    className="w-full px-1 sm:px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none h-11 text-center font-mono text-sm sm:text-base"
+                    className={`w-full px-1 sm:px-3 py-2 border-2 rounded-lg focus:outline-none h-11 text-center font-mono text-sm sm:text-base ${
+                      hasError ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
+                    }`}
                     placeholder={`Parte ${index + 1}`}
                   />
                 </div>
@@ -187,7 +197,9 @@ export default function PolicyNumberInput({
                     type="text"
                     value={inputs[index] || ''}
                     onChange={(e) => handleInputChange(index, e.target.value.toUpperCase())}
-                    className="w-full px-1 sm:px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none h-11 font-mono text-sm sm:text-base"
+                    className={`w-full px-1 sm:px-3 py-2 border-2 rounded-lg focus:outline-none h-11 font-mono text-sm sm:text-base ${
+                      hasError ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
+                    }`}
                     placeholder={`Parte ${index + 1}`}
                   />
                 </div>

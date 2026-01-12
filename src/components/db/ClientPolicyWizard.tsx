@@ -48,6 +48,7 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
   const [showClientSuggestions, setShowClientSuggestions] = useState(false);
   const [userBrokerId, setUserBrokerId] = useState<string | null>(null);
   const [specialOverride, setSpecialOverride] = useState<{ hasSpecialOverride: boolean; overrideValue: number | null; condition?: string }>({ hasSpecialOverride: false, overrideValue: null });
+  const [validationErrors, setValidationErrors] = useState<Record<string, boolean>>({});
   const today = getTodayLocalDate();
   
   const [formData, setFormData] = useState<FormData>({
@@ -251,65 +252,89 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
   };
 
   const validateStep = async () => {
+    const errors: Record<string, boolean> = {};
+    let errorMessages: string[] = [];
+    
     if (step === 1) {
       if (!formData.client_name.trim()) {
-        toast.error('El nombre del cliente es obligatorio');
-        return false;
+        errors.client_name = true;
+        errorMessages.push('Nombre del cliente');
       }
       if (!formData.national_id.trim()) {
-        toast.error('La cédula/pasaporte/RUC es obligatoria');
-        return false;
+        errors.national_id = true;
+        errorMessages.push('Cédula/Pasaporte/RUC');
       }
       if (!formData.email.trim()) {
-        toast.error('El email es obligatorio');
-        return false;
+        errors.email = true;
+        errorMessages.push('Email');
       }
       if (!formData.phone.trim()) {
-        toast.error('El teléfono es obligatorio');
-        return false;
+        errors.phone = true;
+        errorMessages.push('Teléfono');
       }
       if (!formData.birth_date.trim()) {
-        toast.error('La fecha de nacimiento es obligatoria');
-        return false;
+        errors.birth_date = true;
+        errorMessages.push('Fecha de nacimiento');
       }
     } else if (step === 2) {
       if (!formData.policy_number.trim()) {
-        toast.error('El número de póliza es obligatorio');
-        return false;
+        errors.policy_number = true;
+        errorMessages.push('Número de póliza');
       }
       if (!formData.insurer_id) {
-        toast.error('La aseguradora es obligatoria');
-        return false;
+        errors.insurer_id = true;
+        errorMessages.push('Aseguradora');
       }
       if (!formData.ramo.trim()) {
-        toast.error('El ramo/tipo de seguro es obligatorio');
-        return false;
+        errors.ramo = true;
+        errorMessages.push('Tipo de póliza');
       }
       if (!formData.start_date) {
-        toast.error('La fecha de inicio es obligatoria');
-        return false;
+        errors.start_date = true;
+        errorMessages.push('Fecha de inicio');
       }
       if (!formData.renewal_date) {
-        toast.error('La fecha de renovación es obligatoria');
+        errors.renewal_date = true;
+        errorMessages.push('Fecha de renovación');
+      }
+      
+      // Si hay errores de campos vacíos, mostrarlos primero
+      if (errorMessages.length > 0) {
+        setValidationErrors(errors);
+        toast.error('Campos requeridos faltantes', {
+          description: errorMessages.join(', ')
+        });
         return false;
       }
-      // Estado siempre es ACTIVA - no necesita validación
+      
       // Validar que el número de póliza no exista
       const isValid = await validatePolicyNumber(formData.policy_number);
       if (!isValid) {
+        errors.policy_number = true;
+        setValidationErrors(errors);
         toast.error('Esta póliza ya existe en el sistema');
         return false;
       }
     } else if (step === 3 && role === 'master') {
       if (!formData.broker_email) {
-        toast.error('Debe seleccionar un corredor');
-        return false;
+        errors.broker_email = true;
+        errorMessages.push('Corredor');
       }
       if (!formData.percent_override || formData.percent_override.trim() === '') {
-        toast.error('El porcentaje de comisión es obligatorio');
-        return false;
+        errors.percent_override = true;
+        errorMessages.push('Porcentaje de comisión');
       }
     }
+    
+    if (errorMessages.length > 0) {
+      setValidationErrors(errors);
+      toast.error('Campos requeridos faltantes', {
+        description: errorMessages.join(', ')
+      });
+      return false;
+    }
+    
+    setValidationErrors({});
     return true;
   };
 
@@ -493,11 +518,19 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                     const value = e.target.value;
                     setFormData({ ...formData, client_name: value });
                     searchClients(value);
+                    if (validationErrors.client_name && value.trim()) {
+                      setValidationErrors(prev => ({ ...prev, client_name: false }));
+                    }
                   })}
                   onBlur={() => setTimeout(() => setShowClientSuggestions(false), 200)}
-                  className={`w-full px-3 py-2 sm:px-4 text-sm sm:text-base border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition ${uppercaseInputClass}`}
+                  className={`w-full px-3 py-2 sm:px-4 text-sm sm:text-base border-2 rounded-lg focus:outline-none transition ${uppercaseInputClass} ${
+                    validationErrors.client_name ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
+                  }`}
                   placeholder="Juan Pérez"
                 />
+                {validationErrors.client_name && (
+                  <p className="text-xs text-red-500 mt-1">⚠️ Este campo es obligatorio</p>
+                )}
                 {showClientSuggestions && existingClients.length > 0 && (
                   <div className="absolute z-10 w-full mt-1 bg-white border-2 border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto">
                     <div className="p-2 bg-blue-50 text-xs text-blue-700 border-b">
@@ -528,10 +561,19 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
 
               <NationalIdInput
                 value={formData.national_id}
-                onChange={(value) => setFormData({ ...formData, national_id: value })}
+                onChange={(value) => {
+                  setFormData({ ...formData, national_id: value });
+                  if (validationErrors.national_id && value.trim()) {
+                    setValidationErrors(prev => ({ ...prev, national_id: false }));
+                  }
+                }}
                 label="Documento de Identidad"
                 required
+                hasError={validationErrors.national_id}
               />
+              {validationErrors.national_id && (
+                <p className="text-xs text-red-500 mt-1">⚠️ Este campo es obligatorio</p>
+              )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div>
@@ -540,10 +582,20 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                     type="email"
                     required
                     value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    className="w-full px-3 py-2 sm:px-4 text-sm sm:text-base border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition"
+                    onChange={(e) => {
+                      setFormData({ ...formData, email: e.target.value });
+                      if (validationErrors.email && e.target.value.trim()) {
+                        setValidationErrors(prev => ({ ...prev, email: false }));
+                      }
+                    }}
+                    className={`w-full px-3 py-2 sm:px-4 text-sm sm:text-base border-2 rounded-lg focus:outline-none transition ${
+                      validationErrors.email ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
+                    }`}
                     placeholder="cliente@email.com"
                   />
+                  {validationErrors.email && (
+                    <p className="text-xs text-red-500 mt-1">⚠️ Este campo es obligatorio</p>
+                  )}
                 </div>
 
                 <div>
@@ -552,10 +604,20 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                     type="tel"
                     required
                     value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    className="w-full px-3 py-2 sm:px-4 text-sm sm:text-base border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition"
+                    onChange={(e) => {
+                      setFormData({ ...formData, phone: e.target.value });
+                      if (validationErrors.phone && e.target.value.trim()) {
+                        setValidationErrors(prev => ({ ...prev, phone: false }));
+                      }
+                    }}
+                    className={`w-full px-3 py-2 sm:px-4 text-sm sm:text-base border-2 rounded-lg focus:outline-none transition ${
+                      validationErrors.phone ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
+                    }`}
                     placeholder="6000-0000"
                   />
+                  {validationErrors.phone && (
+                    <p className="text-xs text-red-500 mt-1">⚠️ Este campo es obligatorio</p>
+                  )}
                 </div>
               </div>
 
@@ -567,10 +629,20 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                   type="date"
                   required
                   value={formData.birth_date}
-                  onChange={(e) => setFormData({ ...formData, birth_date: e.target.value })}
-                  className="w-full max-w-full px-3 py-2 sm:px-4 text-sm sm:text-base border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition"
+                  onChange={(e) => {
+                    setFormData({ ...formData, birth_date: e.target.value });
+                    if (validationErrors.birth_date && e.target.value) {
+                      setValidationErrors(prev => ({ ...prev, birth_date: false }));
+                    }
+                  }}
+                  className={`w-full max-w-full px-3 py-2 sm:px-4 text-sm sm:text-base border-2 rounded-lg focus:outline-none transition ${
+                    validationErrors.birth_date ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
+                  }`}
                   style={{ WebkitAppearance: 'none' }}
                 />
+                {validationErrors.birth_date && (
+                  <p className="text-xs text-red-500 mt-1">⚠️ Este campo es obligatorio</p>
+                )}
               </div>
             </div>
           )}
@@ -587,8 +659,18 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Aseguradora <span className="text-red-500">*</span>
                 </label>
-                <Select value={formData.insurer_id} onValueChange={(value) => setFormData({ ...formData, insurer_id: value })}>
-                  <SelectTrigger className="w-full border-2 border-gray-300 focus:border-[#8AAA19]">
+                <Select 
+                  value={formData.insurer_id} 
+                  onValueChange={(value) => {
+                    setFormData({ ...formData, insurer_id: value });
+                    if (validationErrors.insurer_id && value) {
+                      setValidationErrors(prev => ({ ...prev, insurer_id: false }));
+                    }
+                  }}
+                >
+                  <SelectTrigger className={`w-full border-2 ${
+                    validationErrors.insurer_id ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
+                  }`}>
                     <SelectValue placeholder="Seleccionar aseguradora..." />
                   </SelectTrigger>
                   <SelectContent className="max-h-[200px] overflow-auto">
@@ -597,17 +679,31 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                     ))}
                   </SelectContent>
                 </Select>
+                {validationErrors.insurer_id && (
+                  <p className="text-xs text-red-500 mt-1">⚠️ Este campo es obligatorio</p>
+                )}
               </div>
 
               {/* Número de Póliza con autoayuda por aseguradora */}
               {formData.insurer_id ? (
-                <PolicyNumberInput
-                  insurerName={insurers.find(i => i.id === formData.insurer_id)?.name || ''}
-                  value={formData.policy_number}
-                  onChange={(value) => setFormData({ ...formData, policy_number: value })}
-                  label="Número de Póliza"
-                  required
-                />
+                <>
+                  <PolicyNumberInput
+                    insurerName={insurers.find(i => i.id === formData.insurer_id)?.name || ''}
+                    value={formData.policy_number}
+                    onChange={(value) => {
+                      setFormData({ ...formData, policy_number: value });
+                      if (validationErrors.policy_number && value.trim()) {
+                        setValidationErrors(prev => ({ ...prev, policy_number: false }));
+                      }
+                    }}
+                    label="Número de Póliza"
+                    required
+                    hasError={validationErrors.policy_number}
+                  />
+                  {validationErrors.policy_number && (
+                    <p className="text-xs text-red-500 mt-1">⚠️ Este campo es obligatorio</p>
+                  )}
+                </>
               ) : (
                 <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
                   <p className="text-sm text-yellow-800">
@@ -622,9 +718,16 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                 </label>
                 <Select 
                   value={formData.ramo} 
-                  onValueChange={(value) => setFormData({ ...formData, ramo: value })}
+                  onValueChange={(value) => {
+                    setFormData({ ...formData, ramo: value });
+                    if (validationErrors.ramo && value) {
+                      setValidationErrors(prev => ({ ...prev, ramo: false }));
+                    }
+                  }}
                 >
-                  <SelectTrigger className="w-full border-2 border-gray-300 focus:border-[#8AAA19]">
+                  <SelectTrigger className={`w-full border-2 ${
+                    validationErrors.ramo ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
+                  }`}>
                     <SelectValue placeholder="Selecciona el tipo de póliza..." />
                   </SelectTrigger>
                   <SelectContent className="max-h-[300px] overflow-auto">
@@ -635,6 +738,9 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                     ))}
                   </SelectContent>
                 </Select>
+                {validationErrors.ramo && (
+                  <p className="text-xs text-red-500 mt-1">⚠️ Este campo es obligatorio</p>
+                )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
@@ -658,10 +764,19 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                         start_date: startDate,
                         renewal_date: calculatedRenewalDate
                       });
+                      
+                      if (validationErrors.start_date && startDate) {
+                        setValidationErrors(prev => ({ ...prev, start_date: false }));
+                      }
                     }}
-                    className="w-full max-w-full px-3 py-2 sm:px-4 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition text-sm sm:text-base"
+                    className={`w-full max-w-full px-3 py-2 sm:px-4 border-2 rounded-lg focus:outline-none transition text-sm sm:text-base ${
+                      validationErrors.start_date ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
+                    }`}
                     style={{ WebkitAppearance: 'none' }}
                   />
+                  {validationErrors.start_date && (
+                    <p className="text-xs text-red-500 mt-1">⚠️ Este campo es obligatorio</p>
+                  )}
                 </div>
 
                 <div className="w-full max-w-full overflow-hidden">
@@ -674,11 +789,21 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                   <input
                     type="date"
                     value={formData.renewal_date}
-                    onChange={(e) => setFormData({ ...formData, renewal_date: e.target.value })}
-                    className="w-full max-w-full px-3 py-2 sm:px-4 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition text-sm sm:text-base"
+                    onChange={(e) => {
+                      setFormData({ ...formData, renewal_date: e.target.value });
+                      if (validationErrors.renewal_date && e.target.value) {
+                        setValidationErrors(prev => ({ ...prev, renewal_date: false }));
+                      }
+                    }}
+                    className={`w-full max-w-full px-3 py-2 sm:px-4 border-2 rounded-lg focus:outline-none transition text-sm sm:text-base ${
+                      validationErrors.renewal_date ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
+                    }`}
                     style={{ WebkitAppearance: 'none' }}
                     required
                   />
+                  {validationErrors.renewal_date && (
+                    <p className="text-xs text-red-500 mt-1">⚠️ Este campo es obligatorio</p>
+                  )}
                 </div>
               </div>
 
@@ -738,9 +863,15 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                           broker_email: value,
                           percent_override: percentToUse
                         });
+                        
+                        if (validationErrors.broker_email && value) {
+                          setValidationErrors(prev => ({ ...prev, broker_email: false }));
+                        }
                       }}
                     >
-                      <SelectTrigger className="w-full border-2 border-gray-300 focus:border-[#8AAA19]">
+                      <SelectTrigger className={`w-full border-2 ${
+                        validationErrors.broker_email ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
+                      }`}>
                         <SelectValue placeholder="Seleccionar corredor..." />
                       </SelectTrigger>
                       <SelectContent className="max-h-[200px] overflow-auto">
@@ -751,6 +882,9 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                         ))}
                       </SelectContent>
                     </Select>
+                    {validationErrors.broker_email && (
+                      <p className="text-xs text-red-500 mt-1">⚠️ Este campo es obligatorio</p>
+                    )}
                   </div>
 
                   <div>
@@ -762,14 +896,24 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                       step="0.01"
                       required
                       value={formData.percent_override}
-                      onChange={(e) => setFormData({ ...formData, percent_override: e.target.value })}
+                      onChange={(e) => {
+                        setFormData({ ...formData, percent_override: e.target.value });
+                        if (validationErrors.percent_override && e.target.value.trim()) {
+                          setValidationErrors(prev => ({ ...prev, percent_override: false }));
+                        }
+                      }}
                       className={`w-full px-4 py-2 border-2 rounded-lg focus:outline-none transition ${
-                        specialOverride.hasSpecialOverride 
-                          ? 'border-blue-300 bg-blue-50 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20' 
-                          : 'border-gray-300 focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20'
+                        validationErrors.percent_override 
+                          ? 'border-red-500 focus:border-red-500' 
+                          : specialOverride.hasSpecialOverride 
+                            ? 'border-blue-300 bg-blue-50 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20' 
+                            : 'border-gray-300 focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20'
                       }`}
                       placeholder="15.5"
                     />
+                    {validationErrors.percent_override && (
+                      <p className="text-xs text-red-500 mt-1">⚠️ Este campo es obligatorio</p>
+                    )}
                     {specialOverride.hasSpecialOverride ? (
                       <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
                         <p className="text-xs text-blue-700 font-semibold">

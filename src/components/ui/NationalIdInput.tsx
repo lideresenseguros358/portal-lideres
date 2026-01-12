@@ -10,6 +10,7 @@ interface NationalIdInputProps {
   required?: boolean;
   error?: string;
   className?: string;
+  hasError?: boolean;
 }
 
 type DocumentType = 'cedula' | 'pasaporte' | 'ruc';
@@ -40,7 +41,8 @@ export default function NationalIdInput({
   label = 'Documento de Identidad',
   required = false,
   error,
-  className = ''
+  className = '',
+  hasError = false
 }: NationalIdInputProps) {
   const [documentType, setDocumentType] = useState<DocumentType>('cedula');
   const isInitialMount = useRef(true);
@@ -235,7 +237,9 @@ export default function NationalIdInput({
           onValueChange={handleDocumentTypeChange}
           key={`doctype-${documentType}`}
         >
-          <SelectTrigger className="w-full sm:w-64 border-2 border-gray-300 focus:border-[#8AAA19] h-10">
+          <SelectTrigger className={`w-full border-2 h-10 ${
+            hasError ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
+          }`}>
             <SelectValue>
               {documentType === 'cedula' && '🪪 Cédula'}
               {documentType === 'pasaporte' && '🛂 Pasaporte'}
@@ -265,7 +269,9 @@ export default function NationalIdInput({
                 }}
                 key={`provincia-${cedulaPart1}`}
               >
-                <SelectTrigger className="w-full border-2 border-gray-300 focus:border-[#8AAA19] h-11">
+                <SelectTrigger className={`w-full border-2 h-11 ${
+                  hasError ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
+                }`}>
                   <SelectValue placeholder="Provincia">
                     {cedulaPart1 || 'Provincia'}
                   </SelectValue>
@@ -289,7 +295,9 @@ export default function NationalIdInput({
                 value={cedulaPart2}
                 onChange={handleCedulaPart2Change}
                 maxLength={4}
-                className="w-full px-1 sm:px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none h-11 text-center font-mono text-sm sm:text-base"
+                className={`w-full px-1 sm:px-3 py-2 border-2 rounded-lg focus:outline-none h-11 text-center font-mono text-sm sm:text-base ${
+                  hasError ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
+                }`}
               />
             </div>
 
@@ -302,7 +310,9 @@ export default function NationalIdInput({
                 value={cedulaPart3}
                 onChange={handleCedulaPart3Change}
                 maxLength={5}
-                className="w-full px-1 sm:px-3 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none h-11 text-center font-mono text-sm sm:text-base"
+                className={`w-full px-1 sm:px-3 py-2 border-2 rounded-lg focus:outline-none h-11 text-center font-mono text-sm sm:text-base ${
+                  hasError ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
+                }`}
               />
             </div>
           </div>
@@ -332,7 +342,9 @@ export default function NationalIdInput({
             placeholder="PA123456789"
             value={singleValue}
             onChange={handleSingleValueChange}
-            className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none h-11 font-mono"
+            className={`w-full px-4 py-2 border-2 rounded-lg focus:outline-none h-11 font-mono ${
+              hasError ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
+            }`}
           />
           {singleValue && (
             <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
@@ -355,7 +367,9 @@ export default function NationalIdInput({
             placeholder="475690-1-434939"
             value={singleValue}
             onChange={handleSingleValueChange}
-            className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none h-11 font-mono"
+            className={`w-full px-4 py-2 border-2 rounded-lg focus:outline-none h-11 font-mono ${
+              hasError ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
+            }`}
           />
           {singleValue && (
             <div className="mt-2 p-2 bg-orange-50 border border-orange-200 rounded-lg">

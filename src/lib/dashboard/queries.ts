@@ -420,13 +420,42 @@ export async function getProductionData() {
     return acc + (bruto - canceladas);
   }, 0);
   
-  const deltaPercent = previousTotal > 0 ? ((totalPMA - previousTotal) / previousTotal) * 100 : 0;
+  // FALLBACK: Si no hay datos del año actual, usar datos del año anterior
+  const hasCurrentYearData = totalPMA > 0;
+  const displayYear = hasCurrentYearData ? currentYear : currentYear - 1;
+  const displayTotal = hasCurrentYearData ? totalPMA : previousTotal;
+  
+  // Para comparación: si estamos mostrando año anterior, comparar con 2 años atrás
+  let comparisonTotal = previousTotal;
+  if (!hasCurrentYearData) {
+    const { data: twoYearsAgoData } = await supabase
+      .from("production")
+      .select("bruto, canceladas")
+      .eq("year", currentYear - 2)
+      .returns<{ bruto: number | string | null; canceladas: number | string | null }[]>();
+    
+    comparisonTotal = (twoYearsAgoData ?? []).reduce((acc, item) => {
+      const bruto = toNumber(item.bruto);
+      const canceladas = toNumber(item.canceladas);
+      return acc + (bruto - canceladas);
+    }, 0);
+  }
+  
+  const deltaPercent = comparisonTotal > 0 ? ((displayTotal - comparisonTotal) / comparisonTotal) * 100 : 0;
+  
+  console.log('[getProductionData] FALLBACK LOGIC:', { 
+    currentYear, 
+    hasCurrentYearData, 
+    displayYear, 
+    displayTotal, 
+    comparisonTotal 
+  });
   
   return {
-    totalPMA,
-    previousTotal,
+    totalPMA: displayTotal,
+    previousTotal: comparisonTotal,
     deltaPercent,
-    year: currentYear
+    year: displayYear
   };
 }
 
@@ -450,8 +479,8 @@ export async function getBrokerRanking() {
     previousClosedMonth 
   });
   
-  // Obtener datos de production del año actual (hasta mes actual)
-  const { data, error } = await (supabase as any)
+  // FALLBACK: Intentar primero con año actual, si no hay datos usar año anterior
+  let { data, error } = await (supabase as any)
     .from("production")
     .select(`
       broker_id,
@@ -464,9 +493,36 @@ export async function getBrokerRanking() {
       )
     `)
     .eq("year", CURRENT_YEAR)
-    .lte("month", closedMonth); // Hasta el mes cerrado
+    .lte("month", closedMonth);
   
-  console.log('[MASTER RANKING DEBUG]', { dataLength: data?.length, error });
+  console.log('[MASTER RANKING DEBUG - Current Year]', { dataLength: data?.length, error });
+  
+  // Si no hay datos del año actual, usar año anterior completo
+  let yearUsed = CURRENT_YEAR;
+  if (!data || data.length === 0) {
+    const result = await (supabase as any)
+      .from("production")
+      .select(`
+        broker_id,
+        bruto,
+        canceladas,
+        month,
+        brokers!production_broker_id_fkey (
+          id,
+          name
+        )
+      `)
+      .eq("year", CURRENT_YEAR - 1);
+    
+    data = result.data;
+    error = result.error;
+    yearUsed = CURRENT_YEAR - 1;
+    console.log('[MASTER RANKING DEBUG - Fallback to Previous Year]', { 
+      dataLength: data?.length, 
+      error, 
+      yearUsed 
+    });
+  }
   
   if (!data || data.length === 0) return [];
   
@@ -637,7 +693,7 @@ export async function getBrokerOfTheMonth(): Promise<{ brokerName: string; month
   
   const monthNames = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
   
-  const { data } = await supabase
+  let { data } = await supabase
     .from("production")
     .select(`
       broker_id,
@@ -651,8 +707,41 @@ export async function getBrokerOfTheMonth(): Promise<{ brokerName: string; month
     .eq("year", targetYear)
     .eq("month", targetMonth); // month es INTEGER 1-12
   
+  // FALLBACK: Si no hay datos del mes objetivo, buscar el último mes con datos del año anterior
   if (!data || data.length === 0) {
     console.log('[BROKER OF THE MONTH] No hay datos para el mes', { targetYear, targetMonth });
+    
+    // Buscar último mes con datos del año anterior
+    const { data: lastMonthData } = await supabase
+      .from("production")
+      .select(`
+        broker_id,
+        bruto,
+        canceladas,
+        month,
+        brokers!production_broker_id_fkey (
+          id,
+          name
+        )
+      `)
+      .eq("year", currentYear - 1)
+      .order("month", { ascending: false })
+      .limit(100);
+    
+    if (lastMonthData && lastMonthData.length > 0) {
+      // Obtener el mes más reciente
+      const lastMonth = Math.max(...lastMonthData.map((d: any) => d.month));
+      data = lastMonthData.filter((d: any) => d.month === lastMonth);
+      targetMonth = lastMonth;
+      targetYear = currentYear - 1;
+      console.log('[BROKER OF THE MONTH] Usando fallback:', { targetYear, targetMonth, dataLength: data.length });
+    } else {
+      return null;
+    }
+  }
+  
+  if (!data || data.length === 0) {
+    console.log('[BROKER OF THE MONTH] No hay datos disponibles');
     return null;
   }
   
@@ -922,8 +1011,16 @@ export async function getYtdComparison(userId: string, role: DashboardRole): Pro
     buildQuery(previousYear).returns<{ month: number | null; bruto: number | string | null; canceladas: number | string | null }[]>(),
   ]);
 
-  const currentTotals = aggregateMonthlyTotals(currentData);
-  const previousTotals = aggregateMonthlyTotals(previousData);
+  let currentTotals = aggregateMonthlyTotals(currentData);
+  let previousTotals = aggregateMonthlyTotals(previousData);
+  
+  // FALLBACK: Si no hay datos del año actual, usar año anterior como "current" y 2 años atrás como "previous"
+  if (currentTotals.length === 0 && previousTotals.length > 0) {
+    console.log('[getYtdComparison] FALLBACK: Usando año anterior como current');
+    const { data: twoYearsAgoData } = await buildQuery(previousYear - 1).returns<{ month: number | null; bruto: number | string | null; canceladas: number | string | null }[]>();
+    currentTotals = previousTotals;
+    previousTotals = aggregateMonthlyTotals(twoYearsAgoData);
+  }
   
   // Si no hay datos reales, usar mock
   if (MOCK_DATA_ENABLED && currentTotals.length === 0 && previousTotals.length === 0) {
