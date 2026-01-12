@@ -91,15 +91,25 @@ textarea:not([data-no-uppercase]) {
   text-transform: uppercase;
 }
 
-/* Mejorar inputs de fecha y select en mobile */
+/* Prevenir zoom automático en iOS - TODOS los inputs deben tener mínimo 16px */
 @media (max-width: 768px) {
-  input[type="date"],
-  input[type="datetime-local"],
-  input[type="time"],
+  /* Todos los tipos de input */
+  input,
+  textarea,
   select {
-    min-height: 44px !important;
     font-size: 16px !important;
+    min-height: 44px !important;
     padding: 0.75rem !important;
+  }
+  
+  /* Asegurar que inputs con clases text-sm o text-xs también tengan 16px */
+  input.text-sm,
+  input.text-xs,
+  textarea.text-sm,
+  textarea.text-xs,
+  select.text-sm,
+  select.text-xs {
+    font-size: 16px !important;
   }
   
   /* Centrar texto de botones submit en mobile */
@@ -108,6 +118,15 @@ textarea:not([data-no-uppercase]) {
     align-items: center !important;
     justify-content: center !important;
     text-align: center !important;
+  }
+}
+
+/* Prevenir zoom en iOS Safari - aplicar a todos los dispositivos táctiles */
+@supports (-webkit-touch-callout: none) {
+  input,
+  textarea,
+  select {
+    font-size: max(16px, 1rem) !important;
   }
 }
 

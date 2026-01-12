@@ -17,6 +17,8 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
   const [loading, setLoading] = useState(false);
   const [insurers, setInsurers] = useState<any[]>([]);
   const [brokers, setBrokers] = useState<any[]>([]);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [pendingDeductionChange, setPendingDeductionChange] = useState<boolean | null>(null);
 
   // Parse metadata from notes
   const parseMetadata = () => {
@@ -53,6 +55,11 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
   const [isBrokerDeduction, setIsBrokerDeduction] = useState<boolean>(initialBrokerDeduction);
   const [deductionBrokerId, setDeductionBrokerId] = useState<string>(
     (metadata.broker_id as string) || formData.broker_id || ''
+  );
+  
+  // Método de pago: 'bank_transfer' o 'broker_deduction'
+  const [paymentMethod, setPaymentMethod] = useState<'bank_transfer' | 'broker_deduction'>(
+    initialBrokerDeduction ? 'broker_deduction' : 'bank_transfer'
   );
 
   // Referencias bancarias con validación
@@ -571,189 +578,343 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
             />
           </div>
 
-          {/* Descuento a corredor */}
-          <div className="border-2 border-[#8AAA19]/40 rounded-lg p-4 bg-[#f9fbea] space-y-3">
-            <div className="flex items-start gap-3">
-              <input
-                type="checkbox"
-                id="edit-broker-deduction"
-                checked={isBrokerDeduction}
-                onChange={(e) => setIsBrokerDeduction(e.target.checked)}
-                className="mt-1 w-5 h-5 text-[#8AAA19] rounded focus:ring-[#8AAA19]"
-              />
-              <div className="flex-1">
-                <label htmlFor="edit-broker-deduction" className="font-semibold text-sm text-[#010139]">
-                  💰 Descontar este pago al corredor (adelanto en comisiones)
-                </label>
-                <p className="text-xs text-gray-600 mt-1">
-                  Si está activo, el monto completo se convierte en un adelanto al corredor seleccionado.
-                  Puedes convertir este pago entre referencia bancaria y descuento a corredor.
-                </p>
-              </div>
-            </div>
-
-            {isBrokerDeduction && (
-              <div className="mt-3 space-y-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Corredor a descontar <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={deductionBrokerId}
-                  onChange={(e) => setDeductionBrokerId(e.target.value)}
-                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none text-sm"
+          {/* Método de Pago */}
+          <div className="border-2 border-[#010139]/20 rounded-lg p-4 sm:p-6 bg-gradient-to-br from-blue-50 to-white">
+            <h3 className="font-bold text-base sm:text-lg text-[#010139] mb-3 sm:mb-4 flex items-center gap-2">
+              💳 Método de Pago
+            </h3>
+            
+            <div className="space-y-3 sm:space-y-4">
+              {/* Radio buttons para seleccionar método */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                <label 
+                  className={`relative flex items-start gap-3 p-3 sm:p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                    paymentMethod === 'bank_transfer' 
+                      ? 'border-[#8AAA19] bg-[#8AAA19]/5 shadow-md' 
+                      : 'border-gray-300 hover:border-gray-400'
+                  }`}
                 >
-                  <option value="">Seleccionar corredor...</option>
-                  {brokers.map((broker) => (
-                    <option key={broker.id} value={broker.id}>{broker.name}</option>
-                  ))}
-                </select>
-                {deductionBrokerId && (
-                  <>
-                    <p className="text-xs text-green-700 mt-1">
-                      Este pago se descontará de las comisiones del corredor seleccionado por
-                      <span className="font-semibold"> ${parseFloat(formData.amount_to_pay || '0').toFixed(2)}</span>.
-                    </p>
-                    <div className="mt-2 p-2 bg-blue-50 border-l-4 border-blue-500 rounded-r">
-                      <p className="text-xs text-blue-800 font-semibold">
-                        🔄 Sincronización automática activada
-                      </p>
-                      <p className="text-[11px] text-blue-700 mt-1">
-                        Si cambias el monto del pago, el adelanto ligado se actualizará automáticamente al mismo valor.
-                      </p>
-                    </div>
-                  </>
-                )}
-                <p className="text-[11px] text-amber-700 mt-2">
-                  💡 <strong>Conversión:</strong> Al activar/desactivar esta opción:
-                  <br/>• Activar: crea un adelanto automático
-                  <br/>• Desactivar: cancela el adelanto ligado
-                  <br/>• Mantener activo + editar monto: sincroniza adelanto
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* Referencias Bancarias */}
-          <div className="border-2 border-gray-200 rounded-lg p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold text-gray-700">Referencias Bancarias</h3>
-              <button
-                type="button"
-                onClick={addReference}
-                className="px-3 py-1 bg-[#8AAA19] text-white rounded-lg text-sm hover:bg-[#7a9916] transition flex items-center gap-1"
-              >
-                <FaPlus /> Agregar
-              </button>
-            </div>
-            {references.map((ref, index) => (
-              <div key={index} className="grid grid-cols-12 gap-2 mb-2">
-                <div className="col-span-4 relative">
                   <input
-                    type="text"
-                    placeholder="# Referencia"
-                    value={ref.reference_number}
-                    onChange={(e) => {
-                      const newRefs = [...references];
-                      if (newRefs[index]) {
-                        newRefs[index].reference_number = e.target.value;
-                        setReferences(newRefs);
-                        // Validar referencia con debounce
-                        validateReference(index, e.target.value);
+                    type="radio"
+                    name="payment-method"
+                    value="bank_transfer"
+                    checked={paymentMethod === 'bank_transfer'}
+                    onChange={() => {
+                      // Si cambia de descuento a corredor a transferencia bancaria
+                      if (isBrokerDeduction && metadata.advance_id) {
+                        setPendingDeductionChange(false);
+                        setShowConfirmModal(true);
+                      } else {
+                        setPaymentMethod('bank_transfer');
+                        setIsBrokerDeduction(false);
                       }
                     }}
-                    list="available-references"
-                    className="w-full px-3 py-2 pr-8 border rounded text-sm"
+                    className="mt-1 w-4 h-4 sm:w-5 sm:h-5 text-[#8AAA19] focus:ring-[#8AAA19]"
                   />
-                  {/* Iconos de validación */}
-                  <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
-                    {ref.validating && (
-                      <FaSpinner className="text-blue-500 animate-spin" size={16} />
-                    )}
-                    {!ref.validating && ref.exists_in_bank && (
-                      <FaCheckCircle className="text-green-600" size={16} title="Referencia válida" />
-                    )}
-                    {!ref.validating && ref.exists_in_bank === false && ref.reference_number && (
-                      <FaExclamationTriangle className="text-red-600" size={16} title="Referencia no encontrada" />
-                    )}
-                    {!ref.validating && ref.status === 'exhausted' && (
-                      <FaExclamationTriangle className="text-orange-600" size={16} title="Referencia agotada" />
+                  <div className="flex-1">
+                    <div className="font-semibold text-sm sm:text-base text-[#010139] flex items-center gap-2">
+                      🏦 Transferencia Bancaria
+                      {paymentMethod === 'bank_transfer' && (
+                        <span className="text-xs bg-[#8AAA19] text-white px-2 py-0.5 rounded-full">Activo</span>
+                      )}
+                    </div>
+                    <p className="text-xs sm:text-sm text-gray-600 mt-1">
+                      Usar referencias bancarias para este pago
+                    </p>
+                  </div>
+                </label>
+
+                <label 
+                  className={`relative flex items-start gap-3 p-3 sm:p-4 border-2 rounded-lg cursor-pointer transition-all ${
+                    paymentMethod === 'broker_deduction' 
+                      ? 'border-[#8AAA19] bg-[#8AAA19]/5 shadow-md' 
+                      : 'border-gray-300 hover:border-gray-400'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="payment-method"
+                    value="broker_deduction"
+                    checked={paymentMethod === 'broker_deduction'}
+                    onChange={() => {
+                      setPaymentMethod('broker_deduction');
+                      setIsBrokerDeduction(true);
+                    }}
+                    className="mt-1 w-4 h-4 sm:w-5 sm:h-5 text-[#8AAA19] focus:ring-[#8AAA19]"
+                  />
+                  <div className="flex-1">
+                    <div className="font-semibold text-sm sm:text-base text-[#010139] flex items-center gap-2">
+                      💰 Descuento a Corredor
+                      {paymentMethod === 'broker_deduction' && (
+                        <span className="text-xs bg-[#8AAA19] text-white px-2 py-0.5 rounded-full">Activo</span>
+                      )}
+                    </div>
+                    <p className="text-xs sm:text-sm text-gray-600 mt-1">
+                      Descontar del adelanto del corredor
+                    </p>
+                  </div>
+                </label>
+              </div>
+
+              {/* Contenido condicional según método */}
+              {paymentMethod === 'broker_deduction' && (
+                <div className="space-y-3 p-3 sm:p-4 bg-white border border-gray-200 rounded-lg">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Corredor a descontar <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={deductionBrokerId}
+                    onChange={(e) => setDeductionBrokerId(e.target.value)}
+                    className="w-full px-3 sm:px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none text-sm"
+                  >
+                    <option value="">Seleccionar corredor...</option>
+                    {brokers.map((broker) => (
+                      <option key={broker.id} value={broker.id}>{broker.name}</option>
+                    ))}
+                  </select>
+                  
+                  {deductionBrokerId && (
+                    <>
+                      <div className="p-3 bg-green-50 border-l-4 border-green-500 rounded-r">
+                        <p className="text-xs sm:text-sm text-green-800">
+                          ✅ Este pago se descontará de las comisiones del corredor por
+                          <span className="font-bold"> ${parseFloat(formData.amount_to_pay || '0').toFixed(2)}</span>
+                        </p>
+                      </div>
+                      
+                      <div className="p-3 bg-blue-50 border-l-4 border-blue-500 rounded-r">
+                        <p className="text-xs sm:text-sm text-blue-800 font-semibold">
+                          🔄 Sincronización automática
+                        </p>
+                        <p className="text-xs text-blue-700 mt-1">
+                          El adelanto se actualizará automáticamente si cambias el monto
+                        </p>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Referencias Bancarias - Solo visible si método es transferencia */}
+          {paymentMethod === 'bank_transfer' && (
+            <div className="border-2 border-gray-200 rounded-lg p-3 sm:p-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0 mb-3 sm:mb-4">
+                <h3 className="font-semibold text-sm sm:text-base text-gray-700">🏦 Referencias Bancarias</h3>
+                <button
+                  type="button"
+                  onClick={addReference}
+                  className="px-3 py-2 bg-[#8AAA19] text-white rounded-lg text-xs sm:text-sm hover:bg-[#7a9916] transition flex items-center justify-center gap-1 w-full sm:w-auto"
+                >
+                  <FaPlus className="text-white" /> <span className="text-white">Agregar Referencia</span>
+                </button>
+              </div>
+              
+              {/* Labels para desktop */}
+              <div className="hidden md:grid md:grid-cols-12 gap-2 mb-2 text-xs font-semibold text-gray-600">
+                <div className="col-span-4">Referencia</div>
+                <div className="col-span-3">Fecha</div>
+                <div className="col-span-2">Monto</div>
+                <div className="col-span-2">A Usar</div>
+                <div className="col-span-1"></div>
+              </div>
+              
+              {references.map((ref, index) => (
+                <div key={index} className="mb-3 sm:mb-2">
+                  {/* Layout mobile - vertical */}
+                  <div className="md:hidden space-y-2 p-3 border-2 border-gray-200 rounded-lg bg-gray-50">
+                    <div className="relative">
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Referencia</label>
+                      <input
+                        type="text"
+                        placeholder="# Referencia"
+                        value={ref.reference_number}
+                        onChange={(e) => {
+                          const newRefs = [...references];
+                          if (newRefs[index]) {
+                            newRefs[index].reference_number = e.target.value;
+                            setReferences(newRefs);
+                            validateReference(index, e.target.value);
+                          }
+                        }}
+                        list="available-references"
+                        className="w-full px-3 py-2 pr-8 border rounded text-sm"
+                      />
+                      <div className="absolute right-2 top-8">
+                        {ref.validating && <FaSpinner className="text-blue-500 animate-spin" size={16} />}
+                        {!ref.validating && ref.exists_in_bank && <FaCheckCircle className="text-green-600" size={16} />}
+                        {!ref.validating && ref.exists_in_bank === false && ref.reference_number && <FaExclamationTriangle className="text-red-600" size={16} />}
+                      </div>
+                      {!ref.validating && ref.exists_in_bank && ref.remaining_amount !== undefined && (
+                        <p className="text-xs text-gray-600 mt-1">Disponible: ${ref.remaining_amount.toFixed(2)}</p>
+                      )}
+                    </div>
+                    
+                    <div>
+                      <label className="block text-xs font-medium text-gray-600 mb-1">Fecha</label>
+                      <input
+                        type="date"
+                        value={ref.date}
+                        onChange={(e) => {
+                          const newRefs = [...references];
+                          if (newRefs[index]) {
+                            newRefs[index].date = e.target.value;
+                            setReferences(newRefs);
+                          }
+                        }}
+                        className="w-full px-3 py-2 border rounded text-sm"
+                      />
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Monto</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          placeholder="0.00"
+                          value={ref.amount}
+                          onChange={(e) => {
+                            const newRefs = [...references];
+                            if (newRefs[index]) {
+                              newRefs[index].amount = e.target.value;
+                              if (!newRefs[index].amount_to_use) {
+                                newRefs[index].amount_to_use = e.target.value;
+                              }
+                              setReferences(newRefs);
+                            }
+                          }}
+                          className="w-full px-3 py-2 border rounded text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">A Usar</label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          placeholder="0.00"
+                          value={ref.amount_to_use}
+                          onChange={(e) => {
+                            const newRefs = [...references];
+                            if (newRefs[index]) {
+                              newRefs[index].amount_to_use = e.target.value;
+                              setReferences(newRefs);
+                            }
+                          }}
+                          className="w-full px-3 py-2 border rounded text-sm"
+                        />
+                      </div>
+                    </div>
+                    
+                    {references.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeReference(index)}
+                        className="w-full px-3 py-2 text-red-500 hover:bg-red-50 rounded transition flex items-center justify-center gap-1 text-sm"
+                      >
+                        <FaTrash /> Eliminar
+                      </button>
                     )}
                   </div>
-                  {/* Info adicional de validación */}
-                  {!ref.validating && ref.exists_in_bank && ref.remaining_amount !== undefined && (
-                    <p className="text-xs text-gray-600 mt-1">
-                      Disponible: ${ref.remaining_amount.toFixed(2)}
-                    </p>
-                  )}
+                  
+                  {/* Layout desktop - horizontal */}
+                  <div className="hidden md:grid md:grid-cols-12 gap-2">
+                    <div className="col-span-4 relative">
+                      <input
+                        type="text"
+                        placeholder="# Referencia"
+                        value={ref.reference_number}
+                        onChange={(e) => {
+                          const newRefs = [...references];
+                          if (newRefs[index]) {
+                            newRefs[index].reference_number = e.target.value;
+                            setReferences(newRefs);
+                            validateReference(index, e.target.value);
+                          }
+                        }}
+                        list="available-references"
+                        className="w-full px-3 py-2 pr-8 border rounded text-sm"
+                      />
+                      <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
+                        {ref.validating && <FaSpinner className="text-blue-500 animate-spin" size={16} />}
+                        {!ref.validating && ref.exists_in_bank && <FaCheckCircle className="text-green-600" size={16} />}
+                        {!ref.validating && ref.exists_in_bank === false && ref.reference_number && <FaExclamationTriangle className="text-red-600" size={16} />}
+                      </div>
+                      {!ref.validating && ref.exists_in_bank && ref.remaining_amount !== undefined && (
+                        <p className="text-xs text-gray-600 mt-1">Disponible: ${ref.remaining_amount.toFixed(2)}</p>
+                      )}
+                    </div>
+                    <div className="col-span-3">
+                      <input
+                        type="date"
+                        value={ref.date}
+                        onChange={(e) => {
+                          const newRefs = [...references];
+                          if (newRefs[index]) {
+                            newRefs[index].date = e.target.value;
+                            setReferences(newRefs);
+                          }
+                        }}
+                        className="w-full px-3 py-2 border rounded text-sm"
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <input
+                        type="number"
+                        step="0.01"
+                        placeholder="Monto"
+                        value={ref.amount}
+                        onChange={(e) => {
+                          const newRefs = [...references];
+                          if (newRefs[index]) {
+                            newRefs[index].amount = e.target.value;
+                            if (!newRefs[index].amount_to_use) {
+                              newRefs[index].amount_to_use = e.target.value;
+                            }
+                            setReferences(newRefs);
+                          }
+                        }}
+                        className="w-full px-3 py-2 border rounded text-sm"
+                      />
+                    </div>
+                    <div className="col-span-2">
+                      <input
+                        type="number"
+                        step="0.01"
+                        placeholder="A usar"
+                        value={ref.amount_to_use}
+                        onChange={(e) => {
+                          const newRefs = [...references];
+                          if (newRefs[index]) {
+                            newRefs[index].amount_to_use = e.target.value;
+                            setReferences(newRefs);
+                          }
+                        }}
+                        className="w-full px-3 py-2 border rounded text-sm"
+                      />
+                    </div>
+                    <div className="col-span-1 flex items-center justify-center">
+                      {references.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeReference(index)}
+                          className="p-2 text-red-500 hover:bg-red-50 rounded transition"
+                        >
+                          <FaTrash />
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <div className="col-span-3">
-                  <input
-                    type="date"
-                    value={ref.date}
-                    onChange={(e) => {
-                      const newRefs = [...references];
-                      if (newRefs[index]) {
-                        newRefs[index].date = e.target.value;
-                        setReferences(newRefs);
-                      }
-                    }}
-                    className="w-full px-3 py-2 border rounded text-sm"
-                  />
-                </div>
-                <div className="col-span-2">
-                  <input
-                    type="number"
-                    step="0.01"
-                    placeholder="Monto"
-                    value={ref.amount}
-                    onChange={(e) => {
-                      const newRefs = [...references];
-                      if (newRefs[index]) {
-                        newRefs[index].amount = e.target.value;
-                        if (!newRefs[index].amount_to_use) {
-                          newRefs[index].amount_to_use = e.target.value;
-                        }
-                        setReferences(newRefs);
-                      }
-                    }}
-                    className="w-full px-3 py-2 border rounded text-sm"
-                  />
-                </div>
-                <div className="col-span-2">
-                  <input
-                    type="number"
-                    step="0.01"
-                    placeholder="A usar"
-                    value={ref.amount_to_use}
-                    onChange={(e) => {
-                      const newRefs = [...references];
-                      if (newRefs[index]) {
-                        newRefs[index].amount_to_use = e.target.value;
-                        setReferences(newRefs);
-                      }
-                    }}
-                    className="w-full px-3 py-2 border rounded text-sm"
-                  />
-                </div>
-                <div className="col-span-1 flex items-center justify-center">
-                  {references.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => removeReference(index)}
-                      className="p-2 text-red-500 hover:bg-red-50 rounded transition"
-                    >
-                      <FaTrash />
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
-            <datalist id="available-references">
-              {availableReferences.map((ref) => (
-                <option key={ref.id} value={ref.reference_number} />
               ))}
-            </datalist>
-          </div>
+              <datalist id="available-references">
+                {availableReferences.map((ref) => (
+                  <option key={ref.id} value={ref.reference_number} />
+                ))}
+              </datalist>
+            </div>
+          )}
 
           {/* Divisiones (opcional) */}
           <div>
@@ -899,12 +1060,12 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
         <div className="standard-modal-footer">
           <div></div>
           
-          <div className="flex gap-3">
+          <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full sm:w-auto">
             <button
               type="button"
               onClick={onClose}
               disabled={loading}
-              className="standard-modal-button-secondary"
+              className="standard-modal-button-secondary w-full sm:w-auto"
             >
               Cancelar
             </button>
@@ -912,7 +1073,7 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
               type="button"
               onClick={handleSave}
               disabled={loading}
-              className="standard-modal-button-primary"
+              className="standard-modal-button-primary w-full sm:w-auto"
             >
               {loading ? (
                 <>
@@ -921,14 +1082,75 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
                 </>
               ) : (
                 <>
-                  <FaSave />
-                  <span>Guardar Cambios</span>
+                  <FaSave className="text-white" />
+                  <span className="text-white">Guardar Cambios</span>
                 </>
               )}
             </button>
           </div>
         </div>
       </div>
+      
+      {/* Modal de confirmación */}
+      {showConfirmModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[10000] p-4">
+          <div className="bg-white rounded-lg max-w-md w-full p-6 shadow-2xl">
+            <div className="flex items-start gap-3 mb-4">
+              <div className="flex-shrink-0 w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center">
+                <FaExclamationTriangle className="text-amber-600" size={24} />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-lg font-bold text-gray-900 mb-2">
+                  ⚠️ Confirmar Cambio de Método de Pago
+                </h3>
+                <p className="text-sm text-gray-600 mb-3">
+                  Este pago está actualmente configurado como <strong>descuento a corredor</strong> y tiene un adelanto asociado.
+                </p>
+                <div className="bg-red-50 border-l-4 border-red-500 p-3 rounded-r mb-3">
+                  <p className="text-sm text-red-800 font-semibold">
+                    🗑️ Al cambiar a transferencia bancaria:
+                  </p>
+                  <ul className="text-xs text-red-700 mt-2 space-y-1 ml-4 list-disc">
+                    <li>El adelanto asociado será <strong>cancelado automáticamente</strong></li>
+                    <li>El pago usará referencias bancarias en su lugar</li>
+                    <li>Esta acción no se puede deshacer</li>
+                  </ul>
+                </div>
+                <p className="text-sm text-gray-700 font-medium">
+                  ¿Estás seguro de que deseas continuar?
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowConfirmModal(false);
+                  setPendingDeductionChange(null);
+                }}
+                className="flex-1 px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition font-medium"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPaymentMethod('bank_transfer');
+                  setIsBrokerDeduction(false);
+                  setShowConfirmModal(false);
+                  setPendingDeductionChange(null);
+                  toast.info('El adelanto será cancelado al guardar los cambios');
+                }}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium flex items-center justify-center gap-2"
+              >
+                <FaExclamationTriangle className="text-white" />
+                <span className="text-white">Sí, Cambiar Método</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
