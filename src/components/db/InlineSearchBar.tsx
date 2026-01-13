@@ -136,17 +136,10 @@ export default function InlineSearchBar({ initialQuery = '' }: InlineSearchBarPr
 
   return (
     <div ref={searchRef} className="relative w-full">
-      <form onSubmit={handleSearch} className="relative">
-        <div className="relative flex items-center">
+      <form onSubmit={handleSearch}>
+        <div className="flex items-center gap-2 border-2 border-gray-200 rounded-xl focus-within:border-[#8AAA19] transition-all bg-white px-3 sm:px-4 py-2.5 sm:py-3">
           {/* Search Icon */}
-          <div 
-            className="absolute left-3 sm:left-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none"
-            style={{ 
-              zIndex: 20,
-              transform: 'translate3d(0, -50%, 0)',
-              WebkitTransform: 'translate3d(0, -50%, 0)'
-            }}
-          >
+          <div className="flex-shrink-0 text-gray-400">
             <FaSearch className="text-base sm:text-lg" />
           </div>
 
@@ -156,38 +149,22 @@ export default function InlineSearchBar({ initialQuery = '' }: InlineSearchBarPr
             value={searchQuery}
             onChange={(e) => handleInputChange(e.target.value)}
             onFocus={() => setShowSuggestions(true)}
-            className="w-full pl-10 sm:pl-12 pr-28 sm:pr-32 py-2.5 sm:py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:border-[#8AAA19] transition-all text-gray-700 placeholder-gray-400 text-[16px] bg-white"
+            className="flex-1 min-w-0 border-0 focus:outline-none focus:ring-0 text-gray-700 placeholder-gray-400 text-[16px] bg-transparent p-0"
             placeholder="Buscar por nombre, cédula, email..."
             style={{ 
               WebkitTextSizeAdjust: '100%',
-              WebkitAppearance: 'none',
-              position: 'relative',
-              zIndex: 1,
-              transform: 'translate3d(0, 0, 0)',
-              WebkitTransform: 'translate3d(0, 0, 0)',
-              isolation: 'isolate'
+              WebkitAppearance: 'none'
             }}
           />
 
           {/* Clear & Search Buttons */}
-          <div 
-            className="absolute right-1.5 sm:right-2 top-1/2 flex items-center gap-0.5 sm:gap-1"
-            style={{ 
-              zIndex: 30,
-              transform: 'translate3d(0, -50%, 0)',
-              WebkitTransform: 'translate3d(0, -50%, 0)'
-            }}
-          >
+          <div className="flex items-center gap-0.5 sm:gap-1 flex-shrink-0">
             {searchQuery && (
               <button
                 type="button"
                 onClick={handleClear}
-                className="p-1.5 sm:p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-all bg-white"
+                className="p-1.5 sm:p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-all"
                 title="Limpiar búsqueda"
-                style={{
-                  transform: 'translate3d(0, 0, 0)',
-                  WebkitTransform: 'translate3d(0, 0, 0)'
-                }}
               >
                 <FaTimes className="text-sm sm:text-base" />
               </button>
@@ -196,10 +173,6 @@ export default function InlineSearchBar({ initialQuery = '' }: InlineSearchBarPr
               type="submit"
               disabled={!searchQuery.trim()}
               className="px-3 sm:px-4 py-1.5 sm:py-2 bg-gradient-to-r from-[#010139] to-[#020270] text-white rounded-lg hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed font-medium text-sm sm:text-base"
-              style={{
-                transform: 'translate3d(0, 0, 0)',
-                WebkitTransform: 'translate3d(0, 0, 0)'
-              }}
             >
               Buscar
             </button>
