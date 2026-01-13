@@ -1246,10 +1246,44 @@ export default function DatabaseTabs({
 
   const handleView = (id: string) => router.push(`/db?tab=clients&modal=view-client&editClient=${id}`, { scroll: false });
   const handleEdit = (id: string) => router.push(`/db?tab=clients&modal=edit-client&editClient=${id}`, { scroll: false });
-  const handleDelete = (id: string) => {
-    if (confirm('¿Estás seguro de eliminar este cliente y todas sus pólizas?')) {
-      // TODO: Implementar eliminación de cliente
-      toast.error('Funcionalidad de eliminación en desarrollo');
+  const handleDelete = async (id: string) => {
+    const client = clients.find(c => c.id === id);
+    const clientName = client?.name || 'este cliente';
+    const policiesCount = client?.policies?.length || 0;
+    
+    if (!confirm(`¿Estás seguro de eliminar a ${clientName}${policiesCount > 0 ? ` y sus ${policiesCount} póliza(s)` : ''}?`)) {
+      return;
+    }
+    
+    try {
+      // Si tiene pólizas, eliminarlas primero
+      if (policiesCount > 0) {
+        for (const policy of client!.policies!) {
+          const policyResponse = await fetch(`/api/db/policies/${policy.id}`, {
+            method: 'DELETE',
+          });
+          
+          if (!policyResponse.ok) {
+            const error = await policyResponse.json();
+            throw new Error(`Error al eliminar póliza ${policy.policy_number}: ${error.error}`);
+          }
+        }
+      }
+      
+      // Ahora eliminar el cliente
+      const response = await fetch(`/api/db/clients/${id}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Error al eliminar');
+      }
+
+      toast.success(`Cliente ${clientName} eliminado correctamente`);
+      router.refresh();
+    } catch (error: any) {
+      toast.error(error.message || 'Error al eliminar el cliente');
     }
   };
 
