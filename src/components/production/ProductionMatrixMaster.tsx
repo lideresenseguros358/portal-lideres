@@ -232,12 +232,8 @@ export default function ProductionMatrixMaster({ year }: ProductionMatrixMasterP
       });
 
       if (response.ok) {
-        setProduction(prev => prev.map(b => {
-          if (b.broker_id === brokerId) {
-            return { ...b, canceladas_ytd: value };
-          }
-          return b;
-        }));
+        // Recargar datos del API para asegurar que todo se actualice
+        await loadProduction();
         toast.success('Canceladas actualizadas');
       } else {
         toast.error('Error al guardar');
