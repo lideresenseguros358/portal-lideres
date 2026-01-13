@@ -201,7 +201,6 @@ export default function ClientDetailsModal({ client, onClose, onEdit, onOpenExpe
         .select(`
           policy_number,
           gross_amount,
-          broker_commission,
           comm_imports!inner(period_label)
         `)
         .eq('policy_number', policy.policy_number)
@@ -248,7 +247,7 @@ export default function ClientDetailsModal({ client, onClose, onEdit, onOpenExpe
           fortnight_id: periodLabel,
           period_start: fortnightData.period_start,
           period_end: fortnightData.period_end,
-          amount: Math.abs(item.broker_commission || item.gross_amount),
+          amount: Math.abs(item.gross_amount),
           policy_number: item.policy_number
         };
       });
