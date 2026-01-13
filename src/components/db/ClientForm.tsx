@@ -13,6 +13,7 @@ import NationalIdInput from '@/components/ui/NationalIdInput';
 import PolicyNumberInput from '@/components/ui/PolicyNumberInput';
 import MergeDuplicateModal from './MergeDuplicateModal';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import BrokerReassignmentModal from './BrokerReassignmentModal';
 import { toast } from 'sonner';
 
 import { ClientWithPolicies } from '@/types/db';
@@ -70,6 +71,9 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
     totalAmount: number;
     fortnightCount: number;
   } | null>(null);
+  const [commissionData, setCommissionData] = useState<any>(null);
+  const [showReassignmentModal, setShowReassignmentModal] = useState(false);
+  const [savingWithAdjustments, setSavingWithAdjustments] = useState(false);
   
   const handleExpedienteModalChange = useCallback((open: boolean) => {
     if (onExpedienteModalChange) {
@@ -171,8 +175,11 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
             totalAmount: data.totalAmount,
             fortnightCount: data.commissionsByFortnight.length
           });
+          // Guardar datos completos para el modal
+          setCommissionData(data);
         } else {
           setCommissionWarning(null);
+          setCommissionData(null);
         }
       } catch (error) {
         console.error('Error checking commissions:', error);
@@ -246,7 +253,20 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
       return;
     }
     
+    // Si hay cambio de broker con comisiones, mostrar modal de confirmación
+    if (client && commissionWarning?.show && formData.broker_id !== client.broker_id) {
+      setShowReassignmentModal(true);
+      return;
+    }
+    
+    // Proceder con guardado normal
+    await saveClient(false);
+  };
+  
+  const saveClient = async (makeAdjustments: boolean) => {
+    
     setLoading(true);
+    setSavingWithAdjustments(makeAdjustments);
     setError("");
 
     try {
@@ -258,18 +278,46 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
           phone: formData.phone || null,
           birth_date: formData.birth_date,
           active: formData.active,
+          broker_id: formData.broker_id || null,
         });
 
-        const response = await fetch(`/api/db/clients/${client.id}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-
-        if (!response.ok) {
-          const errorJson = await response.json().catch(() => null);
-          throw new Error(errorJson?.error || "Error actualizando cliente");
+        // Si hay cambio de broker con ajustes, usar endpoint especial
+        if (makeAdjustments && formData.broker_id !== client.broker_id && commissionData) {
+          const response = await fetch('/api/clients/reassign-broker', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              clientId: client.id,
+              oldBrokerId: client.broker_id,
+              newBrokerId: formData.broker_id,
+              makeAdjustments: true,
+              commissionsData: commissionData.commissionsByFortnight,
+              clientData: payload
+            })
+          });
+          
+          if (!response.ok) {
+            const errorJson = await response.json().catch(() => null);
+            throw new Error(errorJson?.error || "Error en reasignación con ajustes");
+          }
+          
+          toast.success('Cliente reasignado con ajustes retroactivos creados');
+        } else {
+          // Guardado normal
+          const response = await fetch(`/api/db/clients/${client.id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
+          
+          if (!response.ok) {
+            const errorJson = await response.json().catch(() => null);
+            throw new Error(errorJson?.error || "Error actualizando cliente");
+          }
+          
+          toast.success('Cliente actualizado correctamente');
         }
+
       } else {
         const rawClientData = {
           name: formData.name,
@@ -713,6 +761,30 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
             }
           }}
           loading={mergingClients}
+        />
+      )}
+
+      {/* Modal de reasignación de corredor */}
+      {showReassignmentModal && client && commissionData && (
+        <BrokerReassignmentModal
+          isOpen={showReassignmentModal}
+          onClose={() => {
+            setShowReassignmentModal(false);
+          }}
+          onConfirm={async (makeAdjustments) => {
+            setShowReassignmentModal(false);
+            await saveClient(makeAdjustments);
+          }}
+          clientName={formData.name}
+          oldBrokerName={brokers.find(b => b.id === client.broker_id)?.name || 
+                         (brokers.find(b => b.id === client.broker_id)?.profiles as any)?.full_name || 
+                         'Corredor anterior'}
+          newBrokerName={brokers.find(b => b.id === formData.broker_id)?.name || 
+                        (brokers.find(b => b.id === formData.broker_id)?.profiles as any)?.full_name || 
+                        'Nuevo corredor'}
+          totalAmount={commissionData.totalAmount}
+          commissionsByFortnight={commissionData.commissionsByFortnight}
+          loading={loading}
         />
       )}
     </div>
