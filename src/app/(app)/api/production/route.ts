@@ -281,11 +281,45 @@ export async function PUT(request: NextRequest) {
     }
 
     // ===========================================================
-    // CASO 2: Actualizar Canceladas Anuales (YTD)
+    // CASO 2: Actualizar Canceladas Anuales (YTD) usando field
     // ===========================================================
-    // Nota: Las canceladas se guardan a nivel de tabla production en cada mes
-    // La suma de todas las canceladas mensuales = canceladas_ytd
-    // Por ahora retornamos éxito - se manejará en el modal
+    const { field, value } = body;
+    
+    if (field === 'canceladas_ytd') {
+      if (!broker_id || !year) {
+        return NextResponse.json({ error: 'broker_id y year son requeridos' }, { status: 400 });
+      }
+
+      // Actualizar canceladas en todos los meses del año para este broker
+      // Ponemos el valor total en el primer mes y 0 en los demás
+      // Esto es una convención para almacenar el valor anual
+      const { error: updateError } = await supabase
+        .from('production')
+        .update({ canceladas: value })
+        .eq('broker_id', broker_id)
+        .eq('year', year)
+        .eq('month', 1); // Solo actualizar enero con el valor total
+
+      // Limpiar los demás meses
+      await supabase
+        .from('production')
+        .update({ canceladas: 0 })
+        .eq('broker_id', broker_id)
+        .eq('year', year)
+        .neq('month', 1);
+
+      if (updateError) {
+        console.error('Error updating canceladas_ytd:', updateError);
+        return NextResponse.json({ error: 'Error al actualizar canceladas' }, { status: 500 });
+      }
+
+      return NextResponse.json({ 
+        success: true, 
+        message: 'Canceladas anuales actualizadas' 
+      });
+    }
+
+    // Legacy: mantener compatibilidad con canceladas_ytd directo
     if (canceladas_ytd !== undefined) {
       return NextResponse.json({ 
         success: true, 

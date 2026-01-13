@@ -130,7 +130,7 @@ export default function ProductionMatrixMaster({ year }: ProductionMatrixMasterP
     });
   };
 
-  const handleMonthSave = async (bruto: number, numPolizas: number, canceladas: number, persistencia: number | null) => {
+  const handleMonthSave = async (bruto: number, numPolizas: number, persistencia: number | null) => {
     if (!monthModal.broker || !monthModal.monthKey) return;
 
     // Validar que persistencia esté entre 0 y 100 si está definida
@@ -149,7 +149,6 @@ export default function ProductionMatrixMaster({ year }: ProductionMatrixMasterP
           month: monthModal.monthKey,
           bruto,
           num_polizas: numPolizas,
-          canceladas,
           persistencia,
         }),
       });
@@ -162,7 +161,7 @@ export default function ProductionMatrixMaster({ year }: ProductionMatrixMasterP
               ...b,
               months: {
                 ...b.months,
-                [monthModal.monthKey!]: { bruto, num_polizas: numPolizas, canceladas, persistencia }
+                [monthModal.monthKey!]: { bruto, num_polizas: numPolizas, persistencia }
               }
             };
           }
@@ -215,6 +214,35 @@ export default function ProductionMatrixMaster({ year }: ProductionMatrixMasterP
       }
     } catch (error) {
       console.error('Error saving meta:', error);
+      toast.error('Error al guardar');
+    }
+  };
+
+  const handleCanceladasEdit = async (brokerId: string, value: number) => {
+    try {
+      const response = await fetch('/api/production', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          broker_id: brokerId,
+          year,
+          field: 'canceladas_ytd',
+          value,
+        }),
+      });
+
+      if (response.ok) {
+        setProduction(prev => prev.map(b => {
+          if (b.broker_id === brokerId) {
+            return { ...b, canceladas_ytd: value };
+          }
+          return b;
+        }));
+        toast.success('Canceladas actualizadas');
+      } else {
+        toast.error('Error al guardar');
+      }
+    } catch (error) {
       toast.error('Error al guardar');
     }
   };
@@ -543,17 +571,21 @@ export default function ProductionMatrixMaster({ year }: ProductionMatrixMasterP
                         </div>
                       </td>
 
-                      {/* Canceladas */}
+                      {/* Canceladas - Editable */}
                       <td className="px-2 py-2 text-center text-xs font-semibold border-b border-gray-200 bg-red-50">
-                        <div className="relative group">
-                          <span className="font-mono text-red-600 cursor-help">${(broker.canceladas_ytd / 1000).toFixed(0)}k</span>
-                          {/* Tooltip */}
-                          <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-30 shadow-xl">
-                            <div className="font-semibold mb-1">Canceladas Año en curso</div>
-                            <div className="text-red-400">❌ Total: <span className="font-mono">${broker.canceladas_ytd.toLocaleString()}</span></div>
-                            <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 -mb-1 border-4 border-transparent border-b-gray-900"></div>
-                          </div>
-                        </div>
+                        <input
+                          type="number"
+                          value={broker.canceladas_ytd === 0 ? '' : broker.canceladas_ytd}
+                          onChange={(e) => {
+                            const value = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                            handleCanceladasEdit(broker.broker_id, value);
+                          }}
+                          onWheel={(e) => e.currentTarget.blur()}
+                          className="w-full px-2 py-1 text-center border border-red-300 rounded focus:border-red-500 focus:outline-none font-mono text-red-600 bg-white"
+                          placeholder="0"
+                          min="0"
+                          step="0.01"
+                        />
                       </td>
 
                       {/* Neto Total */}
@@ -645,7 +677,6 @@ export default function ProductionMatrixMaster({ year }: ProductionMatrixMasterP
         monthName={monthModal.monthName || ''}
         initialBruto={monthModal.broker && monthModal.monthKey ? monthModal.broker.months[monthModal.monthKey as keyof typeof monthModal.broker.months].bruto : 0}
         initialNumPolizas={monthModal.broker && monthModal.monthKey ? monthModal.broker.months[monthModal.monthKey as keyof typeof monthModal.broker.months].num_polizas : 0}
-        initialCanceladas={monthModal.broker && monthModal.monthKey ? monthModal.broker.months[monthModal.monthKey as keyof typeof monthModal.broker.months].canceladas : 0}
         initialPersistencia={monthModal.broker && monthModal.monthKey ? monthModal.broker.months[monthModal.monthKey as keyof typeof monthModal.broker.months].persistencia : null}
       />
 

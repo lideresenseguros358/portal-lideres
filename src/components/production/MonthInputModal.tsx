@@ -6,12 +6,11 @@ import { FaTimes, FaSave, FaDollarSign, FaFileInvoice, FaPercentage } from 'reac
 interface MonthInputModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (bruto: number, numPolizas: number, canceladas: number, persistencia: number | null) => Promise<void>;
+  onSave: (bruto: number, numPolizas: number, persistencia: number | null) => Promise<void>;
   brokerName: string;
   monthName: string;
   initialBruto?: number;
   initialNumPolizas?: number;
-  initialCanceladas?: number;
   initialPersistencia?: number | null;
 }
 
@@ -23,12 +22,10 @@ export default function MonthInputModal({
   monthName,
   initialBruto = 0,
   initialNumPolizas = 0,
-  initialCanceladas = 0,
   initialPersistencia = null,
 }: MonthInputModalProps) {
   const [bruto, setBruto] = useState(initialBruto);
   const [numPolizas, setNumPolizas] = useState(initialNumPolizas);
-  const [canceladas, setCanceladas] = useState(initialCanceladas);
   const [persistencia, setPersistencia] = useState<number | null>(initialPersistencia);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -37,11 +34,10 @@ export default function MonthInputModal({
     if (isOpen) {
       setBruto(initialBruto);
       setNumPolizas(initialNumPolizas);
-      setCanceladas(initialCanceladas);
       setPersistencia(initialPersistencia);
       setError('');
     }
-  }, [isOpen, initialBruto, initialNumPolizas, initialCanceladas, initialPersistencia]);
+  }, [isOpen, initialBruto, initialNumPolizas, initialPersistencia]);
 
   const handleSave = async () => {
     // Validar que persistencia esté entre 0 y 100 si está definida
@@ -53,7 +49,7 @@ export default function MonthInputModal({
     setError('');
     setSaving(true);
     try {
-      await onSave(bruto, numPolizas, canceladas, persistencia);
+      await onSave(bruto, numPolizas, persistencia);
       onClose();
     } catch (error) {
       console.error('Error saving:', error);
@@ -147,33 +143,6 @@ export default function MonthInputModal({
             </p>
           </div>
 
-          {/* Campo: Canceladas */}
-          <div>
-            <label className="block text-sm font-semibold text-[#010139] mb-2">
-              <FaDollarSign className="inline mr-2 text-red-600" />
-              Canceladas del Mes (USD)
-            </label>
-            <input
-              type="number"
-              value={canceladas === 0 ? '' : canceladas}
-              onChange={(e) => {
-                const value = e.target.value === '' ? 0 : parseFloat(e.target.value);
-                setCanceladas(value);
-                setError('');
-              }}
-              min="0"
-              step="0.01"
-              className={`w-full px-4 py-3 border-2 rounded-lg focus:outline-none font-mono text-lg ${
-                error ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
-              }`}
-              placeholder="0.00"
-              disabled={saving}
-            />
-            <p className="text-xs text-red-600 mt-1 font-semibold">
-              ⚠️ Las canceladas se acumulan año tras año y se restan del total bruto acumulado, NO del bruto de este mes
-            </p>
-          </div>
-
           {/* Campo: Persistencia */}
           <div>
             <label className="block text-sm font-semibold text-[#010139] mb-2">
@@ -216,7 +185,7 @@ export default function MonthInputModal({
           )}
 
           {/* Resumen */}
-          {(bruto > 0 || numPolizas > 0 || canceladas > 0 || persistencia !== null) && (
+          {(bruto > 0 || numPolizas > 0 || persistencia !== null) && (
             <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 rounded-lg p-4">
               <p className="text-sm font-semibold text-blue-800 mb-3">
                 📊 Resumen del Mes:
@@ -225,10 +194,6 @@ export default function MonthInputModal({
                 <div className="flex justify-between items-center">
                   <span className="text-gray-700">Cifra Bruta:</span>
                   <span className="font-mono font-bold text-gray-900">${bruto.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-red-700">Canceladas (acumulan):</span>
-                  <span className="font-mono font-bold text-red-600">${canceladas.toLocaleString('en-US', { minimumFractionDigits: 2 })}</span>
                 </div>
                 <div className="flex justify-between items-center mt-3">
                   <span className="text-gray-700">Pólizas:</span>
