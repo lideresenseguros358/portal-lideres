@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FaCheck, FaTimes, FaInfoCircle, FaStar, FaCheckCircle, FaArrowRight } from 'react-icons/fa';
+import { FaCheck, FaTimes, FaInfoCircle, FaStar, FaCheckCircle, FaArrowRight, FaSpinner } from 'react-icons/fa';
 import { toast } from 'sonner';
 import { AUTO_THIRD_PARTY_INSURERS, COVERAGE_LABELS, AutoThirdPartyPlan, AutoInsurer } from '@/lib/constants/auto-quotes';
 import InsurerLogo from '@/components/shared/InsurerLogo';
@@ -15,6 +15,9 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
   const [showInstallmentsModal, setShowInstallmentsModal] = useState(false);
   const [insurerLogos, setInsurerLogos] = useState<Record<string, string | null>>({});
   const [generatingQuote, setGeneratingQuote] = useState(false);
+  const [loadingFedpaPlans, setLoadingFedpaPlans] = useState(false);
+  const [fedpaPlansLoaded, setFedpaPlansLoaded] = useState(false);
+  const [insurersData, setInsurersData] = useState<AutoInsurer[]>(AUTO_THIRD_PARTY_INSURERS);
 
   useEffect(() => {
     // Cargar logos de aseguradoras
@@ -46,6 +49,63 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
       })
       .catch(err => console.error('Error loading insurer logos:', err));
   }, []);
+
+  // Cargar planes de FEDPA en tiempo real
+  useEffect(() => {
+    const loadFedpaPlans = async () => {
+      if (fedpaPlansLoaded) return;
+      
+      setLoadingFedpaPlans(true);
+      console.log('[ThirdParty] Cargando planes de FEDPA desde API...');
+      
+      try {
+        const response = await fetch('/api/fedpa/third-party');
+        const data = await response.json();
+        
+        if (data.success && data.plans && data.plans.length > 0) {
+          console.log('[ThirdParty] Planes FEDPA cargados:', data.plans.length);
+          
+          // Actualizar datos de FEDPA con información en tiempo real
+          setInsurersData(prevInsurers => {
+            return prevInsurers.map(insurer => {
+              if (insurer.id === 'fedpa') {
+                // Buscar planes básico y premium de FEDPA
+                const basicPlan = data.plans.find((p: any) => p.planType === 'basic');
+                const premiumPlan = data.plans.find((p: any) => p.planType === 'premium');
+                
+                return {
+                  ...insurer,
+                  basicPlan: basicPlan ? {
+                    ...insurer.basicPlan,
+                    coverages: basicPlan.coverages,
+                    annualPremium: basicPlan.annualPremium || insurer.basicPlan.annualPremium,
+                  } : insurer.basicPlan,
+                  premiumPlan: premiumPlan ? {
+                    ...insurer.premiumPlan,
+                    coverages: premiumPlan.coverages,
+                    annualPremium: premiumPlan.annualPremium || insurer.premiumPlan.annualPremium,
+                  } : insurer.premiumPlan,
+                };
+              }
+              return insurer;
+            });
+          });
+          
+          setFedpaPlansLoaded(true);
+          toast.success('Planes de FEDPA actualizados en tiempo real', { duration: 2000 });
+        } else {
+          console.warn('[ThirdParty] No se pudieron cargar planes de FEDPA, usando datos estáticos');
+        }
+      } catch (error) {
+        console.error('[ThirdParty] Error cargando planes de FEDPA:', error);
+        toast.error('No se pudieron actualizar planes de FEDPA. Usando datos estáticos.', { duration: 3000 });
+      } finally {
+        setLoadingFedpaPlans(false);
+      }
+    };
+    
+    loadFedpaPlans();
+  }, [fedpaPlansLoaded]);
 
   const handlePlanClick = async (insurer: AutoInsurer, plan: AutoThirdPartyPlan, type: 'basic' | 'premium') => {
     // Si es INTERNACIONAL, generar cotización automática con API
@@ -197,9 +257,20 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
 
   return (
     <>
+      {/* Loading indicator for FEDPA plans */}
+      {loadingFedpaPlans && (
+        <div className="mb-4 bg-blue-50 border-2 border-blue-200 rounded-lg p-4 flex items-center gap-3">
+          <FaSpinner className="animate-spin text-blue-600 text-xl" />
+          <div>
+            <p className="font-semibold text-blue-900">Actualizando planes de FEDPA...</p>
+            <p className="text-sm text-blue-700">Obteniendo datos en tiempo real desde la API</p>
+          </div>
+        </div>
+      )}
+
       {/* Cards View - Mobile First */}
       <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-        {AUTO_THIRD_PARTY_INSURERS.map((insurer) => (
+        {insurersData.map((insurer) => (
           <div key={insurer.id} className="bg-white rounded-2xl shadow-lg border-2 border-gray-100 hover:border-[#8AAA19] hover:shadow-2xl transition-all duration-300 overflow-hidden group">
             {/* Header con Logo */}
             <div className={`bg-gradient-to-br from-[#010139] to-[#020270] p-6 text-white`}>
