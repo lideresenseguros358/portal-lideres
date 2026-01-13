@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { FaUpload, FaDownload, FaEdit, FaTrash, FaFileAlt, FaFilePdf, FaFileImage, FaFile, FaPlus, FaTimes, FaStar, FaRegStar, FaArrowUp, FaArrowDown, FaSearch, FaFolderOpen } from 'react-icons/fa';
 import { toast } from 'sonner';
 
@@ -26,6 +27,7 @@ interface DocumentsListProps {
 }
 
 export default function DocumentsList({ scope, policyType, insurerId, isMaster, onUpdate }: DocumentsListProps) {
+  const router = useRouter();
   const [documents, setDocuments] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -600,7 +602,7 @@ export default function DocumentsList({ scope, policyType, insurerId, isMaster, 
       )}
 
       {/* Modal de carga de documento */}
-      {showUploadModal && sections.length > 0 && (
+      {showUploadModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
             <div className="flex items-center justify-between mb-6">
@@ -618,6 +620,26 @@ export default function DocumentsList({ scope, policyType, insurerId, isMaster, 
               </button>
             </div>
             
+            {sections.length === 0 ? (
+              <div className="text-center py-8">
+                <FaFolderOpen className="mx-auto text-5xl text-gray-300 mb-4" />
+                <h4 className="text-lg font-semibold text-gray-700 mb-2">
+                  No hay secciones disponibles
+                </h4>
+                <p className="text-sm text-gray-600 mb-6">
+                  Antes de cargar documentos, debes crear al menos una sección para organizarlos.
+                </p>
+                <button
+                  onClick={() => {
+                    setShowUploadModal(false);
+                    router.push(`/downloads/${scope}/${policyType}/${insurerId}/sections`);
+                  }}
+                  className="px-6 py-2 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg hover:shadow-lg transition-all font-semibold"
+                >
+                  Crear Sección
+                </button>
+              </div>
+            ) : (
             <div className="space-y-4">
               {/* Selección de archivo */}
               <div>
@@ -692,6 +714,7 @@ export default function DocumentsList({ scope, policyType, insurerId, isMaster, 
                 </button>
               </div>
             </div>
+            )}
           </div>
         </div>
       )}
