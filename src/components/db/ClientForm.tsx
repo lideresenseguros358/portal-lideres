@@ -134,7 +134,14 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
             .eq('active', true)
             .order('name');
 
+          console.log('[ClientForm] Brokers cargados:', brokersData);
+          console.log('[ClientForm] Broker ID del cliente:', client?.broker_id);
           setBrokers(brokersData || []);
+          
+          // Asegurarse de que el broker_id del cliente esté en formData
+          if (client?.broker_id && !formData.broker_id) {
+            setFormData(prev => ({ ...prev, broker_id: client.broker_id }));
+          }
         }
       } catch (error) {
         console.error('Error loading brokers:', error);
@@ -142,7 +149,7 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
     };
 
     loadBrokersAndRole();
-  }, []);
+  }, [client?.broker_id]);
 
   // Detectar cambio de corredor y verificar comisiones
   useEffect(() => {

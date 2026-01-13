@@ -193,27 +193,51 @@ export default function ClientDetailsModal({ client, onClose, onEdit, onOpenExpe
         return;
       }
 
+      // Get comm_items with their period_label
       const { data: items } = await (supabaseClient() as any)
         .from('comm_items')
         .select(`
           policy_number,
           gross_amount,
           broker_commission,
-          comm_imports!inner(
-            period_label,
-            fortnights!inner(period_start, period_end)
-          )
+          comm_imports!inner(period_label)
         `)
         .eq('policy_number', policy.policy_number)
         .not('gross_amount', 'is', null);
 
-      const detail: FortnightCommission[] = (items || []).map((item: any) => ({
-        fortnight_id: (item.comm_imports as any).period_label,
-        period_start: (item.comm_imports as any).fortnights.period_start,
-        period_end: (item.comm_imports as any).fortnights.period_end,
-        amount: Math.abs(item.broker_commission || item.gross_amount),
-        policy_number: item.policy_number
-      }));
+      if (!items || items.length === 0) {
+        setFortnightDetail([]);
+        setLoadingFortnight(false);
+        return;
+      }
+
+      // Get unique fortnight IDs (period_labels)
+      const fortnightIds = [...new Set(items.map((item: any) => (item.comm_imports as any).period_label))];
+
+      // Fetch fortnight details
+      const { data: fortnights } = await (supabaseClient() as any)
+        .from('fortnights')
+        .select('id, period_start, period_end')
+        .in('id', fortnightIds);
+
+      // Create a map of fortnight data
+      const fortnightMap = new Map<string, { period_start: string; period_end: string }>(
+        (fortnights || []).map((f: any) => [f.id, { period_start: f.period_start, period_end: f.period_end }])
+      );
+
+      // Map items to fortnight commissions
+      const detail: FortnightCommission[] = (items || []).map((item: any) => {
+        const periodLabel = (item.comm_imports as any).period_label;
+        const fortnightData = fortnightMap.get(periodLabel) || { period_start: '', period_end: '' };
+        
+        return {
+          fortnight_id: periodLabel,
+          period_start: fortnightData.period_start,
+          period_end: fortnightData.period_end,
+          amount: Math.abs(item.broker_commission || item.gross_amount),
+          policy_number: item.policy_number
+        };
+      });
 
       // Sort by period_start descending
       detail.sort((a, b) => new Date(b.period_start).getTime() - new Date(a.period_start).getTime());
@@ -221,6 +245,7 @@ export default function ClientDetailsModal({ client, onClose, onEdit, onOpenExpe
       setFortnightDetail(detail);
     } catch (error) {
       console.error('Error loading fortnight detail:', error);
+      setFortnightDetail([]);
     } finally {
       setLoadingFortnight(false);
     }
