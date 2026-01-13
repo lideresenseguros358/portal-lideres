@@ -821,24 +821,24 @@ export async function actionCreatePendingPayment(payment: {
         
         const divisionAmount = Number(division.amount);
         
+        // IMPORTANTE: Calcular excedente ANTES de consumir esta división
+        const excessBeforeThisDivision = remainingExcess > 0 ? remainingExcess : 0;
+        
         console.log(`📝 División ${i + 1}/${pendingPayments.length}:`, {
           client: pendingPayment.client_name,
           amount: divisionAmount,
-          excedente_antes: remainingExcess
+          excedente_antes: excessBeforeThisDivision
         });
         
-        // Generar notas con excedente decreciente para cada referencia
+        // Generar notas con excedente ACTUAL (antes de consumir esta división)
         const divisionNotes: string[] = [];
         
         for (const ref of payment.references) {
-          const refAmount = Number(ref.amount);
-          const excessForThisRef = remainingExcess > 0 ? remainingExcess : 0;
-          
           divisionNotes.push(
-            `REF ${ref.reference_number}: USADO $${divisionAmount.toFixed(2)} (EXCEDENTE $${excessForThisRef.toFixed(2)})`
+            `REF ${ref.reference_number}: USADO $${divisionAmount.toFixed(2)} (EXCEDENTE $${excessBeforeThisDivision.toFixed(2)})`
           );
           
-          console.log(`  └─ Ref ${ref.reference_number}: USADO $${divisionAmount.toFixed(2)} (EXCEDENTE $${excessForThisRef.toFixed(2)})`);
+          console.log(`  └─ Ref ${ref.reference_number}: USADO $${divisionAmount.toFixed(2)} (EXCEDENTE $${excessBeforeThisDivision.toFixed(2)})`);
           
           allReferencesToInsert.push({
             payment_id: pendingPayment.id,
@@ -858,7 +858,7 @@ export async function actionCreatePendingPayment(payment: {
         const updatedMetadata = {
           ...currentMetadata,
           reference_notes: divisionNotes.join(' | '),
-          excess_at_creation: remainingExcess
+          excess_at_creation: excessBeforeThisDivision
         };
         
         // Actualizar el pago con las notas mejoradas
@@ -867,7 +867,7 @@ export async function actionCreatePendingPayment(payment: {
           .update({ notes: JSON.stringify(updatedMetadata) })
           .eq('id', pendingPayment.id);
         
-        // Restar el monto de esta división del excedente para la siguiente
+        // DESPUÉS de guardar, restar el monto de esta división del excedente para la siguiente
         remainingExcess -= divisionAmount;
         
         console.log(`  └─ Excedente después de división ${i + 1}: $${remainingExcess.toFixed(2)}`);

@@ -2052,13 +2052,13 @@ export default function RegisterPaymentWizardNew({
                             <input
                               type="text"
                               value={div.client_name || ''}
-                              onChange={createUppercaseHandler((e) => {
+                              onChange={(e) => {
                                 const newDivs = [...divisions];
                                 if (newDivs[index]) {
-                                  newDivs[index]!.client_name = e.target.value;
+                                  newDivs[index]!.client_name = e.target.value.toUpperCase();
                                 }
                                 setDivisions(newDivs);
-                              })}
+                              }}
                               className={`w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none ${uppercaseInputClass}`}
                               placeholder="Nombre del cliente para esta división"
                             />
