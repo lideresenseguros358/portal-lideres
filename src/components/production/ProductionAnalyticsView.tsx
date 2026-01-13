@@ -251,7 +251,7 @@ export default function ProductionAnalyticsView({ year, brokers }: ProductionAna
       </div>
 
       {/* KPI Cards Agregados - En una sola línea en PC */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 lg:gap-6">
         {/* Meta Global */}
         <div className="bg-gradient-to-br from-[#010139] to-[#020252] rounded-xl shadow-lg p-4 lg:p-6 text-white">
           <div className="flex items-center gap-2 lg:gap-3 mb-2 lg:mb-3">
@@ -284,7 +284,19 @@ export default function ProductionAnalyticsView({ year, brokers }: ProductionAna
             <div className="min-w-0 flex-1">
               <p className="text-xs lg:text-sm text-gray-600 truncate">Neto Año en curso</p>
               <p className="text-lg lg:text-2xl font-bold text-[#8AAA19] font-mono truncate">{formatCurrency(totalNetoYTD)}</p>
-              <p className="text-[10px] lg:text-xs text-gray-500 truncate">{totalNumPolizasYTD} pólizas</p>
+              {totalCanceladasYTD > 0 ? (
+                <div className="text-[9px] lg:text-[10px] text-gray-500 mt-1 space-y-0.5">
+                  <div className="flex items-center gap-1">
+                    <span>Bruto: {formatCurrency(totalBrutoYTD)}</span>
+                  </div>
+                  <div className="flex items-center gap-1 text-red-600">
+                    <span>- Canceladas: {formatCurrency(totalCanceladasYTD)}</span>
+                  </div>
+                  <div className="text-gray-400 text-[8px]">{totalNumPolizasYTD} pólizas</div>
+                </div>
+              ) : (
+                <p className="text-[10px] lg:text-xs text-gray-500 truncate">{totalNumPolizasYTD} pólizas</p>
+              )}
             </div>
           </div>
         </div>
@@ -315,6 +327,31 @@ export default function ProductionAnalyticsView({ year, brokers }: ProductionAna
               <p className="text-xs lg:text-sm text-gray-600 truncate">Mejor Mes {year}</p>
               <p className="text-lg lg:text-xl font-bold text-yellow-600 truncate">{mejorMesActual?.name || '-'}</p>
               <p className="text-xs lg:text-sm font-mono text-gray-700 truncate">{formatCurrency(mejorMesActual?.actual || 0)}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Persistencia */}
+        <div className="bg-white rounded-xl shadow-lg p-4 lg:p-6 border-l-4 border-purple-500">
+          <div className="flex items-center gap-2 lg:gap-3">
+            <div className="bg-purple-100 p-2 lg:p-3 rounded-lg flex-shrink-0">
+              <FaInfoCircle className="text-xl lg:text-2xl text-purple-600" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-xs lg:text-sm text-gray-600 truncate">Persistencia</p>
+              {ultimaPersistencia ? (
+                <>
+                  <p className="text-lg lg:text-2xl font-bold text-purple-600 font-mono truncate">{ultimaPersistencia.value.toFixed(1)}%</p>
+                  <p className="text-[10px] lg:text-xs text-gray-500 truncate">Última: {ultimaPersistencia.month}</p>
+                </>
+              ) : persistenciaPromedio !== null ? (
+                <>
+                  <p className="text-lg lg:text-2xl font-bold text-purple-600 font-mono truncate">{persistenciaPromedio.toFixed(1)}%</p>
+                  <p className="text-[10px] lg:text-xs text-gray-500 truncate">Promedio {year}</p>
+                </>
+              ) : (
+                <p className="text-lg lg:text-xl text-gray-400 truncate">Sin datos</p>
+              )}
             </div>
           </div>
         </div>

@@ -222,7 +222,19 @@ export default function ProductionBrokerView({ year, brokerId }: ProductionBroke
             <div className="min-w-0 flex-1">
               <p className="text-xs lg:text-sm text-gray-600 truncate">Neto Acumulado</p>
               <p className="text-lg lg:text-2xl font-bold text-[#8AAA19] font-mono truncate">{formatCurrency(netoYTD)}</p>
-              <p className="text-[10px] lg:text-xs text-gray-500 truncate">{numPolizasYTD} pólizas</p>
+              {data.canceladas_ytd > 0 ? (
+                <div className="text-[9px] lg:text-[10px] text-gray-500 mt-1 space-y-0.5">
+                  <div className="flex items-center gap-1">
+                    <span>Bruto: {formatCurrency(brutoYTD)}</span>
+                  </div>
+                  <div className="flex items-center gap-1 text-red-600">
+                    <span>- Canceladas: {formatCurrency(data.canceladas_ytd)}</span>
+                  </div>
+                  <div className="text-gray-400 text-[8px]">{numPolizasYTD} pólizas</div>
+                </div>
+              ) : (
+                <p className="text-[10px] lg:text-xs text-gray-500 truncate">{numPolizasYTD} pólizas</p>
+              )}
             </div>
           </div>
         </div>
