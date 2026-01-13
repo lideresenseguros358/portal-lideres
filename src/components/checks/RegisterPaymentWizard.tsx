@@ -741,7 +741,8 @@ export default function RegisterPaymentWizardNew({
           });
 
           // Anexar detalle de uso de referencias a las notas del formulario para que viaje al backend
-          if (allocationDetails.length > 0) {
+          // SKIP si hay divisiones - el backend generará las notas con excedente dinámico
+          if (allocationDetails.length > 0 && !divideSingle) {
             const allocationNote = `REFS: ${allocationDetails.join(' | ')}`;
             formData.notes = formData.notes
               ? `${formData.notes} | ${allocationNote}`
