@@ -167,10 +167,11 @@ export default function ProductionAnalyticsView({ year, brokers }: ProductionAna
     ? aggregateMonthlyData.reduce((max, m) => m.anterior > (max?.anterior || 0) ? m : max)
     : undefined;
 
-  // Calcular última persistencia registrada
+  // Calcular última persistencia registrada (carry-forward desde año anterior si es necesario)
   const ultimaPersistencia = (() => {
     const currentMonth = new Date().getMonth(); // 0-11
-    // Buscar desde el mes actual hacia atrás
+    
+    // 1. Buscar en año actual desde el mes actual hacia atrás
     for (let i = currentMonth; i >= 0; i--) {
       const monthKey = MONTH_KEYS[i];
       if (!monthKey) continue;
@@ -179,10 +180,23 @@ export default function ProductionAnalyticsView({ year, brokers }: ProductionAna
         const monthData = broker.months[monthKey as keyof typeof broker.months];
         const persistencia = monthData?.persistencia;
         if (persistencia !== null && persistencia !== undefined) {
-          return { value: persistencia, month: MONTH_NAMES[i] };
+          return { value: persistencia, month: MONTH_NAMES[i], year };
         }
       }
     }
+    
+    // 2. Si no hay en año actual, buscar en año anterior (carry-forward)
+    for (const broker of allBrokersData) {
+      if (broker.previous_year?.last_persistencia) {
+        const monthIndex = broker.previous_year.last_persistencia.month - 1;
+        return { 
+          value: broker.previous_year.last_persistencia.value, 
+          month: MONTH_NAMES[monthIndex],
+          year: year - 1
+        };
+      }
+    }
+    
     return null;
   })();
 
@@ -342,7 +356,9 @@ export default function ProductionAnalyticsView({ year, brokers }: ProductionAna
               {ultimaPersistencia ? (
                 <>
                   <p className="text-lg lg:text-2xl font-bold text-purple-600 font-mono truncate">{ultimaPersistencia.value.toFixed(1)}%</p>
-                  <p className="text-[10px] lg:text-xs text-gray-500 truncate">Última: {ultimaPersistencia.month}</p>
+                  <p className="text-[10px] lg:text-xs text-gray-500 truncate">
+                    {ultimaPersistencia.month} {ultimaPersistencia.year !== year ? ultimaPersistencia.year : ''}
+                  </p>
                 </>
               ) : persistenciaPromedio !== null ? (
                 <>

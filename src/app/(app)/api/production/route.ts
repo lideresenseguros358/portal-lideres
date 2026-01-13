@@ -197,6 +197,11 @@ export async function GET(request: NextRequest) {
       if (broker) {
         broker.previous_year.bruto_ytd += parseFloat(record.bruto) || 0;
         broker.previous_year.neto_ytd += (parseFloat(record.bruto) || 0) - (parseFloat(record.canceladas) || 0);
+        // Guardar última persistencia del año anterior si existe
+        const persistencia = record.persistencia !== null && record.persistencia !== undefined ? parseFloat(record.persistencia) : null;
+        if (persistencia !== null && !broker.previous_year.last_persistencia) {
+          broker.previous_year.last_persistencia = { value: persistencia, month: record.month };
+        }
         broker.previous_year.num_polizas_ytd += parseInt(record.num_polizas) || 0;
       }
     });

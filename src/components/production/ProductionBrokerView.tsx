@@ -134,20 +134,33 @@ export default function ProductionBrokerView({ year, brokerId }: ProductionBroke
     ? monthlyData.reduce((max, m) => m.anterior > (max?.anterior || 0) ? m : max)
     : undefined;
 
-  // Calcular última persistencia registrada del broker
+  // Calcular última persistencia registrada del broker (carry-forward desde año anterior)
   const MONTH_KEYS_ARRAY = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
   const MONTH_NAMES_ARRAY = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
   const ultimaPersistencia = (() => {
     const currentMonth = new Date().getMonth(); // 0-11
-    // Buscar desde el mes actual hacia atrás
+    
+    // 1. Buscar en año actual desde el mes actual hacia atrás
     for (let i = currentMonth; i >= 0; i--) {
       const monthKey = MONTH_KEYS_ARRAY[i] as keyof typeof data.months;
       const monthData = data.months[monthKey];
       const persistencia = monthData?.persistencia;
       if (persistencia !== null && persistencia !== undefined) {
-        return { value: persistencia, month: MONTH_NAMES_ARRAY[i] };
+        return { value: persistencia, month: MONTH_NAMES_ARRAY[i], year };
       }
     }
+    
+    // 2. Si no hay en año actual, buscar en año anterior (carry-forward)
+    const previousYear = data.previous_year as any;
+    if (previousYear?.last_persistencia) {
+      const monthIndex = previousYear.last_persistencia.month - 1;
+      return { 
+        value: previousYear.last_persistencia.value, 
+        month: MONTH_NAMES_ARRAY[monthIndex],
+        year: year - 1
+      };
+    }
+    
     return null;
   })();
 
@@ -277,7 +290,9 @@ export default function ProductionBrokerView({ year, brokerId }: ProductionBroke
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1 lg:gap-2">
-                <p className="text-xs lg:text-sm text-gray-600 truncate">Persistencia {ultimaPersistencia?.month || ''}</p>
+                <p className="text-xs lg:text-sm text-gray-600 truncate">
+                  Persistencia {ultimaPersistencia?.month || ''} {ultimaPersistencia?.year !== year ? ultimaPersistencia?.year : ''}
+                </p>
                 <div className="group relative flex-shrink-0">
                   <FaInfoCircle className="text-gray-400 hover:text-purple-600 cursor-help text-xs lg:text-sm" />
                   <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-3 py-2 bg-gray-900 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
