@@ -107,33 +107,16 @@ export default function EditDatesModal({ isOpen, onClose, currentDates, onSave }
                 />
               </div>
 
-              <div>
-                <label htmlFor="apadea1" className="block text-sm font-semibold text-[#010139] mb-2">
-                  📅 Primera fecha APADEA
+              <div className="sm:col-span-2">
+                <label htmlFor="apadea" className="block text-sm font-semibold text-[#010139] mb-2">
+                  📅 Fechas APADEA
                 </label>
                 <input
-                  type="number"
-                  id="apadea1"
-                  min="1"
-                  max="31"
-                  value={dates.apadeaDate1 || ''}
-                  onChange={(e) => setDates({ ...dates, apadeaDate1: e.target.value === '' ? 0 : parseInt(e.target.value) })}
-                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none"
-                  disabled={isSaving}
-                />
-              </div>
-
-              <div>
-                <label htmlFor="apadea2" className="block text-sm font-semibold text-[#010139] mb-2">
-                  📅 Segunda fecha APADEA
-                </label>
-                <input
-                  type="number"
-                  id="apadea2"
-                  min="1"
-                  max="31"
-                  value={dates.apadeaDate2 || ''}
-                  onChange={(e) => setDates({ ...dates, apadeaDate2: e.target.value === '' ? 0 : parseInt(e.target.value) })}
+                  type="text"
+                  id="apadea"
+                  value={dates.apadeaText || ''}
+                  onChange={(e) => setDates({ ...dates, apadeaText: e.target.value })}
+                  placeholder="Ej: 10 y 25 de enero, o cualquier texto libre..."
                   className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none"
                   disabled={isSaving}
                 />

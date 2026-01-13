@@ -63,7 +63,7 @@ export default function ImportantDatesSection({ initialDates, isMaster }: Import
             <div className="date-icon">📅</div>
             <div className="date-content">
               <div className="date-label">Fechas APADEA</div>
-              <div className="date-value">{dates.apadeaDate1} y {dates.apadeaDate2} de {monthName}</div>
+              <div className="date-value">{dates.apadeaText || 'No especificado'}</div>
             </div>
           </div>
           

@@ -10,8 +10,7 @@ export interface ImportantDatesData {
   year: number;
   vidaConCancelacionDay: number;
   viaRegularDay: number;
-  apadeaDate1: number;
-  apadeaDate2: number;
+  apadeaText: string;
   cierreMesDay: number;
   newsText: string;
   newsActive: boolean;
@@ -42,8 +41,7 @@ export async function getImportantDates(): Promise<ImportantDatesData | null> {
       year: currentYear,
       vidaConCancelacionDay: 15,
       viaRegularDay: 20,
-      apadeaDate1: 10,
-      apadeaDate2: 25,
+      apadeaText: '',
       cierreMesDay: 30,
       newsText: 'Recuerda actualizar tus trámites pendientes antes del cierre.',
       newsActive: true,
@@ -55,8 +53,7 @@ export async function getImportantDates(): Promise<ImportantDatesData | null> {
     year: data.year,
     vidaConCancelacionDay: data.vida_con_cancelacion_day ?? 15,
     viaRegularDay: data.via_regular_day ?? 20,
-    apadeaDate1: data.apadea_date1 ?? 10,
-    apadeaDate2: data.apadea_date2 ?? 25,
+    apadeaText: String(data.apadea_date1 ?? ''),
     cierreMesDay: data.cierre_mes_day ?? 30,
     newsText: data.news_text ?? '',
     newsActive: data.news_active ?? true,
@@ -72,8 +69,8 @@ export async function updateImportantDates(dates: ImportantDatesData, userId: st
   const updateData: ImportantDatesUpdate = {
     vida_con_cancelacion_day: dates.vidaConCancelacionDay,
     via_regular_day: dates.viaRegularDay,
-    apadea_date1: dates.apadeaDate1,
-    apadea_date2: dates.apadeaDate2,
+    apadea_date1: dates.apadeaText as any, // Store text in numeric field temporarily
+    apadea_date2: null,
     cierre_mes_day: dates.cierreMesDay,
     news_text: dates.newsText,
     news_active: dates.newsActive,
