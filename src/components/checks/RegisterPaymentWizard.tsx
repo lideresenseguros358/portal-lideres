@@ -751,22 +751,33 @@ export default function RegisterPaymentWizardNew({
       }
       
       // Preparar divisiones si están activas
-      const validDivisions = divideSingle ? divisions.map(div => ({
-        purpose: div.purpose,
-        policy_number: div.policy_number || undefined,
-        insurer_name: div.insurer_name || undefined,
-        amount: parseFloat(div.amount),
-        // Campos de devolución
-        return_type: div.return_type || undefined,
-        // Si es mismo cliente, usar el del formulario principal, si no, usar el de la división
-        client_name: sameClient ? formData.client_name : (div.client_name || undefined),
-        broker_id: div.broker_id || undefined,
-        bank_name: div.bank_name || undefined,
-        account_type: div.account_type || undefined,
-        account_number: div.account_number || undefined,
-        // Campo de otros
-        description: div.description || undefined
-      })) : undefined;
+      const validDivisions = divideSingle ? divisions.map((div, index) => {
+        console.log(`[Division ${index + 1}] client_name en div:`, div.client_name);
+        console.log(`[Division ${index + 1}] sameClient:`, sameClient);
+        console.log(`[Division ${index + 1}] formData.client_name:`, formData.client_name);
+        
+        const divisionData = {
+          purpose: div.purpose,
+          policy_number: div.policy_number || undefined,
+          insurer_name: div.insurer_name || undefined,
+          amount: parseFloat(div.amount),
+          // Campos de devolución
+          return_type: div.return_type || undefined,
+          // Si es mismo cliente, usar el del formulario principal, si no, usar el de la división
+          client_name: sameClient ? formData.client_name : (div.client_name || undefined),
+          broker_id: div.broker_id || undefined,
+          bank_name: div.bank_name || undefined,
+          account_type: div.account_type || undefined,
+          account_number: div.account_number || undefined,
+          // Campo de otros
+          description: div.description || undefined
+        };
+        
+        console.log(`[Division ${index + 1}] client_name final:`, divisionData.client_name);
+        return divisionData;
+      }) : undefined;
+      
+      console.log('[Divisions] validDivisions completo:', validDivisions);
       
       const payload = {
         ...formData,
