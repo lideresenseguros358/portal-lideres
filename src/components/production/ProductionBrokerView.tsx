@@ -138,22 +138,31 @@ export default function ProductionBrokerView({ year, brokerId }: ProductionBroke
   const MONTH_KEYS_ARRAY = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
   const MONTH_NAMES_ARRAY = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
   const ultimaPersistencia = (() => {
+    console.log('[ProductionBrokerView] Broker data:', data.broker_name);
+    console.log('[ProductionBrokerView] Months data:', data.months);
+    console.log('[ProductionBrokerView] Previous year:', data.previous_year);
+    
     const currentMonth = new Date().getMonth(); // 0-11
+    console.log('[ProductionBrokerView] Current month:', currentMonth, MONTH_NAMES_ARRAY[currentMonth]);
     
     // 1. Buscar en año actual desde el mes actual hacia atrás
     for (let i = currentMonth; i >= 0; i--) {
       const monthKey = MONTH_KEYS_ARRAY[i] as keyof typeof data.months;
       const monthData = data.months[monthKey];
       const persistencia = monthData?.persistencia;
+      console.log(`[ProductionBrokerView] Checking ${MONTH_NAMES_ARRAY[i]} (${monthKey}): persistencia =`, persistencia);
       if (persistencia !== null && persistencia !== undefined) {
+        console.log('[ProductionBrokerView] Found persistencia in current year:', { value: persistencia, month: MONTH_NAMES_ARRAY[i], year });
         return { value: persistencia, month: MONTH_NAMES_ARRAY[i], year };
       }
     }
     
     // 2. Si no hay en año actual, buscar en año anterior (carry-forward)
     const previousYear = data.previous_year as any;
+    console.log('[ProductionBrokerView] Checking previous year:', previousYear);
     if (previousYear?.last_persistencia) {
       const monthIndex = previousYear.last_persistencia.month - 1;
+      console.log('[ProductionBrokerView] Found persistencia in previous year:', previousYear.last_persistencia);
       return { 
         value: previousYear.last_persistencia.value, 
         month: MONTH_NAMES_ARRAY[monthIndex],
@@ -161,6 +170,7 @@ export default function ProductionBrokerView({ year, brokerId }: ProductionBroke
       };
     }
     
+    console.log('[ProductionBrokerView] No persistencia found');
     return null;
   })();
 
