@@ -1254,6 +1254,7 @@ export async function getRankingTop5(userId: string): Promise<RankingResult> {
     entries,
     currentBrokerId: brokerId ?? undefined,
     currentPosition,
+    currentTotal,
   };
 }
 
