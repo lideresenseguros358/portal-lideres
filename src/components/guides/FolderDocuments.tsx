@@ -84,7 +84,7 @@ export default function FolderDocuments({ folderId, isMaster, onUpdate }: Folder
       // 1. Subir archivo
       const formData = new FormData();
       formData.append('file', uploadFile);
-      formData.append('folder', 'guides');
+      formData.append('section_id', folderId);
 
       const uploadRes = await fetch('/api/guides/upload', {
         method: 'POST',
@@ -103,7 +103,7 @@ export default function FolderDocuments({ folderId, isMaster, onUpdate }: Folder
         body: JSON.stringify({
           section_id: folderId,
           name: uploadFile.name,
-          file_url: uploadData.url,
+          file_url: uploadData.file_url,
           mark_as_new: uploadMarkNew
         })
       });
