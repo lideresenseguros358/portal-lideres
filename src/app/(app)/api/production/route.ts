@@ -57,10 +57,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Error al obtener datos' }, { status: 500 });
     }
 
-    // Obtener datos del año anterior para comparativos
+    // Obtener datos del año anterior para comparativos (incluir persistencia para carry-forward)
     const { data: previousYearData } = await (supabase as any)
       .from('production')
-      .select('broker_id, bruto, canceladas, month')
+      .select('broker_id, bruto, canceladas, month, persistencia, num_polizas')
       .eq('year', year - 1);
 
     // Agrupar datos por broker
@@ -197,12 +197,16 @@ export async function GET(request: NextRequest) {
       if (broker) {
         broker.previous_year.bruto_ytd += parseFloat(record.bruto) || 0;
         broker.previous_year.neto_ytd += (parseFloat(record.bruto) || 0) - (parseFloat(record.canceladas) || 0);
-        // Guardar última persistencia del año anterior si existe
-        const persistencia = record.persistencia !== null && record.persistencia !== undefined ? parseFloat(record.persistencia) : null;
-        if (persistencia !== null && !broker.previous_year.last_persistencia) {
-          broker.previous_year.last_persistencia = { value: persistencia, month: record.month };
-        }
         broker.previous_year.num_polizas_ytd += parseInt(record.num_polizas) || 0;
+        
+        // Guardar última persistencia del año anterior (mes más reciente con valor)
+        const persistencia = record.persistencia !== null && record.persistencia !== undefined ? parseFloat(record.persistencia) : null;
+        if (persistencia !== null) {
+          // Solo actualizar si no existe o si este mes es más reciente
+          if (!broker.previous_year.last_persistencia || record.month > broker.previous_year.last_persistencia.month) {
+            broker.previous_year.last_persistencia = { value: persistencia, month: record.month };
+          }
+        }
       }
     });
 
