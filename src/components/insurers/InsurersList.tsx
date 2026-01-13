@@ -123,14 +123,17 @@ export default function InsurersList({ initialInsurers }: InsurersListProps) {
       <div className="bg-white rounded-xl shadow-lg border-2 border-gray-100 p-3 sm:p-4 md:p-6 mb-6">
         <div className="flex flex-col gap-3 sm:gap-4">
           {/* Buscador compacto */}
-          <div className="relative w-full">
-            <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={14} />
+          <div className="flex items-center gap-2 border-2 border-gray-300 rounded-lg focus-within:border-[#8AAA19] bg-white px-3 py-2 w-full">
+            <div className="flex-shrink-0 text-gray-400">
+              <FaSearch size={14} />
+            </div>
             <input
               type="text"
               placeholder="Buscar..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 text-sm border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition-colors"
+              className="flex-1 min-w-0 border-0 focus:outline-none focus:ring-0 text-gray-700 placeholder-gray-400 text-sm bg-transparent p-0"
+              style={{ WebkitTextSizeAdjust: '100%', WebkitAppearance: 'none' }}
             />
           </div>
           

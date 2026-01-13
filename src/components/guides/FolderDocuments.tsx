@@ -339,14 +339,17 @@ export default function FolderDocuments({ folderId, isMaster, onUpdate }: Folder
       <div className="mb-6 space-y-4">
         <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
           {/* Búsqueda */}
-          <div className="relative flex-1 w-full sm:max-w-md">
-            <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <div className="flex items-center gap-2 border-2 border-gray-300 rounded-lg focus-within:border-[#8AAA19] bg-white px-3 py-2 flex-1 w-full sm:max-w-md">
+            <div className="flex-shrink-0 text-gray-400">
+              <FaSearch />
+            </div>
             <input
               type="text"
               placeholder="Buscar documentos..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+              className="flex-1 min-w-0 border-0 focus:outline-none focus:ring-0 text-gray-700 placeholder-gray-400 bg-transparent p-0"
+              style={{ WebkitTextSizeAdjust: '100%', WebkitAppearance: 'none' }}
             />
           </div>
 

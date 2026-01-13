@@ -120,15 +120,18 @@ export default function SearchModal({
         <div className="standard-modal-content">
           {/* Search Input */}
           <div className="mb-6">
-            <div className="relative">
-              <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+            <div className="flex items-center gap-2 border-2 border-gray-300 rounded-lg focus-within:border-[#8AAA19] bg-white px-4 py-3">
+              <div className="flex-shrink-0 text-gray-400">
+                <FaSearch />
+              </div>
               <input
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder={placeholder}
+                className="flex-1 min-w-0 border-0 focus:outline-none focus:ring-0 text-gray-700 placeholder-gray-400 bg-transparent p-0 text-lg"
+                style={{ WebkitTextSizeAdjust: '100%', WebkitAppearance: 'none' }}
                 autoFocus
-                className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none text-lg"
               />
             </div>
           </div>

@@ -1281,19 +1281,22 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
             
             {/* Buscador */}
             <div className="flex-1 max-w-md">
-              <div className="relative">
-                <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={14} />
+              <div className="flex items-center gap-2 border-2 border-gray-300 rounded-lg focus-within:border-[#8AAA19] focus-within:ring-2 focus-within:ring-[#8AAA19]/20 bg-white px-3 py-2">
+                <div className="flex-shrink-0 text-gray-400">
+                  <FaSearch size={14} />
+                </div>
                 <input
                   type="text"
                   placeholder="Buscar pagos..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-10 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 outline-none text-sm"
+                  className="flex-1 min-w-0 border-0 focus:outline-none focus:ring-0 text-gray-700 placeholder-gray-400 text-sm bg-transparent p-0"
+                  style={{ WebkitTextSizeAdjust: '100%', WebkitAppearance: 'none' }}
                 />
                 {searchTerm && (
                   <button
                     onClick={() => setSearchTerm('')}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    className="flex-shrink-0 text-gray-400 hover:text-gray-600"
                   >
                     <FaTimes size={14} />
                   </button>
@@ -1468,19 +1471,22 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
           <div className="bg-white rounded-xl shadow-md border-2 border-gray-100 p-4">
             {/* Mobile: Buscador arriba (full width) */}
             <div className="mb-3 lg:hidden">
-              <div className="relative">
-                <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={14} />
+              <div className="flex items-center gap-2 border-2 border-gray-300 rounded-lg focus-within:border-[#8AAA19] focus-within:ring-2 focus-within:ring-[#8AAA19]/20 bg-white px-3 py-2">
+                <div className="flex-shrink-0 text-gray-400">
+                  <FaSearch size={14} />
+                </div>
                 <input
                   type="text"
                   placeholder="Buscar pagos..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="w-full pl-10 pr-10 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 outline-none text-sm"
+                  className="flex-1 min-w-0 border-0 focus:outline-none focus:ring-0 text-gray-700 placeholder-gray-400 text-sm bg-transparent p-0"
+                  style={{ WebkitTextSizeAdjust: '100%', WebkitAppearance: 'none' }}
                 />
                 {searchTerm && (
                   <button
                     onClick={() => setSearchTerm('')}
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                    className="flex-shrink-0 text-gray-400 hover:text-gray-600"
                   >
                     <FaTimes size={14} />
                   </button>
@@ -1516,19 +1522,22 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
 
               {/* Buscador - Desktop (centro) */}
               <div className="hidden lg:block flex-1 max-w-md">
-                <div className="relative">
-                  <FaSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={14} />
+                <div className="flex items-center gap-2 border-2 border-gray-300 rounded-lg focus-within:border-[#8AAA19] focus-within:ring-2 focus-within:ring-[#8AAA19]/20 bg-white px-3 py-2">
+                  <div className="flex-shrink-0 text-gray-400">
+                    <FaSearch size={14} />
+                  </div>
                   <input
                     type="text"
                     placeholder="Buscar pagos..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-10 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 outline-none text-sm"
+                    className="flex-1 min-w-0 border-0 focus:outline-none focus:ring-0 text-gray-700 placeholder-gray-400 text-sm bg-transparent p-0"
+                    style={{ WebkitTextSizeAdjust: '100%', WebkitAppearance: 'none' }}
                   />
                   {searchTerm && (
                     <button
                       onClick={() => setSearchTerm('')}
-                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      className="flex-shrink-0 text-gray-400 hover:text-gray-600"
                     >
                       <FaTimes size={14} />
                     </button>
