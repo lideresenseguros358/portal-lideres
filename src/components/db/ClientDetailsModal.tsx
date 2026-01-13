@@ -133,9 +133,9 @@ export default function ClientDetailsModal({ client, onClose, onEdit, onOpenExpe
   const loadComisiones = async () => {
     setLoadingComisiones(true);
     try {
-      const policyIds = client.policies.map(p => p.id);
+      const policyNumbers = client.policies.map(p => p.policy_number);
       
-      if (policyIds.length === 0) {
+      if (policyNumbers.length === 0) {
         setComisionesData([]);
         return;
       }
@@ -143,25 +143,27 @@ export default function ClientDetailsModal({ client, onClose, onEdit, onOpenExpe
       const { data: items } = await (supabaseClient() as any)
         .from('comm_items')
         .select(`
-          policy_id,
+          policy_number,
           gross_amount,
-          policies!inner(
-            policy_number,
-            insurers(name)
-          )
+          insurer_id,
+          insurers(name)
         `)
-        .in('policy_id', policyIds)
+        .in('policy_number', policyNumbers)
         .not('gross_amount', 'is', null);
 
       const grouped = (items || []).reduce((acc: Record<string, PolicyCommissions>, item: any) => {
-        const policyId = item.policy_id;
-        if (!policyId) return acc;
+        const policyNumber = item.policy_number;
+        if (!policyNumber) return acc;
+        
+        // Find the policy_id from client.policies
+        const policy = client.policies.find(p => p.policy_number === policyNumber);
+        const policyId = policy?.id || policyNumber;
         
         if (!acc[policyId]) {
           acc[policyId] = {
             policy_id: policyId,
-            policy_number: (item.policies as any).policy_number || 'N/A',
-            insurer_name: (item.policies as any).insurers?.name || 'N/A',
+            policy_number: policyNumber,
+            insurer_name: (item.insurers as any)?.name || 'N/A',
             total_commissions: 0,
             commissions_count: 0
           };
@@ -182,28 +184,38 @@ export default function ClientDetailsModal({ client, onClose, onEdit, onOpenExpe
   const loadFortnightDetail = async (policyId: string) => {
     setLoadingFortnight(true);
     try {
+      // Find the policy_number from the policyId
+      const policy = client.policies.find(p => p.id === policyId);
+      if (!policy) {
+        console.error('Policy not found:', policyId);
+        setFortnightDetail([]);
+        setLoadingFortnight(false);
+        return;
+      }
+
       const { data: items } = await (supabaseClient() as any)
         .from('comm_items')
         .select(`
-          policy_id,
+          policy_number,
           gross_amount,
-          policies!inner(policy_number),
           comm_imports!inner(
             period_label,
             fortnights!inner(period_start, period_end)
           )
         `)
-        .eq('policy_id', policyId)
-        .not('gross_amount', 'is', null)
-        .order('comm_imports(fortnights(period_start))', { ascending: false });
+        .eq('policy_number', policy.policy_number)
+        .not('gross_amount', 'is', null);
 
       const detail: FortnightCommission[] = (items || []).map((item: any) => ({
         fortnight_id: (item.comm_imports as any).period_label,
         period_start: (item.comm_imports as any).fortnights.period_start,
         period_end: (item.comm_imports as any).fortnights.period_end,
         amount: Math.abs(item.gross_amount),
-        policy_number: (item.policies as any).policy_number
+        policy_number: item.policy_number
       }));
+
+      // Sort by period_start descending
+      detail.sort((a, b) => new Date(b.period_start).getTime() - new Date(a.period_start).getTime());
 
       setFortnightDetail(detail);
     } catch (error) {
