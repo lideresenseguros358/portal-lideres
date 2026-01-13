@@ -797,7 +797,16 @@ export async function actionCreatePendingPayment(payment: {
     
     // Si hay divisiones, asignar referencias con el monto de cada división
     if (hasDivisions && !isBrokerDeduction && payment.divisions && pendingPayments.length === payment.divisions.length) {
-      console.log('📊 Asignando referencias a divisiones...');
+      console.log('📊 Asignando referencias a divisiones con excedente decreciente...');
+      
+      // Calcular el excedente total inicial
+      const totalReferenceAmount = payment.references.reduce((sum, ref) => sum + Number(ref.amount), 0);
+      const totalDivisionsAmount = payment.divisions.reduce((sum, div) => sum + Number(div.amount), 0);
+      let remainingExcess = totalReferenceAmount - totalDivisionsAmount;
+      
+      console.log(`💰 Total referencias: $${totalReferenceAmount.toFixed(2)}`);
+      console.log(`💰 Total divisiones: $${totalDivisionsAmount.toFixed(2)}`);
+      console.log(`💰 Excedente inicial: $${remainingExcess.toFixed(2)}`);
       
       // Para cada división, asignar referencias con el monto de la división
       for (let i = 0; i < pendingPayments.length; i++) {
@@ -814,12 +823,22 @@ export async function actionCreatePendingPayment(payment: {
         
         console.log(`📝 División ${i + 1}/${pendingPayments.length}:`, {
           client: pendingPayment.client_name,
-          amount: divisionAmount
+          amount: divisionAmount,
+          excedente_antes: remainingExcess
         });
         
-        // Para cada referencia, usar el monto de la división
+        // Generar notas con excedente decreciente para cada referencia
+        const divisionNotes: string[] = [];
+        
         for (const ref of payment.references) {
-          console.log(`  └─ Ref ${ref.reference_number}: amount_to_use = $${divisionAmount.toFixed(2)}`);
+          const refAmount = Number(ref.amount);
+          const excessForThisRef = remainingExcess > 0 ? remainingExcess : 0;
+          
+          divisionNotes.push(
+            `REF ${ref.reference_number}: USADO $${divisionAmount.toFixed(2)} (EXCEDENTE $${excessForThisRef.toFixed(2)})`
+          );
+          
+          console.log(`  └─ Ref ${ref.reference_number}: USADO $${divisionAmount.toFixed(2)} (EXCEDENTE $${excessForThisRef.toFixed(2)})`);
           
           allReferencesToInsert.push({
             payment_id: pendingPayment.id,
@@ -830,9 +849,31 @@ export async function actionCreatePendingPayment(payment: {
             exists_in_bank: bankRefMap.has(ref.reference_number)
           });
         }
+        
+        // Actualizar las notas del pago con la información de excedente
+        const currentMetadata = typeof pendingPayment.notes === 'string' 
+          ? JSON.parse(pendingPayment.notes) 
+          : pendingPayment.notes || {};
+        
+        const updatedMetadata = {
+          ...currentMetadata,
+          reference_notes: divisionNotes.join(' | '),
+          excess_at_creation: remainingExcess
+        };
+        
+        // Actualizar el pago con las notas mejoradas
+        await supabase
+          .from('pending_payments')
+          .update({ notes: JSON.stringify(updatedMetadata) })
+          .eq('id', pendingPayment.id);
+        
+        // Restar el monto de esta división del excedente para la siguiente
+        remainingExcess -= divisionAmount;
+        
+        console.log(`  └─ Excedente después de división ${i + 1}: $${remainingExcess.toFixed(2)}`);
       }
       
-      console.log('✅ Referencias asignadas a divisiones');
+      console.log('✅ Referencias asignadas a divisiones con excedente decreciente');
     } else {
       // Lógica para pagos sin divisiones o descuentos a corredor con divisiones
       for (const pendingPayment of pendingPayments) {
@@ -2625,9 +2666,10 @@ export async function actionDeletePendingPayment(paymentId: string) {
     if (batchId) {
       const { data: batchPayments } = await supabase
         .from('pending_payments')
-        .select('id')
+        .select('id, amount_to_pay, notes')
         .neq('id', paymentId)
-        .ilike('notes', `%${batchId}%`);
+        .ilike('notes', `%${batchId}%`)
+        .order('id', { ascending: true });
       
       if (batchPayments && batchPayments.length > 0) {
         otherPaymentsInfo = {
@@ -2636,6 +2678,81 @@ export async function actionDeletePendingPayment(paymentId: string) {
           remaining_ids: batchPayments.map(p => p.id)
         };
         console.log(`ℹ️  Este pago pertenece a un grupo de divisiones. Quedan ${batchPayments.length} pagos del mismo grupo.`);
+        
+        // RECALCULAR EXCEDENTES para las divisiones restantes
+        console.log('🔄 Recalculando excedentes para divisiones restantes...');
+        
+        // Obtener referencias del primer pago restante para calcular el total
+        const firstPaymentId = batchPayments[0]?.id;
+        if (firstPaymentId) {
+          const { data: refs } = await supabase
+            .from('payment_references')
+            .select('reference_number, amount')
+            .eq('payment_id', firstPaymentId);
+          
+          if (refs && refs.length > 0) {
+            // Calcular totales
+            const totalReferenceAmount = refs.reduce((sum, ref) => sum + Number(ref.amount), 0);
+            const totalDivisionsAmount = batchPayments.reduce((sum, p) => sum + Number(p.amount_to_pay), 0);
+            let remainingExcess = totalReferenceAmount - totalDivisionsAmount;
+            
+            console.log(`💰 Total referencias: $${totalReferenceAmount.toFixed(2)}`);
+            console.log(`💰 Total divisiones restantes: $${totalDivisionsAmount.toFixed(2)}`);
+            console.log(`💰 Nuevo excedente: $${remainingExcess.toFixed(2)}`);
+            
+            // Actualizar notas de cada división restante
+            for (let i = 0; i < batchPayments.length; i++) {
+              const payment = batchPayments[i];
+              if (!payment) continue;
+              
+              const divisionAmount = Number(payment.amount_to_pay);
+              const divisionNotes: string[] = [];
+              
+              // Generar notas actualizadas con excedente decreciente
+              for (const ref of refs) {
+                const excessForThisRef = remainingExcess > 0 ? remainingExcess : 0;
+                
+                divisionNotes.push(
+                  `REF ${ref.reference_number}: USADO $${divisionAmount.toFixed(2)} (EXCEDENTE $${excessForThisRef.toFixed(2)})`
+                );
+              }
+              
+              // Actualizar metadata del pago
+              let currentMetadata: any = {};
+              try {
+                if (typeof payment.notes === 'object' && payment.notes !== null) {
+                  currentMetadata = payment.notes;
+                } else if (typeof payment.notes === 'string') {
+                  currentMetadata = JSON.parse(payment.notes);
+                }
+              } catch {
+                currentMetadata = {};
+              }
+              
+              const updatedMetadata = {
+                ...currentMetadata,
+                reference_notes: divisionNotes.join(' | '),
+                excess_at_creation: remainingExcess,
+                division_index: i, // Actualizar índice
+                total_divisions: batchPayments.length, // Actualizar total
+                updated_after_deletion: true
+              };
+              
+              // Actualizar el pago
+              await supabase
+                .from('pending_payments')
+                .update({ notes: JSON.stringify(updatedMetadata) })
+                .eq('id', payment.id);
+              
+              console.log(`  ✅ División ${i + 1}/${batchPayments.length} actualizada - Excedente: $${remainingExcess.toFixed(2)}`);
+              
+              // Restar el monto de esta división del excedente para la siguiente
+              remainingExcess -= divisionAmount;
+            }
+            
+            console.log('✅ Excedentes recalculados para todas las divisiones restantes');
+          }
+        }
       }
     }
 

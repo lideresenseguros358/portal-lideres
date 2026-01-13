@@ -285,7 +285,8 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
         errors.insurer_id = true;
         errorMessages.push('Aseguradora');
       }
-      if (!formData.ramo.trim()) {
+      // Select component returns value directly, no need for .trim()
+      if (!formData.ramo) {
         errors.ramo = true;
         errorMessages.push('Tipo de póliza');
       }
@@ -315,11 +316,13 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
         toast.error('Esta póliza ya existe en el sistema');
         return false;
       }
-    } else if (step === 3 && role === 'master') {
-      if (!formData.broker_email) {
+    } else if (step === 3) {
+      // Validar corredor solo para master
+      if (role === 'master' && !formData.broker_email) {
         errors.broker_email = true;
         errorMessages.push('Corredor');
       }
+      // Validar porcentaje para ambos roles (master y broker)
       if (!formData.percent_override || formData.percent_override.trim() === '') {
         errors.percent_override = true;
         errorMessages.push('Porcentaje de comisión');
@@ -353,25 +356,45 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
     try {
       // Si es un cliente existente, solo crear la póliza
       if (selectedExistingClient) {
-        // Obtener broker_id del broker seleccionado
-        const broker = role === 'master' 
-          ? brokers.find((b: any) => b.profile?.email === formData.broker_email)
-          : null;
+        // Obtener broker_id (p_id del broker seleccionado)
+        let broker_id: string | undefined;
         
-        const { data: userData } = await supabaseClient().auth.getUser();
-        const broker_id = broker ? broker.p_id : userData.user?.id;
+        if (role === 'master') {
+          const broker = brokers.find((b: any) => b.profile?.email === formData.broker_email);
+          broker_id = broker?.p_id;
+          if (!broker_id) {
+            throw new Error('No se encontró el corredor seleccionado');
+          }
+        } else {
+          const { data: userData } = await supabaseClient().auth.getUser();
+          broker_id = userData.user?.id;
+          if (!broker_id) {
+            throw new Error('No se pudo obtener el ID del usuario');
+          }
+        }
 
+        // Normalizar fechas a formato YYYY-MM-DD estricto (sin hora, sin timezone)
+        const normalizedStartDate = formData.start_date?.trim() || null;
+        const normalizedRenewalDate = formData.renewal_date?.trim() || null;
+        
         const policyPayload = {
           policy_number: formData.policy_number.toUpperCase(),
           insurer_id: formData.insurer_id,
           ramo: formData.ramo ? formData.ramo.toUpperCase() : null,
-          start_date: formData.start_date || null,
-          renewal_date: formData.renewal_date || null,
+          start_date: normalizedStartDate,
+          renewal_date: normalizedRenewalDate,
           status: 'ACTIVA' as 'ACTIVA' | 'VENCIDA' | 'CANCELADA', // Siempre ACTIVA para nuevos registros
           notas: formData.notas || null,
           client_id: selectedExistingClient.id,
           broker_id: broker_id,
         };
+        
+        console.log('[FECHA DEBUG] Fechas normalizadas para póliza:', {
+          start_date_input: formData.start_date,
+          start_date_normalized: normalizedStartDate,
+          renewal_date_input: formData.renewal_date,
+          renewal_date_normalized: normalizedRenewalDate
+        });
 
         console.log('[ClientPolicyWizard] Creando póliza para cliente existente:', policyPayload);
         
@@ -388,27 +411,53 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
         toast.success('Nueva póliza agregada al cliente existente');
       } else {
         // Crear nuevo cliente con póliza usando la API
-        // Obtener broker_id del broker seleccionado
-        const broker = role === 'master' 
-          ? brokers.find((b: any) => b.profile?.email === formData.broker_email)
-          : null;
+        // Obtener broker_id (p_id del broker seleccionado)
+        let broker_id: string | undefined;
+        
+        if (role === 'master') {
+          const broker = brokers.find((b: any) => b.profile?.email === formData.broker_email);
+          broker_id = broker?.p_id;
+          if (!broker_id) {
+            throw new Error('No se encontró el corredor seleccionado');
+          }
+        } else {
+          const { data: userData } = await supabaseClient().auth.getUser();
+          broker_id = userData.user?.id;
+          if (!broker_id) {
+            throw new Error('No se pudo obtener el ID del usuario');
+          }
+        }
 
+        // Normalizar TODAS las fechas a formato YYYY-MM-DD estricto (sin hora, sin timezone)
+        const normalizedBirthDate = formData.birth_date?.trim() || null;
+        const normalizedStartDate = formData.start_date?.trim() || null;
+        const normalizedRenewalDate = formData.renewal_date?.trim() || null;
+        
+        console.log('[FECHA DEBUG] Fechas normalizadas para cliente y póliza:', {
+          birth_date_input: formData.birth_date,
+          birth_date_normalized: normalizedBirthDate,
+          start_date_input: formData.start_date,
+          start_date_normalized: normalizedStartDate,
+          renewal_date_input: formData.renewal_date,
+          renewal_date_normalized: normalizedRenewalDate
+        });
+        
         const clientData = {
           name: formData.client_name.toUpperCase(),
           national_id: formData.national_id ? formData.national_id.toUpperCase() : null,
           email: formData.email || null,
           phone: formData.phone || null,
-          birth_date: formData.birth_date || null,
+          birth_date: normalizedBirthDate,
           active: true,
-          broker_id: broker?.p_id || undefined,
+          broker_id: broker_id,
         };
 
         const policyData = {
           policy_number: formData.policy_number.toUpperCase(),
           insurer_id: formData.insurer_id,
           ramo: formData.ramo ? formData.ramo.toUpperCase() : null,
-          start_date: formData.start_date || null,
-          renewal_date: formData.renewal_date || null,
+          start_date: normalizedStartDate,
+          renewal_date: normalizedRenewalDate,
           status: 'ACTIVA' as 'ACTIVA' | 'VENCIDA' | 'CANCELADA', // Siempre ACTIVA para nuevos registros
           notas: formData.notas || null,
         };

@@ -1210,7 +1210,7 @@ export async function getRankingTop5(userId: string): Promise<RankingResult> {
       position: Number(index + 1), // asegurar que position sea number
       positionChange,
       positionDiff: Math.abs(positionDiff),
-      // No incluir total - solo nombres públicos
+      total: item.total, // ✅ Incluir total para todos los brokers del Top 5
     };
   });
 

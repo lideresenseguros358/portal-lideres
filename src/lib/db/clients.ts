@@ -174,6 +174,11 @@ export async function createClientWithPolicy(clientData: unknown, policyData: un
 
   const clientPayload = toInsertPayload(brokerId, clientParsed);
 
+  console.log('[FECHA DEBUG - API] Payload de cliente antes de insertar:', {
+    birth_date: clientPayload.birth_date,
+    birth_date_type: typeof clientPayload.birth_date
+  });
+
   // Create client
   const { data: newClient, error: clientError } = await supabase
     .from('clients')
@@ -208,6 +213,13 @@ export async function createClientWithPolicy(clientData: unknown, policyData: un
     client_id: newClient.id,
     broker_id: brokerId,
   };
+
+  console.log('[FECHA DEBUG - API] Payload de póliza antes de insertar:', {
+    start_date: policyPayload.start_date,
+    renewal_date: policyPayload.renewal_date,
+    start_date_type: typeof policyPayload.start_date,
+    renewal_date_type: typeof policyPayload.renewal_date
+  });
 
   const { error: policyError } = await supabase.from('policies').insert(policyPayload);
 

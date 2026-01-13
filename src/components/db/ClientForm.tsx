@@ -229,26 +229,26 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
       }}
     >
       <div 
-        className="bg-white rounded-2xl max-w-3xl w-full my-8 shadow-2xl flex flex-col max-h-[90vh]"
+        className="bg-white rounded-2xl max-w-3xl w-full my-4 sm:my-8 shadow-2xl flex flex-col max-h-[95vh] sm:max-h-[90vh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="bg-gradient-to-r from-[#010139] to-[#020270] text-white p-6 flex items-center justify-between rounded-t-2xl flex-shrink-0">
-          <div>
-            <h2 className="text-2xl font-bold">
+        <div className="bg-gradient-to-r from-[#010139] to-[#020270] text-white p-4 sm:p-6 flex items-center justify-between rounded-t-2xl flex-shrink-0">
+          <div className="flex-1 min-w-0">
+            <h2 className="text-lg sm:text-2xl font-bold truncate">
               {client ? "Editar Cliente" : "Nuevo Cliente"}
             </h2>
-            <p className="text-white/80 text-sm mt-1">
+            <p className="text-white/80 text-xs sm:text-sm mt-1 hidden sm:block">
               {client ? "Actualizar información del cliente" : "Agregar un nuevo cliente al sistema"}
             </p>
           </div>
-          <button onClick={onClose} className="text-white hover:text-gray-200 transition">
-            <FaTimes size={24} />
+          <button onClick={onClose} className="text-white hover:text-gray-200 transition ml-2 flex-shrink-0">
+            <FaTimes size={20} className="sm:w-6 sm:h-6" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="p-6 overflow-y-auto flex-1">
+        <div className="p-4 sm:p-6 overflow-y-auto flex-1">
           <form id="client-form" onSubmit={readOnly ? (e) => e.preventDefault() : handleSubmit} className="space-y-6">
           {error && (
             <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
@@ -271,7 +271,7 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               {/* Nombre - Full width */}
               <div className="sm:col-span-2">
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -282,7 +282,7 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
                   required
                   value={formData.name}
                   onChange={createUppercaseHandler((e) => setFormData({ ...formData, name: e.target.value }))}
-                  className={`w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none transition-all ${uppercaseInputClass}`}
+                  className={`w-full px-3 sm:px-4 py-2 sm:py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none transition-all text-sm sm:text-base ${uppercaseInputClass}`}
                   placeholder="JUAN PÉREZ GÓMEZ"
                 />
               </div>
@@ -317,7 +317,7 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
                   type="tel"
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                  className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none transition-all"
+                  className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none transition-all text-sm sm:text-base"
                   placeholder="6123-4567"
                 />
               </div>
@@ -332,7 +332,7 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
                   type="email"
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className="w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none transition-all"
+                  className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none transition-all text-sm sm:text-base"
                   placeholder="cliente@email.com"
                 />
               </div>
@@ -347,7 +347,7 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
                   type="date"
                   value={formData.birth_date}
                   onChange={(e) => setFormData({ ...formData, birth_date: e.target.value })}
-                  className="w-full max-w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none transition-all"
+                  className="w-full max-w-full px-3 sm:px-4 py-2 sm:py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none transition-all text-sm sm:text-base"
                   style={{ WebkitAppearance: 'none' }}
                 />
               </div>
@@ -356,14 +356,14 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Estado
                 </label>
-                <label className="flex items-center gap-3 h-[44px] px-4 bg-gray-50 rounded-lg border-2 border-gray-200 hover:border-[#8AAA19] transition-all cursor-pointer">
+                <label className="flex items-center gap-2 sm:gap-3 h-[40px] sm:h-[44px] px-3 sm:px-4 bg-gray-50 rounded-lg border-2 border-gray-200 hover:border-[#8AAA19] transition-all cursor-pointer">
                   <input
                     type="checkbox"
                     checked={formData.active}
                     onChange={(e) => setFormData({ ...formData, active: e.target.checked })}
                     className="sr-only"
                   />
-                  <span className="text-sm font-semibold text-gray-700">{formData.active ? '☑️' : '☐'} Cliente Activo</span>
+                  <span className="text-xs sm:text-sm font-semibold text-gray-700">{formData.active ? '☑️' : '☐'} Cliente Activo</span>
                 </label>
               </div>
             </div>
@@ -384,7 +384,7 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
                   required
                   value={formData.policy_number}
                   onChange={createUppercaseHandler((e) => setFormData({ ...formData, policy_number: e.target.value }))}
-                  className={`w-full px-4 py-3 border-2 border-blue-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none text-sm font-medium ${uppercaseInputClass}`}
+                  className={`w-full px-3 sm:px-4 py-2 sm:py-3 border-2 border-blue-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none text-sm font-medium ${uppercaseInputClass}`}
                   placeholder="AUTO-12345"
                 />
                 <p className="text-xs text-blue-700 mt-2">
@@ -761,33 +761,33 @@ function PolicyForm({ clientId, policy, onClose, onSave, readOnly = false }: Pol
       onClick={onClose}
     >
       <div 
-        className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col my-8"
+        className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[95vh] sm:max-h-[90vh] flex flex-col my-4 sm:my-8"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header con gradiente corporativo */}
-        <div className="bg-gradient-to-r from-[#010139] to-[#020270] px-4 sm:px-5 py-3 sm:py-4 flex items-center justify-between rounded-t-2xl flex-shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-white/10 rounded-lg">
-              <FaPlus size={18} className="text-white" />
+        <div className="bg-gradient-to-r from-[#010139] to-[#020270] px-3 sm:px-5 py-3 sm:py-4 flex items-center justify-between rounded-t-2xl flex-shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+            <div className="p-1.5 sm:p-2 bg-white/10 rounded-lg flex-shrink-0">
+              <FaPlus size={16} className="text-white sm:w-[18px] sm:h-[18px]" />
             </div>
-            <div>
-              <h3 className="text-base sm:text-lg font-bold text-white">
+            <div className="min-w-0 flex-1">
+              <h3 className="text-sm sm:text-lg font-bold text-white truncate">
                 {policy ? "Editar Póliza" : "Nueva Póliza"}
               </h3>
-              <p className="text-xs text-white/80">
+              <p className="text-xs text-white/80 hidden sm:block truncate">
                 {policy ? "Actualizar información de la póliza" : "Agregar una nueva póliza al cliente"}
               </p>
             </div>
           </div>
           <button 
             onClick={onClose} 
-            className="p-2 hover:bg-white/10 rounded-lg transition-all"
+            className="p-1.5 sm:p-2 hover:bg-white/10 rounded-lg transition-all flex-shrink-0 ml-2"
           >
-            <FaTimes size={18} className="text-white" />
+            <FaTimes size={16} className="text-white sm:w-[18px] sm:h-[18px]" />
           </button>
         </div>
 
-        <form onSubmit={readOnly ? (e) => e.preventDefault() : handleSubmit} className="p-4 sm:p-5 space-y-4 sm:space-y-5 overflow-y-auto flex-1">
+        <form onSubmit={readOnly ? (e) => e.preventDefault() : handleSubmit} className="p-3 sm:p-5 space-y-3 sm:space-y-5 overflow-y-auto flex-1">
           {error && (
             <div className="p-3 bg-red-100 border border-red-400 text-red-700 rounded">
               {error}
@@ -803,7 +803,7 @@ function PolicyForm({ clientId, policy, onClose, onSave, readOnly = false }: Pol
                 required
                 value={formData.insurer_id}
                 onChange={(e) => setFormData({ ...formData, insurer_id: e.target.value })}
-                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none text-sm font-medium transition-all"
+                className="w-full px-3 sm:px-4 py-2 sm:py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none text-sm font-medium transition-all"
                 disabled={!insurers.length}
               >
                 <option value="all" disabled>
@@ -842,7 +842,7 @@ function PolicyForm({ clientId, policy, onClose, onSave, readOnly = false }: Pol
                 required
                 value={formData.ramo}
                 onChange={(e) => setFormData({ ...formData, ramo: e.target.value })}
-                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none text-sm font-medium transition-all"
+                className="w-full px-3 sm:px-4 py-2 sm:py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none text-sm font-medium transition-all"
               >
                 <option value="" disabled>
                   Selecciona el tipo de póliza
@@ -870,7 +870,7 @@ function PolicyForm({ clientId, policy, onClose, onSave, readOnly = false }: Pol
               <select
                 value={formData.status}
                 onChange={(e) => setFormData({ ...formData, status: e.target.value as PolicyFormState['status'] })}
-                className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none text-sm font-medium transition-all"
+                className="w-full px-3 sm:px-4 py-2 sm:py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none text-sm font-medium transition-all"
               >
                 <option value="ACTIVA">☑️ ACTIVA</option>
                 <option value="VENCIDA">🔴 VENCIDA</option>
@@ -878,7 +878,7 @@ function PolicyForm({ clientId, policy, onClose, onSave, readOnly = false }: Pol
               </select>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
               <div className="w-full max-w-full overflow-hidden">
                 <label className="block text-sm font-bold text-[#010139] mb-2">
                   📅 Fecha de Inicio
@@ -887,7 +887,7 @@ function PolicyForm({ clientId, policy, onClose, onSave, readOnly = false }: Pol
                   type="date"
                   value={formData.start_date}
                   onChange={(e) => setFormData({ ...formData, start_date: e.target.value })}
-                  className="w-full max-w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none text-sm font-medium transition-all"
+                  className="w-full max-w-full px-3 sm:px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none text-sm font-medium transition-all"
                   style={{ WebkitAppearance: 'none' }}
                 />
               </div>
@@ -899,7 +899,7 @@ function PolicyForm({ clientId, policy, onClose, onSave, readOnly = false }: Pol
                   type="date"
                   value={formData.renewal_date}
                   onChange={(e) => setFormData({ ...formData, renewal_date: e.target.value })}
-                  className="w-full max-w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none text-sm font-medium transition-all"
+                  className="w-full max-w-full px-3 sm:px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:ring-2 focus:ring-[#8AAA19]/20 focus:outline-none text-sm font-medium transition-all"
                   style={{ WebkitAppearance: 'none' }}
                 />
               </div>
@@ -914,7 +914,7 @@ function PolicyForm({ clientId, policy, onClose, onSave, readOnly = false }: Pol
                 step="0.01"
                 value={formData.percent_override}
                 onChange={(e) => setFormData({ ...formData, percent_override: e.target.value })}
-                className={`w-full px-4 py-3 border-2 rounded-lg focus:ring-2 focus:outline-none text-sm font-medium transition-all ${
+                className={`w-full px-3 sm:px-4 py-2 sm:py-3 border-2 rounded-lg focus:ring-2 focus:outline-none text-sm font-medium transition-all ${
                   specialOverride.hasSpecialOverride 
                     ? 'border-blue-300 bg-blue-50 focus:border-blue-500 focus:ring-blue-500/20' 
                     : 'border-gray-300 focus:border-[#8AAA19] focus:ring-[#8AAA19]/20'
@@ -939,7 +939,7 @@ function PolicyForm({ clientId, policy, onClose, onSave, readOnly = false }: Pol
               <textarea
                 value={formData.notas}
                 onChange={createUppercaseHandler((e) => setFormData({ ...formData, notas: e.target.value }))}
-                className={`w-full px-4 py-3 border-2 rounded-lg focus:ring-2 focus:outline-none text-sm font-medium transition-all ${uppercaseInputClass} ${
+                className={`w-full px-3 sm:px-4 py-2 sm:py-3 border-2 rounded-lg focus:ring-2 focus:outline-none text-sm font-medium transition-all ${uppercaseInputClass} ${
                   formData.ramo === 'OTROS' 
                     ? 'border-orange-300 bg-orange-50 focus:border-orange-500 focus:ring-orange-500/20' 
                     : 'border-gray-300 focus:border-[#8AAA19] focus:ring-[#8AAA19]/20'
@@ -962,11 +962,11 @@ function PolicyForm({ clientId, policy, onClose, onSave, readOnly = false }: Pol
               )}
             </div>
 
-          <div className="sticky bottom-0 bg-white border-t-2 border-gray-100 pt-4 flex justify-end gap-2 sm:gap-3">
+          <div className="sticky bottom-0 bg-white border-t-2 border-gray-100 pt-3 sm:pt-4 flex justify-end gap-2 sm:gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 sm:flex-none px-4 sm:px-6 py-2.5 sm:py-3 text-sm sm:text-base text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-all font-semibold"
+              className="flex-1 sm:flex-none px-3 sm:px-6 py-2 sm:py-3 text-xs sm:text-base text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-all font-semibold"
             >
               {readOnly ? 'Cerrar' : 'Cancelar'}
             </button>
@@ -974,7 +974,7 @@ function PolicyForm({ clientId, policy, onClose, onSave, readOnly = false }: Pol
               <button
                 type="submit"
                 disabled={loading}
-                className="flex-1 sm:flex-none px-4 sm:px-6 py-2.5 sm:py-3 text-sm sm:text-base bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg hover:shadow-lg hover:scale-[1.02] transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-2"
+                className="flex-1 sm:flex-none px-3 sm:px-6 py-2 sm:py-3 text-xs sm:text-base bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg hover:shadow-lg hover:scale-[1.02] transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-1 sm:gap-2"
               >
                 {loading ? (
                   <>
