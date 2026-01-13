@@ -40,6 +40,16 @@ services/
 └── fedpa-sync.ts            → Sincronización de datos
 ```
 
+### Servicios Complementarios (`src/lib/fedpa/`)
+
+```
+fedpa/ (complementarios)
+├── catalogos-complementarios.ts  → Ocupaciones, colores, usos, acreedores (NUEVO)
+├── error-handler.ts              → Manejo de códigos de error (NUEVO)
+├── payment-integration.ts        → Integración de pagos (NUEVO)
+└── expediente.service.ts         → Consulta de expedientes (NUEVO)
+```
+
 ### Endpoints API (`src/app/api/fedpa/`)
 
 ```
