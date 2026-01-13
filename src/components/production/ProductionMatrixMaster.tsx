@@ -490,7 +490,9 @@ export default function ProductionMatrixMaster({ year }: ProductionMatrixMasterP
                 </tr>
               ) : (
                 displayedProduction.map((broker) => {
+                  console.log('[ProductionMatrix] Broker:', broker.broker_name, 'canceladas_ytd:', broker.canceladas_ytd);
                   const { brutoYTD, netoYTD, numPolizasYTD } = calculateYTD(broker.months, broker.canceladas_ytd);
+                  console.log('[ProductionMatrix] Calculated:', { brutoYTD, canceladas_ytd: broker.canceladas_ytd, netoYTD });
                   const percentage = calculatePercentage(netoYTD, broker.meta_personal);
 
                   return (
