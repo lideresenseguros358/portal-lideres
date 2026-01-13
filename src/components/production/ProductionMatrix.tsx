@@ -393,10 +393,18 @@ export default function ProductionMatrix({ year, role, brokerId, brokers }: Prod
                       {isMaster ? (
                         <input
                           type="number"
-                          value={broker.canceladas_ytd === 0 ? '' : broker.canceladas_ytd}
-                          onChange={(e) => handleCanceladasEdit(broker.broker_id, e.target.value === '' ? 0 : parseFloat(e.target.value))}
+                          defaultValue={broker.canceladas_ytd === 0 ? '' : broker.canceladas_ytd}
+                          onBlur={(e) => {
+                            const value = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                            if (value !== broker.canceladas_ytd) {
+                              handleCanceladasEdit(broker.broker_id, value);
+                            }
+                          }}
+                          onWheel={(e) => e.currentTarget.blur()}
                           className="w-full px-2 py-1 text-center border border-red-300 rounded focus:border-red-500 focus:outline-none font-mono text-red-600"
                           placeholder="0"
+                          min="0"
+                          step="0.01"
                         />
                       ) : (
                         <span className="font-mono text-red-600">{formatCurrency(broker.canceladas_ytd)}</span>

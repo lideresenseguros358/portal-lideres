@@ -575,10 +575,12 @@ export default function ProductionMatrixMaster({ year }: ProductionMatrixMasterP
                       <td className="px-2 py-2 text-center text-xs font-semibold border-b border-gray-200 bg-red-50">
                         <input
                           type="number"
-                          value={broker.canceladas_ytd === 0 ? '' : broker.canceladas_ytd}
-                          onChange={(e) => {
+                          defaultValue={broker.canceladas_ytd === 0 ? '' : broker.canceladas_ytd}
+                          onBlur={(e) => {
                             const value = e.target.value === '' ? 0 : parseFloat(e.target.value);
-                            handleCanceladasEdit(broker.broker_id, value);
+                            if (value !== broker.canceladas_ytd) {
+                              handleCanceladasEdit(broker.broker_id, value);
+                            }
                           }}
                           onWheel={(e) => e.currentTarget.blur()}
                           className="w-full px-2 py-1 text-center border border-red-300 rounded focus:border-red-500 focus:outline-none font-mono text-red-600 bg-white"
