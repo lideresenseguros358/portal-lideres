@@ -2,15 +2,17 @@
 
 import { useEffect, useState, useMemo, useCallback, memo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { FaTimes, FaPlus, FaEdit, FaTrash, FaFolderPlus } from "react-icons/fa";
+import { FaTimes, FaPlus, FaEdit, FaTrash, FaFolderPlus, FaExclamationTriangle } from "react-icons/fa";
 import { actionCreateClientWithPolicy, actionFindDuplicateByNationalId, actionMergeClients } from '@/app/(app)/db/actions';
 import type { Tables } from "@/lib/supabase/client";
+import { supabaseClient } from '@/lib/supabase/client';
 import { toUppercasePayload, createUppercaseHandler, uppercaseInputClass } from '@/lib/utils/uppercase';
 import ExpedienteManager from '@/components/expediente/ExpedienteManager';
 import { POLICY_TYPES, checkSpecialOverride } from '@/lib/constants/policy-types';
 import NationalIdInput from '@/components/ui/NationalIdInput';
 import PolicyNumberInput from '@/components/ui/PolicyNumberInput';
 import MergeDuplicateModal from './MergeDuplicateModal';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 
 import { ClientWithPolicies } from '@/types/db';
@@ -41,6 +43,7 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
     birth_date: (client as any)?.birth_date || "",
     active: client?.active ?? true,
     policy_number: '', // Add policy number
+    broker_id: client?.broker_id || '',
   });
 
   const [policies, setPolicies] = useState<PolicyWithInsurer[]>(client?.policies || []);
@@ -57,6 +60,16 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
   const [showMergeModal, setShowMergeModal] = useState(false);
   const [checkingDuplicate, setCheckingDuplicate] = useState(false);
   const [mergingClients, setMergingClients] = useState(false);
+  
+  // Estados para gestión de corredor
+  const [brokers, setBrokers] = useState<any[]>([]);
+  const [userRole, setUserRole] = useState<string>('');
+  const [checkingCommissions, setCheckingCommissions] = useState(false);
+  const [commissionWarning, setCommissionWarning] = useState<{
+    show: boolean;
+    totalAmount: number;
+    fortnightCount: number;
+  } | null>(null);
   
   const handleExpedienteModalChange = useCallback((open: boolean) => {
     if (onExpedienteModalChange) {
@@ -92,6 +105,85 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
       }
     }
   }, [editPolicyId, client]);
+
+  // Cargar lista de brokers y rol del usuario
+  useEffect(() => {
+    const loadBrokersAndRole = async () => {
+      try {
+        // Obtener rol del usuario
+        const { data: { user } } = await supabaseClient().auth.getUser();
+        if (!user) return;
+
+        const { data: profile } = await supabaseClient()
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .single();
+
+        setUserRole(profile?.role || '');
+
+        // Solo cargar brokers si es Master
+        if (profile?.role === 'master') {
+          const { data: brokersData } = await supabaseClient()
+            .from('brokers')
+            .select('id, name, profiles(full_name)')
+            .eq('active', true)
+            .order('name');
+
+          setBrokers(brokersData || []);
+        }
+      } catch (error) {
+        console.error('Error loading brokers:', error);
+      }
+    };
+
+    loadBrokersAndRole();
+  }, []);
+
+  // Detectar cambio de corredor y verificar comisiones
+  useEffect(() => {
+    const checkCommissionsOnBrokerChange = async () => {
+      // Solo verificar si:
+      // 1. Estamos editando un cliente (no creando uno nuevo)
+      // 2. El broker_id cambió
+      // 3. El usuario es Master
+      if (!client || !client.broker_id || formData.broker_id === client.broker_id || userRole !== 'master') {
+        setCommissionWarning(null);
+        return;
+      }
+
+      setCheckingCommissions(true);
+      try {
+        const response = await fetch('/api/clients/check-commissions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            clientId: client.id,
+            oldBrokerId: client.broker_id
+          })
+        });
+
+        const data = await response.json();
+        
+        if (data.success && data.hasPaidCommissions) {
+          setCommissionWarning({
+            show: true,
+            totalAmount: data.totalAmount,
+            fortnightCount: data.commissionsByFortnight.length
+          });
+        } else {
+          setCommissionWarning(null);
+        }
+      } catch (error) {
+        console.error('Error checking commissions:', error);
+        setCommissionWarning(null);
+      } finally {
+        setCheckingCommissions(false);
+      }
+    };
+
+    checkCommissionsOnBrokerChange();
+  }, [formData.broker_id, client, userRole]);
 
   // Detectar duplicados al cambiar la cédula
   const checkForDuplicates = useCallback(async (nationalId: string) => {
@@ -351,6 +443,60 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
                   style={{ WebkitAppearance: 'none' }}
                 />
               </div>
+
+              {/* Corredor - Solo Master */}
+              {userRole === 'master' && client && (
+                <div className="sm:col-span-2">
+                  <label className="block text-sm font-semibold text-gray-700 mb-2 flex items-center gap-1.5">
+                    <span className="text-blue-600">👔</span>
+                    Corredor Asignado <span className="text-red-500">*</span>
+                  </label>
+                  <Select 
+                    value={formData.broker_id} 
+                    onValueChange={(value) => setFormData({ ...formData, broker_id: value })}
+                    disabled={checkingCommissions}
+                  >
+                    <SelectTrigger className="w-full border-2 border-gray-300 focus:border-[#8AAA19]">
+                      <SelectValue placeholder="Seleccionar corredor..." />
+                    </SelectTrigger>
+                    <SelectContent className="max-h-[300px] overflow-auto">
+                      {brokers.map((broker) => (
+                        <SelectItem key={broker.id} value={broker.id}>
+                          {broker.name || (broker.profiles as any)?.full_name || 'Sin nombre'}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {checkingCommissions && (
+                    <p className="text-xs text-gray-500 mt-1 flex items-center gap-1">
+                      <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-[#8AAA19]"></div>
+                      Verificando comisiones...
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Advertencia de comisiones existentes */}
+              {commissionWarning?.show && (
+                <div className="sm:col-span-2 bg-yellow-50 border-2 border-yellow-400 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <FaExclamationTriangle className="text-yellow-600 text-xl flex-shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <h4 className="font-bold text-yellow-800 mb-1">
+                        ⚠️ Cliente con Comisiones Pagadas
+                      </h4>
+                      <p className="text-sm text-yellow-700 mb-2">
+                        Este cliente tiene <strong>{commissionWarning.fortnightCount} quincena(s)</strong> con comisiones pagadas 
+                        al corredor anterior por un total de <strong>${commissionWarning.totalAmount.toFixed(2)}</strong>.
+                      </p>
+                      <p className="text-xs text-yellow-600">
+                        <strong>Nota:</strong> En la Fase 2 podrás realizar ajustes retroactivos de comisiones. 
+                        Por ahora, el cambio de corredor solo afectará las comisiones futuras.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
