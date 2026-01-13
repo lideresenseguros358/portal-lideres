@@ -9,7 +9,7 @@ import {
   getFortnightStatus,
   getNetCommissions,
   getAnnualNet,
-  getRankingTop5,
+  getBrokerRanking,
   getContestProgress,
   getYtdComparison,
   getBrokerOfTheMonth,
@@ -50,13 +50,13 @@ const BrokerDashboard = async ({ userId }: BrokerDashboardProps) => {
     .eq("id", userId)
     .maybeSingle<Pick<Tables<"profiles">, "full_name" | "broker_id">>();
 
-  const [profileResult, fortnightStatus, netCommissions, annualNet, rankingData, contestData, ytdComparison, brokerOfTheMonth, importantDates] =
+  const [profileResult, fortnightStatus, netCommissions, annualNet, brokerRanking, contestData, ytdComparison, brokerOfTheMonth, importantDates] =
     await Promise.all([
       profilePromise,
       getFortnightStatus(userId, ROLE),
       getNetCommissions(userId, ROLE),
       getAnnualNet(userId, ROLE),
-      getRankingTop5(userId),
+      getBrokerRanking(),
       getContestProgress(userId),
       getYtdComparison(userId, ROLE),
       getBrokerOfTheMonth(),
@@ -65,7 +65,6 @@ const BrokerDashboard = async ({ userId }: BrokerDashboardProps) => {
 
   const profileName = formatFirstName(profileResult.data?.full_name);
   const brokerId = profileResult.data?.broker_id ?? null;
-  const ranking: RankingResult = rankingData;
   const contests: ContestProgress[] = contestData;
 
   // Obtener el rango de la última quincena pagada (puede ser de otro mes)
@@ -97,9 +96,9 @@ const BrokerDashboard = async ({ userId }: BrokerDashboardProps) => {
     }
   }
 
-  const rankingEntries: RankingEntry[] = [...ranking.entries]
-    .sort((a, b) => a.position - b.position)
-  const myEntry = ranking.entries.find((entry) => entry.total !== undefined);
+  // Find broker's position in ranking
+  const myPosition = brokerRanking.findIndex(b => b.brokerId === brokerId) + 1;
+  const myEntry = brokerRanking.find(b => b.brokerId === brokerId);
 
   return (
     <div className="broker-dashboard">
@@ -130,7 +129,7 @@ const BrokerDashboard = async ({ userId }: BrokerDashboardProps) => {
           <Link href="/production" className="block">
             <KpiCard
               title="Posición ranking"
-              value={ranking.currentPosition ?? "-"}
+              value={myPosition > 0 ? myPosition : "-"}
               subtitle={myEntry?.total ? `Tu producción: ${formatCurrency(myEntry.total)}` : "Mantente activo para subir en el ranking"}
             />
           </Link>
@@ -146,55 +145,51 @@ const BrokerDashboard = async ({ userId }: BrokerDashboardProps) => {
           <div className="ranking-section">
             <h3 className="subsection-title">Top 5 Corredores {new Date().getFullYear()}</h3>
             <div className="ranking-list">
-            {rankingEntries.length === 0 ? (
-              <p className="empty-state">Aún no hay datos disponibles.</p>
-            ) : (
-              rankingEntries.map((entry) => {
-                const getMedalEmoji = (position: number) => {
-                  if (position === 1) return '🥇';
-                  if (position === 2) return '🥈';
-                  if (position === 3) return '🥉';
-                  return null;
-                };
-                const medal = getMedalEmoji(entry.position);
-                const isTopThree = entry.position <= 3;
-                
-                return (
-                  <Link href="/production" key={entry.brokerId} className="ranking-item-link">
-                    <div className={`ranking-item ${isTopThree ? `ranking-top-${entry.position}` : ''}`}>
-                      <div className="ranking-medal-container">
-                        {medal ? (
-                          <span className="ranking-medal ranking-medal-animated">{medal}</span>
-                        ) : (
-                          <span className="ranking-position">{entry.position}</span>
-                        )}
-                      </div>
-                      <div className="ranking-name-container">
-                        <span className="ranking-name">{entry.brokerName || "Sin nombre"}</span>
-                      </div>
-                      <div className="ranking-change">
-                        {entry.positionChange === 'up' && entry.positionDiff ? (
-                          <span className="change-up" title={`Subió ${entry.positionDiff} posición${entry.positionDiff > 1 ? 'es' : ''}`}>
-                            ↑{entry.positionDiff}
-                          </span>
-                        ) : entry.positionChange === 'down' && entry.positionDiff ? (
-                          <span className="change-down" title={`Bajó ${entry.positionDiff} posición${entry.positionDiff > 1 ? 'es' : ''}`}>
-                            ↓{entry.positionDiff}
-                          </span>
-                        ) : entry.positionChange === 'new' ? (
-                          <span className="change-new" title="Nuevo en el ranking">
-                            NUEVO
-                          </span>
-                        ) : (
-                          <span className="change-same" title="Mantuvo su posición">–</span>
-                        )}
-                      </div>
-                      {isTopThree && <div className="ranking-glow"></div>}
+            {brokerRanking.map((broker, index) => {
+              const getMedalEmoji = (position: number) => {
+                if (position === 1) return '🥇';
+                if (position === 2) return '🥈';
+                if (position === 3) return '🥉';
+                return null;
+              };
+              const medal = getMedalEmoji(index + 1);
+              const isTopThree = index < 3;
+              
+              return (
+                <Link href="/production" key={broker.brokerId} className="ranking-item-link">
+                  <div className={`ranking-item ${isTopThree ? `ranking-top-${index + 1}` : ''}`}>
+                    <div className="ranking-medal-container">
+                      {medal ? (
+                        <span className="ranking-medal ranking-medal-animated">{medal}</span>
+                      ) : (
+                        <span className="ranking-position">{index + 1}</span>
+                      )}
                     </div>
-                  </Link>
-                );
-              })
-            )}
+                    <div className="ranking-name-container">
+                      <span className="ranking-name">{broker.brokerName}</span>
+                    </div>
+                    <div className="ranking-change">
+                      {broker.positionChange === 'up' && broker.positionDiff ? (
+                        <span className="change-up" title={`Subió ${broker.positionDiff} posición${broker.positionDiff > 1 ? 'es' : ''}`}>
+                          ↑{broker.positionDiff}
+                        </span>
+                      ) : broker.positionChange === 'down' && broker.positionDiff ? (
+                        <span className="change-down" title={`Bajó ${broker.positionDiff} posición${broker.positionDiff > 1 ? 'es' : ''}`}>
+                          ↓{broker.positionDiff}
+                        </span>
+                      ) : broker.positionChange === 'new' ? (
+                        <span className="change-new" title="Nuevo en el ranking">
+                          NUEVO
+                        </span>
+                      ) : (
+                        <span className="change-same" title="Mantuvo su posición">–</span>
+                      )}
+                    </div>
+                    {isTopThree && <div className="ranking-glow"></div>}
+                  </div>
+                </Link>
+              );
+            })}
             </div>
             
             {/* Corredor del mes */}
