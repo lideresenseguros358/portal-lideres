@@ -392,6 +392,7 @@ export default function ProductionMatrix({ year, role, brokerId, brokers }: Prod
                     <td className="px-3 py-3 text-center text-sm font-semibold border-b border-gray-200 bg-red-50">
                       {isMaster ? (
                         <input
+                          key={`${broker.broker_id}-${broker.canceladas_ytd}`}
                           type="number"
                           defaultValue={broker.canceladas_ytd === 0 ? '' : broker.canceladas_ytd}
                           onBlur={(e) => {

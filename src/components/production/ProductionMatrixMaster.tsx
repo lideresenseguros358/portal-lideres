@@ -574,6 +574,7 @@ export default function ProductionMatrixMaster({ year }: ProductionMatrixMasterP
                       {/* Canceladas - Editable */}
                       <td className="px-2 py-2 text-center text-xs font-semibold border-b border-gray-200 bg-red-50">
                         <input
+                          key={`${broker.broker_id}-${broker.canceladas_ytd}`}
                           type="number"
                           defaultValue={broker.canceladas_ytd === 0 ? '' : broker.canceladas_ytd}
                           onBlur={(e) => {
