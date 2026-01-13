@@ -198,6 +198,7 @@ export default function ClientDetailsModal({ client, onClose, onEdit, onOpenExpe
         .select(`
           policy_number,
           gross_amount,
+          broker_commission,
           comm_imports!inner(
             period_label,
             fortnights!inner(period_start, period_end)
@@ -210,7 +211,7 @@ export default function ClientDetailsModal({ client, onClose, onEdit, onOpenExpe
         fortnight_id: (item.comm_imports as any).period_label,
         period_start: (item.comm_imports as any).fortnights.period_start,
         period_end: (item.comm_imports as any).fortnights.period_end,
-        amount: Math.abs(item.gross_amount),
+        amount: Math.abs(item.broker_commission || item.gross_amount),
         policy_number: item.policy_number
       }));
 
@@ -235,13 +236,13 @@ export default function ClientDetailsModal({ client, onClose, onEdit, onOpenExpe
               onClick={onEdit}
               className="flex-1 min-w-[140px] px-4 py-2.5 bg-[#010139] text-white rounded-lg hover:bg-[#020270] transition font-semibold flex items-center justify-center gap-2 shadow-md"
             >
-              <FaEdit className="text-white" /> Editar Cliente
+              <FaEdit className="text-white" /> Editar
             </button>
             <button
               onClick={onOpenExpediente}
               className="flex-1 min-w-[140px] px-4 py-2.5 bg-[#8AAA19] text-white rounded-lg hover:bg-[#6f8815] transition font-semibold flex items-center justify-center gap-2 shadow-md"
             >
-              <FaFolderOpen className="text-white" /> Ver Expediente
+              <FaFolderOpen className="text-white" /> Expediente
             </button>
             <button
               onClick={() => {
