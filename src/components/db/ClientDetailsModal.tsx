@@ -187,14 +187,16 @@ export default function ClientDetailsModal({ client, onClose, onEdit, onOpenExpe
       // Find the policy_number from the policyId
       const policy = client.policies.find(p => p.id === policyId);
       if (!policy) {
-        console.error('Policy not found:', policyId);
+        console.error('[FortnightDetail] Policy not found:', policyId);
         setFortnightDetail([]);
         setLoadingFortnight(false);
         return;
       }
 
+      console.log('[FortnightDetail] Loading for policy:', policy.policy_number);
+
       // Get comm_items with their period_label
-      const { data: items } = await (supabaseClient() as any)
+      const { data: items, error: itemsError } = await (supabaseClient() as any)
         .from('comm_items')
         .select(`
           policy_number,
@@ -205,7 +207,12 @@ export default function ClientDetailsModal({ client, onClose, onEdit, onOpenExpe
         .eq('policy_number', policy.policy_number)
         .not('gross_amount', 'is', null);
 
+      console.log('[FortnightDetail] Items found:', items?.length || 0);
+      console.log('[FortnightDetail] Items error:', itemsError);
+      console.log('[FortnightDetail] Items data:', items);
+
       if (!items || items.length === 0) {
+        console.log('[FortnightDetail] No items found, returning empty');
         setFortnightDetail([]);
         setLoadingFortnight(false);
         return;
@@ -213,17 +220,24 @@ export default function ClientDetailsModal({ client, onClose, onEdit, onOpenExpe
 
       // Get unique fortnight IDs (period_labels)
       const fortnightIds = [...new Set(items.map((item: any) => (item.comm_imports as any).period_label))];
+      console.log('[FortnightDetail] Fortnight IDs to fetch:', fortnightIds);
 
       // Fetch fortnight details
-      const { data: fortnights } = await (supabaseClient() as any)
+      const { data: fortnights, error: fortnightsError } = await (supabaseClient() as any)
         .from('fortnights')
         .select('id, period_start, period_end')
         .in('id', fortnightIds);
+
+      console.log('[FortnightDetail] Fortnights found:', fortnights?.length || 0);
+      console.log('[FortnightDetail] Fortnights error:', fortnightsError);
+      console.log('[FortnightDetail] Fortnights data:', fortnights);
 
       // Create a map of fortnight data
       const fortnightMap = new Map<string, { period_start: string; period_end: string }>(
         (fortnights || []).map((f: any) => [f.id, { period_start: f.period_start, period_end: f.period_end }])
       );
+
+      console.log('[FortnightDetail] Fortnight map size:', fortnightMap.size);
 
       // Map items to fortnight commissions
       const detail: FortnightCommission[] = (items || []).map((item: any) => {
@@ -239,12 +253,15 @@ export default function ClientDetailsModal({ client, onClose, onEdit, onOpenExpe
         };
       });
 
+      console.log('[FortnightDetail] Final detail array:', detail);
+      console.log('[FortnightDetail] Detail count:', detail.length);
+
       // Sort by period_start descending
       detail.sort((a, b) => new Date(b.period_start).getTime() - new Date(a.period_start).getTime());
 
       setFortnightDetail(detail);
     } catch (error) {
-      console.error('Error loading fortnight detail:', error);
+      console.error('[FortnightDetail] Error loading fortnight detail:', error);
       setFortnightDetail([]);
     } finally {
       setLoadingFortnight(false);
