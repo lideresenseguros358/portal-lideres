@@ -752,7 +752,7 @@ export async function actionCreatePendingPayment(payment: {
           }
           
           return {
-            client_name: payment.client_name,
+            client_name: div.client_name || payment.client_name, // USAR client_name de la división si existe
             policy_number: div.policy_number || payment.policy_number,
             insurer_name: div.insurer_name || payment.insurer_name,
             purpose: div.purpose,
