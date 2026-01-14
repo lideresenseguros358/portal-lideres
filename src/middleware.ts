@@ -3,6 +3,16 @@ import { NextResponse, type NextRequest } from 'next/server';
 import type { Database } from './lib/database.types';
 
 export async function middleware(request: NextRequest) {
+  // Si hay errores de Supabase en la URL (token expirado, etc), redirigir a login con el error
+  const error_code = request.nextUrl.searchParams.get('error_code');
+  const error_description = request.nextUrl.searchParams.get('error_description');
+  
+  if (error_code || error_description) {
+    const loginUrl = new URL('/login', request.url);
+    loginUrl.searchParams.set('error', error_description || error_code || 'authentication_failed');
+    return NextResponse.redirect(loginUrl);
+  }
+
   let supabaseResponse = NextResponse.next({
     request,
   });
