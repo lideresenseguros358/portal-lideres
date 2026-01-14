@@ -4,7 +4,7 @@ import { FormEvent, useMemo, useState } from "react";
 
 import AuthShell from "../_AuthShell";
 import { supabaseClient as getSupabaseClient } from "@/lib/supabase/client";
-import { getRedirectUrl } from "@/lib/auth/redirect";
+import { getPasswordRecoveryUrl } from "@/lib/auth/redirect";
 
 const ForgotPage = () => {
   const supabase = useMemo(() => getSupabaseClient(), []);
@@ -26,7 +26,7 @@ const ForgotPage = () => {
     setLoading(true);
 
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: getRedirectUrl(),
+      redirectTo: getPasswordRecoveryUrl(),
     });
 
     setLoading(false);
