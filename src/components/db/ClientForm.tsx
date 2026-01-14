@@ -136,7 +136,7 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
         if (profile?.role === 'master') {
           const { data: brokersData } = await supabaseClient()
             .from('brokers')
-            .select('id, name, profiles(full_name)')
+            .select('id, name')
             .eq('active', true)
             .order('name');
 
@@ -520,12 +520,8 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
                       if (value === formData.broker_id) return;
                       
                       // Pedir confirmación al cambiar el broker
-                      const oldBrokerName = brokers.find(b => b.id === formData.broker_id)?.name || 
-                                           (brokers.find(b => b.id === formData.broker_id)?.profiles as any)?.full_name || 
-                                           'Corredor anterior';
-                      const newBrokerName = brokers.find(b => b.id === value)?.name || 
-                                           (brokers.find(b => b.id === value)?.profiles as any)?.full_name || 
-                                           'Nuevo corredor';
+                      const oldBrokerName = brokers.find(b => b.id === formData.broker_id)?.name || 'Corredor anterior';
+                      const newBrokerName = brokers.find(b => b.id === value)?.name || 'Nuevo corredor';
                       
                       const confirmed = await confirm(
                         `¿Está seguro de cambiar el corredor asignado de "${oldBrokerName}" a "${newBrokerName}"?\n\nEsto puede afectar las comisiones futuras de este cliente.`,
@@ -540,19 +536,16 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
                   >
                     <SelectTrigger className="w-full border-2 border-gray-300 focus:border-[#8AAA19]">
                       <SelectValue placeholder="Seleccionar corredor...">
-                        {formData.broker_id ? (
-                          brokers.find(b => b.id === formData.broker_id)?.name || 
-                          (brokers.find(b => b.id === formData.broker_id)?.profiles as any)?.full_name || 
-                          'Seleccionar corredor...'
-                        ) : (
-                          'Seleccionar corredor...'
-                        )}
+                        {formData.broker_id 
+                          ? (brokers.find(b => b.id === formData.broker_id)?.name || 'Seleccionar corredor...')
+                          : 'Seleccionar corredor...'
+                        }
                       </SelectValue>
                     </SelectTrigger>
                     <SelectContent className="max-h-[300px] overflow-auto">
                       {brokers.map((broker) => (
                         <SelectItem key={broker.id} value={broker.id}>
-                          {broker.name || (broker.profiles as any)?.full_name || 'Sin nombre'}
+                          {broker.name || 'Sin nombre'}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -830,12 +823,8 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
             await saveClient(makeAdjustments);
           }}
           clientName={formData.name}
-          oldBrokerName={brokers.find(b => b.id === client.broker_id)?.name || 
-                         (brokers.find(b => b.id === client.broker_id)?.profiles as any)?.full_name || 
-                         'Corredor anterior'}
-          newBrokerName={brokers.find(b => b.id === formData.broker_id)?.name || 
-                        (brokers.find(b => b.id === formData.broker_id)?.profiles as any)?.full_name || 
-                        'Nuevo corredor'}
+          oldBrokerName={brokers.find(b => b.id === client.broker_id)?.name || 'Corredor anterior'}
+          newBrokerName={brokers.find(b => b.id === formData.broker_id)?.name || 'Nuevo corredor'}
           totalAmount={commissionData.totalAmount}
           commissionsByFortnight={commissionData.commissionsByFortnight}
           loading={loading}
