@@ -9,12 +9,15 @@ import { supabaseClient } from '@/lib/supabase/client';
 import { toUppercasePayload, createUppercaseHandler, uppercaseInputClass } from '@/lib/utils/uppercase';
 import ExpedienteManager from '@/components/expediente/ExpedienteManager';
 import { POLICY_TYPES, checkSpecialOverride } from '@/lib/constants/policy-types';
+import { getTodayLocalDate, addOneYearToDate } from '@/lib/utils/dates';
 import NationalIdInput from '@/components/ui/NationalIdInput';
 import PolicyNumberInput from '@/components/ui/PolicyNumberInput';
 import MergeDuplicateModal from './MergeDuplicateModal';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import BrokerReassignmentModal from './BrokerReassignmentModal';
 import { toast } from 'sonner';
+import { useConfirmDialog } from '@/hooks/useConfirmDialog';
+import ConfirmDialog from '@/components/shared/ConfirmDialog';
 
 import { ClientWithPolicies } from '@/types/db';
 
@@ -74,6 +77,9 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
   const [commissionData, setCommissionData] = useState<any>(null);
   const [showReassignmentModal, setShowReassignmentModal] = useState(false);
   const [savingWithAdjustments, setSavingWithAdjustments] = useState(false);
+  const [previousBrokerId, setPreviousBrokerId] = useState<string>('');
+  
+  const { dialogState, closeDialog, confirm } = useConfirmDialog();
   
   const handleExpedienteModalChange = useCallback((open: boolean) => {
     if (onExpedienteModalChange) {
@@ -138,9 +144,10 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
           console.log('[ClientForm] Broker ID del cliente:', client?.broker_id);
           setBrokers(brokersData || []);
           
-          // Asegurarse de que el broker_id del cliente esté en formData
-          if (client?.broker_id && !formData.broker_id) {
+          // Establecer el broker_id inicial del cliente
+          if (client?.broker_id) {
             setFormData(prev => ({ ...prev, broker_id: client.broker_id }));
+            setPreviousBrokerId(client.broker_id);
           }
         }
       } catch (error) {
@@ -507,12 +514,40 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
                     Corredor Asignado <span className="text-red-500">*</span>
                   </label>
                   <Select 
-                    value={formData.broker_id} 
-                    onValueChange={(value) => setFormData({ ...formData, broker_id: value })}
+                    value={formData.broker_id || ''} 
+                    onValueChange={async (value) => {
+                      // Si es el mismo broker, no hacer nada
+                      if (value === formData.broker_id) return;
+                      
+                      // Pedir confirmación al cambiar el broker
+                      const oldBrokerName = brokers.find(b => b.id === formData.broker_id)?.name || 
+                                           (brokers.find(b => b.id === formData.broker_id)?.profiles as any)?.full_name || 
+                                           'Corredor anterior';
+                      const newBrokerName = brokers.find(b => b.id === value)?.name || 
+                                           (brokers.find(b => b.id === value)?.profiles as any)?.full_name || 
+                                           'Nuevo corredor';
+                      
+                      const confirmed = await confirm(
+                        `¿Está seguro de cambiar el corredor asignado de "${oldBrokerName}" a "${newBrokerName}"?\n\nEsto puede afectar las comisiones futuras de este cliente.`,
+                        'Confirmar cambio de corredor'
+                      );
+                      
+                      if (confirmed) {
+                        setFormData({ ...formData, broker_id: value });
+                      }
+                    }}
                     disabled={checkingCommissions}
                   >
                     <SelectTrigger className="w-full border-2 border-gray-300 focus:border-[#8AAA19]">
-                      <SelectValue placeholder="Seleccionar corredor..." />
+                      <SelectValue placeholder="Seleccionar corredor...">
+                        {formData.broker_id ? (
+                          brokers.find(b => b.id === formData.broker_id)?.name || 
+                          (brokers.find(b => b.id === formData.broker_id)?.profiles as any)?.full_name || 
+                          'Seleccionar corredor...'
+                        ) : (
+                          'Seleccionar corredor...'
+                        )}
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent className="max-h-[300px] overflow-auto">
                       {brokers.map((broker) => (
@@ -771,6 +806,18 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
         />
       )}
 
+      {/* Diálogo de confirmación corporativo */}
+      <ConfirmDialog
+        isOpen={dialogState.isOpen}
+        onClose={() => closeDialog(false)}
+        onConfirm={() => closeDialog(true)}
+        title={dialogState.title}
+        message={dialogState.message}
+        type={dialogState.type}
+        confirmText={dialogState.confirmText}
+        cancelText={dialogState.cancelText}
+      />
+      
       {/* Modal de reasignación de corredor */}
       {showReassignmentModal && client && commissionData && (
         <BrokerReassignmentModal
@@ -823,11 +870,14 @@ type PolicyFormState = {
 };
 
 function PolicyForm({ clientId, policy, onClose, onSave, readOnly = false }: PolicyFormProps) {
+  // Obtener fecha de hoy para autocompletar
+  const today = getTodayLocalDate();
+  
   const [formData, setFormData] = useState<PolicyFormState>({
     policy_number: policy?.policy_number || "",
     ramo: policy?.ramo || "",
     insurer_id: policy?.insurer_id || "all",
-    start_date: policy?.start_date || "",
+    start_date: policy?.start_date || (!policy ? today : ""),
     renewal_date: policy?.renewal_date || "",
     status: (policy?.status as PolicyFormState['status']) || "ACTIVA",
     percent_override: policy?.percent_override !== null && policy?.percent_override !== undefined
@@ -839,11 +889,26 @@ function PolicyForm({ clientId, policy, onClose, onSave, readOnly = false }: Pol
   const [insurers, setInsurers] = useState<{ id: string; name: string }[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [specialOverride, setSpecialOverride] = useState<{ hasSpecialOverride: boolean; overrideValue: number | null; condition?: string }>({ hasSpecialOverride: false, overrideValue: null });
+  const [userRole, setUserRole] = useState<string>('');
 
+  // Cargar aseguradoras y rol del usuario
   useEffect(() => {
     let mounted = true;
     (async () => {
       try {
+        // Obtener rol del usuario
+        const { data: { user } } = await supabaseClient().auth.getUser();
+        if (user) {
+          const { data: profile } = await supabaseClient()
+            .from('profiles')
+            .select('role')
+            .eq('id', user.id)
+            .single();
+          if (mounted) {
+            setUserRole(profile?.role || '');
+          }
+        }
+        
         const response = await fetch('/api/insurers', { cache: 'no-store' });
         if (!response.ok) throw new Error('Error cargando aseguradoras');
         const result = await response.json();
@@ -869,6 +934,14 @@ function PolicyForm({ clientId, policy, onClose, onSave, readOnly = false }: Pol
       mounted = false;
     };
   }, []);
+
+  // Auto-calcular fecha de renovación (1 año después de inicio)
+  useEffect(() => {
+    if (formData.start_date && !policy?.renewal_date) {
+      const calculatedRenewalDate = addOneYearToDate(formData.start_date);
+      setFormData(prev => ({ ...prev, renewal_date: calculatedRenewalDate }));
+    }
+  }, [formData.start_date, policy?.renewal_date]);
 
   // Verificar condición especial ASSA + VIDA
   useEffect(() => {
@@ -1012,7 +1085,7 @@ function PolicyForm({ clientId, policy, onClose, onSave, readOnly = false }: Pol
           </button>
         </div>
 
-        <form onSubmit={readOnly ? (e) => e.preventDefault() : handleSubmit} className="p-3 sm:p-5 space-y-3 sm:space-y-5 overflow-y-auto flex-1">
+        <form id="policy-form" onSubmit={readOnly ? (e) => e.preventDefault() : handleSubmit} className="p-3 sm:p-5 space-y-3 sm:space-y-5 overflow-y-auto flex-1">
           {error && (
             <div className="p-3 bg-red-100 border border-red-400 text-red-700 rounded">
               {error}
@@ -1130,32 +1203,35 @@ function PolicyForm({ clientId, policy, onClose, onSave, readOnly = false }: Pol
               </div>
             </div>
 
-            <div>
-              <label className="block text-sm font-bold text-[#010139] mb-2">
-                💰 % Comisión Override {specialOverride.hasSpecialOverride ? '(Condición Especial)' : '(opcional)'}
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                value={formData.percent_override}
-                onChange={(e) => setFormData({ ...formData, percent_override: e.target.value })}
-                className={`w-full px-3 sm:px-4 py-2 sm:py-3 border-2 rounded-lg focus:ring-2 focus:outline-none text-sm font-medium transition-all ${
-                  specialOverride.hasSpecialOverride 
-                    ? 'border-blue-300 bg-blue-50 focus:border-blue-500 focus:ring-blue-500/20' 
-                    : 'border-gray-300 focus:border-[#8AAA19] focus:ring-[#8AAA19]/20'
-                }`}
-                placeholder="Ej: 5.50"
-              />
-              {specialOverride.hasSpecialOverride ? (
-                <p className="text-xs text-blue-600 mt-1 font-semibold">
-                  🔒 1.0% automático (ASSA + VIDA). Editable pero protegido de cambios masivos.
-                </p>
-              ) : (
-                <p className="text-xs text-gray-500 mt-1">
-                  💡 Dejar vacío para usar el porcentaje por defecto
-                </p>
-              )}
-            </div>
+            {/* % Comisión Override - Solo visible para Master */}
+            {userRole === 'master' && (
+              <div>
+                <label className="block text-sm font-bold text-[#010139] mb-2">
+                  💰 % Comisión Override {specialOverride.hasSpecialOverride ? '(Condición Especial)' : '(opcional)'}
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={formData.percent_override}
+                  onChange={(e) => setFormData({ ...formData, percent_override: e.target.value })}
+                  className={`w-full px-3 sm:px-4 py-2 sm:py-3 border-2 rounded-lg focus:ring-2 focus:outline-none text-sm font-medium transition-all ${
+                    specialOverride.hasSpecialOverride 
+                      ? 'border-blue-300 bg-blue-50 focus:border-blue-500 focus:ring-blue-500/20' 
+                      : 'border-gray-300 focus:border-[#8AAA19] focus:ring-[#8AAA19]/20'
+                  }`}
+                  placeholder="Ej: 5.50"
+                />
+                {specialOverride.hasSpecialOverride ? (
+                  <p className="text-xs text-blue-600 mt-1 font-semibold">
+                    🔒 1.0% automático (ASSA + VIDA). Editable pero protegido de cambios masivos.
+                  </p>
+                ) : (
+                  <p className="text-xs text-gray-500 mt-1">
+                    💡 Dejar vacío para usar el porcentaje por defecto
+                  </p>
+                )}
+              </div>
+            )}
 
             <div>
               <label className="block text-sm font-bold text-[#010139] mb-2">
@@ -1186,39 +1262,40 @@ function PolicyForm({ clientId, policy, onClose, onSave, readOnly = false }: Pol
                 </p>
               )}
             </div>
-
-          <div className="sticky bottom-0 bg-white border-t-2 border-gray-100 pt-3 sm:pt-4 flex justify-end gap-2 sm:gap-3">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 sm:flex-none px-3 sm:px-6 py-2 sm:py-3 text-xs sm:text-base text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-all font-semibold"
-            >
-              {readOnly ? 'Cerrar' : 'Cancelar'}
-            </button>
-            {!readOnly && (
-              <button
-                type="submit"
-                disabled={loading}
-                className="flex-1 sm:flex-none px-3 sm:px-6 py-2 sm:py-3 text-xs sm:text-base bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg hover:shadow-lg hover:scale-[1.02] transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-1 sm:gap-2"
-              >
-                {loading ? (
-                  <>
-                    <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
-                    <span className="hidden sm:inline">Guardando...</span>
-                    <span className="sm:hidden">...</span>
-                  </>
-                ) : (
-                  <>
-                    <FaFolderPlus size={14} className="hidden sm:inline" />
-                    <span className="hidden sm:inline">{policy ? "Guardar Cambios" : "Crear Póliza"}</span>
-                    <span className="sm:hidden">{policy ? "Guardar" : "Crear"}</span>
-                  </>
-                )}
-              </button>
-            )}
-          </div>
-        </fieldset>
+          </fieldset>
         </form>
+
+        {/* Barra de botones fija en la parte inferior */}
+        <div className="bg-gray-50 px-3 sm:px-5 py-3 sm:py-4 border-t-2 border-gray-100 flex justify-end gap-2 sm:gap-3 rounded-b-2xl flex-shrink-0">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 sm:flex-none px-3 sm:px-6 py-2 sm:py-3 text-xs sm:text-base text-gray-700 bg-white border-2 border-gray-300 rounded-lg hover:bg-gray-50 transition-all font-semibold"
+          >
+            Cancelar
+          </button>
+          {!readOnly && (
+            <button
+              type="submit"
+              form="policy-form"
+              disabled={loading}
+              className="flex-1 sm:flex-none px-3 sm:px-6 py-2 sm:py-3 text-xs sm:text-base bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg hover:shadow-lg hover:scale-[1.02] transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center justify-center gap-1 sm:gap-2"
+            >
+              {loading ? (
+                <>
+                  <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
+                  <span className="hidden sm:inline">Guardando...</span>
+                  <span className="sm:hidden">...</span>
+                </>
+              ) : (
+                <>
+                  <FaFolderPlus size={14} className="hidden sm:inline" />
+                  <span>Guardar</span>
+                </>
+              )}
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
