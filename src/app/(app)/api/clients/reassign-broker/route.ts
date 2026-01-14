@@ -6,8 +6,7 @@ import { getSupabaseServer } from '@/lib/supabase/server';
  * Reasigna un cliente a un nuevo corredor con opción de ajustes retroactivos
  * Si makeAdjustments = true:
  *   - Crea adelanto (deuda) al broker antiguo
- *   - Crea adjustment_reports para broker nuevo
- *   - Actualiza broker_id en client y policies
+ *   - Crea pending_items para flujo de ajustes sin identificar
  */
 export async function POST(request: NextRequest) {
   try {
@@ -83,20 +82,84 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 3. Calcular total de comisiones
-    const totalCommissions = commissionsData.reduce(
-      (sum: number, fortnight: any) => sum + fortnight.total_commission, 
-      0
-    );
+    // 3. Obtener percent_default de ambos brokers
+    const { data: oldBroker } = await supabase
+      .from('brokers')
+      .select('percent_default')
+      .eq('id', oldBrokerId)
+      .single();
 
-    // 4. Crear adelanto (deuda) para el broker antiguo
-    // El monto es negativo porque es una deuda
+    const { data: newBroker } = await supabase
+      .from('brokers')
+      .select('percent_default')
+      .eq('id', newBrokerId)
+      .single();
+
+    if (!oldBroker || !newBroker) {
+      throw new Error('No se pudieron obtener los datos de los brokers');
+    }
+
+    const percentOld = oldBroker.percent_default || 0;
+    const percentNew = newBroker.percent_default || 0;
+
+    if (percentOld === 0 || percentNew === 0) {
+      throw new Error('Los brokers deben tener porcentajes de comisión configurados');
+    }
+
+    // 4. Procesar cada quincena y crear pending_items
+    const pendingItemsToCreate = [];
+    let totalDebt = 0;
+    let totalNewCommissions = 0;
+
+    for (const fortnight of commissionsData) {
+      for (const item of fortnight.items) {
+        // Comisión que recibió el broker antiguo
+        const commissionPaid = item.broker_commission;
+        
+        // CALCULAR EN REVERSA: comision_pagada / percent_antiguo = comision_bruta
+        const commissionRaw = commissionPaid / (percentOld / 100);
+        
+        // CALCULAR NUEVA COMISIÓN: comision_bruta * percent_nuevo = comision_nueva
+        const newCommission = commissionRaw * (percentNew / 100);
+
+        totalDebt += commissionPaid;
+        totalNewCommissions += newCommission;
+
+        // Crear pending_item con status 'open' para flujo de ajustes sin identificar
+        pendingItemsToCreate.push({
+          policy_number: item.policy_number,
+          insured_name: item.insured_name || null,
+          insurer_id: item.insurer_id || null,
+          commission_raw: commissionRaw,
+          fortnight_id: fortnight.fortnight_id,
+          status: 'open', // ← IMPORTANTE: status 'open' para que vaya a ajustes sin identificar
+          assigned_broker_id: newBrokerId, // Ya asignado al nuevo broker
+          assigned_by: user.id,
+          assigned_at: new Date().toISOString(),
+          assignment_notes: `Reasignación de broker. Broker anterior pagado: $${commissionPaid.toFixed(2)} (${percentOld}%). Comisión bruta: $${commissionRaw.toFixed(2)}. Nueva comisión: $${newCommission.toFixed(2)} (${percentNew}%). Requiere aprobación master.`
+        });
+      }
+    }
+
+    // 5. Insertar pending_items
+    if (pendingItemsToCreate.length > 0) {
+      const { error: pendingError } = await supabase
+        .from('pending_items')
+        .insert(pendingItemsToCreate);
+
+      if (pendingError) {
+        console.error('Error creating pending items:', pendingError);
+        throw new Error('Error al crear items pendientes de ajuste');
+      }
+    }
+
+    // 6. Crear adelanto (deuda) para el broker antiguo
     const { data: advance, error: advanceError } = await supabase
       .from('advances')
       .insert({
         broker_id: oldBrokerId,
-        amount: -Math.abs(totalCommissions), // Negativo = deuda
-        reason: `Ajuste por reasignación de cliente. Cliente reasignado a otro corredor. Total comisiones recuperadas: $${totalCommissions.toFixed(2)}`,
+        amount: -Math.abs(totalDebt), // Negativo = deuda
+        reason: `DEUDA por reasignación de cliente. Cliente reasignado a otro corredor. Total comisiones a recuperar: $${totalDebt.toFixed(2)}. Esta deuda se irá descontando de futuras comisiones.`,
         status: 'PENDING',
         created_by: user.id,
         is_recurring: false
@@ -106,55 +169,21 @@ export async function POST(request: NextRequest) {
 
     if (advanceError) {
       console.error('Error creating advance:', advanceError);
-      throw new Error('Error al crear adelanto para broker anterior');
-    }
-
-    // 5. Crear adjustment_reports para el broker nuevo (uno por quincena)
-    const adjustmentReports = [];
-    const adjustmentItems = [];
-
-    for (const fortnight of commissionsData) {
-      // Crear adjustment_report para esta quincena
-      const { data: report, error: reportError } = await supabase
-        .from('adjustment_reports')
-        .insert({
-          broker_id: newBrokerId,
-          fortnight_id: fortnight.fortnight_id,
-          total_amount: fortnight.total_commission,
-          status: 'PENDING',
-          admin_notes: `Ajuste por reasignación de cliente. Cliente previamente asignado a otro corredor. Período: ${fortnight.period_label}`,
-          broker_notes: null
-        })
-        .select()
-        .single();
-
-      if (reportError) {
-        console.error('Error creating adjustment report:', reportError);
-        throw new Error(`Error al crear reporte de ajuste para quincena ${fortnight.period_label}`);
-      }
-
-      adjustmentReports.push(report);
-
-      // 6. Los adjustment_report_items se crearán cuando Master apruebe los reportes
-      // Por ahora, los reportes quedan en estado PENDING con la información en admin_notes
-      adjustmentItems.push({
-        report_id: report.id,
-        fortnight_label: fortnight.period_label,
-        items_count: fortnight.items.length,
-        total_amount: fortnight.total_commission
-      });
+      throw new Error('Error al crear deuda para broker anterior');
     }
 
     return NextResponse.json({
       success: true,
-      message: 'Cliente reasignado con ajustes retroactivos creados',
+      message: `Cliente reasignado. Deuda creada al broker anterior ($${totalDebt.toFixed(2)}). ${pendingItemsToCreate.length} ajustes pendientes de aprobación master.`,
       adjustmentsCreated: true,
       details: {
         advanceId: advance.id,
-        advanceAmount: advance.amount,
-        adjustmentReportsCount: adjustmentReports.length,
-        adjustmentItemsCount: adjustmentItems.length,
-        totalCommissions: totalCommissions
+        debtAmount: totalDebt,
+        pendingItemsCount: pendingItemsToCreate.length,
+        oldBrokerPercent: percentOld,
+        newBrokerPercent: percentNew,
+        totalNewCommissions: totalNewCommissions,
+        note: 'Los ajustes aparecerán en "Ajustes Sin Identificar" y requieren aprobación de master.'
       }
     });
 
