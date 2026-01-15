@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { FaEdit, FaCheckCircle, FaClock, FaCircle, FaLock, FaSave, FaTimes, FaLayerGroup, FaTrash } from 'react-icons/fa';
-import { actionUpdateBankTransfer, actionAddTransferToGroup, actionDeleteBankTransfer } from '@/app/(app)/commissions/banco-actions';
+import { actionUpdateBankTransfer, actionAddTransferToGroup, actionDeleteBankTransfer, actionUpdateGroupTransfers } from '@/app/(app)/commissions/banco-actions';
 import type { BankTransferStatus, TransferType } from '@/app/(app)/commissions/banco-actions';
 import CreateGroupModal from './CreateGroupModal';
 import { toast } from 'sonner';
@@ -154,7 +154,7 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
     setShowCreateGroupModal(true);
   };
 
-  const handleGroupCreated = async (groupId: string) => {
+  const handleGroupCreated = async (groupId: string, insurerId: string, transferType: string) => {
     setAddingToGroup(true);
     
     // Agregar todas las transferencias seleccionadas al grupo
@@ -170,10 +170,25 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
       }
     }
 
+    // Actualizar aseguradora y tipo de forma masiva en el grupo
+    if (success) {
+      const updateResult = await actionUpdateGroupTransfers(groupId, {
+        insurerAssignedId: insurerId,
+        transferType: transferType as TransferType,
+      });
+
+      if (!updateResult.ok) {
+        toast.error('Error al actualizar transferencias', { description: updateResult.error });
+        success = false;
+      }
+    }
+
     setAddingToGroup(false);
 
     if (success) {
-      toast.success(`Grupo creado con ${transferIds.length} transferencia(s)`);
+      toast.success(`Grupo creado con ${transferIds.length} transferencia(s)`, {
+        description: 'Aseguradora y tipo asignados'
+      });
       setShowCreateGroupModal(false);
       setSelectedTransfers(new Set());
       onRefresh();

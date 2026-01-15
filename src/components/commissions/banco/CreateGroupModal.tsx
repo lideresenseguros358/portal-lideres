@@ -9,7 +9,7 @@ import type { GroupTemplate } from '@/app/(app)/commissions/banco-actions';
 interface CreateGroupModalProps {
   insurers: { id: string; name: string }[];
   onClose: () => void;
-  onSuccess: (groupId: string) => void;
+  onSuccess: (groupId: string, insurerId: string, transferType: string) => void;
 }
 
 const GROUP_TEMPLATES: { value: GroupTemplate; label: string; requiresLifeFlag: boolean }[] = [
@@ -24,6 +24,7 @@ export default function CreateGroupModal({ insurers, onClose, onSuccess }: Creat
     template: 'NORMAL' as GroupTemplate,
     insurerId: '',
     isLifeInsurance: undefined as boolean | undefined,
+    transferType: 'REPORTE' as 'REPORTE' | 'BONO' | 'OTRO' | 'PENDIENTE',
   });
 
   // Auto-seleccionar ASSA cuando se elige Códigos ASSA
@@ -73,7 +74,7 @@ export default function CreateGroupModal({ insurers, onClose, onSuccess }: Creat
 
       if (result.ok && result.data?.groupId) {
         toast.success('Grupo creado exitosamente');
-        onSuccess(result.data.groupId); // Pasar groupId al callback
+        onSuccess(result.data.groupId, formData.insurerId, formData.transferType); // Pasar groupId, insurerId y transferType
       } else {
         toast.error('Error al crear grupo', { description: result.error });
       }
@@ -145,6 +146,27 @@ export default function CreateGroupModal({ insurers, onClose, onSuccess }: Creat
             </select>
           </div>
 
+          {/* Tipo de Transferencia */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Tipo de Transferencia *
+            </label>
+            <select
+              value={formData.transferType}
+              onChange={(e) => setFormData({ ...formData, transferType: e.target.value as any })}
+              className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-[#8AAA19]"
+              required
+            >
+              <option value="REPORTE">REPORTE</option>
+              <option value="BONO">BONO</option>
+              <option value="OTRO">OTRO</option>
+              <option value="PENDIENTE">PENDIENTE</option>
+            </select>
+            <p className="text-xs text-gray-500 mt-1">
+              Este tipo se asignará a todas las transferencias del grupo
+            </p>
+          </div>
+
           {/* Aseguradora */}
           <div>
             <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -167,6 +189,9 @@ export default function CreateGroupModal({ insurers, onClose, onSuccess }: Creat
                 ✓ ASSA seleccionada automáticamente para Códigos ASSA
               </p>
             )}
+            <p className="text-xs text-gray-500 mt-1">
+              Esta aseguradora se asignará a todas las transferencias del grupo
+            </p>
           </div>
 
           {/* VIDA / NO VIDA (solo para ASSA) */}
