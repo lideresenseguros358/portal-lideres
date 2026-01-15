@@ -399,6 +399,13 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
           const dateKey = log.date.substring(0, 10); // YYYY-MM-DD
           const paymentYear = parseInt(dateKey.substring(0, 4)); // Extraer año directamente del string
           
+          console.log('[AdvancesTab DEBUG] Payment log:', {
+            dateKey,
+            paymentYear,
+            selectedYear: year,
+            willInclude: paymentYear === year
+          });
+          
           // Solo incluir pagos del año seleccionado
           if (paymentYear !== year) return;
           
