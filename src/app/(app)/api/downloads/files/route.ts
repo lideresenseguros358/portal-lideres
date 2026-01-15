@@ -43,10 +43,14 @@ export async function GET(request: NextRequest) {
 // POST, PUT, DELETE - Igual que guides/files pero con download_files
 export async function POST(request: NextRequest) {
   try {
+    console.log('========== DOWNLOAD FILE INSERT DEBUG ==========');
     const supabase = await getSupabaseServer();
     
     const { data: { user } } = await supabase.auth.getUser();
+    console.log('User ID:', user?.id);
+    
     if (!user) {
+      console.error('[ERROR] No user authenticated');
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
     }
 
@@ -56,14 +60,33 @@ export async function POST(request: NextRequest) {
       .eq('id', user.id)
       .single();
 
+    console.log('Profile role:', profile?.role);
+
     if (profile?.role !== 'master') {
+      console.error('[ERROR] User is not master:', profile?.role);
       return NextResponse.json({ error: 'Solo Master puede subir archivos' }, { status: 403 });
     }
 
     const body = await request.json();
+    console.log('Request body:', JSON.stringify(body, null, 2));
+    
     const { section_id, name, file_url, mark_as_new = true, duplicate_in = [], link_changes = false } = body;
 
+    console.log('Parsed fields:', {
+      section_id,
+      name,
+      file_url,
+      mark_as_new,
+      duplicate_in,
+      link_changes
+    });
+
     if (!section_id || !name || !file_url) {
+      console.error('[ERROR] Missing required fields:', {
+        has_section_id: !!section_id,
+        has_name: !!name,
+        has_file_url: !!file_url
+      });
       return NextResponse.json({ error: 'Faltan campos requeridos' }, { status: 400 });
     }
 

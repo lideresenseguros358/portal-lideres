@@ -144,7 +144,7 @@ export default function DocumentsList({ scope, policyType, insurerId, isMaster, 
         body: JSON.stringify({
           section_id: uploadSectionId,
           name: uploadFile.name,
-          file_url: uploadData.url,
+          file_url: uploadData.file_url,
           mark_as_new: uploadMarkNew
         })
       });
