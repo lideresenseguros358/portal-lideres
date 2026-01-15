@@ -161,6 +161,14 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
   // Detectar cambio de corredor y verificar comisiones
   useEffect(() => {
     const checkCommissionsOnBrokerChange = async () => {
+      console.log('[BROKER CHANGE DEBUG] Verificando condiciones:', {
+        hasClient: !!client,
+        clientBrokerId: client?.broker_id,
+        formBrokerId: formData.broker_id,
+        userRole,
+        brokerChanged: formData.broker_id !== client?.broker_id
+      });
+      
       // Solo verificar si:
       // 1. Estamos editando un cliente (no creando uno nuevo)
       // 2. El broker_id cambió
@@ -170,6 +178,7 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
         return;
       }
 
+      console.log('[BROKER CHANGE DEBUG] Verificando comisiones para cliente:', client.id);
       setCheckingCommissions(true);
       try {
         const response = await fetch('/api/clients/check-commissions', {
@@ -182,8 +191,10 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
         });
 
         const data = await response.json();
+        console.log('[BROKER CHANGE DEBUG] Respuesta de comisiones:', data);
         
         if (data.success && data.hasPaidCommissions) {
+          console.log('[BROKER CHANGE DEBUG] ⚠️ Comisiones detectadas - mostrando warning');
           setCommissionWarning({
             show: true,
             totalAmount: data.totalAmount,
@@ -192,11 +203,12 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
           // Guardar datos completos para el modal
           setCommissionData(data);
         } else {
+          console.log('[BROKER CHANGE DEBUG] ✅ No hay comisiones pagadas');
           setCommissionWarning(null);
           setCommissionData(null);
         }
       } catch (error) {
-        console.error('Error checking commissions:', error);
+        console.error('[BROKER CHANGE DEBUG] Error checking commissions:', error);
         setCommissionWarning(null);
       } finally {
         setCheckingCommissions(false);
