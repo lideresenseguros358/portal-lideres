@@ -70,8 +70,8 @@ export const config = {
      * - favicon.ico (favicon file)
      * - public folder
      * - api routes
-     * - login, forgot, new-user pages
+     * - login, forgot, new-user, update-password pages
      */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$|api|login|forgot|new-user|auth).*)',
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$|api|login|forgot|new-user|update-password|auth).*)',
   ],
 };
