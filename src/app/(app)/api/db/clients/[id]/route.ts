@@ -37,6 +37,7 @@ export async function PUT(
       // birth_date: mantener como string YYYY-MM-DD sin conversión de zona horaria
       birth_date: body.birth_date?.trim() || null,
       active: body.active ?? true,
+      broker_id: body.broker_id || null, // ← CRÍTICO: guardar cambio de broker
     };
 
     // Actualizar cliente
