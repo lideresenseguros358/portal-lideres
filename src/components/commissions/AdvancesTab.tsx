@@ -394,9 +394,13 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
       allPaidAdvances.forEach(adv => {
         if (!adv.payment_logs || adv.payment_logs.length === 0) return;
         
-        // Procesar cada log individual
+        // Procesar cada log individual - FILTRAR solo pagos del año seleccionado
         adv.payment_logs.forEach(log => {
           const dateKey = log.date.substring(0, 10);
+          const paymentYear = new Date(dateKey).getFullYear();
+          
+          // Solo incluir pagos del año seleccionado
+          if (paymentYear !== year) return;
           
           if (!byDate[dateKey]) {
             byDate[dateKey] = { advances: [], total: 0, brokers: {} };
