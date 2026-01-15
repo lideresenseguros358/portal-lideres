@@ -1121,6 +1121,150 @@ export async function actionGetAvailableYears() {
   }
 }
 
+/**
+ * Get Top 5 brokers by insurer for a given year (includes paid adjustments)
+ */
+export async function actionGetTop5BrokersByInsurer(year: number) {
+  const supabase = await getSupabaseAdmin();
+
+  const yearStartDate = `${year}-01-01`;
+  const yearEndDate = `${year}-12-31`;
+
+  try {
+    console.log('🏆 [actionGetTop5BrokersByInsurer] year:', year);
+    
+    // Obtener quincenas cerradas del año
+    const { data: fortnights, error: fortnightsError } = await supabase
+      .from('fortnights')
+      .select('id')
+      .eq('status', 'PAID')
+      .gte('period_end', yearStartDate)
+      .lte('period_end', yearEndDate);
+
+    if (fortnightsError) throw new Error(fortnightsError.message);
+    if (!fortnights || fortnights.length === 0) {
+      return { ok: true as const, data: [] };
+    }
+
+    const fortnightIds = fortnights.map(f => f.id);
+
+    // Obtener comisiones base de fortnight_details
+    const { data: details, error: detailsError } = await supabase
+      .from('fortnight_details')
+      .select(`
+        commission_calculated,
+        broker_id,
+        brokers (id, name),
+        insurers (id, name)
+      `)
+      .in('fortnight_id', fortnightIds) as any;
+
+    if (detailsError) throw new Error(detailsError.message);
+
+    // Obtener ajustes pagados del año con sus items
+    const { data: adjustmentReports, error: adjustmentsError } = await supabase
+      .from('adjustment_reports')
+      .select(`
+        id,
+        broker_id,
+        brokers (id, name)
+      `)
+      .eq('status', 'paid')
+      .gte('paid_date', yearStartDate)
+      .lte('paid_date', yearEndDate) as any;
+
+    if (adjustmentsError) throw new Error(adjustmentsError.message);
+
+    // Obtener items de los reportes de ajustes para obtener las aseguradoras
+    let adjustmentItems: any[] = [];
+    if (adjustmentReports && adjustmentReports.length > 0) {
+      const reportIds = adjustmentReports.map((r: any) => r.id);
+      const { data: items } = await supabase
+        .from('adjustment_report_items')
+        .select(`
+          report_id,
+          broker_commission,
+          pending_item_id,
+          pending_items (insurer_id, insurers (id, name))
+        `)
+        .in('report_id', reportIds) as any;
+      
+      adjustmentItems = items || [];
+    }
+
+    // Agrupar por aseguradora y broker
+    const insurerBrokerMap: Record<string, Record<string, { brokerName: string; total: number }>> = {};
+
+    // Procesar comisiones base
+    (details || []).forEach((detail: any) => {
+      const insurerName = detail.insurers?.name || 'Sin Aseguradora';
+      const brokerId = detail.broker_id;
+      const brokerName = detail.brokers?.name || 'Sin Nombre';
+      const commission = Number(detail.commission_calculated) || 0;
+
+      if (!insurerBrokerMap[insurerName]) {
+        insurerBrokerMap[insurerName] = {};
+      }
+      if (!insurerBrokerMap[insurerName][brokerId]) {
+        insurerBrokerMap[insurerName][brokerId] = { brokerName, total: 0 };
+      }
+      insurerBrokerMap[insurerName][brokerId].total += commission;
+    });
+
+    // Procesar ajustes pagados por item
+    adjustmentItems.forEach((item: any) => {
+      const report = adjustmentReports?.find((r: any) => r.id === item.report_id);
+      if (!report) return;
+
+      const insurerName = item.pending_items?.insurers?.name || 'Sin Aseguradora';
+      const brokerId = report.broker_id;
+      const brokerName = report.brokers?.name || 'Sin Nombre';
+      const commission = Number(item.broker_commission) || 0;
+
+      if (!insurerBrokerMap[insurerName]) {
+        insurerBrokerMap[insurerName] = {};
+      }
+      if (!insurerBrokerMap[insurerName][brokerId]) {
+        insurerBrokerMap[insurerName][brokerId] = { brokerName, total: 0 };
+      }
+      insurerBrokerMap[insurerName][brokerId].total += commission;
+    });
+
+    // Crear estructura de top 5 por aseguradora
+    const top5ByInsurer = Object.entries(insurerBrokerMap).map(([insurerName, brokers]) => {
+      const brokersList = Object.entries(brokers)
+        .map(([brokerId, data]) => ({
+          brokerId,
+          brokerName: data.brokerName,
+          total: data.total
+        }))
+        .sort((a, b) => b.total - a.total)
+        .slice(0, 5);
+
+      const totalInsurer = brokersList.reduce((sum, b) => sum + b.total, 0);
+
+      return {
+        insurerName,
+        totalInsurer,
+        topBrokers: brokersList
+      };
+    }).sort((a, b) => b.totalInsurer - a.totalInsurer);
+
+    console.log('✅ [actionGetTop5BrokersByInsurer] top5:', top5ByInsurer.length, 'aseguradoras');
+
+    return {
+      ok: true as const,
+      data: top5ByInsurer
+    };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : 'Error desconocido',
+      data: []
+    };
+  }
+}
+
 export async function actionGetAllAdvances() {
   const supabase = await getSupabaseAdmin();
   try {

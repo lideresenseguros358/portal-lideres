@@ -28,10 +28,64 @@ export async function PUT(
       );
     }
 
+    // Obtener datos actuales del cliente
+    const { data: currentClient, error: fetchError } = await supabase
+      .from('clients')
+      .select('national_id, name')
+      .eq('id', id)
+      .single();
+
+    if (fetchError) {
+      return NextResponse.json(
+        { error: 'Cliente no encontrado' },
+        { status: 404 }
+      );
+    }
+
+    const newNationalId = body.national_id?.trim().toUpperCase() || null;
+    
+    // DETECCIÓN DE DUPLICADOS: Si se está agregando/cambiando la cédula
+    if (newNationalId && newNationalId !== currentClient.national_id) {
+      // Buscar si ya existe otro cliente con esta cédula
+      const { data: duplicate, error: dupError } = await supabase
+        .from('clients')
+        .select(`
+          id,
+          name,
+          national_id,
+          email,
+          phone,
+          birth_date,
+          active,
+          broker_id,
+          policies (
+            id,
+            policy_number,
+            insurer_id,
+            ramo,
+            status,
+            insurers (name)
+          )
+        `)
+        .eq('national_id', newNationalId)
+        .neq('id', id)
+        .single();
+
+      // Si existe un duplicado, retornar info para que el frontend pregunte
+      if (duplicate && !dupError) {
+        return NextResponse.json({
+          duplicate_found: true,
+          duplicate: duplicate,
+          current_client_id: id,
+          current_client_name: currentClient.name,
+        });
+      }
+    }
+
     // Preparar payload de actualización
     const updatePayload: TablesUpdate<'clients'> = {
       name: body.name.trim().toUpperCase(),
-      national_id: body.national_id?.trim().toUpperCase() || null,
+      national_id: newNationalId,
       email: body.email?.trim() || null,
       phone: body.phone?.trim() || null,
       // birth_date: mantener como string YYYY-MM-DD sin conversión de zona horaria

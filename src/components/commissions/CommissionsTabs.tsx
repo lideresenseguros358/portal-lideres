@@ -153,7 +153,7 @@ export default function CommissionsTabs({ initialData }: { initialData: InitialD
           <AdjustmentsTab role={role} brokerId={brokerId} brokers={validBrokers} onPendingCountChange={handlePendingCountChange} />
         )}
         {activeTab === 'ytd' && (
-          <YTDTab role={role} brokerId={brokerId} />
+          <YTDTab role={role} brokerId={brokerId} brokers={validBrokers} />
         )}
       </div>
     </div>

@@ -7,7 +7,7 @@ type Policy = Tables<'policies'>;
 type Client = Tables<'clients'>;
 
 interface RenewalNotificationOptions {
-  daysBefore?: number;
+  daysBefore?: number | string;
 }
 
 interface PolicyWithClient extends Policy {
@@ -17,7 +17,8 @@ interface PolicyWithClient extends Policy {
 /**
  * Sistema de Renovaciones - Alertas Escalonadas
  * 
- * 30 días antes: Recordatorio de renovación próxima (Broker)
+ * VENCIDAS: Pólizas ya vencidas (renewal_date < hoy) - Con botón "Ya renovó"
+ * 30 días antes: Recordatorio de renovación próxima (Broker) - Con botón "Ya renovó"
  * 7 días antes: Recordatorio urgente (Broker)
  * Día de vencimiento: Advertencia de eliminación en 60 días (Broker)
  * 60 días post-vencimiento: Eliminación automática (Broker + Master)
@@ -29,6 +30,7 @@ export async function runRenewalNotifications(options: RenewalNotificationOption
   const todayISO = getTodayLocalDate();
   
   let results = {
+    alert_expired: 0,
     alert_30d: 0,
     alert_7d: 0,
     alert_0d: 0,
@@ -37,7 +39,9 @@ export async function runRenewalNotifications(options: RenewalNotificationOption
   };
   
   // Ejecutar según el parámetro daysBefore
-  if (daysBefore === 30) {
+  if (daysBefore === 'expired') {
+    results = await runExpiredAlert(supabase, todayISO!);
+  } else if (daysBefore === 30) {
     results = await run30DaysAlert(supabase, todayISO!);
   } else if (daysBefore === 7) {
     results = await run7DaysAlert(supabase, todayISO!);
@@ -59,6 +63,65 @@ export async function runRenewalNotifications(options: RenewalNotificationOption
   });
   
   return { ok: true, ...results };
+}
+
+/**
+ * Alerta para pólizas YA vencidas
+ */
+async function runExpiredAlert(supabase: any, todayISO: string) {
+  // Pólizas con renewal_date < hoy y status ACTIVA
+  const { data: policies } = await supabase
+    .from('policies')
+    .select(`
+      *,
+      clients!inner (
+        id,
+        name,
+        email,
+        phone,
+        broker_id,
+        brokers (
+          id,
+          name,
+          p_id,
+          profiles (
+            email,
+            notify_broker_renewals
+          )
+        )
+      ),
+      insurers (
+        id,
+        name
+      )
+    `)
+    .eq('status', 'ACTIVA')
+    .lt('renewal_date', todayISO);
+  
+  if (!policies || policies.length === 0) {
+    return { alert_expired: 0, alert_30d: 0, alert_7d: 0, alert_0d: 0, alert_60d_deleted: 0, brokers_notified: 0 };
+  }
+  
+  // Agrupar por broker
+  const brokerPoliciesMap = groupPoliciesByBroker(policies);
+  
+  // Notificar a cada broker
+  for (const [brokerId, brokerPolicies] of brokerPoliciesMap.entries()) {
+    try {
+      await notifyBrokerRenewal(supabase, brokerId, brokerPolicies, 'expired');
+    } catch (error) {
+      console.error(`Error notificando broker ${brokerId}:`, error);
+    }
+  }
+  
+  return {
+    alert_expired: policies.length,
+    alert_30d: 0,
+    alert_7d: 0,
+    alert_0d: 0,
+    alert_60d_deleted: 0,
+    brokers_notified: brokerPoliciesMap.size,
+  };
 }
 
 /**
@@ -97,7 +160,7 @@ async function run30DaysAlert(supabase: any, todayISO: string) {
     .eq('renewal_date', futureISO);
   
   if (!policies || policies.length === 0) {
-    return { alert_30d: 0, alert_7d: 0, alert_0d: 0, alert_60d_deleted: 0, brokers_notified: 0 };
+    return { alert_expired: 0, alert_30d: 0, alert_7d: 0, alert_0d: 0, alert_60d_deleted: 0, brokers_notified: 0 };
   }
   
   // Agrupar por broker
@@ -113,6 +176,7 @@ async function run30DaysAlert(supabase: any, todayISO: string) {
   }
   
   return {
+    alert_expired: 0,
     alert_30d: policies.length,
     alert_7d: 0,
     alert_0d: 0,
@@ -156,7 +220,7 @@ async function run7DaysAlert(supabase: any, todayISO: string) {
     .eq('renewal_date', futureISO);
   
   if (!policies || policies.length === 0) {
-    return { alert_30d: 0, alert_7d: 0, alert_0d: 0, alert_60d_deleted: 0, brokers_notified: 0 };
+    return { alert_expired: 0, alert_30d: 0, alert_7d: 0, alert_0d: 0, alert_60d_deleted: 0, brokers_notified: 0 };
   }
   
   const brokerPoliciesMap = groupPoliciesByBroker(policies);
@@ -170,6 +234,7 @@ async function run7DaysAlert(supabase: any, todayISO: string) {
   }
   
   return {
+    alert_expired: 0,
     alert_30d: 0,
     alert_7d: policies.length,
     alert_0d: 0,
@@ -211,7 +276,7 @@ async function run0DaysAlert(supabase: any, todayISO: string) {
     .eq('renewal_date', todayISO);
   
   if (!policies || policies.length === 0) {
-    return { alert_30d: 0, alert_7d: 0, alert_0d: 0, alert_60d_deleted: 0, brokers_notified: 0 };
+    return { alert_expired: 0, alert_30d: 0, alert_7d: 0, alert_0d: 0, alert_60d_deleted: 0, brokers_notified: 0 };
   }
   
   const brokerPoliciesMap = groupPoliciesByBroker(policies);
@@ -225,6 +290,7 @@ async function run0DaysAlert(supabase: any, todayISO: string) {
   }
   
   return {
+    alert_expired: 0,
     alert_30d: 0,
     alert_7d: 0,
     alert_0d: policies.length,
@@ -269,7 +335,7 @@ async function run60DaysPostExpiration(supabase: any, todayISO: string) {
     .eq('renewal_date', sixtyDaysAgoISO);
   
   if (!policies || policies.length === 0) {
-    return { alert_30d: 0, alert_7d: 0, alert_0d: 0, alert_60d_deleted: 0, brokers_notified: 0 };
+    return { alert_expired: 0, alert_30d: 0, alert_7d: 0, alert_0d: 0, alert_60d_deleted: 0, brokers_notified: 0 };
   }
   
   const brokerPoliciesMap = groupPoliciesByBroker(policies);
@@ -308,6 +374,7 @@ async function run60DaysPostExpiration(supabase: any, todayISO: string) {
   }
   
   return {
+    alert_expired: 0,
     alert_30d: 0,
     alert_7d: 0,
     alert_0d: 0,
@@ -342,7 +409,7 @@ async function notifyBrokerRenewal(
   supabase: any,
   brokerId: string,
   policies: any[],
-  alertType: '30d' | '7d' | '0d' | '60d-delete'
+  alertType: 'expired' | '30d' | '7d' | '0d' | '60d-delete'
 ) {
   // Obtener info del broker
   const broker = policies[0]?.clients?.brokers;
@@ -352,80 +419,109 @@ async function notifyBrokerRenewal(
   const brokerName = broker.name || 'Broker';
   const brokerEmail = brokerProfile?.email;
   const notifyBrokerRenewals = brokerProfile?.notify_broker_renewals;
+  const isOficina = brokerEmail?.toLowerCase() === 'contacto@lideresenseguros.com';
   
   if (!brokerEmail) return;
   
-  // Determinar si notificar a master
-  const shouldNotifyMaster = alertType === '60d-delete' || notifyBrokerRenewals;
+  // Determinar si notificar al broker según tipo de alerta
+  const shouldNotifyBroker = alertType !== '0d'; // 0d solo va a master
+  
+  // Determinar si notificar a master según tipo de alerta
+  let shouldNotifyMaster = false;
+  if (alertType === '30d') {
+    // 30d: master solo si notify_broker_renewals habilitado O es Oficina
+    shouldNotifyMaster = notifyBrokerRenewals || isOficina;
+  } else if (alertType === '0d') {
+    // 0d (día renovación): SOLO master recibe
+    shouldNotifyMaster = true;
+  } else if (alertType === '60d-delete' || alertType === 'expired') {
+    // 60d-delete y expired: master siempre recibe
+    shouldNotifyMaster = true;
+  }
+  // 7d: master NO recibe (shouldNotifyMaster = false)
   
   // Títulos y mensajes según tipo de alerta
   const alerts = {
+    'expired': {
+      title: `⚠️ PÓLIZAS VENCIDAS: ${policies.length} póliza${policies.length > 1 ? 's' : ''}`,
+      body: `${policies.length} póliza${policies.length > 1 ? 's están' : ' está'} vencida${policies.length > 1 ? 's' : ''}. ¿Ya renovó?`,
+      urgency: 'critical' as const,
+      showRenewButton: true,
+    },
     '30d': {
       title: `🔔 Renovación Próxima: ${policies.length} póliza${policies.length > 1 ? 's' : ''}`,
       body: `${policies.length} póliza${policies.length > 1 ? 's' : ''} de tus clientes vence${policies.length > 1 ? 'n' : ''} en 30 días`,
       urgency: 'normal' as const,
+      showRenewButton: true,
     },
     '7d': {
       title: `⚠️ URGENTE: Renovación en 7 Días - ${policies.length} póliza${policies.length > 1 ? 's' : ''}`,
       body: `¡Quedan solo 7 días! Actualiza la fecha de renovación`,
       urgency: 'high' as const,
+      showRenewButton: false,
     },
     '0d': {
       title: `🚨 ÚLTIMA ADVERTENCIA: ${policies.length} Póliza${policies.length > 1 ? 's' : ''} Vencida${policies.length > 1 ? 's' : ''} Hoy`,
       body: `Las pólizas vencieron hoy. Si no actualizas en 60 días, los clientes serán eliminados automáticamente`,
       urgency: 'critical' as const,
+      showRenewButton: false,
     },
     '60d-delete': {
       title: `❌ Cliente${policies.length > 1 ? 's' : ''} Eliminado${policies.length > 1 ? 's' : ''} por Vencimiento`,
       body: `${policies.length} cliente${policies.length > 1 ? 's fueron' : ' fue'} eliminado${policies.length > 1 ? 's' : ''} automáticamente tras 60 días sin renovación`,
       urgency: 'critical' as const,
+      showRenewButton: false,
     },
   };
   
   const alert = alerts[alertType];
   
-  // Crear notificación para el broker
-  const notificationData = {
-    type: 'renewal' as const,
-    target: 'BROKER' as const,
-    title: alert.title,
-    body: alert.body,
-    brokerId: broker.p_id,
-    meta: {
-      alert_type: alertType,
-      urgency: alert.urgency,
-      policies_count: policies.length,
-      policies: policies.map((p: any) => ({
-        policy_number: p.policy_number,
-        client_name: p.clients?.name,
-        renewal_date: p.renewal_date,
-        insurer_name: p.insurers?.name,
-      })),
-    },
-    entityId: `renewal-${alertType}-${brokerId}-${policies[0].renewal_date}`,
-  };
-  
-  const notifResult = await createNotification(notificationData);
-  
-  // Enviar email
-  if (notifResult.success && !notifResult.isDuplicate) {
-    await sendNotificationEmail({
-      type: 'renewal',
-      to: brokerEmail,
-      data: {
-        brokerName,
-        alertType,
+  // Crear notificación para el broker (solo si debe recibirla)
+  if (shouldNotifyBroker) {
+    const notificationData = {
+      type: 'renewal' as const,
+      target: 'BROKER' as const,
+      title: alert.title,
+      body: alert.body,
+      brokerId: broker.p_id,
+      meta: {
+        alert_type: alertType,
         urgency: alert.urgency,
+        policies_count: policies.length,
+        show_renew_button: (alert as any).showRenewButton || false,
         policies: policies.map((p: any) => ({
-          policyNumber: p.policy_number,
-          clientName: p.clients?.name,
-          renewalDate: p.renewal_date,
-          insurerName: p.insurers?.name,
-          clientId: p.clients?.id,
+          policy_id: p.id,
+          policy_number: p.policy_number,
+          client_name: p.clients?.name,
+          renewal_date: p.renewal_date,
+          insurer_name: p.insurers?.name,
         })),
       },
-      notificationId: notifResult.notificationId,
-    });
+      entityId: `renewal-${alertType}-${brokerId}-${policies[0].renewal_date}`,
+    };
+    
+    const notifResult = await createNotification(notificationData);
+    
+    // Enviar email
+    if (notifResult.success && !notifResult.isDuplicate) {
+      await sendNotificationEmail({
+        type: 'renewal',
+        to: brokerEmail,
+        data: {
+          brokerName,
+          alertType,
+          urgency: alert.urgency,
+          policies: policies.map((p: any) => ({
+            policyNumber: p.policy_number,
+            clientName: p.clients?.name,
+            renewalDate: p.renewal_date,
+            insurerName: p.insurers?.name,
+            clientId: p.clients?.id,
+          })),
+        },
+        notificationId: notifResult.notificationId,
+      });
+    }
   }
   
   // Notificar a master si aplica

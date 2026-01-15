@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { FaTimes, FaDownload, FaUpload, FaExclamationTriangle } from "react-icons/fa";
 import Papa from "papaparse";
 
@@ -24,20 +24,31 @@ export default function ImportModal({ onClose }: ImportModalProps) {
   const [loading, setLoading] = useState(false);
   const [preview, setPreview] = useState<Record<string, string>[]>([]);
   const [result, setResult] = useState<ImportResult | null>(null);
+  const [insurers, setInsurers] = useState<string[]>([]);
+
+  // Cargar aseguradoras al montar el componente
+  useEffect(() => {
+    async function loadInsurers() {
+      try {
+        const response = await fetch('/api/insurers');
+        const data = await response.json();
+        if (data.success && data.insurers) {
+          const names = data.insurers
+            .filter((ins: any) => ins.is_active)
+            .map((ins: any) => ins.name)
+            .sort();
+          setInsurers(names);
+        }
+      } catch (error) {
+        console.error('Error cargando aseguradoras:', error);
+      }
+    }
+    loadInsurers();
+  }, []);
 
   const downloadTemplate = () => {
-    const template = `name,national_id,email,phone,policy_number,ramo,insurer_id,start_date,renewal_date,status
-"Juan Pérez","8-111-2222","juan@example.com","+507 6000-0000","POL-001","AUTO","1","2024-01-01","2025-01-01","ACTIVA"
-"María González","","maria@example.com","","POL-002","VIDA","1","2024-02-01","2025-02-01","ACTIVA"
-"Pedro Martínez","","","","POL-003","","1","","2025-03-15","ACTIVA"`;
-    
-    const blob = new Blob([template], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "plantilla_clientes.csv";
-    link.click();
-    URL.revokeObjectURL(url);
+    // Redirigir a la plantilla pública actualizada
+    window.open('/plantilla_clientes.csv', '_blank');
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -120,17 +131,75 @@ export default function ImportModal({ onClose }: ImportModalProps) {
           {step === "upload" && (
             <div className="space-y-6">
               {/* Instructions */}
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                <h3 className="font-semibold text-blue-900 mb-2">Instrucciones</h3>
-                <ul className="text-sm text-blue-800 space-y-1">
-                  <li>• El archivo debe estar en formato CSV</li>
-                  <li>• <strong>Columnas OBLIGATORIAS:</strong> name (nombre), policy_number (número de póliza), insurer_id (ID aseguradora), renewal_date (fecha renovación)</li>
-                  <li>• <strong>Columnas OPCIONALES:</strong> national_id (cédula), email, phone, ramo, start_date, status</li>
-                  <li>• La cédula (national_id) NO es obligatoria - puede dejarse vacía</li>
-                  <li>• La fecha de renovación (renewal_date) SÍ es obligatoria para todas las pólizas</li>
-                  <li>• Use campos vacíos (no la palabra &quot;NULL&quot;) para valores opcionales</li>
-                  <li>• Los números de póliza deben ser únicos</li>
-                </ul>
+              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-300 rounded-xl p-5 space-y-3">
+                <h3 className="font-bold text-blue-900 text-base mb-2">📋 Cómo Importar Clientes</h3>
+                
+                {/* Paso 1 */}
+                <div className="bg-white rounded-lg p-3 border border-blue-200">
+                  <p className="font-semibold text-blue-900 text-sm mb-1.5">1️⃣ Descarga la Plantilla</p>
+                  <p className="text-xs text-gray-700">Haz clic en "Descargar plantilla CSV" abajo. El archivo tiene todas las columnas que necesitas llenar.</p>
+                </div>
+
+                {/* Paso 2 */}
+                <div className="bg-white rounded-lg p-3 border border-blue-200">
+                  <p className="font-semibold text-blue-900 text-sm mb-1.5">2️⃣ Llena Todos los Datos</p>
+                  <p className="text-xs text-gray-700 mb-2">Debes completar TODA la información de cada cliente y póliza:</p>
+                  
+                  <div className="grid grid-cols-2 gap-2 mb-2">
+                    <div className="bg-blue-50 p-2 rounded text-xs">
+                      <p className="font-semibold text-blue-900 mb-1">Del Cliente:</p>
+                      <ul className="space-y-0.5 text-gray-700">
+                        <li>✓ Nombre</li>
+                        <li>✓ Cédula/RUC</li>
+                        <li>✓ Email</li>
+                        <li>✓ Teléfono</li>
+                        <li>✓ Fecha nacimiento</li>
+                      </ul>
+                    </div>
+                    <div className="bg-green-50 p-2 rounded text-xs">
+                      <p className="font-semibold text-green-900 mb-1">De la Póliza:</p>
+                      <ul className="space-y-0.5 text-gray-700">
+                        <li>✓ Número póliza</li>
+                        <li>✓ Aseguradora</li>
+                        <li>✓ Tipo (AUTO, VIDA...)</li>
+                        <li>✓ Fechas inicio/renovación</li>
+                        <li>✓ Estado (ACTIVA...)</li>
+                        <li>✓ Email del corredor</li>
+                      </ul>
+                    </div>
+                  </div>
+
+                  <div className="bg-amber-50 border border-amber-300 rounded p-2">
+                    <p className="text-xs text-amber-900">
+                      <strong>⚠️ Importante:</strong> Solo "notas" es opcional. Si falta cédula, email, teléfono o fecha de nacimiento, el cliente queda como PRELIMINAR.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Paso 3 - Aseguradoras */}
+                <div className="bg-white rounded-lg p-3 border border-blue-200">
+                  <p className="font-semibold text-blue-900 text-sm mb-1.5">3️⃣ Nombres de Aseguradoras</p>
+                  <p className="text-xs text-gray-700 mb-2">Copia EXACTAMENTE uno de estos nombres:</p>
+                  {insurers.length > 0 ? (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-1 text-xs max-h-28 overflow-y-auto border border-gray-200 rounded p-2 bg-gray-50">
+                      {insurers.map((insurer, idx) => (
+                        <div key={idx} className="text-gray-800 font-medium">• {insurer}</div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-gray-500 italic">Cargando...</p>
+                  )}
+                </div>
+
+                {/* Paso 4 - Formatos */}
+                <div className="bg-white rounded-lg p-3 border border-blue-200">
+                  <p className="font-semibold text-blue-900 text-sm mb-1.5">4️⃣ Formatos Importantes</p>
+                  <ul className="space-y-1 text-xs text-gray-700">
+                    <li><strong>Fechas:</strong> Año-Mes-Día (ejemplo: 2024-01-15)</li>
+                    <li><strong>Pólizas:</strong> Cada número debe ser único</li>
+                    <li><strong>Varias pólizas:</strong> Usa la misma cédula en varias filas, se agrupan solas</li>
+                  </ul>
+                </div>
               </div>
 
               {/* Download Template */}

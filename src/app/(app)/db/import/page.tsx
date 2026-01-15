@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { FaArrowLeft, FaDownload, FaUpload, FaCheckCircle, FaExclamationTriangle, FaFileAlt } from "react-icons/fa";
+import { FaArrowLeft, FaDownload, FaUpload, FaCheckCircle, FaExclamationTriangle, FaFileAlt, FaEye, FaEyeSlash } from "react-icons/fa";
 import Link from "next/link";
 import Papa from "papaparse";
 // import { actionImportClientsCSV } from "../actions"; // DEPRECADO - Usar ImportModal.tsx
@@ -39,6 +39,28 @@ export default function ImportPage() {
   const [errorRows, setErrorRows] = useState<ValidationError[]>([]);
   const [showPreview, setShowPreview] = useState(false);
   const [importResult, setImportResult] = useState<any>(null);
+  const [insurers, setInsurers] = useState<string[]>([]);
+  const [showInsurers, setShowInsurers] = useState(false);
+
+  // Cargar aseguradoras al montar el componente
+  useEffect(() => {
+    async function loadInsurers() {
+      try {
+        const response = await fetch('/api/insurers');
+        const data = await response.json();
+        if (data.success && data.insurers) {
+          const names = data.insurers
+            .filter((ins: any) => ins.is_active)
+            .map((ins: any) => ins.name)
+            .sort();
+          setInsurers(names);
+        }
+      } catch (error) {
+        console.error('Error cargando aseguradoras:', error);
+      }
+    }
+    loadInsurers();
+  }, []);
 
   const downloadTemplate = () => {
     window.open('/plantilla_clientes.csv', '_blank');
@@ -162,38 +184,114 @@ export default function ImportPage() {
       <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-[#010139] rounded-xl p-6 mb-6 shadow-lg">
         <h2 className="font-bold text-[#010139] text-lg mb-4 flex items-center gap-2">
           <FaFileAlt className="text-xl" />
-          Instrucciones
+          📋 Instrucciones para Importar
         </h2>
-        <ul className="space-y-3 text-sm text-gray-800">
-          <li className="flex items-start gap-2">
-            <span className="text-[#8AAA19] font-bold">✓</span>
-            <span>El archivo debe estar en formato CSV con codificación UTF-8</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="text-[#8AAA19] font-bold">✓</span>
-            <span><strong>Columnas obligatorias:</strong> <code className="bg-[#010139] text-white px-2 py-1 rounded">client_name</code>, <code className="bg-[#010139] text-white px-2 py-1 rounded">policy_number</code>, <code className="bg-[#010139] text-white px-2 py-1 rounded">insurer_name</code>, <code className="bg-[#010139] text-white px-2 py-1 rounded">broker_email</code></span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="text-[#8AAA19] font-bold">✓</span>
-            <span><strong>Columnas opcionales:</strong> <code className="bg-gray-200 px-2 py-1 rounded">national_id</code>, <code className="bg-gray-200 px-2 py-1 rounded">email</code>, <code className="bg-gray-200 px-2 py-1 rounded">phone</code>, <code className="bg-gray-200 px-2 py-1 rounded">address</code>, <code className="bg-gray-200 px-2 py-1 rounded">ramo</code>, <code className="bg-gray-200 px-2 py-1 rounded">start_date</code>, <code className="bg-gray-200 px-2 py-1 rounded">renewal_date</code>, <code className="bg-gray-200 px-2 py-1 rounded">percent_override</code></span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="text-amber-600 font-bold">⚠</span>
-            <span><strong>Sin cédula/RUC:</strong> El cliente quedará como PRELIMINAR hasta que se complete este campo</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="text-[#8AAA19] font-bold">✓</span>
-            <span>Use campos vacíos para valores opcionales (no escriba "NULL")</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="text-[#8AAA19] font-bold">✓</span>
-            <span>Los números de póliza deben ser únicos en todo el sistema</span>
-          </li>
-          <li className="flex items-start gap-2">
-            <span className="text-[#8AAA19] font-bold">✓</span>
-            <span>El nombre de la aseguradora debe coincidir exactamente con el registrado en el sistema</span>
-          </li>
-        </ul>
+        
+        <div className="space-y-4">
+          {/* Paso 1 */}
+          <div className="bg-white rounded-lg p-4 border border-blue-200">
+            <p className="font-semibold text-[#010139] mb-2">1️⃣ Descarga la Plantilla</p>
+            <p className="text-sm text-gray-700">Descarga el archivo CSV de ejemplo haciendo clic en el botón de abajo. Este archivo ya tiene las columnas correctas.</p>
+          </div>
+
+          {/* Paso 2 */}
+          <div className="bg-white rounded-lg p-4 border border-blue-200">
+            <p className="font-semibold text-[#010139] mb-2">2️⃣ Completa TODOS los Datos</p>
+            <p className="text-sm text-gray-700 mb-2">Debes llenar TODAS las columnas para cada cliente y póliza:</p>
+            <div className="grid grid-cols-2 gap-2 text-xs mt-2">
+              <div className="bg-blue-50 p-2 rounded">
+                <p className="font-semibold text-blue-900">📋 Datos del Cliente:</p>
+                <ul className="mt-1 space-y-1 text-gray-700">
+                  <li>• Nombre completo</li>
+                  <li>• Cédula o RUC</li>
+                  <li>• Email</li>
+                  <li>• Teléfono</li>
+                  <li>• Fecha de nacimiento</li>
+                </ul>
+              </div>
+              <div className="bg-green-50 p-2 rounded">
+                <p className="font-semibold text-green-900">🏢 Datos de la Póliza:</p>
+                <ul className="mt-1 space-y-1 text-gray-700">
+                  <li>• Número de póliza</li>
+                  <li>• Aseguradora (nombre exacto)</li>
+                  <li>• Tipo (AUTO, VIDA, etc.)</li>
+                  <li>• Fecha de inicio</li>
+                  <li>• Fecha de renovación</li>
+                  <li>• Estado (ACTIVA, etc.)</li>
+                  <li>• Email del corredor</li>
+                </ul>
+              </div>
+            </div>
+            <div className="bg-amber-50 border border-amber-200 rounded p-2 mt-2">
+              <p className="text-xs text-amber-800">
+                <span className="font-bold">⚠️ IMPORTANTE:</span> Solo la columna "notas" es opcional. Si falta algún dato del cliente (cédula, email, teléfono o fecha de nacimiento), el cliente quedará como PRELIMINAR.
+              </p>
+            </div>
+          </div>
+
+          {/* Paso 3 */}
+          <div className="bg-white rounded-lg p-4 border border-blue-200">
+            <p className="font-semibold text-[#010139] mb-2">3️⃣ Usa el Formato Correcto</p>
+            <ul className="space-y-2 text-sm text-gray-700">
+              <li className="flex items-start gap-2">
+                <span className="text-green-600">✓</span>
+                <span><strong>Fechas:</strong> Formato YYYY-MM-DD (ejemplo: 2024-01-15)</span>
+              </li>
+              <li className="flex flex-col gap-2">
+                <div className="flex items-start gap-2">
+                  <span className="text-green-600">✓</span>
+                  <div className="flex-1">
+                    <span><strong>Aseguradora:</strong> Escribe el nombre EXACTO como aparece en el sistema</span>
+                  </div>
+                  <button
+                    onClick={() => setShowInsurers(!showInsurers)}
+                    className="flex items-center gap-1 text-xs px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                    type="button"
+                  >
+                    {showInsurers ? (
+                      <>
+                        <FaEyeSlash className="text-xs" />
+                        Ocultar
+                      </>
+                    ) : (
+                      <>
+                        <FaEye className="text-xs" />
+                        Ver Lista
+                      </>
+                    )}
+                  </button>
+                </div>
+                {showInsurers && (
+                  <div className="ml-6 bg-gray-50 border border-gray-200 rounded-lg p-3">
+                    <p className="text-xs font-semibold text-gray-700 mb-2">Aseguradoras Registradas:</p>
+                    {insurers.length > 0 ? (
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs max-h-40 overflow-y-auto">
+                        {insurers.map((insurer, idx) => (
+                          <div key={idx} className="flex items-center gap-1 text-gray-800">
+                            <span className="text-blue-600">▪</span>
+                            <span className="font-medium">{insurer}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-gray-500 italic">Cargando aseguradoras...</p>
+                    )}
+                  </div>
+                )}
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-green-600">✓</span>
+                <span><strong>Números de póliza:</strong> Deben ser únicos (no pueden repetirse)</span>
+              </li>
+            </ul>
+          </div>
+
+          {/* Paso 4 */}
+          <div className="bg-white rounded-lg p-4 border border-blue-200">
+            <p className="font-semibold text-[#010139] mb-2">4️⃣ Múltiples Pólizas del Mismo Cliente</p>
+            <p className="text-sm text-gray-700">Si un cliente tiene varias pólizas, puedes ponerlas en filas separadas con la misma cédula. El sistema las agrupará automáticamente.</p>
+          </div>
+        </div>
       </div>
 
       {/* Download Template */}

@@ -1,0 +1,37 @@
+name: Check Policy Renewals
+
+on:
+  schedule:
+    # Ejecutar diariamente a las 12:00 UTC (7:00 AM UTC-5 Panamá)
+    - cron: '0 12 * * *'
+  workflow_dispatch:  # Permite ejecución manual desde GitHub UI
+
+jobs:
+  check-renewals:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Check Expired Policies
+        run: |
+          curl -X GET "${{ secrets.APP_URL }}/api/policies/check-renewals?type=expired"
+        continue-on-error: true
+        
+      - name: Check 30 Days Before Renewal
+        run: |
+          curl -X GET "${{ secrets.APP_URL }}/api/policies/check-renewals?type=30d"
+        continue-on-error: true
+        
+      - name: Check 7 Days Before Renewal
+        run: |
+          curl -X GET "${{ secrets.APP_URL }}/api/policies/check-renewals?type=7d"
+        continue-on-error: true
+        
+      - name: Check Day of Renewal
+        run: |
+          curl -X GET "${{ secrets.APP_URL }}/api/policies/check-renewals?type=0d"
+        continue-on-error: true
+        
+      - name: Summary
+        run: |
+          echo "✅ Verificación de renovaciones completada"
+          echo "Timestamp: $(date -u +"%Y-%m-%d %H:%M:%S UTC")"

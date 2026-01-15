@@ -204,6 +204,36 @@ const NotificationsBell = ({ profileId, role, brokerId }: NotificationsBellProps
     },
     [notifications, profileId, showErrorToast, supabase, loadNotifications]
   );
+
+  const handleRenewPolicy = useCallback(
+    async (policyId: string, notificationId: string) => {
+      try {
+        const response = await fetch('/api/policies/renew', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ policyId }),
+        });
+
+        const result = await response.json();
+
+        if (!result.ok) {
+          throw new Error(result.error || 'Error al renovar póliza');
+        }
+
+        setToast({ type: "success", message: "Póliza renovada exitosamente" });
+        
+        // Marcar notificación como leída
+        await handleMarkRead(notificationId);
+        
+        // Recargar notificaciones
+        await loadNotifications();
+      } catch (err: any) {
+        console.error("renew policy error", err);
+        showErrorToast(err.message || "No se pudo renovar la póliza");
+      }
+    },
+    [handleMarkRead, loadNotifications, showErrorToast]
+  );
   
   const handleDeleteAll = useCallback(
     async () => {
@@ -315,6 +345,7 @@ const NotificationsBell = ({ profileId, role, brokerId }: NotificationsBellProps
         onDelete={handleDelete}
         onDeleteAll={handleDeleteAll}
         onMarkAllRead={handleMarkAllRead}
+        onRenewPolicy={handleRenewPolicy}
       />
 
       {toast ? (

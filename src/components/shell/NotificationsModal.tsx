@@ -17,6 +17,7 @@ interface NotificationsModalProps {
   onDelete: (notificationId: string) => Promise<void>;
   onDeleteAll: () => Promise<void>;
   onMarkAllRead: () => Promise<void>;
+  onRenewPolicy?: (policyId: string, notificationId: string) => Promise<void>;
 }
 
 const NotificationsModal = ({
@@ -27,6 +28,7 @@ const NotificationsModal = ({
   onDelete,
   onDeleteAll,
   onMarkAllRead,
+  onRenewPolicy,
 }: NotificationsModalProps) => {
   if (!open) return null;
 
@@ -122,8 +124,14 @@ const NotificationsModal = ({
                 </tr>
               ) : (
                 notifications.map((notification) => {
-                  const meta = notification.meta as { cta_url?: string } | null;
+                  const meta = notification.meta as { 
+                    cta_url?: string;
+                    show_renew_button?: boolean;
+                    policies?: Array<{ policy_id?: string; policy_number?: string }>
+                  } | null;
                   const ctaUrl = meta?.cta_url;
+                  const showRenewButton = meta?.show_renew_button;
+                  const policies = meta?.policies || [];
                   
                   return (
                     <tr key={notification.id} className={notification.read_at ? "read" : "unread"}>
@@ -152,6 +160,24 @@ const NotificationsModal = ({
                       </td>
                       <td data-label="Estado:">{notification.read_at ? "Leída" : "No leída"}</td>
                       <td className="actions">
+                        {showRenewButton && policies.length > 0 && onRenewPolicy && (
+                          <button 
+                            type="button" 
+                            className="action-btn-small renew-btn"
+                            onClick={async () => {
+                              if (confirm(`¿Confirmar renovación de ${policies.length} póliza${policies.length > 1 ? 's' : ''}? Esto actualizará las fechas sumando 1 año.`)) {
+                                for (const policy of policies) {
+                                  if (policy.policy_id) {
+                                    await onRenewPolicy(policy.policy_id, notification.id);
+                                  }
+                                }
+                              }
+                            }}
+                            title="Ya renovó"
+                          >
+                            🔄 Renovar
+                          </button>
+                        )}
                         {!notification.read_at ? (
                           <button 
                             type="button" 
@@ -370,6 +396,19 @@ const NotificationsModal = ({
         .delete-btn:hover {
           background: #EF4444;
           border-color: #EF4444;
+        }
+        
+        .renew-btn {
+          background: rgba(33, 150, 243, 0.1);
+          color: #2196F3;
+          border-color: rgba(33, 150, 243, 0.3);
+          font-weight: 600;
+        }
+        
+        .renew-btn:hover {
+          background: #2196F3;
+          color: white;
+          border-color: #2196F3;
         }
 
         .type-badge {

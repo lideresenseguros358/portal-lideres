@@ -3,13 +3,15 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { FaChartLine, FaArrowUp, FaArrowDown, FaDollarSign } from 'react-icons/fa';
+import { FaChartLine, FaArrowUp, FaArrowDown, FaDollarSign, FaTrophy } from 'react-icons/fa';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
-import { actionGetYTDCommissions, actionGetAvailableYears } from '@/app/(app)/commissions/actions';
+import { actionGetYTDCommissions, actionGetAvailableYears, actionGetTop5BrokersByInsurer } from '@/app/(app)/commissions/actions';
+import { InsurersDetailModal } from './InsurersDetailModal';
 
 interface Props {
   role: string;
   brokerId: string | null;
+  brokers?: { id: string; name: string }[];
 }
 
 const formatCurrency = (amount: number) => 
@@ -17,11 +19,14 @@ const formatCurrency = (amount: number) =>
 
 const COLORS = ['#010139', '#8AAA19', '#4B5563', '#EF4444', '#3B82F6', '#F59E0B'];
 
-export function YTDTab({ role, brokerId }: Props) {
+export function YTDTab({ role, brokerId, brokers = [] }: Props) {
   const [year, setYear] = useState(new Date().getFullYear());
+  const [selectedBrokerId, setSelectedBrokerId] = useState<string | null>(role === 'broker' ? brokerId : null);
   const [ytdData, setYtdData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [availableYears, setAvailableYears] = useState<number[]>([new Date().getFullYear()]);
+  const [insurersModalOpen, setInsurersModalOpen] = useState(false);
+  const [top5Data, setTop5Data] = useState<any[]>([]);
 
   useEffect(() => {
     const loadAvailableYears = async () => {
@@ -37,9 +42,19 @@ export function YTDTab({ role, brokerId }: Props) {
     const loadYTD = async () => {
       setLoading(true);
       try {
-        const result = await actionGetYTDCommissions(year, role === 'broker' ? brokerId : undefined, true);
+        const result = await actionGetYTDCommissions(year, selectedBrokerId || undefined, true);
         if (result.ok) {
           setYtdData(result.data);
+        }
+        
+        // Cargar Top 5 solo si es master y no hay broker seleccionado
+        if (role === 'master' && !selectedBrokerId) {
+          const top5Result = await actionGetTop5BrokersByInsurer(year);
+          if (top5Result.ok) {
+            setTop5Data(top5Result.data || []);
+          }
+        } else {
+          setTop5Data([]);
         }
       } catch (error) {
         console.error('Error loading YTD data:', error);
@@ -47,7 +62,7 @@ export function YTDTab({ role, brokerId }: Props) {
       setLoading(false);
     };
     loadYTD();
-  }, [year, role, brokerId]);
+  }, [year, selectedBrokerId, role]);
 
   // Preparar datos mensuales reales
   const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
@@ -63,8 +78,8 @@ export function YTDTab({ role, brokerId }: Props) {
     };
   });
 
-  // Preparar datos por aseguradora reales
-  const insurerData = ytdData?.currentYear?.byInsurer ? 
+  // Preparar datos por aseguradora reales - TODAS para el modal
+  const allInsurersData = ytdData?.currentYear?.byInsurer ? 
     Object.entries(ytdData.currentYear.byInsurer)
       .map(([name, value]: [string, any]) => {
         const currentValue = Number(value) || 0;
@@ -72,13 +87,20 @@ export function YTDTab({ role, brokerId }: Props) {
         const growth = previousValue > 0 ? ((currentValue - previousValue) / previousValue * 100) : 0;
         return {
           name,
-          value: currentValue,
+          current: currentValue,
+          previous: previousValue,
           growth: Number(growth.toFixed(1))
         };
       })
-      .sort((a, b) => b.value - a.value)
-      .slice(0, 5)
+      .sort((a, b) => b.current - a.current)
     : [];
+
+  // Top 5 para mostrar en el card
+  const insurerData = allInsurersData.slice(0, 5).map(i => ({
+    name: i.name,
+    value: i.current,
+    growth: i.growth
+  }));
 
   const totalCurrent = monthlyData.reduce((sum, m) => sum + m.current, 0);
   const totalPrevious = monthlyData.reduce((sum, m) => sum + m.previous, 0);
@@ -113,16 +135,31 @@ export function YTDTab({ role, brokerId }: Props) {
                 </div>
               </div>
             </div>
-            <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
-              <SelectTrigger className="w-full sm:w-32 border-2 border-white/30 bg-white/10 text-white hover:bg-white/20 transition-all">
-                <SelectValue placeholder="Año" />
-              </SelectTrigger>
-              <SelectContent>
-                {availableYears.map(y => (
-                  <SelectItem key={y} value={String(y)}>{y}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div className="flex flex-col sm:flex-row gap-3">
+              {role === 'master' && brokers.length > 0 && (
+                <Select value={selectedBrokerId || 'all'} onValueChange={(v) => setSelectedBrokerId(v === 'all' ? null : v)}>
+                  <SelectTrigger className="w-full sm:w-48 border-2 border-white/30 bg-white/10 text-white hover:bg-white/20 transition-all">
+                    <SelectValue placeholder="Broker" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos los Brokers</SelectItem>
+                    {brokers.map(b => (
+                      <SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+              <Select value={String(year)} onValueChange={(v) => setYear(Number(v))}>
+                <SelectTrigger className="w-full sm:w-32 border-2 border-white/30 bg-white/10 text-white hover:bg-white/20 transition-all">
+                  <SelectValue placeholder="Año" />
+                </SelectTrigger>
+                <SelectContent>
+                  {availableYears.map(y => (
+                    <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </CardHeader>
       </Card>
@@ -352,11 +389,12 @@ export function YTDTab({ role, brokerId }: Props) {
         </Card>
 
         {/* Growth by Insurer */}
-        <Card className="shadow-xl border-2 border-[#010139]/30 overflow-hidden bg-white">
+        <Card className="shadow-xl border-2 border-[#010139]/30 overflow-hidden bg-white cursor-pointer hover:shadow-2xl transition-all" onClick={() => setInsurersModalOpen(true)}>
           <CardHeader className="bg-gradient-to-r from-[#010139] via-[#020270] to-[#010139] border-b-2 border-[#8AAA19]">
             <CardTitle className="text-lg font-bold text-white flex items-center gap-2">
               <FaArrowUp className="text-[#8AAA19]" />
               Crecimiento por Aseguradora
+              <span className="text-xs ml-auto bg-white/20 px-2 py-1 rounded">Click para ver todas</span>
             </CardTitle>
           </CardHeader>
           <CardContent className="p-6 sm:p-8 bg-gradient-to-br from-white to-blue-50/20">
@@ -434,6 +472,92 @@ export function YTDTab({ role, brokerId }: Props) {
           </div>
         </CardContent>
       </Card>
+
+      {/* Top 5 por Aseguradora - Solo vista completa */}
+      {role === 'master' && !selectedBrokerId && top5Data.length > 0 && (
+        <Card className="shadow-xl border-2 border-[#8AAA19]/30 overflow-hidden bg-white">
+          <CardHeader className="bg-gradient-to-r from-[#8AAA19] to-[#6a8a14] border-b-2 border-[#010139]/10">
+            <CardTitle className="text-lg font-bold text-white flex items-center gap-2">
+              <FaTrophy className="text-yellow-300" />
+              Top 5 Brokers por Aseguradora
+              <span className="text-xs ml-auto bg-white/20 px-2 py-1 rounded">Incluye ajustes pagados</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-6 bg-gradient-to-br from-white to-green-50/20">
+            <div className="space-y-6">
+              {top5Data.map((insurer, idx) => (
+                <div key={idx} className="border-2 border-gray-200 rounded-xl p-4 hover:shadow-lg transition-all bg-white">
+                  {/* Header de aseguradora */}
+                  <div className="flex items-center justify-between mb-4 pb-3 border-b-2 border-[#8AAA19]/20">
+                    <div>
+                      <h3 className="text-xl font-bold text-[#010139]">{insurer.insurerName}</h3>
+                      <p className="text-sm text-gray-600">Top 5 Brokers</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm text-gray-600 font-semibold">Total</p>
+                      <p className="text-2xl font-bold text-[#8AAA19] font-mono">{formatCurrency(insurer.totalInsurer)}</p>
+                    </div>
+                  </div>
+                  
+                  {/* Lista de top brokers */}
+                  <div className="space-y-2">
+                    {insurer.topBrokers.map((broker: any, brokerIdx: number) => {
+                      const percentage = insurer.totalInsurer > 0 
+                        ? ((broker.total / insurer.totalInsurer) * 100).toFixed(1)
+                        : '0.0';
+                      
+                      return (
+                        <div 
+                          key={brokerIdx}
+                          className="flex items-center gap-4 p-3 rounded-lg bg-gradient-to-r from-gray-50 to-white hover:from-[#8AAA19]/5 hover:to-white transition-all border border-gray-200"
+                        >
+                          {/* Posición */}
+                          <div className={`flex-shrink-0 w-10 h-10 rounded-full flex items-center justify-center font-bold text-lg ${
+                            brokerIdx === 0 ? 'bg-yellow-100 text-yellow-700 border-2 border-yellow-400' :
+                            brokerIdx === 1 ? 'bg-gray-100 text-gray-700 border-2 border-gray-400' :
+                            brokerIdx === 2 ? 'bg-orange-100 text-orange-700 border-2 border-orange-400' :
+                            'bg-blue-50 text-blue-700 border border-blue-200'
+                          }`}>
+                            {brokerIdx + 1}
+                          </div>
+                          
+                          {/* Nombre del broker */}
+                          <div className="flex-1 min-w-0">
+                            <p className="font-bold text-gray-800 truncate">{broker.brokerName}</p>
+                            <div className="flex items-center gap-2 mt-1">
+                              <div className="flex-1 bg-gray-200 rounded-full h-2 overflow-hidden">
+                                <div 
+                                  className="bg-[#8AAA19] h-full rounded-full transition-all"
+                                  style={{ width: `${percentage}%` }}
+                                />
+                              </div>
+                              <span className="text-xs text-gray-600 font-semibold">{percentage}%</span>
+                            </div>
+                          </div>
+                          
+                          {/* Monto */}
+                          <div className="text-right">
+                            <p className="text-lg font-bold text-[#010139] font-mono">{formatCurrency(broker.total)}</p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Modal de Aseguradoras */}
+      <InsurersDetailModal
+        isOpen={insurersModalOpen}
+        onClose={() => setInsurersModalOpen(false)}
+        insurers={allInsurersData}
+        year={year}
+        brokerName={selectedBrokerId ? brokers.find(b => b.id === selectedBrokerId)?.name : undefined}
+      />
     </div>
   );
 }

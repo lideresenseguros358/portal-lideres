@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FaTimes } from 'react-icons/fa';
+import { FaTimes, FaHistory } from 'react-icons/fa';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,11 +10,14 @@ import { FaMoneyBillWave, FaExchangeAlt, FaCheckCircle, FaExclamationTriangle, F
 import { toast } from 'sonner';
 import { actionApplyAdvancePayment } from '@/app/(app)/commissions/actions';
 import { supabaseClient } from '@/lib/supabase/client';
+import { AdvanceHistoryModal } from './AdvanceHistoryModal';
 
 interface AdvanceItem {
   id: string;
   amount: number;
   reason: string | null;
+  total_paid?: number;
+  payment_logs?: Array<{ date: string; amount: number }>;
 }
 
 interface AdvancePayment {
@@ -35,6 +38,7 @@ interface Props {
 export function PayAdvanceModal({ isOpen, onClose, onSuccess, brokerId, brokerName, pendingAdvances }: Props) {
   const [paymentType, setPaymentType] = useState<'cash' | 'transfer'>('transfer');
   const [loading, setLoading] = useState(false);
+  const [selectedAdvanceForHistory, setSelectedAdvanceForHistory] = useState<string | null>(null);
   
   // Determinar quincena actual (Panamá timezone UTC-5)
   const getCurrentQuincena = () => {
@@ -367,17 +371,18 @@ export function PayAdvanceModal({ isOpen, onClose, onSuccess, brokerId, brokerNa
               </div>
               <div className="border rounded-lg overflow-hidden">
                 <div className="bg-gray-50 px-3 py-2 border-b grid grid-cols-12 gap-2 text-xs font-semibold text-gray-700">
-                  <div className="col-span-6">Motivo del Adelanto</div>
-                  <div className="col-span-3 text-right">Saldo</div>
+                  <div className="col-span-5">Motivo del Adelanto</div>
+                  <div className="col-span-2 text-right">Saldo</div>
                   <div className="col-span-3 text-right">Monto a Pagar</div>
+                  <div className="col-span-2 text-center">Acciones</div>
                 </div>
                 <div className="max-h-48 overflow-y-auto">
                   {pendingAdvances.map((advance) => {
                     const currentPayment = advancePayments.find(ap => ap.advanceId === advance.id);
                     return (
                       <div key={advance.id} className="px-3 py-2 border-b last:border-b-0 grid grid-cols-12 gap-2 items-center hover:bg-gray-50">
-                        <div className="col-span-6 text-sm">{advance.reason || 'Sin motivo'}</div>
-                        <div className="col-span-3 text-right text-sm font-mono text-gray-600">${advance.amount.toFixed(2)}</div>
+                        <div className="col-span-5 text-sm">{advance.reason || 'Sin motivo'}</div>
+                        <div className="col-span-2 text-right text-sm font-mono text-gray-600">${advance.amount.toFixed(2)}</div>
                         <div className="col-span-3">
                           <Input
                             type="number"
@@ -390,6 +395,18 @@ export function PayAdvanceModal({ isOpen, onClose, onSuccess, brokerId, brokerNa
                             className="text-right text-sm"
                             disabled={!refValidation?.exists}
                           />
+                        </div>
+                        <div className="col-span-2 flex justify-center">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setSelectedAdvanceForHistory(advance.id)}
+                            className="text-xs px-2 py-1 h-7"
+                            title="Ver historial de pagos"
+                          >
+                            <FaHistory className="text-[#010139]" />
+                          </Button>
                         </div>
                       </div>
                     );
@@ -432,17 +449,18 @@ export function PayAdvanceModal({ isOpen, onClose, onSuccess, brokerId, brokerNa
               </div>
               <div className="border rounded-lg overflow-hidden">
                 <div className="bg-gray-50 px-3 py-2 border-b grid grid-cols-12 gap-2 text-xs font-semibold text-gray-700">
-                  <div className="col-span-6">Motivo del Adelanto</div>
-                  <div className="col-span-3 text-right">Saldo</div>
+                  <div className="col-span-5">Motivo del Adelanto</div>
+                  <div className="col-span-2 text-right">Saldo</div>
                   <div className="col-span-3 text-right">Monto a Pagar</div>
+                  <div className="col-span-2 text-center">Acciones</div>
                 </div>
                 <div className="max-h-48 overflow-y-auto">
                   {pendingAdvances.map((advance) => {
                     const currentPayment = advancePayments.find(ap => ap.advanceId === advance.id);
                     return (
                       <div key={advance.id} className="px-3 py-2 border-b last:border-b-0 grid grid-cols-12 gap-2 items-center hover:bg-gray-50">
-                        <div className="col-span-6 text-sm">{advance.reason || 'Sin motivo'}</div>
-                        <div className="col-span-3 text-right text-sm font-mono text-gray-600">${advance.amount.toFixed(2)}</div>
+                        <div className="col-span-5 text-sm">{advance.reason || 'Sin motivo'}</div>
+                        <div className="col-span-2 text-right text-sm font-mono text-gray-600">${advance.amount.toFixed(2)}</div>
                         <div className="col-span-3">
                           <Input
                             type="number"
@@ -454,6 +472,18 @@ export function PayAdvanceModal({ isOpen, onClose, onSuccess, brokerId, brokerNa
                             placeholder="0.00"
                             className="text-right text-sm"
                           />
+                        </div>
+                        <div className="col-span-2 flex justify-center">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setSelectedAdvanceForHistory(advance.id)}
+                            className="text-xs px-2 py-1 h-7"
+                            title="Ver historial de pagos"
+                          >
+                            <FaHistory className="text-[#010139]" />
+                          </Button>
                         </div>
                       </div>
                     );
@@ -502,6 +532,13 @@ export function PayAdvanceModal({ isOpen, onClose, onSuccess, brokerId, brokerNa
           </div>
         </div>
       </div>
+
+      {/* Modal de Historial */}
+      <AdvanceHistoryModal
+        isOpen={!!selectedAdvanceForHistory}
+        onClose={() => setSelectedAdvanceForHistory(null)}
+        advanceId={selectedAdvanceForHistory}
+      />
     </div>
   );
 }

@@ -336,6 +336,17 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
             body: JSON.stringify(payload),
           });
           
+          const data = await response.json();
+          
+          // DETECCIÓN DE DUPLICADO: El servidor encontró otro cliente con la misma cédula
+          if (data.duplicate_found) {
+            setDuplicateClient(data.duplicate);
+            setShowMergeModal(true);
+            setLoading(false);
+            setSavingWithAdjustments(false);
+            return; // Detener guardado y esperar confirmación del usuario
+          }
+          
           if (!response.ok) {
             const errorJson = await response.json().catch(() => null);
             throw new Error(errorJson?.error || "Error actualizando cliente");

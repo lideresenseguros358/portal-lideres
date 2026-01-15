@@ -66,7 +66,13 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
     isOpen: boolean;
     brokerId: string | null;
     brokerName: string;
-    pendingAdvances: { id: string; amount: number; reason: string | null }[];
+    pendingAdvances: { 
+      id: string; 
+      amount: number; 
+      reason: string | null;
+      total_paid?: number;
+      payment_logs?: Array<{ date: string; amount: number }>;
+    }[];
   }>({
     isOpen: false,
     brokerId: null,
@@ -101,9 +107,9 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
       //   await syncRecurrences();
       // }
       
-      // Para "Deudas Activas" (pending) no filtrar por año, para "Descuentos" (paid) sí
-      const yearFilter = activeTab === 'paid' ? year : undefined;
-      const result = await actionGetAdvances(role === 'broker' ? brokerId || undefined : undefined, yearFilter);
+      // NO filtrar por año al cargar - cargar TODOS los adelantos
+      // El filtro por año se aplica en el frontend solo a payment_logs en "Descuentos"
+      const result = await actionGetAdvances(role === 'broker' ? brokerId || undefined : undefined, undefined);
       console.log('[AdvancesTab] Result from actionGetAdvances:', result);
       if (result.ok) {
         console.log('[AdvancesTab] Setting advances, count:', result.data?.length || 0);
@@ -137,8 +143,9 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
         toast.error('Error al cargar adelantos', { description: result.error });
       }
       
-      // Cargar total de deudas saldadas desde advance_logs
-      const paidResult = await actionGetPaidAdvancesTotal(role === 'broker' ? brokerId || undefined : undefined, year);
+      // Cargar total de deudas saldadas desde advance_logs - sin filtro de año
+      // El filtrado por año se hace en el cálculo de totals en frontend
+      const paidResult = await actionGetPaidAdvancesTotal(role === 'broker' ? brokerId || undefined : undefined, undefined);
       if (paidResult.ok) {
         console.log('[AdvancesTab] Paid total from logs:', paidResult.total);
         setPaidTotal(paidResult.total);
@@ -147,8 +154,9 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
         setPaidTotal(0);
       }
       
-      // Cargar logs de pagos para la pestaña "Descuentos"
-      const logsResult = await actionGetAdvanceLogs(role === 'broker' ? brokerId || undefined : undefined, year);
+      // Cargar logs de pagos para la pestaña "Descuentos" - sin filtro de año
+      // El filtrado por año se hace en renderTable('paid')
+      const logsResult = await actionGetAdvanceLogs(role === 'broker' ? brokerId || undefined : undefined, undefined);
       if (logsResult.ok) {
         console.log('[AdvancesTab] Loaded advance logs:', logsResult.data?.length || 0);
         setAdvanceLogs(logsResult.data || []);
@@ -162,7 +170,7 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [role, brokerId, year, activeTab]);
+  }, [role, brokerId]); // Removido year y activeTab - cargamos TODOS los adelantos siempre
 
   useEffect(() => {
     loadAdvances();
@@ -892,12 +900,20 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
                                 return { 
                                   id: specific.id, 
                                   amount: specific.amount, 
-                                  reason: a.reason 
+                                  reason: a.reason,
+                                  total_paid: specific.total_paid,
+                                  payment_logs: a.payment_logs
                                 };
                               }
                             }
                             // Adelanto normal o sin grupo
-                            return { id: a.id, amount: a.amount, reason: a.reason };
+                            return { 
+                              id: a.id, 
+                              amount: a.amount, 
+                              reason: a.reason,
+                              total_paid: a.total_paid,
+                              payment_logs: a.payment_logs
+                            };
                           });
                         
                         if (pendingAdv.length === 0) {
@@ -1084,7 +1100,13 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
                                   isOpen: true,
                                   brokerId: advance.brokers?.id || null,
                                   brokerName: advance.brokers?.name || 'Desconocido',
-                                  pendingAdvances: [{ id: advance.id, amount: advance.amount, reason: advance.reason }],
+                                  pendingAdvances: [{ 
+                                    id: advance.id, 
+                                    amount: advance.amount, 
+                                    reason: advance.reason,
+                                    total_paid: advance.total_paid,
+                                    payment_logs: advance.payment_logs
+                                  }],
                                 });
                               }}
                               className="flex-1 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] hover:from-[#7a9916] hover:to-[#5c7312] text-white text-xs"

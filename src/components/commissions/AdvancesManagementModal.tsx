@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 import { FaPlus, FaTrash, FaHistory, FaCheckCircle, FaTimes, FaExclamationTriangle } from 'react-icons/fa';
 import { actionCreateAdvance, actionDeleteAdvance, actionGetAdvances } from '@/app/(app)/commissions/actions';
+import { AdvanceHistoryModal } from './AdvanceHistoryModal';
 
 interface Advance {
   id: string;
@@ -49,6 +50,7 @@ export function AdvancesManagementModal({
   const [existingDiscounts, setExistingDiscounts] = useState<TemporaryDiscount[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [selectedAdvanceForHistory, setSelectedAdvanceForHistory] = useState<string | null>(null);
 
   // Estado para crear nuevo adelanto
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -521,14 +523,23 @@ export function AdvancesManagementModal({
                                     </p>
                                   </div>
 
-                                  {/* Botón eliminar */}
-                                  <button
-                                    onClick={() => handleDeleteAdvance(advance.id)}
-                                    className="text-red-600 hover:text-red-800 p-2"
-                                    title="Eliminar adelanto"
-                                  >
-                                    <FaTrash size={16} />
-                                  </button>
+                                  {/* Botones de acción */}
+                                  <div className="flex gap-2">
+                                    <button
+                                      onClick={() => setSelectedAdvanceForHistory(advance.id)}
+                                      className="text-[#010139] hover:text-[#020270] p-2"
+                                      title="Ver historial de pagos"
+                                    >
+                                      <FaHistory size={16} />
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteAdvance(advance.id)}
+                                      className="text-red-600 hover:text-red-800 p-2"
+                                      title="Eliminar adelanto"
+                                    >
+                                      <FaTrash size={16} />
+                                    </button>
+                                  </div>
                                 </div>
                               </div>
 
@@ -708,6 +719,13 @@ export function AdvancesManagementModal({
           </div>
         )}
       </div>
+
+      {/* Modal de Historial */}
+      <AdvanceHistoryModal
+        isOpen={!!selectedAdvanceForHistory}
+        onClose={() => setSelectedAdvanceForHistory(null)}
+        advanceId={selectedAdvanceForHistory}
+      />
     </div>
   );
 }
