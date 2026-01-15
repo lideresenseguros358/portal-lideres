@@ -523,6 +523,78 @@ export async function actionAddTransferToGroup(
 }
 
 // ============================================
+// 6.1 AGREGAR MÚLTIPLES TRANSFERENCIAS A GRUPO (BATCH)
+// ============================================
+
+export async function actionAddTransfersToGroupBatch(
+  groupId: string,
+  transferIds: string[]
+): Promise<ActionResult> {
+  try {
+    const { role } = await getAuthContext();
+    if (role !== 'master') {
+      return { ok: false, error: 'Acceso denegado' };
+    }
+
+    if (transferIds.length === 0) {
+      return { ok: false, error: 'No hay transferencias para agregar' };
+    }
+
+    const supabase = await getSupabaseServer();
+
+    // Verificar que el grupo no esté PAGADO
+    const { data: group } = await supabase
+      .from('bank_groups')
+      .select('status')
+      .eq('id', groupId)
+      .single();
+
+    if (!group) {
+      return { ok: false, error: 'Grupo no encontrado' };
+    }
+
+    if (group.status === 'PAGADO') {
+      return { ok: false, error: 'No se puede modificar un grupo PAGADO' };
+    }
+
+    // Verificar que ninguna transferencia esté en otro grupo
+    const { data: existing } = await supabase
+      .from('bank_group_transfers')
+      .select('transfer_id')
+      .in('transfer_id', transferIds);
+
+    if (existing && existing.length > 0) {
+      const duplicates = existing.map(e => e.transfer_id);
+      return { ok: false, error: `${duplicates.length} transferencia(s) ya pertenecen a otro grupo` };
+    }
+
+    // Insertar todas las relaciones en una sola query (BATCH)
+    const records = transferIds.map(transferId => ({
+      group_id: groupId,
+      transfer_id: transferId,
+    }));
+
+    const { error: insertError } = await supabase
+      .from('bank_group_transfers')
+      .insert(records);
+
+    if (insertError) {
+      console.error('[BANCO] Error agregando transferencias en batch:', insertError);
+      return { ok: false, error: 'Error al agregar transferencias al grupo' };
+    }
+
+    // Recalcular total del grupo una sola vez
+    await supabase.rpc('calculate_bank_group_total', { p_group_id: groupId });
+
+    revalidatePath('/commissions');
+    return { ok: true };
+  } catch (error) {
+    console.error('[BANCO] Error en actionAddTransfersToGroupBatch:', error);
+    return { ok: false, error: 'Error inesperado' };
+  }
+}
+
+// ============================================
 // 7. REMOVER TRANSFERENCIA DE GRUPO
 // ============================================
 

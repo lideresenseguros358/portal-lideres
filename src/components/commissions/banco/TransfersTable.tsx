@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { FaEdit, FaCheckCircle, FaClock, FaCircle, FaLock, FaSave, FaTimes, FaLayerGroup, FaTrash } from 'react-icons/fa';
-import { actionUpdateBankTransfer, actionAddTransferToGroup, actionDeleteBankTransfer, actionUpdateGroupTransfers } from '@/app/(app)/commissions/banco-actions';
+import { actionUpdateBankTransfer, actionAddTransfersToGroupBatch, actionDeleteBankTransfer, actionUpdateGroupTransfers } from '@/app/(app)/commissions/banco-actions';
 import type { BankTransferStatus, TransferType } from '@/app/(app)/commissions/banco-actions';
 import CreateGroupModal from './CreateGroupModal';
 import { toast } from 'sonner';
@@ -157,41 +157,34 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
   const handleGroupCreated = async (groupId: string, insurerId: string, transferType: string) => {
     setAddingToGroup(true);
     
-    // Agregar todas las transferencias seleccionadas al grupo
     const transferIds = Array.from(selectedTransfers);
-    let success = true;
-
-    for (const transferId of transferIds) {
-      const addResult = await actionAddTransferToGroup(groupId, transferId);
-      if (!addResult.ok) {
-        toast.error(`Error al agregar transfer ${transferId}`);
-        success = false;
-        break;
-      }
+    
+    // Agregar TODAS las transferencias en una sola query (BATCH)
+    const addResult = await actionAddTransfersToGroupBatch(groupId, transferIds);
+    
+    if (!addResult.ok) {
+      toast.error('Error al crear grupo', { description: addResult.error });
+      setAddingToGroup(false);
+      return;
     }
 
-    // Actualizar aseguradora y tipo de forma masiva en el grupo
-    if (success) {
-      const updateResult = await actionUpdateGroupTransfers(groupId, {
-        insurerAssignedId: insurerId,
-        transferType: transferType as TransferType,
-      });
-
-      if (!updateResult.ok) {
-        toast.error('Error al actualizar transferencias', { description: updateResult.error });
-        success = false;
-      }
-    }
+    // Actualizar aseguradora y tipo de forma masiva
+    const updateResult = await actionUpdateGroupTransfers(groupId, {
+      insurerAssignedId: insurerId,
+      transferType: transferType as TransferType,
+    });
 
     setAddingToGroup(false);
 
-    if (success) {
+    if (updateResult.ok) {
       toast.success(`Grupo creado con ${transferIds.length} transferencia(s)`, {
         description: 'Aseguradora y tipo asignados'
       });
       setShowCreateGroupModal(false);
       setSelectedTransfers(new Set());
       onRefresh();
+    } else {
+      toast.error('Error al actualizar transferencias', { description: updateResult.error });
     }
   };
 
