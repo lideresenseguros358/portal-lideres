@@ -18,12 +18,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'section_id es requerido' }, { status: 400 });
     }
 
+    // Obtener archivos (created_by apunta a auth.users, no profiles)
     const { data: files, error } = await supabase
       .from('download_files')
-      .select(`
-        *,
-        created_by_profile:profiles (full_name)
-      `)
+      .select('*')
       .eq('section_id', sectionId)
       .order('display_order');
 
@@ -32,7 +30,6 @@ export async function GET(request: NextRequest) {
     const now = new Date();
     const filesWithStatus = files?.map((file: any) => ({
       ...file,
-      created_by_name: file.created_by_profile?.full_name || 'Sistema',
       show_new_badge: file.is_new && file.marked_new_until && new Date(file.marked_new_until) > now
     })) || [];
 
