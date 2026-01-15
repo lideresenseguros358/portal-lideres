@@ -113,7 +113,7 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
         // Calculate broker commissions (items with broker_id assigned)
         const brokerCommissions = (items || [])
           .filter(item => item.broker_id !== null)
-          .reduce((sum, item) => sum + Math.abs(Number(item.gross_amount) || 0), 0);
+          .reduce((sum, item) => sum + (Number(item.gross_amount) || 0), 0);
         
         // Detectar si es un reporte de Códigos ASSA (cuando todos los items tienen códigos PJ750-xxx)
         const isAssaCodigos = (items || []).length > 0 && (items || []).every(item => 
@@ -230,10 +230,10 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
           .not('broker_id', 'is', null);
         
         const totalComisionesBrokers = (items || []).reduce((sum, item) => {
-          return sum + Math.abs(Number(item.gross_amount) || 0);
+          return sum + (Number(item.gross_amount) || 0);
         }, 0);
         
-        const totalReporte = Math.abs(Number(imp.total_amount) || 0);
+        const totalReporte = Number(imp.total_amount) || 0;
         const gananciaOficina = totalReporte - totalComisionesBrokers;
         
         
