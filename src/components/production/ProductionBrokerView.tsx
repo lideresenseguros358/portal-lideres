@@ -142,11 +142,9 @@ export default function ProductionBrokerView({ year, brokerId }: ProductionBroke
     console.log('[ProductionBrokerView] Months data:', data.months);
     console.log('[ProductionBrokerView] Previous year:', data.previous_year);
     
-    const currentMonth = new Date().getMonth(); // 0-11
-    console.log('[ProductionBrokerView] Current month:', currentMonth, MONTH_NAMES_ARRAY[currentMonth]);
-    
-    // 1. Buscar en año actual desde el mes actual hacia atrás
-    for (let i = currentMonth; i >= 0; i--) {
+    // 1. Buscar en año actual desde DICIEMBRE hacia ENERO (último mes registrado)
+    // NO limitarse al mes actual - buscar en todos los meses del año
+    for (let i = 11; i >= 0; i--) {
       const monthKey = MONTH_KEYS_ARRAY[i] as keyof typeof data.months;
       const monthData = data.months[monthKey];
       const persistencia = monthData?.persistencia;

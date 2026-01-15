@@ -169,10 +169,9 @@ export default function ProductionAnalyticsView({ year, brokers }: ProductionAna
 
   // Calcular última persistencia registrada (carry-forward desde año anterior si es necesario)
   const ultimaPersistencia = (() => {
-    const currentMonth = new Date().getMonth(); // 0-11
-    
-    // 1. Buscar en año actual desde el mes actual hacia atrás
-    for (let i = currentMonth; i >= 0; i--) {
+    // 1. Buscar en año actual desde DICIEMBRE hacia ENERO (último mes registrado)
+    // NO limitarse al mes actual - buscar en todos los meses del año
+    for (let i = 11; i >= 0; i--) {
       const monthKey = MONTH_KEYS[i];
       if (!monthKey) continue;
       for (const broker of allBrokersData) {
