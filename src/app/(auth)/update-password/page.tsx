@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseClient as getSupabaseClient } from "@/lib/supabase/client";
 import AuthShell from "../_AuthShell";
@@ -14,6 +14,25 @@ const UpdatePasswordPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [sessionChecked, setSessionChecked] = useState(false);
+
+  // Verificar que el usuario tenga una sesión válida de recovery
+  useEffect(() => {
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        console.error('[UPDATE-PASSWORD] No hay sesión activa');
+        setError("Sesión inválida o expirada. Por favor solicita un nuevo enlace de recuperación.");
+      } else {
+        console.log('[UPDATE-PASSWORD] Sesión de recovery válida:', session.user.id);
+      }
+      
+      setSessionChecked(true);
+    };
+
+    checkSession();
+  }, [supabase]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();

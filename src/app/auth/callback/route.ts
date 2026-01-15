@@ -7,10 +7,8 @@ export async function GET(request: Request) {
   try {
     const requestUrl = new URL(request.url);
     const code = requestUrl.searchParams.get("code");
-    const token_hash = requestUrl.searchParams.get("token_hash");
-    const type = requestUrl.searchParams.get("type");
-
-    if (!code && !token_hash) {
+    
+    if (!code) {
       return NextResponse.redirect(
         new URL("/login?error=missing_code", request.url)
       );
@@ -36,24 +34,14 @@ export async function GET(request: Request) {
       } as any
     );
     
-    let data, error;
+    // Intentar intercambiar código por sesión
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
     
-    // Para recovery, verificar OTP directamente sin PKCE
-    if (type === 'recovery' && token_hash) {
-      const verifyResult = await supabase.auth.verifyOtp({
-        token_hash,
-        type: 'recovery'
-      });
-      data = verifyResult.data;
-      error = verifyResult.error;
-    } else if (code) {
-      // Para login normal, usar exchangeCodeForSession
-      const exchangeResult = await supabase.auth.exchangeCodeForSession(code);
-      data = exchangeResult.data;
-      error = exchangeResult.error;
-    } else {
+    // Si falla por PKCE, es un flujo de recovery - redirigir a update-password
+    if (error && error.message.includes('code verifier')) {
+      console.log('[CALLBACK] Recovery detectado - redirigiendo a update-password con code');
       return NextResponse.redirect(
-        new URL("/login?error=invalid_params", request.url)
+        new URL(`/update-password?code=${code}`, request.url)
       );
     }
 

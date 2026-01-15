@@ -1,9 +1,8 @@
 export const getRedirectUrl = () => {
-  // Hardcodeado temporalmente para debugging
   return "https://portal.lideresenseguros.com/auth/callback";
 };
 
 export const getPasswordRecoveryUrl = () => {
-  // Hardcodeado temporalmente para debugging
-  return "https://portal.lideresenseguros.com/auth/callback";
+  // Recovery va directo a update-password, no a callback
+  return "https://portal.lideresenseguros.com/update-password";
 };
