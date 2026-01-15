@@ -1,6 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseServer } from '@/lib/supabase/server';
 
+// Función para sanitizar nombres de archivo
+function sanitizeFileName(fileName: string): string {
+  // Eliminar tildes y caracteres especiales
+  const normalized = fileName
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // Elimina acentos
+    .replace(/[^a-zA-Z0-9.\-_\s]/g, '') // Solo permite alfanuméricos, puntos, guiones y espacios
+    .replace(/\s+/g, '-') // Reemplaza espacios por guiones
+    .replace(/-+/g, '-'); // Elimina guiones duplicados
+  
+  return normalized;
+}
+
 // POST - Upload PDF a Supabase Storage
 export async function POST(request: NextRequest) {
   try {
@@ -50,11 +63,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Solo se permiten archivos PDF' }, { status: 400 });
     }
 
+    // Sanitizar nombre de archivo (eliminar tildes y caracteres especiales)
+    const sanitizedName = sanitizeFileName(file.name);
+    
     // Generar nombre único
     const timestamp = Date.now();
-    const fileName = `${sectionId}/${timestamp}-${file.name}`;
+    const fileName = `${sectionId}/${timestamp}-${sanitizedName}`;
 
     console.log('[4] Uploading to Storage bucket "guides":', fileName);
+    console.log('[4a] Original name:', file.name, '→ Sanitized:', sanitizedName);
 
     // Subir a Storage
     const { data: uploadData, error: uploadError } = await supabase.storage
