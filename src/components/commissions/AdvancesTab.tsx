@@ -53,6 +53,7 @@ interface Props {
 
 export function AdvancesTab({ role, brokerId, brokers }: Props) {
   const [year, setYear] = useState(new Date().getFullYear());
+  const [activeTab, setActiveTab] = useState<'pending' | 'paid'>('pending');
   const [allAdvances, setAllAdvances] = useState<Advance[]>([]);
   const [advanceLogs, setAdvanceLogs] = useState<any[]>([]);
   const [paidTotal, setPaidTotal] = useState(0);
@@ -100,7 +101,9 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
       //   await syncRecurrences();
       // }
       
-      const result = await actionGetAdvances(role === 'broker' ? brokerId || undefined : undefined, year);
+      // Para "Deudas Activas" (pending) no filtrar por año, para "Descuentos" (paid) sí
+      const yearFilter = activeTab === 'paid' ? year : undefined;
+      const result = await actionGetAdvances(role === 'broker' ? brokerId || undefined : undefined, yearFilter);
       console.log('[AdvancesTab] Result from actionGetAdvances:', result);
       if (result.ok) {
         console.log('[AdvancesTab] Setting advances, count:', result.data?.length || 0);
@@ -159,7 +162,7 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [role, brokerId, year]);
+  }, [role, brokerId, year, activeTab]);
 
   useEffect(() => {
     loadAdvances();
@@ -794,7 +797,9 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
             </TableRow>
           </TableHeader>
           <TableBody>
-        {Object.entries(groupedData).map(([bId, brokerData]) => {
+        {Object.entries(groupedData)
+          .sort(([, a], [, b]) => a.broker_name.localeCompare(b.broker_name)) // Ordenar alfabéticamente
+          .map(([bId, brokerData]) => {
           const advancesToShow = brokerData.advances.filter(a => {
             // Recurrentes SIEMPRE en Deudas Activas (sin importar status)
             if (a.is_recurring && a.recurrence_id) {
@@ -974,7 +979,9 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
         
         {/* Cards para mobile */}
         <div className="md:hidden space-y-3">
-          {Object.entries(groupedData).map(([bId, brokerData]) => {
+          {Object.entries(groupedData)
+            .sort(([, a], [, b]) => a.broker_name.localeCompare(b.broker_name)) // Ordenar alfabéticamente
+            .map(([bId, brokerData]) => {
             const advancesToShow = brokerData.advances.filter(a => {
               // Recurrentes SIEMPRE en Deudas Activas (sin importar status)
               if (a.is_recurring && a.recurrence_id) {
@@ -1206,14 +1213,17 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
               <CardTitle className="text-white text-xl">Gestión de Adelantos</CardTitle>
             </div>
             <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-              <Select value={String(year)} onValueChange={(value) => setYear(Number(value))}>
-                <SelectTrigger className="w-28 bg-white/10 border-white/30 text-white backdrop-blur-sm hover:bg-white/20">
-                  <SelectValue placeholder="Año" />
-                </SelectTrigger>
-                <SelectContent>
-                  {years.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              {/* Selector de año solo en pestaña Descuentos */}
+              {activeTab === 'paid' && (
+                <Select value={String(year)} onValueChange={(value) => setYear(Number(value))}>
+                  <SelectTrigger className="w-28 bg-white/10 border-white/30 text-white backdrop-blur-sm hover:bg-white/20">
+                    <SelectValue placeholder="Año" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {years.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              )}
               {role === 'master' && (
                 <Button 
                   onClick={() => setIsAddModalOpen(true)}
@@ -1228,7 +1238,7 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
           </div>
         </CardHeader>
         <CardContent className="p-0">
-          <Tabs defaultValue="pending" className="w-full">
+          <Tabs defaultValue="pending" value={activeTab} onValueChange={(value) => setActiveTab(value as 'pending' | 'paid')} className="w-full">
             <TabsList className="grid w-full grid-cols-2 rounded-none bg-gray-50 border-b-2 border-gray-200">
               <TabsTrigger value="pending" className="data-[state=active]:bg-white data-[state=active]:text-[#010139] data-[state=active]:border-b-2 data-[state=active]:border-[#010139] rounded-none font-semibold">
                 Deudas Activas
