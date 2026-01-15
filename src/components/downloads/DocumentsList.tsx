@@ -124,6 +124,7 @@ export default function DocumentsList({ scope, policyType, insurerId, isMaster, 
       // 1. Subir archivo a storage
       const formData = new FormData();
       formData.append('file', uploadFile);
+      formData.append('section_id', uploadSectionId);
       formData.append('folder', 'downloads');
 
       const uploadRes = await fetch('/api/downloads/upload', {
