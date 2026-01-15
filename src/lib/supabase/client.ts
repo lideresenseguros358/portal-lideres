@@ -6,7 +6,7 @@ import type { Database } from "../database.types";
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-// Simple client with session persistence
+// Cliente browser - maneja cookies automáticamente para PKCE
 export const supabaseClient = () =>
   createBrowserClient<Database>(url, key);
 

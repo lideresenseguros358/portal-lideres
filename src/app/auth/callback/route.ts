@@ -7,8 +7,10 @@ export async function GET(request: Request) {
   try {
     const requestUrl = new URL(request.url);
     const code = requestUrl.searchParams.get("code");
+    const token_hash = requestUrl.searchParams.get("token_hash");
+    const type = requestUrl.searchParams.get("type");
 
-    if (!code) {
+    if (!code && !token_hash) {
       return NextResponse.redirect(
         new URL("/login?error=missing_code", request.url)
       );
@@ -34,8 +36,26 @@ export async function GET(request: Request) {
       } as any
     );
     
-    // Intercambiar código por sesión
-    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+    let data, error;
+    
+    // Para recovery, verificar OTP directamente sin PKCE
+    if (type === 'recovery' && token_hash) {
+      const verifyResult = await supabase.auth.verifyOtp({
+        token_hash,
+        type: 'recovery'
+      });
+      data = verifyResult.data;
+      error = verifyResult.error;
+    } else if (code) {
+      // Para login normal, usar exchangeCodeForSession
+      const exchangeResult = await supabase.auth.exchangeCodeForSession(code);
+      data = exchangeResult.data;
+      error = exchangeResult.error;
+    } else {
+      return NextResponse.redirect(
+        new URL("/login?error=invalid_params", request.url)
+      );
+    }
 
     if (error) {
       console.error('Error en exchangeCodeForSession:', error);
