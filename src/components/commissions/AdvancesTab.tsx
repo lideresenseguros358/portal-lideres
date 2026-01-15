@@ -396,8 +396,8 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
         
         // Procesar cada log individual - FILTRAR solo pagos del año seleccionado
         adv.payment_logs.forEach(log => {
-          const dateKey = log.date.substring(0, 10);
-          const paymentYear = new Date(dateKey).getFullYear();
+          const dateKey = log.date.substring(0, 10); // YYYY-MM-DD
+          const paymentYear = parseInt(dateKey.substring(0, 4)); // Extraer año directamente del string
           
           // Solo incluir pagos del año seleccionado
           if (paymentYear !== year) return;
