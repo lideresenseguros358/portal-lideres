@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
-import { getSupabaseServer } from "@/lib/supabase/server";
+import { cookies } from "next/headers";
+import { createServerClient } from "@supabase/ssr";
+import type { Database } from "@/lib/database.types";
 
 export async function GET(request: Request) {
   try {
@@ -12,7 +14,25 @@ export async function GET(request: Request) {
       );
     }
 
-    const supabase = await getSupabaseServer();
+    const cookieStore = await cookies();
+    
+    // Crear cliente de Supabase para Route Handler con manejo correcto de cookies
+    const supabase = createServerClient<Database>(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return cookieStore.getAll();
+          },
+          setAll(cookiesToSet: any) {
+            cookiesToSet.forEach(({ name, value, options }: any) => {
+              cookieStore.set(name, value, options);
+            });
+          },
+        },
+      } as any
+    );
     
     // Intercambiar código por sesión
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
