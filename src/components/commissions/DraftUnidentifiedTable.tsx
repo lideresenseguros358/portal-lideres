@@ -177,7 +177,7 @@ export default function DraftUnidentifiedTable({ fortnightId, brokers, onUpdate,
                               {/* Comisión */}
                               <div className="flex-shrink-0">
                                 <p className="font-mono font-bold text-[#8AAA19] text-sm">
-                                  ${((item.insurers as any)?.invert_negatives ? -item.commission_raw : item.commission_raw).toFixed(2)}
+                                  ${item.commission_raw.toFixed(2)}
                                 </p>
                               </div>
                               {/* Botón Asignar */}
@@ -246,7 +246,7 @@ export default function DraftUnidentifiedTable({ fortnightId, brokers, onUpdate,
                               {/* Comisión */}
                               <div className="flex-shrink-0">
                                 <p className="font-mono font-bold text-[#8AAA19] text-sm">
-                                  ${((item.insurers as any)?.invert_negatives ? -item.commission_raw : item.commission_raw).toFixed(2)}
+                                  ${item.commission_raw.toFixed(2)}
                                 </p>
                               </div>
                               {/* Corredor asignado */}
