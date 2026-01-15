@@ -9,9 +9,12 @@ type ProfileRow = Pick<Database["public"]["Tables"]["profiles"]["Row"], "role" |
 export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const type = requestUrl.searchParams.get("type");
+  const code = requestUrl.searchParams.get("code");
 
   const cookieStore = cookies();
   const supabase = createRouteHandlerClient<Database>({ cookies: () => cookieStore });
+  
+  // Intercambiar código por sesión
   const { data, error } = await supabase.auth.exchangeCodeForSession(requestUrl.toString());
 
   if (error || !data.session) {
@@ -26,7 +29,10 @@ export async function GET(request: Request) {
     .eq("id", data.session.user.id)
     .maybeSingle<ProfileRow>();
 
-  if (type === "recovery") {
+  // Detectar recovery: por type param o por recovery_sent_at del usuario
+  const isRecovery = type === "recovery" || data.session.user.recovery_sent_at;
+
+  if (isRecovery) {
     return NextResponse.redirect(new URL("/update-password", request.url));
   }
 
