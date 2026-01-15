@@ -25,8 +25,14 @@ const ForgotPage = () => {
 
     setLoading(true);
 
+    const redirectUrl = getPasswordRecoveryUrl();
+    console.log('=== PASSWORD RECOVERY DEBUG ===');
+    console.log('NEXT_PUBLIC_SITE_URL:', process.env.NEXT_PUBLIC_SITE_URL);
+    console.log('Redirect URL being sent to Supabase:', redirectUrl);
+    console.log('==============================');
+
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: getPasswordRecoveryUrl(),
+      redirectTo: redirectUrl,
     });
 
     setLoading(false);
