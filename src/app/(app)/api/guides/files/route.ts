@@ -18,13 +18,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'section_id es requerido' }, { status: 400 });
     }
 
-    // Obtener archivos con info del creador
+    // Obtener archivos (created_by apunta a auth.users, no profiles)
     const { data: files, error } = await supabase
       .from('guide_files')
-      .select(`
-        *,
-        created_by_profile:profiles (full_name)
-      `)
+      .select('*')
       .eq('section_id', sectionId)
       .order('display_order');
 
@@ -34,7 +31,6 @@ export async function GET(request: NextRequest) {
     const now = new Date();
     const filesWithStatus = files?.map((file: any) => ({
       ...file,
-      created_by_name: file.created_by_profile?.full_name || 'Sistema',
       show_new_badge: file.is_new && file.marked_new_until && new Date(file.marked_new_until) > now
     })) || [];
 
@@ -96,6 +92,16 @@ export async function POST(request: NextRequest) {
 
     const newOrder = (lastFile?.display_order || 0) + 1;
 
+    // LOG: Datos antes de insert
+    console.log('========== GUIDE FILE INSERT DEBUG ==========');
+    console.log('User ID:', user.id);
+    console.log('Profile role:', profile?.role);
+    console.log('Section ID:', section_id);
+    console.log('File URL:', file_url);
+    console.log('Display Order:', newOrder);
+    console.log('Created By:', user.id);
+    console.log('============================================');
+
     // Crear archivo principal
     const { data: file, error } = await supabase
       .from('guide_files')
@@ -111,7 +117,15 @@ export async function POST(request: NextRequest) {
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error('========== RLS ERROR DETAIL ==========');
+      console.error('Error code:', error.code);
+      console.error('Error message:', error.message);
+      console.error('Error details:', error.details);
+      console.error('Error hint:', error.hint);
+      console.error('=====================================');
+      throw error;
+    }
 
     // Crear duplicados si se especificó
     const linkedIds: string[] = [];

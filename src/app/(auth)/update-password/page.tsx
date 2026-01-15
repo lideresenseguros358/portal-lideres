@@ -19,15 +19,30 @@ const UpdatePasswordPage = () => {
   // Verificar que el usuario tenga una sesión válida de recovery
   useEffect(() => {
     const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      console.log('========== UPDATE-PASSWORD DEBUG ==========');
+      console.log('[1] Verificando sesión de recovery...');
+      
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      console.log('[2] Session error:', sessionError);
+      console.log('[3] Session data:', session ? {
+        user_id: session.user.id,
+        email: session.user.email,
+        recovery_sent_at: session.user.recovery_sent_at,
+        aud: session.user.aud,
+        role: session.user.role,
+        created_at: session.user.created_at
+      } : null);
       
       if (!session) {
-        console.error('[UPDATE-PASSWORD] No hay sesión activa');
+        console.error('[4] ❌ No hay sesión activa - usuario debe solicitar nuevo link');
         setError("Sesión inválida o expirada. Por favor solicita un nuevo enlace de recuperación.");
       } else {
-        console.log('[UPDATE-PASSWORD] Sesión de recovery válida:', session.user.id);
+        console.log('[4] ✅ Sesión de recovery válida para:', session.user.email);
+        console.log('[5] Recovery sent at:', session.user.recovery_sent_at);
       }
       
+      console.log('==========================================');
       setSessionChecked(true);
     };
 
