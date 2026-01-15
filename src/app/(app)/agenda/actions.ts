@@ -193,7 +193,7 @@ export async function actionCreateEvent(payload: {
       const { sendNotificationEmail } = await import('@/lib/notifications/send-email');
       
       const eventDate = new Date(payload.start_at).toISOString().split('T')[0];
-      const eventTime = payload.is_all_day ? undefined : new Date(payload.start_at).toLocaleTimeString('es-PA', { hour: '2-digit', minute: '2-digit' });
+      const eventTime = payload.is_all_day ? undefined : new Date(payload.start_at).toLocaleTimeString('es-PA', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Panama' });
       const isForAllBrokers = payload.audience === 'ALL';
       
       if (isForAllBrokers) {
@@ -377,7 +377,7 @@ export async function actionUpdateEvent(params: {
         const audience = params.payload.audience || currentEvent.audience;
         
         const eventDate = new Date(startAt).toISOString().split('T')[0];
-        const eventTime = isAllDay ? undefined : new Date(startAt).toLocaleTimeString('es-PA', { hour: '2-digit', minute: '2-digit' });
+        const eventTime = isAllDay ? undefined : new Date(startAt).toLocaleTimeString('es-PA', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Panama' });
         const isForAllBrokers = audience === 'ALL';
         
         if (isForAllBrokers) {

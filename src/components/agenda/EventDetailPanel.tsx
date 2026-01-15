@@ -171,7 +171,8 @@ END:VCALENDAR`;
     const timeStr = date.toLocaleTimeString('es-PA', { 
       hour: 'numeric', 
       minute: '2-digit',
-      hour12: true 
+      hour12: true,
+      timeZone: 'America/Panama'
     });
     
     return `${dateStr} a las ${timeStr}`;

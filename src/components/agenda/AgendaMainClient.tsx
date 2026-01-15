@@ -289,7 +289,8 @@ export default function AgendaMainClient() {
                 const dayName = eventDate.toLocaleDateString('es-PA', { weekday: 'long' });
                 const eventTime = eventDate.toLocaleTimeString('es-PA', { 
                   hour: '2-digit', 
-                  minute: '2-digit' 
+                  minute: '2-digit',
+                  timeZone: 'America/Panama'
                 });
                 
                 return (
