@@ -52,13 +52,17 @@ export async function POST(request: NextRequest) {
     const policyNumbers = policies.map(p => p.policy_number);
 
     // Buscar comisiones pagadas (en quincenas cerradas con status PAID)
+    // NO filtramos por broker_id porque las comisiones siguen ligadas a las pólizas
     const { data: commissions } = await supabase
       .from('comm_items')
       .select(`
         id,
         policy_number,
+        insured_name,
+        insurer_id,
         gross_amount,
         broker_commission,
+        broker_id,
         import_id,
         comm_imports!inner(
           id,
@@ -72,7 +76,6 @@ export async function POST(request: NextRequest) {
         )
       `)
       .in('policy_number', policyNumbers)
-      .eq('broker_id', oldBrokerId)
       .not('gross_amount', 'is', null);
 
     if (!commissions || commissions.length === 0) {
@@ -84,10 +87,14 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Filtrar solo las comisiones de quincenas PAID
+    // Filtrar solo las comisiones de quincenas PAID del broker antiguo
     const paidCommissions = commissions.filter((c: any) => 
-      c.comm_imports?.fortnights?.status === 'PAID'
+      c.comm_imports?.fortnights?.status === 'PAID' &&
+      c.broker_id === oldBrokerId // Solo comisiones del broker que estamos reemplazando
     );
+
+    console.log('[CHECK COMMISSIONS] Total comisiones encontradas:', commissions.length);
+    console.log('[CHECK COMMISSIONS] Comisiones PAID del broker antiguo:', paidCommissions.length);
 
     if (paidCommissions.length === 0) {
       return NextResponse.json({
@@ -119,6 +126,8 @@ export async function POST(request: NextRequest) {
       acc[fortnightId].items.push({
         id: item.id,
         policy_number: item.policy_number,
+        insured_name: item.insured_name || null,
+        insurer_id: item.insurer_id || null,
         gross_amount: item.gross_amount,
         broker_commission: commission
       });
