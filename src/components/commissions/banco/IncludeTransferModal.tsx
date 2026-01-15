@@ -29,10 +29,14 @@ export default function IncludeTransferModal({ transfer, currentCutoffId, onClos
       const response = await fetch('/api/insurers');
       if (response.ok) {
         const data = await response.json();
-        setInsurers(data.filter((i: any) => i.status === 'ACTIVE'));
+        // El endpoint retorna { success, insurers }
+        const insurersList = data.insurers || [];
+        // Filtrar por is_active (booleano), no status
+        setInsurers(insurersList.filter((i: any) => i.is_active === true));
       }
     } catch (error) {
       console.error('Error cargando aseguradoras:', error);
+      toast.error('Error al cargar aseguradoras');
     }
   };
 
