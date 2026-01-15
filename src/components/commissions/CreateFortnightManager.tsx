@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { FaPlus, FaCalendarCheck } from 'react-icons/fa';
+import { FaPlus, FaCalendarCheck, FaEdit } from 'react-icons/fa';
 import {
   Dialog,
   DialogContent,
@@ -36,6 +36,7 @@ export default function CreateFortnightManager({ onFortnightCreated }: Props) {
   const [proposedPeriod, setProposedPeriod] = useState<FortnightPeriod | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isEditingPeriod, setIsEditingPeriod] = useState(false);
 
   const getNextFortnightPeriod = (): FortnightPeriod => {
     const now = new Date();
@@ -81,6 +82,54 @@ export default function CreateFortnightManager({ onFortnightCreated }: Props) {
     setProposedPeriod(period);
     setIsModalOpen(true);
     setError(null);
+    setIsEditingPeriod(false);
+  };
+
+  const handleEditPeriod = () => {
+    setIsEditingPeriod(true);
+  };
+
+  const handleCancelEdit = () => {
+    setIsEditingPeriod(false);
+    // Restaurar al período sugerido original
+    const period = getNextFortnightPeriod();
+    setProposedPeriod(period);
+  };
+
+  const handleDateChange = (field: 'start' | 'end', value: string) => {
+    if (!proposedPeriod) return;
+    
+    const newDate = new Date(value);
+    if (isNaN(newDate.getTime())) return;
+    
+    let newStart = proposedPeriod.period_start;
+    let newEnd = proposedPeriod.period_end;
+    
+    if (field === 'start') {
+      newStart = newDate;
+    } else {
+      newEnd = newDate;
+    }
+    
+    // Generar label actualizado
+    const startDay = newStart.getDate();
+    const endDay = newEnd.getDate();
+    const month = months[newEnd.getMonth()];
+    const year = newEnd.getFullYear();
+    
+    setProposedPeriod({
+      period_start: newStart,
+      period_end: newEnd,
+      label: `del ${startDay} al ${endDay} de ${month} ${year}`,
+      canCreate: true
+    });
+  };
+
+  const formatDateForInput = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   };
 
   const handleConfirmCreate = async () => {
@@ -163,11 +212,78 @@ export default function CreateFortnightManager({ onFortnightCreated }: Props) {
           </DialogHeader>
           
           {proposedPeriod && (
-            <div className="py-6 text-center bg-gradient-to-r from-gray-50 to-gray-100 rounded-lg border border-gray-200">
-              <p className="text-sm text-gray-600 mb-2">Período a gestionar:</p>
-              <p className="font-bold text-xl text-[#010139]">
-                {proposedPeriod.label}
-              </p>
+            <div className="space-y-4">
+              {!isEditingPeriod ? (
+                <div className="py-6 text-center bg-gradient-to-r from-gray-50 to-gray-100 rounded-lg border border-gray-200">
+                  <p className="text-sm text-gray-600 mb-2">Período a gestionar:</p>
+                  <p className="font-bold text-xl text-[#010139] mb-3">
+                    {proposedPeriod.label}
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleEditPeriod}
+                    className="text-[#010139] hover:bg-[#010139] hover:text-white"
+                  >
+                    <FaEdit className="mr-2 h-3 w-3" />
+                    Editar Período
+                  </Button>
+                </div>
+              ) : (
+                <div className="py-6 px-4 bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg border-2 border-[#010139]">
+                  <p className="text-sm text-[#010139] font-semibold mb-4 text-center">Editar Período</p>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Fecha Inicio
+                      </label>
+                      <input
+                        type="date"
+                        value={formatDateForInput(proposedPeriod.period_start)}
+                        onChange={(e) => handleDateChange('start', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#010139]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Fecha Fin
+                      </label>
+                      <input
+                        type="date"
+                        value={formatDateForInput(proposedPeriod.period_end)}
+                        onChange={(e) => handleDateChange('end', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-[#010139]"
+                      />
+                    </div>
+                    <div className="pt-2 text-center">
+                      <p className="text-sm text-gray-600 mb-1">Período resultante:</p>
+                      <p className="font-bold text-lg text-[#010139]">
+                        {proposedPeriod.label}
+                      </p>
+                    </div>
+                    <div className="flex gap-2 pt-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleCancelEdit}
+                        className="flex-1"
+                      >
+                        Cancelar
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => setIsEditingPeriod(false)}
+                        className="flex-1 bg-[#8AAA19] hover:bg-[#010139] text-white"
+                      >
+                        Aplicar
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
           
