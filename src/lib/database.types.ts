@@ -550,25 +550,51 @@ export type Database = {
         Row: {
           amount_assigned: number
           created_at: string | null
+          cutoff_origin_id: string | null
+          fortnight_paid_id: string | null
           group_id: string
           id: string
           import_id: string
+          is_temporary: boolean | null
+          notes: string | null
         }
         Insert: {
           amount_assigned: number
           created_at?: string | null
+          cutoff_origin_id?: string | null
+          fortnight_paid_id?: string | null
           group_id: string
           id?: string
           import_id: string
+          is_temporary?: boolean | null
+          notes?: string | null
         }
         Update: {
           amount_assigned?: number
           created_at?: string | null
+          cutoff_origin_id?: string | null
+          fortnight_paid_id?: string | null
           group_id?: string
           id?: string
           import_id?: string
+          is_temporary?: boolean | null
+          notes?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "bank_group_imports_cutoff_origin_id_fkey"
+            columns: ["cutoff_origin_id"]
+            isOneToOne: false
+            referencedRelation: "bank_cutoffs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bank_group_imports_fortnight_paid_id_fkey"
+            columns: ["fortnight_paid_id"]
+            isOneToOne: false
+            referencedRelation: "fortnights"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "bank_group_imports_group_id_fkey"
             columns: ["group_id"]
@@ -578,45 +604,6 @@ export type Database = {
           },
           {
             foreignKeyName: "bank_group_imports_import_id_fkey"
-            columns: ["import_id"]
-            isOneToOne: false
-            referencedRelation: "comm_imports"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      bank_transfer_imports: {
-        Row: {
-          amount_assigned: number
-          created_at: string | null
-          id: string
-          import_id: string
-          transfer_id: string
-        }
-        Insert: {
-          amount_assigned: number
-          created_at?: string | null
-          id?: string
-          import_id: string
-          transfer_id: string
-        }
-        Update: {
-          amount_assigned?: number
-          created_at?: string | null
-          id?: string
-          import_id?: string
-          transfer_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "bank_transfer_imports_transfer_id_fkey"
-            columns: ["transfer_id"]
-            isOneToOne: false
-            referencedRelation: "bank_transfers_comm"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "bank_transfer_imports_import_id_fkey"
             columns: ["import_id"]
             isOneToOne: false
             referencedRelation: "comm_imports"
@@ -664,6 +651,7 @@ export type Database = {
         Row: {
           created_at: string | null
           created_by: string | null
+          cutoff_id: string | null
           fortnight_paid_id: string | null
           group_template: string
           id: string
@@ -678,6 +666,7 @@ export type Database = {
         Insert: {
           created_at?: string | null
           created_by?: string | null
+          cutoff_id?: string | null
           fortnight_paid_id?: string | null
           group_template: string
           id?: string
@@ -692,6 +681,7 @@ export type Database = {
         Update: {
           created_at?: string | null
           created_by?: string | null
+          cutoff_id?: string | null
           fortnight_paid_id?: string | null
           group_template?: string
           id?: string
@@ -712,6 +702,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "bank_groups_cutoff_id_fkey"
+            columns: ["cutoff_id"]
+            isOneToOne: false
+            referencedRelation: "bank_cutoffs"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "bank_groups_fortnight_paid_id_fkey"
             columns: ["fortnight_paid_id"]
             isOneToOne: false
@@ -723,6 +720,71 @@ export type Database = {
             columns: ["insurer_id"]
             isOneToOne: false
             referencedRelation: "insurers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      bank_transfer_imports: {
+        Row: {
+          amount_assigned: number
+          created_at: string | null
+          cutoff_origin_id: string | null
+          fortnight_paid_id: string | null
+          id: string
+          import_id: string
+          is_temporary: boolean | null
+          notes: string | null
+          transfer_id: string
+        }
+        Insert: {
+          amount_assigned: number
+          created_at?: string | null
+          cutoff_origin_id?: string | null
+          fortnight_paid_id?: string | null
+          id?: string
+          import_id: string
+          is_temporary?: boolean | null
+          notes?: string | null
+          transfer_id: string
+        }
+        Update: {
+          amount_assigned?: number
+          created_at?: string | null
+          cutoff_origin_id?: string | null
+          fortnight_paid_id?: string | null
+          id?: string
+          import_id?: string
+          is_temporary?: boolean | null
+          notes?: string | null
+          transfer_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bank_transfer_imports_cutoff_origin_id_fkey"
+            columns: ["cutoff_origin_id"]
+            isOneToOne: false
+            referencedRelation: "bank_cutoffs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bank_transfer_imports_fortnight_paid_id_fkey"
+            columns: ["fortnight_paid_id"]
+            isOneToOne: false
+            referencedRelation: "fortnights"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bank_transfer_imports_import_id_fkey"
+            columns: ["import_id"]
+            isOneToOne: false
+            referencedRelation: "comm_imports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bank_transfer_imports_transfer_id_fkey"
+            columns: ["transfer_id"]
+            isOneToOne: false
+            referencedRelation: "bank_transfers_comm"
             referencedColumns: ["id"]
           },
         ]
@@ -2116,6 +2178,101 @@ export type Database = {
           },
         ]
       }
+      draft_unidentified_items: {
+        Row: {
+          commission_raw: number
+          created_at: string | null
+          fortnight_id: string
+          id: string
+          import_id: string
+          insured_name: string | null
+          insurer_id: string
+          policy_number: string
+          raw_row: string | null
+          temp_assigned_at: string | null
+          temp_assigned_broker_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          commission_raw?: number
+          created_at?: string | null
+          fortnight_id: string
+          id?: string
+          import_id: string
+          insured_name?: string | null
+          insurer_id: string
+          policy_number: string
+          raw_row?: string | null
+          temp_assigned_at?: string | null
+          temp_assigned_broker_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          commission_raw?: number
+          created_at?: string | null
+          fortnight_id?: string
+          id?: string
+          import_id?: string
+          insured_name?: string | null
+          insurer_id?: string
+          policy_number?: string
+          raw_row?: string | null
+          temp_assigned_at?: string | null
+          temp_assigned_broker_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "draft_unidentified_items_fortnight_id_fkey"
+            columns: ["fortnight_id"]
+            isOneToOne: false
+            referencedRelation: "fortnights"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "draft_unidentified_items_import_id_fkey"
+            columns: ["import_id"]
+            isOneToOne: false
+            referencedRelation: "comm_imports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "draft_unidentified_items_insurer_id_fkey"
+            columns: ["insurer_id"]
+            isOneToOne: false
+            referencedRelation: "insurers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "draft_unidentified_items_temp_assigned_broker_id_fkey"
+            columns: ["temp_assigned_broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "draft_unidentified_items_temp_assigned_broker_id_fkey"
+            columns: ["temp_assigned_broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_ach_validation"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "draft_unidentified_items_temp_assigned_broker_id_fkey"
+            columns: ["temp_assigned_broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_ach_info"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "draft_unidentified_items_temp_assigned_broker_id_fkey"
+            columns: ["temp_assigned_broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_bank_info"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_attendees: {
         Row: {
           broker_id: string
@@ -2564,32 +2721,32 @@ export type Database = {
         Row: {
           advance_id: string
           amount: number
-          applied: boolean
+          applied: boolean | null
           broker_id: string
-          created_at: string
+          created_at: string | null
           fortnight_id: string
           id: string
-          updated_at: string
+          updated_at: string | null
         }
         Insert: {
           advance_id: string
           amount: number
-          applied?: boolean
+          applied?: boolean | null
           broker_id: string
-          created_at?: string
+          created_at?: string | null
           fortnight_id: string
           id?: string
-          updated_at?: string
+          updated_at?: string | null
         }
         Update: {
           advance_id?: string
           amount?: number
-          applied?: boolean
+          applied?: boolean | null
           broker_id?: string
-          created_at?: string
+          created_at?: string | null
           fortnight_id?: string
           id?: string
-          updated_at?: string
+          updated_at?: string | null
         }
         Relationships: [
           {
@@ -2604,6 +2761,27 @@ export type Database = {
             columns: ["broker_id"]
             isOneToOne: false
             referencedRelation: "brokers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fortnight_discounts_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_ach_validation"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fortnight_discounts_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_ach_info"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fortnight_discounts_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_bank_info"
             referencedColumns: ["id"]
           },
           {
@@ -4716,6 +4894,14 @@ export type Database = {
         }[]
       }
       confirm_claims_paid: { Args: { p_claim_ids: string[] }; Returns: boolean }
+      count_draft_unidentified: {
+        Args: { p_fortnight_id: string }
+        Returns: {
+          identified_count: number
+          total_count: number
+          unidentified_count: number
+        }[]
+      }
       create_temp_client_from_pending: {
         Args: {
           p_broker_id: string
@@ -4776,6 +4962,16 @@ export type Database = {
         }[]
       }
       get_missing_fields: { Args: { temp_id: string }; Returns: string[] }
+      get_pending_groups: {
+        Args: never
+        Returns: {
+          created_at: string
+          group_id: string
+          group_name: string
+          status: string
+          total_amount: number
+        }[]
+      }
       get_pending_items_grouped: {
         Args: never
         Returns: {
@@ -4788,6 +4984,18 @@ export type Database = {
           total_items: number
         }[]
       }
+      get_pending_transfers: {
+        Args: never
+        Returns: {
+          amount: number
+          cutoff_id: string
+          cutoff_name: string
+          date: string
+          description: string
+          reference_number: string
+          transfer_id: string
+        }[]
+      }
       get_queued_claims_for_fortnight: {
         Args: never
         Returns: {
@@ -4798,6 +5006,10 @@ export type Database = {
         }[]
       }
       get_sla_days_remaining: { Args: { p_case_id: string }; Returns: number }
+      get_transfer_total_used: {
+        Args: { p_transfer_id: string }
+        Returns: number
+      }
       get_valid_is_token: { Args: { env: string }; Returns: string }
       is_master: { Args: never; Returns: boolean }
       is_self: { Args: { broker: string }; Returns: boolean }

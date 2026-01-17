@@ -301,25 +301,38 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
   return (
     <>
     {/* Sticky Bar - Agrupar transferencias */}
-    {selectedTransfers.size > 0 && (
-      <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-r from-[#010139] to-[#020270] text-white shadow-2xl z-50 border-t-4 border-[#8AAA19]">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-            {/* Info */}
-            <div className="flex items-center gap-3">
-              <FaLayerGroup className="text-[#8AAA19]" size={24} />
-              <div>
-                <p className="font-semibold text-lg">
-                  {selectedTransfers.size} transferencia(s) seleccionada(s)
-                </p>
-                <p className="text-xs text-gray-300">
-                  Haz clic en "Crear Grupo" para configurar tipo y aseguradora
-                </p>
+    {selectedTransfers.size > 0 && (() => {
+      // Calcular suma total de transferencias seleccionadas
+      const selectedTotal = transfers
+        .filter(t => selectedTransfers.has(t.id))
+        .reduce((sum, t) => sum + t.amount, 0);
+      
+      return (
+        <div className="fixed bottom-0 left-0 right-0 bg-gradient-to-r from-[#010139] to-[#020270] text-white shadow-2xl z-50 border-t-4 border-[#8AAA19]">
+          <div className="max-w-7xl mx-auto px-4 py-4">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+              {/* Info */}
+              <div className="flex items-center gap-3 sm:gap-4">
+                <FaLayerGroup className="text-[#8AAA19] flex-shrink-0" size={24} />
+                <div>
+                  <p className="font-semibold text-base sm:text-lg">
+                    {selectedTransfers.size} transferencia(s) seleccionada(s)
+                  </p>
+                  <p className="text-xs text-gray-300">
+                    Haz clic en "Crear Grupo" para configurar tipo y aseguradora
+                  </p>
+                </div>
+                <div className="hidden sm:block h-12 w-px bg-white/30"></div>
+                <div className="bg-[#8AAA19] px-4 py-2 rounded-lg">
+                  <p className="text-xs font-semibold uppercase tracking-wide">Total Seleccionado</p>
+                  <p className="text-xl sm:text-2xl font-bold font-mono">
+                    ${selectedTotal.toFixed(2)}
+                  </p>
+                </div>
               </div>
-            </div>
-            
-            {/* Botones */}
-            <div className="flex gap-2">
+              
+              {/* Botones */}
+              <div className="flex gap-2">
               <button
                 onClick={() => setSelectedTransfers(new Set())}
                 className="flex items-center gap-2 px-4 py-2 bg-white text-gray-700 border-2 border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition font-medium text-sm shadow-sm"
@@ -347,7 +360,8 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
           </div>
         </div>
       </div>
-    )}
+      );
+    })()}
 
     <div className="bg-white rounded-xl shadow-lg overflow-hidden border-2 border-gray-100">
       {/* Header con controles de selección */}

@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FaChevronDown, FaChevronRight, FaLayerGroup, FaCheckCircle, FaClock, FaLock, FaTrash, FaSave, FaEdit } from 'react-icons/fa';
+import { FaChevronDown, FaChevronRight, FaLayerGroup, FaCheckCircle, FaClock, FaLock, FaTrash, FaSave, FaEdit, FaUndo } from 'react-icons/fa';
 import { toast } from 'sonner';
-import { actionDeleteBankGroup, actionUpdateGroupTransfers } from '@/app/(app)/commissions/banco-actions';
+import { actionDeleteBankGroup, actionUpdateGroupTransfers, actionRevertTransferInclusion } from '@/app/(app)/commissions/banco-actions';
 import type { BankTransferStatus, TransferType } from '@/app/(app)/commissions/banco-actions';
 import { supabaseClient } from '@/lib/supabase/client';
 
@@ -25,6 +25,7 @@ export default function GroupsTable({ groups, loading, onGroupDeleted }: GroupsT
   const [editingGroups, setEditingGroups] = useState<Set<string>>(new Set());
   const [showEditMode, setShowEditMode] = useState<Set<string>>(new Set());
   const [groupEdits, setGroupEdits] = useState<Record<string, { insurerId?: string; transferType?: TransferType }>>({});
+  const [revertingTransfers, setRevertingTransfers] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const loadInsurers = async () => {
@@ -107,6 +108,27 @@ export default function GroupsTable({ groups, loading, onGroupDeleted }: GroupsT
     }
   };
 
+  const handleRevertInclusion = async (transferId: string, transferRef: string) => {
+    if (!confirm(`¿Revertir inclusión de la transferencia ${transferRef}?\n\nEsto restaurará su estado a PENDIENTE y eliminará las notas de inclusión.`)) {
+      return;
+    }
+
+    setRevertingTransfers(prev => new Set(prev).add(transferId));
+    const result = await actionRevertTransferInclusion(transferId);
+    setRevertingTransfers(prev => {
+      const next = new Set(prev);
+      next.delete(transferId);
+      return next;
+    });
+
+    if (result.ok) {
+      toast.success('Inclusión revertida', { description: 'La transferencia volvió a su estado anterior' });
+      onGroupDeleted?.(); // Refresh data
+    } else {
+      toast.error('Error al revertir', { description: result.error });
+    }
+  };
+
   const getStatusBadge = (status: BankTransferStatus | string) => {
     const badges = {
       SIN_CLASIFICAR: { label: 'Sin clasificar', color: 'bg-gray-100 text-gray-800', icon: FaClock },
@@ -134,33 +156,25 @@ export default function GroupsTable({ groups, loading, onGroupDeleted }: GroupsT
   }
 
   if (groups.length === 0) {
-    return null; // No mostrar si no hay grupos
+    return (
+      <div className="p-6 sm:p-8 text-center">
+        <FaLayerGroup className="mx-auto text-5xl text-gray-300 mb-3" />
+        <p className="text-gray-600 font-semibold text-base">No hay grupos creados</p>
+        <p className="text-gray-500 text-sm mt-1">Los grupos que crees aparecerán aquí</p>
+      </div>
+    );
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-lg border-2 border-gray-100 mb-6">
-      <div className="p-3 sm:p-4 bg-gradient-to-r from-purple-50 to-purple-100 border-b-2 border-purple-200">
-        <div className="flex items-center gap-3">
-          <FaLayerGroup className="text-purple-600 flex-shrink-0" size={20} />
-          <div className="min-w-0">
-            <h3 className="font-bold text-purple-900 text-base sm:text-lg">
-              Grupos de Transferencias ({groups.length})
-            </h3>
-            <p className="text-xs sm:text-sm text-purple-700">
-              Click para expandir y ver transferencias agrupadas
-            </p>
-          </div>
-        </div>
-      </div>
+    <div className="p-3 sm:p-4 space-y-3">
+      {groups.map((group) => {
+        const isExpanded = expandedGroups.has(group.id);
+        // Las transferencias vienen en group.transfers (de actionGetBankGroups)
+        const transfers = group.transfers?.map((gt: any) => gt.bank_transfers_comm) || [];
+        const totalAmount = transfers.reduce((sum: number, t: any) => sum + (t.amount || 0), 0);
 
-      <div className="divide-y divide-gray-200">
-        {groups.map((group) => {
-          const isExpanded = expandedGroups.has(group.id);
-          const transfers = group.bank_group_transfers?.map((gt: any) => gt.bank_transfers_comm) || [];
-          const totalAmount = transfers.reduce((sum: number, t: any) => sum + (t.amount || 0), 0);
-
-          return (
-            <div key={group.id} className="hover:bg-gray-50">
+        return (
+          <div key={group.id} className="bg-white rounded-lg border-2 border-green-200 hover:border-green-400 transition-all hover:shadow-md overflow-hidden">
               {/* Header del grupo */}
               <div className="px-3 sm:px-6 py-3 sm:py-4 flex flex-col gap-3">
                 {/* Primera fila: Info y expansión */}
@@ -288,32 +302,50 @@ export default function GroupsTable({ groups, loading, onGroupDeleted }: GroupsT
                           <th className="px-4 py-2 text-left text-xs font-semibold text-purple-900 uppercase">Descripción</th>
                           <th className="px-4 py-2 text-center text-xs font-semibold text-purple-900 uppercase">Estado</th>
                           <th className="px-4 py-2 text-right text-xs font-semibold text-purple-900 uppercase">Monto</th>
+                          <th className="px-4 py-2 text-center text-xs font-semibold text-purple-900 uppercase">Acciones</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {transfers.map((transfer: any) => (
-                          <tr key={transfer.id} className="border-t border-purple-100 hover:bg-purple-50">
-                            <td className="px-4 py-2 text-gray-700">
-                              {new Date(transfer.date).toLocaleDateString('es-PA')}
-                            </td>
-                            <td className="px-4 py-2 font-mono text-xs text-gray-600">
-                              {transfer.reference_number}
-                            </td>
-                            <td className="px-4 py-2 text-gray-900">
-                              {transfer.description_raw?.substring(0, 50) || 'Sin descripción'}
-                            </td>
-                            <td className="px-4 py-2 text-center">
-                              {getStatusBadge(transfer.status)}
-                            </td>
-                            <td className="px-4 py-2 text-right font-mono font-bold text-gray-900">
-                              ${transfer.amount.toFixed(2)}
-                            </td>
-                          </tr>
-                        ))}
+                        {transfers.map((transfer: any) => {
+                          const isIncludedFromOtherCutoff = group.name === 'Transferencias de otras quincenas';
+                          
+                          return (
+                            <tr key={transfer.id} className="border-t border-purple-100 hover:bg-purple-50">
+                              <td className="px-4 py-2 text-gray-700">
+                                {new Date(transfer.date).toLocaleDateString('es-PA')}
+                              </td>
+                              <td className="px-4 py-2 font-mono text-xs text-gray-600">
+                                {transfer.reference_number}
+                              </td>
+                              <td className="px-4 py-2 text-gray-900">
+                                {transfer.description_raw?.substring(0, 50) || 'Sin descripción'}
+                              </td>
+                              <td className="px-4 py-2 text-center">
+                                {getStatusBadge(transfer.status)}
+                              </td>
+                              <td className="px-4 py-2 text-right font-mono font-bold text-gray-900">
+                                ${transfer.amount.toFixed(2)}
+                              </td>
+                              <td className="px-4 py-2 text-center">
+                                {isIncludedFromOtherCutoff && group.status !== 'PAGADO' && (
+                                  <button
+                                    onClick={() => handleRevertInclusion(transfer.id, transfer.reference_number)}
+                                    disabled={revertingTransfers.has(transfer.id)}
+                                    className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold text-orange-700 bg-orange-50 hover:bg-orange-100 border border-orange-300 rounded-lg transition disabled:opacity-50"
+                                    title="Revertir inclusión"
+                                  >
+                                    <FaUndo size={10} />
+                                    {revertingTransfers.has(transfer.id) ? 'Revertiendo...' : 'Revertir'}
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                       <tfoot className="bg-purple-50 border-t-2 border-purple-200">
                         <tr>
-                          <td colSpan={4} className="px-4 py-2 text-right font-semibold text-purple-900">
+                          <td colSpan={5} className="px-4 py-2 text-right font-semibold text-purple-900">
                             Total:
                           </td>
                           <td className="px-4 py-2 text-right font-mono font-bold text-purple-900 text-lg">
@@ -325,10 +357,9 @@ export default function GroupsTable({ groups, loading, onGroupDeleted }: GroupsT
                   </div>
                 </div>
               )}
-            </div>
-          );
-        })}
-      </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

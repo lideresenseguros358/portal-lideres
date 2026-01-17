@@ -25,69 +25,235 @@ export const POLICY_TYPES = {
 
 // Requisitos NO descargables (solo guía visual)
 export const REQUIREMENTS_MAP: Record<string, string[]> = {
-  auto: [
-    'Cédula / Pasaporte del asegurado',
-    'Licencia de conducir vigente',
-    'Registro vehicular (Título de Propiedad)',
-    'Fotos de inspección completas:',
-    '  • Vista frontal completa del vehículo',
-    '  • Vista posterior completa del vehículo',
-    '  • Vista lateral izquierda',
-    '  • Vista lateral derecha',
-    '  • Tablero de instrumentos (velocímetro visible)',
-    '  • Odómetro (lectura clara del kilometraje)',
-    '  • Asientos delanteros y traseros',
-    '  • Número de chasis (grabado en el vehículo)',
-    '  • Motor (número visible)',
-    '  • Maletero (abierto y vacío)',
-    '  • Juego de llaves completo'
-  ],
+  // VIDA ASSA - EMISIÓN
   vida_assa: [
-    'Cédula / Pasaporte del asegurado',
-    'Formulario de solicitud firmado',
-    'Exámenes médicos (según monto)',
-    'Activos y Pasivos (opcional, según caso)'
+    '📋 PARA EMISIÓN:',
+    '  • Solicitud (obligatorio)',
+    '  • Cédula (obligatorio)',
+    '  • Cotización (obligatorio)',
+    '  • Formulario de pago (obligatorio)',
+    '  • Autorización (obligatorio solo si es web)',
+    '  • Cuestionarios (opcional)',
+    '  • Exámenes (opcional)',
+    '  • Informe de activos y pasivos (opcional)',
+    '',
+    '📋 REHABILITACIÓN:',
+    '  • Formulario de rehabilitación',
+    '  • Conoce tu cliente',
+    '  • Formulario de pago',
+    '  • Cédula',
+    '  • FATCA',
+    '  • Certificado de salud',
+    '',
+    '📋 MODIFICACIÓN:',
+    '  • Formulario de cambios múltiples',
+    '  • Cotización',
+    '  • Conoce tu cliente',
+    '',
+    '📋 CANCELACIÓN:',
+    '  • Carta de cancelación',
+    '  • Cédula',
+    '  • Formulario de rescate',
+    '  • Formulario de reembolso',
+    '  • Conoce tu cliente',
+    '  • FATCA',
+    '',
+    '📋 RECLAMOS VIDA:',
+    '  • Formulario de reclamo',
+    '  • Certificado de defunción',
+    '  • FATCA',
+    '  • Conoce tu cliente',
+    '  • Cédula'
   ],
+  
+  // VIDA (OTRAS ASEGURADORAS)
   vida: [
-    'Cédula / Pasaporte del asegurado',
-    'Formulario de solicitud firmado',
-    'Exámenes médicos (según aseguradora y monto)'
+    '📋 PARA EMISIÓN (Otras Aseguradoras):',
+    '  • Solicitud (obligatorio)',
+    '  • Cédula (obligatorio)',
+    '  • Cotización (obligatorio)',
+    '  • Formulario de pago (obligatorio)',
+    '  • Cuestionarios (opcional)',
+    '  • Exámenes (opcional)',
+    '  • Informe de activos y pasivos (opcional)',
+    '',
+    '💡 Para otros trámites ver requisitos VIDA ASSA'
   ],
+  
+  // SALUD
   salud: [
-    'Cédula / Pasaporte del asegurado',
-    'Formulario de solicitud firmado',
-    'Declaración de salud',
-    'Exámenes médicos (según plan)'
+    '📋 PARA EMISIÓN:',
+    '  • Solicitud (obligatorio)',
+    '  • Cédula (obligatorio)',
+    '  • Cotización (obligatorio)',
+    '  • Formulario de pago (obligatorio)',
+    '  • Cuestionario COVID (opcional)',
+    '  • Tarjeta de vacunas (opcional)',
+    '  • Certificado de salud (opcional)',
+    '  • Informe pediátrico (opcional)',
+    '',
+    '💡 Para otros trámites: mismo formato que VIDA'
   ],
+  
+  // ACCIDENTES PERSONALES
   ap: [
-    'Cédula / Pasaporte del asegurado',
-    'Formulario de solicitud firmado',
-    'Declaración de salud básica'
+    '📋 PARA EMISIÓN:',
+    '  • Solicitud (obligatorio)',
+    '  • Cédula (obligatorio)',
+    '  • Cotización (obligatorio)',
+    '  • Formulario de pago (obligatorio)',
+    '',
+    '💡 Para otros trámites: mismo formato que VIDA'
   ],
+  
+  // AUTO - COBERTURA COMPLETA
+  auto: [
+    '📋 PARA EMISIÓN (Cobertura Completa):',
+    '  • Solicitud (obligatorio)',
+    '  • Cédula (obligatorio)',
+    '  • Cotización (obligatorio)',
+    '  • Formulario de pago (obligatorio)',
+    '  • Fotos inspección (opcional)',
+    '  • Formulario inspección (opcional)',
+    '  • Conoce tu cliente (opcional)',
+    '',
+    '📋 PARA COTIZACIÓN:',
+    '  • Cédula (obligatorio)',
+    '  • Solicitud (obligatorio)',
+    '  • Todos los demás opcionales',
+    '',
+    '📋 OTROS TRÁMITES (Cancelación, Rehabilitación, Modificación, Cambio Corredor, Reclamo):',
+    '  • Carta (obligatorio)',
+    '  • Cédula (obligatorio)',
+    '  • Solicitud (obligatorio)'
+  ],
+  
+  // INCENDIO
   incendio: [
-    'Cédula / Pasaporte del propietario',
-    'Título de propiedad o contrato de arrendamiento',
-    'Planos o descripción de la propiedad',
-    'Fotos del inmueble (exterior e interior)',
-    'Certificado de registro público (si aplica)'
+    '📋 PARA EMISIÓN:',
+    '  • Solicitud (obligatorio)',
+    '  • Cédula (obligatorio)',
+    '  • Cotización (obligatorio)',
+    '  • Formulario de pago (obligatorio)',
+    '',
+    '📋 PARA COTIZACIÓN:',
+    '  • Cédula (obligatorio)',
+    '  • Solicitud (obligatorio)',
+    '',
+    '📋 OTROS TRÁMITES:',
+    '  • Carta (obligatorio)',
+    '  • Cédula (obligatorio)',
+    '  • Solicitud (obligatorio)'
   ],
+  
+  // MULTIPÓLIZA / TODO RIESGO
   multipoliza: [
-    'Cédula / Pasaporte del asegurado',
-    'Inventario de bienes a asegurar',
-    'Fotos de la propiedad',
-    'Declaración de valores'
+    '📋 PARA EMISIÓN:',
+    '  • Solicitud (obligatorio)',
+    '  • Cédula (obligatorio)',
+    '  • Cotización (obligatorio)',
+    '  • Formulario de pago (obligatorio)',
+    '',
+    '📋 PARA COTIZACIÓN:',
+    '  • Cédula (obligatorio)',
+    '  • Solicitud (obligatorio)',
+    '',
+    '📋 OTROS TRÁMITES:',
+    '  • Carta (obligatorio)',
+    '  • Cédula (obligatorio)',
+    '  • Solicitud (obligatorio)'
   ],
+  
+  // RESPONSABILIDAD CIVIL
   rc: [
-    'Cédula / Pasaporte',
-    'RUC o cédula jurídica (para empresas)',
-    'Descripción de actividades',
-    'Declaración de información comercial'
+    '📋 PARA EMISIÓN:',
+    '  • Solicitud (obligatorio)',
+    '  • Cédula (obligatorio)',
+    '  • Cotización (obligatorio)',
+    '  • Formulario de pago (obligatorio)',
+    '',
+    '📋 PARA COTIZACIÓN:',
+    '  • Cédula (obligatorio)',
+    '  • Solicitud (obligatorio)',
+    '',
+    '📋 OTROS TRÁMITES:',
+    '  • Carta (obligatorio)',
+    '  • Cédula (obligatorio)',
+    '  • Solicitud (obligatorio)'
   ],
+  
+  // FIANZAS
   fianzas: [
-    'RUC o cédula jurídica',
-    'Estados financieros',
-    'Contrato que respalda la fianza',
-    'Cédula de representante legal'
+    '📋 PARA EMISIÓN:',
+    '  • Solicitud (obligatorio)',
+    '  • Cédula (obligatorio)',
+    '  • Cotización (obligatorio)',
+    '  • Formulario de pago (obligatorio)',
+    '',
+    '📋 PARA COTIZACIÓN:',
+    '  • Cédula (obligatorio)',
+    '  • Solicitud (obligatorio)',
+    '',
+    '📋 OTROS TRÁMITES:',
+    '  • Carta (obligatorio)',
+    '  • Cédula (obligatorio)',
+    '  • Solicitud (obligatorio)'
+  ],
+  
+  // EQUIPOS (Electrónico, Pesado, etc.)
+  car: [
+    '📋 PARA EMISIÓN:',
+    '  • Solicitud (obligatorio)',
+    '  • Cédula (obligatorio)',
+    '  • Cotización (obligatorio)',
+    '  • Formulario de pago (obligatorio)',
+    '',
+    '💡 Mismo formato que otros ramos generales'
+  ],
+  
+  // CASCO MARINO
+  casco_marino: [
+    '📋 PARA EMISIÓN:',
+    '  • Solicitud (obligatorio)',
+    '  • Cédula (obligatorio)',
+    '  • Cotización (obligatorio)',
+    '  • Formulario de pago (obligatorio)'
+  ],
+  
+  // CASCO AÉREO
+  casco_aereo: [
+    '📋 PARA EMISIÓN:',
+    '  • Solicitud (obligatorio)',
+    '  • Cédula (obligatorio)',
+    '  • Cotización (obligatorio)',
+    '  • Formulario de pago (obligatorio)'
+  ],
+  
+  // TRANSPORTE / CARGA
+  transporte: [
+    '📋 PARA EMISIÓN:',
+    '  • Solicitud (obligatorio)',
+    '  • Cédula (obligatorio)',
+    '  • Cotización (obligatorio)',
+    '  • Formulario de pago (obligatorio)'
+  ],
+  
+  carga: [
+    '📋 PARA EMISIÓN:',
+    '  • Solicitud (obligatorio)',
+    '  • Cédula (obligatorio)',
+    '  • Cotización (obligatorio)',
+    '  • Formulario de pago (obligatorio)'
+  ],
+  
+  // FLOTAS
+  flotas: [
+    '📋 PARA EMISIÓN:',
+    '  • Solicitud (obligatorio)',
+    '  • Cédula (obligatorio)',
+    '  • Cotización (obligatorio)',
+    '  • Formulario de pago (obligatorio)',
+    '  • Lista de vehículos'
   ]
 };
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FaUpload, FaDownload, FaEdit, FaTrash, FaFileAlt, FaFilePdf, FaFileImage, FaFile, FaPlus, FaTimes, FaStar, FaRegStar, FaArrowUp, FaArrowDown, FaSearch, FaFolderOpen } from 'react-icons/fa';
+import { FaUpload, FaDownload, FaEdit, FaTrash, FaFileAlt, FaFilePdf, FaFileImage, FaFile, FaPlus, FaTimes, FaStar, FaRegStar, FaArrowUp, FaArrowDown, FaSearch, FaFolderOpen, FaPencilAlt } from 'react-icons/fa';
 import { toast } from 'sonner';
 
 interface Document {
@@ -17,11 +17,13 @@ interface Document {
 interface FolderDocumentsProps {
   folderId: string;
   isMaster: boolean;
+  editMode?: boolean;
   onUpdate?: () => void;
 }
 
-export default function FolderDocuments({ folderId, isMaster, onUpdate }: FolderDocumentsProps) {
+export default function FolderDocuments({ folderId, isMaster, editMode: externalEditMode, onUpdate }: FolderDocumentsProps) {
   const [documents, setDocuments] = useState<Document[]>([]);
+  const [editMode, setEditMode] = useState(externalEditMode || false);
   const [loading, setLoading] = useState(true);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -357,16 +359,18 @@ export default function FolderDocuments({ folderId, isMaster, onUpdate }: Folder
           <div className="flex gap-2 w-full sm:w-auto">
             <button
               onClick={() => setFilterFavorites(!filterFavorites)}
-              className={`flex-1 sm:flex-none px-4 py-2 rounded-lg font-medium transition-all flex items-center gap-2 ${
+              className={`flex-1 sm:flex-none px-5 py-2.5 rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-md hover:shadow-lg hover:scale-105 ${
                 filterFavorites
-                  ? 'bg-yellow-500 text-white shadow-md'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  ? 'bg-gradient-to-r from-yellow-500 to-yellow-600 text-white'
+                  : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-yellow-400'
               }`}
             >
-              <FaStar />
+              <FaStar className={filterFavorites ? 'text-white' : 'text-yellow-500'} />
               <span>Favoritos</span>
               {favorites.size > 0 && (
-                <span className="ml-1 px-2 py-0.5 bg-white bg-opacity-30 rounded-full text-xs">
+                <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                  filterFavorites ? 'bg-white/30 text-white' : 'bg-yellow-100 text-yellow-800'
+                }`}>
                   {favorites.size}
                 </span>
               )}
@@ -374,10 +378,31 @@ export default function FolderDocuments({ folderId, isMaster, onUpdate }: Folder
 
             {isMaster && (
               <button
-                onClick={() => setShowUploadModal(true)}
-                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg hover:shadow-lg transition-all font-semibold"
+                onClick={() => setEditMode(!editMode)}
+                className={
+                  `flex-1 sm:flex-none px-5 py-2.5 rounded-xl font-bold text-sm
+                  shadow-md hover:shadow-lg
+                  hover:scale-105
+                  transition-all duration-200
+                  flex items-center gap-2
+                  ${editMode 
+                    ? 'bg-gradient-to-r from-red-600 to-red-700 text-white' 
+                    : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-gray-400'
+                  }`
+                }
+                title={editMode ? 'Desactivar modo edición' : 'Activar modo edición'}
               >
-                <FaPlus />
+                <FaPencilAlt className={editMode ? 'text-white' : 'text-gray-600'} />
+                <span className="hidden sm:inline">{editMode ? 'Salir' : 'Editar'}</span>
+              </button>
+            )}
+
+            {isMaster && editMode && (
+              <button
+                onClick={() => setShowUploadModal(true)}
+                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-5 py-2.5 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-xl hover:shadow-lg transition-all font-bold text-sm shadow-md hover:scale-105"
+              >
+                <FaPlus className="text-white" />
                 <span className="hidden sm:inline">Cargar</span>
               </button>
             )}
@@ -471,10 +496,10 @@ export default function FolderDocuments({ folderId, isMaster, onUpdate }: Folder
                       onClick={() => handleDownload(doc)}
                       className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-[#010139] text-white rounded-lg hover:bg-[#020270] transition-all text-sm font-medium"
                     >
-                      <FaDownload size={12} />
+                      <FaDownload className="text-white" size={12} />
                       <span>Descargar</span>
                     </button>
-                    {isMaster && (
+                    {isMaster && editMode && (
                       <>
                         <button
                           onClick={() => handleEdit(doc)}
@@ -505,7 +530,7 @@ export default function FolderDocuments({ folderId, isMaster, onUpdate }: Folder
                     )}
                   </div>
 
-                  {isMaster && (canMoveUp || canMoveDown) && (
+                  {isMaster && editMode && (canMoveUp || canMoveDown) && (
                     <div className="flex items-center gap-2">
                       <button
                         onClick={() => handleReorder(doc.id, 'up')}

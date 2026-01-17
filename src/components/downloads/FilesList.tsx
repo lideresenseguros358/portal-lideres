@@ -8,10 +8,11 @@ import { FaFilePdf } from 'react-icons/fa';
 interface FilesListProps {
   files: DownloadFile[];
   isMaster: boolean;
+  editMode: boolean;
   onUpdate: () => void;
 }
 
-export default function FilesList({ files, isMaster, onUpdate }: FilesListProps) {
+export default function FilesList({ files, isMaster, editMode, onUpdate }: FilesListProps) {
   if (files.length === 0) {
     return (
       <div className="text-center py-12 bg-gray-50 rounded-xl">
@@ -61,6 +62,7 @@ export default function FilesList({ files, isMaster, onUpdate }: FilesListProps)
               fileName={file.name}
               fileUrl={file.file_url}
               isMaster={isMaster}
+              editMode={editMode}
               onUpdate={onUpdate}
               deleteEndpoint="/api/downloads/files"
             />

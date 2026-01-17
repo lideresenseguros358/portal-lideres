@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { FaArrowLeft, FaPlus, FaSearch } from 'react-icons/fa';
+import { FaArrowLeft, FaPlus, FaSearch, FaPencilAlt } from 'react-icons/fa';
 import FilesList from '@/components/downloads/FilesList';
 import UploadFileModal from '@/components/shared/UploadFileModal';
 import SearchModal from '@/components/shared/SearchModal';
@@ -23,6 +23,7 @@ export default function DownloadsSectionPage() {
   const [loading, setLoading] = useState(true);
   const [showUpload, setShowUpload] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
+  const [editMode, setEditMode] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -109,11 +110,31 @@ export default function DownloadsSectionPage() {
                 flex items-center gap-2
               "
             >
-              <FaSearch />
+              <FaSearch className="text-white" />
               <span className="hidden sm:inline">Buscar</span>
             </button>
 
             {isMaster && (
+              <button
+                onClick={() => setEditMode(!editMode)}
+                className={
+                  `px-6 py-3 rounded-lg font-semibold
+                  hover:scale-105
+                  transition-all duration-200
+                  flex items-center gap-2
+                  ${editMode 
+                    ? 'bg-red-600 text-white hover:bg-red-700' 
+                    : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                  }`
+                }
+                title={editMode ? 'Desactivar modo edición' : 'Activar modo edición'}
+              >
+                <FaPencilAlt className={editMode ? 'text-white' : ''} />
+                <span className="hidden sm:inline">{editMode ? 'Salir' : 'Editar'}</span>
+              </button>
+            )}
+
+            {isMaster && editMode && (
               <button
                 onClick={() => setShowUpload(true)}
                 className="
@@ -126,14 +147,14 @@ export default function DownloadsSectionPage() {
                   flex items-center gap-2
                 "
               >
-                <FaPlus />
+                <FaPlus className="text-white" />
                 <span>Subir Documento</span>
               </button>
             )}
           </div>
         </div>
 
-        <FilesList files={files} isMaster={isMaster} onUpdate={loadData} />
+        <FilesList files={files} isMaster={isMaster} editMode={editMode} onUpdate={loadData} />
 
         <UploadFileModal
           isOpen={showUpload}

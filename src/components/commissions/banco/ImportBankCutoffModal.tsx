@@ -44,9 +44,7 @@ export default function ImportBankCutoffModal({ onClose, onSuccess, lastCutoffIn
     setLoading(true);
 
     try {
-      console.log('[BANCO] Parseando archivo...');
       const transfers = await parseBankCommFile(selectedFile);
-      console.log(`[BANCO] ${transfers.length} transferencias encontradas`);
 
       if (transfers.length === 0) {
         toast.warning('No se encontraron transferencias válidas en el archivo');
@@ -77,7 +75,6 @@ export default function ImportBankCutoffModal({ onClose, onSuccess, lastCutoffIn
       setShowPreview(true);
       toast.success(`${transfers.length} transferencias encontradas`);
     } catch (error: any) {
-      console.error('[BANCO] Error al parsear:', error);
       toast.error('Error al procesar archivo', { description: error.message });
       setPreview([]);
       setShowPreview(false);
@@ -121,7 +118,6 @@ export default function ImportBankCutoffModal({ onClose, onSuccess, lastCutoffIn
         toast.error('Error al importar', { description: result.error });
       }
     } catch (error: any) {
-      console.error('[BANCO] Error inesperado:', error);
       toast.error('Error inesperado', { description: error.message });
     } finally {
       setLoading(false);

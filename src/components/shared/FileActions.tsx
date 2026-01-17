@@ -9,6 +9,7 @@ interface FileActionsProps {
   fileName: string;
   fileUrl: string;
   isMaster: boolean;
+  editMode: boolean;
   onUpdate: () => void;
   deleteEndpoint: string;
 }
@@ -18,6 +19,7 @@ export default function FileActions({
   fileName,
   fileUrl,
   isMaster,
+  editMode,
   onUpdate,
   deleteEndpoint
 }: FileActionsProps) {
@@ -97,8 +99,8 @@ export default function FileActions({
           <FaDownload />
         </button>
 
-        {/* Más acciones (solo Master) */}
-        {isMaster && (
+        {/* Más acciones (solo Master en modo edición) */}
+        {isMaster && editMode && (
           <>
             <button
               onClick={() => setShowMenu(!showMenu)}

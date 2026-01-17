@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { FaArrowLeft } from 'react-icons/fa';
+import { FaArrowLeft, FaPencilAlt } from 'react-icons/fa';
 import DocumentsList from '@/components/downloads/DocumentsList';
 import { getPolicyTypeLabel } from '@/lib/downloads/constants';
 import { toast } from 'sonner';
@@ -17,6 +17,7 @@ export default function DownloadsInsurerPage() {
   const [insurer, setInsurer] = useState<any>(null);
   const [isMaster, setIsMaster] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [editMode, setEditMode] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -82,6 +83,7 @@ export default function DownloadsInsurerPage() {
             policyType={policyType}
             insurerId={insurerId}
             isMaster={isMaster}
+            editMode={editMode}
             onUpdate={loadData}
           />
         )}

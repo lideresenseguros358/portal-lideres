@@ -168,31 +168,23 @@ export function PreviewTab({ role, brokerId }: Props) {
 
   const handleCompleteDownload = async (fortnightId: string, fortnightLabel: string, format: 'pdf' | 'xlsx') => {
     try {
-      console.log('[Download] Iniciando descarga completa:', { fortnightId, format, label: fortnightLabel });
-      
       toast.info('Cargando detalles de comisiones...');
       
-      // Usar API endpoint en lugar de action para obtener datos desde fortnight_details
       const response = await fetch(`/api/commissions/fortnight-export?fortnight_id=${fortnightId}`);
       const result = await response.json();
       
-      console.log('[Download] Resultado API:', { ok: result.ok, dataLength: result.data?.length });
-      
       if (!result.ok || !result.data) {
-        console.error('[Download] Error cargando detalles:', result);
         toast.error('No se pudieron cargar los detalles de las comisiones');
         return;
       }
 
       if (result.data.length === 0) {
-        console.warn('[Download] No hay brokers para exportar');
         toast.warning('No hay datos de brokers para exportar');
         return;
       }
 
       const fortnight = fortnights.find(f => f.id === fortnightId);
       if (!fortnight) {
-        console.error('[Download] Fortnight no encontrada:', fortnightId);
         toast.error('No se encontró la quincena');
         return;
       }
@@ -203,34 +195,14 @@ export function PreviewTab({ role, brokerId }: Props) {
         total_office_profit: fortnight.total_office_profit,
       };
 
-      // Validar estructura de datos
       const brokersWithData = result.data.filter((b: any) => {
-        const hasValidData = b.broker_name && b.insurers && b.insurers.length > 0;
-        if (!hasValidData) {
-          console.warn('[Download] Broker sin datos válidos:', b.broker_name);
-        }
-        return hasValidData;
+        return b.broker_name && b.insurers && b.insurers.length > 0;
       });
 
       if (brokersWithData.length === 0) {
-        console.error('[Download] No hay brokers con datos válidos');
         toast.error('No hay datos para exportar en esta quincena');
         return;
       }
-
-      console.log('[Download] Datos preparados:', {
-        brokersTotal: result.data.length,
-        brokersConDatos: brokersWithData.length,
-        brokers: brokersWithData.map((b: any) => ({ 
-          name: b.broker_name,
-          email: b.broker_email,
-          insurers: b.insurers?.length || 0,
-          policiesCount: b.insurers?.reduce((sum: number, i: any) => sum + (i.policies?.length || 0), 0) || 0,
-          total_gross: b.total_gross,
-          total_net: b.total_net
-        })),
-        totals
-      });
 
       toast.info(`Generando reporte ${format.toUpperCase()}...`);
 
@@ -240,7 +212,6 @@ export function PreviewTab({ role, brokerId }: Props) {
         } else {
           exportCompleteReportToExcel(brokersWithData, fortnightLabel, totals);
         }
-        console.log('[Download] Reporte generado exitosamente');
         toast.success(`Reporte ${format.toUpperCase()} generado correctamente`);
         setShowCompleteDownloadModal(null);
       } catch (exportError) {

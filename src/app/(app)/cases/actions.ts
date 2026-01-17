@@ -51,7 +51,7 @@ export async function actionGetCases(filters?: {
         *,
         broker:brokers!broker_id(
           *,
-          profiles(id, email, name, role)
+          profiles!brokers_p_id_fkey(id, email, full_name, role)
         ),
         client:clients(id, name, national_id),
         insurer:insurers(id, name, active)
@@ -126,7 +126,7 @@ export async function actionGetCase(caseId: string) {
         *,
         broker:brokers!broker_id(
           *,
-          profiles(id, email, name, role)
+          profiles!brokers_p_id_fkey(id, email, full_name, role)
         ),
         client:clients(id, name, national_id, email, phone),
         insurer:insurers(id, name, active)
@@ -329,64 +329,8 @@ export async function actionCreateCase(payload: {
       }
     }
 
-    // Handle payment-related logic
-    if (payload.payment_method === 'DESCUENTO_A_CORREDOR' && payload.premium && payload.premium > 0) {
-      // Create advance for broker
-      const { data: advance, error: advanceError } = await supabase
-        .from('advances')
-        .insert([{
-          broker_id: payload.broker_id,
-          amount: payload.premium,
-          status: 'pending',
-          reason: `Caso #${newCase.id} - ${payload.client_name || 'Cliente'} - ${payload.policy_number || 'Sin póliza'}`,
-          created_by: user.id,
-        }])
-        .select()
-        .single();
-
-      if (advanceError) {
-        console.error('Error creating advance:', advanceError);
-        // Don't fail the case creation, just log
-      } else {
-        // Create pending payment linked to this case
-        const { error: paymentError } = await supabase
-          .from('pending_payments')
-          .insert([{
-            amount_to_pay: payload.premium,
-            client_name: payload.client_name || 'CLIENTE NO ESPECIFICADO',
-            insurer_name: payload.insurer_id ? `ID: ${payload.insurer_id}` : null,
-            policy_number: payload.policy_number || null,
-            purpose: 'DESCUENTO A CORREDOR',
-            status: 'pending',
-            can_be_paid: false, // Can't be paid until advance is settled
-            notes: `Caso #${newCase.id} - Adelanto ID: ${advance?.id}`,
-            created_by: user.id,
-          }]);
-
-        if (paymentError) {
-          console.error('Error creating pending payment:', paymentError);
-        }
-      }
-    } else if (payload.payment_method === 'TRANSFERENCIA' && payload.premium && payload.premium > 0) {
-      // Create pending payment for bank transfer
-      const { error: paymentError } = await supabase
-        .from('pending_payments')
-        .insert([{
-          amount_to_pay: payload.premium,
-          client_name: payload.client_name || 'CLIENTE NO ESPECIFICADO',
-          insurer_name: payload.insurer_id ? `ID: ${payload.insurer_id}` : null,
-          policy_number: payload.policy_number || null,
-          purpose: 'PAGO DE POLIZA',
-          status: 'pending',
-          can_be_paid: true, // Can be paid immediately
-          notes: `Caso #${newCase.id} - Transferencia bancaria`,
-          created_by: user.id,
-        }]);
-
-      if (paymentError) {
-        console.error('Error creating pending payment for transfer:', paymentError);
-      }
-    }
+    // Note: Pago oficina is handled via wizard after case creation
+    // No automatic pending_payment or advance creation here
 
     // Initialize case progress
     try {

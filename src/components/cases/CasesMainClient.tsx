@@ -1,12 +1,14 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { FaSearch, FaPlus, FaDownload, FaEnvelope, FaFilter, FaList, FaThLarge } from 'react-icons/fa';
+import { FaSearch, FaPlus, FaDownload, FaEnvelope, FaFilter, FaList, FaThLarge, FaTrash } from 'react-icons/fa';
 import { toast } from 'sonner';
-import { actionGetCases } from '@/app/(app)/cases/actions';
+import { actionGetCases, actionDeleteCase } from '@/app/(app)/cases/actions';
 import { actionGetCaseStats } from '@/app/(app)/cases/actions-details';
 import CasesList from '@/components/cases/CasesList';
 import SearchModal from '@/components/cases/SearchModal';
+import NewCaseWizardModal from '@/components/cases/NewCaseWizardModal';
+import QuickEditModal from '@/components/cases/QuickEditModal';
 import { CASE_SECTION_LABELS } from '@/lib/constants/cases';
 
 type UserProfile = {
@@ -53,6 +55,10 @@ export default function CasesMainClient({ userProfile, brokers, insurers }: Case
   const [stats, setStats] = useState<any>(null);
   const [activeTab, setActiveTab] = useState<string>('RAMOS_GENERALES');
   const [showSearch, setShowSearch] = useState(false);
+  const [showNewCaseModal, setShowNewCaseModal] = useState(false);
+  const [showQuickEdit, setShowQuickEdit] = useState(false);
+  const [editingCaseId, setEditingCaseId] = useState<string | null>(null);
+  const [prefillCaseData, setPrefillCaseData] = useState<any>(null);
   const [selectedCases, setSelectedCases] = useState<string[]>([]);
   const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
   const [kanbanEnabled, setKanbanEnabled] = useState(false);
@@ -129,6 +135,16 @@ export default function CasesMainClient({ userProfile, brokers, insurers }: Case
     }
   };
 
+  const handleOpenQuickEdit = (caseId: string) => {
+    setEditingCaseId(caseId);
+    setShowQuickEdit(true);
+  };
+
+  const handleOpenFullWizard = (caseData: any) => {
+    setPrefillCaseData(caseData);
+    setShowNewCaseModal(true);
+  };
+
   const handleExportPDF = () => {
     if (selectedCases.length === 0) {
       toast.warning('Selecciona al menos un caso');
@@ -143,8 +159,45 @@ export default function CasesMainClient({ userProfile, brokers, insurers }: Case
       toast.warning('Selecciona al menos un caso');
       return;
     }
-    // TODO: Implement email send
-    toast.info('Enviando correo...');
+    // TODO: Implement email sending
+    toast.info('Enviando email...');
+  };
+
+  const handleDeleteCases = async () => {
+    if (selectedCases.length === 0) {
+      toast.warning('Selecciona al menos un caso');
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `¿Estás seguro de eliminar ${selectedCases.length} caso(s)? Esta acción moverá los casos a la papelera.`
+    );
+
+    if (!confirmed) return;
+
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const caseId of selectedCases) {
+      const result = await actionDeleteCase(caseId);
+      if (result.ok) {
+        successCount++;
+      } else {
+        errorCount++;
+        console.error(`Error deleting case ${caseId}:`, result.error);
+      }
+    }
+
+    if (successCount > 0) {
+      toast.success(`${successCount} caso(s) eliminado(s) correctamente`);
+      await loadCases();
+      await loadStats();
+      setSelectedCases([]);
+    }
+
+    if (errorCount > 0) {
+      toast.error(`Error al eliminar ${errorCount} caso(s)`);
+    }
   };
 
   const tabs = [
@@ -228,10 +281,10 @@ export default function CasesMainClient({ userProfile, brokers, insurers }: Case
 
             {userProfile.role === 'master' && (
               <button
-                onClick={() => window.location.href = '/cases/new'}
+                onClick={() => setShowNewCaseModal(true)}
                 className="px-4 py-2 bg-gradient-to-r from-[#010139] to-[#020270] text-white rounded-lg hover:shadow-lg transition-all flex items-center gap-2"
               >
-                <FaPlus />
+                <FaPlus className="text-white" />
                 <span className="hidden sm:inline">Nuevo</span>
               </button>
             )}
@@ -242,7 +295,7 @@ export default function CasesMainClient({ userProfile, brokers, insurers }: Case
                   onClick={handleExportPDF}
                   className="px-4 py-2 bg-[#8AAA19] hover:bg-[#7a9916] text-white rounded-lg transition-all flex items-center gap-2"
                 >
-                  <FaDownload />
+                  <FaDownload className="text-white" />
                   <span className="hidden sm:inline">PDF ({selectedCases.length})</span>
                 </button>
 
@@ -250,8 +303,17 @@ export default function CasesMainClient({ userProfile, brokers, insurers }: Case
                   onClick={handleSendEmail}
                   className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all flex items-center gap-2"
                 >
-                  <FaEnvelope />
+                  <FaEnvelope className="text-white" />
                   <span className="hidden sm:inline">Enviar ({selectedCases.length})</span>
+                </button>
+
+                <button
+                  onClick={handleDeleteCases}
+                  className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-all flex items-center gap-2"
+                  title="Eliminar casos seleccionados"
+                >
+                  <FaTrash className="text-white" />
+                  <span className="hidden sm:inline">Eliminar ({selectedCases.length})</span>
                 </button>
               </>
             )}
@@ -354,6 +416,7 @@ export default function CasesMainClient({ userProfile, brokers, insurers }: Case
           onSelectAll={handleSelectAll}
           onRefresh={loadCases}
           userRole={userProfile.role || 'broker'}
+          onEdit={handleOpenQuickEdit}
         />
       ) : (
         <div className="bg-white rounded-xl shadow-lg border-2 border-gray-100 p-12 text-center">
@@ -370,6 +433,40 @@ export default function CasesMainClient({ userProfile, brokers, insurers }: Case
           onClose={() => setShowSearch(false)}
           onSearch={handleSearch}
           insurers={insurers}
+        />
+      )}
+
+      {/* New Case Wizard Modal */}
+      {showNewCaseModal && (
+        <NewCaseWizardModal
+          onClose={() => {
+            setShowNewCaseModal(false);
+            setPrefillCaseData(null);
+          }}
+          onSuccess={() => {
+            loadCases();
+            loadStats();
+            setPrefillCaseData(null);
+          }}
+          brokers={brokers}
+          insurers={insurers}
+          prefillData={prefillCaseData}
+        />
+      )}
+
+      {/* Quick Edit Modal */}
+      {showQuickEdit && editingCaseId && (
+        <QuickEditModal
+          caseId={editingCaseId}
+          onClose={() => {
+            setShowQuickEdit(false);
+            setEditingCaseId(null);
+          }}
+          onSuccess={() => {
+            loadCases();
+            loadStats();
+          }}
+          onOpenFullWizard={handleOpenFullWizard}
         />
       )}
     </>

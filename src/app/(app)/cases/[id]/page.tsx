@@ -30,7 +30,7 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ id:
       *,
       broker:brokers!broker_id(
         *,
-        profiles(id, email, name, full_name, role)
+        profiles!brokers_p_id_fkey(id, email, name, full_name, role)
       ),
       client:clients(id, name, national_id, email, phone),
       insurer:insurers(id, name, active)

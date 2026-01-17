@@ -190,71 +190,191 @@ export const POLICY_TYPES = {
 
 export type PolicyType = keyof typeof POLICY_TYPES;
 
-// Documentos requeridos por tipo de póliza
-export const REQUIRED_DOCUMENTS: Record<PolicyType, { label: string; required: boolean; standardName: string; category?: 'inspection' }[]> = {
+// Función para obtener documentos requeridos según tipo de póliza y tipo de gestión
+export function getRequiredDocuments(policyType: PolicyType | '', managementType: string, isAssaLife: boolean = false): { label: string; required: boolean; standardName: string }[] {
+  // Para COTIZACIÓN: solo cédula y solicitud obligatorios
+  if (managementType === 'COTIZACION') {
+    return [
+      { label: 'Cédula', required: true, standardName: 'cedula' },
+      { label: 'Solicitud', required: true, standardName: 'solicitud' },
+      { label: 'Cotización', required: false, standardName: 'cotizacion' },
+      { label: 'Formulario de pago', required: false, standardName: 'formulario_pago' },
+    ];
+  }
+
+  // Para EMISIÓN según tipo de póliza
+  if (managementType === 'EMISION') {
+    // VIDA ASSA
+    if (policyType === 'VIDA' && isAssaLife) {
+      return [
+        { label: 'Solicitud', required: true, standardName: 'solicitud' },
+        { label: 'Cédula', required: true, standardName: 'cedula' },
+        { label: 'Cotización', required: true, standardName: 'cotizacion' },
+        { label: 'Formulario de pago', required: true, standardName: 'formulario_pago' },
+        { label: 'Autorización', required: false, standardName: 'autorizacion' }, // Obligatorio si es web
+        { label: 'Cuestionarios', required: false, standardName: 'cuestionarios' },
+        { label: 'Exámenes', required: false, standardName: 'examenes' },
+        { label: 'Informe de activos y pasivos', required: false, standardName: 'informe_activos_pasivos' },
+      ];
+    }
+
+    // SALUD
+    if (policyType === 'SALUD') {
+      return [
+        { label: 'Solicitud', required: true, standardName: 'solicitud' },
+        { label: 'Cédula', required: true, standardName: 'cedula' },
+        { label: 'Cotización', required: true, standardName: 'cotizacion' },
+        { label: 'Formulario de pago', required: true, standardName: 'formulario_pago' },
+        { label: 'Cuestionario COVID', required: false, standardName: 'cuestionario_covid' },
+        { label: 'Tarjeta de vacunas', required: false, standardName: 'tarjeta_vacunas' },
+        { label: 'Certificado de salud', required: false, standardName: 'certificado_salud' },
+        { label: 'Informe pediátrico', required: false, standardName: 'informe_pediatrico' },
+      ];
+    }
+
+    // ACCIDENTES PERSONALES
+    if (policyType === 'ACCIDENTES_PERSONALES') {
+      return [
+        { label: 'Solicitud', required: true, standardName: 'solicitud' },
+        { label: 'Cédula', required: true, standardName: 'cedula' },
+        { label: 'Cotización', required: true, standardName: 'cotizacion' },
+        { label: 'Formulario de pago', required: true, standardName: 'formulario_pago' },
+      ];
+    }
+
+    // AUTO cobertura completa
+    if (policyType === 'AUTO') {
+      return [
+        { label: 'Solicitud', required: true, standardName: 'solicitud' },
+        { label: 'Cédula', required: true, standardName: 'cedula' },
+        { label: 'Cotización', required: true, standardName: 'cotizacion' },
+        { label: 'Formulario de pago', required: true, standardName: 'formulario_pago' },
+        { label: 'Fotos inspección', required: false, standardName: 'fotos_inspeccion' },
+        { label: 'Formulario inspección', required: false, standardName: 'formulario_inspeccion' },
+        { label: 'Conoce tu cliente', required: false, standardName: 'conoce_cliente' },
+      ];
+    }
+
+    // INCENDIO, TODO_RIESGO, RESPONSABILIDAD_CIVIL, OTROS ramos generales
+    if (['INCENDIO', 'TODO_RIESGO', 'RESPONSABILIDAD_CIVIL', 'OTROS'].includes(policyType)) {
+      return [
+        { label: 'Solicitud', required: true, standardName: 'solicitud' },
+        { label: 'Cédula', required: true, standardName: 'cedula' },
+        { label: 'Cotización', required: true, standardName: 'cotizacion' },
+        { label: 'Formulario de pago', required: true, standardName: 'formulario_pago' },
+      ];
+    }
+  }
+
+  // Para REHABILITACIÓN en ramos personas
+  if (managementType === 'REHABILITACION' && ['VIDA', 'SALUD', 'ACCIDENTES_PERSONALES'].includes(policyType)) {
+    return [
+      { label: 'Formulario de rehabilitación', required: true, standardName: 'formulario_rehabilitacion' },
+      { label: 'Conoce tu cliente', required: true, standardName: 'conoce_cliente' },
+      { label: 'Formulario de pago', required: true, standardName: 'formulario_pago' },
+      { label: 'Cédula', required: true, standardName: 'cedula' },
+      { label: 'FATCA', required: true, standardName: 'fatca' },
+      { label: 'Certificado de salud', required: true, standardName: 'certificado_salud' },
+    ];
+  }
+
+  // Para MODIFICACIÓN en ramos personas
+  if (managementType === 'MODIFICACION' && ['VIDA', 'SALUD', 'ACCIDENTES_PERSONALES'].includes(policyType)) {
+    return [
+      { label: 'Formulario de cambios múltiples', required: true, standardName: 'formulario_cambios' },
+      { label: 'Cotización', required: true, standardName: 'cotizacion' },
+      { label: 'Conoce tu cliente', required: true, standardName: 'conoce_cliente' },
+    ];
+  }
+
+  // Para CANCELACIÓN en ramos personas
+  if (managementType === 'CANCELACION' && ['VIDA', 'SALUD', 'ACCIDENTES_PERSONALES'].includes(policyType)) {
+    return [
+      { label: 'Carta de cancelación', required: true, standardName: 'carta_cancelacion' },
+      { label: 'Cédula', required: true, standardName: 'cedula' },
+      { label: 'Formulario de rescate', required: true, standardName: 'formulario_rescate' },
+      { label: 'Formulario de reembolso', required: true, standardName: 'formulario_reembolso' },
+      { label: 'Conoce tu cliente', required: true, standardName: 'conoce_cliente' },
+      { label: 'FATCA', required: true, standardName: 'fatca' },
+    ];
+  }
+
+  // Para RECLAMO en vida
+  if (managementType === 'RECLAMO' && policyType === 'VIDA') {
+    return [
+      { label: 'Formulario de reclamo', required: true, standardName: 'formulario_reclamo' },
+      { label: 'Certificado de defunción', required: true, standardName: 'certificado_defuncion' },
+      { label: 'FATCA', required: true, standardName: 'fatca' },
+      { label: 'Conoce tu cliente', required: true, standardName: 'conoce_cliente' },
+      { label: 'Cédula', required: true, standardName: 'cedula' },
+    ];
+  }
+
+  // Para otros trámites en ramos generales (CANCELACION, REHABILITACION, MODIFICACION, CAMBIO_CORREDOR, RECLAMO)
+  if (['CANCELACION', 'REHABILITACION', 'MODIFICACION', 'CAMBIO_CORREDOR', 'RECLAMO'].includes(managementType)) {
+    if (['AUTO', 'INCENDIO', 'TODO_RIESGO', 'RESPONSABILIDAD_CIVIL', 'OTROS'].includes(policyType)) {
+      return [
+        { label: 'Carta', required: true, standardName: 'carta' },
+        { label: 'Cédula', required: true, standardName: 'cedula' },
+        { label: 'Solicitud', required: true, standardName: 'solicitud' },
+      ];
+    }
+  }
+
+  // Default: documentos básicos
+  return [
+    { label: 'Cédula', required: true, standardName: 'cedula' },
+    { label: 'Solicitud', required: true, standardName: 'solicitud' },
+  ];
+}
+
+// Legacy: mantener por compatibilidad
+export const REQUIRED_DOCUMENTS: Record<PolicyType, { label: string; required: boolean; standardName: string }[]> = {
   AUTO: [
-    { label: 'Cédula del asegurado', required: true, standardName: 'cedula' },
-    { label: 'Formulario firmado', required: true, standardName: 'formulario' },
-    { label: 'Tarjeta de circulación', required: true, standardName: 'tarjeta_circulacion' },
-    { label: 'Póliza anterior', required: false, standardName: 'poliza_anterior' },
-    { label: 'Comprobante de pago', required: true, standardName: 'comprobante_pago' },
-    { label: 'Foto frontal del vehículo', required: true, standardName: 'inspeccion_frontal', category: 'inspection' },
-    { label: 'Foto trasera del vehículo', required: true, standardName: 'inspeccion_trasera', category: 'inspection' },
-    { label: 'Foto lateral derecha', required: true, standardName: 'inspeccion_lateral_derecha', category: 'inspection' },
-    { label: 'Foto lateral izquierda', required: true, standardName: 'inspeccion_lateral_izquierda', category: 'inspection' },
-    { label: 'Foto tablero/VIN', required: true, standardName: 'inspeccion_vin', category: 'inspection' },
-    { label: 'Foto odómetro', required: true, standardName: 'inspeccion_odometro', category: 'inspection' },
+    { label: 'Solicitud', required: true, standardName: 'solicitud' },
+    { label: 'Cédula', required: true, standardName: 'cedula' },
+    { label: 'Cotización', required: true, standardName: 'cotizacion' },
+    { label: 'Formulario de pago', required: true, standardName: 'formulario_pago' },
   ],
   VIDA: [
-    { label: 'Cédula del asegurado', required: true, standardName: 'cedula' },
-    { label: 'Formulario firmado', required: true, standardName: 'formulario' },
-    { label: 'Certificado médico', required: true, standardName: 'certificado_medico' },
-    { label: 'Exámenes de laboratorio', required: false, standardName: 'examenes_laboratorio' },
-    { label: 'Póliza anterior', required: false, standardName: 'poliza_anterior' },
-    { label: 'Comprobante de pago', required: true, standardName: 'comprobante_pago' },
+    { label: 'Solicitud', required: true, standardName: 'solicitud' },
+    { label: 'Cédula', required: true, standardName: 'cedula' },
+    { label: 'Cotización', required: true, standardName: 'cotizacion' },
+    { label: 'Formulario de pago', required: true, standardName: 'formulario_pago' },
   ],
   SALUD: [
-    { label: 'Cédula del asegurado', required: true, standardName: 'cedula' },
-    { label: 'Formulario firmado', required: true, standardName: 'formulario' },
-    { label: 'Historial médico', required: true, standardName: 'historial_medico' },
-    { label: 'Exámenes de laboratorio', required: false, standardName: 'examenes_laboratorio' },
-    { label: 'Póliza anterior', required: false, standardName: 'poliza_anterior' },
-    { label: 'Comprobante de pago', required: true, standardName: 'comprobante_pago' },
+    { label: 'Solicitud', required: true, standardName: 'solicitud' },
+    { label: 'Cédula', required: true, standardName: 'cedula' },
+    { label: 'Cotización', required: true, standardName: 'cotizacion' },
+    { label: 'Formulario de pago', required: true, standardName: 'formulario_pago' },
   ],
   INCENDIO: [
-    { label: 'Cédula del asegurado', required: true, standardName: 'cedula' },
-    { label: 'Formulario firmado', required: true, standardName: 'formulario' },
-    { label: 'Título de propiedad', required: true, standardName: 'titulo_propiedad' },
-    { label: 'Avalúo del inmueble', required: true, standardName: 'avaluo' },
-    { label: 'Póliza anterior', required: false, standardName: 'poliza_anterior' },
-    { label: 'Comprobante de pago', required: true, standardName: 'comprobante_pago' },
+    { label: 'Solicitud', required: true, standardName: 'solicitud' },
+    { label: 'Cédula', required: true, standardName: 'cedula' },
+    { label: 'Cotización', required: true, standardName: 'cotizacion' },
+    { label: 'Formulario de pago', required: true, standardName: 'formulario_pago' },
   ],
   TODO_RIESGO: [
-    { label: 'Cédula del asegurado', required: true, standardName: 'cedula' },
-    { label: 'Formulario firmado', required: true, standardName: 'formulario' },
-    { label: 'Factura de bienes', required: true, standardName: 'factura_bienes' },
-    { label: 'Fotos de los bienes', required: false, standardName: 'fotos_bienes' },
-    { label: 'Póliza anterior', required: false, standardName: 'poliza_anterior' },
-    { label: 'Comprobante de pago', required: true, standardName: 'comprobante_pago' },
+    { label: 'Solicitud', required: true, standardName: 'solicitud' },
+    { label: 'Cédula', required: true, standardName: 'cedula' },
+    { label: 'Cotización', required: true, standardName: 'cotizacion' },
+    { label: 'Formulario de pago', required: true, standardName: 'formulario_pago' },
   ],
   RESPONSABILIDAD_CIVIL: [
-    { label: 'Cédula del asegurado', required: true, standardName: 'cedula' },
-    { label: 'Formulario firmado', required: true, standardName: 'formulario' },
-    { label: 'Aviso de operación', required: true, standardName: 'aviso_operacion' },
-    { label: 'Póliza anterior', required: false, standardName: 'poliza_anterior' },
-    { label: 'Comprobante de pago', required: true, standardName: 'comprobante_pago' },
+    { label: 'Solicitud', required: true, standardName: 'solicitud' },
+    { label: 'Cédula', required: true, standardName: 'cedula' },
+    { label: 'Cotización', required: true, standardName: 'cotizacion' },
+    { label: 'Formulario de pago', required: true, standardName: 'formulario_pago' },
   ],
   ACCIDENTES_PERSONALES: [
-    { label: 'Cédula del asegurado', required: true, standardName: 'cedula' },
-    { label: 'Formulario firmado', required: true, standardName: 'formulario' },
-    { label: 'Lista de asegurados (colectivo)', required: false, standardName: 'lista_asegurados' },
-    { label: 'Póliza anterior', required: false, standardName: 'poliza_anterior' },
-    { label: 'Comprobante de pago', required: true, standardName: 'comprobante_pago' },
+    { label: 'Solicitud', required: true, standardName: 'solicitud' },
+    { label: 'Cédula', required: true, standardName: 'cedula' },
+    { label: 'Cotización', required: true, standardName: 'cotizacion' },
+    { label: 'Formulario de pago', required: true, standardName: 'formulario_pago' },
   ],
   OTROS: [
-    { label: 'Cédula del asegurado', required: true, standardName: 'cedula' },
-    { label: 'Formulario firmado', required: true, standardName: 'formulario' },
-    { label: 'Comprobante de pago', required: true, standardName: 'comprobante_pago' },
+    { label: 'Cédula', required: true, standardName: 'cedula' },
+    { label: 'Solicitud', required: true, standardName: 'solicitud' },
   ],
 };
 

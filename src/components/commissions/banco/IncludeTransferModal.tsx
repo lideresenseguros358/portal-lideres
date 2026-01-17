@@ -63,7 +63,7 @@ export default function IncludeTransferModal({ transfer, currentCutoffId, onClos
 
       if (result.ok) {
         toast.success('Transferencia incluida exitosamente', {
-          description: 'Se agregó al grupo "Transferencias de otras quincenas"'
+          description: 'La transferencia ahora está disponible en este corte'
         });
         onSuccess();
       } else {
@@ -180,9 +180,9 @@ export default function IncludeTransferModal({ transfer, currentCutoffId, onClos
               <strong>⚠️ Importante:</strong> Al incluir esta transferencia:
             </p>
             <ul className="text-sm text-amber-700 mt-2 space-y-1 ml-4 list-disc">
-              <li>Se agregará al grupo "Transferencias de otras quincenas" en el corte actual</li>
-              <li>En el corte original se moverá a "Pagados en otras quincenas"</li>
-              <li>Se registrará la quincena de pago al cerrar la quincena actual</li>
+              <li>Quedará disponible en el corte actual para su procesamiento</li>
+              <li>Se actualizará su tipo y aseguradora según lo seleccionado</li>
+              <li>Mantendrá su corte original registrado en las notas</li>
             </ul>
           </div>
         </div>

@@ -1,11 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { FaEye, FaChevronDown, FaChevronUp, FaClock, FaExclamationTriangle, FaCheckCircle, FaDownload, FaExternalLinkAlt, FaFolder, FaFileAlt } from 'react-icons/fa';
+import { FaEye, FaChevronDown, FaChevronUp, FaClock, FaExclamationTriangle, FaCheckCircle, FaDownload, FaExternalLinkAlt, FaFolder, FaFileAlt, FaEdit, FaFilePdf, FaFileImage } from 'react-icons/fa';
 import { getSLAColor, getSLALabel, STATUS_COLORS, CASE_STATUS_LABELS, MANAGEMENT_TYPES } from '@/lib/constants/cases';
 import { actionMarkCaseSeen } from '@/app/(app)/cases/actions';
 import { toast } from 'sonner';
 import Link from 'next/link';
+import { getClientDocuments } from '@/lib/storage/expediente';
 
 interface CasesListProps {
   cases: any[];
@@ -15,6 +16,7 @@ interface CasesListProps {
   onSelectAll: () => void;
   onRefresh: () => void;
   userRole: string;
+  onEdit?: (caseId: string) => void;
 }
 
 export default function CasesList({
@@ -25,15 +27,39 @@ export default function CasesList({
   onSelectAll,
   onRefresh,
   userRole,
+  onEdit,
 }: CasesListProps) {
   const [expandedCases, setExpandedCases] = useState<string[]>([]);
+  const [expedienteDocuments, setExpedienteDocuments] = useState<Record<string, any[]>>({});
 
-  const toggleExpand = (caseId: string) => {
+  const toggleExpand = async (caseId: string) => {
+    const isExpanding = !expandedCases.includes(caseId);
+    
     setExpandedCases(prev =>
       prev.includes(caseId)
         ? prev.filter(id => id !== caseId)
         : [...prev, caseId]
     );
+
+    // Cargar documentos del expediente si se está expandiendo y tiene client_id
+    if (isExpanding) {
+      const caseItem = cases.find(c => c.id === caseId);
+      if (caseItem?.client_id && !expedienteDocuments[caseId]) {
+        try {
+          const result = await getClientDocuments(caseItem.client_id);
+          setExpedienteDocuments(prev => ({
+            ...prev,
+            [caseId]: result.ok && result.data ? result.data : []
+          }));
+        } catch (error) {
+          console.error('Error loading expediente:', error);
+          setExpedienteDocuments(prev => ({
+            ...prev,
+            [caseId]: []
+          }));
+        }
+      }
+    }
   };
 
   const handleMarkSeen = async (caseId: string, e: React.MouseEvent) => {
@@ -206,15 +232,18 @@ export default function CasesList({
                         {isExpanded ? <FaChevronUp size={18} /> : <FaChevronDown size={18} />}
                       </button>
 
-                      {/* View Detail - Primary Action */}
-                      <Link
-                        href={`/cases/${caseItem.id}`}
-                        className="px-3 py-2 sm:px-4 bg-gradient-to-r from-[#010139] to-[#020270] text-white rounded-lg hover:shadow-lg transition-all text-sm font-semibold flex items-center gap-1"
+                      {/* Edit Button - Quick Edit Modal */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onEdit?.(caseItem.id);
+                        }}
+                        className="px-3 py-2 sm:px-4 bg-[#8AAA19] hover:bg-[#7a9916] text-white rounded-lg transition-all text-sm font-semibold flex items-center gap-1"
+                        title="Edición rápida"
                       >
-                        <FaFileAlt className="sm:hidden" />
-                        <span className="hidden sm:inline">Ver Detalle</span>
-                        <span className="sm:hidden">Ver</span>
-                      </Link>
+                        <FaEdit className="text-white" />
+                        <span className="hidden sm:inline">Editar</span>
+                      </button>
                     </div>
                   </div>
 
@@ -267,13 +296,9 @@ export default function CasesList({
                     </div>
                     <div className="relative w-full bg-gray-200 rounded-full h-3 overflow-hidden shadow-inner">
                       <div
-                        className="h-full bg-gradient-to-r from-[#010139] via-[#020270] to-[#8AAA19] transition-all duration-700 ease-out rounded-full relative"
+                        className="h-full bg-[#8AAA19] transition-all duration-700 ease-out rounded-full"
                         style={{ width: `${progress}%` }}
-                      >
-                        {progress > 10 && (
-                          <div className="absolute inset-0 bg-white/20 animate-pulse" />
-                        )}
-                      </div>
+                      />
                     </div>
                   </div>
 
@@ -281,7 +306,7 @@ export default function CasesList({
                   {userRole === 'master' && caseItem.broker && (
                     <p className="text-sm text-gray-600">
                       <span className="font-semibold">Broker:</span>{' '}
-                      {(caseItem.broker.profiles as any)?.name || (caseItem.broker.profiles as any)?.email}
+                      {(caseItem.broker.profiles as any)?.full_name || (caseItem.broker.profiles as any)?.email || 'Sin nombre'}
                     </p>
                   )}
                 </div>
@@ -386,6 +411,75 @@ export default function CasesList({
                     </p>
                   </div>
                 </div>
+
+                {/* Expediente Section - Full Width */}
+                {caseItem.client_id && (
+                  <div className="mt-6 pt-6 border-t-2 border-gray-200">
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="font-bold text-[#010139] flex items-center gap-2">
+                        <FaFolder />
+                        Expediente del Cliente
+                      </h4>
+                      <Link
+                        href={`/cases/${caseItem.id}?tab=expediente`}
+                        className="text-sm text-[#8AAA19] hover:text-[#6d8814] font-semibold flex items-center gap-1"
+                      >
+                        Ver expediente completo
+                        <FaExternalLinkAlt className="text-xs" />
+                      </Link>
+                    </div>
+
+                    {(() => {
+                      const docs = expedienteDocuments[caseItem.id];
+                      if (!docs) {
+                        return (
+                          <div className="flex items-center justify-center p-6">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#010139]"></div>
+                            <p className="ml-3 text-gray-600">Cargando documentos...</p>
+                          </div>
+                        );
+                      }
+                      
+                      if (docs.length === 0) {
+                        return (
+                          <div className="bg-gray-50 border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+                            <FaFolder className="mx-auto text-gray-300 text-3xl mb-2" />
+                            <p className="text-gray-500 text-sm">No hay documentos en el expediente</p>
+                          </div>
+                        );
+                      }
+                      
+                      return (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                          {docs.map((doc: any, idx: number) => (
+                            <a
+                              key={idx}
+                              href={doc.file_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-3 p-3 bg-white border-2 border-gray-200 rounded-lg hover:border-[#8AAA19] hover:shadow-md transition-all group"
+                            >
+                              {doc.file_url?.endsWith('.pdf') ? (
+                                <FaFilePdf className="text-red-500 text-2xl flex-shrink-0" />
+                              ) : (
+                                <FaFileImage className="text-blue-500 text-2xl flex-shrink-0" />
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <p className="font-semibold text-sm text-gray-800 group-hover:text-[#8AAA19] truncate">
+                                  {doc.document_name || 'Sin nombre'}
+                                </p>
+                                <p className="text-xs text-gray-500 capitalize">
+                                  {doc.document_type?.replace('_', ' ') || 'Documento'}
+                                </p>
+                              </div>
+                              <FaExternalLinkAlt className="text-gray-400 group-hover:text-[#8AAA19] text-xs flex-shrink-0" />
+                            </a>
+                          ))}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
               </div>
             )}
           </div>

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { FaArrowLeft, FaFolder } from 'react-icons/fa';
+import { FaArrowLeft, FaFolder, FaPencilAlt } from 'react-icons/fa';
 import { GuideSection } from '@/lib/guides/types';
 import FolderDocuments from '@/components/guides/FolderDocuments';
 import { toast } from 'sonner';
@@ -15,6 +15,7 @@ export default function GuideSectionPage() {
   const [section, setSection] = useState<GuideSection | null>(null);
   const [isMaster, setIsMaster] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [editMode, setEditMode] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -96,6 +97,7 @@ export default function GuideSectionPage() {
         <FolderDocuments
           folderId={sectionId}
           isMaster={isMaster}
+          editMode={editMode}
           onUpdate={loadData}
         />
       </div>

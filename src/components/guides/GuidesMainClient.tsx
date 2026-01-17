@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { FaSearch } from 'react-icons/fa';
+import { FaSearch, FaPencilAlt } from 'react-icons/fa';
 import { GuideSection } from '@/lib/guides/types';
 import FoldersView from './FoldersView';
 import SearchModal from '@/components/shared/SearchModal';
@@ -16,6 +16,7 @@ export default function GuidesMainClient({ initialSections, isMaster }: GuidesMa
   const [sections, setSections] = useState<GuideSection[]>(initialSections);
   const [showSearch, setShowSearch] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [editMode, setEditMode] = useState(false);
 
   const loadSections = async () => {
     setLoading(true);
@@ -60,7 +61,7 @@ export default function GuidesMainClient({ initialSections, isMaster }: GuidesMa
               flex items-center gap-3
             "
           >
-            <FaSearch className="text-xl" />
+            <FaSearch className="text-white text-xl" />
             <span>Buscar Documento</span>
           </button>
         </div>
@@ -72,7 +73,7 @@ export default function GuidesMainClient({ initialSections, isMaster }: GuidesMa
             <p className="mt-4 text-gray-600">Cargando carpetas...</p>
           </div>
         ) : (
-          <FoldersView folders={sections} isMaster={isMaster} onUpdate={loadSections} />
+          <FoldersView folders={sections} isMaster={isMaster} editMode={editMode} onUpdate={loadSections} />
         )}
 
         {/* Modal de Búsqueda */}

@@ -22,9 +22,6 @@ interface MappingRule {
  * Parse XLSX file using previewMapping for consistent logic
  */
 async function parseXlsxFile(file: File, mappingRules: MappingRule[] = [], invertNegatives: boolean = false, useMultiColumns: boolean = false, insurerId?: string): Promise<ParsedRow[]> {
-  console.log('[PARSER] Parsing XLSX file:', file.name);
-  console.log('[PARSER] Using mapping rules:', mappingRules);
-  console.log('[PARSER] Insurer ID:', insurerId);
   
   // PARSER ESPECIAL PARA SURA (formato multi-tabla complejo)
   if (insurerId) {
@@ -37,10 +34,7 @@ async function parseXlsxFile(file: File, mappingRules: MappingRule[] = [], inver
 
     const insurerSlug = getInsurerSlug(String((insurer as any)?.name || ''));
     
-    console.log(`[PARSER] Insurer detectado: "${insurer?.name}" (slug: ${insurerSlug})`);
-    
     if (insurer?.name?.toUpperCase().includes('SURA')) {
-      console.log('[PARSER] Detectado SURA - Usando parser especial');
       try {
         const arrayBuffer = await file.arrayBuffer();
         const suraRows = parseSuraExcel(arrayBuffer);
@@ -61,7 +55,6 @@ async function parseXlsxFile(file: File, mappingRules: MappingRule[] = [], inver
 
     // PARSER ESPECIAL PARA WW MEDICAL
     if (insurerSlug === 'ww-medical') {
-      console.log('[PARSER] Detectado WW MEDICAL - Usando parser especial');
       try {
         const arrayBuffer = await file.arrayBuffer();
         const fileExtension = file.name.toLowerCase().split('.').pop();
@@ -90,7 +83,6 @@ async function parseXlsxFile(file: File, mappingRules: MappingRule[] = [], inver
 
     // PARSER ESPECIAL PARA UNIVIVIR
     if (insurer?.name?.toUpperCase().includes('UNIVIVIR')) {
-      console.log('[PARSER] Detectado UNIVIVIR - Usando parser especial');
       try {
         const arrayBuffer = await file.arrayBuffer();
         const fileExtension = file.name.toLowerCase().split('.').pop();
@@ -119,7 +111,6 @@ async function parseXlsxFile(file: File, mappingRules: MappingRule[] = [], inver
     
     // PARSER ESPECIAL PARA BANESCO (PDF o Excel con columnas mezcladas)
     if (insurer?.name?.toUpperCase().includes('BANESCO')) {
-      console.log('[PARSER] Detectado BANESCO - Usando parser especial');
       try {
         const arrayBuffer = await file.arrayBuffer();
         const fileExtension = file.name.toLowerCase().split('.').pop();
@@ -153,7 +144,6 @@ async function parseXlsxFile(file: File, mappingRules: MappingRule[] = [], inver
     
     // PARSER ESPECIAL PARA MERCANTIL (similar a BANESCO)
     if (insurer?.name?.toUpperCase().includes('MERCANTIL')) {
-      console.log('[PARSER] Detectado MERCANTIL - Usando parser especial');
       try {
         const arrayBuffer = await file.arrayBuffer();
         const fileExtension = file.name.toLowerCase().split('.').pop();
@@ -187,7 +177,6 @@ async function parseXlsxFile(file: File, mappingRules: MappingRule[] = [], inver
 
     // PARSER ESPECIAL PARA REGIONAL
     if (insurer?.name?.toUpperCase().includes('REGIONAL')) {
-      console.log('[PARSER] Detectado REGIONAL - Usando parser especial');
       try {
         const arrayBuffer = await file.arrayBuffer();
         const fileExtension = file.name.toLowerCase().split('.').pop();
@@ -216,7 +205,6 @@ async function parseXlsxFile(file: File, mappingRules: MappingRule[] = [], inver
 
     // PARSER ESPECIAL PARA ACERTA
     if (insurer?.name?.toUpperCase().includes('ACERTA')) {
-      console.log('[PARSER] Detectado ACERTA - Usando parser especial');
       try {
         const arrayBuffer = await file.arrayBuffer();
         const fileExtension = file.name.toLowerCase().split('.').pop();
@@ -245,7 +233,6 @@ async function parseXlsxFile(file: File, mappingRules: MappingRule[] = [], inver
 
     // PARSER ESPECIAL PARA GENERAL
     if (insurer?.name?.toUpperCase().includes('GENERAL')) {
-      console.log('[PARSER] Detectado GENERAL - Usando parser especial');
       try {
         const arrayBuffer = await file.arrayBuffer();
         const fileExtension = file.name.toLowerCase().split('.').pop();
@@ -274,7 +261,6 @@ async function parseXlsxFile(file: File, mappingRules: MappingRule[] = [], inver
 
     // PARSER ESPECIAL PARA OPTIMA
     if (insurer?.name?.toUpperCase().includes('OPTIMA')) {
-      console.log('[PARSER] Detectado OPTIMA - Usando parser especial');
       try {
         const arrayBuffer = await file.arrayBuffer();
         const fileExtension = file.name.toLowerCase().split('.').pop();
@@ -303,7 +289,6 @@ async function parseXlsxFile(file: File, mappingRules: MappingRule[] = [], inver
 
     // PARSER ESPECIAL PARA MB (MAPFRE BANCO)
     if (insurer?.name?.toUpperCase() === 'MB' || insurer?.name?.toUpperCase().includes('MAPFRE BANCO')) {
-      console.log('[PARSER] Detectado MB (Mapfre Banco) - Usando parser especial');
       try {
         const arrayBuffer = await file.arrayBuffer();
         const fileExtension = file.name.toLowerCase().split('.').pop();
@@ -332,7 +317,6 @@ async function parseXlsxFile(file: File, mappingRules: MappingRule[] = [], inver
 
     // PARSER ESPECIAL PARA ALIADO
     if (insurer?.name?.toUpperCase() === 'ALIADO' || insurer?.name?.toUpperCase().includes('ALIADO')) {
-      console.log('[PARSER] Detectado ALIADO - Usando parser especial');
       try {
         const arrayBuffer = await file.arrayBuffer();
         const fileExtension = file.name.toLowerCase().split('.').pop();
@@ -361,7 +345,6 @@ async function parseXlsxFile(file: File, mappingRules: MappingRule[] = [], inver
 
     // PARSER ESPECIAL PARA PALIG (PAN AMERICAN LIFE)
     if (insurer?.name?.toUpperCase() === 'PALIG' || insurer?.name?.toUpperCase().includes('PAN AMERICAN')) {
-      console.log('[PARSER] Detectado PALIG - Usando parser especial');
       try {
         const arrayBuffer = await file.arrayBuffer();
         const fileExtension = file.name.toLowerCase().split('.').pop();
@@ -390,7 +373,6 @@ async function parseXlsxFile(file: File, mappingRules: MappingRule[] = [], inver
 
     // PARSER ESPECIAL PARA VUMI (LA REGIONAL)
     if (insurer?.name?.toUpperCase() === 'VUMI' || insurer?.name?.toUpperCase().includes('REGIONAL')) {
-      console.log('[PARSER] Detectado VUMI - Usando parser especial');
       try {
         const arrayBuffer = await file.arrayBuffer();
         const fileExtension = file.name.toLowerCase().split('.').pop();
@@ -431,10 +413,8 @@ async function parseXlsxFile(file: File, mappingRules: MappingRule[] = [], inver
       });
       
       if (!result.success || !result.previewRows) {
-        console.log('[PARSER] previewMapping failed, falling back to manual parsing');
         // Caer al método manual
       } else {
-        console.log('[PARSER] previewMapping successful, processing rows...');
         
         // Convertir previewRows a ParsedRow[]
         const rows: ParsedRow[] = [];
@@ -455,61 +435,53 @@ async function parseXlsxFile(file: File, mappingRules: MappingRule[] = [], inver
                                !invalidTexts.some(text => clientName.toUpperCase().includes(text));
           
           if (isValidPolicy && isValidClient && row.gross_amount !== 0) {
+            let finalAmount = row.gross_amount || 0;
+            
+            // Aplicar inversión si está configurado
+            if (invertNegatives) {
+              console.log(`🔄 INVIRTIENDO SIGNO: ${finalAmount} → ${finalAmount * -1}`);
+              finalAmount = finalAmount * -1;
+            } else {
+              console.log(`❌ NO INVERTIR (invertNegatives=${invertNegatives}): ${finalAmount}`);
+            }
+            
             rows.push({
               policy_number: policyNum,
               client_name: clientName || null,
-              commission_amount: row.gross_amount || 0,
+              commission_amount: finalAmount,
               raw_row: row,
             });
           }
         }
         
-        console.log('[PARSER] Parsed rows:', rows.length);
-        console.log('[PARSER] Sample row:', rows[0]);
         return rows;
       }
     } catch (error) {
-      console.log('[PARSER] Error with previewMapping, falling back:', error);
+      // Fallback silencioso
     }
   }
   
   // Fallback: método manual (código original)
-  console.log('[PARSER] Using manual parsing...');
   const arrayBuffer = await file.arrayBuffer();
   const workbook = XLSX.read(arrayBuffer, { type: 'array' });
   
   // Get first sheet
   const sheetName = workbook.SheetNames[0];
-  if (!sheetName) {
-    console.log('[PARSER] No sheets found');
-    return [];
-  }
+  if (!sheetName) return [];
   
   const worksheet = workbook.Sheets[sheetName];
-  if (!worksheet) {
-    console.log('[PARSER] Sheet not found');
-    return [];
-  }
+  if (!worksheet) return [];
   
   // Convert to JSON
   const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
   
-  console.log('[PARSER] Total rows:', jsonData.length);
-  
-  if (jsonData.length === 0) {
-    console.log('[PARSER] No data found');
-    return [];
-  }
+  if (jsonData.length === 0) return [];
   
   // First row is headers
   const firstRow = jsonData[0];
-  if (!firstRow) {
-    console.log('[PARSER] No header row');
-    return [];
-  }
+  if (!firstRow) return [];
   
   const headers = firstRow.map((h: any) => String(h || '').trim());
-  console.log('[PARSER] Headers:', headers);
   
   // Use mapping rules if available, otherwise use default detection
   let policyIndex = -1;
@@ -630,7 +602,10 @@ async function parseXlsxFile(file: File, mappingRules: MappingRule[] = [], inver
     
     // Invert sign if configured
     if (invertNegatives) {
+      console.log(`🔄 INVIRTIENDO SIGNO: ${grossAmount} → ${grossAmount * -1}`);
       grossAmount = grossAmount * -1;
+    } else {
+      console.log(`❌ NO INVERTIR (invertNegatives=${invertNegatives}): ${grossAmount}`);
     }
     
     // Excluir rows con 0.00 (excepto si viene de ASSA que puede tener códigos especiales)
@@ -644,10 +619,6 @@ async function parseXlsxFile(file: File, mappingRules: MappingRule[] = [], inver
       });
     }
   }
-  
-  console.log('[PARSER] Parsed rows:', rows.length);
-  console.log('[PARSER] Sample row:', rows[0]);
-  console.log('[PARSER] Sample row 2:', rows[1]);
   
   return rows;
 }

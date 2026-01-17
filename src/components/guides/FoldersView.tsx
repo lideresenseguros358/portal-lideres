@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { FaFolder, FaPlus, FaEdit, FaTrash, FaArrowUp, FaArrowDown, FaFileAlt, FaStar, FaTimes } from 'react-icons/fa';
+import { FaFolder, FaPlus, FaEdit, FaTrash, FaArrowUp, FaArrowDown, FaFileAlt, FaStar, FaTimes, FaPencilAlt } from 'react-icons/fa';
 import { toast } from 'sonner';
 import Link from 'next/link';
 
@@ -18,11 +18,13 @@ interface Folder {
 interface FoldersViewProps {
   folders: Folder[];
   isMaster: boolean;
+  editMode?: boolean;
   onUpdate: () => void;
 }
 
-export default function FoldersView({ folders: initialFolders, isMaster, onUpdate }: FoldersViewProps) {
+export default function FoldersView({ folders: initialFolders, isMaster, editMode: externalEditMode, onUpdate }: FoldersViewProps) {
   const [folders, setFolders] = useState(initialFolders);
+  const [editMode, setEditMode] = useState(externalEditMode || false);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingFolder, setEditingFolder] = useState<Folder | null>(null);
@@ -164,16 +166,37 @@ export default function FoldersView({ folders: initialFolders, isMaster, onUpdat
 
   return (
     <div>
-      {/* Header con botón crear */}
+      {/* Header con controles */}
       {isMaster && (
-        <div className="mb-6 flex justify-end">
+        <div className="mb-6 flex justify-end gap-2">
           <button
-            onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg hover:shadow-lg transition-all font-semibold"
+            onClick={() => setEditMode(!editMode)}
+            className={
+              `px-5 py-2.5 rounded-xl font-bold text-sm
+              shadow-md hover:shadow-lg
+              hover:scale-105
+              transition-all duration-200
+              flex items-center gap-2
+              ${editMode 
+                ? 'bg-gradient-to-r from-red-600 to-red-700 text-white' 
+                : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-gray-400'
+              }`
+            }
+            title={editMode ? 'Desactivar modo edición' : 'Activar modo edición'}
           >
-            <FaPlus />
-            <span>Nueva Carpeta</span>
+            <FaPencilAlt className={editMode ? 'text-white' : 'text-gray-600'} />
+            <span className="hidden sm:inline">{editMode ? 'Salir' : 'Editar'}</span>
           </button>
+          
+          {editMode && (
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-xl hover:shadow-lg transition-all font-bold shadow-md hover:scale-105"
+            >
+              <FaPlus className="text-white" />
+              <span>Nueva Carpeta</span>
+            </button>
+          )}
         </div>
       )}
 
@@ -217,8 +240,8 @@ export default function FoldersView({ folders: initialFolders, isMaster, onUpdat
                 </p>
               </Link>
 
-              {/* Botones de acción (solo Master) */}
-              {isMaster && (
+              {/* Botones de acción (solo Master en modo edición) */}
+              {isMaster && editMode && (
                 <div className="border-t border-gray-200 p-3 space-y-2">
                   <div className="flex items-center gap-2">
                     <button

@@ -63,6 +63,7 @@ export default function FilesList({ files, isMaster, onUpdate }: FilesListProps)
               isMaster={isMaster}
               onUpdate={onUpdate}
               deleteEndpoint="/api/guides/files"
+              editMode={false}
             />
           </div>
         </div>

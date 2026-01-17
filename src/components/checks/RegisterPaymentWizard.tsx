@@ -16,12 +16,22 @@ interface AdvancePrefill {
   broker_name: string;
 }
 
+interface CasePrefillData {
+  client_name?: string;
+  policy_number?: string;
+  insurer_id?: string;
+  amount_to_pay?: number;
+  purpose?: 'poliza' | 'devolucion' | 'otro';
+  notes?: string;
+}
+
 interface WizardProps {
   onClose: () => void;
   onSuccess: () => void;
   advanceId?: string | null;
   advancePrefill?: AdvancePrefill | null;
   advanceLoading?: boolean;
+  prefillData?: CasePrefillData;
 }
 
 export default function RegisterPaymentWizardNew({
@@ -30,6 +40,7 @@ export default function RegisterPaymentWizardNew({
   advanceId,
   advancePrefill = null,
   advanceLoading = false,
+  prefillData,
 }: WizardProps) {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -39,12 +50,12 @@ export default function RegisterPaymentWizardNew({
   
   // Step 1: Información básica
   const [formData, setFormData] = useState({
-    client_name: '',
-    purpose: 'poliza' as 'poliza' | 'devolucion' | 'otro',
-    policy_number: '',
+    client_name: prefillData?.client_name || '',
+    purpose: (prefillData?.purpose || 'poliza') as 'poliza' | 'devolucion' | 'otro',
+    policy_number: prefillData?.policy_number || '',
     insurer_name: '',
-    amount_to_pay: '',
-    notes: '',
+    amount_to_pay: prefillData?.amount_to_pay?.toString() || '',
+    notes: prefillData?.notes || '',
     devolucion_tipo: 'cliente' as 'cliente' | 'corredor',
     cuenta_banco: '',
     banco_nombre: '',
@@ -129,10 +140,19 @@ export default function RegisterPaymentWizardNew({
       }]);
     }
   }, [advancePrefill]);
+
   const loadInsurers = async () => {
     const result = await actionGetInsurers();
-    if (result.ok) {
-      setInsurers(result.data || []);
+    if (result.ok && result.data) {
+      setInsurers(result.data);
+      
+      // Si viene prefillData con insurer_id, pre-seleccionar la aseguradora
+      if (prefillData?.insurer_id) {
+        const insurer = result.data.find((i: any) => i.id === prefillData.insurer_id);
+        if (insurer) {
+          setFormData(prev => ({ ...prev, insurer_name: insurer.name }));
+        }
+      }
     }
   };
 

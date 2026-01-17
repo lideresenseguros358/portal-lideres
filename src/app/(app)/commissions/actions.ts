@@ -51,7 +51,6 @@ type AdvanceLogIns = TablesInsert<'advance_logs'>;
  */
 export async function actionUploadImport(formData: FormData) {
   try {
-    console.log('[SERVER] actionUploadImport called');
     const file = formData.get('file') as File;
     const rawData = {
       insurer_id: String(formData.get('insurer_id') || ''),
@@ -66,8 +65,6 @@ export async function actionUploadImport(formData: FormData) {
     const bankGroupIdsStr = formData.get('bank_group_ids') as string | null;
     const bankGroupIds = bankGroupIdsStr ? JSON.parse(bankGroupIdsStr) : [];
 
-    console.log('[SERVER] FormData:', { ...rawData, fileName: file?.name });
-
     // Detectar ASSA_CODIGOS ANTES de validar (no es un UUID válido)
     const isAssaCodigos = rawData.insurer_id === 'ASSA_CODIGOS';
     
@@ -80,7 +77,6 @@ export async function actionUploadImport(formData: FormData) {
     
     // Manejar ASSA_CODIGOS sin validación de schema (no tiene insurer_id UUID)
     if (isAssaCodigos) {
-      console.log('[SERVER] Detected ASSA_CODIGOS import');
       const parsedSpecial = {
         fortnight_id: rawData.fortnight_id,
         total_amount: rawData.total_amount,
@@ -93,9 +89,6 @@ export async function actionUploadImport(formData: FormData) {
 
     // Validate input para aseguradoras normales
     const parsed = UploadImportSchema.parse(rawData);
-    console.log('[SERVER] Validation passed:', parsed);
-    
-    console.log('[SERVER] Parsing file...');
 
     const { data: insurerForFile } = await supabase
       .from('insurers')
@@ -175,8 +168,6 @@ export async function actionUploadImport(formData: FormData) {
       .select('target_field, aliases, commission_column_2_aliases, commission_column_3_aliases')
       .eq('insurer_id', parsed.insurer_id) as any;
     
-    console.log('[SERVER] Mapping rules:', mappingRules);
-    
     // Get insurer configuration for invert_negatives and multi-column support (ASSA)
     const { data: insurerData } = await supabase
       .from('insurers')
@@ -185,19 +176,19 @@ export async function actionUploadImport(formData: FormData) {
       .single();
     
     // Prioridad: valor enviado por UI (FormData) > config en BD
+    console.log('\n========================================');
+    console.log('🔍 VERIFICANDO INVERT_NEGATIVES');
+    console.log('FormData invert_negatives:', parsed.invert_negatives);
+    console.log('BD invert_negatives:', (insurerData as any)?.invert_negatives);
     const invertNegatives = parsed.invert_negatives === 'true' ? true : ((insurerData as any)?.invert_negatives || false);
     const useMultiColumns = (insurerData as any)?.use_multi_commission_columns || false;
-    console.log('[SERVER] Invert negatives from insurer config:', invertNegatives);
-    console.log('[SERVER] Use multi commission columns (ASSA):', useMultiColumns);
+    console.log('✅ FINAL invertNegatives:', invertNegatives);
+    console.log('Use multi commission columns (ASSA):', useMultiColumns);
+    console.log('========================================\n');
     
+    console.log('\n🚀 LLAMANDO PARSER con invertNegatives =', invertNegatives, '\n');
     const rows = await parseCsvXlsx(processedFile, mappingRules || [], invertNegatives, useMultiColumns, parsed.insurer_id);
-    console.log(`[SERVER][${insurerName}] ========== RESULTADO PARSER ==========`);
-    console.log(`[SERVER][${insurerName}] Total filas parseadas: ${rows.length}`);
-    console.log(`[SERVER][${insurerName}] Primeras 3 filas:`, rows.slice(0, 3).map(r => ({
-      policy: r.policy_number,
-      client: r.client_name,
-      amount: r.commission_amount
-    })));
+    console.log(`Total: ${rows.length} | Primera comisión: ${rows[0]?.commission_amount || 'N/A'}`);
     
     if (rows.length === 0) {
       console.error(`[SERVER][${insurerName}] ❌ PARSER NO EXTRAJO NINGUNA FILA - Revisar parser`);
@@ -218,8 +209,6 @@ export async function actionUploadImport(formData: FormData) {
 
     if (importError) throw importError;
     if (!importRecord) throw new Error('Failed to create import record');
-    
-    console.log('[SERVER] Saved total_amount:', importRecord.total_amount, 'for import:', importRecord.id);
 
     // 2. Buscar pólizas existentes Y clientes por nombre para matching en dos niveles
     // Nivel 1: Match por número de póliza
@@ -557,7 +546,6 @@ export async function actionUploadImport(formData: FormData) {
 
     // 6. BANCO: Vincular transfer individual o grupos con el import (TEMPORAL)
     if (bankTransferId) {
-      console.log('[BANCO] Vinculando transfer individual con import (temporal):', bankTransferId);
       
       // Obtener cutoff_id de la transferencia para tracking de origen
       const { data: transferData } = await supabase
@@ -585,14 +573,11 @@ export async function actionUploadImport(formData: FormData) {
         });
       
       if (transferLinkError) {
-        console.error('[BANCO] Error vinculando transfer:', transferLinkError);
-      } else {
-        console.log('[BANCO] Transfer vinculada exitosamente (temporal)');
+        // Error silencioso, no crítico
       }
     }
 
     if (bankGroupIds.length > 0) {
-      console.log('[BANCO] Vinculando grupos bancarios con import (temporal):', bankGroupIds);
       for (const groupId of bankGroupIds) {
         const { data: groupData } = await supabase
           .from('bank_groups')
@@ -616,8 +601,6 @@ export async function actionUploadImport(formData: FormData) {
               notes: originNote,
               is_temporary: true, // Temporal hasta confirmar quincena
             });
-          
-          console.log('[BANCO] Grupo vinculado (temporal):', groupId);
         }
       }
     }
@@ -629,7 +612,7 @@ export async function actionUploadImport(formData: FormData) {
       totalAmount: parsed.total_amount,
     };
 
-    console.log('[SERVER] Import successful:', result);
+    console.log(`✅ Import OK: ${result.insertedCount + result.pendingCount} items`);
     revalidatePath('/(app)/commissions');
     return { ok: true as const, data: result };
   } catch (error) {
