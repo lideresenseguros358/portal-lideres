@@ -171,7 +171,7 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
 
     let query = supabaseClient()
       .from('clients')
-      .select('id, name, national_id, email, phone, broker_id')
+      .select('id, name, national_id, email, phone, birth_date, broker_id')
       .ilike('name', `%${searchTerm}%`);
     
     // Si es broker, solo mostrar sus clientes
