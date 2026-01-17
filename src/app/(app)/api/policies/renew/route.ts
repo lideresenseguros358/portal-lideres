@@ -34,22 +34,30 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, error: 'Póliza sin fecha de renovación' }, { status: 400 });
     }
 
-    // Calcular nuevas fechas (sumar 1 año)
-    const currentStart = new Date(policy.start_date || policy.renewal_date);
-    const currentRenewal = new Date(policy.renewal_date);
+    // Calcular nuevas fechas (sumar 1 año) - SIN timezone
+    const currentStartDate = policy.start_date || policy.renewal_date;
+    const currentRenewalDate = policy.renewal_date;
 
-    const newStart = new Date(currentStart);
-    newStart.setFullYear(currentStart.getFullYear() + 1);
-
-    const newRenewal = new Date(currentRenewal);
-    newRenewal.setFullYear(currentRenewal.getFullYear() + 1);
+    // Parse manual para evitar timezone issues - sumar 1 año
+    const startParts = currentStartDate.split('-').map(Number);
+    const renewalParts = currentRenewalDate.split('-').map(Number);
+    
+    if (startParts.length !== 3 || renewalParts.length !== 3) {
+      return NextResponse.json({ ok: false, error: 'Formato de fecha inválido' }, { status: 400 });
+    }
+    
+    const [startYear = 0, startMonth = 1, startDay = 1] = startParts;
+    const [renewalYear = 0, renewalMonth = 1, renewalDay = 1] = renewalParts;
+    
+    const newStart = `${startYear + 1}-${String(startMonth).padStart(2, '0')}-${String(startDay).padStart(2, '0')}`;
+    const newRenewal = `${renewalYear + 1}-${String(renewalMonth).padStart(2, '0')}-${String(renewalDay).padStart(2, '0')}`;
 
     // Actualizar la póliza
     const { error: updateError } = await supabase
       .from('policies')
       .update({
-        start_date: newStart.toISOString().split('T')[0],
-        renewal_date: newRenewal.toISOString().split('T')[0],
+        start_date: newStart,
+        renewal_date: newRenewal,
         updated_at: new Date().toISOString(),
       })
       .eq('id', policyId);
@@ -67,17 +75,17 @@ export async function POST(request: Request) {
       meta: {
         policy_number: policy.policy_number,
         old_start_date: policy.start_date,
-        new_start_date: newStart.toISOString().split('T')[0],
+        new_start_date: newStart,
         old_renewal_date: policy.renewal_date,
-        new_renewal_date: newRenewal.toISOString().split('T')[0],
+        new_renewal_date: newRenewal,
       },
     });
 
     return NextResponse.json({
       ok: true,
       data: {
-        newStartDate: newStart.toISOString().split('T')[0],
-        newRenewalDate: newRenewal.toISOString().split('T')[0],
+        newStartDate: newStart,
+        newRenewalDate: newRenewal,
       },
     });
   } catch (error) {

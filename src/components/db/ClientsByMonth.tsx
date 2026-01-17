@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { ChevronDown, ChevronUp, Calendar } from 'lucide-react';
+import { formatDateForDisplay } from '@/lib/utils/dates';
 import { ClientWithPolicies } from '@/types/db';
 
 interface ClientsByMonthProps {
@@ -35,9 +36,14 @@ export default function ClientsByMonth({ clients }: ClientsByMonthProps) {
     clients.forEach(client => {
       client.policies?.forEach(policy => {
         if (policy.renewal_date) {
-          const renewalDate = new Date(policy.renewal_date);
-          const policyMonth = renewalDate.getMonth();
-          const policyYear = renewalDate.getFullYear();
+          // Parse manual sin Date object para evitar timezone
+          const parts = policy.renewal_date.split('-');
+          if (parts.length < 2) return;
+          const year = Number(parts[0]);
+          const month = Number(parts[1]);
+          if (!year || !month) return;
+          const policyMonth = month - 1; // 0-indexed
+          const policyYear = year;
           
           // Incluir pólizas del año seleccionado
           if (policyMonth === monthIndex && policyYear === selectedYear) {
@@ -193,7 +199,7 @@ export default function ClientsByMonth({ clients }: ClientsByMonthProps) {
                             </span>
                             <span className="text-xs font-semibold text-blue-600">
                               <Calendar size={12} className="inline mr-1" />
-                              {new Date(policy.renewal_date).toLocaleDateString('es-PA')}
+                              {formatDateForDisplay(policy.renewal_date)}
                             </span>
                           </div>
                         </div>

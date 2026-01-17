@@ -17,6 +17,7 @@ import InlineSearchBar from './InlineSearchBar';
 import { ClientWithPolicies, InsurerWithCount } from '@/types/db';
 import { actionGetPreliminaryClients } from '@/app/(app)/db/preliminary-actions';
 import { actionLoadMoreClients } from '@/app/(app)/db/actions';
+import { formatDateForDisplay } from '@/lib/utils/dates';
 
 interface DatabaseTabsProps {
   activeTab: string;
@@ -67,15 +68,14 @@ const getClientRenewalDisplay = (client: ClientWithPolicies) => {
     return '—';
   }
 
-  const earliest = withDates.reduce<Date | null>((acc, policy) => {
+  const earliest = withDates.reduce<string | null>((acc, policy) => {
     if (!policy.renewal_date) return acc;
-    const current = new Date(policy.renewal_date);
-    if (Number.isNaN(current.getTime())) return acc;
-    if (!acc || current < acc) return current;
+    // Comparar strings directamente sin Date objects para evitar timezone
+    if (!acc || policy.renewal_date < acc) return policy.renewal_date;
     return acc;
   }, null);
 
-  return earliest ? earliest.toLocaleDateString('es-PA') : '—';
+  return earliest ? formatDateForDisplay(earliest) : '—';
 };
 
 // Función para exportar a PDF con tabla única denormalizada
@@ -1341,8 +1341,11 @@ export default function DatabaseTabs({
       if (filters.month !== undefined) {
         filteredPolicies = filteredPolicies.filter(p => {
           if (!p.renewal_date) return false;
-          const renewalMonth = new Date(p.renewal_date).getMonth();
-          return renewalMonth === filters.month;
+          // Parse manual sin Date object para evitar timezone
+          const parts = p.renewal_date.split('-');
+          if (parts.length < 2 || !parts[1]) return false;
+          const month = parseInt(parts[1]) - 1;
+          return month === filters.month;
         });
       }
 
