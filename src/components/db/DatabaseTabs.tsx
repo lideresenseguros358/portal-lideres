@@ -182,7 +182,7 @@ const exportToPDF = async (clients: ClientWithPolicies[], role: string) => {
             ];
             
             if (role === 'master') {
-              row.push((client as any).brokers?.name || '—');
+              row.push(capitalizeText((client as any).brokers?.name) || '—');
             }
             
             row.push(
@@ -217,7 +217,7 @@ const exportToPDF = async (clients: ClientWithPolicies[], role: string) => {
         ];
         
         if (role === 'master') {
-          row.push((client as any).brokers?.name || '—');
+          row.push(capitalizeText((client as any).brokers?.name) || '—');
         }
         
         row.push('SIN PÓLIZAS', '—', '—', '—', '—', '—');
@@ -376,7 +376,7 @@ const exportToExcel = async (clients: ClientWithPolicies[], role: string) => {
           };
           
           if (role === 'master') {
-            row['Corredor'] = (client as any).brokers?.name || '—';
+            row['Corredor'] = capitalizeText((client as any).brokers?.name) || '—';
           }
           
           // Agregar información de la póliza
@@ -407,7 +407,7 @@ const exportToExcel = async (clients: ClientWithPolicies[], role: string) => {
         };
         
         if (role === 'master') {
-          row['Corredor'] = (client as any).brokers?.name || '—';
+          row['Corredor'] = capitalizeText((client as any).brokers?.name) || '—';
         }
         
         row['N° Póliza'] = 'SIN PÓLIZAS';
@@ -530,7 +530,7 @@ const ClientsListView = ({ clients, onView, onEdit, onDelete, role, selectedClie
         nationalId: client.national_id?.toUpperCase?.() || '—',
         email: client.email || '—',
         phone: client.phone || '—',
-        brokerName: (client as any).brokers?.name || '—',
+        brokerName: capitalizeText((client as any).brokers?.name) || '—',
       })),
     [clients]
   );
@@ -1735,7 +1735,7 @@ export default function DatabaseTabs({
                   >
                     <option value="">Todos</option>
                     {filterOptions.brokers.map((broker: any) => (
-                      <option key={broker.id} value={broker.id}>{broker.name}</option>
+                      <option key={broker.id} value={broker.id}>{capitalizeText(broker.name)}</option>
                     ))}
                   </select>
                 </div>
@@ -1762,7 +1762,7 @@ export default function DatabaseTabs({
                 )}
                 {filters.broker && role === 'master' && (
                   <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded">
-                    Corredor: {filterOptions.brokers.find((b: any) => b.id === filters.broker)?.name}
+                    Corredor: {capitalizeText(filterOptions.brokers.find((b: any) => b.id === filters.broker)?.name)}
                   </span>
                 )}
                 <span className="text-xs text-gray-600">
