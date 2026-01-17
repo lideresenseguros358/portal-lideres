@@ -60,14 +60,11 @@ export default function ClientDetailsModal({ client, onClose, onEdit, onOpenExpe
   const [loadingComisiones, setLoadingComisiones] = useState(false);
   const [loadingFortnight, setLoadingFortnight] = useState(false);
 
-  // Formatear fecha con zona horaria (para otras fechas como renewal_date)
+  // Formatear fecha SIN zona horaria para evitar cambios de día
   const formatDate = (date: string | null) => {
     if (!date) return 'N/A';
-    return new Date(date).toLocaleDateString('es-PA', { 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
-    });
+    // Usar formato largo sin timezone
+    return formatDateLongNoTimezone(date);
   };
 
   const getStatusBadge = (status: string) => {

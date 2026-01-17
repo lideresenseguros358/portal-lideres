@@ -43,11 +43,9 @@ interface FilterOptions {
   broker?: string;
 }
 
+// Usar formatDateForDisplay importado que NO tiene timezone issues
 const formatDate = (value?: string | null) => {
-  if (!value) return '—';
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return '—';
-  return parsed.toLocaleDateString('es-PA');
+  return formatDateForDisplay(value);
 };
 
 const capitalizeText = (text?: string | null) => {
