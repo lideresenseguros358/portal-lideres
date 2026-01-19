@@ -177,7 +177,7 @@ const exportToPDF = async (clients: ClientWithPolicies[], role: string) => {
             const row = [
               client.name?.toUpperCase() || '—',
               client.national_id?.toUpperCase() || '—',
-              client.email || '—',
+              client.email?.toLowerCase() || '—',
               client.phone || '—',
             ];
             
@@ -212,7 +212,7 @@ const exportToPDF = async (clients: ClientWithPolicies[], role: string) => {
         const row = [
           client.name?.toUpperCase() || '—',
           client.national_id?.toUpperCase() || '—',
-          client.email || '—',
+          client.email?.toLowerCase() || '—',
           client.phone || '—',
         ];
         
@@ -371,7 +371,7 @@ const exportToExcel = async (clients: ClientWithPolicies[], role: string) => {
           const row: any = {
             'Cliente': client.name?.toUpperCase() || '—',
             'Cédula': client.national_id?.toUpperCase() || '—',
-            'Email': client.email || '—',
+            'Email': client.email?.toLowerCase() || '—',
             'Teléfono': client.phone || '—',
           };
           
@@ -402,7 +402,7 @@ const exportToExcel = async (clients: ClientWithPolicies[], role: string) => {
         const row: any = {
           'Cliente': client.name?.toUpperCase() || '—',
           'Cédula': client.national_id?.toUpperCase() || '—',
-          'Email': client.email || '—',
+          'Email': client.email?.toLowerCase() || '—',
           'Teléfono': client.phone || '—',
         };
         
@@ -528,7 +528,7 @@ const ClientsListView = ({ clients, onView, onEdit, onDelete, role, selectedClie
         renewalDisplay: getClientRenewalDisplay(client),
         policiesCount: getPoliciesCount(client),
         nationalId: client.national_id?.toUpperCase?.() || '—',
-        email: client.email || '—',
+        email: client.email?.toLowerCase() || '—',
         phone: client.phone || '—',
         brokerName: capitalizeText((client as any).brokers?.name) || '—',
       })),

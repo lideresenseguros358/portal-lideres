@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { FaArrowLeft, FaDownload, FaUpload, FaCheckCircle, FaExclamationTriangle, FaFileAlt, FaEye, FaEyeSlash } from "react-icons/fa";
+import { FaArrowLeft, FaDownload, FaUpload, FaCheckCircle, FaExclamationTriangle, FaFileAlt, FaEye, FaEyeSlash, FaInfoCircle, FaChevronDown, FaChevronUp } from "react-icons/fa";
 import Link from "next/link";
 import Papa from "papaparse";
 // import { actionImportClientsCSV } from "../actions"; // DEPRECADO - Usar ImportModal.tsx
@@ -36,6 +36,13 @@ export default function ImportPage() {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
+  const [importProgress, setImportProgress] = useState(0);
+  const [showResultModal, setShowResultModal] = useState(false);
+  const [showDuplicates, setShowDuplicates] = useState(false);
+  const [showErrors, setShowErrors] = useState(false);
+  const [showCsvDuplicates, setShowCsvDuplicates] = useState(false);
+  const [showExcluded, setShowExcluded] = useState(false);
+  const [redirecting, setRedirecting] = useState(false);
   const [validRows, setValidRows] = useState<ParsedRow[]>([]);
   const [errorRows, setErrorRows] = useState<ValidationError[]>([]);
   const [showPreview, setShowPreview] = useState(false);
@@ -153,9 +160,20 @@ export default function ImportPage() {
     }
     
     setLoading(true);
+    setImportProgress(0);
     
     const formData = new FormData();
     formData.append("file", file);
+    
+    // Polling para obtener progreso real del servidor
+    const startTime = Date.now();
+    const pollInterval = setInterval(() => {
+      // Incrementar progreso gradualmente mientras esperamos
+      setImportProgress((prev) => {
+        if (prev >= 95) return 95; // No pasar del 95% hasta que termine
+        return prev + 1;
+      });
+    }, 1000); // 1% por segundo hasta 95%
     
     try {
       console.log('[IMPORT] Enviando request a /api/db/import');
@@ -164,27 +182,60 @@ export default function ImportPage() {
         body: formData,
       });
       console.log('[IMPORT] Response recibido:', response.status);
+      
+      // Limpiar intervalo cuando termina
+      clearInterval(pollInterval);
 
       const data = await response.json();
       console.log('[IMPORT] Data:', data);
+      console.log('[IMPORT] SUCCESS:', data.success);
+      console.log('[IMPORT] ERRORS:', data.errors?.length || 0);
+      console.log('[IMPORT] EXCLUDED:', data.excluded?.length || 0);
+      console.log('[IMPORT] TOTAL GROUPS:', data.totalGroups);
+      console.log('[IMPORT] PROCESSED:', data.processed);
       
-      if (data.success) {
-        setImportResult(data);
+      // DEBUG: Verificar duplicados
+      if (data.errors && data.errors.length > 0) {
+        const duplicates = data.errors.filter((e: any) => e.isDuplicate);
+        const realErrors = data.errors.filter((e: any) => !e.isDuplicate);
+        console.log('[IMPORT] DUPLICADOS:', duplicates.length);
+        console.log('[IMPORT] ERRORES REALES:', realErrors.length);
+        console.log('[IMPORT] PRIMEROS 5 ERRORES:');
+        data.errors.slice(0, 5).forEach((error: any, idx: number) => {
+          console.log(`  Error ${idx + 1}:`, error);
+        });
+      }
+      
+      // Siempre mostrar resultado (con o sin errores)
+      setImportResult(data);
+      setImportProgress(100);
+      
+      // Pequeño delay para que se vea el 100% antes del modal
+      setTimeout(() => {
+        setShowResultModal(true);
+        setLoading(false);
+        setImportProgress(0);
+      }, 500);
+      
+      if (data.success && data.success > 0) {
         toast.success('Importación completada', {
-          description: `${data.processed || 0} registros importados exitosamente`
+          description: `${data.success} clientes importados`
         });
       } else {
         toast.error('Error en la importación', {
-          description: data.error || 'Error desconocido'
+          description: data.error || 'No se pudieron importar registros'
         });
       }
     } catch (error) {
+      clearInterval(pollInterval); // Limpiar intervalo en caso de error
       console.error('[IMPORT] Error al importar:', error);
+      setLoading(false);
+      setImportProgress(0);
       toast.error('Error al importar', {
         description: error instanceof Error ? error.message : 'Error desconocido'
       });
     } finally {
-      setLoading(false);
+      // El loading se desactiva en el setTimeout después de mostrar el modal
     }
   };
 
@@ -434,7 +485,17 @@ export default function ImportPage() {
               Cancelar
             </button>
             <button
-              onClick={handleImport}
+              onClick={(e) => {
+                console.log('[BUTTON] ======== CLICK EN BOTÓN IMPORTAR ========');
+                console.log('[BUTTON] Evento:', e);
+                console.log('[BUTTON] validRows.length:', validRows.length);
+                console.log('[BUTTON] loading:', loading);
+                console.log('[BUTTON] file:', file);
+                console.log('[BUTTON] disabled:', validRows.length === 0 || loading);
+                console.log('[BUTTON] Llamando handleImport...');
+                handleImport();
+                console.log('[BUTTON] handleImport llamado');
+              }}
               disabled={validRows.length === 0 || loading}
               className="flex-1 px-6 py-3 bg-[#8AAA19] text-white rounded-lg hover:bg-[#010139] transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
@@ -444,38 +505,267 @@ export default function ImportPage() {
         </div>
       )}
 
-      {/* Import Results */}
-      {importResult && (
-        <div className="space-y-6">
-          <div className="bg-white rounded-xl shadow-lg p-8 text-center">
-            <FaCheckCircle className="text-green-600 text-6xl mx-auto mb-4" />
-            <h3 className="text-2xl font-bold text-[#010139] mb-2">Importación Completada</h3>
-            <p className="text-lg text-gray-600">
-              {importResult.processed} de {importResult.total} registros importados exitosamente
+      {/* Loading Screen con Barra de Progreso */}
+      {loading && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-[#8AAA19] mx-auto mb-4"></div>
+              <h3 className="text-xl font-bold text-[#010139] mb-2">Importando Clientes...</h3>
+              <p className="text-gray-600 mb-6">Por favor, tenga paciencia mientras procesamos los registros</p>
+              
+              {/* Barra de progreso */}
+              <div className="w-full bg-gray-200 rounded-full h-4 mb-2 overflow-hidden">
+                <div 
+                  className="bg-[#8AAA19] h-full rounded-full transition-all duration-500 ease-out"
+                  style={{ width: `${importProgress}%` }}
+                ></div>
+              </div>
+              <p className="text-sm text-gray-500">{importProgress}%</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Resultados */}
+      {showResultModal && importResult && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-8 space-y-6">
+          {/* Resultado principal con contadores */}
+          <div className="rounded-xl shadow-lg p-8 text-center bg-white border-2 border-[#8AAA19]">
+            {importResult.success > 0 ? (
+              <FaCheckCircle className="text-green-600 text-6xl mx-auto mb-4" />
+            ) : (
+              <FaExclamationTriangle className="text-red-600 text-6xl mx-auto mb-4" />
+            )}
+            <h3 className="text-2xl font-bold text-[#010139] mb-4">
+              {importResult.success > 0 ? '✅ Importación Completada' : '⚠️ Importación con Errores'}
+            </h3>
+            
+            {/* Contadores principales */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+              <div className="bg-green-50 rounded-lg p-4 border border-green-200">
+                <p className="text-sm text-green-700 font-semibold">Pólizas Nuevas</p>
+                <p className="text-3xl font-bold text-green-600">{importResult.success || 0}</p>
+              </div>
+              
+              <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                <p className="text-sm text-blue-700 font-semibold">Clientes Nuevos</p>
+                <p className="text-3xl font-bold text-blue-600">{importResult.clientsCreated || 0}</p>
+              </div>
+              
+              <div className="bg-purple-50 rounded-lg p-4 border border-purple-200">
+                <p className="text-sm text-purple-700 font-semibold">Clientes Actualizados</p>
+                <p className="text-3xl font-bold text-purple-600">{importResult.clientsUpdated || 0}</p>
+              </div>
+            </div>
+            
+            <p className="text-sm text-gray-600">
+              Total de clientes procesados: <strong>{(importResult.clientsCreated || 0) + (importResult.clientsUpdated || 0)}</strong>
             </p>
           </div>
 
-          {importResult.errors && importResult.errors.length > 0 && (
-            <div className="bg-amber-50 border-2 border-amber-200 rounded-xl p-6">
-              <h4 className="text-lg font-bold text-amber-800 mb-4">
-                Registros No Procesados ({importResult.errors.length})
-              </h4>
-              <ul className="space-y-2 text-sm text-amber-700">
-                {importResult.errors.slice(0, 10).map((error: any, idx: number) => (
-                  <li key={idx}>
-                    <strong>{error.row || error.policy}:</strong> {error.message}
-                  </li>
-                ))}
-              </ul>
+          {/* Pólizas Duplicadas (separado de errores) */}
+          {importResult.errors && importResult.errors.filter((e: any) => e.isDuplicate).length > 0 && (
+            <div className="bg-blue-50 border-2 border-blue-300 rounded-xl overflow-hidden">
+              <button
+                onClick={() => setShowDuplicates(!showDuplicates)}
+                className="w-full flex items-center justify-between p-4 hover:bg-blue-100 transition"
+              >
+                <div className="flex items-center gap-3">
+                  <FaInfoCircle className="text-blue-600 text-xl" />
+                  <h4 className="text-lg font-bold text-blue-800">
+                    Pólizas ya Existentes ({importResult.errors.filter((e: any) => e.isDuplicate).length})
+                  </h4>
+                </div>
+                {showDuplicates ? <FaChevronUp className="text-blue-600" /> : <FaChevronDown className="text-blue-600" />}
+              </button>
+              
+              {showDuplicates && (
+                <div className="p-4 pt-0 space-y-2 max-h-60 overflow-y-auto">
+                  {importResult.errors.filter((e: any) => e.isDuplicate).map((error: any, idx: number) => (
+                    <div key={idx} className="bg-white rounded p-3 border-l-4 border-blue-500 text-sm">
+                      <p className="font-semibold text-blue-900">Fila {error.row}</p>
+                      <p className="text-blue-700">{error.message}</p>
+                      <p className="text-xs text-blue-600 mt-1">💡 Esta póliza ya está registrada en la base de datos</p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
-          <button
-            onClick={() => router.push('/db')}
-            className="w-full px-6 py-3 bg-[#010139] text-white rounded-lg hover:bg-[#8AAA19] transition-all transform hover:scale-105"
-          >
-            Ir a Base de Datos
-          </button>
+          {/* Errores Reales */}
+          {importResult.errors && importResult.errors.filter((e: any) => !e.isDuplicate).length > 0 && (
+            <div className="bg-red-50 border-2 border-red-300 rounded-xl overflow-hidden">
+              <button
+                onClick={() => setShowErrors(!showErrors)}
+                className="w-full flex items-center justify-between p-4 hover:bg-red-100 transition"
+              >
+                <div className="flex items-center gap-3">
+                  <FaExclamationTriangle className="text-red-600 text-xl" />
+                  <h4 className="text-lg font-bold text-red-800">
+                    Errores de Importación ({importResult.errors.filter((e: any) => !e.isDuplicate).length})
+                  </h4>
+                </div>
+                {showErrors ? <FaChevronUp className="text-red-600" /> : <FaChevronDown className="text-red-600" />}
+              </button>
+              
+              {showErrors && (
+                <div className="p-4 pt-0 space-y-3 max-h-96 overflow-y-auto">
+                  {importResult.errors.filter((e: any) => !e.isDuplicate).map((error: any, idx: number) => {
+                    // Determinar el tipo de error y el tooltip de ayuda
+                    let tooltipText = '';
+                    let errorIcon = '❌';
+                    
+                    if (error.message?.includes('Broker no encontrado') || error.message?.includes('profile')) {
+                      tooltipText = 'El email del broker no existe en el sistema. Verifica el email o crea el broker primero.';
+                      errorIcon = '👤';
+                    } else if (error.message?.includes('Aseguradora no encontrada')) {
+                      tooltipText = 'La aseguradora no existe en el sistema. Verifica el nombre o créala en la sección de Aseguradoras.';
+                      errorIcon = '🏢';
+                    } else if (error.message?.includes('obligatorio')) {
+                      tooltipText = 'Falta información requerida. Completa todos los campos obligatorios en el CSV.';
+                      errorIcon = '📝';
+                    } else if (error.message?.includes('Error creando póliza')) {
+                      tooltipText = 'Error en la base de datos al crear la póliza. Verifica los datos y vuelve a intentar.';
+                      errorIcon = '⚠️';
+                    } else {
+                      tooltipText = 'Error inesperado. Revisa los datos del CSV o contacta al administrador.';
+                    }
+                    
+                    return (
+                      <div key={idx} className="bg-white rounded-lg p-4 border-l-4 border-red-500 shadow-sm">
+                        <div className="flex items-start gap-3">
+                          <span className="text-2xl flex-shrink-0">{errorIcon}</span>
+                          <div className="flex-1">
+                            <p className="font-semibold text-red-900 text-sm">
+                              Fila {error.row || 'N/A'}
+                            </p>
+                            <p className="text-red-700 text-sm mt-1">{error.message}</p>
+                            
+                            {/* Tooltip de ayuda */}
+                            <div className="mt-2 flex items-start gap-2 bg-blue-50 border border-blue-200 rounded p-2">
+                              <FaInfoCircle className="text-blue-600 mt-0.5 flex-shrink-0" />
+                              <p className="text-xs text-blue-800">
+                                <strong>💡 Solución:</strong> {tooltipText}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Duplicados dentro del CSV */}
+          {importResult.csvDuplicates && importResult.csvDuplicates.length > 0 && (
+            <div className="bg-gray-50 border-2 border-gray-300 rounded-xl overflow-hidden">
+              <button
+                onClick={() => setShowCsvDuplicates(!showCsvDuplicates)}
+                className="w-full flex items-center justify-between p-4 hover:bg-gray-100 transition"
+              >
+                <div className="flex items-center gap-3">
+                  <FaFileAlt className="text-gray-600 text-xl" />
+                  <h4 className="text-lg font-bold text-gray-800">
+                    Duplicados en el CSV ({importResult.csvDuplicates.length})
+                  </h4>
+                </div>
+                {showCsvDuplicates ? <FaChevronUp className="text-gray-600" /> : <FaChevronDown className="text-gray-600" />}
+              </button>
+              
+              {showCsvDuplicates && (
+                <div className="p-4 pt-0 space-y-2 max-h-60 overflow-y-auto">
+                  {importResult.csvDuplicates.map((duplicate: any, idx: number) => (
+                    <div key={idx} className="bg-white rounded p-3 border-l-4 border-gray-500 text-sm">
+                      <p className="font-semibold text-gray-900">Fila {duplicate.row}</p>
+                      <p className="text-gray-700">{duplicate.message}</p>
+                      <div className="mt-2 flex items-start gap-2 bg-blue-50 border border-blue-200 rounded p-2">
+                        <FaInfoCircle className="text-blue-600 mt-0.5 flex-shrink-0" />
+                        <p className="text-xs text-blue-800">
+                          <strong>💡 Información:</strong> Esta póliza aparece más de una vez en el archivo CSV. Solo se mantuvo una de ellas para evitar duplicados.
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Registros excluidos (broker no encontrado) */}
+          {importResult.excluded && importResult.excluded.length > 0 && (
+            <div className="bg-amber-50 border-2 border-amber-300 rounded-xl overflow-hidden">
+              <button
+                onClick={() => setShowExcluded(!showExcluded)}
+                className="w-full flex items-center justify-between p-4 hover:bg-amber-100 transition"
+              >
+                <div className="flex items-center gap-3">
+                  <FaExclamationTriangle className="text-amber-600 text-xl" />
+                  <h4 className="text-lg font-bold text-amber-800">
+                    Registros Excluidos - Broker No Encontrado ({importResult.excluded.length})
+                  </h4>
+                </div>
+                {showExcluded ? <FaChevronUp className="text-amber-600" /> : <FaChevronDown className="text-amber-600" />}
+              </button>
+              
+              {showExcluded && (
+                <div className="p-4 pt-0 space-y-2 max-h-60 overflow-y-auto">
+                  {importResult.excluded.map((excluded: any, idx: number) => (
+                    <div key={idx} className="bg-white rounded p-3 border-l-4 border-amber-500 text-sm">
+                      <p className="font-semibold text-amber-900">Fila {excluded.row}</p>
+                      <p className="text-amber-700">{excluded.message}</p>
+                      <div className="mt-2 flex items-start gap-2 bg-blue-50 border border-blue-200 rounded p-2">
+                        <FaInfoCircle className="text-blue-600 mt-0.5 flex-shrink-0" />
+                        <p className="text-xs text-blue-800">
+                          <strong>💡 Solución:</strong> El broker con este email no existe. Crea el broker primero o verifica el email en el CSV.
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+              {/* Botón Confirmar para cerrar modal y redirigir */}
+              <button
+                onClick={() => {
+                  setRedirecting(true);
+                  setShowResultModal(false);
+                  setImportResult(null);
+                  setShowPreview(false);
+                  setFile(null);
+                  setValidRows([]);
+                  setErrorRows([]);
+                  // Usar setTimeout 0 para que el loading se muestre antes de la redirección
+                  setTimeout(() => {
+                    router.push('/db');
+                  }, 0);
+                }}
+                disabled={redirecting}
+                className="w-full px-6 py-3 bg-[#010139] text-white rounded-lg hover:bg-[#8AAA19] transition-all transform hover:scale-105 font-bold text-lg disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {redirecting ? 'Redirigiendo...' : '✓ Confirmar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Loading durante redirección */}
+      {redirecting && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl shadow-2xl p-8">
+            <div className="flex flex-col items-center gap-4">
+              <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-[#8AAA19]"></div>
+              <p className="text-[#010139] font-semibold text-lg">Redirigiendo a Base de Datos...</p>
+            </div>
+          </div>
         </div>
       )}
     </div>
