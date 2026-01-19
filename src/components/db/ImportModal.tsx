@@ -16,6 +16,7 @@ interface ImportError {
 interface ImportResult {
   success: number;
   errors: ImportError[];
+  excluded: ImportError[];
 }
 
 export default function ImportModal({ onClose }: ImportModalProps) {
@@ -25,8 +26,10 @@ export default function ImportModal({ onClose }: ImportModalProps) {
   const [preview, setPreview] = useState<Record<string, string>[]>([]);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [insurers, setInsurers] = useState<string[]>([]);
+  const [userRole, setUserRole] = useState<string>('');
+  const [userBrokerId, setUserBrokerId] = useState<string | null>(null);
 
-  // Cargar aseguradoras al montar el componente
+  // Cargar aseguradoras y datos del usuario al montar el componente
   useEffect(() => {
     async function loadInsurers() {
       try {
@@ -43,7 +46,24 @@ export default function ImportModal({ onClose }: ImportModalProps) {
         console.error('Error cargando aseguradoras:', error);
       }
     }
+    
+    async function loadUserData() {
+      try {
+        const response = await fetch('/api/user/profile');
+        const data = await response.json();
+        if (data.profile) {
+          setUserRole(data.profile.role);
+          if (data.profile.role === 'broker' && data.broker) {
+            setUserBrokerId(data.broker.id);
+          }
+        }
+      } catch (error) {
+        console.error('Error cargando datos del usuario:', error);
+      }
+    }
+    
     loadInsurers();
+    loadUserData();
   }, []);
 
   const downloadTemplate = () => {
@@ -62,10 +82,10 @@ export default function ImportModal({ onClose }: ImportModalProps) {
     
     setFile(selectedFile);
     
-    // Parse preview
+    // Parse preview (primeras 10 filas)
     const text = await selectedFile.text();
     const parsed = await parseCSV(text);
-    setPreview(parsed.slice(0, 5));
+    setPreview(parsed.slice(0, 10));
     setStep("preview");
   };
 
@@ -75,6 +95,10 @@ export default function ImportModal({ onClose }: ImportModalProps) {
     setLoading(true);
     const formData = new FormData();
     formData.append("file", file);
+    formData.append("userRole", userRole);
+    if (userBrokerId) {
+      formData.append("userBrokerId", userBrokerId);
+    }
 
     try {
       const response = await fetch("/api/db/import", {
@@ -235,7 +259,12 @@ export default function ImportModal({ onClose }: ImportModalProps) {
 
           {step === "preview" && preview.length > 0 && (
             <div className="space-y-4">
-              <h3 className="font-semibold text-gray-800">Vista previa (primeras 5 filas)</h3>
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                <h3 className="font-semibold text-blue-900 mb-1">Vista previa (primeras 10 filas)</h3>
+                <p className="text-xs text-blue-700">
+                  Verifica que las columnas se hayan leído correctamente. {userRole === 'broker' && "La columna broker_email será ignorada y se usará tu email."}
+                </p>
+              </div>
               
               <div className="overflow-x-auto">
                 <table className="min-w-full divide-y divide-gray-200">
@@ -287,25 +316,63 @@ export default function ImportModal({ onClose }: ImportModalProps) {
 
           {step === "result" && result && (
             <div className="space-y-4">
-              <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                <p className="text-green-800 font-semibold">
-                  ✓ {result.success} registros importados exitosamente
+              {/* Resumen */}
+              <div className="bg-gradient-to-r from-green-50 to-blue-50 border-2 border-green-300 rounded-lg p-4">
+                <p className="text-green-900 font-bold text-lg">
+                  ✓ {result.success} pólizas importadas exitosamente
                 </p>
+                {result.excluded.length > 0 && (
+                  <p className="text-blue-700 text-sm mt-1">
+                    {result.excluded.length} filas excluidas (duplicados)
+                  </p>
+                )}
+                {result.errors.length > 0 && (
+                  <p className="text-amber-700 text-sm mt-1">
+                    {result.errors.length} filas rechazadas por errores
+                  </p>
+                )}
               </div>
 
-              {result.errors.length > 0 && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                  <h4 className="text-red-800 font-semibold mb-2">
-                    <FaExclamationTriangle className="inline mr-2" />
-                    {result.errors.length} errores encontrados
+              {/* Exclusiones */}
+              {result.excluded.length > 0 && (
+                <div className="bg-blue-50 border border-blue-300 rounded-lg p-4">
+                  <h4 className="text-blue-900 font-semibold mb-2">
+                    📋 Filas Excluidas ({result.excluded.length})
                   </h4>
-                  <ul className="text-sm text-red-700 space-y-1">
-                    {result.errors.map((error, idx) => (
-                      <li key={idx}>
-                        Fila {error.row}: {error.message}
-                      </li>
-                    ))}
-                  </ul>
+                  <p className="text-xs text-blue-700 mb-2">
+                    Estas filas fueron excluidas automáticamente porque son duplicados de pólizas.
+                  </p>
+                  <div className="max-h-40 overflow-y-auto">
+                    <ul className="text-sm text-blue-800 space-y-1">
+                      {result.excluded.map((excluded, idx) => (
+                        <li key={idx} className="text-xs">
+                          <strong>Fila {excluded.row}:</strong> {excluded.message}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              )}
+
+              {/* Errores */}
+              {result.errors.length > 0 && (
+                <div className="bg-red-50 border border-red-300 rounded-lg p-4">
+                  <h4 className="text-red-900 font-semibold mb-2">
+                    <FaExclamationTriangle className="inline mr-2" />
+                    Filas Rechazadas ({result.errors.length})
+                  </h4>
+                  <p className="text-xs text-red-700 mb-2">
+                    Estas filas no pudieron importarse por los siguientes motivos:
+                  </p>
+                  <div className="max-h-60 overflow-y-auto">
+                    <ul className="text-sm text-red-800 space-y-1">
+                      {result.errors.map((error, idx) => (
+                        <li key={idx} className="text-xs">
+                          <strong>Fila {error.row}:</strong> {error.message}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 </div>
               )}
 

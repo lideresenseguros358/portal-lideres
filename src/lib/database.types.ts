@@ -431,6 +431,50 @@ export type Database = {
         }
         Relationships: []
       }
+      aseguradoras_catalog: {
+        Row: {
+          code: string
+          created_at: string | null
+          display_order: number | null
+          id: string
+          insurer_id: string | null
+          is_active: boolean | null
+          name: string
+          short_name: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          code: string
+          created_at?: string | null
+          display_order?: number | null
+          id?: string
+          insurer_id?: string | null
+          is_active?: boolean | null
+          name: string
+          short_name?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          code?: string
+          created_at?: string | null
+          display_order?: number | null
+          id?: string
+          insurer_id?: string | null
+          is_active?: boolean | null
+          name?: string
+          short_name?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "aseguradoras_catalog_insurer_id_fkey"
+            columns: ["insurer_id"]
+            isOneToOne: false
+            referencedRelation: "insurers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_logs: {
         Row: {
           action: string
@@ -1112,6 +1156,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "case_checklist_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases_with_catalogs"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "case_checklist_completed_by_fkey"
             columns: ["completed_by"]
             isOneToOne: false
@@ -1151,6 +1202,13 @@ export type Database = {
             columns: ["case_id"]
             isOneToOne: false
             referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "case_comments_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases_with_catalogs"
             referencedColumns: ["id"]
           },
         ]
@@ -1195,6 +1253,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "case_files_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases_with_catalogs"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "case_files_created_by_fkey"
             columns: ["created_by"]
             isOneToOne: false
@@ -1234,6 +1299,13 @@ export type Database = {
             columns: ["case_id"]
             isOneToOne: false
             referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "case_history_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases_with_catalogs"
             referencedColumns: ["id"]
           },
         ]
@@ -1280,17 +1352,154 @@ export type Database = {
             referencedRelation: "cases"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "case_progress_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: true
+            referencedRelation: "cases_with_catalogs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      case_security_logs: {
+        Row: {
+          action_type: string
+          actor_email: string | null
+          actor_id: string | null
+          actor_role: string | null
+          case_id: string
+          created_at: string
+          field_changed: string | null
+          id: string
+          ip_address: unknown
+          metadata: Json | null
+          new_value: string | null
+          old_value: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          action_type: string
+          actor_email?: string | null
+          actor_id?: string | null
+          actor_role?: string | null
+          case_id: string
+          created_at?: string
+          field_changed?: string | null
+          id?: string
+          ip_address?: unknown
+          metadata?: Json | null
+          new_value?: string | null
+          old_value?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          action_type?: string
+          actor_email?: string | null
+          actor_id?: string | null
+          actor_role?: string | null
+          case_id?: string
+          created_at?: string
+          field_changed?: string | null
+          id?: string
+          ip_address?: unknown
+          metadata?: Json | null
+          new_value?: string | null
+          old_value?: string | null
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "case_security_logs_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "case_security_logs_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "case_security_logs_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases_with_catalogs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      case_ticket_history: {
+        Row: {
+          case_id: string
+          changed_by: string | null
+          created_at: string | null
+          id: string
+          metadata: Json | null
+          new_ticket: string
+          old_ticket: string | null
+          reason: string | null
+        }
+        Insert: {
+          case_id: string
+          changed_by?: string | null
+          created_at?: string | null
+          id?: string
+          metadata?: Json | null
+          new_ticket: string
+          old_ticket?: string | null
+          reason?: string | null
+        }
+        Update: {
+          case_id?: string
+          changed_by?: string | null
+          created_at?: string | null
+          id?: string
+          metadata?: Json | null
+          new_ticket?: string
+          old_ticket?: string | null
+          reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "case_ticket_history_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "case_ticket_history_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases_with_catalogs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "case_ticket_history_changed_by_fkey"
+            columns: ["changed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
         ]
       }
       cases: {
         Row: {
           adelanto_id: string | null
           admin_id: string | null
+          aplazar_months: number | null
+          aplazar_notify_at: string | null
           aplazar_reason: string | null
+          aseguradora_code: string | null
           broker_id: string | null
           canal: string
           case_number: string | null
           claimed_by_broker_id: string | null
+          classification_changed_count: number | null
+          classified_at: string | null
           client_id: string | null
           client_name: string | null
           content_hash: string | null
@@ -1301,8 +1510,10 @@ export type Database = {
           deleted_reason: string | null
           direct_payment: boolean | null
           discount_to_broker: boolean | null
+          final_policy_number: string | null
           id: string
           insurer_id: string | null
+          is_classified: boolean | null
           is_deleted: boolean | null
           is_verified: boolean | null
           management_type: string | null
@@ -1311,14 +1522,29 @@ export type Database = {
           payment_method: string | null
           policy_id: string | null
           policy_number: string | null
+          policy_type: Database["public"]["Enums"]["policy_type_enum"] | null
           postponed_until: string | null
           premium: number | null
+          ramo_code: string | null
+          reopen_count: number | null
+          reopened_from_ticket: string | null
           section: Database["public"]["Enums"]["case_section_enum"]
+          seen_by_broker: boolean | null
+          sla_accumulated_pause_days: number | null
           sla_date: string | null
           sla_days: number | null
+          sla_paused: boolean | null
+          sla_paused_at: string | null
+          sla_paused_reason: string | null
           status: Database["public"]["Enums"]["case_status_enum"]
+          status_v2:
+            | Database["public"]["Enums"]["case_status_simplified"]
+            | null
           thread_id: string | null
+          ticket_can_regenerate: boolean | null
+          ticket_generated_at: string | null
           ticket_ref: string | null
+          tramite_code: string | null
           updated_at: string
           visto: boolean
           visto_at: string | null
@@ -1327,11 +1553,16 @@ export type Database = {
         Insert: {
           adelanto_id?: string | null
           admin_id?: string | null
+          aplazar_months?: number | null
+          aplazar_notify_at?: string | null
           aplazar_reason?: string | null
+          aseguradora_code?: string | null
           broker_id?: string | null
           canal?: string
           case_number?: string | null
           claimed_by_broker_id?: string | null
+          classification_changed_count?: number | null
+          classified_at?: string | null
           client_id?: string | null
           client_name?: string | null
           content_hash?: string | null
@@ -1342,8 +1573,10 @@ export type Database = {
           deleted_reason?: string | null
           direct_payment?: boolean | null
           discount_to_broker?: boolean | null
+          final_policy_number?: string | null
           id?: string
           insurer_id?: string | null
+          is_classified?: boolean | null
           is_deleted?: boolean | null
           is_verified?: boolean | null
           management_type?: string | null
@@ -1352,14 +1585,29 @@ export type Database = {
           payment_method?: string | null
           policy_id?: string | null
           policy_number?: string | null
+          policy_type?: Database["public"]["Enums"]["policy_type_enum"] | null
           postponed_until?: string | null
           premium?: number | null
+          ramo_code?: string | null
+          reopen_count?: number | null
+          reopened_from_ticket?: string | null
           section?: Database["public"]["Enums"]["case_section_enum"]
+          seen_by_broker?: boolean | null
+          sla_accumulated_pause_days?: number | null
           sla_date?: string | null
           sla_days?: number | null
+          sla_paused?: boolean | null
+          sla_paused_at?: string | null
+          sla_paused_reason?: string | null
           status?: Database["public"]["Enums"]["case_status_enum"]
+          status_v2?:
+            | Database["public"]["Enums"]["case_status_simplified"]
+            | null
           thread_id?: string | null
+          ticket_can_regenerate?: boolean | null
+          ticket_generated_at?: string | null
           ticket_ref?: string | null
+          tramite_code?: string | null
           updated_at?: string
           visto?: boolean
           visto_at?: string | null
@@ -1368,11 +1616,16 @@ export type Database = {
         Update: {
           adelanto_id?: string | null
           admin_id?: string | null
+          aplazar_months?: number | null
+          aplazar_notify_at?: string | null
           aplazar_reason?: string | null
+          aseguradora_code?: string | null
           broker_id?: string | null
           canal?: string
           case_number?: string | null
           claimed_by_broker_id?: string | null
+          classification_changed_count?: number | null
+          classified_at?: string | null
           client_id?: string | null
           client_name?: string | null
           content_hash?: string | null
@@ -1383,8 +1636,10 @@ export type Database = {
           deleted_reason?: string | null
           direct_payment?: boolean | null
           discount_to_broker?: boolean | null
+          final_policy_number?: string | null
           id?: string
           insurer_id?: string | null
+          is_classified?: boolean | null
           is_deleted?: boolean | null
           is_verified?: boolean | null
           management_type?: string | null
@@ -1393,14 +1648,29 @@ export type Database = {
           payment_method?: string | null
           policy_id?: string | null
           policy_number?: string | null
+          policy_type?: Database["public"]["Enums"]["policy_type_enum"] | null
           postponed_until?: string | null
           premium?: number | null
+          ramo_code?: string | null
+          reopen_count?: number | null
+          reopened_from_ticket?: string | null
           section?: Database["public"]["Enums"]["case_section_enum"]
+          seen_by_broker?: boolean | null
+          sla_accumulated_pause_days?: number | null
           sla_date?: string | null
           sla_days?: number | null
+          sla_paused?: boolean | null
+          sla_paused_at?: string | null
+          sla_paused_reason?: string | null
           status?: Database["public"]["Enums"]["case_status_enum"]
+          status_v2?:
+            | Database["public"]["Enums"]["case_status_simplified"]
+            | null
           thread_id?: string | null
+          ticket_can_regenerate?: boolean | null
+          ticket_generated_at?: string | null
           ticket_ref?: string | null
+          tramite_code?: string | null
           updated_at?: string
           visto?: boolean
           visto_at?: string | null
@@ -3991,6 +4261,42 @@ export type Database = {
           },
         ]
       }
+      ramos_catalog: {
+        Row: {
+          code: string
+          created_at: string | null
+          description: string | null
+          display_order: number | null
+          id: string
+          is_active: boolean | null
+          name: string
+          sla_days_default: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          code: string
+          created_at?: string | null
+          description?: string | null
+          display_order?: number | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          sla_days_default?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          code?: string
+          created_at?: string | null
+          description?: string | null
+          display_order?: number | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          sla_days_default?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       retained_commissions: {
         Row: {
           applied_advance_id: string | null
@@ -4286,6 +4592,160 @@ export type Database = {
         }
         Relationships: []
       }
+      ticket_sequences: {
+        Row: {
+          aseguradora_code: string
+          created_at: string | null
+          id: string
+          last_correlative: number | null
+          ramo_code: string
+          tramite_code: string
+          updated_at: string | null
+          year_month: string
+        }
+        Insert: {
+          aseguradora_code: string
+          created_at?: string | null
+          id?: string
+          last_correlative?: number | null
+          ramo_code: string
+          tramite_code: string
+          updated_at?: string | null
+          year_month: string
+        }
+        Update: {
+          aseguradora_code?: string
+          created_at?: string | null
+          id?: string
+          last_correlative?: number | null
+          ramo_code?: string
+          tramite_code?: string
+          updated_at?: string | null
+          year_month?: string
+        }
+        Relationships: []
+      }
+      tramites_catalog: {
+        Row: {
+          code: string
+          created_at: string | null
+          description: string | null
+          display_order: number | null
+          id: string
+          is_active: boolean | null
+          name: string
+          requires_policy_number: boolean | null
+          sla_modifier: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          code: string
+          created_at?: string | null
+          description?: string | null
+          display_order?: number | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          requires_policy_number?: boolean | null
+          sla_modifier?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          code?: string
+          created_at?: string | null
+          description?: string | null
+          display_order?: number | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          requires_policy_number?: boolean | null
+          sla_modifier?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      unclassified_emails: {
+        Row: {
+          assigned_at: string | null
+          assigned_by: string | null
+          assigned_to_case_id: string | null
+          body_html: string | null
+          body_text: string | null
+          confidence_score: number | null
+          created_at: string | null
+          from_email: string
+          from_name: string | null
+          grouped_until: string | null
+          id: string
+          message_id: string | null
+          metadata: Json | null
+          received_at: string
+          status: string | null
+          subject: string | null
+          thread_id: string | null
+        }
+        Insert: {
+          assigned_at?: string | null
+          assigned_by?: string | null
+          assigned_to_case_id?: string | null
+          body_html?: string | null
+          body_text?: string | null
+          confidence_score?: number | null
+          created_at?: string | null
+          from_email: string
+          from_name?: string | null
+          grouped_until?: string | null
+          id?: string
+          message_id?: string | null
+          metadata?: Json | null
+          received_at: string
+          status?: string | null
+          subject?: string | null
+          thread_id?: string | null
+        }
+        Update: {
+          assigned_at?: string | null
+          assigned_by?: string | null
+          assigned_to_case_id?: string | null
+          body_html?: string | null
+          body_text?: string | null
+          confidence_score?: number | null
+          created_at?: string | null
+          from_email?: string
+          from_name?: string | null
+          grouped_until?: string | null
+          id?: string
+          message_id?: string | null
+          metadata?: Json | null
+          received_at?: string
+          status?: string | null
+          subject?: string | null
+          thread_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "unclassified_emails_assigned_by_fkey"
+            columns: ["assigned_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "unclassified_emails_assigned_to_case_id_fkey"
+            columns: ["assigned_to_case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "unclassified_emails_assigned_to_case_id_fkey"
+            columns: ["assigned_to_case_id"]
+            isOneToOne: false
+            referencedRelation: "cases_with_catalogs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_requests: {
         Row: {
           additional_fields: Json | null
@@ -4376,6 +4836,45 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      vacation_config: {
+        Row: {
+          auto_reassign: boolean | null
+          backup_email: string | null
+          created_at: string | null
+          id: string
+          is_on_vacation: boolean | null
+          master_email: string
+          master_name: string
+          updated_at: string | null
+          vacation_end: string | null
+          vacation_start: string | null
+        }
+        Insert: {
+          auto_reassign?: boolean | null
+          backup_email?: string | null
+          created_at?: string | null
+          id?: string
+          is_on_vacation?: boolean | null
+          master_email: string
+          master_name: string
+          updated_at?: string | null
+          vacation_end?: string | null
+          vacation_start?: string | null
+        }
+        Update: {
+          auto_reassign?: boolean | null
+          backup_email?: string | null
+          created_at?: string | null
+          id?: string
+          is_on_vacation?: boolean | null
+          master_email?: string
+          master_name?: string
+          updated_at?: string | null
+          vacation_end?: string | null
+          vacation_start?: string | null
+        }
+        Relationships: []
       }
       workflow_steps: {
         Row: {
@@ -4648,6 +5147,161 @@ export type Database = {
           },
         ]
       }
+      cases_with_catalogs: {
+        Row: {
+          adelanto_id: string | null
+          admin_email: string | null
+          admin_id: string | null
+          admin_name: string | null
+          aplazar_reason: string | null
+          aseguradora_code: string | null
+          aseguradora_name: string | null
+          broker_email: string | null
+          broker_id: string | null
+          broker_name: string | null
+          canal: string | null
+          case_number: string | null
+          claimed_by_broker_id: string | null
+          client_id: string | null
+          client_name: string | null
+          content_hash: string | null
+          created_at: string | null
+          created_by: string | null
+          ctype: Database["public"]["Enums"]["case_type_enum"] | null
+          deleted_at: string | null
+          deleted_reason: string | null
+          direct_payment: boolean | null
+          discount_to_broker: boolean | null
+          id: string | null
+          insurer_id: string | null
+          is_deleted: boolean | null
+          is_verified: boolean | null
+          management_type: string | null
+          message_id: string | null
+          notes: string | null
+          payment_method: string | null
+          policy_id: string | null
+          policy_number: string | null
+          policy_type: Database["public"]["Enums"]["policy_type_enum"] | null
+          postponed_until: string | null
+          premium: number | null
+          ramo_code: string | null
+          ramo_name: string | null
+          section: Database["public"]["Enums"]["case_section_enum"] | null
+          seen_by_broker: boolean | null
+          sla_date: string | null
+          sla_days: number | null
+          status: Database["public"]["Enums"]["case_status_enum"] | null
+          thread_id: string | null
+          ticket_ref: string | null
+          tramite_code: string | null
+          tramite_name: string | null
+          updated_at: string | null
+          visto: boolean | null
+          visto_at: string | null
+          visto_by: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cases_admin_id_fkey"
+            columns: ["admin_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cases_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cases_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_ach_validation"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cases_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_ach_info"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cases_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_bank_info"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cases_claimed_by_broker_id_fkey"
+            columns: ["claimed_by_broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cases_claimed_by_broker_id_fkey"
+            columns: ["claimed_by_broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_ach_validation"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cases_claimed_by_broker_id_fkey"
+            columns: ["claimed_by_broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_ach_info"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cases_claimed_by_broker_id_fkey"
+            columns: ["claimed_by_broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_bank_info"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cases_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cases_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cases_insurer_id_fkey"
+            columns: ["insurer_id"]
+            isOneToOne: false
+            referencedRelation: "insurers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cases_policy_id_fkey"
+            columns: ["policy_id"]
+            isOneToOne: false
+            referencedRelation: "policies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cases_visto_by_fkey"
+            columns: ["visto_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fortnight_details_full: {
         Row: {
           assa_code: string | null
@@ -4882,6 +5536,10 @@ export type Database = {
         Args: { p_group_id: string }
         Returns: number
       }
+      calculate_effective_sla_date: {
+        Args: { p_case_id: string }
+        Returns: string
+      }
       clean_expired_is_tokens: { Args: never; Returns: undefined }
       cleanup_old_notification_hashes: { Args: never; Returns: undefined }
       cleanup_processed_temp_imports: { Args: never; Returns: number }
@@ -4920,6 +5578,14 @@ export type Database = {
         Returns: string
       }
       fix_text_encoding: { Args: { input_text: string }; Returns: string }
+      generate_ticket_number: {
+        Args: {
+          p_aseguradora_code: string
+          p_ramo_code: string
+          p_tramite_code: string
+        }
+        Returns: string
+      }
       get_brokers_for_import: {
         Args: never
         Returns: {
@@ -4962,6 +5628,15 @@ export type Database = {
         }[]
       }
       get_missing_fields: { Args: { temp_id: string }; Returns: string[] }
+      get_next_ticket_correlative: {
+        Args: {
+          p_aseguradora_code: string
+          p_ramo_code: string
+          p_tramite_code: string
+          p_year_month: string
+        }
+        Returns: number
+      }
       get_pending_groups: {
         Args: never
         Returns: {
@@ -5039,6 +5714,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      reopen_aplazado_case: {
+        Args: { p_case_id: string; p_create_new_ticket?: boolean }
+        Returns: string
+      }
       set_user_role:
         | {
             Args: {
@@ -5052,6 +5731,10 @@ export type Database = {
             Args: { p_broker_id?: string; p_email: string; p_role: string }
             Returns: undefined
           }
+      toggle_case_sla_pause: {
+        Args: { p_case_id: string; p_pause: boolean; p_reason?: string }
+        Returns: undefined
+      }
       validate_broker_for_ach: {
         Args: { broker_id: string }
         Returns: {
@@ -5094,6 +5777,15 @@ export type Database = {
         | "PENDIENTE_DOCUMENTACION"
         | "COTIZANDO"
         | "REVISAR_ORIGEN"
+      case_status_simplified:
+        | "NUEVO"
+        | "EN_PROCESO"
+        | "PENDIENTE_CLIENTE"
+        | "PENDIENTE_BROKER"
+        | "ENVIADO"
+        | "APLAZADO"
+        | "CERRADO_APROBADO"
+        | "CERRADO_RECHAZADO"
       case_type_enum:
         | "COTIZACION"
         | "EMISION_GENERAL"
@@ -5119,6 +5811,15 @@ export type Database = {
         | "carnet_renewal"
         | "agenda_event"
       policy_status_enum: "ACTIVA" | "CANCELADA" | "VENCIDA"
+      policy_type_enum:
+        | "AUTO"
+        | "VIDA"
+        | "SALUD"
+        | "INCENDIO"
+        | "TODO_RIESGO"
+        | "RESPONSABILIDAD_CIVIL"
+        | "ACCIDENTES_PERSONALES"
+        | "OTROS"
       porcents: "1" | "0.94" | "0.82" | "0.8" | "0.7" | "0.6" | "0.5" | "0"
       role_enum: "master" | "broker"
       role_t: "master" | "broker"
@@ -5283,6 +5984,16 @@ export const Constants = {
         "COTIZANDO",
         "REVISAR_ORIGEN",
       ],
+      case_status_simplified: [
+        "NUEVO",
+        "EN_PROCESO",
+        "PENDIENTE_CLIENTE",
+        "PENDIENTE_BROKER",
+        "ENVIADO",
+        "APLAZADO",
+        "CERRADO_APROBADO",
+        "CERRADO_RECHAZADO",
+      ],
       case_type_enum: [
         "COTIZACION",
         "EMISION_GENERAL",
@@ -5310,6 +6021,16 @@ export const Constants = {
         "agenda_event",
       ],
       policy_status_enum: ["ACTIVA", "CANCELADA", "VENCIDA"],
+      policy_type_enum: [
+        "AUTO",
+        "VIDA",
+        "SALUD",
+        "INCENDIO",
+        "TODO_RIESGO",
+        "RESPONSABILIDAD_CIVIL",
+        "ACCIDENTES_PERSONALES",
+        "OTROS",
+      ],
       porcents: ["1", "0.94", "0.82", "0.8", "0.7", "0.6", "0.5", "0"],
       role_enum: ["master", "broker"],
       role_t: ["master", "broker"],
