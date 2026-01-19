@@ -19,6 +19,7 @@ type DocumentType = 'cedula' | 'pasaporte' | 'ruc';
 const CEDULA_PREFIXES = [
   'PE',  // Panamá Este
   'E',   // Extranjero
+  'N',   // Naturalizado
   'PN',  // Panamá Norte
   'PI',  // Panamá Interior
   '1',   // Bocas del Toro

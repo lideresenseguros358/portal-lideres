@@ -30,8 +30,8 @@ export default function PolicyNumberInput({
   className = '',
   hasError = false
 }: PolicyNumberInputProps) {
-  const isInitialMount = useRef(true);
-  const lastValueRef = useRef(value);
+  const lastValueRef = useRef('');
+  const hasInitialized = useRef(false);
   
   // Obtener configuración de la aseguradora
   const config = getPolicyFormatConfig(insurerName.toLowerCase().replace(/\s+/g, '-') as InsurerSlug);
@@ -39,34 +39,61 @@ export default function PolicyNumberInput({
   // Estados para múltiples inputs
   const [inputs, setInputs] = useState<string[]>([]);
 
-  // Inicializar inputs desde el value prop
+  // Inicializar inputs desde el value prop - REPLICANDO LÓGICA DE NationalIdInput
   useEffect(() => {
     if (!config) return;
     
-    if (value && value !== lastValueRef.current) {
-      lastValueRef.current = value;
-      
-      // Separar el valor según el separador configurado
-      if (config.inputCount === 1) {
-        setInputs([value]);
-      } else {
-        const separator = config.joinWith || '-';
-        const parts = value.split(separator);
-        setInputs(parts.length === config.inputCount ? parts : Array(config.inputCount).fill(''));
+    // Si no hay value, limpiar todo
+    if (!value || value.trim() === '') {
+      if (lastValueRef.current !== '') {
+        lastValueRef.current = '';
+        setInputs(Array(config.inputCount).fill(''));
       }
-    } else if (!value && inputs.length === 0) {
-      // Inicializar inputs vacíos
-      setInputs(Array(config.inputCount).fill(''));
+      return;
     }
     
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
+    // Si el value no ha cambiado, no hacer nada
+    if (value === lastValueRef.current) {
+      return;
+    }
+    
+    // Actualizar lastValueRef
+    lastValueRef.current = value;
+    hasInitialized.current = true;
+    
+    // Separar el valor según el separador configurado
+    if (config.inputCount === 1) {
+      setInputs([value]);
+    } else {
+      const separator = config.joinWith || '-';
+      const parts = value.split(separator);
+      
+      if (parts.length === config.inputCount) {
+        // Caso perfecto: el número de partes coincide con el esperado
+        setInputs(parts);
+      } else if (parts.length === 1 && parts[0] && parts[0].trim() !== '') {
+        // Caso sin guiones: solo hay un número (ej: "14713")
+        // Colocar "0" en los inputs anteriores y el valor en el último
+        const newInputs = Array(config.inputCount).fill('0');
+        newInputs[config.inputCount - 1] = parts[0];
+        setInputs(newInputs);
+      } else if (parts.length > config.inputCount) {
+        // Más partes de las esperadas: tomar solo las primeras
+        setInputs(parts.slice(0, config.inputCount));
+      } else {
+        // Menos partes de las esperadas: rellenar con vacíos
+        const newInputs = [...parts];
+        while (newInputs.length < config.inputCount) {
+          newInputs.push('');
+        }
+        setInputs(newInputs);
+      }
     }
   }, [value, config]);
 
   // Actualizar el valor cuando cambien los inputs
   useEffect(() => {
-    if (!isInitialMount.current && config && inputs.length === config.inputCount) {
+    if (hasInitialized.current && config && inputs.length === config.inputCount) {
       // Filtrar inputs vacíos para no incluirlos
       const filledInputs = inputs.filter(i => i.trim() !== '');
       
@@ -89,6 +116,7 @@ export default function PolicyNumberInput({
   }, [inputs, config, onChange]);
 
   const handleInputChange = (index: number, newValue: string) => {
+    hasInitialized.current = true; // Marcar como inicializado al primer cambio manual
     const newInputs = [...inputs];
     newInputs[index] = newValue;
     setInputs(newInputs);
