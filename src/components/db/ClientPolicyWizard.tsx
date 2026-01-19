@@ -10,6 +10,7 @@ import { POLICY_TYPES, checkSpecialOverride } from '@/lib/constants/policy-types
 import { getTodayLocalDate, addOneYearToDate } from '@/lib/utils/dates';
 import NationalIdInput from '@/components/ui/NationalIdInput';
 import PolicyNumberInput from '@/components/ui/PolicyNumberInput';
+import { normalizeToUpperCase } from '@/lib/utils/normalize-text';
 
 interface WizardProps {
   onClose: () => void;
@@ -378,9 +379,9 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
         const normalizedRenewalDate = formData.renewal_date?.trim() || null;
         
         const policyPayload = {
-          policy_number: formData.policy_number.toUpperCase(),
+          policy_number: normalizeToUpperCase(formData.policy_number),
           insurer_id: formData.insurer_id,
-          ramo: formData.ramo ? formData.ramo.toUpperCase() : null,
+          ramo: formData.ramo ? normalizeToUpperCase(formData.ramo) : null,
           start_date: normalizedStartDate,
           renewal_date: normalizedRenewalDate,
           status: 'ACTIVA' as 'ACTIVA' | 'VENCIDA' | 'CANCELADA', // Siempre ACTIVA para nuevos registros
@@ -443,7 +444,7 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
         });
         
         const clientData = {
-          name: formData.client_name.toUpperCase(),
+          name: normalizeToUpperCase(formData.client_name),
           national_id: formData.national_id ? formData.national_id.toUpperCase() : null,
           email: formData.email || null,
           phone: formData.phone || null,
@@ -453,9 +454,9 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
         };
 
         const policyData = {
-          policy_number: formData.policy_number.toUpperCase(),
+          policy_number: normalizeToUpperCase(formData.policy_number),
           insurer_id: formData.insurer_id,
-          ramo: formData.ramo ? formData.ramo.toUpperCase() : null,
+          ramo: formData.ramo ? normalizeToUpperCase(formData.ramo) : null,
           start_date: normalizedStartDate,
           renewal_date: normalizedRenewalDate,
           status: 'ACTIVA' as 'ACTIVA' | 'VENCIDA' | 'CANCELADA', // Siempre ACTIVA para nuevos registros

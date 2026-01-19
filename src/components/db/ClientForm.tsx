@@ -7,6 +7,7 @@ import { actionCreateClientWithPolicy, actionFindDuplicateByNationalId, actionMe
 import type { Tables } from "@/lib/supabase/client";
 import { supabaseClient } from '@/lib/supabase/client';
 import { toUppercasePayload, createUppercaseHandler, uppercaseInputClass } from '@/lib/utils/uppercase';
+import { normalizeToUpperCase } from '@/lib/utils/normalize-text';
 import ExpedienteManager from '@/components/expediente/ExpedienteManager';
 import { POLICY_TYPES, checkSpecialOverride } from '@/lib/constants/policy-types';
 import { getTodayLocalDate, addOneYearToDate } from '@/lib/utils/dates';
@@ -297,15 +298,15 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
 
     try {
       if (client) {
-        const payload = toUppercasePayload({
-          name: formData.name,
-          national_id: formData.national_id || null,
+        const payload = {
+          name: normalizeToUpperCase(formData.name),
+          national_id: formData.national_id ? formData.national_id.toUpperCase() : null,
           email: formData.email || null,
           phone: formData.phone || null,
           birth_date: formData.birth_date,
           active: formData.active,
           broker_id: formData.broker_id || null,
-        });
+        };
 
         // Si hay cambio de broker con ajustes, usar endpoint especial
         if (makeAdjustments && formData.broker_id !== client.broker_id && commissionData) {
@@ -356,16 +357,15 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
         }
 
       } else {
-        const rawClientData = {
-          name: formData.name,
-          national_id: formData.national_id,
-          email: formData.email,
-          phone: formData.phone,
+        const clientData = {
+          name: normalizeToUpperCase(formData.name),
+          national_id: formData.national_id ? formData.national_id.toUpperCase() : null,
+          email: formData.email || null,
+          phone: formData.phone || null,
           birth_date: formData.birth_date,
           active: formData.active,
         };
-        const clientData = toUppercasePayload(rawClientData);
-        const policyData = { policy_number: formData.policy_number.toUpperCase() };
+        const policyData = { policy_number: normalizeToUpperCase(formData.policy_number) };
         const result = await actionCreateClientWithPolicy(clientData, policyData);
         if (!result.ok) {
           throw new Error(result.error);
@@ -1019,8 +1019,8 @@ function PolicyForm({ clientId, policy, onClose, onSave, readOnly = false }: Pol
       const payload = {
         client_id: clientId,
         insurer_id: formData.insurer_id,
-        policy_number: formData.policy_number.trim().toUpperCase(),
-        ramo: formData.ramo.trim().toUpperCase(),
+        policy_number: normalizeToUpperCase(formData.policy_number.trim()),
+        ramo: normalizeToUpperCase(formData.ramo.trim()),
         start_date: formData.start_date || null,
         renewal_date: formData.renewal_date || null,
         status: formData.status,

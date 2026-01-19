@@ -7,16 +7,7 @@ import Link from "next/link";
 import Papa from "papaparse";
 // import { actionImportClientsCSV } from "../actions"; // DEPRECADO - Usar ImportModal.tsx
 import { toast } from "sonner";
-
-// Función para normalizar caracteres especiales (acentos y ñ)
-function normalizeText(text: string): string {
-  if (!text) return '';
-  return text
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '') // Eliminar acentos
-    .replace(/ñ/gi, 'n') // Reemplazar ñ y Ñ por n
-    .replace(/Ñ/g, 'N');
-}
+import { normalizeText } from '@/lib/utils/normalize-text';
 
 interface ParsedRow {
   client_name: string;
