@@ -107,11 +107,11 @@ export async function POST(request: Request) {
       const { error: notifError } = await supabase
         .from('notifications')
         .insert({
-          user_id: c.admin_id,
+          broker_id: c.broker_id,
+          target: `/cases/${c.id}`,
           title: `⚠️ SLA VENCIDO`,
-          message: `El caso ${c.ticket_ref || c.id} (${c.client_name}) tiene el SLA vencido`,
-          type: 'SLA_EXPIRED',
-          link: `/cases/${c.id}`,
+          body: `El caso ${c.ticket_ref || c.id} (${c.client_name}) tiene el SLA vencido`,
+          notification_type: 'other',
           priority: 'HIGH',
           metadata: {
             case_id: c.id,
@@ -127,11 +127,11 @@ export async function POST(request: Request) {
       const { error: notifError } = await supabase
         .from('notifications')
         .insert({
-          user_id: c.admin_id,
+          broker_id: c.broker_id,
+          target: `/cases/${c.id}`,
           title: `⏰ SLA vence HOY`,
-          message: `El caso ${c.ticket_ref || c.id} (${c.client_name}) vence hoy`,
-          type: 'SLA_EXPIRING_TODAY',
-          link: `/cases/${c.id}`,
+          body: `El caso ${c.ticket_ref || c.id} (${c.client_name}) vence hoy`,
+          notification_type: 'other',
           priority: 'HIGH',
           metadata: {
             case_id: c.id,
@@ -147,11 +147,11 @@ export async function POST(request: Request) {
       const { error: notifError } = await supabase
         .from('notifications')
         .insert({
-          user_id: c.admin_id,
+          broker_id: c.broker_id,
+          target: `/cases/${c.id}`,
           title: `⏱️ SLA vence MAÑANA`,
-          message: `El caso ${c.ticket_ref || c.id} (${c.client_name}) vence mañana`,
-          type: 'SLA_EXPIRING_TOMORROW',
-          link: `/cases/${c.id}`,
+          body: `El caso ${c.ticket_ref || c.id} (${c.client_name}) vence mañana`,
+          notification_type: 'other',
           priority: 'MEDIUM',
           metadata: {
             case_id: c.id,

@@ -17,9 +17,9 @@ interface SecurityLog {
   field_changed?: string | null;
   old_value?: string | null;
   new_value?: string | null;
-  ip_address?: string | null;
+  ip_address?: unknown;
   user_agent?: string | null;
-  metadata?: Record<string, any> | null;
+  metadata?: any;
   created_at: string;
 }
 
@@ -398,7 +398,7 @@ function LogDetailModal({ log, onClose }: { log: SecurityLog; onClose: () => voi
 
           {/* Technical Details */}
           <div className="grid grid-cols-2 gap-4">
-            {log.ip_address && (
+            {typeof log.ip_address === 'string' && log.ip_address && (
               <div>
                 <label className="block text-sm font-bold text-gray-700 mb-2">Dirección IP</label>
                 <p className="text-sm font-mono text-gray-900 bg-gray-50 rounded-lg p-3">

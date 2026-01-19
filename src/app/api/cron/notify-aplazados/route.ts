@@ -63,12 +63,12 @@ export async function POST(request: Request) {
       const { error: notifError } = await supabase
         .from('notifications')
         .insert({
-          user_id: caseItem.admin_id,
+          broker_id: caseItem.broker_id,
+          target: `/cases/${caseItem.id}`,
           title: `Caso aplazado requiere decisión`,
-          message: `El caso ${caseItem.ticket_ref || caseItem.id} (${caseItem.client_name}) ha llegado a su fecha de notificación. Decide si reabrir o cerrar definitivamente.`,
-          type: 'APLAZADO_NOTIFICATION',
-          link: `/cases/${caseItem.id}`,
-          metadata: {
+          body: `El caso ${caseItem.ticket_ref || caseItem.id} (${caseItem.client_name}) ha llegado a su fecha de notificación. Decide si reabrir o cerrar definitivamente.`,
+          notification_type: 'other',
+          meta: {
             case_id: caseItem.id,
             ticket_ref: caseItem.ticket_ref,
             postponed_until: caseItem.postponed_until,

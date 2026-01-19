@@ -62,14 +62,20 @@ export async function POST(request: Request) {
         if (!groupedByThread[email.thread_id]) {
           groupedByThread[email.thread_id] = [];
         }
-        groupedByThread[email.thread_id].push(email);
+        const threadGroup = groupedByThread[email.thread_id];
+        if (threadGroup) {
+          threadGroup.push(email);
+        }
       }
       
       // Agrupar por remitente
       if (!groupedBySender[email.from_email]) {
         groupedBySender[email.from_email] = [];
       }
-      groupedBySender[email.from_email].push(email);
+      const senderGroup = groupedBySender[email.from_email];
+      if (senderGroup) {
+        senderGroup.push(email);
+      }
     }
 
     // Crear notificaciones para masters
@@ -90,11 +96,11 @@ export async function POST(request: Request) {
         const { error: notifError } = await supabase
           .from('notifications')
           .insert({
-            user_id: profile.id,
+            broker_id: profile.id,
+            target: '/cases/unclassified',
             title: `📧 ${expiredEmails.length} emails sin clasificar requieren asignación`,
-            message: `Hay ${expiredEmails.length} emails que superaron la ventana de 24h y necesitan ser asignados manualmente`,
-            type: 'UNCLASSIFIED_EMAILS',
-            link: '/cases/unclassified',
+            body: `Hay ${expiredEmails.length} emails que superaron la ventana de 24h y necesitan ser asignados manualmente`,
+            notification_type: 'other',
             metadata: {
               count: expiredEmails.length,
               threads: Object.keys(groupedByThread).length,

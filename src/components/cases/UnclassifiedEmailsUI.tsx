@@ -171,6 +171,8 @@ function EmailGroup({
   if (emails.length === 0) return null;
   
   const primaryEmail = emails[0];
+  if (!primaryEmail) return null;
+  
   const isExpired = primaryEmail.grouped_until ? new Date(primaryEmail.grouped_until) < new Date() : true;
 
   return (
