@@ -8,6 +8,16 @@ import Papa from "papaparse";
 // import { actionImportClientsCSV } from "../actions"; // DEPRECADO - Usar ImportModal.tsx
 import { toast } from "sonner";
 
+// Función para normalizar caracteres especiales (acentos y ñ)
+function normalizeText(text: string): string {
+  if (!text) return '';
+  return text
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // Eliminar acentos
+    .replace(/ñ/gi, 'n') // Reemplazar ñ y Ñ por n
+    .replace(/Ñ/g, 'N');
+}
+
 interface ParsedRow {
   client_name: string;
   national_id?: string;
@@ -120,14 +130,14 @@ export default function ImportPage() {
         });
       } else {
         valid.push({
-          client_name: row.client_name?.trim(),
+          client_name: normalizeText(row.client_name?.trim() || ''),
           national_id: row.national_id?.trim() || undefined,
           email: row.email?.trim() || undefined,
           phone: row.phone?.trim() || undefined,
-          address: row.address?.trim() || undefined,
+          address: normalizeText(row.address?.trim() || '') || undefined,
           policy_number: row.policy_number?.trim(),
-          insurer_name: row.insurer_name?.trim(),
-          ramo: row.ramo?.trim() || undefined,
+          insurer_name: normalizeText(row.insurer_name?.trim() || ''),
+          ramo: normalizeText(row.ramo?.trim() || '') || undefined,
           start_date: row.start_date?.trim() || undefined,
           renewal_date: row.renewal_date?.trim() || undefined,
           status: row.status?.trim() || 'active',
@@ -142,7 +152,14 @@ export default function ImportPage() {
   };
 
   const handleImport = async () => {
-    if (validRows.length === 0 || !file) return;
+    console.log('[IMPORT] handleImport iniciado');
+    console.log('[IMPORT] validRows:', validRows.length);
+    console.log('[IMPORT] file:', file);
+    
+    if (validRows.length === 0 || !file) {
+      console.log('[IMPORT] Abortado: no hay filas válidas o no hay archivo');
+      return;
+    }
     
     setLoading(true);
     
@@ -150,12 +167,15 @@ export default function ImportPage() {
     formData.append("file", file);
     
     try {
+      console.log('[IMPORT] Enviando request a /api/db/import');
       const response = await fetch("/api/db/import", {
         method: "POST",
         body: formData,
       });
+      console.log('[IMPORT] Response recibido:', response.status);
 
       const data = await response.json();
+      console.log('[IMPORT] Data:', data);
       
       if (data.success) {
         setImportResult(data);
@@ -168,7 +188,7 @@ export default function ImportPage() {
         });
       }
     } catch (error) {
-      console.error('Error al importar:', error);
+      console.error('[IMPORT] Error al importar:', error);
       toast.error('Error al importar', {
         description: error instanceof Error ? error.message : 'Error desconocido'
       });
