@@ -195,26 +195,32 @@ export default function IncludedTransfersList({ transfers, onRefresh }: Included
                 </td>
                 <td className="px-3 py-2 text-center">
                   <div className="flex items-center justify-center gap-2">
-                    {transfer.status !== 'PAGADO' && (
-                      <button
-                        onClick={() => handleMarkAsPaid(transfer.id)}
-                        disabled={marking[transfer.id]}
-                        className="inline-flex items-center gap-1 px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-semibold disabled:opacity-50"
-                        title="Confirmar Pagado"
-                      >
-                        <FaCheckCircle className="text-white text-xs" />
-                        <span className="hidden lg:inline">{marking[transfer.id] ? 'Marcando...' : 'Pagado'}</span>
-                      </button>
+                    {transfer.status !== 'PAGADO' ? (
+                      <>
+                        <button
+                          onClick={() => handleMarkAsPaid(transfer.id)}
+                          disabled={marking[transfer.id]}
+                          className="inline-flex items-center gap-1 px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-semibold disabled:opacity-50"
+                          title="Confirmar Pagado"
+                        >
+                          <FaCheckCircle className="text-white text-xs" />
+                          <span className="hidden lg:inline">{marking[transfer.id] ? 'Marcando...' : 'Pagado'}</span>
+                        </button>
+                        <button
+                          onClick={() => handleRevert(transfer.id)}
+                          disabled={reverting[transfer.id]}
+                          className="inline-flex items-center gap-1 px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-semibold disabled:opacity-50"
+                          title="Revertir inclusión"
+                        >
+                          <FaTrash className="text-white text-xs" />
+                          <span className="hidden lg:inline">{reverting[transfer.id] ? 'Revirtiendo...' : 'Revertir'}</span>
+                        </button>
+                      </>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-3 py-1 bg-gray-100 text-gray-500 rounded text-xs font-semibold" title="Transferencia pagada - Sin acciones disponibles">
+                        🔒 Bloqueado
+                      </span>
                     )}
-                    <button
-                      onClick={() => handleRevert(transfer.id)}
-                      disabled={reverting[transfer.id]}
-                      className="inline-flex items-center gap-1 px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-semibold disabled:opacity-50"
-                      title="Revertir inclusión"
-                    >
-                      <FaTrash className="text-white text-xs" />
-                      <span className="hidden lg:inline">{reverting[transfer.id] ? 'Revirtiendo...' : 'Revertir'}</span>
-                    </button>
                   </div>
                 </td>
               </tr>

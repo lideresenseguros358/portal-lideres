@@ -338,31 +338,53 @@ export async function actionMarkTransfersAsPaid(
 
     const supabase = await getSupabaseServer();
 
+    // Obtener transferencias actuales para preservar notas existentes
+    const { data: currentTransfers, error: fetchError } = await supabase
+      .from('bank_transfers_comm')
+      .select('id, notes_internal')
+      .in('id', transferIds);
+
+    if (fetchError) {
+      return { ok: false, error: 'Error al obtener transferencias' };
+    }
+
     // Formatear nota de pago
     const dateParts = paymentDate.split('-');
-    let formattedNote = '';
+    let paymentNote = '';
     if (dateParts.length === 3 && dateParts[0] && dateParts[1] && dateParts[2]) {
       const year = dateParts[0];
       const month = dateParts[1];
       const day = dateParts[2];
       const shortYear = year.slice(2);
-      formattedNote = `Pagado manualmente - ${day}-${month}-${shortYear}`;
+      paymentNote = `Pagado manualmente - ${day}-${month}-${shortYear}`;
       if (paymentNotes?.trim()) {
-        formattedNote += ` - ${paymentNotes}`;
+        paymentNote += ` - ${paymentNotes}`;
       }
     }
 
-    // Actualizar todas las transferencias
-    const { error } = await supabase
-      .from('bank_transfers_comm')
-      .update({
-        status: 'PAGADO',
-        notes_internal: formattedNote,
-      })
-      .in('id', transferIds);
+    // Actualizar cada transferencia preservando notas existentes
+    for (const transfer of currentTransfers || []) {
+      const existingNotes = transfer.notes_internal || '';
+      
+      // Preservar marcador de inclusión si existe
+      let newNote = paymentNote;
+      if (existingNotes.includes('Incluida en corte:') || existingNotes.includes('🔗 Incluida en corte:')) {
+        // Mantener nota de inclusión y agregar nota de pago
+        newNote = `${existingNotes} | ${paymentNote}`;
+      }
 
-    if (error) {
-      return { ok: false, error: 'Error al marcar como pagado' };
+      const { error: updateError } = await supabase
+        .from('bank_transfers_comm')
+        .update({
+          status: 'PAGADO',
+          notes_internal: newNote,
+        })
+        .eq('id', transfer.id);
+
+      if (updateError) {
+        console.error(`Error actualizando transferencia ${transfer.id}:`, updateError);
+        return { ok: false, error: 'Error al marcar como pagado' };
+      }
     }
 
     return { ok: true };
@@ -1625,7 +1647,7 @@ export async function actionGetIncludedTransfers(
     console.log('[BANCO] Buscando transferencias incluidas con patrón:', searchPattern);
 
     // 3. Buscar transferencias que tienen notas con este label
-    // Buscar por el patrón sin importar el emoji
+    // Buscar por el patrón sin importar el emoji o estado (incluir PAGADAS)
     const { data: transfers, error } = await supabase
       .from('bank_transfers_comm')
       .select(`
@@ -1634,7 +1656,8 @@ export async function actionGetIncludedTransfers(
         original_cutoff:bank_cutoffs!cutoff_id(id, start_date, end_date)
       `)
       .like('notes_internal', searchPattern)
-      .neq('cutoff_id', cutoffId);
+      .neq('cutoff_id', cutoffId)
+      .order('date', { ascending: false });
 
     if (error) {
       console.error('[BANCO] Error obteniendo transferencias incluidas:', error);
