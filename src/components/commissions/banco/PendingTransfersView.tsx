@@ -70,36 +70,47 @@ export default function PendingTransfersView({ excludeCutoffId, currentCutoffId,
 
   return (
     <>
-    <div className="p-3 sm:p-4">
-      {/* Header con stats */}
-      <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 rounded-xl p-4 mb-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div>
-            <p className="text-sm text-amber-700 font-semibold mb-1">
-              Transferencias disponibles para incluir
-            </p>
-            <p className="text-xs text-amber-600">
-              De otros períodos bancarios
-            </p>
+      <div className="bg-white rounded-xl shadow-lg border-2 border-orange-200 overflow-hidden">
+        <button className="w-full flex items-center justify-between p-4 sm:p-5 hover:bg-orange-50 transition-colors">
+          <div className="flex items-center gap-3">
+            <FaClock className="text-orange-600 text-xl sm:text-2xl" />
+            <div className="text-left">
+              <h3 className="text-base sm:text-lg font-bold text-[#010139]">Pendientes de Otros Cortes</h3>
+              <p className="text-xs sm:text-sm text-gray-600">Transferencias sin clasificar de períodos anteriores</p>
+            </div>
           </div>
-          <div className="bg-white px-4 py-2 rounded-lg border-2 border-amber-300">
-            <p className="text-xs text-amber-700 font-semibold uppercase">Total Disponible</p>
-            <p className="text-xl sm:text-2xl font-bold text-amber-900">
-              {isInitialLoad ? 'Cargando...' : `$${totalPending.toFixed(2)}`}
-            </p>
-          </div>
-        </div>
-      </div>
+        </button>
+        <div className="border-t-2 border-orange-100">
+          <div className="p-3 sm:p-4">
+            {/* Header con stats */}
+            <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-2 border-amber-300 rounded-xl p-4 mb-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <p className="text-sm text-amber-700 font-semibold mb-1">
+                    Transferencias disponibles para incluir
+                  </p>
+                  <p className="text-xs text-amber-600">
+                    De otros períodos bancarios
+                  </p>
+                </div>
+                <div className="bg-white px-4 py-2 rounded-lg border-2 border-amber-300">
+                  <p className="text-xs text-amber-700 font-semibold uppercase">Total Disponible</p>
+                  <p className="text-xl sm:text-2xl font-bold text-amber-900">
+                    {isInitialLoad ? 'Cargando...' : `$${totalPending.toFixed(2)}`}
+                  </p>
+                </div>
+              </div>
+            </div>
 
-      {/* Contenido */}
-      <div className="space-y-4">
-        {loading ? (
-          <div className="text-center py-8">
-            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-amber-600 mb-2"></div>
-            <p className="text-amber-700 font-medium">Cargando transferencias...</p>
-          </div>
-        ) : (
-          <>
+            {/* Contenido */}
+            <div className="space-y-4">
+              {loading ? (
+                <div className="text-center py-8">
+                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-amber-600 mb-2"></div>
+                  <p className="text-amber-700 font-medium">Cargando transferencias...</p>
+                </div>
+              ) : (
+                <>
             {/* Transferencias individuales AGRUPADAS POR CORTE */}
             {transfers.length > 0 && (() => {
                 // Agrupar transferencias por corte
@@ -271,11 +282,13 @@ export default function PendingTransfersView({ excludeCutoffId, currentCutoffId,
                 <p className="font-semibold text-gray-700 mb-1">✅ No hay transferencias pendientes</p>
                 <p className="text-sm text-gray-500">Todas las transferencias han sido vinculadas</p>
               </div>
-            )}
-          </>
-        )}
+                )}
+              </>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
-    </div>
 
       {/* Modal de Incluir Transferencia */}
       {showIncludeModal && selectedTransfer && currentCutoffId && (
