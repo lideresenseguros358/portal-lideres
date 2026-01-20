@@ -322,7 +322,57 @@ export async function actionUpdateBankTransfer(
 }
 
 // ============================================
-// 4.1 ACTUALIZAR TRANSFERENCIAS DE GRUPO EN MASA
+// 4.1 MARCAR TRANSFERENCIAS COMO PAGADAS (MANUAL)
+// ============================================
+
+export async function actionMarkTransfersAsPaid(
+  transferIds: string[],
+  paymentDate: string,
+  paymentNotes?: string
+): Promise<ActionResult> {
+  try {
+    const { role } = await getAuthContext();
+    if (role !== 'master') {
+      return { ok: false, error: 'Acceso denegado' };
+    }
+
+    const supabase = await getSupabaseServer();
+
+    // Formatear nota de pago
+    const dateParts = paymentDate.split('-');
+    let formattedNote = '';
+    if (dateParts.length === 3 && dateParts[0] && dateParts[1] && dateParts[2]) {
+      const year = dateParts[0];
+      const month = dateParts[1];
+      const day = dateParts[2];
+      const shortYear = year.slice(2);
+      formattedNote = `Pagado manualmente - ${day}-${month}-${shortYear}`;
+      if (paymentNotes?.trim()) {
+        formattedNote += ` - ${paymentNotes}`;
+      }
+    }
+
+    // Actualizar todas las transferencias
+    const { error } = await supabase
+      .from('bank_transfers_comm')
+      .update({
+        status: 'PAGADO',
+        notes_internal: formattedNote,
+      })
+      .in('id', transferIds);
+
+    if (error) {
+      return { ok: false, error: 'Error al marcar como pagado' };
+    }
+
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: 'Error inesperado' };
+  }
+}
+
+// ============================================
+// 4.2 ACTUALIZAR TRANSFERENCIAS DE GRUPO EN MASA
 // ============================================
 
 export async function actionUpdateGroupTransfers(

@@ -1,10 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { FaEdit, FaCheckCircle, FaClock, FaCircle, FaLock, FaSave, FaTimes, FaLayerGroup, FaTrash } from 'react-icons/fa';
-import { actionUpdateBankTransfer, actionAddTransfersToGroupBatch, actionDeleteBankTransfer, actionUpdateGroupTransfers } from '@/app/(app)/commissions/banco-actions';
+import { FaEdit, FaCheckCircle, FaClock, FaCircle, FaLock, FaSave, FaTimes, FaLayerGroup, FaTrash, FaMoneyBillWave } from 'react-icons/fa';
+import { actionUpdateBankTransfer, actionAddTransfersToGroupBatch, actionDeleteBankTransfer, actionUpdateGroupTransfers, actionMarkTransfersAsPaid } from '@/app/(app)/commissions/banco-actions';
 import type { BankTransferStatus, TransferType } from '@/app/(app)/commissions/banco-actions';
 import CreateGroupModal from './CreateGroupModal';
+import MarkAsPaidModal from './MarkAsPaidModal';
 import { toast } from 'sonner';
 
 interface TransfersTableProps {
@@ -22,6 +23,9 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
   const [addingToGroup, setAddingToGroup] = useState(false);
   const [deletingTransfers, setDeletingTransfers] = useState<Set<string>>(new Set());
+  const [showMarkAsPaidModal, setShowMarkAsPaidModal] = useState(false);
+  const [transfersToMarkPaid, setTransfersToMarkPaid] = useState<string[]>([]);
+  const [markingAsPaid, setMarkingAsPaid] = useState(false);
 
   const getStatusBadge = (status: BankTransferStatus) => {
     const badges = {
@@ -276,6 +280,59 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
     onRefresh();
   };
 
+  const handleMarkSingleAsPaid = (transferId: string) => {
+    const transfer = transfers.find(t => t.id === transferId);
+    if (!transfer) return;
+
+    if (transfer.status === 'PAGADO') {
+      toast.error('Esta transferencia ya está marcada como PAGADA');
+      return;
+    }
+
+    setTransfersToMarkPaid([transferId]);
+    setShowMarkAsPaidModal(true);
+  };
+
+  const handleMarkSelectedAsPaid = () => {
+    if (selectedTransfers.size === 0) {
+      toast.error('Selecciona al menos una transferencia');
+      return;
+    }
+
+    const selectedArray = Array.from(selectedTransfers);
+    const alreadyPaid = transfers.filter(t => selectedArray.includes(t.id) && t.status === 'PAGADO');
+
+    if (alreadyPaid.length > 0) {
+      toast.error('No se puede marcar como pagado', {
+        description: `${alreadyPaid.length} transferencia(s) ya están marcadas como PAGADO`
+      });
+      return;
+    }
+
+    setTransfersToMarkPaid(selectedArray);
+    setShowMarkAsPaidModal(true);
+  };
+
+  const handleConfirmMarkAsPaid = async (paymentDate: string, notes: string) => {
+    setMarkingAsPaid(true);
+
+    const result = await actionMarkTransfersAsPaid(transfersToMarkPaid, paymentDate, notes);
+
+    setMarkingAsPaid(false);
+
+    if (result.ok) {
+      toast.success(`${transfersToMarkPaid.length} transferencia(s) marcada(s) como PAGADO`, {
+        description: 'Estado actualizado correctamente'
+      });
+      setShowMarkAsPaidModal(false);
+      setTransfersToMarkPaid([]);
+      setSelectedTransfers(new Set());
+      onRefresh();
+    } else {
+      toast.error('Error al marcar como pagado', { description: result.error });
+    }
+  };
+
   if (loading) {
     return (
       <div className="bg-white rounded-xl shadow-lg overflow-hidden border-2 border-gray-100">
@@ -347,6 +404,14 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
               >
                 <FaTrash size={14} />
                 Eliminar
+              </button>
+              
+              <button
+                onClick={handleMarkSelectedAsPaid}
+                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white border-2 border-green-600 rounded-lg hover:bg-green-700 hover:border-green-700 transition font-medium text-sm shadow-sm"
+              >
+                <FaMoneyBillWave size={14} className="text-white" />
+                Marcar Pagado
               </button>
               
               <button
@@ -562,6 +627,14 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
                           <FaEdit size={14} />
                         </button>
                         <button
+                          onClick={() => handleMarkSingleAsPaid(transfer.id)}
+                          disabled={transfer.status === 'PAGADO'}
+                          className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition disabled:opacity-30 disabled:cursor-not-allowed"
+                          title={transfer.status === 'PAGADO' ? 'Ya está PAGADO' : 'Marcar como pagado'}
+                        >
+                          <FaMoneyBillWave size={14} />
+                        </button>
+                        <button
                           onClick={() => handleDeleteSingle(transfer.id)}
                           disabled={transfer.status === 'PAGADO' || deletingTransfers.has(transfer.id)}
                           className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition disabled:opacity-30 disabled:cursor-not-allowed"
@@ -763,6 +836,13 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
                       className="w-4 h-4 text-[#8AAA19] border-2 border-gray-300 rounded focus:ring-[#8AAA19] disabled:opacity-30"
                     />
                     <button
+                      onClick={() => handleMarkSingleAsPaid(transfer.id)}
+                      disabled={transfer.status === 'PAGADO'}
+                      className="px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition disabled:opacity-30 disabled:cursor-not-allowed text-xs font-medium"
+                    >
+                      {transfer.status === 'PAGADO' ? '✓ Pagado' : '💵 Pagado'}
+                    </button>
+                    <button
                       onClick={() => handleEdit(transfer)}
                       disabled={transfer.status === 'PAGADO'}
                       className="px-3 py-1.5 bg-[#010139] text-white rounded-lg hover:bg-[#020270] transition disabled:opacity-30 disabled:cursor-not-allowed text-xs font-medium"
@@ -799,6 +879,21 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
         insurers={insurers}
         onClose={() => setShowCreateGroupModal(false)}
         onSuccess={handleGroupCreated}
+      />
+    )}
+
+    {/* Modal Marcar como Pagado */}
+    {showMarkAsPaidModal && (
+      <MarkAsPaidModal
+        transferCount={transfersToMarkPaid.length}
+        totalAmount={transfers
+          .filter(t => transfersToMarkPaid.includes(t.id))
+          .reduce((sum, t) => sum + t.amount, 0)}
+        onClose={() => {
+          setShowMarkAsPaidModal(false);
+          setTransfersToMarkPaid([]);
+        }}
+        onConfirm={handleConfirmMarkAsPaid}
       />
     )}
     </>
