@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FaChevronDown, FaChevronRight, FaLayerGroup, FaCheckCircle, FaClock, FaLock, FaTrash, FaSave, FaEdit, FaUndo } from 'react-icons/fa';
+import { FaChevronDown, FaChevronRight, FaLayerGroup, FaCheckCircle, FaClock, FaLock, FaTrash, FaSave, FaEdit, FaUndo, FaMoneyBillWave } from 'react-icons/fa';
 import { toast } from 'sonner';
-import { actionDeleteBankGroup, actionUpdateGroupTransfers, actionRevertTransferInclusion } from '@/app/(app)/commissions/banco-actions';
+import { actionDeleteBankGroup, actionUpdateGroupTransfers, actionRevertTransferInclusion, actionMarkGroupAsPaid } from '@/app/(app)/commissions/banco-actions';
 import type { BankTransferStatus, TransferType } from '@/app/(app)/commissions/banco-actions';
 import { supabaseClient } from '@/lib/supabase/client';
+import MarkAsPaidModal from './MarkAsPaidModal';
 
 interface Insurer {
   id: string;
@@ -26,6 +27,9 @@ export default function GroupsTable({ groups, loading, onGroupDeleted }: GroupsT
   const [showEditMode, setShowEditMode] = useState<Set<string>>(new Set());
   const [groupEdits, setGroupEdits] = useState<Record<string, { insurerId?: string; transferType?: TransferType }>>({});
   const [revertingTransfers, setRevertingTransfers] = useState<Set<string>>(new Set());
+  const [showMarkAsPaidModal, setShowMarkAsPaidModal] = useState(false);
+  const [groupToMarkPaid, setGroupToMarkPaid] = useState<{ id: string; name: string; totalAmount: number } | null>(null);
+  const [markingAsPaid, setMarkingAsPaid] = useState(false);
 
   useEffect(() => {
     const loadInsurers = async () => {
@@ -129,6 +133,37 @@ export default function GroupsTable({ groups, loading, onGroupDeleted }: GroupsT
     }
   };
 
+  const handleMarkGroupAsPaid = (groupId: string, groupName: string, totalAmount: number, status: string) => {
+    if (status === 'PAGADO') {
+      toast.error('Este grupo ya está marcado como PAGADO');
+      return;
+    }
+
+    setGroupToMarkPaid({ id: groupId, name: groupName, totalAmount });
+    setShowMarkAsPaidModal(true);
+  };
+
+  const handleConfirmMarkGroupAsPaid = async (paymentDate: string, notes: string) => {
+    if (!groupToMarkPaid) return;
+
+    setMarkingAsPaid(true);
+
+    const result = await actionMarkGroupAsPaid(groupToMarkPaid.id, paymentDate, notes);
+
+    setMarkingAsPaid(false);
+
+    if (result.ok) {
+      toast.success(`Grupo "${groupToMarkPaid.name}" marcado como PAGADO`, {
+        description: 'Todas las transferencias del grupo fueron actualizadas'
+      });
+      setShowMarkAsPaidModal(false);
+      setGroupToMarkPaid(null);
+      onGroupDeleted?.(); // Refresh data
+    } else {
+      toast.error('Error al marcar como pagado', { description: result.error });
+    }
+  };
+
   const getStatusBadge = (status: BankTransferStatus | string) => {
     const badges = {
       SIN_CLASIFICAR: { label: 'Sin clasificar', color: 'bg-gray-100 text-gray-800', icon: FaClock },
@@ -215,21 +250,30 @@ export default function GroupsTable({ groups, loading, onGroupDeleted }: GroupsT
                     
                     <div className="flex gap-1">
                       {group.status !== 'PAGADO' && (
-                        <button
-                          onClick={() => {
-                            const newShowEdit = new Set(showEditMode);
-                            if (newShowEdit.has(group.id)) {
-                              newShowEdit.delete(group.id);
-                            } else {
-                              newShowEdit.add(group.id);
-                            }
-                            setShowEditMode(newShowEdit);
-                          }}
-                          className="p-2 text-[#010139] hover:bg-blue-50 rounded-lg transition flex-shrink-0"
-                          title="Editar tipo/aseguradora"
-                        >
-                          <FaEdit size={14} />
-                        </button>
+                        <>
+                          <button
+                            onClick={() => {
+                              const newShowEdit = new Set(showEditMode);
+                              if (newShowEdit.has(group.id)) {
+                                newShowEdit.delete(group.id);
+                              } else {
+                                newShowEdit.add(group.id);
+                              }
+                              setShowEditMode(newShowEdit);
+                            }}
+                            className="p-2 text-[#010139] hover:bg-blue-50 rounded-lg transition flex-shrink-0"
+                            title="Editar tipo/aseguradora"
+                          >
+                            <FaEdit size={14} />
+                          </button>
+                          <button
+                            onClick={() => handleMarkGroupAsPaid(group.id, group.name, totalAmount, group.status)}
+                            className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition flex-shrink-0"
+                            title="Marcar grupo como pagado"
+                          >
+                            <FaMoneyBillWave size={14} />
+                          </button>
+                        </>
                       )}
                       <button
                         onClick={() => handleDeleteGroup(group.id, group.name, group.status)}
@@ -360,6 +404,21 @@ export default function GroupsTable({ groups, loading, onGroupDeleted }: GroupsT
           </div>
         );
       })}
+
+      {/* Modal Marcar como Pagado */}
+      {showMarkAsPaidModal && groupToMarkPaid && (
+        <MarkAsPaidModal
+          transferCount={1}
+          totalAmount={groupToMarkPaid.totalAmount}
+          onClose={() => {
+            setShowMarkAsPaidModal(false);
+            setGroupToMarkPaid(null);
+          }}
+          onConfirm={handleConfirmMarkGroupAsPaid}
+          isGroup={true}
+          groupName={groupToMarkPaid.name}
+        />
+      )}
     </div>
   );
 }

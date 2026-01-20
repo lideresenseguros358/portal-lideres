@@ -452,6 +452,95 @@ export async function actionUpdateGroupTransfers(
 }
 
 // ============================================
+// 4.3 MARCAR GRUPO COMPLETO COMO PAGADO
+// ============================================
+
+export async function actionMarkGroupAsPaid(
+  groupId: string,
+  paymentDate: string,
+  paymentNotes?: string
+): Promise<ActionResult> {
+  try {
+    const { role } = await getAuthContext();
+    if (role !== 'master') {
+      return { ok: false, error: 'Acceso denegado' };
+    }
+
+    const supabase = await getSupabaseServer();
+
+    // 1. Verificar que el grupo existe y no está PAGADO
+    const { data: group } = await supabase
+      .from('bank_groups')
+      .select('status')
+      .eq('id', groupId)
+      .single();
+
+    if (!group) {
+      return { ok: false, error: 'Grupo no encontrado' };
+    }
+
+    if (group.status === 'PAGADO') {
+      return { ok: false, error: 'Este grupo ya está marcado como PAGADO' };
+    }
+
+    // 2. Obtener IDs de todas las transferencias del grupo
+    const { data: groupTransfers } = await supabase
+      .from('bank_group_transfers')
+      .select('transfer_id')
+      .eq('group_id', groupId);
+
+    if (!groupTransfers || groupTransfers.length === 0) {
+      return { ok: false, error: 'El grupo no tiene transferencias' };
+    }
+
+    const transferIds = groupTransfers.map(gt => gt.transfer_id);
+
+    // 3. Formatear nota de pago
+    const dateParts = paymentDate.split('-');
+    let formattedNote = '';
+    if (dateParts.length === 3 && dateParts[0] && dateParts[1] && dateParts[2]) {
+      const year = dateParts[0];
+      const month = dateParts[1];
+      const day = dateParts[2];
+      const shortYear = year.slice(2);
+      formattedNote = `Pagado manualmente (grupo) - ${day}-${month}-${shortYear}`;
+      if (paymentNotes?.trim()) {
+        formattedNote += ` - ${paymentNotes}`;
+      }
+    }
+
+    // 4. Marcar todas las transferencias del grupo como PAGADO
+    const { error: transfersError } = await supabase
+      .from('bank_transfers_comm')
+      .update({
+        status: 'PAGADO',
+        notes_internal: formattedNote,
+      })
+      .in('id', transferIds);
+
+    if (transfersError) {
+      return { ok: false, error: 'Error al marcar transferencias como pagadas' };
+    }
+
+    // 5. Marcar el grupo como PAGADO
+    const { error: groupError } = await supabase
+      .from('bank_groups')
+      .update({
+        status: 'PAGADO',
+      })
+      .eq('id', groupId);
+
+    if (groupError) {
+      return { ok: false, error: 'Error al marcar grupo como pagado' };
+    }
+
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: 'Error inesperado' };
+  }
+}
+
+// ============================================
 // 5. CREAR GRUPO BANCARIO
 // ============================================
 

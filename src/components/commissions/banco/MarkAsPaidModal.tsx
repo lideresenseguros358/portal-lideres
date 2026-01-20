@@ -8,13 +8,17 @@ interface MarkAsPaidModalProps {
   totalAmount: number;
   onClose: () => void;
   onConfirm: (paymentDate: string, notes: string) => void;
+  isGroup?: boolean;
+  groupName?: string;
 }
 
 export default function MarkAsPaidModal({ 
   transferCount, 
   totalAmount, 
   onClose, 
-  onConfirm 
+  onConfirm,
+  isGroup = false,
+  groupName
 }: MarkAsPaidModalProps) {
   const [paymentDate, setPaymentDate] = useState(() => {
     const today = new Date();
@@ -51,12 +55,25 @@ export default function MarkAsPaidModal({
         <div className="p-6 space-y-4">
           {/* Info */}
           <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded">
-            <p className="text-sm text-blue-900">
-              <strong>{transferCount}</strong> transferencia{transferCount !== 1 ? 's' : ''} será{transferCount !== 1 ? 'n' : ''} marcada{transferCount !== 1 ? 's' : ''} como <strong>PAGADA</strong>
-            </p>
-            <p className="text-lg font-bold text-blue-900 mt-2 font-mono">
-              Total: ${totalAmount.toFixed(2)}
-            </p>
+            {isGroup ? (
+              <>
+                <p className="text-sm text-blue-900">
+                  El grupo <strong>"{groupName}"</strong> y todas sus transferencias serán marcadas como <strong>PAGADO</strong>
+                </p>
+                <p className="text-lg font-bold text-blue-900 mt-2 font-mono">
+                  Total: ${totalAmount.toFixed(2)}
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-blue-900">
+                  <strong>{transferCount}</strong> transferencia{transferCount !== 1 ? 's' : ''} será{transferCount !== 1 ? 'n' : ''} marcada{transferCount !== 1 ? 's' : ''} como <strong>PAGADA</strong>
+                </p>
+                <p className="text-lg font-bold text-blue-900 mt-2 font-mono">
+                  Total: ${totalAmount.toFixed(2)}
+                </p>
+              </>
+            )}
           </div>
 
           {/* Fecha de Pago */}
