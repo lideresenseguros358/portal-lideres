@@ -343,40 +343,16 @@ export default function BancoTab({ role, insurers }: BancoTabProps) {
           <>
             {/* Secciones Colapsables */}
             <div className="space-y-4">
-              {/* Sección 1: Pendientes de Otros Cortes */}
-              <div className="bg-white rounded-xl shadow-lg border-2 border-orange-200 overflow-hidden">
-                <button
-                  onClick={() => toggleSection('pending')}
-                  className="w-full flex items-center justify-between p-4 sm:p-5 hover:bg-orange-50 transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <FaClock className="text-orange-600 text-xl sm:text-2xl" />
-                    <div className="text-left">
-                      <h3 className="text-base sm:text-lg font-bold text-[#010139]">Pendientes de Otros Cortes</h3>
-                      <p className="text-xs sm:text-sm text-gray-600">Transferencias sin clasificar de períodos anteriores</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    {expandedSections.pending ? (
-                      <FaChevronUp className="text-gray-500 text-lg" />
-                    ) : (
-                      <FaChevronDown className="text-gray-500 text-lg" />
-                    )}
-                  </div>
-                </button>
-                {expandedSections.pending && (
-                  <div className="border-t-2 border-orange-100 animate-fadeIn">
-                    <PendingTransfersView 
-                      excludeCutoffId={selectedCutoff}
-                      currentCutoffId={selectedCutoff}
-                      onTransferIncluded={() => loadGroups()}
-                    />
-                  </div>
-                )}
-              </div>
+              {/* Sección 1: Pendientes de Otros Cortes - Solo mostrar si hay contenido */}
+              <PendingTransfersView 
+                excludeCutoffId={selectedCutoff}
+                currentCutoffId={selectedCutoff}
+                onTransferIncluded={() => loadGroups()}
+              />
 
-              {/* Sección 2: Transferencias del Corte */}
-              <div className="bg-white rounded-xl shadow-lg border-2 border-blue-200 overflow-hidden">
+              {/* Sección 2: Transferencias del Corte - Solo mostrar si hay transferencias */}
+              {transfers.length > 0 && (
+                <div className="bg-white rounded-xl shadow-lg border-2 border-blue-200 overflow-hidden">
                 <button
                   onClick={() => toggleSection('transfers')}
                   className="w-full flex items-center justify-between p-4 sm:p-5 hover:bg-blue-50 transition-colors"
@@ -451,10 +427,12 @@ export default function BancoTab({ role, insurers }: BancoTabProps) {
                     />
                   </div>
                 )}
-              </div>
+                </div>
+              )}
 
-              {/* Sección 3: Transferencias Incluidas en Este Corte */}
-              <div className="bg-white rounded-xl shadow-lg border-2 border-purple-200 overflow-hidden">
+              {/* Sección 3: Transferencias Incluidas en Este Corte - Solo mostrar si hay incluidas */}
+              {includedTransfers.length > 0 && (
+                <div className="bg-white rounded-xl shadow-lg border-2 border-purple-200 overflow-hidden">
                 <button
                   onClick={() => toggleSection('included')}
                   className="w-full flex items-center justify-between p-4 sm:p-5 hover:bg-purple-50 transition-colors"
@@ -493,42 +471,45 @@ export default function BancoTab({ role, insurers }: BancoTabProps) {
                     )}
                   </div>
                 )}
-              </div>
+                </div>
+              )}
 
-              {/* Sección 4: Grupos de Transferencias */}
-              <div className="bg-white rounded-xl shadow-lg border-2 border-green-200 overflow-hidden">
-                <button
-                  onClick={() => toggleSection('groups')}
-                  className="w-full flex items-center justify-between p-4 sm:p-5 hover:bg-green-50 transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <FaLayerGroup className="text-green-600 text-xl sm:text-2xl" />
-                    <div className="text-left">
-                      <h3 className="text-base sm:text-lg font-bold text-[#010139]">Grupos de Transferencias</h3>
-                      <p className="text-xs sm:text-sm text-gray-600">Agrupaciones para reportes de comisiones</p>
+              {/* Sección 4: Grupos de Transferencias - Solo mostrar si hay grupos */}
+              {groups.length > 0 && (
+                <div className="bg-white rounded-xl shadow-lg border-2 border-green-200 overflow-hidden">
+                  <button
+                    onClick={() => toggleSection('groups')}
+                    className="w-full flex items-center justify-between p-4 sm:p-5 hover:bg-green-50 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <FaLayerGroup className="text-green-600 text-xl sm:text-2xl" />
+                      <div className="text-left">
+                        <h3 className="text-base sm:text-lg font-bold text-[#010139]">Grupos de Transferencias</h3>
+                        <p className="text-xs sm:text-sm text-gray-600">Agrupaciones para reportes de comisiones</p>
+                      </div>
                     </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="bg-green-600 text-white px-3 py-1 rounded-full text-sm font-bold">
-                      {groups.length}
-                    </span>
-                    {expandedSections.groups ? (
-                      <FaChevronUp className="text-gray-500 text-lg" />
-                    ) : (
-                      <FaChevronDown className="text-gray-500 text-lg" />
-                    )}
-                  </div>
-                </button>
-                {expandedSections.groups && (
-                  <div className="border-t-2 border-green-100 animate-fadeIn">
-                    <GroupsTable
-                      groups={groups}
-                      loading={loadingGroups}
-                      onGroupDeleted={() => setRefreshKey(prev => prev + 1)}
-                    />
-                  </div>
-                )}
-              </div>
+                    <div className="flex items-center gap-3">
+                      <span className="bg-green-600 text-white px-3 py-1 rounded-full text-sm font-bold">
+                        {groups.length}
+                      </span>
+                      {expandedSections.groups ? (
+                        <FaChevronUp className="text-gray-500 text-lg" />
+                      ) : (
+                        <FaChevronDown className="text-gray-500 text-lg" />
+                      )}
+                    </div>
+                  </button>
+                  {expandedSections.groups && (
+                    <div className="border-t-2 border-green-100 animate-fadeIn">
+                      <GroupsTable
+                        groups={groups}
+                        loading={loadingGroups}
+                        onGroupDeleted={() => setRefreshKey(prev => prev + 1)}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </>
         )}

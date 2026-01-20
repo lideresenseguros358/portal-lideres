@@ -63,6 +63,11 @@ export default function PendingTransfersView({ excludeCutoffId, currentCutoffId,
     setLoading(false);
   };
 
+  // No renderizar nada si no hay contenido (badge 0)
+  if (!loading && transfers.length === 0 && groups.length === 0) {
+    return null;
+  }
+
   return (
     <>
     <div className="p-3 sm:p-4">
