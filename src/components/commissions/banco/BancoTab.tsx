@@ -213,6 +213,18 @@ export default function BancoTab({ role, insurers }: BancoTabProps) {
 
   const selectedCutoffData = cutoffs.find(c => c.id === selectedCutoff);
 
+  // Calcular totales del corte seleccionado
+  const totalPagado = transfers
+    .filter(t => t.status === 'PAGADO')
+    .reduce((sum, t) => sum + t.amount, 0) +
+    includedTransfers
+      .filter(t => t.status === 'PAGADO')
+      .reduce((sum, t) => sum + t.amount, 0);
+
+  const totalPendiente = transfers
+    .filter(t => t.status !== 'PAGADO')
+    .reduce((sum, t) => sum + t.amount, 0);
+
   const toggleSection = (section: keyof typeof expandedSections) => {
     setExpandedSections(prev => ({ ...prev, [section]: !prev[section] }));
   };
@@ -302,15 +314,25 @@ export default function BancoTab({ role, insurers }: BancoTabProps) {
             
             {selectedCutoffData && (
               <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4 border border-white/20">
-                <p className="text-white/80 text-xs font-semibold uppercase mb-2">Información del Corte</p>
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div>
-                    <p className="text-white/70 text-xs">Transferencias</p>
-                    <p className="text-white font-bold text-lg">{transfers.length}</p>
+                <p className="text-white/80 text-xs font-semibold uppercase mb-3">Información del Corte</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="bg-white/5 rounded-lg p-2">
+                    <p className="text-white/70 text-xs mb-1">Transferencias</p>
+                    <p className="text-white font-bold text-lg">{transfers.length + includedTransfers.length}</p>
                   </div>
-                  <div>
-                    <p className="text-white/70 text-xs">Grupos</p>
+                  <div className="bg-white/5 rounded-lg p-2">
+                    <p className="text-white/70 text-xs mb-1">Grupos</p>
                     <p className="text-white font-bold text-lg">{groups.length}</p>
+                  </div>
+                  <div className="bg-green-500/20 border border-green-400/30 rounded-lg p-2">
+                    <p className="text-green-100 text-xs mb-1 font-semibold">💰 Total Pagado</p>
+                    <p className="text-green-50 font-bold text-base">${totalPagado.toFixed(2)}</p>
+                    <p className="text-green-200/70 text-[10px] mt-0.5">Incluye transferencias incluidas</p>
+                  </div>
+                  <div className="bg-amber-500/20 border border-amber-400/30 rounded-lg p-2">
+                    <p className="text-amber-100 text-xs mb-1 font-semibold">⏳ Total Pendiente</p>
+                    <p className="text-amber-50 font-bold text-base">${totalPendiente.toFixed(2)}</p>
+                    <p className="text-amber-200/70 text-[10px] mt-0.5">Solo del corte actual</p>
                   </div>
                 </div>
               </div>
