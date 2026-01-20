@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FaClock, FaCheckCircle, FaChevronDown, FaChevronRight, FaPlusCircle } from 'react-icons/fa';
+import { FaClock, FaCheckCircle, FaChevronDown, FaChevronUp, FaPlusCircle } from 'react-icons/fa';
 import { toast } from 'sonner';
 import { actionGetPendingTransfersAllCutoffs, actionGetPendingGroupsAll } from '@/app/(app)/commissions/banco-actions';
 import IncludeTransferModal from './IncludeTransferModal';
@@ -20,6 +20,7 @@ export default function PendingTransfersView({ excludeCutoffId, currentCutoffId,
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [selectedTransfer, setSelectedTransfer] = useState<any | null>(null);
   const [showIncludeModal, setShowIncludeModal] = useState(false);
+  const [expanded, setExpanded] = useState(true);
 
   useEffect(() => {
     loadPending();
@@ -71,7 +72,10 @@ export default function PendingTransfersView({ excludeCutoffId, currentCutoffId,
   return (
     <>
       <div className="bg-white rounded-xl shadow-lg border-2 border-orange-200 overflow-hidden">
-        <button className="w-full flex items-center justify-between p-4 sm:p-5 hover:bg-orange-50 transition-colors">
+        <button 
+          onClick={() => setExpanded(!expanded)}
+          className="w-full flex items-center justify-between p-4 sm:p-5 hover:bg-orange-50 transition-colors"
+        >
           <div className="flex items-center gap-3">
             <FaClock className="text-orange-600 text-xl sm:text-2xl" />
             <div className="text-left">
@@ -79,7 +83,15 @@ export default function PendingTransfersView({ excludeCutoffId, currentCutoffId,
               <p className="text-xs sm:text-sm text-gray-600">Transferencias sin clasificar de períodos anteriores</p>
             </div>
           </div>
+          <div className="flex items-center gap-3">
+            {expanded ? (
+              <FaChevronUp className="text-gray-500 text-lg" />
+            ) : (
+              <FaChevronDown className="text-gray-500 text-lg" />
+            )}
+          </div>
         </button>
+        {expanded && (
         <div className="border-t-2 border-orange-100">
           <div className="p-3 sm:p-4">
             {/* Header con stats */}
@@ -288,6 +300,7 @@ export default function PendingTransfersView({ excludeCutoffId, currentCutoffId,
             </div>
           </div>
         </div>
+        )}
       </div>
 
       {/* Modal de Incluir Transferencia */}
