@@ -102,7 +102,7 @@ export async function actionImportBankCutoff(
       reference_number: t.reference_number,
       description_raw: t.description,
       amount: t.credit,
-      status: 'SIN_CLASIFICAR' as BankTransferStatus,
+      status: 'PENDIENTE' as BankTransferStatus,
       transfer_type: 'PENDIENTE' as TransferType,
     }));
 

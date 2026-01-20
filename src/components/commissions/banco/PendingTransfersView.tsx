@@ -35,8 +35,28 @@ export default function PendingTransfersView({ excludeCutoffId, currentCutoffId,
     ]);
     
     if (transfersResult.ok) {
+      console.log('[PENDIENTES] Total transferencias PENDIENTES:', transfersResult.data?.length);
+      console.log('[PENDIENTES] Excluyendo corte:', excludeCutoffId);
+      
       // Filtrar transferencias que NO fueron incluidas en otros cortes
-      const notIncluded = (transfersResult.data || []).filter((t: any) => !t.included_from_cutoff);
+      // Y que NO pertenecen al corte actual que se está visualizando
+      const notIncluded = (transfersResult.data || []).filter((t: any) => {
+        // Una transferencia está incluida si tiene el marcador en notes_internal
+        const isIncluded = t.notes_internal?.includes('Incluida en corte:') || false;
+        const isNotCurrentCutoff = !excludeCutoffId || t.cutoff_id !== excludeCutoffId;
+        const shouldShow = !isIncluded && isNotCurrentCutoff;
+        
+        if (!shouldShow && t.cutoff_id === excludeCutoffId) {
+          console.log('[PENDIENTES] Excluyendo (mismo corte):', t.reference_number, t.cutoff_id);
+        }
+        if (!shouldShow && isIncluded) {
+          console.log('[PENDIENTES] Excluyendo (ya incluida):', t.reference_number);
+        }
+        
+        return shouldShow;
+      });
+      
+      console.log('[PENDIENTES] Transferencias filtradas para mostrar:', notIncluded.length);
       setTransfers(notIncluded);
     }
     
@@ -52,9 +72,13 @@ export default function PendingTransfersView({ excludeCutoffId, currentCutoffId,
       setGroups(filteredGroups);
     }
     
-    // Calcular total DESPUÉS de tener los datos (solo con no incluidas)
+    // Calcular total DESPUÉS de tener los datos (solo con no incluidas y excluyendo corte actual)
     const transfersForTotal = transfersResult.ok 
-      ? (transfersResult.data || []).filter((t: any) => !t.included_from_cutoff)
+      ? (transfersResult.data || []).filter((t: any) => {
+          const isIncluded = t.notes_internal?.includes('Incluida en corte:') || false;
+          const isNotCurrentCutoff = !excludeCutoffId || t.cutoff_id !== excludeCutoffId;
+          return !isIncluded && isNotCurrentCutoff;
+        })
       : [];
     const total = transfersForTotal.reduce((sum: number, t: any) => sum + (t.amount || 0), 0) + 
                   (groupsResult.data || []).reduce((sum: number, g: any) => sum + (g.total_amount || 0), 0);

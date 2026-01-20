@@ -299,23 +299,26 @@ export async function PUT(request: NextRequest) {
         return NextResponse.json({ error: 'broker_id y year son requeridos' }, { status: 400 });
       }
 
-      // Actualizar canceladas en todos los meses del año para este broker
-      // Ponemos el valor total en el primer mes y 0 en los demás
-      // Esto es una convención para almacenar el valor anual
+      // Guardar el valor de canceladas ANUAL
+      // Se distribuye proporcionalmente entre todos los meses existentes
+      const { data: existingMonths, error: fetchError } = await supabase
+        .from('production')
+        .select('month')
+        .eq('broker_id', broker_id)
+        .eq('year', year);
+
+      if (fetchError || !existingMonths || existingMonths.length === 0) {
+        return NextResponse.json({ error: 'No hay registros mensuales para este broker/año' }, { status: 400 });
+      }
+
+      // Distribuir el valor total entre los meses existentes
+      const valuePerMonth = value / existingMonths.length;
+
       const { error: updateError } = await supabase
         .from('production')
-        .update({ canceladas: value })
+        .update({ canceladas: valuePerMonth })
         .eq('broker_id', broker_id)
-        .eq('year', year)
-        .eq('month', 1); // Solo actualizar enero con el valor total
-
-      // Limpiar los demás meses
-      await supabase
-        .from('production')
-        .update({ canceladas: 0 })
-        .eq('broker_id', broker_id)
-        .eq('year', year)
-        .neq('month', 1);
+        .eq('year', year);
 
       if (updateError) {
         console.error('Error updating canceladas_ytd:', updateError);
