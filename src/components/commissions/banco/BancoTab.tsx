@@ -40,7 +40,7 @@ export default function BancoTab({ role, insurers }: BancoTabProps) {
   const [expandedSections, setExpandedSections] = useState({
     pending: false,
     transfers: true,
-    included: false,
+    included: true,
     groups: false
   });
   
@@ -69,20 +69,13 @@ export default function BancoTab({ role, insurers }: BancoTabProps) {
     loadCutoffs();
   }, []);
 
-  // Cargar transferencias e incluidas primero, luego grupos
+  // Cargar transferencias y grupos cuando cambia el corte o filtros
   useEffect(() => {
     if (selectedCutoff) {
       loadTransfers();
-      loadIncludedTransfers();
-    }
-  }, [selectedCutoff, filters, refreshKey]);
-
-  // Cargar grupos después de que se carguen las transferencias incluidas
-  useEffect(() => {
-    if (selectedCutoff && !loadingIncluded) {
       loadGroups();
     }
-  }, [selectedCutoff, includedTransfers, refreshKey]);
+  }, [selectedCutoff, filters, refreshKey]);
 
   const loadLastCutoff = async () => {
     const result = await actionGetLastCutoff();
@@ -111,73 +104,55 @@ export default function BancoTab({ role, insurers }: BancoTabProps) {
   const loadGroups = async () => {
     if (!selectedCutoff) {
       setGroups([]);
+      setIncludedTransfers([]);
       return;
     }
     
     setLoadingGroups(true);
-    // Cargar TODOS los grupos EN_PROCESO
-    const result = await actionGetBankGroups({ status: 'EN_PROCESO' });
     
-    if (result.ok) {
-      const allGroups = result.data || [];
+    // Cargar grupos y transferencias incluidas en paralelo
+    const [groupsResult, includedResult] = await Promise.all([
+      actionGetBankGroups({ status: 'EN_PROCESO' }),
+      actionGetIncludedTransfers(selectedCutoff)
+    ]);
+    
+    // Procesar grupos - EXCLUIR completamente grupos de sistema
+    if (groupsResult.ok) {
+      const allGroups = groupsResult.data || [];
       
-      // Filtrar para mostrar SOLO grupos que tengan transferencias del corte actual
-      const groupsForCurrentCutoff = allGroups.filter((g: any) => {
+      const normalGroups = allGroups.filter((g: any) => {
         const name = (g.name || '').toLowerCase();
         
-        // 1. Excluir grupos de sistema
+        // EXCLUIR grupos de sistema completamente
         if (name.includes('otras quincenas') || 
-            name.includes('otros cortes') ||
+            name.includes('otros cortes') || 
+            name.includes('transferencias de otras') ||
             name.includes('pagados en otras')) {
           return false;
         }
         
-        // 2. Verificar que tenga transferencias del corte actual
+        // Solo incluir grupos con transferencias del corte actual
         const transfers = g.transfers || [];
-        const hasTransfersFromCutoff = transfers.some((t: any) => 
+        return transfers.some((t: any) => 
           t.bank_transfers_comm?.cutoff_id === selectedCutoff
         );
-        
-        return hasTransfersFromCutoff;
       });
       
-      // Si hay transferencias incluidas, agregar como grupo virtual
-      if (includedTransfers.length > 0) {
-        const totalIncluded = includedTransfers.reduce((sum, t) => sum + t.amount, 0);
-        const virtualGroup = {
-          id: 'included-transfers-virtual',
-          name: 'Transferencias de otras quincenas',
-          status: 'EN_PROCESO',
-          total_amount: totalIncluded,
-          isVirtual: true,
-          transfers: includedTransfers.map((t: any) => ({
-            bank_transfers_comm: t
-          }))
-        };
-        setGroups([virtualGroup, ...groupsForCurrentCutoff]);
-      } else {
-        setGroups(groupsForCurrentCutoff);
-      }
+      setGroups(normalGroups);
     } else {
       toast.error('Error al cargar grupos');
     }
+    
+    // Procesar transferencias incluidas directamente de la BD
+    if (includedResult.ok) {
+      setIncludedTransfers(includedResult.data || []);
+    } else {
+      setIncludedTransfers([]);
+    }
+    
     setLoadingGroups(false);
   };
 
-  const loadIncludedTransfers = async () => {
-    if (!selectedCutoff) return;
-    
-    setLoadingIncluded(true);
-    const result = await actionGetIncludedTransfers(selectedCutoff);
-    
-    if (result.ok) {
-      setIncludedTransfers(result.data || []);
-    } else {
-      console.error('Error al cargar transferencias incluidas:', result.error);
-      setIncludedTransfers([]);
-    }
-    setLoadingIncluded(false);
-  };
 
   const loadTransfers = async () => {
     setLoading(true);
@@ -207,8 +182,7 @@ export default function BancoTab({ role, insurers }: BancoTabProps) {
   const handleRefresh = () => {
     setRefreshKey(prev => prev + 1);
     loadCutoffs(); // Refrescar lista de cortes (elimina cortes vacíos)
-    loadGroups(); // Refrescar grupos también
-    loadIncludedTransfers(); // Refrescar transferencias incluidas
+    loadGroups(); // Refrescar grupos y transferencias incluidas
   };
 
   const selectedCutoffData = cutoffs.find(c => c.id === selectedCutoff);
@@ -395,6 +369,7 @@ export default function BancoTab({ role, insurers }: BancoTabProps) {
                     <PendingTransfersView 
                       excludeCutoffId={selectedCutoff}
                       currentCutoffId={selectedCutoff}
+                      onTransferIncluded={() => loadGroups()}
                     />
                   </div>
                 )}
@@ -478,7 +453,49 @@ export default function BancoTab({ role, insurers }: BancoTabProps) {
                 )}
               </div>
 
-              {/* Sección 3: Grupos de Transferencias */}
+              {/* Sección 3: Transferencias Incluidas en Este Corte */}
+              <div className="bg-white rounded-xl shadow-lg border-2 border-purple-200 overflow-hidden">
+                <button
+                  onClick={() => toggleSection('included')}
+                  className="w-full flex items-center justify-between p-4 sm:p-5 hover:bg-purple-50 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <FaSync className="text-purple-600 text-xl sm:text-2xl" />
+                    <div className="text-left">
+                      <h3 className="text-base sm:text-lg font-bold text-[#010139]">Transferencias Incluidas en Este Corte</h3>
+                      <p className="text-xs sm:text-sm text-gray-600">Transferencias de otras quincenas incluidas aquí</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="bg-purple-600 text-white px-3 py-1 rounded-full text-sm font-bold">
+                      {includedTransfers.length}
+                    </span>
+                    {expandedSections.included ? (
+                      <FaChevronUp className="text-gray-500 text-lg" />
+                    ) : (
+                      <FaChevronDown className="text-gray-500 text-lg" />
+                    )}
+                  </div>
+                </button>
+                {expandedSections.included && (
+                  <div className="border-t-2 border-purple-100 animate-fadeIn">
+                    {includedTransfers.length > 0 ? (
+                      <IncludedTransfersList
+                        transfers={includedTransfers}
+                        onRefresh={handleRefresh}
+                      />
+                    ) : (
+                      <div className="p-6 sm:p-8 text-center">
+                        <FaSync className="mx-auto text-5xl text-purple-300 mb-3" />
+                        <p className="text-gray-600 font-semibold text-base">No hay transferencias incluidas</p>
+                        <p className="text-gray-500 text-sm mt-1">Las transferencias que incluyas aparecerán aquí</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Sección 4: Grupos de Transferencias */}
               <div className="bg-white rounded-xl shadow-lg border-2 border-green-200 overflow-hidden">
                 <button
                   onClick={() => toggleSection('groups')}

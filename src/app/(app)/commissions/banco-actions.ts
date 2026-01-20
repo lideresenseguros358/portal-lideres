@@ -1068,7 +1068,6 @@ export async function actionGetPendingTransfersAllCutoffs(): Promise<ActionResul
     const supabase = await getSupabaseServer();
 
     // Obtener transferencias PENDIENTES que NO tienen vínculos permanentes
-    // Y que NO fueron incluidas en otros cortes
     const { data, error } = await supabase
       .from('bank_transfers_comm')
       .select(`
@@ -1078,7 +1077,6 @@ export async function actionGetPendingTransfersAllCutoffs(): Promise<ActionResul
         bank_transfer_imports!left (id, is_temporary)
       `)
       .eq('status', 'PENDIENTE')
-      .is('included_from_cutoff', null)
       .order('date', { ascending: false });
 
     if (error) {
@@ -1622,9 +1620,12 @@ export async function actionGetIncludedTransfers(
 
     // 2. Construir el label exacto que se usa en las notas
     const targetCutoffLabel = `${new Date(targetCutoff.start_date).toLocaleDateString('es-PA')} - ${new Date(targetCutoff.end_date).toLocaleDateString('es-PA')}`;
-    const searchPattern = `%📌 Incluida en corte: ${targetCutoffLabel}%`;
+    const searchPattern = `%Incluida en corte: ${targetCutoffLabel}%`;
+
+    console.log('[BANCO] Buscando transferencias incluidas con patrón:', searchPattern);
 
     // 3. Buscar transferencias que tienen notas con este label
+    // Buscar por el patrón sin importar el emoji
     const { data: transfers, error } = await supabase
       .from('bank_transfers_comm')
       .select(`
@@ -1632,7 +1633,8 @@ export async function actionGetIncludedTransfers(
         insurers!insurer_assigned_id(id, name),
         original_cutoff:bank_cutoffs!cutoff_id(id, start_date, end_date)
       `)
-      .like('notes_internal', searchPattern);
+      .like('notes_internal', searchPattern)
+      .neq('cutoff_id', cutoffId);
 
     if (error) {
       console.error('[BANCO] Error obteniendo transferencias incluidas:', error);

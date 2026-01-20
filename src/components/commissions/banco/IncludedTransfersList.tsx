@@ -133,82 +133,56 @@ export default function IncludedTransfersList({ transfers, onRefresh }: Included
         </div>
       </div>
 
-      {/* Transfers Grid */}
-      <div className="p-3 sm:p-4 space-y-3">
-        {transfers.map((transfer) => (
-          <div key={transfer.id} className="bg-white rounded-lg border-2 border-purple-200 hover:border-purple-400 transition-all hover:shadow-md">
-            {/* Card Header - Monto y Acciones */}
-            <div className="bg-gradient-to-r from-purple-50 to-white px-4 py-3 border-b border-purple-200 flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3 flex-1">
-                <span className="text-xl sm:text-2xl font-bold text-purple-900">
-                  ${transfer.amount.toFixed(2)}
-                </span>
-                <div className="flex flex-wrap gap-2">
-                  {getStatusBadge(transfer.status)}
-                  {getTypeBadge(transfer.transfer_type)}
-                </div>
-              </div>
-              <button
-                onClick={() => handleRevert(transfer.id)}
-                disabled={reverting[transfer.id]}
-                className="flex items-center gap-2 px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-xs sm:text-sm font-semibold whitespace-nowrap"
-                title="Revertir inclusión"
-              >
-                <FaTrash className="text-white" />
-                <span className="hidden sm:inline">{reverting[transfer.id] ? 'Revirtiendo...' : 'Revertir'}</span>
-              </button>
-            </div>
-
-            {/* Card Body */}
-            <div className="p-4 space-y-3">
-              {/* Corte Original - MUY DESTACADO */}
-              {transfer.original_cutoff && (
-                <div className="bg-amber-50 border-2 border-amber-300 rounded-lg p-3">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="text-amber-900 font-bold text-xs uppercase tracking-wide">
-                      📅 Corte Original
+      {/* Transfers Table - Compacto */}
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-purple-50 border-b-2 border-purple-200">
+            <tr>
+              <th className="px-3 py-2 text-left text-xs font-bold text-purple-900">Monto</th>
+              <th className="px-3 py-2 text-left text-xs font-bold text-purple-900">Estado</th>
+              <th className="px-3 py-2 text-left text-xs font-bold text-purple-900">Fecha</th>
+              <th className="px-3 py-2 text-left text-xs font-bold text-purple-900">Ref</th>
+              <th className="px-3 py-2 text-left text-xs font-bold text-purple-900">Aseguradora</th>
+              <th className="px-3 py-2 text-left text-xs font-bold text-purple-900">Descripción</th>
+              <th className="px-3 py-2 text-left text-xs font-bold text-purple-900">Corte Original</th>
+              <th className="px-3 py-2 text-center text-xs font-bold text-purple-900">Acción</th>
+            </tr>
+          </thead>
+          <tbody>
+            {transfers.map((transfer) => (
+              <tr key={transfer.id} className="border-b border-purple-100 hover:bg-purple-50">
+                <td className="px-3 py-2 font-mono font-bold text-purple-900">${transfer.amount.toFixed(2)}</td>
+                <td className="px-3 py-2">{getStatusBadge(transfer.status)}</td>
+                <td className="px-3 py-2 text-gray-700 text-xs">{formatDate(transfer.date)}</td>
+                <td className="px-3 py-2 font-mono text-xs text-gray-600">{transfer.reference_number}</td>
+                <td className="px-3 py-2 text-sm font-semibold text-blue-900">
+                  {transfer.insurer_assigned?.name || '-'}
+                </td>
+                <td className="px-3 py-2 text-sm text-gray-800 max-w-xs truncate" title={transfer.description_raw}>
+                  {transfer.description_raw?.substring(0, 60) || 'Sin descripción'}
+                </td>
+                <td className="px-3 py-2 text-xs">
+                  {transfer.original_cutoff && (
+                    <span className="bg-amber-100 text-amber-900 px-2 py-1 rounded font-semibold">
+                      {formatCutoffPeriod(transfer.original_cutoff)}
                     </span>
-                  </div>
-                  <p className="text-amber-800 font-bold text-base">
-                    {formatCutoffPeriod(transfer.original_cutoff)}
-                  </p>
-                </div>
-              )}
-
-              {/* Información Principal */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
-                <div className="bg-gray-50 rounded-lg p-2 border border-gray-200">
-                  <p className="text-xs text-gray-600 font-semibold mb-0.5">Referencia</p>
-                  <p className="text-gray-900 font-medium">{transfer.reference_number}</p>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-2 border border-gray-200">
-                  <p className="text-xs text-gray-600 font-semibold mb-0.5">Fecha</p>
-                  <p className="text-gray-900 font-medium">{formatDate(transfer.date)}</p>
-                </div>
-              </div>
-
-              {transfer.insurer_assigned && (
-                <div className="bg-blue-50 rounded-lg p-2 border border-blue-200">
-                  <p className="text-xs text-blue-700 font-semibold mb-0.5">Aseguradora</p>
-                  <p className="text-blue-900 font-bold">{transfer.insurer_assigned.name}</p>
-                </div>
-              )}
-
-              {/* Descripción */}
-              <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
-                <p className="text-xs text-gray-600 font-semibold mb-1">Descripción</p>
-                <p className="text-sm text-gray-800">{transfer.description_raw}</p>
-              </div>
-
-              {/* Notas Internas */}
-              {transfer.notes_internal && (
-                <div className="bg-yellow-50 rounded-lg p-2 border-l-4 border-yellow-400">
-                  <p className="text-xs text-yellow-900 italic">{transfer.notes_internal}</p>
-                </div>
-              )}
-            </div>
-          </div>
-        ))}
+                  )}
+                </td>
+                <td className="px-3 py-2 text-center">
+                  <button
+                    onClick={() => handleRevert(transfer.id)}
+                    disabled={reverting[transfer.id]}
+                    className="inline-flex items-center gap-1 px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-semibold disabled:opacity-50"
+                    title="Revertir inclusión"
+                  >
+                    <FaTrash className="text-white text-xs" />
+                    <span className="hidden lg:inline">{reverting[transfer.id] ? 'Revirtiendo...' : 'Revertir'}</span>
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );

@@ -9,9 +9,10 @@ import IncludeTransferModal from './IncludeTransferModal';
 interface PendingTransfersViewProps {
   excludeCutoffId?: string;
   currentCutoffId?: string;
+  onTransferIncluded?: () => void;
 }
 
-export default function PendingTransfersView({ excludeCutoffId, currentCutoffId }: PendingTransfersViewProps) {
+export default function PendingTransfersView({ excludeCutoffId, currentCutoffId, onTransferIncluded }: PendingTransfersViewProps) {
   const [transfers, setTransfers] = useState<any[]>([]);
   const [groups, setGroups] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -33,15 +34,28 @@ export default function PendingTransfersView({ excludeCutoffId, currentCutoffId 
     ]);
     
     if (transfersResult.ok) {
-      setTransfers(transfersResult.data || []);
+      // Filtrar transferencias que NO fueron incluidas en otros cortes
+      const notIncluded = (transfersResult.data || []).filter((t: any) => !t.included_from_cutoff);
+      setTransfers(notIncluded);
     }
     
     if (groupsResult.ok) {
-      setGroups(groupsResult.data || []);
+      // Filtrar grupos de sistema (como "Transferencias de otras quincenas")
+      const filteredGroups = (groupsResult.data || []).filter((g: any) => {
+        const name = (g.name || '').toLowerCase();
+        return !name.includes('otras quincenas') && 
+               !name.includes('otros cortes') && 
+               !name.includes('transferencias de otras') &&
+               !name.includes('pagados en otras');
+      });
+      setGroups(filteredGroups);
     }
     
-    // Calcular total DESPUÉS de tener los datos
-    const total = (transfersResult.data || []).reduce((sum: number, t: any) => sum + (t.amount || 0), 0) + 
+    // Calcular total DESPUÉS de tener los datos (solo con no incluidas)
+    const transfersForTotal = transfersResult.ok 
+      ? (transfersResult.data || []).filter((t: any) => !t.included_from_cutoff)
+      : [];
+    const total = transfersForTotal.reduce((sum: number, t: any) => sum + (t.amount || 0), 0) + 
                   (groupsResult.data || []).reduce((sum: number, g: any) => sum + (g.total_amount || 0), 0);
     setTotalPending(total);
     setIsInitialLoad(false);
@@ -271,6 +285,7 @@ export default function PendingTransfersView({ excludeCutoffId, currentCutoffId 
             setShowIncludeModal(false);
             setSelectedTransfer(null);
             loadPending(); // Recargar lista
+            onTransferIncluded?.(); // Refrescar página principal
           }}
         />
       )}
