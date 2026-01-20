@@ -164,12 +164,12 @@ export default function IncludedTransfersList({ transfers, onRefresh }: Included
           <thead className="bg-purple-50 border-b-2 border-purple-200">
             <tr>
               <th className="px-3 py-2 text-left text-xs font-bold text-purple-900">Monto</th>
-              <th className="px-3 py-2 text-left text-xs font-bold text-purple-900">Estado</th>
-              <th className="px-3 py-2 text-left text-xs font-bold text-purple-900">Fecha</th>
-              <th className="px-3 py-2 text-left text-xs font-bold text-purple-900">Ref</th>
+              <th className="px-3 py-2 text-left text-xs font-bold text-purple-900 hidden sm:table-cell">Estado</th>
+              <th className="px-3 py-2 text-left text-xs font-bold text-purple-900 hidden md:table-cell">Fecha</th>
+              <th className="px-3 py-2 text-left text-xs font-bold text-purple-900 hidden lg:table-cell">Ref</th>
               <th className="px-3 py-2 text-left text-xs font-bold text-purple-900">Aseguradora</th>
-              <th className="px-3 py-2 text-left text-xs font-bold text-purple-900">Descripción</th>
-              <th className="px-3 py-2 text-left text-xs font-bold text-purple-900">Corte Original</th>
+              <th className="px-3 py-2 text-left text-xs font-bold text-purple-900 hidden md:table-cell">Descripción</th>
+              <th className="px-3 py-2 text-left text-xs font-bold text-purple-900 hidden lg:table-cell">Corte Original</th>
               <th className="px-3 py-2 text-center text-xs font-bold text-purple-900">Acción</th>
             </tr>
           </thead>
@@ -177,16 +177,16 @@ export default function IncludedTransfersList({ transfers, onRefresh }: Included
             {transfers.map((transfer) => (
               <tr key={transfer.id} className="border-b border-purple-100 hover:bg-purple-50">
                 <td className="px-3 py-2 font-mono font-bold text-purple-900">${transfer.amount.toFixed(2)}</td>
-                <td className="px-3 py-2">{getStatusBadge(transfer.status)}</td>
-                <td className="px-3 py-2 text-gray-700 text-xs">{formatDate(transfer.date)}</td>
-                <td className="px-3 py-2 font-mono text-xs text-gray-600">{transfer.reference_number}</td>
+                <td className="px-3 py-2 hidden sm:table-cell">{getStatusBadge(transfer.status)}</td>
+                <td className="px-3 py-2 text-gray-700 text-xs hidden md:table-cell">{formatDate(transfer.date)}</td>
+                <td className="px-3 py-2 font-mono text-xs text-gray-600 hidden lg:table-cell">{transfer.reference_number}</td>
                 <td className="px-3 py-2 text-sm font-semibold text-blue-900">
                   {transfer.insurer_assigned?.name || '-'}
                 </td>
-                <td className="px-3 py-2 text-sm text-gray-800 max-w-xs truncate" title={transfer.description_raw}>
+                <td className="px-3 py-2 text-sm text-gray-800 max-w-xs truncate hidden md:table-cell" title={transfer.description_raw}>
                   {transfer.description_raw?.substring(0, 60) || 'Sin descripción'}
                 </td>
-                <td className="px-3 py-2 text-xs">
+                <td className="px-3 py-2 text-xs hidden lg:table-cell">
                   {transfer.original_cutoff && (
                     <span className="bg-amber-100 text-amber-900 px-2 py-1 rounded font-semibold">
                       {formatCutoffPeriod(transfer.original_cutoff)}
