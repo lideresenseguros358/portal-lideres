@@ -84,6 +84,9 @@ export default function PendingTransfersView({ excludeCutoffId, currentCutoffId,
             </div>
           </div>
           <div className="flex items-center gap-3">
+            <span className="bg-orange-600 text-white px-3 py-1 rounded-full text-sm font-bold">
+              {transfers.length + groups.length}
+            </span>
             {expanded ? (
               <FaChevronUp className="text-gray-500 text-lg" />
             ) : (

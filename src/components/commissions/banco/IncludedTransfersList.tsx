@@ -6,8 +6,8 @@
  */
 
 import { useState } from 'react';
-import { FaSync, FaInfoCircle, FaTrash } from 'react-icons/fa';
-import { actionRevertTransferInclusion } from '@/app/(app)/commissions/banco-actions';
+import { FaSync, FaInfoCircle, FaTrash, FaCheckCircle } from 'react-icons/fa';
+import { actionRevertTransferInclusion, actionMarkTransfersAsPaid } from '@/app/(app)/commissions/banco-actions';
 import { toast } from 'sonner';
 
 interface IncludedTransfer {
@@ -32,6 +32,7 @@ interface IncludedTransfersListProps {
 
 export default function IncludedTransfersList({ transfers, onRefresh }: IncludedTransfersListProps) {
   const [reverting, setReverting] = useState<Record<string, boolean>>({});
+  const [marking, setMarking] = useState<Record<string, boolean>>({});
 
   const handleRevert = async (transferId: string) => {
     if (!confirm('¿Está seguro de que desea revertir la inclusión de esta transferencia?\n\nLa transferencia volverá a estado PENDIENTE y se eliminará de este corte.')) {
@@ -53,6 +54,30 @@ export default function IncludedTransfersList({ transfers, onRefresh }: Included
       toast.error('Error inesperado', { description: error.message });
     } finally {
       setReverting({ ...reverting, [transferId]: false });
+    }
+  };
+
+  const handleMarkAsPaid = async (transferId: string) => {
+    if (!confirm('¿Está seguro de que desea marcar esta transferencia como PAGADA?\n\nEsto actualizará el estado en el corte original.')) {
+      return;
+    }
+
+    setMarking({ ...marking, [transferId]: true });
+
+    try {
+      const today = new Date().toISOString().split('T')[0] as string;
+      const result = await actionMarkTransfersAsPaid([transferId], today, 'Marcado desde transferencias incluidas');
+      
+      if (result.ok) {
+        toast.success('Transferencia marcada como PAGADA exitosamente');
+        onRefresh();
+      } else {
+        toast.error('Error al marcar como pagada', { description: result.error });
+      }
+    } catch (error: any) {
+      toast.error('Error inesperado', { description: error.message });
+    } finally {
+      setMarking({ ...marking, [transferId]: false });
     }
   };
 
@@ -169,15 +194,28 @@ export default function IncludedTransfersList({ transfers, onRefresh }: Included
                   )}
                 </td>
                 <td className="px-3 py-2 text-center">
-                  <button
-                    onClick={() => handleRevert(transfer.id)}
-                    disabled={reverting[transfer.id]}
-                    className="inline-flex items-center gap-1 px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-semibold disabled:opacity-50"
-                    title="Revertir inclusión"
-                  >
-                    <FaTrash className="text-white text-xs" />
-                    <span className="hidden lg:inline">{reverting[transfer.id] ? 'Revirtiendo...' : 'Revertir'}</span>
-                  </button>
+                  <div className="flex items-center justify-center gap-2">
+                    {transfer.status !== 'PAGADO' && (
+                      <button
+                        onClick={() => handleMarkAsPaid(transfer.id)}
+                        disabled={marking[transfer.id]}
+                        className="inline-flex items-center gap-1 px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-semibold disabled:opacity-50"
+                        title="Confirmar Pagado"
+                      >
+                        <FaCheckCircle className="text-white text-xs" />
+                        <span className="hidden lg:inline">{marking[transfer.id] ? 'Marcando...' : 'Pagado'}</span>
+                      </button>
+                    )}
+                    <button
+                      onClick={() => handleRevert(transfer.id)}
+                      disabled={reverting[transfer.id]}
+                      className="inline-flex items-center gap-1 px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs font-semibold disabled:opacity-50"
+                      title="Revertir inclusión"
+                    >
+                      <FaTrash className="text-white text-xs" />
+                      <span className="hidden lg:inline">{reverting[transfer.id] ? 'Revirtiendo...' : 'Revertir'}</span>
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}
