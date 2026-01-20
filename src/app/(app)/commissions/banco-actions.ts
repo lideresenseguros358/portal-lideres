@@ -1068,6 +1068,7 @@ export async function actionGetPendingTransfersAllCutoffs(): Promise<ActionResul
     const supabase = await getSupabaseServer();
 
     // Obtener transferencias PENDIENTES que NO tienen vínculos permanentes
+    // Y que NO fueron incluidas en otros cortes
     const { data, error } = await supabase
       .from('bank_transfers_comm')
       .select(`
@@ -1077,6 +1078,7 @@ export async function actionGetPendingTransfersAllCutoffs(): Promise<ActionResul
         bank_transfer_imports!left (id, is_temporary)
       `)
       .eq('status', 'PENDIENTE')
+      .is('included_from_cutoff', null)
       .order('date', { ascending: false });
 
     if (error) {
