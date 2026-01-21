@@ -30,13 +30,19 @@ export default function PendingTransfersView({ excludeCutoffId, currentCutoffId,
   const loadPending = async () => {
     setLoading(true);
     
+    console.log('[PENDIENTES] Parámetros recibidos:', {
+      excludeCutoffId,
+      currentCutoffId,
+      currentCutoffEndDate
+    });
+    
     const [transfersResult, groupsResult] = await Promise.all([
-      actionGetPendingTransfersAllCutoffs(),
+      actionGetPendingTransfersAllCutoffs(currentCutoffEndDate),
       actionGetPendingGroupsAll(excludeCutoffId)
     ]);
     
     if (transfersResult.ok) {
-      console.log('[PENDIENTES] Total transferencias PENDIENTES:', transfersResult.data?.length);
+      console.log('[PENDIENTES] Total transferencias PENDIENTES (ya filtradas por fecha):', transfersResult.data?.length);
       console.log('[PENDIENTES] Excluyendo corte:', excludeCutoffId);
       
       // Filtrar transferencias que NO fueron incluidas en otros cortes

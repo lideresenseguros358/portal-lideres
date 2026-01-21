@@ -1119,6 +1119,9 @@ export async function actionGetPendingTransfersAllCutoffs(currentCutoffEndDate?:
 
     // Filtrar las que NO tienen imports permanentes
     // Y si hay fecha límite, SOLO mostrar transferencias de cortes ANTERIORES
+    console.log('[BANCO-ACTIONS] currentCutoffEndDate recibido:', currentCutoffEndDate);
+    console.log('[BANCO-ACTIONS] Total transferencias antes de filtrar:', data?.length);
+    
     const pendingTransfers = (data || []).filter((t: any) => {
       const imports = t.bank_transfer_imports || [];
       const hasNoImports = imports.length === 0 || imports.every((imp: any) => imp.is_temporary === true);
@@ -1131,12 +1134,23 @@ export async function actionGetPendingTransfersAllCutoffs(currentCutoffEndDate?:
         const transferCutoffEnd = new Date(t.bank_cutoffs.end_date);
         const currentCutoffEnd = new Date(currentCutoffEndDate);
         
+        const isBeforeCurrent = transferCutoffEnd < currentCutoffEnd;
+        
+        console.log('[BANCO-ACTIONS] Transferencia:', t.reference_number,
+          'Corte end:', t.bank_cutoffs.end_date,
+          'vs Current:', currentCutoffEndDate,
+          'Incluir?', isBeforeCurrent);
+        
         // Solo incluir si el corte de la transferencia terminó ANTES del corte actual
-        return transferCutoffEnd < currentCutoffEnd;
+        return isBeforeCurrent;
       }
       
+      // Si no hay currentCutoffEndDate, incluir todas (backward compatibility)
+      console.log('[BANCO-ACTIONS] ⚠️ No hay currentCutoffEndDate, mostrando todas las transferencias');
       return true;
     });
+    
+    console.log('[BANCO-ACTIONS] Transferencias después de filtrar:', pendingTransfers.length);
 
     return { ok: true, data: pendingTransfers };
   } catch (error) {
