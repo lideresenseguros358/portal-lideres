@@ -307,31 +307,18 @@ export default function PolicyNumberInput({
 
       {/* Ejemplo */}
       <div className="mt-2">
-        {config.slug === 'internacional' ? (
-          <div className="space-y-2">
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-2">
-              <p className="text-xs text-blue-900 font-semibold mb-1">
-                📝 <strong>Ingrese exactamente como aparece en la carátula:</strong>
-              </p>
-              <p className="text-xs font-mono text-center bg-white border border-blue-300 rounded py-1">
-                {config.examples[0]}
-              </p>
-            </div>
-            <p className="text-xs text-amber-700">
-              ℹ️ El sistema invertirá automáticamente el número para que concuerde con el sistema de la INTERNACIONAL.
-            </p>
-          </div>
-        ) : (
-          <>
-            <p className="text-xs text-gray-500">
-              📝 <strong>Ejemplo:</strong> <span className="font-mono">{config.examples[0]}</span>
-            </p>
-            {config.examples[1] && (
-              <p className="text-xs text-gray-500">
-                <span className="ml-4 font-mono">{config.examples[1]}</span>
-              </p>
-            )}
-          </>
+        <p className="text-xs text-gray-500">
+          📝 <strong>Ejemplo:</strong> <span className="font-mono">{config.examples[0]}</span>
+        </p>
+        {config.examples[1] && (
+          <p className="text-xs text-gray-500">
+            <span className="ml-4 font-mono">{config.examples[1]}</span>
+          </p>
+        )}
+        {config.slug === 'internacional' && (
+          <p className="text-xs text-gray-500 mt-1">
+            ℹ️ El sistema invertirá automáticamente el número para que concuerde con el sistema de la INTERNACIONAL.
+          </p>
         )}
       </div>
 
