@@ -42,11 +42,11 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // If user is authenticated and not on /account, check must_change_password
-  if (user && !request.nextUrl.pathname.startsWith('/account')) {
+  // If user is authenticated and not on /account, check must_change_password and broker active status
+  if (user && !request.nextUrl.pathname.startsWith('/account') && !request.nextUrl.pathname.startsWith('/login')) {
     const { data: profile } = await supabase
       .from('profiles')
-      .select('must_change_password')
+      .select('must_change_password, role, broker_id')
       .eq('id', user.id)
       .single();
 
@@ -55,6 +55,23 @@ export async function middleware(request: NextRequest) {
       url.pathname = '/account';
       url.searchParams.set('forcePassword', '1');
       return NextResponse.redirect(url);
+    }
+
+    // Si es broker, verificar que esté activo
+    if (profile?.role === 'broker' && profile?.broker_id) {
+      const { data: broker } = await supabase
+        .from('brokers')
+        .select('active')
+        .eq('id', profile.broker_id)
+        .single();
+
+      if (broker && broker.active === false) {
+        // Broker inactivo: cerrar sesión y redirigir a login
+        await supabase.auth.signOut();
+        const loginUrl = new URL('/login', request.url);
+        loginUrl.searchParams.set('error', 'Tu cuenta ha sido desactivada. Contacta al administrador.');
+        return NextResponse.redirect(loginUrl);
+      }
     }
   }
 

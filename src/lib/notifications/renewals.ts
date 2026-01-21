@@ -80,10 +80,11 @@ async function runExpiredAlert(supabase: any, todayISO: string) {
         email,
         phone,
         broker_id,
-        brokers (
+        brokers!inner (
           id,
           name,
           p_id,
+          active,
           profiles (
             email,
             notify_broker_renewals
@@ -96,6 +97,7 @@ async function runExpiredAlert(supabase: any, todayISO: string) {
       )
     `)
     .eq('status', 'ACTIVA')
+    .eq('clients.brokers.active', true)
     .lt('renewal_date', todayISO);
   
   if (!policies || policies.length === 0) {
@@ -141,10 +143,11 @@ async function run30DaysAlert(supabase: any, todayISO: string) {
         email,
         phone,
         broker_id,
-        brokers (
+        brokers!inner (
           id,
           name,
           p_id,
+          active,
           profiles (
             email,
             notify_broker_renewals
@@ -157,6 +160,7 @@ async function run30DaysAlert(supabase: any, todayISO: string) {
       )
     `)
     .eq('status', 'ACTIVA')
+    .eq('clients.brokers.active', true)
     .eq('renewal_date', futureISO);
   
   if (!policies || policies.length === 0) {
@@ -201,10 +205,11 @@ async function run7DaysAlert(supabase: any, todayISO: string) {
         email,
         phone,
         broker_id,
-        brokers (
+        brokers!inner (
           id,
           name,
           p_id,
+          active,
           profiles (
             email,
             notify_broker_renewals
@@ -217,6 +222,7 @@ async function run7DaysAlert(supabase: any, todayISO: string) {
       )
     `)
     .eq('status', 'ACTIVA')
+    .eq('clients.brokers.active', true)
     .eq('renewal_date', futureISO);
   
   if (!policies || policies.length === 0) {
@@ -257,10 +263,11 @@ async function run0DaysAlert(supabase: any, todayISO: string) {
         email,
         phone,
         broker_id,
-        brokers (
+        brokers!inner (
           id,
           name,
           p_id,
+          active,
           profiles (
             email,
             notify_broker_renewals
@@ -273,6 +280,7 @@ async function run0DaysAlert(supabase: any, todayISO: string) {
       )
     `)
     .eq('status', 'ACTIVA')
+    .eq('clients.brokers.active', true)
     .eq('renewal_date', todayISO);
   
   if (!policies || policies.length === 0) {
@@ -316,10 +324,11 @@ async function run60DaysPostExpiration(supabase: any, todayISO: string) {
         email,
         phone,
         broker_id,
-        brokers (
+        brokers!inner (
           id,
           name,
           p_id,
+          active,
           profiles (
             email,
             notify_broker_renewals
@@ -332,6 +341,7 @@ async function run60DaysPostExpiration(supabase: any, todayISO: string) {
       )
     `)
     .eq('status', 'ACTIVA')
+    .eq('clients.brokers.active', true)
     .eq('renewal_date', sixtyDaysAgoISO);
   
   if (!policies || policies.length === 0) {

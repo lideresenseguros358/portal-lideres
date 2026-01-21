@@ -15,6 +15,16 @@ type ClientRow = Tables<"clients">;
 
 async function getClientsWithPolicies(searchQuery?: string): Promise<ClientWithPolicies[]> {
   const supabase = await getSupabaseServer();
+  const { role, brokerId } = await getAuthContext();
+  
+  // Obtener broker de LISSA (Oficina)
+  const { data: lissaBroker } = await supabase
+    .from('brokers')
+    .select('id')
+    .eq('email', 'contacto@lideresenseguros.com')
+    .single();
+  
+  const lissaBrokerId = lissaBroker?.id;
   
   // Si hay búsqueda, buscar también en notas y números de pólizas
   let clientIds: string[] = [];
@@ -52,10 +62,21 @@ async function getClientsWithPolicies(searchQuery?: string): Promise<ClientWithP
       ),
       brokers (
         id,
-        name
+        name,
+        active
       )
     `)
     .order("name", { ascending: true });
+  
+  // Si es LISSA, incluir clientes de brokers inactivos
+  if (role === 'broker' && brokerId === lissaBrokerId) {
+    // LISSA ve: sus clientes directos + clientes de brokers inactivos
+    // No filtrar por broker_id, filtrar después en el código
+  } else if (role === 'broker' && brokerId) {
+    // Otros brokers solo ven sus propios clientes
+    query = query.eq('broker_id', brokerId);
+  }
+  // Master ve todos (no filtrar)
 
   if (searchQuery && searchQuery.trim()) {
     // Buscar en clientes O en IDs de clientes que tienen pólizas con notas/números que coinciden
@@ -73,7 +94,20 @@ async function getClientsWithPolicies(searchQuery?: string): Promise<ClientWithP
     return [];
   }
   
-  return (data || []).map((client: any) => ({
+  let filteredData = data || [];
+  
+  // Si es LISSA, filtrar para mostrar sus clientes + clientes de brokers inactivos
+  if (role === 'broker' && brokerId === lissaBrokerId && filteredData) {
+    filteredData = filteredData.filter((client: any) => {
+      // Mostrar si:
+      // 1. El cliente es de LISSA directamente
+      // 2. El broker del cliente está inactivo
+      return client.broker_id === lissaBrokerId || 
+             (client.brokers && client.brokers.active === false);
+    });
+  }
+  
+  return filteredData.map((client: any) => ({
     ...client,
     policies: client.policies ? [client.policies].flat() : [],
     brokers: client.brokers || null

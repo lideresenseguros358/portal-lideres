@@ -50,11 +50,14 @@ export async function POST(request: NextRequest) {
 
     // Obtener datos necesarios de BD
     const { data: insurers } = await supabase.from('insurers').select('id, name');
-    const { data: brokers } = await supabase.from('brokers').select('id, email, name, percent_default');
+    const { data: brokers } = await supabase.from('brokers').select('id, email, name, percent_default, active');
 
     if (!insurers || !brokers) {
       return NextResponse.json({ error: 'Failed to load reference data' }, { status: 500 });
     }
+
+    // Encontrar el broker de Oficina (LISSA)
+    const oficinaBroker = brokers.find((b: any) => b.email?.toLowerCase() === 'contacto@lideresenseguros.com');
 
     // Mapas para búsqueda rápida
     const insurerMap = new Map<string, any>(insurers.map((i: any) => [i.name.toUpperCase(), i]));
@@ -79,7 +82,8 @@ export async function POST(request: NextRequest) {
           supabase,
           insurerMap,
           brokerMap,
-          brokers
+          brokers,
+          oficinaBroker
         );
 
         processed.push(result);
@@ -162,7 +166,8 @@ async function processRow(
   supabase: any,
   insurerMap: Map<string, any>,
   brokerMap: Map<string, any>,
-  allBrokers: any[]
+  allBrokers: any[],
+  oficinaBroker: any
 ): Promise<ProcessedRow> {
   
   const grossAmount = parseFloat(row.commission_amount) || 0;
@@ -193,7 +198,14 @@ async function processRow(
   if (row.broker_email && row.broker_email.trim() !== '') {
     broker = brokerMap.get(row.broker_email.toLowerCase());
     if (broker) {
-      brokerId = broker.id;
+      // Si el broker está inactivo, redirigir a LISSA (Oficina)
+      if (broker.active === false && oficinaBroker) {
+        console.log(`⚠️ Broker ${broker.name} (${broker.email}) inactivo, redirigiendo comisión a LISSA`);
+        broker = oficinaBroker;
+        brokerId = oficinaBroker.id;
+      } else {
+        brokerId = broker.id;
+      }
     }
   }
 
