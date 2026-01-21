@@ -577,8 +577,10 @@ export default function ProductionMatrixMaster({ year }: ProductionMatrixMasterP
                           defaultValue={broker.canceladas_ytd === 0 ? '' : broker.canceladas_ytd}
                           onBlur={(e) => {
                             const rawValue = e.target.value === '' ? 0 : parseFloat(e.target.value);
-                            // Redondear a 2 decimales para evitar problemas de precisión
-                            const value = Math.round(rawValue * 100) / 100;
+                            // TRUNCAR a máximo 2 decimales (NO redondear)
+                            // Si ingresa 8190.666 → 8190.66 (trunca)
+                            // Si ingresa 8190.66 → 8190.66 (mantiene exacto)
+                            const value = Math.floor(rawValue * 100) / 100;
                             if (value !== broker.canceladas_ytd) {
                               handleCanceladasEdit(broker.broker_id, value);
                             }
