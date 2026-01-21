@@ -17,8 +17,16 @@ import { EditAdvanceModal } from './EditAdvanceModal';
 // Types
 type AdvanceStatus = 'pending' | 'paid' | 'partial';
 
+interface AdvanceRecurrence {
+  end_date: string | null;
+  start_date: string;
+  fortnight_type: string | null;
+  is_active: boolean | null;
+}
+
 interface Advance {
   id: string;
+  broker_id: string;
   amount: number;
   reason: string | null;
   status: AdvanceStatus;
@@ -26,6 +34,7 @@ interface Advance {
   brokers: { id: string; name: string | null } | null;
   is_recurring?: boolean;
   recurrence_id?: string | null;
+  advance_recurrences?: AdvanceRecurrence | null; // Info de recurrencia con end_date
   total_paid?: number; // Total pagado desde advance_logs
   last_payment_date?: string | null; // Fecha del último pago desde advance_logs
   payment_logs?: Array<{ date: string; amount: number }>; // Logs individuales con fecha y monto
@@ -39,9 +48,10 @@ interface Advance {
 interface GroupedAdvances {
   [brokerId: string]: {
     broker_name: string;
-    total_pending: number;
+    total_pending: number; // Solo adelantos NO recurrentes
     total_paid: number; // Total pagado por este broker
-    advances: Advance[];
+    advances: Advance[]; // Todos los adelantos
+    recurring_reminders: Advance[]; // Solo adelantos recurrentes (recordatorios)
   };
 }
 
@@ -122,6 +132,7 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
             'pending';
           const advance: Advance = {
             id: item.id,
+            broker_id: (item as any).broker_id,
             amount: Number(item.amount) || 0,
             reason: item.reason ?? null,
             status: normalizedStatus,
@@ -129,6 +140,7 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
             brokers: (item as any).brokers ?? null,
             is_recurring: (item as any).is_recurring ?? false,
             recurrence_id: (item as any).recurrence_id ?? null,
+            advance_recurrences: (item as any).advance_recurrences ?? null,
             total_paid: (item as any).total_paid ? Number((item as any).total_paid) : undefined,
             last_payment_date: (item as any).last_payment_date ?? null,
             payment_logs: (item as any).payment_logs ?? [],
@@ -255,13 +267,15 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
         
         const merged: Advance = { 
           id: base.id,
-          amount: base.amount, // Mantener monto individual, no sumar
+          broker_id: base.broker_id,
+          amount: base.amount, // Monto individual (no suma)
           reason: base.reason?.replace(/ \(Recurrente Q[12]\)/, '') + ' (Recurrente Q1 y Q2)',
           status: base.status,
           created_at: base.created_at,
           brokers: base.brokers,
           is_recurring: base.is_recurring,
           recurrence_id: base.recurrence_id,
+          advance_recurrences: base.advance_recurrences,
           total_paid: combinedTotalPaid, // Total de AMBOS
           last_payment_date: latestPaymentDate, // Fecha más reciente
           payment_logs: combinedPaymentLogs, // Logs combinados de ambos
@@ -295,16 +309,28 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
           total_pending: 0,
           total_paid: 0,
           advances: [],
+          recurring_reminders: [],
         };
       }
-      // Sumar al pending si es pending o partial Y tiene monto > 0
-      if ((advance.status === 'pending' || advance.status === 'partial') && advance.amount > 0) {
-        acc[bId].total_pending += advance.amount;
+      
+      // CRÍTICO: Separar recurrentes de deuda real
+      const isRecurring = advance.is_recurring && advance.recurrence_id;
+      
+      if (isRecurring) {
+        // Es un RECORDATORIO - NO suma al total
+        acc[bId].recurring_reminders.push(advance);
+      } else {
+        // Es deuda REAL - SÍ suma al total
+        if ((advance.status === 'pending' || advance.status === 'partial') && advance.amount > 0) {
+          acc[bId].total_pending += advance.amount;
+        }
       }
+      
       // Sumar al paid si tiene total_paid (incluye recurrentes con pagos)
       if (advance.total_paid && advance.total_paid > 0) {
         acc[bId].total_paid += advance.total_paid;
       }
+      
       acc[bId].advances.push(advance);
       return acc;
     }, {});
@@ -846,8 +872,146 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
 
     // Renderizar tabla de pendientes (status === 'pending')
     return (
-      <div className="advances-table-wrapper">
-        {/* Tabla para desktop */}
+      <div className="advances-table-wrapper space-y-6">
+        
+        {/* SECCIÓN 1: RECORDATORIOS DE DESCUENTOS RECURRENTES */}
+        {Object.values(groupedData).some(b => b.recurring_reminders.length > 0) && (
+          <div className="bg-gradient-to-r from-purple-50 to-blue-50 border-2 border-purple-300 rounded-lg p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h3 className="text-lg font-bold text-purple-900 flex items-center gap-2">
+                  🔔 Recordatorios de Descuentos Recurrentes
+                </h3>
+                <p className="text-sm text-purple-700 mt-1">
+                  Estos NO suman al total de deuda. Son recordatorios para aplicar cada quincena.
+                </p>
+              </div>
+              <span className="text-xs bg-purple-200 text-purple-900 px-3 py-1 rounded-full font-semibold">
+                NO SUMA AL TOTAL
+              </span>
+            </div>
+            
+            {/* Tabla de recordatorios - Desktop */}
+            <div className="hidden md:block bg-white rounded-lg overflow-hidden border border-purple-200">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-purple-100">
+                    {role === 'master' && <TableHead className="w-10"></TableHead>}
+                    <TableHead className="text-purple-900 font-bold">{role === 'master' ? 'Corredor / Motivo' : 'Motivo'}</TableHead>
+                    <TableHead className="text-right text-purple-900 font-bold">Monto Sugerido</TableHead>
+                    <TableHead className="text-center text-purple-900 font-bold">Quincena</TableHead>
+                    <TableHead className="text-center text-purple-900 font-bold">Acciones</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {Object.entries(groupedData)
+                    .filter(([, brokerData]) => brokerData.recurring_reminders.length > 0)
+                    .sort(([, a], [, b]) => a.broker_name.localeCompare(b.broker_name))
+                    .map(([bId, brokerData]) => (
+                      <React.Fragment key={`recurring-${bId}`}>
+                        {role === 'master' && (
+                          <TableRow className="bg-purple-50 font-semibold">
+                            <TableCell>
+                              <FaChevronRight className="text-purple-600" />
+                            </TableCell>
+                            <TableCell className="font-bold text-purple-900">{brokerData.broker_name}</TableCell>
+                            <TableCell colSpan={3} className="text-sm text-purple-700">
+                              {brokerData.recurring_reminders.length} recordatorio{brokerData.recurring_reminders.length !== 1 ? 's' : ''}
+                            </TableCell>
+                          </TableRow>
+                        )}
+                        {brokerData.recurring_reminders.map(advance => (
+                          <TableRow key={advance.id} className="hover:bg-purple-50/50">
+                            {role === 'master' && <TableCell></TableCell>}
+                            <TableCell className={role === 'master' ? 'pl-12' : ''}>
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm">{advance.reason || 'Sin motivo'}</span>
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-200 text-purple-900 border border-purple-400">
+                                  📌 RECORDATORIO
+                                </span>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right font-mono text-purple-900 font-semibold">
+                              ${advance.amount.toFixed(2)}
+                            </TableCell>
+                            <TableCell className="text-center text-sm text-purple-700">
+                              {(advance.reason || '').includes('Q1 y Q2') ? 'Q1 y Q2' : 
+                               (advance.reason || '').includes('Q1') ? 'Q1' : 'Q2'}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <div className="flex items-center justify-center gap-1">
+                                {role === 'master' && (
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => setEditingAdvance(advance)}
+                                    className="hover:bg-purple-600 hover:text-white text-xs"
+                                    title="Editar monto de este mes"
+                                  >
+                                    <FaEdit className="text-xs" />
+                                  </Button>
+                                )}
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => setSelectedAdvanceId(advance.id)}
+                                  className="hover:bg-purple-600 hover:text-white text-xs"
+                                  title="Ver historial"
+                                >
+                                  <FaHistory className="text-xs" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </React.Fragment>
+                    ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            {/* Cards de recordatorios - Mobile */}
+            <div className="md:hidden space-y-2 mt-3">
+              {Object.entries(groupedData)
+                .filter(([, brokerData]) => brokerData.recurring_reminders.length > 0)
+                .map(([bId, brokerData]) => (
+                  <div key={`mobile-rec-${bId}`} className="space-y-2">
+                    {role === 'master' && (
+                      <div className="bg-purple-100 rounded-lg p-2 font-bold text-purple-900 text-sm">
+                        {brokerData.broker_name}
+                      </div>
+                    )}
+                    {brokerData.recurring_reminders.map(advance => (
+                      <div key={advance.id} className="bg-white border border-purple-200 rounded-lg p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-semibold text-purple-900">{advance.reason}</span>
+                          <span className="text-xs bg-purple-200 text-purple-900 px-2 py-0.5 rounded-full font-bold">
+                            📌
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-purple-700">Monto sugerido:</span>
+                          <span className="font-mono font-bold text-purple-900">${advance.amount.toFixed(2)}</span>
+                        </div>
+                        <div className="flex gap-2 mt-2 pt-2 border-t border-purple-200">
+                          {role === 'master' && (
+                            <Button size="sm" onClick={() => setEditingAdvance(advance)} className="flex-1 bg-purple-600 hover:bg-purple-700 text-white text-xs">
+                              <FaEdit /> Editar
+                            </Button>
+                          )}
+                          <Button size="sm" variant="outline" onClick={() => setSelectedAdvanceId(advance.id)} className="flex-1 text-xs">
+                            <FaHistory /> Ver
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
+
+        {/* SECCIÓN 2: DEUDAS ACTIVAS (Solo adelantos NO recurrentes) */}
         <div className="hidden md:block">
         <Table>
           <TableHeader>
@@ -863,22 +1027,19 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
         {Object.entries(groupedData)
           .sort(([, a], [, b]) => a.broker_name.localeCompare(b.broker_name)) // Ordenar alfabéticamente
           .map(([bId, brokerData]) => {
+          // FILTRAR: Solo adelantos NO recurrentes (los recurrentes ya están en su sección)
           const advancesToShow = brokerData.advances.filter(a => {
-            // Recurrentes SIEMPRE en Deudas Activas (sin importar status)
+            // Excluir recurrentes (ya tienen su propia sección)
             if (a.is_recurring && a.recurrence_id) {
-              return true;
+              return false;
             }
-            // No recurrentes: solo pending o partial con monto > 0
+            // Solo adelantos reales: pending o partial con monto > 0
             return ((a.status === 'pending' || a.status === 'partial') && a.amount > 0);
           });
           if (advancesToShow.length === 0) return null;
 
-          // Ordenar: recurrentes primero, luego normales
-          const sortedAdvances = advancesToShow.sort((a, b) => {
-            if (a.is_recurring && !b.is_recurring) return -1;
-            if (!a.is_recurring && b.is_recurring) return 1;
-            return 0;
-          });
+          // Ya no necesitamos ordenar por recurrentes porque están excluidos
+          const sortedAdvances = advancesToShow;
 
           return (
             <React.Fragment key={`broker-${bId}`}>
@@ -1048,27 +1209,24 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
         </Table>
         </div>
         
-        {/* Cards para mobile */}
+        {/* Cards para mobile - Solo deudas activas (NO recurrentes) */}
         <div className="md:hidden space-y-3">
           {Object.entries(groupedData)
             .sort(([, a], [, b]) => a.broker_name.localeCompare(b.broker_name)) // Ordenar alfabéticamente
             .map(([bId, brokerData]) => {
+            // FILTRAR: Solo adelantos NO recurrentes
             const advancesToShow = brokerData.advances.filter(a => {
-              // Recurrentes SIEMPRE en Deudas Activas (sin importar status)
+              // Excluir recurrentes (ya tienen su sección arriba)
               if (a.is_recurring && a.recurrence_id) {
-                return true;
+                return false;
               }
-              // No recurrentes: solo pending o partial con monto > 0
+              // Solo adelantos reales: pending o partial con monto > 0
               return ((a.status === 'pending' || a.status === 'partial') && a.amount > 0);
             });
             if (advancesToShow.length === 0) return null;
 
-            // Ordenar: recurrentes primero
-            const sortedAdvances = advancesToShow.sort((a, b) => {
-              if (a.is_recurring && !b.is_recurring) return -1;
-              if (!a.is_recurring && b.is_recurring) return 1;
-              return 0;
-            });
+            // Ya no necesitamos ordenar por recurrentes
+            const sortedAdvances = advancesToShow;
             
             return (
               <div key={`mobile-broker-${bId}`} className="space-y-2">

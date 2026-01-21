@@ -1632,7 +1632,7 @@ export async function actionGetAdvances(brokerId?: string, year?: number) {
   try {
     let query = supabase
       .from('advances')
-      .select('*, brokers(id, name)')
+      .select('*, brokers(id, name), advance_recurrences(end_date, start_date, fortnight_type, is_active)')
       .order('created_at', { ascending: false });
 
     // Filter by broker_id if provided
