@@ -576,7 +576,9 @@ export default function ProductionMatrixMaster({ year }: ProductionMatrixMasterP
                           type="number"
                           defaultValue={broker.canceladas_ytd === 0 ? '' : broker.canceladas_ytd}
                           onBlur={(e) => {
-                            const value = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                            const rawValue = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                            // Redondear a 2 decimales para evitar problemas de precisión
+                            const value = Math.round(rawValue * 100) / 100;
                             if (value !== broker.canceladas_ytd) {
                               handleCanceladasEdit(broker.broker_id, value);
                             }
@@ -585,7 +587,7 @@ export default function ProductionMatrixMaster({ year }: ProductionMatrixMasterP
                           className="w-full px-2 py-1 text-center border border-red-300 rounded focus:border-red-500 focus:outline-none font-mono text-red-600 bg-white"
                           placeholder="0"
                           min="0"
-                          step="0.01"
+                          step="any"
                         />
                       </td>
 
