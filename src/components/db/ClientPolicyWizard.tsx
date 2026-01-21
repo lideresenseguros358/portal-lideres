@@ -273,7 +273,10 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
         errors.phone = true;
         errorMessages.push('Teléfono');
       }
-      if (!formData.birth_date.trim()) {
+      
+      // Fecha de nacimiento solo es obligatoria si NO es RUC (empresas)
+      const isRUC = formData.national_id.includes('-') && !formData.national_id.match(/^(PE|E|N|PN|PI|[1-9]|1[0-2])-/);
+      if (!isRUC && !formData.birth_date.trim()) {
         errors.birth_date = true;
         errorMessages.push('Fecha de nacimiento');
       }

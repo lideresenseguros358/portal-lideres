@@ -215,15 +215,27 @@ function deduplicatePolicies(
 }
 
 /**
+ * Detecta si un documento es RUC (empresa)
+ */
+function isRUC(nationalId: string): boolean {
+  if (!nationalId || !nationalId.includes('-')) return false;
+  // RUC tiene guiones pero NO empieza con prefijos de cédula
+  return !nationalId.match(/^(PE|E|N|PN|PI|[1-9]|1[0-2])-/);
+}
+
+/**
  * Verifica si una fila tiene información completa
  */
 function isRowComplete(row: CSVRow & { _rowNumber?: number }): boolean {
+  // Si es RUC, la fecha de nacimiento es opcional
+  const isCompany = isRUC(row.national_id?.trim() || '');
+  
   return !!(
     row.client_name?.trim() &&
     row.national_id?.trim() &&
     row.email?.trim() &&
     row.phone?.trim() &&
-    row.birth_date?.trim() &&
+    (isCompany || row.birth_date?.trim()) && // Opcional si es RUC
     row.policy_number?.trim() &&
     row.insurer_name?.trim() &&
     row.ramo?.trim() &&
@@ -494,7 +506,10 @@ async function processClientGroup(
   let clientId: string;
   let clientCreated = false;
   let clientUpdated = false;
-  const isPreliminary = !normalizedId || !firstRow.email?.trim() || !firstRow.phone?.trim() || !firstRow.birth_date?.trim();
+  
+  // Si es RUC (empresa), la fecha de nacimiento es opcional
+  const isCompany = isRUC(normalizedId);
+  const isPreliminary = !normalizedId || !firstRow.email?.trim() || !firstRow.phone?.trim() || (!isCompany && !firstRow.birth_date?.trim());
 
   if (existingClient) {
     // Cliente existe: ACTUALIZAR datos faltantes
