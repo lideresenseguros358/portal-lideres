@@ -9,10 +9,11 @@ import IncludeTransferModal from './IncludeTransferModal';
 interface PendingTransfersViewProps {
   excludeCutoffId?: string;
   currentCutoffId?: string;
+  currentCutoffEndDate?: string; // Fecha de fin del corte actual para filtrar
   onTransferIncluded?: () => void;
 }
 
-export default function PendingTransfersView({ excludeCutoffId, currentCutoffId, onTransferIncluded }: PendingTransfersViewProps) {
+export default function PendingTransfersView({ excludeCutoffId, currentCutoffId, currentCutoffEndDate, onTransferIncluded }: PendingTransfersViewProps) {
   const [transfers, setTransfers] = useState<any[]>([]);
   const [groups, setGroups] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);

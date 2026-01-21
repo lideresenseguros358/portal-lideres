@@ -1088,8 +1088,10 @@ export async function actionAutoAssignInsurerToGroup(
 // ============================================
 // 11. OBTENER TRANSFERENCIAS PENDIENTES (TODOS LOS CORTES)
 // ============================================
+// IMPORTANTE: Solo muestra transferencias de cortes ANTERIORES al corte actual
+// Esto evita que se muestren transferencias de cortes futuros en "Pendientes"
 
-export async function actionGetPendingTransfersAllCutoffs(): Promise<ActionResult<any[]>> {
+export async function actionGetPendingTransfersAllCutoffs(currentCutoffEndDate?: string): Promise<ActionResult<any[]>> {
   try {
     const { role } = await getAuthContext();
     if (role !== 'master') {
@@ -1099,6 +1101,7 @@ export async function actionGetPendingTransfersAllCutoffs(): Promise<ActionResul
     const supabase = await getSupabaseServer();
 
     // Obtener transferencias PENDIENTES que NO tienen vínculos permanentes
+    // Si se proporciona currentCutoffEndDate, filtrar SOLO cortes ANTERIORES
     const { data, error } = await supabase
       .from('bank_transfers_comm')
       .select(`
@@ -1115,10 +1118,24 @@ export async function actionGetPendingTransfersAllCutoffs(): Promise<ActionResul
     }
 
     // Filtrar las que NO tienen imports permanentes
+    // Y si hay fecha límite, SOLO mostrar transferencias de cortes ANTERIORES
     const pendingTransfers = (data || []).filter((t: any) => {
       const imports = t.bank_transfer_imports || [];
-      // Incluir si NO tiene imports o SOLO tiene imports temporales
-      return imports.length === 0 || imports.every((imp: any) => imp.is_temporary === true);
+      const hasNoImports = imports.length === 0 || imports.every((imp: any) => imp.is_temporary === true);
+      
+      if (!hasNoImports) return false;
+      
+      // CRÍTICO: Si hay fecha de corte actual, solo mostrar transferencias de cortes ANTERIORES
+      // Esto evita que pendientes muestre transferencias de cortes futuros
+      if (currentCutoffEndDate && t.bank_cutoffs?.end_date) {
+        const transferCutoffEnd = new Date(t.bank_cutoffs.end_date);
+        const currentCutoffEnd = new Date(currentCutoffEndDate);
+        
+        // Solo incluir si el corte de la transferencia terminó ANTES del corte actual
+        return transferCutoffEnd < currentCutoffEnd;
+      }
+      
+      return true;
     });
 
     return { ok: true, data: pendingTransfers };

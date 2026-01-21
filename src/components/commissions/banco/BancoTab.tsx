@@ -347,6 +347,7 @@ export default function BancoTab({ role, insurers }: BancoTabProps) {
               <PendingTransfersView 
                 excludeCutoffId={selectedCutoff}
                 currentCutoffId={selectedCutoff}
+                currentCutoffEndDate={selectedCutoffData?.end_date}
                 onTransferIncluded={() => loadGroups()}
               />
 
