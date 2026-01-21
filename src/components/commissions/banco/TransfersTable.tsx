@@ -313,16 +313,16 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
     setShowMarkAsPaidModal(true);
   };
 
-  const handleConfirmMarkAsPaid = async (paymentDate: string, notes: string) => {
+  const handleConfirmMarkAsPaid = async (paymentDate: string, notes: string, transferType?: string) => {
     setMarkingAsPaid(true);
 
-    const result = await actionMarkTransfersAsPaid(transfersToMarkPaid, paymentDate, notes);
+    const result = await actionMarkTransfersAsPaid(transfersToMarkPaid, paymentDate, notes, transferType);
 
     setMarkingAsPaid(false);
 
     if (result.ok) {
       toast.success(`${transfersToMarkPaid.length} transferencia(s) marcada(s) como PAGADO`, {
-        description: 'Estado actualizado correctamente'
+        description: transferType ? `Tipo actualizado a ${transferType}` : 'Estado actualizado correctamente'
       });
       setShowMarkAsPaidModal(false);
       setTransfersToMarkPaid([]);
@@ -889,6 +889,7 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
         totalAmount={transfers
           .filter(t => transfersToMarkPaid.includes(t.id))
           .reduce((sum, t) => sum + t.amount, 0)}
+        transfers={transfers.filter(t => transfersToMarkPaid.includes(t.id))}
         onClose={() => {
           setShowMarkAsPaidModal(false);
           setTransfersToMarkPaid([]);

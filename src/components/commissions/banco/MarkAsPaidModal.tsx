@@ -1,20 +1,22 @@
 'use client';
 
 import { useState } from 'react';
-import { FaTimes, FaCheckCircle } from 'react-icons/fa';
+import { FaTimes, FaCheckCircle, FaExclamationTriangle } from 'react-icons/fa';
 
 interface MarkAsPaidModalProps {
   transferCount: number;
   totalAmount: number;
+  transfers?: any[];
   onClose: () => void;
-  onConfirm: (paymentDate: string, notes: string) => void;
+  onConfirm: (paymentDate: string, notes: string, transferType?: string) => void;
   isGroup?: boolean;
   groupName?: string;
 }
 
 export default function MarkAsPaidModal({ 
   transferCount, 
-  totalAmount, 
+  totalAmount,
+  transfers = [],
   onClose, 
   onConfirm,
   isGroup = false,
@@ -25,13 +27,24 @@ export default function MarkAsPaidModal({
     return today.toISOString().split('T')[0];
   });
   const [notes, setNotes] = useState('');
+  
+  // Detectar si hay transferencias con tipo PENDIENTE
+  const pendingTypeTransfers = transfers.filter(t => t.transfer_type === 'PENDIENTE');
+  const hasPendingTypes = pendingTypeTransfers.length > 0;
+  const [selectedType, setSelectedType] = useState<string>('REPORTE');
 
   const handleConfirm = () => {
     if (!paymentDate?.trim()) {
       alert('La fecha de pago es obligatoria');
       return;
     }
-    onConfirm(paymentDate, notes);
+    
+    if (hasPendingTypes && !selectedType) {
+      alert('Debes seleccionar un tipo de transferencia');
+      return;
+    }
+    
+    onConfirm(paymentDate, notes, hasPendingTypes ? selectedType : undefined);
   };
 
   return (
@@ -75,6 +88,45 @@ export default function MarkAsPaidModal({
               </>
             )}
           </div>
+
+          {/* Alerta si hay transferencias PENDIENTE */}
+          {hasPendingTypes && (
+            <div className="bg-orange-50 border-l-4 border-orange-500 p-4 rounded">
+              <div className="flex items-start gap-2">
+                <FaExclamationTriangle className="text-orange-500 flex-shrink-0 mt-0.5" size={16} />
+                <div className="flex-1">
+                  <p className="text-sm text-orange-900 font-semibold">
+                    Tipo de transferencia PENDIENTE
+                  </p>
+                  <p className="text-xs text-orange-800 mt-1">
+                    {pendingTypeTransfers.length} transferencia{pendingTypeTransfers.length !== 1 ? 's' : ''} tiene{pendingTypeTransfers.length !== 1 ? 'n' : ''} tipo PENDIENTE. Debes asignar un tipo antes de marcar como PAGADO.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Selector de Tipo - Solo visible si hay transferencias PENDIENTE */}
+          {hasPendingTypes && (
+            <div className="space-y-2">
+              <label className="block text-sm font-semibold text-gray-700">
+                Tipo de Transferencia <span className="text-red-600">*</span>
+              </label>
+              <select
+                value={selectedType}
+                onChange={(e) => setSelectedType(e.target.value)}
+                className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg text-sm focus:border-[#8AAA19] focus:outline-none"
+                required
+              >
+                <option value="REPORTE">Reporte</option>
+                <option value="BONO">Bono</option>
+                <option value="OTRO">Otro</option>
+              </select>
+              <p className="text-xs text-gray-500">
+                Se asignará este tipo a las {pendingTypeTransfers.length} transferencia{pendingTypeTransfers.length !== 1 ? 's' : ''} PENDIENTE
+              </p>
+            </div>
+          )}
 
           {/* Fecha de Pago */}
           <div className="space-y-2">

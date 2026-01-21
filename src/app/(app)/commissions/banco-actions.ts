@@ -328,7 +328,8 @@ export async function actionUpdateBankTransfer(
 export async function actionMarkTransfersAsPaid(
   transferIds: string[],
   paymentDate: string,
-  paymentNotes?: string
+  paymentNotes?: string,
+  transferType?: string
 ): Promise<ActionResult> {
   try {
     const { role } = await getAuthContext();
@@ -338,10 +339,10 @@ export async function actionMarkTransfersAsPaid(
 
     const supabase = await getSupabaseServer();
 
-    // Obtener transferencias actuales para preservar notas existentes
+    // Obtener transferencias actuales para preservar notas existentes y verificar tipos
     const { data: currentTransfers, error: fetchError } = await supabase
       .from('bank_transfers_comm')
-      .select('id, notes_internal')
+      .select('id, notes_internal, transfer_type')
       .in('id', transferIds);
 
     if (fetchError) {
@@ -373,10 +374,18 @@ export async function actionMarkTransfersAsPaid(
         newNote = `${existingNotes} | ${paymentNote}`;
       }
 
+      // Determinar el tipo a asignar
+      let finalTransferType = transfer.transfer_type;
+      if (transfer.transfer_type === 'PENDIENTE' && transferType) {
+        // Si el tipo actual es PENDIENTE y se proporcionó un tipo, usar el proporcionado
+        finalTransferType = transferType as TransferType;
+      }
+
       const { error: updateError } = await supabase
         .from('bank_transfers_comm')
         .update({
           status: 'PAGADO',
+          transfer_type: finalTransferType,
           notes_internal: newNote,
         })
         .eq('id', transfer.id);
