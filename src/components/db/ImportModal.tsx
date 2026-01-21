@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { FaTimes, FaDownload, FaUpload, FaExclamationTriangle } from "react-icons/fa";
+import { FaTimes, FaDownload, FaUpload, FaExclamationTriangle, FaEye, FaEyeSlash } from "react-icons/fa";
 import Papa from "papaparse";
+import { POLICY_TYPES } from '@/lib/constants/policy-types';
 
 interface ImportModalProps {
   onClose: () => void;
@@ -28,6 +29,7 @@ export default function ImportModal({ onClose }: ImportModalProps) {
   const [insurers, setInsurers] = useState<string[]>([]);
   const [userRole, setUserRole] = useState<string>('');
   const [userBrokerId, setUserBrokerId] = useState<string | null>(null);
+  const [showPolicyTypes, setShowPolicyTypes] = useState(false);
 
   // Cargar aseguradoras y datos del usuario al montar el componente
   useEffect(() => {
@@ -213,6 +215,36 @@ export default function ImportModal({ onClose }: ImportModalProps) {
                   ) : (
                     <p className="text-xs text-gray-500 italic">Cargando...</p>
                   )}
+                </div>
+
+                {/* Paso 3.5 - Tipos de Póliza */}
+                <div className="bg-white rounded-lg p-3 border border-blue-200">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <p className="font-semibold text-blue-900 text-sm">3️⃣.5 Tipos de Póliza</p>
+                    <button
+                      type="button"
+                      onClick={() => setShowPolicyTypes(!showPolicyTypes)}
+                      className="text-xs px-2 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded flex items-center gap-1 transition-colors"
+                    >
+                      {showPolicyTypes ? <FaEyeSlash size={12} /> : <FaEye size={12} />}
+                      {showPolicyTypes ? 'Ocultar' : 'Ver'}
+                    </button>
+                  </div>
+                  <p className="text-xs text-gray-700 mb-2">Usa uno de los tipos admitidos:</p>
+                  {showPolicyTypes && (
+                    <div className="grid grid-cols-2 gap-1 text-xs border border-gray-200 rounded p-2 bg-gray-50">
+                      {POLICY_TYPES.map((type) => (
+                        <div key={type.value} className="text-gray-800 font-medium">
+                          • {type.value}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="bg-amber-50 border border-amber-300 rounded p-2 mt-2">
+                    <p className="text-xs text-amber-900">
+                      <strong>💡 Nota:</strong> Si el tipo de póliza que necesitas no está en el listado, usa <strong>OTROS</strong>
+                    </p>
+                  </div>
                 </div>
 
                 {/* Paso 4 - Formatos */}
