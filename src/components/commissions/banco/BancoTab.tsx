@@ -39,8 +39,8 @@ export default function BancoTab({ role, insurers }: BancoTabProps) {
   const [showHelp, setShowHelp] = useState(false);
   const [expandedSections, setExpandedSections] = useState({
     pending: false,
-    transfers: true,
-    included: true,
+    transfers: false,
+    included: false,
     groups: false
   });
   
@@ -74,6 +74,13 @@ export default function BancoTab({ role, insurers }: BancoTabProps) {
     if (selectedCutoff) {
       loadTransfers();
       loadGroups();
+      // Cerrar todas las secciones al cambiar de corte
+      setExpandedSections({
+        pending: false,
+        transfers: false,
+        included: false,
+        groups: false,
+      });
     }
   }, [selectedCutoff, filters, refreshKey]);
 

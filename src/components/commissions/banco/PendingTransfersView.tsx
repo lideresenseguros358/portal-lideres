@@ -21,7 +21,7 @@ export default function PendingTransfersView({ excludeCutoffId, currentCutoffId,
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [selectedTransfer, setSelectedTransfer] = useState<any | null>(null);
   const [showIncludeModal, setShowIncludeModal] = useState(false);
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     loadPending();
@@ -30,21 +30,12 @@ export default function PendingTransfersView({ excludeCutoffId, currentCutoffId,
   const loadPending = async () => {
     setLoading(true);
     
-    console.log('[PENDIENTES] Parámetros recibidos:', {
-      excludeCutoffId,
-      currentCutoffId,
-      currentCutoffEndDate
-    });
-    
     const [transfersResult, groupsResult] = await Promise.all([
       actionGetPendingTransfersAllCutoffs(currentCutoffEndDate),
       actionGetPendingGroupsAll(excludeCutoffId)
     ]);
     
     if (transfersResult.ok) {
-      console.log('[PENDIENTES] Total transferencias PENDIENTES (ya filtradas por fecha):', transfersResult.data?.length);
-      console.log('[PENDIENTES] Excluyendo corte:', excludeCutoffId);
-      
       // Filtrar transferencias que NO fueron incluidas en otros cortes
       // Y que NO pertenecen al corte actual que se está visualizando
       const notIncluded = (transfersResult.data || []).filter((t: any) => {
@@ -53,17 +44,9 @@ export default function PendingTransfersView({ excludeCutoffId, currentCutoffId,
         const isNotCurrentCutoff = !excludeCutoffId || t.cutoff_id !== excludeCutoffId;
         const shouldShow = !isIncluded && isNotCurrentCutoff;
         
-        if (!shouldShow && t.cutoff_id === excludeCutoffId) {
-          console.log('[PENDIENTES] Excluyendo (mismo corte):', t.reference_number, t.cutoff_id);
-        }
-        if (!shouldShow && isIncluded) {
-          console.log('[PENDIENTES] Excluyendo (ya incluida):', t.reference_number);
-        }
-        
         return shouldShow;
       });
       
-      console.log('[PENDIENTES] Transferencias filtradas para mostrar:', notIncluded.length);
       setTransfers(notIncluded);
     }
     
