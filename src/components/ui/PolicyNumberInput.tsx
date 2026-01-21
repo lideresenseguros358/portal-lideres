@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { FaQuestionCircle } from 'react-icons/fa';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   getPolicyFormatConfig, 
@@ -167,9 +168,31 @@ export default function PolicyNumberInput({
 
       {/* Info de aseguradora */}
       <div className="mb-2 p-2 bg-blue-50 border border-blue-200 rounded-lg">
-        <p className="text-xs text-blue-800">
-          <strong>🏢 {config.insurer}</strong> - Formato: {config.inputCount} {config.inputCount === 1 ? 'campo' : 'campos'}
-        </p>
+        <div className="flex items-start gap-2">
+          <p className="text-xs text-blue-800 flex-1">
+            <strong>🏢 {config.insurer}</strong> - Formato: {config.inputCount} {config.inputCount === 1 ? 'campo' : 'campos'}
+          </p>
+          {config.slug === 'internacional' && (
+            <div className="group relative">
+              <FaQuestionCircle className="text-blue-600 cursor-help" size={16} />
+              <div className="hidden group-hover:block absolute z-50 w-80 p-3 bg-white border-2 border-blue-300 rounded-lg shadow-xl right-0 top-6">
+                <p className="text-xs font-bold text-blue-900 mb-2">ℹ️ Instrucciones INTERNACIONAL</p>
+                <p className="text-xs text-gray-700 mb-2">
+                  <strong>Completar exactamente igual que en la carátula:</strong>
+                </p>
+                <p className="text-xs font-mono bg-blue-50 p-2 rounded mb-2 text-center">
+                  030-0001-0000012345
+                </p>
+                <p className="text-xs text-amber-700 font-semibold mb-1">
+                  ⚠️ No se asuste:
+                </p>
+                <p className="text-xs text-gray-600">
+                  El sistema invertirá automáticamente el número para que concuerde con el sistema de la INTERNACIONAL.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Inputs según configuración */}
@@ -284,13 +307,31 @@ export default function PolicyNumberInput({
 
       {/* Ejemplo */}
       <div className="mt-2">
-        <p className="text-xs text-gray-500">
-          📝 <strong>Ejemplo:</strong> <span className="font-mono">{config.examples[0]}</span>
-        </p>
-        {config.examples[1] && (
-          <p className="text-xs text-gray-500">
-            <span className="ml-4 font-mono">{config.examples[1]}</span>
-          </p>
+        {config.slug === 'internacional' ? (
+          <div className="space-y-2">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-2">
+              <p className="text-xs text-blue-900 font-semibold mb-1">
+                📝 <strong>Ingrese exactamente como aparece en la carátula:</strong>
+              </p>
+              <p className="text-xs font-mono text-center bg-white border border-blue-300 rounded py-1">
+                {config.examples[0]}
+              </p>
+            </div>
+            <p className="text-xs text-amber-700">
+              ℹ️ El sistema invertirá automáticamente el número para que concuerde con el sistema de la INTERNACIONAL.
+            </p>
+          </div>
+        ) : (
+          <>
+            <p className="text-xs text-gray-500">
+              📝 <strong>Ejemplo:</strong> <span className="font-mono">{config.examples[0]}</span>
+            </p>
+            {config.examples[1] && (
+              <p className="text-xs text-gray-500">
+                <span className="ml-4 font-mono">{config.examples[1]}</span>
+              </p>
+            )}
+          </>
         )}
       </div>
 

@@ -80,7 +80,7 @@ export const POLICY_FORMATS: Record<InsurerSlug, PolicyFormatConfig> = {
     normalize: true,
     reorder: [1, 0, 2], // input2-input1-input3
     removeLeadingZeros: [true, true, true],
-    examples: ['1-30-98767', '2-15-123456'],
+    examples: ['030-0001-0000012345'],
     parserRule: 'full',
   },
   'sura': {
