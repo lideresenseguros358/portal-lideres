@@ -191,77 +191,137 @@ export default function PendingTransfersView({ excludeCutoffId, currentCutoffId,
                             </div>
                           </div>
                           
-                          {/* Tabla de transferencias del corte */}
-                          <table className="w-full text-sm">
-                            <thead className="bg-amber-50">
-                              <tr>
-                                <th className="px-3 py-2 text-left text-xs font-semibold text-amber-900 uppercase">Fecha</th>
-                                <th className="px-3 py-2 text-left text-xs font-semibold text-amber-900 uppercase">Descripción</th>
-                                <th className="px-3 py-2 text-left text-xs font-semibold text-amber-900 uppercase">Tipo</th>
-                                <th className="px-3 py-2 text-right text-xs font-semibold text-amber-900 uppercase">Monto</th>
-                                <th className="px-3 py-2 text-center text-xs font-semibold text-amber-900 uppercase">Acción</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {cutoffTransfers.map((t: any) => (
-                                <tr key={t.id} className="border-t border-amber-100 hover:bg-amber-50">
-                                  <td className="px-3 py-2 text-gray-700 text-xs">
-                                    {new Date(t.date).toLocaleDateString('es-PA')}
-                                  </td>
-                                  <td className="px-3 py-2 text-gray-900 font-medium text-sm">
-                                    {t.description_raw?.substring(0, 50) || 'Sin descripción'}
-                                    {t.insurers?.name && (
-                                      <div className="text-xs text-gray-500 mt-0.5">
-                                        🏢 {t.insurers.name}
-                                      </div>
-                                    )}
-                                  </td>
-                                  <td className="px-3 py-2">
-                                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
-                                      {t.transfer_type || 'PENDIENTE'}
-                                    </span>
-                                  </td>
-                                  <td className="px-3 py-2 text-right font-mono font-bold text-amber-900">
-                                    ${t.amount.toFixed(2)}
-                                  </td>
-                                  <td className="px-3 py-2 text-center">
-                                    {(() => {
-                                      const isSameCutoff = t.cutoff_id === currentCutoffId;
-                                      const isDisabled = !currentCutoffId || isSameCutoff;
-                                      const tooltipText = !currentCutoffId 
-                                        ? 'Selecciona un corte bancario primero'
-                                        : isSameCutoff
-                                        ? 'Esta transferencia ya pertenece al corte actual'
-                                        : 'Incluir en quincena actual';
-                                      
-                                      return (
-                                        <button
-                                          onClick={() => {
-                                            if (!currentCutoffId) {
-                                              toast.error('Selecciona un corte bancario primero');
-                                              return;
-                                            }
-                                            if (isSameCutoff) {
-                                              toast.error('Esta transferencia ya pertenece al corte actual');
-                                              return;
-                                            }
-                                            setSelectedTransfer(t);
-                                            setShowIncludeModal(true);
-                                          }}
-                                          disabled={isDisabled}
-                                          className="inline-flex items-center gap-1 px-3 py-1.5 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white text-xs font-semibold rounded-lg hover:from-[#010139] hover:to-[#020270] transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                                          title={tooltipText}
-                                        >
-                                          <FaPlusCircle size={12} className="text-white" />
-                                          Incluir
-                                        </button>
-                                      );
-                                    })()}
-                                  </td>
+                          {/* Vista Desktop: Tabla */}
+                          <div className="hidden sm:block">
+                            <table className="w-full text-sm">
+                              <thead className="bg-amber-50">
+                                <tr>
+                                  <th className="px-3 py-2 text-left text-xs font-semibold text-amber-900 uppercase">Fecha</th>
+                                  <th className="px-3 py-2 text-left text-xs font-semibold text-amber-900 uppercase">Descripción</th>
+                                  <th className="px-3 py-2 text-left text-xs font-semibold text-amber-900 uppercase">Tipo</th>
+                                  <th className="px-3 py-2 text-right text-xs font-semibold text-amber-900 uppercase">Monto</th>
+                                  <th className="px-3 py-2 text-center text-xs font-semibold text-amber-900 uppercase">Acción</th>
                                 </tr>
-                              ))}
-                            </tbody>
-                          </table>
+                              </thead>
+                              <tbody>
+                                {cutoffTransfers.map((t: any) => (
+                                  <tr key={t.id} className="border-t border-amber-100 hover:bg-amber-50">
+                                    <td className="px-3 py-2 text-gray-700 text-xs">
+                                      {new Date(t.date).toLocaleDateString('es-PA')}
+                                    </td>
+                                    <td className="px-3 py-2 text-gray-900 font-medium text-sm">
+                                      {t.description_raw?.substring(0, 50) || 'Sin descripción'}
+                                      {t.insurers?.name && (
+                                        <div className="text-xs text-gray-500 mt-0.5">
+                                          🏢 {t.insurers.name}
+                                        </div>
+                                      )}
+                                    </td>
+                                    <td className="px-3 py-2">
+                                      <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
+                                        {t.transfer_type || 'PENDIENTE'}
+                                      </span>
+                                    </td>
+                                    <td className="px-3 py-2 text-right font-mono font-bold text-amber-900">
+                                      ${t.amount.toFixed(2)}
+                                    </td>
+                                    <td className="px-3 py-2 text-center">
+                                      {(() => {
+                                        const isSameCutoff = t.cutoff_id === currentCutoffId;
+                                        const isDisabled = !currentCutoffId || isSameCutoff;
+                                        const tooltipText = !currentCutoffId 
+                                          ? 'Selecciona un corte bancario primero'
+                                          : isSameCutoff
+                                          ? 'Esta transferencia ya pertenece al corte actual'
+                                          : 'Incluir en quincena actual';
+                                        
+                                        return (
+                                          <button
+                                            onClick={() => {
+                                              if (!currentCutoffId) {
+                                                toast.error('Selecciona un corte bancario primero');
+                                                return;
+                                              }
+                                              if (isSameCutoff) {
+                                                toast.error('Esta transferencia ya pertenece al corte actual');
+                                                return;
+                                              }
+                                              setSelectedTransfer(t);
+                                              setShowIncludeModal(true);
+                                            }}
+                                            disabled={isDisabled}
+                                            className="inline-flex items-center gap-1 px-3 py-1.5 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white text-xs font-semibold rounded-lg hover:from-[#010139] hover:to-[#020270] transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                            title={tooltipText}
+                                          >
+                                            <FaPlusCircle size={12} className="text-white" />
+                                            Incluir
+                                          </button>
+                                        );
+                                      })()}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+
+                          {/* Vista Mobile: Cards */}
+                          <div className="sm:hidden space-y-2">
+                            {cutoffTransfers.map((t: any) => {
+                              const isSameCutoff = t.cutoff_id === currentCutoffId;
+                              const isDisabled = !currentCutoffId || isSameCutoff;
+                              
+                              return (
+                                <div key={t.id} className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                                  <div className="flex justify-between items-start mb-2">
+                                    <div className="flex-1">
+                                      <p className="text-sm font-bold text-amber-900 mb-1">
+                                        {t.description_raw?.substring(0, 40) || 'Sin descripción'}
+                                        {t.description_raw && t.description_raw.length > 40 && '...'}
+                                      </p>
+                                      {t.insurers?.name && (
+                                        <p className="text-xs text-gray-600">🏢 {t.insurers.name}</p>
+                                      )}
+                                    </div>
+                                    <span className="text-lg font-bold text-amber-900 font-mono ml-2">
+                                      ${t.amount.toFixed(2)}
+                                    </span>
+                                  </div>
+                                  
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-xs text-gray-600">
+                                        📅 {new Date(t.date).toLocaleDateString('es-PA')}
+                                      </span>
+                                      <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
+                                        {t.transfer_type || 'PENDIENTE'}
+                                      </span>
+                                    </div>
+                                    
+                                    <button
+                                      onClick={() => {
+                                        if (!currentCutoffId) {
+                                          toast.error('Selecciona un corte bancario primero');
+                                          return;
+                                        }
+                                        if (isSameCutoff) {
+                                          toast.error('Esta transferencia ya pertenece al corte actual');
+                                          return;
+                                        }
+                                        setSelectedTransfer(t);
+                                        setShowIncludeModal(true);
+                                      }}
+                                      disabled={isDisabled}
+                                      className="inline-flex items-center gap-1 px-2 py-1 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white text-xs font-semibold rounded-lg hover:from-[#010139] hover:to-[#020270] transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                      <FaPlusCircle size={10} />
+                                      Incluir
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
                         </div>
                       );
                     })}
@@ -275,7 +335,9 @@ export default function PendingTransfersView({ excludeCutoffId, currentCutoffId,
                   <h4 className="font-semibold text-amber-800 mb-2 flex items-center gap-2">
                     📦 Grupos de Transferencias ({groups.length})
                   </h4>
-                  <div className="bg-white rounded-lg border border-amber-200 overflow-hidden">
+                  
+                  {/* Vista Desktop: Tabla */}
+                  <div className="hidden sm:block bg-white rounded-lg border border-amber-200 overflow-hidden">
                     <table className="w-full text-sm">
                       <thead className="bg-amber-100">
                         <tr>
@@ -310,6 +372,36 @@ export default function PendingTransfersView({ excludeCutoffId, currentCutoffId,
                         ))}
                       </tbody>
                     </table>
+                  </div>
+
+                  {/* Vista Mobile: Cards */}
+                  <div className="sm:hidden space-y-2">
+                    {groups.map((g: any) => (
+                      <div key={g.id} className="bg-white border border-amber-200 rounded-lg p-3">
+                        <div className="flex justify-between items-start mb-2">
+                          <div className="flex-1">
+                            <p className="text-sm font-bold text-gray-900">{g.name}</p>
+                          </div>
+                          <span className="text-lg font-bold text-amber-900 font-mono ml-2">
+                            ${(g.total_amount || 0).toFixed(2)}
+                          </span>
+                        </div>
+                        
+                        <div>
+                          {g.status === 'EN_PROCESO' ? (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-yellow-100 text-yellow-800">
+                              <FaClock size={10} />
+                              EN PROCESO
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
+                              <FaCheckCircle size={10} />
+                              OK
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}

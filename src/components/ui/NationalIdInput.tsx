@@ -206,7 +206,7 @@ export default function NationalIdInput({
   const handleCedulaPart2Change = (e: React.ChangeEvent<HTMLInputElement>) => {
     hasInitialized.current = true; // Marcar como inicializado al primer cambio
     const val = e.target.value.replace(/\D/g, ''); // Solo números
-    if (val.length <= 4) {
+    if (val.length <= 10) {
       setCedulaPart2(val);
     }
   };
@@ -214,7 +214,7 @@ export default function NationalIdInput({
   const handleCedulaPart3Change = (e: React.ChangeEvent<HTMLInputElement>) => {
     hasInitialized.current = true; // Marcar como inicializado al primer cambio
     const val = e.target.value.replace(/\D/g, ''); // Solo números
-    if (val.length <= 5) {
+    if (val.length <= 10) {
       setCedulaPart3(val);
     }
   };
@@ -287,7 +287,7 @@ export default function NationalIdInput({
               </Select>
             </div>
 
-            {/* Parte 2: Tomo (max 4 dígitos) */}
+            {/* Parte 2: Tomo (max 10 dígitos) */}
             <div className="flex-1 min-w-0 sm:w-28">
               <input
                 type="text"
@@ -295,14 +295,14 @@ export default function NationalIdInput({
                 placeholder="Tomo"
                 value={cedulaPart2}
                 onChange={handleCedulaPart2Change}
-                maxLength={4}
+                maxLength={10}
                 className={`w-full px-1 sm:px-3 py-2 border-2 rounded-lg focus:outline-none h-11 text-center font-mono text-sm sm:text-base ${
                   hasError ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
                 }`}
               />
             </div>
 
-            {/* Parte 3: Asiento (max 5 dígitos) */}
+            {/* Parte 3: Asiento (max 10 dígitos) */}
             <div className="flex-1 min-w-0 sm:w-32">
               <input
                 type="text"
@@ -310,7 +310,7 @@ export default function NationalIdInput({
                 placeholder="Asiento"
                 value={cedulaPart3}
                 onChange={handleCedulaPart3Change}
-                maxLength={5}
+                maxLength={10}
                 className={`w-full px-1 sm:px-3 py-2 border-2 rounded-lg focus:outline-none h-11 text-center font-mono text-sm sm:text-base ${
                   hasError ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
                 }`}
@@ -324,14 +324,14 @@ export default function NationalIdInput({
               <p className="text-xs text-blue-700">
                 <strong>Vista previa:</strong>{' '}
                 <span className="font-mono text-sm">
-                  {cedulaPart1 || '___'}-{cedulaPart2 || '____'}-{cedulaPart3 || '_____'}
+                  {cedulaPart1 || '___'}-{cedulaPart2 || '__________'}-{cedulaPart3 || '__________'}
                 </span>
               </p>
             </div>
           )}
 
           <p className="text-xs text-gray-500 mt-2">
-            📝 <strong>Formato:</strong> Provincia-Tomo-Asiento (ej: 8-999-9999 o E-8888-88888)
+            📝 <strong>Formato:</strong> Provincia-Tomo-Asiento (ej: 8-999-9999 o E-8888888888-8888888888)
           </p>
         </div>
       )}
