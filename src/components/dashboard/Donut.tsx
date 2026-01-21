@@ -70,10 +70,10 @@ const Donut = ({
         <p className="text-base font-bold text-gray-400">{label}</p>
         
         <div
-          className="relative flex h-40 w-40 items-center justify-center rounded-full"
+          className="relative flex h-52 w-52 items-center justify-center rounded-full"
           style={{ background: 'conic-gradient(#e5e7eb 100%)' }}
         >
-          <div className="flex h-32 w-32 items-center justify-center rounded-full bg-white text-gray-400">
+          <div className="flex h-28 w-28 items-center justify-center rounded-full bg-white text-gray-400">
             <span className="text-2xl font-semibold">🔒</span>
           </div>
         </div>
@@ -101,10 +101,10 @@ const Donut = ({
         <p className="text-base font-bold text-[#010139]">{label}</p>
         
         <div
-          className="relative flex h-40 w-40 items-center justify-center rounded-full"
+          className="relative flex h-52 w-52 items-center justify-center rounded-full"
           style={{ background: 'conic-gradient(#10b981 100%)' }}
         >
-          <div className="flex h-32 w-32 items-center justify-center rounded-full bg-white text-green-600">
+          <div className="flex h-28 w-28 items-center justify-center rounded-full bg-white text-green-600">
             <span className="text-5xl">🎉</span>
           </div>
         </div>
@@ -137,10 +137,10 @@ const Donut = ({
         <p className="text-base font-bold text-gray-600">{label}</p>
         
         <div
-          className="relative flex h-40 w-40 items-center justify-center rounded-full"
+          className="relative flex h-52 w-52 items-center justify-center rounded-full"
           style={{ background: 'conic-gradient(#f87171 100%)' }}
         >
-          <div className="flex h-32 w-32 items-center justify-center rounded-full bg-white text-red-400">
+          <div className="flex h-28 w-28 items-center justify-center rounded-full bg-white text-red-400">
             <span className="text-3xl font-semibold">{safePercent.toFixed(0)}%</span>
           </div>
         </div>
@@ -189,10 +189,10 @@ const Donut = ({
         <p className="text-base font-bold text-[#010139]">{label}</p>
         
         <div
-          className="relative flex h-40 w-40 items-center justify-center rounded-full"
+          className="relative flex h-52 w-52 items-center justify-center rounded-full"
           style={{ background: 'conic-gradient(#10b981 100%)' }}
         >
-          <div className="flex h-32 w-32 items-center justify-center rounded-full bg-white text-green-600">
+          <div className="flex h-28 w-28 items-center justify-center rounded-full bg-white text-green-600">
             <span className="text-5xl">🎉</span>
           </div>
         </div>
@@ -227,10 +227,10 @@ const Donut = ({
         <p className="text-base font-bold text-[#010139]">{label}</p>
         
         <div
-          className="relative flex h-40 w-40 items-center justify-center rounded-full"
+          className="relative flex h-52 w-52 items-center justify-center rounded-full"
           style={{ background: gradient }}
         >
-          <div className="flex h-32 w-32 items-center justify-center rounded-full bg-white text-green-600">
+          <div className="flex h-28 w-28 items-center justify-center rounded-full bg-white text-green-600">
             <span className="text-3xl font-semibold">{displayPercent.toFixed(0)}%</span>
           </div>
         </div>
@@ -280,10 +280,10 @@ const Donut = ({
       <p className="text-base font-bold text-[#010139]">{label}</p>
       
       <div
-        className="relative flex h-40 w-40 items-center justify-center rounded-full"
+        className="relative flex h-52 w-52 items-center justify-center rounded-full"
         style={{ background: gradient }}
       >
-        <div className="flex h-32 w-32 items-center justify-center rounded-full bg-white text-[#010139]">
+        <div className="flex h-28 w-28 items-center justify-center rounded-full bg-white text-[#010139]">
           <span className="text-3xl font-semibold">{displayPercent.toFixed(0)}%</span>
         </div>
       </div>
