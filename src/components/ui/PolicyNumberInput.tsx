@@ -72,11 +72,26 @@ export default function PolicyNumberInput({
         // Caso perfecto: el número de partes coincide con el esperado
         setInputs(parts);
       } else if (parts.length === 1 && parts[0] && parts[0].trim() !== '') {
-        // Caso sin guiones: solo hay un número (ej: "14713")
-        // Colocar "0" en los inputs anteriores y el valor en el último
-        const newInputs = Array(config.inputCount).fill('0');
-        newInputs[config.inputCount - 1] = parts[0];
-        setInputs(newInputs);
+        // Caso especial para ASSA: formato sin separador (ej: 02B123456)
+        if (config.slug === 'assa' && config.inputCount === 3) {
+          const raw = parts[0];
+          // Formato ASSA: 02B123456 → [02, B, 123456]
+          // Extraer: primeros 2 dígitos, letras intermedias, resto de números
+          const match = raw.match(/^(\d{1,2})([A-Z]{1,2})(\d+)$/i);
+          if (match && match[1] && match[2] && match[3]) {
+            setInputs([match[1], match[2].toUpperCase(), match[3]]);
+          } else {
+            // Si no coincide el patrón, poner todo en el último input como fallback
+            const newInputs = Array(config.inputCount).fill('');
+            newInputs[config.inputCount - 1] = parts[0];
+            setInputs(newInputs);
+          }
+        } else {
+          // Caso sin guiones para otras aseguradoras: poner en el último input
+          const newInputs = Array(config.inputCount).fill('');
+          newInputs[config.inputCount - 1] = parts[0];
+          setInputs(newInputs);
+        }
       } else if (parts.length > config.inputCount) {
         // Más partes de las esperadas: tomar solo las primeras
         setInputs(parts.slice(0, config.inputCount));
