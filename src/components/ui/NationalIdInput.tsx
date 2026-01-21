@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 interface NationalIdInputProps {
   value: string;
   onChange: (value: string) => void;
+  onDocumentTypeChange?: (type: 'cedula' | 'pasaporte' | 'ruc') => void;
   label?: string;
   required?: boolean;
   error?: string;
@@ -39,6 +40,7 @@ const CEDULA_PREFIXES = [
 export default function NationalIdInput({
   value,
   onChange,
+  onDocumentTypeChange,
   label = 'Documento de Identidad',
   required = false,
   error,
@@ -190,6 +192,13 @@ export default function NationalIdInput({
       }
     }
   }, [singleValue, documentType, onChange]);
+
+  // Notificar al padre cuando cambia el tipo de documento
+  useEffect(() => {
+    if (onDocumentTypeChange) {
+      onDocumentTypeChange(documentType);
+    }
+  }, [documentType, onDocumentTypeChange]);
 
   const handleDocumentTypeChange = (newType: DocumentType) => {
     setDocumentType(newType);

@@ -50,6 +50,7 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
   const [userBrokerId, setUserBrokerId] = useState<string | null>(null);
   const [specialOverride, setSpecialOverride] = useState<{ hasSpecialOverride: boolean; overrideValue: number | null; condition?: string }>({ hasSpecialOverride: false, overrideValue: null });
   const [validationErrors, setValidationErrors] = useState<Record<string, boolean>>({});
+  const [documentType, setDocumentType] = useState<'cedula' | 'pasaporte' | 'ruc'>('cedula');
   const today = getTodayLocalDate();
   
   const [formData, setFormData] = useState<FormData>({
@@ -275,8 +276,7 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
       }
       
       // Fecha de nacimiento solo es obligatoria si NO es RUC (empresas)
-      const isRUC = formData.national_id.includes('-') && !formData.national_id.match(/^(PE|E|N|PN|PI|[1-9]|1[0-2])-/);
-      if (!isRUC && !formData.birth_date.trim()) {
+      if (documentType !== 'ruc' && !formData.birth_date.trim()) {
         errors.birth_date = true;
         errorMessages.push('Fecha de nacimiento');
       }
@@ -620,6 +620,9 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                     setValidationErrors(prev => ({ ...prev, national_id: false }));
                   }
                 }}
+                onDocumentTypeChange={(type) => {
+                  setDocumentType(type);
+                }}
                 label="Documento de Identidad"
                 required
                 hasError={validationErrors.national_id}
@@ -676,11 +679,11 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
 
               <div className="w-full max-w-full overflow-hidden">
                 <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
-                  Fecha de Nacimiento <span className="text-red-500">*</span>
+                  Fecha de Nacimiento {documentType !== 'ruc' && <span className="text-red-500">*</span>}
                 </label>
                 <input
                   type="date"
-                  required
+                  required={documentType !== 'ruc'}
                   value={formData.birth_date}
                   onChange={(e) => {
                     setFormData({ ...formData, birth_date: e.target.value });
