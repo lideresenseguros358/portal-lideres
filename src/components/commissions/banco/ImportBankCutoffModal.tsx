@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { FaTimes, FaFileExcel, FaCheckCircle, FaCalendar } from 'react-icons/fa';
+import { useState, useEffect } from 'react';
+import { FaTimes, FaFileExcel, FaCheckCircle, FaCalendar, FaExclamationTriangle } from 'react-icons/fa';
 import { toast } from 'sonner';
 import { parseBankCommFile, validateBankCommFile, normalizeDescription } from '@/lib/banco/bancoParser';
 import type { BankTransferCommRow } from '@/lib/banco/bancoParser';
@@ -11,6 +11,7 @@ interface ImportBankCutoffModalProps {
   onClose: () => void;
   onSuccess: () => void;
   lastCutoffInfo: any;
+  existingCutoffs: any[]; // Para validar duplicados
 }
 
 type PreviewRow = BankTransferCommRow & {
@@ -18,7 +19,19 @@ type PreviewRow = BankTransferCommRow & {
   errors: string[];
 };
 
-export default function ImportBankCutoffModal({ onClose, onSuccess, lastCutoffInfo }: ImportBankCutoffModalProps) {
+const QUINCENAS = ['PRIMERA', 'SEGUNDA'] as const;
+const MESES = [
+  'ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO',
+  'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'
+] as const;
+
+const getCurrentYear = () => new Date().getFullYear();
+const getYearOptions = () => {
+  const currentYear = getCurrentYear();
+  return [currentYear - 1, currentYear, currentYear + 1];
+};
+
+export default function ImportBankCutoffModal({ onClose, onSuccess, lastCutoffInfo, existingCutoffs }: ImportBankCutoffModalProps) {
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [preview, setPreview] = useState<PreviewRow[]>([]);
@@ -28,7 +41,27 @@ export default function ImportBankCutoffModal({ onClose, onSuccess, lastCutoffIn
   // Fechas del corte
   const [startDate, setStartDate] = useState(lastCutoffInfo?.suggestedStart || '');
   const [endDate, setEndDate] = useState(lastCutoffInfo?.suggestedEnd || '');
+  
+  // Componentes de la nota estandarizada
+  const [quincena, setQuincena] = useState<typeof QUINCENAS[number]>('PRIMERA');
+  const [mes, setMes] = useState<typeof MESES[number]>('ENERO');
+  const [año, setAño] = useState<number>(getCurrentYear());
+  
+  // Estado de validación
+  const [isDuplicate, setIsDuplicate] = useState(false);
   const [notes, setNotes] = useState('');
+
+  // Actualizar notes cuando cambian los selectores
+  useEffect(() => {
+    const generatedNotes = `${quincena} DE ${mes} ${año}`;
+    setNotes(generatedNotes);
+    
+    // Validar si ya existe
+    const duplicate = existingCutoffs.some(cutoff => 
+      cutoff.notes?.toUpperCase() === generatedNotes.toUpperCase()
+    );
+    setIsDuplicate(duplicate);
+  }, [quincena, mes, año, existingCutoffs]);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
@@ -87,6 +120,11 @@ export default function ImportBankCutoffModal({ onClose, onSuccess, lastCutoffIn
   const handleImport = async () => {
     if (!file || !startDate || !endDate) {
       toast.error('Completa todos los campos requeridos');
+      return;
+    }
+    
+    if (isDuplicate) {
+      toast.error('Este corte ya fue ingresado anteriormente');
       return;
     }
 
@@ -181,18 +219,77 @@ export default function ImportBankCutoffModal({ onClose, onSuccess, lastCutoffIn
                 </div>
               </div>
 
-              {/* Notas */}
+              {/* Selector de Quincena Estandarizado */}
               <div className="mb-6">
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Notas/Recordatorio (opcional)
+                  📝 Identificador del Corte *
                 </label>
-                <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Ej: Corte de diciembre 2024"
-                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-[#8AAA19]"
-                  rows={2}
-                />
+                <p className="text-xs text-gray-600 mb-3">
+                  Selecciona la quincena, mes y año para generar automáticamente el identificador
+                </p>
+                
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-xs text-gray-600 mb-1">Quincena</label>
+                    <select
+                      value={quincena}
+                      onChange={(e) => setQuincena(e.target.value as typeof QUINCENAS[number])}
+                      className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-[#8AAA19] text-sm font-medium"
+                    >
+                      {QUINCENAS.map(q => (
+                        <option key={q} value={q}>{q}</option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-xs text-gray-600 mb-1">Mes</label>
+                    <select
+                      value={mes}
+                      onChange={(e) => setMes(e.target.value as typeof MESES[number])}
+                      className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-[#8AAA19] text-sm font-medium"
+                    >
+                      {MESES.map(m => (
+                        <option key={m} value={m}>{m}</option>
+                      ))}
+                    </select>
+                  </div>
+                  
+                  <div>
+                    <label className="block text-xs text-gray-600 mb-1">Año</label>
+                    <select
+                      value={año}
+                      onChange={(e) => setAño(Number(e.target.value))}
+                      className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-[#8AAA19] text-sm font-medium"
+                    >
+                      {getYearOptions().map(y => (
+                        <option key={y} value={y}>{y}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                
+                {/* Preview del identificador */}
+                <div className={`mt-3 p-3 rounded-lg border-2 ${
+                  isDuplicate 
+                    ? 'bg-red-50 border-red-300' 
+                    : 'bg-blue-50 border-blue-300'
+                }`}>
+                  <p className="text-xs text-gray-600 mb-1">Identificador generado:</p>
+                  <p className={`font-bold text-sm ${
+                    isDuplicate ? 'text-red-700' : 'text-blue-900'
+                  }`}>
+                    {notes}
+                  </p>
+                  {isDuplicate && (
+                    <div className="flex items-start gap-2 mt-2 text-red-700">
+                      <FaExclamationTriangle className="text-red-600 mt-0.5 flex-shrink-0" />
+                      <p className="text-xs font-semibold">
+                        Este corte ya fue ingresado, por favor ingrese uno distinto
+                      </p>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Upload Zone */}

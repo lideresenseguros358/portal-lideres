@@ -7,6 +7,7 @@
 
 import { useState } from 'react';
 import { FaSync, FaInfoCircle, FaTrash, FaCheckCircle } from 'react-icons/fa';
+import { formatDateLocal } from '@/lib/banco/dateHelpers';
 import { actionRevertTransferInclusion, actionMarkTransfersAsPaid } from '@/app/(app)/commissions/banco-actions';
 import { toast } from 'sonner';
 
@@ -81,16 +82,8 @@ export default function IncludedTransfersList({ transfers, onRefresh }: Included
     }
   };
 
-  const formatDate = (dateStr: string) => {
-    return new Date(dateStr).toLocaleDateString('es-PA', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    });
-  };
-
   const formatCutoffPeriod = (cutoff: { start_date: string; end_date: string }) => {
-    return `${formatDate(cutoff.start_date)} - ${formatDate(cutoff.end_date)}`;
+    return `${formatDateLocal(cutoff.start_date)} - ${formatDateLocal(cutoff.end_date)}`;
   };
 
   const getStatusBadge = (status: string | null) => {
@@ -178,7 +171,7 @@ export default function IncludedTransfersList({ transfers, onRefresh }: Included
               <tr key={transfer.id} className="border-b border-purple-100 hover:bg-purple-50">
                 <td className="px-3 py-2 font-mono font-bold text-purple-900">${transfer.amount.toFixed(2)}</td>
                 <td className="px-3 py-2">{getStatusBadge(transfer.status)}</td>
-                <td className="px-3 py-2 text-gray-700 text-xs">{formatDate(transfer.date)}</td>
+                <td className="px-3 py-2 text-gray-700 text-xs">{formatDateLocal(transfer.date)}</td>
                 <td className="px-3 py-2 font-mono text-xs text-gray-600 hidden lg:table-cell">{transfer.reference_number}</td>
                 <td className="px-3 py-2 text-sm font-semibold text-blue-900">
                   {transfer.insurer_assigned?.name || '-'}
@@ -266,7 +259,7 @@ export default function IncludedTransfersList({ transfers, onRefresh }: Included
 
             {/* Fecha y Ref */}
             <div className="flex items-center gap-3 mb-3 text-xs text-gray-600">
-              <span>📅 {formatDate(transfer.date)}</span>
+              <span>📅 {formatDateLocal(transfer.date)}</span>
               <span className="font-mono">#{transfer.reference_number}</span>
             </div>
 

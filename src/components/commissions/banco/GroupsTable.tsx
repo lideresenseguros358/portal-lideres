@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { FaChevronDown, FaChevronRight, FaLayerGroup, FaCheckCircle, FaClock, FaLock, FaTrash, FaSave, FaEdit, FaUndo, FaMoneyBillWave } from 'react-icons/fa';
 import { toast } from 'sonner';
+import { formatDateLocal } from '@/lib/banco/dateHelpers';
 import { actionDeleteBankGroup, actionUpdateGroupTransfers, actionRevertTransferInclusion, actionMarkGroupAsPaid } from '@/app/(app)/commissions/banco-actions';
 import type { BankTransferStatus, TransferType } from '@/app/(app)/commissions/banco-actions';
 import { supabaseClient } from '@/lib/supabase/client';
@@ -356,7 +357,7 @@ export default function GroupsTable({ groups, loading, onGroupDeleted }: GroupsT
                           return (
                             <tr key={transfer.id} className="border-t border-purple-100 hover:bg-purple-50">
                               <td className="px-4 py-2 text-gray-700">
-                                {new Date(transfer.date).toLocaleDateString('es-PA')}
+                                {formatDateLocal(transfer.date)}
                               </td>
                               <td className="px-4 py-2 font-mono text-xs text-gray-600">
                                 {transfer.reference_number}

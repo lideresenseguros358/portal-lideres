@@ -9,6 +9,7 @@
 import { useState, useEffect } from 'react';
 import { FaFileImport, FaInfoCircle, FaChevronDown, FaChevronUp, FaClock, FaSync, FaLayerGroup, FaList, FaCalendarAlt } from 'react-icons/fa';
 import { actionGetBankCutoffs, actionGetBankTransfers, actionGetLastCutoff, actionGetBankGroupsByCutoff, actionGetIncludedTransfers, actionGetBankGroups } from '@/app/(app)/commissions/banco-actions';
+import { formatDateLocal } from '@/lib/banco/dateHelpers';
 import ImportBankCutoffModal from './ImportBankCutoffModal';
 import TransfersTable from './TransfersTable';
 import GroupsTable from './GroupsTable';
@@ -287,7 +288,7 @@ export default function BancoTab({ role, insurers }: BancoTabProps) {
                 <option value="">-- Selecciona un corte --</option>
                 {cutoffs.map(cutoff => (
                   <option key={cutoff.id} value={cutoff.id}>
-                    {new Date(cutoff.start_date).toLocaleDateString('es-PA')} - {new Date(cutoff.end_date).toLocaleDateString('es-PA')}
+                    {cutoff.notes || `${formatDateLocal(cutoff.start_date)} - ${formatDateLocal(cutoff.end_date)}`}
                   </option>
                 ))}
               </select>
@@ -539,6 +540,7 @@ export default function BancoTab({ role, insurers }: BancoTabProps) {
             onClose={() => setShowImportModal(false)}
             onSuccess={handleImportSuccess}
             lastCutoffInfo={lastCutoffInfo}
+            existingCutoffs={cutoffs}
           />
         )}
       </div>

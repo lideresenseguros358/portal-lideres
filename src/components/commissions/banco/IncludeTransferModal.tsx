@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FaTimes, FaCheckCircle } from 'react-icons/fa';
+import { FaTimes, FaCheckCircle, FaExclamationCircle } from 'react-icons/fa';
 import { toast } from 'sonner';
+import { formatDateLocal } from '@/lib/banco/dateHelpers';
 import { actionIncludeTransferInCurrentFortnight } from '@/app/(app)/commissions/banco-actions';
 
 interface IncludeTransferModalProps {
@@ -112,7 +113,7 @@ export default function IncludeTransferModal({ transfer, currentCutoffId, onClos
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div>
                 <p className="text-blue-700 font-semibold">Fecha:</p>
-                <p className="text-blue-900">{new Date(transfer.date).toLocaleDateString('es-PA')}</p>
+                <p className="text-blue-900">{formatDateLocal(transfer.date)}</p>
               </div>
               <div>
                 <p className="text-blue-700 font-semibold">Referencia:</p>
@@ -130,7 +131,7 @@ export default function IncludeTransferModal({ transfer, currentCutoffId, onClos
                 <p className="text-blue-700 font-semibold">Corte Origen:</p>
                 <p className="text-blue-900 text-xs">
                   {transfer.bank_cutoffs
-                    ? `${new Date(transfer.bank_cutoffs.start_date).toLocaleDateString('es-PA')} - ${new Date(transfer.bank_cutoffs.end_date).toLocaleDateString('es-PA')}`
+                    ? `${formatDateLocal(transfer.bank_cutoffs.start_date)} - ${formatDateLocal(transfer.bank_cutoffs.end_date)}`
                     : 'Sin corte'}
                 </p>
               </div>

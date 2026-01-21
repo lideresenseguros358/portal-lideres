@@ -5,6 +5,7 @@ import { FaClock, FaCheckCircle, FaChevronDown, FaChevronUp, FaPlusCircle } from
 import { toast } from 'sonner';
 import { actionGetPendingTransfersAllCutoffs, actionGetPendingGroupsAll } from '@/app/(app)/commissions/banco-actions';
 import IncludeTransferModal from './IncludeTransferModal';
+import { formatDateLocal } from '@/lib/banco/dateHelpers';
 
 interface PendingTransfersViewProps {
   excludeCutoffId?: string;
@@ -161,7 +162,7 @@ export default function PendingTransfersView({ excludeCutoffId, currentCutoffId,
                     {Array.from(transfersByCutoff.entries()).map(([cutoffKey, cutoffTransfers]) => {
                       const firstTransfer = cutoffTransfers[0];
                       const cutoffInfo = firstTransfer.bank_cutoffs
-                        ? `Corte ${new Date(firstTransfer.bank_cutoffs.start_date).toLocaleDateString('es-PA')} - ${new Date(firstTransfer.bank_cutoffs.end_date).toLocaleDateString('es-PA')}`
+                        ? `Corte ${formatDateLocal(firstTransfer.bank_cutoffs.start_date)} - ${formatDateLocal(firstTransfer.bank_cutoffs.end_date)}`
                         : 'Sin corte asignado';
                       const cutoffTotal = cutoffTransfers.reduce((sum, t) => sum + t.amount, 0);
 
@@ -197,7 +198,7 @@ export default function PendingTransfersView({ excludeCutoffId, currentCutoffId,
                                 {cutoffTransfers.map((t: any) => (
                                   <tr key={t.id} className="border-t border-amber-100 hover:bg-amber-50">
                                     <td className="px-3 py-2 text-gray-700 text-xs">
-                                      {new Date(t.date).toLocaleDateString('es-PA')}
+                                      {formatDateLocal(t.date)}
                                     </td>
                                     <td className="px-3 py-2 text-gray-900 font-medium text-sm">
                                       {t.description_raw?.substring(0, 50) || 'Sin descripción'}
@@ -281,7 +282,7 @@ export default function PendingTransfersView({ excludeCutoffId, currentCutoffId,
                                   <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-2">
                                       <span className="text-xs text-gray-600">
-                                        📅 {new Date(t.date).toLocaleDateString('es-PA')}
+                                        📅 {formatDateLocal(t.date)}
                                       </span>
                                       <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800">
                                         {t.transfer_type || 'PENDIENTE'}

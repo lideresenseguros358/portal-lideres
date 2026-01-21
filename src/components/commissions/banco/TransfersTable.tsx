@@ -7,6 +7,7 @@ import type { BankTransferStatus, TransferType } from '@/app/(app)/commissions/b
 import CreateGroupModal from './CreateGroupModal';
 import MarkAsPaidModal from './MarkAsPaidModal';
 import { toast } from 'sonner';
+import { formatDateLocal } from '@/lib/banco/dateHelpers';
 
 interface TransfersTableProps {
   transfers: any[];
@@ -499,7 +500,7 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
                         className="w-4 h-4 text-[#8AAA19] border-2 border-gray-300 rounded focus:ring-[#8AAA19] disabled:opacity-30"
                       />
                     </td>
-                    <td className="px-3 py-3 text-xs text-gray-700">{new Date(transfer.date).toLocaleDateString('es-PA')}</td>
+                    <td className="px-3 py-3 text-xs text-gray-700">{formatDateLocal(transfer.date)}</td>
                     <td className="px-3 py-3 font-mono text-xs text-gray-700">{transfer.reference_number}</td>
                     <td className="px-3 py-3">
                       <div className="text-xs font-medium text-gray-800 mb-1">{transfer.description_raw.substring(0, 50)}...</div>
@@ -600,7 +601,7 @@ export default function TransfersTable({ transfers, loading, insurers, onRefresh
                         className="w-4 h-4 text-[#8AAA19] border-2 border-gray-300 rounded focus:ring-[#8AAA19] disabled:opacity-30 cursor-pointer"
                       />
                     </td>
-                    <td className="px-3 py-3 text-xs text-gray-700">{new Date(transfer.date).toLocaleDateString('es-PA')}</td>
+                    <td className="px-3 py-3 text-xs text-gray-700">{formatDateLocal(transfer.date)}</td>
                     <td className="px-3 py-3 font-mono text-xs text-gray-700">{transfer.reference_number}</td>
                     <td className="px-3 py-3">
                       <div className="text-xs font-medium text-gray-800">{transfer.description_raw.substring(0, 60)}{transfer.description_raw.length > 60 && '...'}</div>
