@@ -203,9 +203,17 @@ export default function ProductionBrokerView({ year, brokerId }: ProductionBroke
     }).format(value);
   };
 
+  // Comparar mismo período (enero hasta mes actual)
+  const currentMonth = new Date().getMonth(); // 0 = enero, 11 = diciembre
+  const monthsToCompare = MONTH_KEYS.slice(0, currentMonth + 1);
+  
   const previousYTD = previousYearData ? 
-    Object.values(previousYearData.months).reduce((sum, m) => sum + m.bruto, 0) - (previousYearData.canceladas_ytd || 0) : 0;
-  const crecimiento = previousYTD > 0 ? ((netoYTD - previousYTD) / previousYTD) * 100 : 0;
+    monthsToCompare.reduce((sum, key) => sum + (previousYearData.months[key as keyof typeof previousYearData.months]?.bruto || 0), 0) - (previousYearData.canceladas_ytd || 0) : 0;
+  
+  // Verificar si enero tiene datos (determinar si mostrar neutral)
+  const eneroHasDatos = (data.months.jan?.bruto || 0) > 0;
+  
+  const crecimiento = (!eneroHasDatos || previousYTD === 0) ? null : ((netoYTD - previousYTD) / previousYTD) * 100;
 
   return (
     <div className="space-y-6">
@@ -268,9 +276,13 @@ export default function ProductionBrokerView({ year, brokerId }: ProductionBroke
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-xs lg:text-sm text-gray-600 truncate">vs {year - 1}</p>
-              <p className={`text-lg lg:text-2xl font-bold font-mono truncate ${crecimiento >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                {crecimiento >= 0 ? '+' : ''}{crecimiento.toFixed(1)}%
-              </p>
+              {crecimiento === null ? (
+                <p className="text-lg lg:text-2xl font-bold font-mono text-gray-400 truncate">-</p>
+              ) : (
+                <p className={`text-lg lg:text-2xl font-bold font-mono truncate ${crecimiento >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {crecimiento >= 0 ? '+' : ''}{crecimiento.toFixed(1)}%
+                </p>
+              )}
               <p className="text-[10px] lg:text-xs text-gray-500 truncate">{formatCurrency(previousYTD)} anterior</p>
             </div>
           </div>
@@ -544,7 +556,10 @@ export default function ProductionBrokerView({ year, brokerId }: ProductionBroke
             </thead>
             <tbody className="divide-y divide-gray-200">
               {monthlyData.map((month, index) => {
+                // Mostrar "-" si el mes actual está en 0.00
+                const mesEnCero = month.actual === 0;
                 const variacion = month.anterior > 0 ? ((month.actual - month.anterior) / month.anterior) * 100 : 0;
+                
                 return (
                   <tr key={index} className="hover:bg-gray-50">
                     <td className="px-6 py-4 text-sm font-semibold text-gray-900">{month.name}</td>
@@ -556,8 +571,14 @@ export default function ProductionBrokerView({ year, brokerId }: ProductionBroke
                       {formatCurrency(month.anterior)}
                     </td>
                     <td className="px-6 py-4 text-sm text-right text-gray-600">{month.polizas_anterior}</td>
-                    <td className={`px-6 py-4 text-sm text-right font-bold ${variacion >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {variacion >= 0 ? '+' : ''}{variacion.toFixed(1)}%
+                    <td className="px-6 py-4 text-sm text-right font-bold">
+                      {mesEnCero ? (
+                        <span className="text-gray-400">-</span>
+                      ) : (
+                        <span className={variacion >= 0 ? 'text-green-600' : 'text-red-600'}>
+                          {variacion >= 0 ? '+' : ''}{variacion.toFixed(1)}%
+                        </span>
+                      )}
                     </td>
                   </tr>
                 );
@@ -574,8 +595,14 @@ export default function ProductionBrokerView({ year, brokerId }: ProductionBroke
                 <td className="px-6 py-4 text-sm text-right text-gray-700">
                   {previousYearData ? Object.values(previousYearData.months).reduce((sum, m) => sum + m.num_polizas, 0) : 0}
                 </td>
-                <td className={`px-6 py-4 text-sm text-right ${crecimiento >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {crecimiento >= 0 ? '+' : ''}{crecimiento.toFixed(1)}%
+                <td className="px-6 py-4 text-sm text-right font-bold">
+                  {crecimiento === null ? (
+                    <span className="text-gray-400">-</span>
+                  ) : (
+                    <span className={crecimiento >= 0 ? 'text-green-600' : 'text-red-600'}>
+                      {crecimiento >= 0 ? '+' : ''}{crecimiento.toFixed(1)}%
+                    </span>
+                  )}
                 </td>
               </tr>
             </tfoot>

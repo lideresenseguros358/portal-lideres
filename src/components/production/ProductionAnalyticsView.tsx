@@ -145,12 +145,21 @@ export default function ProductionAnalyticsView({ year, brokers }: ProductionAna
   const metaGlobal = allBrokersData.reduce((sum, b) => sum + (b.meta_personal || 0), 0);
   const porcentajeCumplidoGlobal = metaGlobal > 0 ? (totalNetoYTD / metaGlobal) * 100 : 0;
 
-  // Año anterior
+  // Año anterior - Comparar mismo período (enero hasta mes actual)
+  const currentMonth = new Date().getMonth(); // 0 = enero, 11 = diciembre
+  const monthsToCompare = MONTH_KEYS.slice(0, currentMonth + 1);
+  
   const totalPreviousYTD = previousYearData.reduce((sum, b) => {
-    return sum + Object.values(b.months).reduce((mSum: number, m: any) => mSum + (m.bruto || 0), 0) - (b.canceladas_ytd || 0);
+    const monthsSum = monthsToCompare.reduce((mSum: number, key) => {
+      return mSum + (b.months[key]?.bruto || 0);
+    }, 0);
+    return sum + monthsSum - (b.canceladas_ytd || 0);
   }, 0);
 
-  const crecimientoGlobal = totalPreviousYTD > 0 ? ((totalNetoYTD - totalPreviousYTD) / totalPreviousYTD) * 100 : 0;
+  // Verificar si enero tiene datos para todos los brokers (determinar si mostrar neutral)
+  const eneroHasDatos = allBrokersData.some(broker => (broker.months.jan?.bruto || 0) > 0);
+  
+  const crecimientoGlobal = (!eneroHasDatos || totalPreviousYTD === 0) ? null : ((totalNetoYTD - totalPreviousYTD) / totalPreviousYTD) * 100;
 
   // Contar brokers con ventas (producción > 0)
   const brokersConVentas = allBrokersData.filter(broker => {
@@ -322,9 +331,13 @@ export default function ProductionAnalyticsView({ year, brokers }: ProductionAna
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-xs lg:text-sm text-gray-600 truncate">vs {year - 1}</p>
-              <p className={`text-lg lg:text-2xl font-bold font-mono truncate ${crecimientoGlobal >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                {crecimientoGlobal >= 0 ? '+' : ''}{crecimientoGlobal.toFixed(1)}%
-              </p>
+              {crecimientoGlobal === null ? (
+                <p className="text-lg lg:text-2xl font-bold font-mono text-gray-400 truncate">-</p>
+              ) : (
+                <p className={`text-lg lg:text-2xl font-bold font-mono truncate ${crecimientoGlobal >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  {crecimientoGlobal >= 0 ? '+' : ''}{crecimientoGlobal.toFixed(1)}%
+                </p>
+              )}
               <p className="text-[10px] lg:text-xs text-gray-500 truncate">{formatCurrency(totalPreviousYTD)} anterior</p>
             </div>
           </div>
@@ -503,7 +516,10 @@ export default function ProductionAnalyticsView({ year, brokers }: ProductionAna
             </thead>
             <tbody className="divide-y divide-gray-200">
               {aggregateMonthlyData.map((month, index) => {
+                // Mostrar "-" si todos los brokers tienen 0.00 en el mes actual
+                const todosEnCero = month.actual === 0;
                 const variacion = month.anterior > 0 ? ((month.actual - month.anterior) / month.anterior) * 100 : 0;
+                
                 return (
                   <tr key={index} className="hover:bg-gray-50">
                     <td className="px-6 py-4 text-sm font-semibold text-gray-900">{month.name}</td>
@@ -515,8 +531,14 @@ export default function ProductionAnalyticsView({ year, brokers }: ProductionAna
                       {formatCurrency(month.anterior)}
                     </td>
                     <td className="px-6 py-4 text-sm text-right text-gray-600">{month.polizas_anterior}</td>
-                    <td className={`px-6 py-4 text-sm text-right font-bold ${variacion >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {variacion >= 0 ? '+' : ''}{variacion.toFixed(1)}%
+                    <td className="px-6 py-4 text-sm text-right font-bold">
+                      {todosEnCero ? (
+                        <span className="text-gray-400">-</span>
+                      ) : (
+                        <span className={variacion >= 0 ? 'text-green-600' : 'text-red-600'}>
+                          {variacion >= 0 ? '+' : ''}{variacion.toFixed(1)}%
+                        </span>
+                      )}
                     </td>
                   </tr>
                 );
@@ -537,8 +559,14 @@ export default function ProductionAnalyticsView({ year, brokers }: ProductionAna
                     return sum + Object.values(b.months).reduce((mSum: number, m: any) => mSum + (m.num_polizas || 0), 0);
                   }, 0)}
                 </td>
-                <td className={`px-6 py-4 text-sm text-right ${crecimientoGlobal >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {crecimientoGlobal >= 0 ? '+' : ''}{crecimientoGlobal.toFixed(1)}%
+                <td className="px-6 py-4 text-sm text-right font-bold">
+                  {crecimientoGlobal === null ? (
+                    <span className="text-gray-400">-</span>
+                  ) : (
+                    <span className={crecimientoGlobal >= 0 ? 'text-green-600' : 'text-red-600'}>
+                      {crecimientoGlobal >= 0 ? '+' : ''}{crecimientoGlobal.toFixed(1)}%
+                    </span>
+                  )}
                 </td>
               </tr>
             </tfoot>
