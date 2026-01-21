@@ -191,11 +191,28 @@ export default function PolicyNumberInput({
         <div className="flex flex-row gap-2">
           {Array.from({ length: config.inputCount }).map((_, index) => {
             const inputType = config.inputTypes[index];
+            
+            // Tamaños específicos para ASSA
+            const isAssa = config.slug === 'assa';
+            let containerClass = '';
+            
+            if (isAssa) {
+              if (index === 0) {
+                // Primer input ASSA: 2 dígitos (pequeño)
+                containerClass = 'flex-none w-16 sm:w-20';
+              } else if (index === 1) {
+                // Segundo input ASSA: dropdown letras (medio)
+                containerClass = 'flex-none w-20 sm:w-24';
+              } else if (index === 2) {
+                // Tercer input ASSA: hasta 10 dígitos (flex para ocupar espacio restante)
+                containerClass = 'flex-1 min-w-0';
+              }
+            }
 
             if (inputType === 'dropdown') {
               // Dropdown (ej: ASSA parte 2)
               return (
-                <div key={index} className="flex-none w-24 sm:w-32">
+                <div key={index} className={containerClass || 'flex-none w-24 sm:w-32'}>
                   <Select 
                     value={inputs[index] || ''} 
                     onValueChange={(val) => handleInputChange(index, val)}
@@ -216,7 +233,7 @@ export default function PolicyNumberInput({
             } else if (inputType === 'numeric') {
               // Input numérico
               return (
-                <div key={index} className="flex-1 min-w-0 sm:w-28">
+                <div key={index} className={containerClass || 'flex-1 min-w-0 sm:w-28'}>
                   <input
                     type="text"
                     inputMode="numeric"
@@ -225,22 +242,23 @@ export default function PolicyNumberInput({
                       const val = e.target.value.replace(/\D/g, ''); // Solo números
                       handleInputChange(index, val);
                     }}
-                    className={`w-full px-1 sm:px-3 py-2 border-2 rounded-lg focus:outline-none h-11 text-center font-mono text-sm sm:text-base ${
+                    className={`w-full px-2 sm:px-3 py-2 border-2 rounded-lg focus:outline-none h-11 text-center font-mono text-sm sm:text-base ${
                       hasError ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
                     }`}
-                    placeholder={`Parte ${index + 1}`}
+                    placeholder={isAssa && index === 0 ? '02' : isAssa && index === 2 ? '123456' : `Parte ${index + 1}`}
+                    maxLength={isAssa && index === 0 ? 2 : isAssa && index === 2 ? 10 : undefined}
                   />
                 </div>
               );
             } else {
               // Input mixto (texto y números)
               return (
-                <div key={index} className="flex-1 min-w-0 sm:w-32">
+                <div key={index} className={containerClass || 'flex-1 min-w-0 sm:w-32'}>
                   <input
                     type="text"
                     value={inputs[index] || ''}
                     onChange={(e) => handleInputChange(index, e.target.value.toUpperCase())}
-                    className={`w-full px-1 sm:px-3 py-2 border-2 rounded-lg focus:outline-none h-11 font-mono text-sm sm:text-base ${
+                    className={`w-full px-2 sm:px-3 py-2 border-2 rounded-lg focus:outline-none h-11 font-mono text-sm sm:text-base ${
                       hasError ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
                     }`}
                     placeholder={`Parte ${index + 1}`}
