@@ -158,17 +158,17 @@ export default function IncludedTransfersList({ transfers, onRefresh }: Included
         </div>
       </div>
 
-      {/* Transfers Table - Compacto */}
-      <div className="overflow-x-auto">
+      {/* Vista Desktop - Tabla */}
+      <div className="hidden md:block overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="bg-purple-50 border-b-2 border-purple-200">
             <tr>
               <th className="px-3 py-2 text-left text-xs font-bold text-purple-900">Monto</th>
-              <th className="px-3 py-2 text-left text-xs font-bold text-purple-900 hidden sm:table-cell">Estado</th>
-              <th className="px-3 py-2 text-left text-xs font-bold text-purple-900 hidden md:table-cell">Fecha</th>
+              <th className="px-3 py-2 text-left text-xs font-bold text-purple-900">Estado</th>
+              <th className="px-3 py-2 text-left text-xs font-bold text-purple-900">Fecha</th>
               <th className="px-3 py-2 text-left text-xs font-bold text-purple-900 hidden lg:table-cell">Ref</th>
               <th className="px-3 py-2 text-left text-xs font-bold text-purple-900">Aseguradora</th>
-              <th className="px-3 py-2 text-left text-xs font-bold text-purple-900 hidden md:table-cell">Descripción</th>
+              <th className="px-3 py-2 text-left text-xs font-bold text-purple-900">Descripción</th>
               <th className="px-3 py-2 text-left text-xs font-bold text-purple-900 hidden lg:table-cell">Corte Original</th>
               <th className="px-3 py-2 text-center text-xs font-bold text-purple-900">Acción</th>
             </tr>
@@ -177,13 +177,13 @@ export default function IncludedTransfersList({ transfers, onRefresh }: Included
             {transfers.map((transfer) => (
               <tr key={transfer.id} className="border-b border-purple-100 hover:bg-purple-50">
                 <td className="px-3 py-2 font-mono font-bold text-purple-900">${transfer.amount.toFixed(2)}</td>
-                <td className="px-3 py-2 hidden sm:table-cell">{getStatusBadge(transfer.status)}</td>
-                <td className="px-3 py-2 text-gray-700 text-xs hidden md:table-cell">{formatDate(transfer.date)}</td>
+                <td className="px-3 py-2">{getStatusBadge(transfer.status)}</td>
+                <td className="px-3 py-2 text-gray-700 text-xs">{formatDate(transfer.date)}</td>
                 <td className="px-3 py-2 font-mono text-xs text-gray-600 hidden lg:table-cell">{transfer.reference_number}</td>
                 <td className="px-3 py-2 text-sm font-semibold text-blue-900">
                   {transfer.insurer_assigned?.name || '-'}
                 </td>
-                <td className="px-3 py-2 text-sm text-gray-800 max-w-xs truncate hidden md:table-cell" title={transfer.description_raw}>
+                <td className="px-3 py-2 text-sm text-gray-800 max-w-xs truncate" title={transfer.description_raw}>
                   {transfer.description_raw?.substring(0, 60) || 'Sin descripción'}
                 </td>
                 <td className="px-3 py-2 text-xs hidden lg:table-cell">
@@ -227,6 +227,78 @@ export default function IncludedTransfersList({ transfers, onRefresh }: Included
             ))}
           </tbody>
         </table>
+      </div>
+
+      {/* Vista Mobile - Cards */}
+      <div className="md:hidden space-y-3 p-3">
+        {transfers.map((transfer) => (
+          <div key={transfer.id} className="bg-purple-50 border-2 border-purple-200 rounded-lg p-3 shadow-sm">
+            {/* Header con monto y estado */}
+            <div className="flex justify-between items-start mb-3">
+              <div className="flex-1">
+                <p className="text-lg font-bold text-purple-900 font-mono mb-1">
+                  ${transfer.amount.toFixed(2)}
+                </p>
+                {getStatusBadge(transfer.status)}
+              </div>
+              {transfer.original_cutoff && (
+                <span className="bg-amber-100 text-amber-900 px-2 py-1 rounded text-xs font-semibold ml-2">
+                  📅 {formatCutoffPeriod(transfer.original_cutoff)}
+                </span>
+              )}
+            </div>
+
+            {/* Aseguradora */}
+            <div className="mb-2">
+              <p className="text-xs text-purple-700 font-semibold mb-0.5">Aseguradora</p>
+              <p className="text-sm font-bold text-blue-900">
+                {transfer.insurer_assigned?.name || '-'}
+              </p>
+            </div>
+
+            {/* Descripción */}
+            <div className="mb-2">
+              <p className="text-xs text-gray-700 leading-tight">
+                {transfer.description_raw?.substring(0, 80) || 'Sin descripción'}
+                {transfer.description_raw && transfer.description_raw.length > 80 && '...'}
+              </p>
+            </div>
+
+            {/* Fecha y Ref */}
+            <div className="flex items-center gap-3 mb-3 text-xs text-gray-600">
+              <span>📅 {formatDate(transfer.date)}</span>
+              <span className="font-mono">#{transfer.reference_number}</span>
+            </div>
+
+            {/* Acciones */}
+            <div className="flex gap-2">
+              {transfer.status !== 'PAGADO' ? (
+                <>
+                  <button
+                    onClick={() => handleMarkAsPaid(transfer.id)}
+                    disabled={marking[transfer.id]}
+                    className="flex-1 inline-flex items-center justify-center gap-1 px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-semibold disabled:opacity-50"
+                  >
+                    <FaCheckCircle className="text-white" />
+                    {marking[transfer.id] ? 'Marcando...' : 'Marcar Pagado'}
+                  </button>
+                  <button
+                    onClick={() => handleRevert(transfer.id)}
+                    disabled={reverting[transfer.id]}
+                    className="flex-1 inline-flex items-center justify-center gap-1 px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-semibold disabled:opacity-50"
+                  >
+                    <FaTrash className="text-white" />
+                    {reverting[transfer.id] ? 'Revirtiendo...' : 'Revertir'}
+                  </button>
+                </>
+              ) : (
+                <div className="flex-1 text-center px-3 py-2 bg-gray-100 text-gray-500 rounded-lg text-xs font-semibold">
+                  🔒 Transferencia Bloqueada (PAGADA)
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
