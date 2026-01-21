@@ -55,7 +55,7 @@ async function getClientsWithPolicies(searchQuery?: string): Promise<ClientWithP
         name
       )
     `)
-    .order("created_at", { ascending: false });
+    .order("name", { ascending: true });
 
   if (searchQuery && searchQuery.trim()) {
     // Buscar en clientes O en IDs de clientes que tienen pólizas con notas/números que coinciden
