@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { FaChevronDown, FaChevronRight, FaMoneyBillWave, FaPlus, FaHistory, FaDollarSign, FaEdit } from 'react-icons/fa';
+import { FaChevronDown, FaChevronRight, FaMoneyBillWave, FaPlus, FaHistory, FaDollarSign, FaEdit, FaTrash } from 'react-icons/fa';
 import { AddAdvanceModal } from './AddAdvanceModal';
 import { AdvanceHistoryModal } from './AdvanceHistoryModal';
 import { PayAdvanceModal } from './PayAdvanceModal';
@@ -175,6 +175,36 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
   useEffect(() => {
     loadAdvances();
   }, [loadAdvances]);
+
+  // Revertir/Eliminar descuento aplicado
+  const handleRevertDiscount = async (advanceId: string, paymentDate: string) => {
+    if (!confirm('¿Estás seguro de eliminar este descuento?\n\nEsto revertirá el descuento pero mantendrá el adelanto intacto.')) {
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/commissions/fortnight-discounts/revert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          advance_id: advanceId,
+          payment_date: paymentDate
+        })
+      });
+
+      const result = await response.json();
+
+      if (result.ok) {
+        toast.success('Descuento eliminado correctamente');
+        loadAdvances(); // Recargar datos
+      } else {
+        toast.error(result.error || 'Error al eliminar descuento');
+      }
+    } catch (error) {
+      console.error('Error reverting discount:', error);
+      toast.error('Error al eliminar descuento');
+    }
+  };
 
   const groupedData = useMemo(() => {
     console.log('[AdvancesTab] Grouping advances, total count:', allAdvances.length);
@@ -579,12 +609,12 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
                                           variant="ghost"
                                           onClick={(e) => {
                                             e.stopPropagation();
-                                            setEditingAdvance(advance);
+                                            handleRevertDiscount(advance.id, dateKey);
                                           }}
-                                          className="hover:bg-[#010139] hover:text-white"
-                                          title="Editar adelanto"
+                                          className="hover:bg-red-600 hover:text-white"
+                                          title="Eliminar descuento"
                                         >
-                                          <FaEdit className="text-sm" />
+                                          <FaTrash className="text-sm" />
                                         </Button>
                                         <Button
                                           size="sm"
@@ -631,16 +661,30 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
                                 {paidOnThisDate.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
                               </TableCell>
                               <TableCell className="text-center">
-                                <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => setSelectedAdvanceId(advance.id)}
-                                className="hover:bg-[#8AAA19] hover:text-white"
-                                title="Ver historial"
-                              >
-                                <FaHistory className="text-sm" />
-                              </Button>
-                            </TableCell>
+                                <div className="flex items-center justify-center gap-2">
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleRevertDiscount(advance.id, dateKey);
+                                    }}
+                                    className="hover:bg-red-600 hover:text-white"
+                                    title="Eliminar descuento"
+                                  >
+                                    <FaTrash className="text-sm" />
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => setSelectedAdvanceId(advance.id)}
+                                    className="hover:bg-[#8AAA19] hover:text-white"
+                                    title="Ver historial"
+                                  >
+                                    <FaHistory className="text-sm" />
+                                  </Button>
+                                </div>
+                              </TableCell>
                           </TableRow>
                           );
                         })

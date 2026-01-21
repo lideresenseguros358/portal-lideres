@@ -3,17 +3,18 @@ import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { revalidatePath } from 'next/cache';
 
 /**
- * POST: Revertir un descuento aplicado
- * - Elimina el registro de fortnight_discounts
- * - Mantiene el adelanto intacto (saldo se restaura automáticamente)
+ * POST: Revertir/Eliminar un descuento aplicado
+ * - Busca el advance_log específico por advance_id y fecha de pago
+ * - Valida que el descuento no esté amarrado a un pago pendiente ya pagado
+ * - Elimina el advance_log (el saldo del adelanto se restaura automáticamente)
  * - El adelanto queda disponible para ser aplicado nuevamente
  */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { fortnight_id, broker_id, advance_id } = body;
+    const { advance_id, payment_date } = body;
 
-    if (!fortnight_id || !broker_id || !advance_id) {
+    if (!advance_id || !payment_date) {
       return NextResponse.json(
         { ok: false, error: 'Datos incompletos' },
         { status: 400 }
@@ -22,53 +23,97 @@ export async function POST(request: NextRequest) {
 
     const supabase = getSupabaseAdmin();
 
-    // 1. Verificar que el descuento existe
-    const { data: discount, error: fetchError } = await supabase
-      .from('fortnight_discounts')
+    console.log(`[revert-discount] Buscando descuento: advance_id=${advance_id}, payment_date=${payment_date}`);
+
+    // 1. Buscar el advance_log específico por advance_id y fecha
+    // La fecha en created_at está en formato "YYYY-MM-DD HH:MM:SS"
+    // payment_date viene como "YYYY-MM-DD"
+    const { data: advanceLogs, error: fetchError } = await supabase
+      .from('advance_logs')
       .select('*')
-      .eq('fortnight_id', fortnight_id)
-      .eq('broker_id', broker_id)
       .eq('advance_id', advance_id)
-      .eq('applied', false) // Solo descuentos en borrador
-      .maybeSingle();
+      .gte('created_at', `${payment_date} 00:00:00`)
+      .lte('created_at', `${payment_date} 23:59:59`);
 
     if (fetchError) {
-      console.error('[revert-discount] Error fetching discount:', fetchError);
+      console.error('[revert-discount] Error fetching advance_log:', fetchError);
       return NextResponse.json({ ok: false, error: fetchError.message }, { status: 500 });
     }
 
-    if (!discount) {
+    if (!advanceLogs || advanceLogs.length === 0) {
       return NextResponse.json(
-        { ok: false, error: 'Descuento no encontrado o ya fue aplicado' },
+        { ok: false, error: 'Descuento no encontrado en esta fecha' },
         { status: 404 }
       );
     }
 
-    console.log(`[revert-discount] Revirtiendo descuento de $${discount.amount} para adelanto ${advance_id}`);
+    const advanceLog = advanceLogs[0]!;
+    console.log(`[revert-discount] Advance log encontrado: id=${advanceLog.id}, amount=$${advanceLog.amount}, payment_type=${advanceLog.payment_type}`);
 
-    // 2. Eliminar el descuento de fortnight_discounts
+    // 2. Validar si el adelanto está asociado a un pago pendiente YA PAGADO
+    // La relación se establece en el campo 'notes' (JSON) con la clave 'advance_id'
+    const { data: paidPayments, error: paymentsError } = await supabase
+      .from('pending_payments')
+      .select('id, status, client_name, notes')
+      .eq('status', 'PAID');
+
+    if (paymentsError) {
+      console.error('[revert-discount] Error checking paid payments:', paymentsError);
+    }
+
+    // Buscar si algún pago PAID tiene este advance_id en su metadata
+    if (paidPayments && paidPayments.length > 0) {
+      for (const payment of paidPayments) {
+        let metadata: any = null;
+        
+        // Parsear notes como JSON
+        if (payment.notes) {
+          try {
+            metadata = typeof payment.notes === 'string' ? JSON.parse(payment.notes) : payment.notes;
+          } catch (e) {
+            // Si no es JSON válido, continuar
+            continue;
+          }
+        }
+
+        // Verificar si este pago tiene el advance_id que estamos intentando eliminar
+        if (metadata && metadata.advance_id === advance_id) {
+          console.log(`[revert-discount] ❌ BLOQUEADO: Descuento amarrado a pago PAID: ${payment.id} - Cliente: ${payment.client_name}`);
+          return NextResponse.json({
+            ok: false,
+            error: 'No se puede eliminar porque este descuento ya se utilizó para un pago. Por favor contactar al administrador para más información.',
+            blocked: true,
+            payment_info: {
+              payment_id: payment.id,
+              client: payment.client_name
+            }
+          }, { status: 403 });
+        }
+      }
+    }
+
+    console.log(`[revert-discount] ✓ Validación pasada: descuento no está amarrado a pagos PAID`);
+
+    // 3. Eliminar el advance_log
     const { error: deleteError } = await supabase
-      .from('fortnight_discounts')
+      .from('advance_logs')
       .delete()
-      .eq('fortnight_id', fortnight_id)
-      .eq('broker_id', broker_id)
-      .eq('advance_id', advance_id)
-      .eq('applied', false);
+      .eq('id', advanceLog.id);
 
     if (deleteError) {
-      console.error('[revert-discount] Error deleting discount:', deleteError);
+      console.error('[revert-discount] Error deleting advance_log:', deleteError);
       return NextResponse.json({ ok: false, error: deleteError.message }, { status: 500 });
     }
 
     console.log('[revert-discount] ✓ Descuento eliminado correctamente');
 
-    // 3. Revalidar páginas relacionadas
+    // 4. Revalidar páginas relacionadas
     revalidatePath('/commissions');
 
     return NextResponse.json({ 
       ok: true, 
-      message: 'Descuento revertido correctamente',
-      amount: discount.amount
+      message: 'Descuento eliminado correctamente',
+      amount: advanceLog.amount
     });
   } catch (error) {
     console.error('[revert-discount] Error:', error);

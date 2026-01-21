@@ -285,38 +285,6 @@ export function AdvancesManagementModal({
     }
   };
 
-  // Revertir descuento aplicado
-  const handleRevertDiscount = async (advanceId: string) => {
-    if (!confirm('¿Estás seguro de revertir este descuento?\n\nEsto eliminará el descuento de esta quincena pero mantendrá el adelanto intacto.')) {
-      return;
-    }
-
-    try {
-      const response = await fetch('/api/commissions/fortnight-discounts/revert', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fortnight_id: fortnightId,
-          broker_id: brokerId,
-          advance_id: advanceId
-        })
-      });
-
-      const result = await response.json();
-
-      if (result.ok) {
-        toast.success('Descuento revertido correctamente');
-        onDiscountsApplied(); // Refrescar datos en el padre
-        loadData(); // Recargar datos del modal
-      } else {
-        toast.error(result.error || 'Error al revertir descuento');
-      }
-    } catch (error) {
-      console.error('Error reverting discount:', error);
-      toast.error('Error al revertir descuento');
-    }
-  };
-
   if (!isOpen) return null;
 
   return (
@@ -429,47 +397,6 @@ export function AdvancesManagementModal({
                       <span className="font-semibold">Crear Adelanto</span>
                     </button>
                   </div>
-
-                  {/* Descuentos Aplicados Actualmente */}
-                  {existingDiscounts.length > 0 && (
-                    <div className="bg-amber-50 border-2 border-amber-300 rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <h4 className="font-bold text-amber-900 flex items-center gap-2">
-                          <FaExclamationTriangle className="text-amber-600" />
-                          Descuentos Aplicados a esta Quincena
-                        </h4>
-                        <span className="text-sm bg-amber-200 text-amber-900 px-3 py-1 rounded-full font-semibold">
-                          {existingDiscounts.length} descuento{existingDiscounts.length !== 1 ? 's' : ''}
-                        </span>
-                      </div>
-                      <div className="space-y-2">
-                        {existingDiscounts.map((discount) => {
-                          const advance = [...advances, ...allAdvances].find(a => a.id === discount.advance_id);
-                          return (
-                            <div key={discount.advance_id} className="bg-white border border-amber-200 rounded-lg p-3 flex items-center justify-between">
-                              <div className="flex-1">
-                                <p className="font-semibold text-gray-900">{advance?.reason || 'Adelanto'}</p>
-                                <p className="text-sm text-gray-600">
-                                  Monto descontado: <span className="font-mono font-bold text-red-600">${discount.amount.toFixed(2)}</span>
-                                </p>
-                              </div>
-                              <button
-                                onClick={() => handleRevertDiscount(discount.advance_id)}
-                                className="flex items-center gap-2 px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors text-sm font-semibold"
-                                title="Revertir descuento"
-                              >
-                                <FaTrash size={14} />
-                                Revertir
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </div>
-                      <p className="text-xs text-amber-700 mt-3">
-                        ⚠️ Revertir un descuento lo eliminará de esta quincena pero mantendrá el adelanto intacto
-                      </p>
-                    </div>
-                  )}
 
                   {/* Formulario crear adelanto */}
                   {showCreateForm && (
