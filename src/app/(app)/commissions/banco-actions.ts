@@ -1669,7 +1669,7 @@ export async function actionGetIncludedTransfers(
 
     // 2. Construir el label exacto que se usa en las notas
     const targetCutoffLabel = `${new Date(targetCutoff.start_date).toLocaleDateString('es-PA')} - ${new Date(targetCutoff.end_date).toLocaleDateString('es-PA')}`;
-    const searchPattern = `%Incluida en corte: ${targetCutoffLabel}%`;
+    const searchPattern = `%📌 Incluida en corte: ${targetCutoffLabel}%`;
 
     console.log('[BANCO] Buscando transferencias incluidas con patrón:', searchPattern);
 
