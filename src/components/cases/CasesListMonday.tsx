@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { FaChevronDown, FaChevronUp, FaClock, FaFolder, FaEnvelope, FaEdit, FaTicketAlt, FaExternalLinkAlt } from 'react-icons/fa';
 import { getSLAColor, getSLALabel, STATUS_COLORS, CASE_STATUS_LABELS, MANAGEMENT_TYPES } from '@/lib/constants/cases';
 import Link from 'next/link';
@@ -34,7 +34,7 @@ export default function CasesListMonday({
   const [expandedGroups, setExpandedGroups] = useState<string[]>([]);
   const [emailHistoryCaseId, setEmailHistoryCaseId] = useState<string | null>(null);
 
-  // Agrupar casos por tipo de trámite
+  // Expandir todos los grupos automáticamente al cargar
   const groupedCases = useMemo(() => {
     const groups: Record<string, any[]> = {};
     
@@ -52,7 +52,8 @@ export default function CasesListMonday({
     });
 
     sortedCases.forEach(caseItem => {
-      const managementType = caseItem.management_type || 'SIN_TIPO';
+      // Usar management_type o 'OTROS' como fallback
+      const managementType = caseItem.management_type || 'OTROS';
       if (!groups[managementType]) {
         groups[managementType] = [];
       }
@@ -61,6 +62,12 @@ export default function CasesListMonday({
 
     return groups;
   }, [cases]);
+
+  // Auto-expandir todos los grupos cuando cambian los casos
+  useEffect(() => {
+    const allGroups = Object.keys(groupedCases);
+    setExpandedGroups(allGroups);
+  }, [groupedCases]);
 
   const toggleGroup = (groupKey: string) => {
     setExpandedGroups(prev =>
@@ -115,7 +122,8 @@ export default function CasesListMonday({
       {/* Grupos por tipo de trámite */}
       {Object.entries(groupedCases).map(([managementType, groupCases]) => {
         const isExpanded = expandedGroups.includes(managementType);
-        const managementLabel = MANAGEMENT_TYPES[managementType as keyof typeof MANAGEMENT_TYPES] || managementType;
+        const managementLabel = MANAGEMENT_TYPES[managementType as keyof typeof MANAGEMENT_TYPES] || 
+                                (managementType === 'OTROS' ? 'Otros / Sin clasificar' : managementType);
 
         return (
           <div key={managementType} className="bg-white rounded-xl shadow-lg border-2 border-gray-100 overflow-hidden">
