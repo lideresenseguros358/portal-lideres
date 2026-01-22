@@ -15,6 +15,10 @@ const ASEGURADORAS_KEYWORDS: Record<string, string[]> = {
   'SURA': ['sura', 'seguros sura'],
   'QUALITAS': ['qualitas', 'quálitas'],
   'ACERTA': ['acerta'],
+  'ANCON': ['ancón', 'ancon'],
+  'INTERNACIONAL': ['internacional', 'internacional de seguros'],
+  'SEGURO MUNDIAL': ['seguro mundial', 'mundial'],
+  'ATLANTICO': ['atlántico', 'atlantico'],
 };
 
 const CASE_TYPE_KEYWORDS: Record<string, string[]> = {
@@ -83,14 +87,26 @@ export function normalizeText(text: string): string {
 
 /**
  * Detects insurer from text using keywords
+ * Returns 'VARIAS' if multiple insurers are detected (for cotizaciones)
  */
 export function detectInsurer(subject: string, body: string): string | null {
   const text = normalizeText(subject + ' ' + body);
+  const foundInsurers: string[] = [];
   
   for (const [insurer, keywords] of Object.entries(ASEGURADORAS_KEYWORDS)) {
     if (keywords.some(kw => text.includes(kw.toLowerCase()))) {
-      return insurer;
+      foundInsurers.push(insurer);
     }
+  }
+  
+  // Si encontró 2 o más aseguradoras, retornar VARIAS
+  if (foundInsurers.length >= 2) {
+    return 'VARIAS';
+  }
+  
+  // Si encontró exactamente 1, retornarla
+  if (foundInsurers.length === 1) {
+    return foundInsurers[0]!;
   }
   
   return null;
