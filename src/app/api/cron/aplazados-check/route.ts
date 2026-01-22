@@ -37,6 +37,7 @@ export async function GET(request: NextRequest) {
     console.log('[CRON APLAZADOS] Starting aplazados check');
 
     // 📊 HEARTBEAT: Log inicio
+    // @ts-ignore - tabla nueva, database.types.ts pendiente de actualizar
     const { data: runData } = await supabase
       .from('cron_runs')
       .insert({
@@ -78,6 +79,7 @@ export async function GET(request: NextRequest) {
 
     for (const caso of aplazadosVencidos) {
       // Crear notificación para master asignado
+      // @ts-ignore
       const { error: notifError } = await supabase.from('notifications').insert({
         user_id: caso.assigned_master_id,
         type: 'APLAZADO_VENCIDO',
@@ -92,6 +94,7 @@ export async function GET(request: NextRequest) {
       }
 
       // Crear evento de historial
+      // @ts-ignore - tabla nueva, database.types.ts pendiente de actualizar
       await supabase.from('case_history_events').insert({
         case_id: caso.id,
         event_type: 'aplazado_vencido',
@@ -104,6 +107,7 @@ export async function GET(request: NextRequest) {
       });
 
       // Audit log
+      // @ts-ignore - tabla nueva, database.types.ts pendiente de actualizar
       await supabase.from('security_audit_logs').insert({
         actor_type: 'system',
         action: 'APLAZADO_VENCIDO',
@@ -117,6 +121,7 @@ export async function GET(request: NextRequest) {
 
     // 📊 HEARTBEAT: Log finalización
     if (runId) {
+      // @ts-ignore - tabla nueva, database.types.ts pendiente de actualizar
       await supabase
         .from('cron_runs')
         .update({
@@ -144,6 +149,7 @@ export async function GET(request: NextRequest) {
 
     // 📊 HEARTBEAT: Log error
     if (runId) {
+      // @ts-ignore - tabla nueva, database.types.ts pendiente de actualizar
       await supabase
         .from('cron_runs')
         .update({

@@ -288,6 +288,7 @@ async function linkEmailToCase(
   caseId: string,
   inboundEmailId: string
 ): Promise<void> {
+  // @ts-ignore - tabla nueva, database.types.ts pendiente de actualizar
   await supabase.from('case_emails').insert({
     case_id: caseId,
     inbound_email_id: inboundEmailId,
@@ -384,6 +385,7 @@ async function createAuditLog(
     after?: any;
   }
 ): Promise<void> {
+  // @ts-ignore - tabla nueva, database.types.ts pendiente de actualizar
   await supabase.from('security_audit_logs').insert({
     actor_type: 'system',
     action: data.action,

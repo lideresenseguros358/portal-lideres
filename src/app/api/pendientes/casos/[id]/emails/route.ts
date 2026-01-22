@@ -19,6 +19,7 @@ export async function GET(
     }
 
     // Obtener correos vinculados al caso
+    // @ts-ignore - tablas nuevas, database.types.ts pendiente de actualizar
     const { data: emails, error } = await supabase
       .from('case_emails')
       .select(`

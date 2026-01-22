@@ -119,6 +119,7 @@ async function processMessage(msg: EmailMessage): Promise<any> {
   const supabase = await createClient();
 
   // 1. Deduplicar por message-id
+  // @ts-ignore - tabla nueva, database.types.ts pendiente de actualizar
   const { data: existing } = await supabase
     .from('inbound_emails')
     .select('id')
@@ -131,6 +132,7 @@ async function processMessage(msg: EmailMessage): Promise<any> {
   }
 
   // 2. Guardar en inbound_emails
+  // @ts-ignore - tabla nueva, database.types.ts pendiente de actualizar
   const { data: inboundEmail, error: saveError } = await supabase
     .from('inbound_emails')
     .insert({
@@ -189,6 +191,7 @@ async function processMessage(msg: EmailMessage): Promise<any> {
   // 6. Actualizar estado de inbound_email
   const newStatus = caseResult.success ? 'linked' : 'error';
   
+  // @ts-ignore - tabla nueva, database.types.ts pendiente de actualizar
   await supabase
     .from('inbound_emails')
     .update({

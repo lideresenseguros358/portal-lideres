@@ -38,6 +38,7 @@ export async function GET(request: NextRequest) {
     console.log('[CRON IMAP] Starting ingestion cycle');
 
     // 📊 HEARTBEAT: Log inicio
+    // @ts-ignore - tabla nueva, database.types.ts pendiente de actualizar
     const { data: runData } = await supabase
       .from('cron_runs')
       .insert({
@@ -57,6 +58,7 @@ export async function GET(request: NextRequest) {
 
     // 📊 HEARTBEAT: Log finalización
     if (runId) {
+      // @ts-ignore - tabla nueva, database.types.ts pendiente de actualizar
       await supabase
         .from('cron_runs')
         .update({
@@ -92,6 +94,7 @@ export async function GET(request: NextRequest) {
 
     // 📊 HEARTBEAT: Log error
     if (runId) {
+      // @ts-ignore - tabla nueva, database.types.ts pendiente de actualizar
       await supabase
         .from('cron_runs')
         .update({

@@ -28,6 +28,7 @@ export async function GET(
     const isMaster = profile?.role === 'master';
 
     // Query de historial
+    // @ts-ignore - tabla nueva, database.types.ts pendiente de actualizar
     let query = supabase
       .from('case_history_events')
       .select(`

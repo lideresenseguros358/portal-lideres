@@ -58,6 +58,7 @@ async function PendientesContent() {
   }
 
   // Obtener conteo de correos por caso (simplificado)
+  // @ts-ignore - tabla nueva, database.types.ts pendiente de actualizar
   const { data: emailCounts } = await supabase
     .from('case_emails')
     .select('case_id, inbound_email_id')

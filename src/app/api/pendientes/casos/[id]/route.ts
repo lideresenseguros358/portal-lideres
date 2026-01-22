@@ -51,6 +51,7 @@ export async function PATCH(
     }
 
     // Crear evento de historial
+    // @ts-ignore - tabla nueva, database.types.ts pendiente de actualizar
     await supabase.from('case_history_events').insert({
       case_id: caseId,
       event_type: 'case_updated',
@@ -61,6 +62,7 @@ export async function PATCH(
     });
 
     // Audit log
+    // @ts-ignore - tabla nueva, database.types.ts pendiente de actualizar
     await supabase.from('security_audit_logs').insert({
       actor_user_id: user.id,
       actor_type: 'user',

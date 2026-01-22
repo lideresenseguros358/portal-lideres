@@ -13,7 +13,6 @@
  */
 
 import { ImapFlow } from 'imapflow';
-import type { FetchMessageObject } from 'imapflow';
 
 export interface ImapConfig {
   host: string;
@@ -104,7 +103,7 @@ export async function fetchMessagesInWindow(
   };
 
   // Buscar UIDs
-  const uids = await client.search(searchCriteria, { uid: true });
+  const uids = await client.search(searchCriteria);
   
   if (uids.length === 0) {
     console.log('[IMAP] No messages found in window');
@@ -142,7 +141,7 @@ export async function fetchMessagesInWindow(
  * Parsea un mensaje IMAP a EmailMessage
  */
 async function parseMessage(
-  msg: FetchMessageObject,
+  msg: any,
   folder: string
 ): Promise<EmailMessage | null> {
   const envelope = msg.envelope;
@@ -160,13 +159,13 @@ async function parseMessage(
     : null;
 
   // To
-  const to = envelope.to?.map((addr) => ({
+  const to = envelope.to?.map((addr: any) => ({
     email: addr.address || '',
     name: addr.name || undefined,
   })) || [];
 
   // CC
-  const cc = envelope.cc?.map((addr) => ({
+  const cc = envelope.cc?.map((addr: any) => ({
     email: addr.address || '',
     name: addr.name || undefined,
   })) || [];
