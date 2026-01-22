@@ -22,10 +22,32 @@ const UpdatePasswordPage = () => {
       console.log('========== UPDATE-PASSWORD DEBUG ==========');
       console.log('[1] Verificando sesión de recovery...');
       
+      // Verificar si hay un code en la URL (viene del callback)
+      const urlParams = new URLSearchParams(window.location.search);
+      const code = urlParams.get('code');
+      
+      if (code) {
+        console.log('[2] Code detectado en URL - intercambiando por sesión...');
+        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+        
+        if (exchangeError) {
+          console.error('[3] ❌ Error al intercambiar code:', exchangeError.message);
+          setError("Sesión inválida o expirada. Por favor solicita un nuevo enlace de recuperación.");
+          setSessionChecked(true);
+          return;
+        }
+        
+        console.log('[3] ✅ Code intercambiado exitosamente');
+        
+        // Limpiar el code de la URL
+        window.history.replaceState({}, '', '/update-password');
+      }
+      
+      // Ahora verificar la sesión
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       
-      console.log('[2] Session error:', sessionError);
-      console.log('[3] Session data:', session ? {
+      console.log('[4] Session error:', sessionError);
+      console.log('[5] Session data:', session ? {
         user_id: session.user.id,
         email: session.user.email,
         recovery_sent_at: session.user.recovery_sent_at,
@@ -35,11 +57,11 @@ const UpdatePasswordPage = () => {
       } : null);
       
       if (!session) {
-        console.error('[4] ❌ No hay sesión activa - usuario debe solicitar nuevo link');
+        console.error('[6] ❌ No hay sesión activa - usuario debe solicitar nuevo link');
         setError("Sesión inválida o expirada. Por favor solicita un nuevo enlace de recuperación.");
       } else {
-        console.log('[4] ✅ Sesión de recovery válida para:', session.user.email);
-        console.log('[5] Recovery sent at:', session.user.recovery_sent_at);
+        console.log('[6] ✅ Sesión de recovery válida para:', session.user.email);
+        console.log('[7] Recovery sent at:', session.user.recovery_sent_at);
       }
       
       console.log('==========================================');
