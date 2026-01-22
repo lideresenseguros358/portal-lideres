@@ -122,6 +122,7 @@ const UpdatePasswordPage = () => {
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               autoComplete="new-password"
+              data-no-uppercase
             />
             <button
               type="button"
@@ -151,6 +152,7 @@ const UpdatePasswordPage = () => {
               value={confirmPassword}
               onChange={(event) => setConfirmPassword(event.target.value)}
               autoComplete="new-password"
+              data-no-uppercase
             />
             <button
               type="button"

@@ -259,6 +259,7 @@ export default function NewUserWizard() {
                     className="w-full px-4 py-2 pr-10 border-2 border-gray-300 rounded-lg focus:border-[#010139] focus:outline-none"
                     placeholder="Mínimo 6 caracteres"
                     required
+                    data-no-uppercase
                   />
                   <button
                     type="button"
@@ -287,6 +288,7 @@ export default function NewUserWizard() {
                     className="w-full px-4 py-2 pr-10 border-2 border-gray-300 rounded-lg focus:border-[#010139] focus:outline-none"
                     placeholder="Repite la contraseña"
                     required
+                    data-no-uppercase
                   />
                   <button
                     type="button"
