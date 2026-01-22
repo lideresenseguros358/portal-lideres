@@ -3,9 +3,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { FaSearch, FaPlus, FaDownload, FaEnvelope, FaFilter, FaList, FaThLarge, FaTrash } from 'react-icons/fa';
 import { toast } from 'sonner';
-import { actionGetCases, actionDeleteCase } from '@/app/(app)/cases/actions';
+import { actionGetCases, actionDeleteCase, actionUpdateCase } from '@/app/(app)/cases/actions';
 import { actionGetCaseStats } from '@/app/(app)/cases/actions-details';
 import CasesList from '@/components/cases/CasesList';
+import CasesListMonday from '@/components/cases/CasesListMonday';
 import SearchModal from '@/components/cases/SearchModal';
 import NewCaseWizardModal from '@/components/cases/NewCaseWizardModal';
 import QuickEditModal from '@/components/cases/QuickEditModal';
@@ -197,6 +198,28 @@ export default function CasesMainClient({ userProfile, brokers, insurers }: Case
 
     if (errorCount > 0) {
       toast.error(`Error al eliminar ${errorCount} caso(s)`);
+    }
+  };
+
+  const handleChangeStatus = async (caseId: string, newStatus: string) => {
+    const result = await actionUpdateCase(caseId, { status: newStatus as any });
+    if (result.ok) {
+      toast.success('Estado actualizado');
+      await loadCases();
+      await loadStats();
+    } else {
+      toast.error(result.error);
+    }
+  };
+
+  const handleChangeSLA = async (caseId: string, newDate: string) => {
+    const result = await actionUpdateCase(caseId, { sla_date: newDate });
+    if (result.ok) {
+      toast.success('Plazo actualizado');
+      await loadCases();
+      await loadStats();
+    } else {
+      toast.error(result.error);
     }
   };
 
@@ -408,7 +431,7 @@ export default function CasesMainClient({ userProfile, brokers, insurers }: Case
 
       {/* Cases List or Kanban */}
       {viewMode === 'list' ? (
-        <CasesList
+        <CasesListMonday
           cases={cases}
           loading={loading}
           selectedCases={selectedCases}
@@ -417,6 +440,8 @@ export default function CasesMainClient({ userProfile, brokers, insurers }: Case
           onRefresh={loadCases}
           userRole={userProfile.role || 'broker'}
           onEdit={handleOpenQuickEdit}
+          onChangeStatus={handleChangeStatus}
+          onChangeSLA={handleChangeSLA}
         />
       ) : (
         <div className="bg-white rounded-xl shadow-lg border-2 border-gray-100 p-12 text-center">
