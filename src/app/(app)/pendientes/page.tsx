@@ -43,7 +43,7 @@ async function PendientesContent() {
       brokers!broker_id(name),
       profiles!assigned_master_id(full_name, email)
     `)
-    .is('deleted_at', null)
+    .eq('is_deleted', false)
     .order('created_at', { ascending: false });
 
   // Filtrar por broker si no es master

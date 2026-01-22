@@ -61,11 +61,22 @@ export default function PendientesClient({
   // Filtros
   const [searchQuery, setSearchQuery] = useState('');
   const [estadoFilter, setEstadoFilter] = useState<EstadoSimple | 'all'>('all');
-  const [activeTab, setActiveTab] = useState<RamoBucket>('vida_assa');
+  
+  // Determinar tab inicial: si hay casos sin clasificar, mostrarlos primero
+  const initialTab = useMemo(() => {
+    const hasDesconocido = casos.some(c => !c.ramo_bucket || c.ramo_bucket === 'desconocido');
+    return hasDesconocido ? 'desconocido' : 'vida_assa';
+  }, [casos]);
+  
+  const [activeTab, setActiveTab] = useState<RamoBucket>(initialTab);
 
   // Filtrar casos por tab
   const casosPorTab = useMemo(() => {
-    return casos.filter(c => c.ramo_bucket === activeTab);
+    return casos.filter(c => {
+      // Casos con ramo_bucket null van a 'desconocido'
+      const bucket = c.ramo_bucket || 'desconocido';
+      return bucket === activeTab;
+    });
   }, [casos, activeTab]);
 
   // Aplicar filtros y búsqueda
@@ -141,7 +152,7 @@ export default function PendientesClient({
     vida_assa: casos.filter(c => c.ramo_bucket === 'vida_assa').length,
     ramos_generales: casos.filter(c => c.ramo_bucket === 'ramos_generales').length,
     ramo_personas: casos.filter(c => c.ramo_bucket === 'ramo_personas').length,
-    desconocido: casos.filter(c => c.ramo_bucket === 'desconocido').length,
+    desconocido: casos.filter(c => !c.ramo_bucket || c.ramo_bucket === 'desconocido').length,
   }), [casos]);
 
   return (
