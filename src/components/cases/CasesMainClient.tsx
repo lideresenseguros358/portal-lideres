@@ -395,34 +395,38 @@ export default function CasesMainClient({ userProfile, brokers, insurers }: Case
               <option value="CERRADO">Cerrado</option>
             </select>
 
-            <select
-              value={filters.broker_id || ''}
-              onChange={(e) => setFilters(prev => ({ ...prev, broker_id: e.target.value || undefined }))}
-              className="px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none"
-            >
-              <option value="">Todos los brokers</option>
-              {brokers.map(broker => {
-                const brokerName = broker.name || broker.profiles?.full_name || broker.profiles?.email || 'Sin nombre';
-                return (
-                  <option key={broker.id} value={broker.id}>
-                    {brokerName}
-                  </option>
-                );
-              })}
-            </select>
+            {activeTab !== 'VIDA_ASSA' && (
+              <>
+                <select
+                  value={filters.broker_id || ''}
+                  onChange={(e) => setFilters(prev => ({ ...prev, broker_id: e.target.value || undefined }))}
+                  className="px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+                >
+                  <option value="">Todos los brokers</option>
+                  {brokers.map(broker => {
+                    const brokerName = broker.name || broker.profiles?.full_name || broker.profiles?.email || 'Sin nombre';
+                    return (
+                      <option key={broker.id} value={broker.id}>
+                        {brokerName}
+                      </option>
+                    );
+                  })}
+                </select>
 
-            <select
-              value={filters.insurer_id || ''}
-              onChange={(e) => setFilters(prev => ({ ...prev, insurer_id: e.target.value || undefined }))}
-              className="px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none"
-            >
-              <option value="">Todas las aseguradoras</option>
-              {insurers.map(insurer => (
-                <option key={insurer.id} value={insurer.id}>
-                  {insurer.name}
-                </option>
-              ))}
-            </select>
+                <select
+                  value={filters.insurer_id || ''}
+                  onChange={(e) => setFilters(prev => ({ ...prev, insurer_id: e.target.value || undefined }))}
+                  className="px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+                >
+                  <option value="">Todas las aseguradoras</option>
+                  {insurers.map(insurer => (
+                    <option key={insurer.id} value={insurer.id}>
+                      {insurer.name}
+                    </option>
+                  ))}
+                </select>
+              </>
+            )}
 
             {Object.keys(filters).length > 0 && (
               <button

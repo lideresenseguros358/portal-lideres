@@ -120,7 +120,14 @@ export default function CasesListMonday({
       </div>
 
       {/* Grupos por broker */}
-      {Object.entries(groupedCases).map(([brokerId, groupCases]) => {
+      {Object.entries(groupedCases)
+        .sort(([, casesA], [, casesB]) => {
+          // Ordenar alfabéticamente por nombre del broker
+          const brokerA = casesA[0]?.broker?.name || casesA[0]?.broker?.profiles?.full_name || 'Sin broker asignado';
+          const brokerB = casesB[0]?.broker?.name || casesB[0]?.broker?.profiles?.full_name || 'Sin broker asignado';
+          return brokerA.localeCompare(brokerB, 'es', { sensitivity: 'base' });
+        })
+        .map(([brokerId, groupCases]) => {
         const isExpanded = expandedGroups.includes(brokerId);
         const firstCase = groupCases[0];
         const brokerLabel = firstCase?.broker?.name || firstCase?.broker?.profiles?.full_name || 'Sin broker asignado';
