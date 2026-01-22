@@ -1668,22 +1668,23 @@ export async function actionGetIncludedTransfers(
       return { ok: false, error: 'Error al obtener información del corte' };
     }
 
-    // 2. Construir el label exacto que se usa en las notas (usando formato consistente)
+    // 2. Buscar transferencias incluidas de forma FLEXIBLE
+    // Buscamos cualquier nota que contenga "Incluida en corte:" seguido del label del corte
+    // IMPORTANTE: Usamos MÚLTIPLES patrones para compatibilidad con formatos antiguos
     const targetCutoffLabel = `${formatDateConsistent(targetCutoff.start_date)} - ${formatDateConsistent(targetCutoff.end_date)}`;
-    const searchPattern = `%📌 Incluida en corte: ${targetCutoffLabel}%`;
+    
+    console.log('[BANCO] Buscando transferencias incluidas para corte:', targetCutoffLabel);
 
-    console.log('[BANCO] Buscando transferencias incluidas con patrón:', searchPattern);
-
-    // 3. Buscar transferencias que tienen notas con este label
-    // Buscar por el patrón sin importar el emoji o estado (incluir PAGADAS)
-    const { data: transfers, error } = await supabase
+    // 3. Buscar de forma más flexible: cualquier transferencia con "Incluida en corte:" en las notas
+    // y que NO pertenezca al corte actual (son de otros cortes)
+    const { data: allIncluded, error } = await supabase
       .from('bank_transfers_comm')
       .select(`
         *,
         insurers!insurer_assigned_id(id, name),
         original_cutoff:bank_cutoffs!cutoff_id(id, start_date, end_date)
       `)
-      .like('notes_internal', searchPattern)
+      .like('notes_internal', '%Incluida en corte:%')
       .neq('cutoff_id', cutoffId)
       .order('date', { ascending: false });
 
@@ -1692,7 +1693,38 @@ export async function actionGetIncludedTransfers(
       return { ok: false, error: 'Error al obtener transferencias incluidas' };
     }
 
-    // 4. Transformar datos para simplificar estructura
+    // 4. Filtrar en memoria para encontrar solo las que corresponden a ESTE corte
+    // (necesario porque el formato de fecha puede variar)
+    const transfers = (allIncluded || []).filter((t: any) => {
+      const notes = t.notes_internal || '';
+      // Buscar cualquier mención del label del corte en las notas
+      // Esto funciona con cualquier formato: "1/12/2025", "01/12/2025", "2025-1-12", etc.
+      const startParts = targetCutoff.start_date.split('-');
+      const endParts = targetCutoff.end_date.split('-');
+      
+      // Extraer día y mes (sin padding)
+      const startDay = parseInt(startParts[2] || '0', 10);
+      const startMonth = parseInt(startParts[1] || '0', 10);
+      const endDay = parseInt(endParts[2] || '0', 10);
+      const endMonth = parseInt(endParts[1] || '0', 10);
+      
+      // Buscar si las notas contienen estos números cerca de "Incluida en corte:"
+      const includeMarkerIndex = notes.indexOf('Incluida en corte:');
+      if (includeMarkerIndex === -1) return false;
+      
+      // Tomar fragmento de 100 caracteres después del marcador
+      const fragment = notes.substring(includeMarkerIndex, includeMarkerIndex + 100);
+      
+      // Verificar si contiene los días/meses del rango (flexiblemente)
+      const hasStartDate = fragment.includes(`${startDay}/${startMonth}`) || 
+                           fragment.includes(`${String(startDay).padStart(2, '0')}/${String(startMonth).padStart(2, '0')}`);
+      const hasEndDate = fragment.includes(`${endDay}/${endMonth}`) || 
+                         fragment.includes(`${String(endDay).padStart(2, '0')}/${String(endMonth).padStart(2, '0')}`);
+      
+      return hasStartDate && hasEndDate;
+    });
+
+    // 5. Transformar datos para simplificar estructura
     const includedTransfers = (transfers || []).map((t: any) => ({
       id: t.id,
       reference_number: t.reference_number,
