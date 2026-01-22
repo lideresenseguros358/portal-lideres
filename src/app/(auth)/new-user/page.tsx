@@ -1,7 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { FaUser, FaIdCard, FaUniversity, FaArrowRight, FaArrowLeft, FaCheckCircle } from "react-icons/fa";
+import { FaUser, FaIdCard, FaUniversity, FaArrowRight, FaArrowLeft, FaCheckCircle, FaEye, FaEyeSlash } from "react-icons/fa";
 import AuthShell from "../_AuthShell";
 import NationalIdInput from '@/components/ui/NationalIdInput';
 // NO usar BankSelect/AccountTypeSelect en páginas públicas (auth) - no tienen acceso a Supabase
@@ -14,6 +14,8 @@ export default function NewUserWizard() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // Paso 1: Credenciales
   const [credentials, setCredentials] = useState({
@@ -249,28 +251,56 @@ export default function NewUserWizard() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Contraseña <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="password"
-                  value={credentials.password}
-                  onChange={(e) => setCredentials({ ...credentials, password: e.target.value })}
-                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#010139] focus:outline-none"
-                  placeholder="Mínimo 6 caracteres"
-                  required
-                />
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    value={credentials.password}
+                    onChange={(e) => setCredentials({ ...credentials, password: e.target.value })}
+                    className="w-full px-4 py-2 pr-10 border-2 border-gray-300 rounded-lg focus:border-[#010139] focus:outline-none"
+                    placeholder="Mínimo 6 caracteres"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 transition-colors duration-200"
+                    style={{
+                      color: showPassword ? '#8AAA19' : '#cbd5e1',
+                      opacity: showPassword ? 1 : 0.6,
+                    }}
+                    tabIndex={-1}
+                  >
+                    {showPassword ? <FaEye size={18} /> : <FaEyeSlash size={18} />}
+                  </button>
+                </div>
               </div>
 
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Confirmar Contraseña <span className="text-red-500">*</span>
                 </label>
-                <input
-                  type="password"
-                  value={credentials.confirmPassword}
-                  onChange={(e) => setCredentials({ ...credentials, confirmPassword: e.target.value })}
-                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#010139] focus:outline-none"
-                  placeholder="Repite la contraseña"
-                  required
-                />
+                <div className="relative">
+                  <input
+                    type={showConfirmPassword ? "text" : "password"}
+                    value={credentials.confirmPassword}
+                    onChange={(e) => setCredentials({ ...credentials, confirmPassword: e.target.value })}
+                    className="w-full px-4 py-2 pr-10 border-2 border-gray-300 rounded-lg focus:border-[#010139] focus:outline-none"
+                    placeholder="Repite la contraseña"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 transition-colors duration-200"
+                    style={{
+                      color: showConfirmPassword ? '#8AAA19' : '#cbd5e1',
+                      opacity: showConfirmPassword ? 1 : 0.6,
+                    }}
+                    tabIndex={-1}
+                  >
+                    {showConfirmPassword ? <FaEye size={18} /> : <FaEyeSlash size={18} />}
+                  </button>
+                </div>
               </div>
             </div>
           )}
