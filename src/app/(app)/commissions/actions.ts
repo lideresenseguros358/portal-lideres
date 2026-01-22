@@ -4861,6 +4861,19 @@ export async function actionPayFortnight(fortnight_id: string) {
       throw updateError;
     }
     
+    // NUEVO: Enviar correos SMTP a brokers notificados
+    console.log('[actionPayFortnight] Enviando correos SMTP a brokers...');
+    for (const bt of brokersToNotify) {
+      try {
+        const { notifyFortnightPaid } = await import('@/lib/email/commissions');
+        await notifyFortnightPaid(fortnight_id);
+        console.log(`[actionPayFortnight] ✅ Correo SMTP enviado`);
+      } catch (emailError) {
+        console.error(`[actionPayFortnight] ⚠️ Error enviando correo SMTP:`, emailError);
+        // No fallar la operación si el correo falla
+      }
+    }
+    
     // Verificar valores guardados en fortnight_broker_totals
     console.log('[actionPayFortnight] ========== VERIFICACIÓN FINAL ==========');
     const { data: savedTotals } = await supabase
