@@ -192,12 +192,14 @@ export default function CasesListMonday({
                               onChange={(e) => onChangeStatus?.(caseItem.id, e.target.value)}
                               className={`w-full px-2 py-1 rounded text-xs font-semibold border-2 ${STATUS_COLORS[caseItem.status as keyof typeof STATUS_COLORS]}`}
                             >
-                              <option value="PENDIENTE_REVISION">Pendiente revisión</option>
+                              <option value="PENDIENTE_REVISION">Nuevo</option>
                               <option value="EN_PROCESO">En proceso</option>
-                              <option value="FALTA_DOC">Falta documentación</option>
+                              <option value="FALTA_DOC">Pendiente cliente</option>
+                              <option value="APROBADO_PEND_PAGO">Pendiente broker</option>
+                              <option value="EMITIDO">Enviado</option>
                               <option value="APLAZADO">Aplazado</option>
-                              <option value="EMITIDO">Emitido</option>
-                              <option value="CERRADO">Cerrado</option>
+                              <option value="CERRADO">Cerrado aprobado</option>
+                              <option value="RECHAZADO">Cerrado rechazado</option>
                             </select>
                           ) : (
                             <span className={`px-3 py-1 rounded-full text-xs font-semibold inline-block ${STATUS_COLORS[caseItem.status as keyof typeof STATUS_COLORS]}`}>
