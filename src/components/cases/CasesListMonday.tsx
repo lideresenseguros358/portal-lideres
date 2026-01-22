@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react';
 import { FaChevronDown, FaChevronUp, FaClock, FaFolder, FaEnvelope, FaEdit, FaTicketAlt, FaExternalLinkAlt } from 'react-icons/fa';
 import { getSLAColor, getSLALabel, STATUS_COLORS, CASE_STATUS_LABELS, MANAGEMENT_TYPES } from '@/lib/constants/cases';
 import Link from 'next/link';
+import EmailHistoryModal from './EmailHistoryModal';
 
 interface CasesListMondayProps {
   cases: any[];
@@ -31,6 +32,7 @@ export default function CasesListMonday({
   onChangeSLA,
 }: CasesListMondayProps) {
   const [expandedGroups, setExpandedGroups] = useState<string[]>([]);
+  const [emailHistoryCaseId, setEmailHistoryCaseId] = useState<string | null>(null);
 
   // Agrupar casos por tipo de trámite
   const groupedCases = useMemo(() => {
@@ -217,6 +219,14 @@ export default function CasesListMonday({
                         {/* Acciones */}
                         <div className="col-span-2 flex items-center gap-2 justify-end">
                           <button
+                            onClick={() => setEmailHistoryCaseId(caseItem.id)}
+                            className="p-2 bg-purple-500 hover:bg-purple-600 text-white rounded transition-all"
+                            title="Historial de correos"
+                          >
+                            <FaEnvelope className="text-white" />
+                          </button>
+
+                          <button
                             onClick={() => onEdit?.(caseItem.id)}
                             className="p-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded transition-all"
                             title="Editar"
@@ -274,6 +284,13 @@ export default function CasesListMonday({
 
                             <div className="flex flex-wrap gap-2">
                               <button
+                                onClick={() => setEmailHistoryCaseId(caseItem.id)}
+                                className="px-3 py-1 bg-purple-500 hover:bg-purple-600 text-white rounded text-sm font-semibold"
+                              >
+                                <FaEnvelope className="inline mr-1 text-white" />
+                                Correos
+                              </button>
+                              <button
                                 onClick={() => onEdit?.(caseItem.id)}
                                 className="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded text-sm font-semibold"
                               >
@@ -299,6 +316,14 @@ export default function CasesListMonday({
           </div>
         );
       })}
+
+      {/* Email History Modal */}
+      {emailHistoryCaseId && (
+        <EmailHistoryModal
+          caseId={emailHistoryCaseId}
+          onClose={() => setEmailHistoryCaseId(null)}
+        />
+      )}
     </div>
   );
 }
