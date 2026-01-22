@@ -20,7 +20,8 @@ export type RamoBucket =
   | 'vida_assa'
   | 'ramos_generales'
   | 'ramo_personas'
-  | 'desconocido';
+  | 'desconocido'
+  | string; // Permite otros valores de BD
 
 export interface CasoPendiente {
   id: string;
@@ -28,25 +29,27 @@ export interface CasoPendiente {
   created_at: string;
   updated_at: string;
   
+  // Datos del cliente
+  client_name: string | null;
+  
   // Clasificación
-  ramo_bucket: RamoBucket;
+  ramo_bucket: string | null; // Permite cualquier string de BD
   ramo_code: string | null;
   aseguradora_code: string | null;
   tramite_code: string | null;
-  tipo_poliza: string | null;
   
   // Estado
-  estado_simple: EstadoSimple;
+  estado_simple: string | null; // Permite cualquier valor de BD
   
   // Asignación
-  broker_id: string;
+  broker_id: string | null;
   assigned_master_id: string | null;
   detected_broker_email: string | null;
   
   // SLA
   sla_due_date: string | null;
   sla_paused_at: string | null;
-  sla_accumulated_pause_hours: number;
+  sla_accumulated_pause_hours: number | null;
   
   // Aplazado
   aplazado_until: string | null;
@@ -56,17 +59,17 @@ export interface CasoPendiente {
   // AI
   ai_classification: any;
   ai_confidence: number | null;
-  missing_fields: string[] | null;
-  special_flags: string[] | null;
+  missing_fields: any; // Json en BD
+  special_flags: any; // Json en BD
   
   // Relaciones
   brokers?: {
-    name: string;
-  };
+    name: string | null;
+  } | null;
   profiles?: {
-    full_name: string;
-    email: string;
-  };
+    full_name: string | null;
+    email: string | null;
+  } | null;
   
   // Contadores
   emails_count?: number;

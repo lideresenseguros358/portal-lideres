@@ -66,8 +66,8 @@ export default function CaseCard({ caso, onClick }: CaseCardProps) {
           </p>
         </div>
         
-        <Badge className={`${ESTADO_COLORS[caso.estado_simple]} text-xs font-semibold`}>
-          {caso.estado_simple}
+        <Badge className={`${caso.estado_simple && ESTADO_COLORS[caso.estado_simple as EstadoSimple] ? ESTADO_COLORS[caso.estado_simple as EstadoSimple] : 'bg-gray-500 text-white'} text-xs font-semibold`}>
+          {caso.estado_simple || 'Sin estado'}
         </Badge>
       </div>
 
@@ -78,8 +78,7 @@ export default function CaseCard({ caso, onClick }: CaseCardProps) {
           <div className="flex items-center gap-2">
             <FileText className="w-4 h-4 text-gray-400" />
             <span className="text-gray-700">
-              {RAMO_LABELS[caso.ramo_code] || caso.ramo_code}
-              {caso.tipo_poliza && ` - ${caso.tipo_poliza}`}
+              {caso.ramo_code || 'Sin ramo'}
             </span>
           </div>
         )}

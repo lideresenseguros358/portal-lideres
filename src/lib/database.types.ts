@@ -883,6 +883,7 @@ export type Database = {
           date: string
           description_raw: string
           id: string
+          included_in_cutoff_id: string | null
           insurer_assigned_id: string | null
           notes_internal: string | null
           reference_number: string
@@ -897,6 +898,7 @@ export type Database = {
           date: string
           description_raw: string
           id?: string
+          included_in_cutoff_id?: string | null
           insurer_assigned_id?: string | null
           notes_internal?: string | null
           reference_number: string
@@ -911,6 +913,7 @@ export type Database = {
           date?: string
           description_raw?: string
           id?: string
+          included_in_cutoff_id?: string | null
           insurer_assigned_id?: string | null
           notes_internal?: string | null
           reference_number?: string
@@ -922,6 +925,13 @@ export type Database = {
           {
             foreignKeyName: "bank_transfers_comm_cutoff_id_fkey"
             columns: ["cutoff_id"]
+            isOneToOne: false
+            referencedRelation: "bank_cutoffs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bank_transfers_comm_included_in_cutoff_id_fkey"
+            columns: ["included_in_cutoff_id"]
             isOneToOne: false
             referencedRelation: "bank_cutoffs"
             referencedColumns: ["id"]
@@ -1213,6 +1223,55 @@ export type Database = {
           },
         ]
       }
+      case_emails: {
+        Row: {
+          case_id: string
+          id: string
+          inbound_email_id: string
+          linked_at: string | null
+          linked_by: string | null
+          visible_to_broker: boolean | null
+        }
+        Insert: {
+          case_id: string
+          id?: string
+          inbound_email_id: string
+          linked_at?: string | null
+          linked_by?: string | null
+          visible_to_broker?: boolean | null
+        }
+        Update: {
+          case_id?: string
+          id?: string
+          inbound_email_id?: string
+          linked_at?: string | null
+          linked_by?: string | null
+          visible_to_broker?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "case_emails_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "case_emails_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases_with_catalogs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "case_emails_inbound_email_id_fkey"
+            columns: ["inbound_email_id"]
+            isOneToOne: false
+            referencedRelation: "inbound_emails"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       case_files: {
         Row: {
           case_id: string
@@ -1303,6 +1362,54 @@ export type Database = {
           },
           {
             foreignKeyName: "case_history_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases_with_catalogs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      case_history_events: {
+        Row: {
+          case_id: string
+          created_at: string | null
+          created_by_role: string
+          created_by_user_id: string | null
+          event_type: string
+          id: string
+          payload: Json | null
+          visible_to_broker: boolean | null
+        }
+        Insert: {
+          case_id: string
+          created_at?: string | null
+          created_by_role?: string
+          created_by_user_id?: string | null
+          event_type: string
+          id?: string
+          payload?: Json | null
+          visible_to_broker?: boolean | null
+        }
+        Update: {
+          case_id?: string
+          created_at?: string | null
+          created_by_role?: string
+          created_by_user_id?: string | null
+          event_type?: string
+          id?: string
+          payload?: Json | null
+          visible_to_broker?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "case_history_events_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "case_history_events_case_id_fkey"
             columns: ["case_id"]
             isOneToOne: false
             referencedRelation: "cases_with_catalogs"
@@ -1490,10 +1597,15 @@ export type Database = {
         Row: {
           adelanto_id: string | null
           admin_id: string | null
+          ai_classification: Json | null
+          ai_confidence: number | null
+          aplazado_months: number | null
+          aplazado_until: string | null
           aplazar_months: number | null
           aplazar_notify_at: string | null
           aplazar_reason: string | null
           aseguradora_code: string | null
+          assigned_master_id: string | null
           broker_id: string | null
           canal: string
           case_number: string | null
@@ -1505,12 +1617,17 @@ export type Database = {
           content_hash: string | null
           created_at: string
           created_by: string | null
+          created_client_id: string | null
           ctype: Database["public"]["Enums"]["case_type_enum"]
           deleted_at: string | null
           deleted_reason: string | null
+          derived_from_case_id: string | null
+          detected_broker_email: string | null
           direct_payment: boolean | null
           discount_to_broker: boolean | null
+          estado_simple: string | null
           final_policy_number: string | null
+          generated_policy_number: string | null
           id: string
           insurer_id: string | null
           is_classified: boolean | null
@@ -1518,6 +1635,7 @@ export type Database = {
           is_verified: boolean | null
           management_type: string | null
           message_id: string | null
+          missing_fields: Json | null
           notes: string | null
           payment_method: string | null
           policy_id: string | null
@@ -1525,22 +1643,27 @@ export type Database = {
           policy_type: Database["public"]["Enums"]["policy_type_enum"] | null
           postponed_until: string | null
           premium: number | null
+          ramo_bucket: string | null
           ramo_code: string | null
           reopen_count: number | null
           reopened_from_ticket: string | null
           section: Database["public"]["Enums"]["case_section_enum"]
           seen_by_broker: boolean | null
           sla_accumulated_pause_days: number | null
+          sla_accumulated_pause_hours: number | null
           sla_date: string | null
           sla_days: number | null
+          sla_due_date: string | null
           sla_paused: boolean | null
           sla_paused_at: string | null
           sla_paused_reason: string | null
+          special_flags: Json | null
           status: Database["public"]["Enums"]["case_status_enum"]
           status_v2:
             | Database["public"]["Enums"]["case_status_simplified"]
             | null
           thread_id: string | null
+          ticket: string | null
           ticket_can_regenerate: boolean | null
           ticket_generated_at: string | null
           ticket_ref: string | null
@@ -1553,10 +1676,15 @@ export type Database = {
         Insert: {
           adelanto_id?: string | null
           admin_id?: string | null
+          ai_classification?: Json | null
+          ai_confidence?: number | null
+          aplazado_months?: number | null
+          aplazado_until?: string | null
           aplazar_months?: number | null
           aplazar_notify_at?: string | null
           aplazar_reason?: string | null
           aseguradora_code?: string | null
+          assigned_master_id?: string | null
           broker_id?: string | null
           canal?: string
           case_number?: string | null
@@ -1568,12 +1696,17 @@ export type Database = {
           content_hash?: string | null
           created_at?: string
           created_by?: string | null
+          created_client_id?: string | null
           ctype?: Database["public"]["Enums"]["case_type_enum"]
           deleted_at?: string | null
           deleted_reason?: string | null
+          derived_from_case_id?: string | null
+          detected_broker_email?: string | null
           direct_payment?: boolean | null
           discount_to_broker?: boolean | null
+          estado_simple?: string | null
           final_policy_number?: string | null
+          generated_policy_number?: string | null
           id?: string
           insurer_id?: string | null
           is_classified?: boolean | null
@@ -1581,6 +1714,7 @@ export type Database = {
           is_verified?: boolean | null
           management_type?: string | null
           message_id?: string | null
+          missing_fields?: Json | null
           notes?: string | null
           payment_method?: string | null
           policy_id?: string | null
@@ -1588,22 +1722,27 @@ export type Database = {
           policy_type?: Database["public"]["Enums"]["policy_type_enum"] | null
           postponed_until?: string | null
           premium?: number | null
+          ramo_bucket?: string | null
           ramo_code?: string | null
           reopen_count?: number | null
           reopened_from_ticket?: string | null
           section?: Database["public"]["Enums"]["case_section_enum"]
           seen_by_broker?: boolean | null
           sla_accumulated_pause_days?: number | null
+          sla_accumulated_pause_hours?: number | null
           sla_date?: string | null
           sla_days?: number | null
+          sla_due_date?: string | null
           sla_paused?: boolean | null
           sla_paused_at?: string | null
           sla_paused_reason?: string | null
+          special_flags?: Json | null
           status?: Database["public"]["Enums"]["case_status_enum"]
           status_v2?:
             | Database["public"]["Enums"]["case_status_simplified"]
             | null
           thread_id?: string | null
+          ticket?: string | null
           ticket_can_regenerate?: boolean | null
           ticket_generated_at?: string | null
           ticket_ref?: string | null
@@ -1616,10 +1755,15 @@ export type Database = {
         Update: {
           adelanto_id?: string | null
           admin_id?: string | null
+          ai_classification?: Json | null
+          ai_confidence?: number | null
+          aplazado_months?: number | null
+          aplazado_until?: string | null
           aplazar_months?: number | null
           aplazar_notify_at?: string | null
           aplazar_reason?: string | null
           aseguradora_code?: string | null
+          assigned_master_id?: string | null
           broker_id?: string | null
           canal?: string
           case_number?: string | null
@@ -1631,12 +1775,17 @@ export type Database = {
           content_hash?: string | null
           created_at?: string
           created_by?: string | null
+          created_client_id?: string | null
           ctype?: Database["public"]["Enums"]["case_type_enum"]
           deleted_at?: string | null
           deleted_reason?: string | null
+          derived_from_case_id?: string | null
+          detected_broker_email?: string | null
           direct_payment?: boolean | null
           discount_to_broker?: boolean | null
+          estado_simple?: string | null
           final_policy_number?: string | null
+          generated_policy_number?: string | null
           id?: string
           insurer_id?: string | null
           is_classified?: boolean | null
@@ -1644,6 +1793,7 @@ export type Database = {
           is_verified?: boolean | null
           management_type?: string | null
           message_id?: string | null
+          missing_fields?: Json | null
           notes?: string | null
           payment_method?: string | null
           policy_id?: string | null
@@ -1651,22 +1801,27 @@ export type Database = {
           policy_type?: Database["public"]["Enums"]["policy_type_enum"] | null
           postponed_until?: string | null
           premium?: number | null
+          ramo_bucket?: string | null
           ramo_code?: string | null
           reopen_count?: number | null
           reopened_from_ticket?: string | null
           section?: Database["public"]["Enums"]["case_section_enum"]
           seen_by_broker?: boolean | null
           sla_accumulated_pause_days?: number | null
+          sla_accumulated_pause_hours?: number | null
           sla_date?: string | null
           sla_days?: number | null
+          sla_due_date?: string | null
           sla_paused?: boolean | null
           sla_paused_at?: string | null
           sla_paused_reason?: string | null
+          special_flags?: Json | null
           status?: Database["public"]["Enums"]["case_status_enum"]
           status_v2?:
             | Database["public"]["Enums"]["case_status_simplified"]
             | null
           thread_id?: string | null
+          ticket?: string | null
           ticket_can_regenerate?: boolean | null
           ticket_generated_at?: string | null
           ticket_ref?: string | null
@@ -1680,6 +1835,13 @@ export type Database = {
           {
             foreignKeyName: "cases_admin_id_fkey"
             columns: ["admin_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cases_assigned_master_id_fkey"
+            columns: ["assigned_master_id"]
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
@@ -1752,6 +1914,27 @@ export type Database = {
             columns: ["created_by"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cases_created_client_id_fkey"
+            columns: ["created_client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cases_derived_from_case_id_fkey"
+            columns: ["derived_from_case_id"]
+            isOneToOne: false
+            referencedRelation: "cases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cases_derived_from_case_id_fkey"
+            columns: ["derived_from_case_id"]
+            isOneToOne: false
+            referencedRelation: "cases_with_catalogs"
             referencedColumns: ["id"]
           },
           {
@@ -2138,6 +2321,45 @@ export type Database = {
           lissa_recurring_link?: string | null
           updated_at?: string | null
           user_id?: string
+        }
+        Relationships: []
+      }
+      cron_runs: {
+        Row: {
+          created_at: string | null
+          error_message: string | null
+          error_stack: string | null
+          finished_at: string | null
+          id: string
+          job_name: string
+          metadata: Json | null
+          processed_count: number | null
+          started_at: string
+          status: string
+        }
+        Insert: {
+          created_at?: string | null
+          error_message?: string | null
+          error_stack?: string | null
+          finished_at?: string | null
+          id?: string
+          job_name: string
+          metadata?: Json | null
+          processed_count?: number | null
+          started_at?: string
+          status?: string
+        }
+        Update: {
+          created_at?: string | null
+          error_message?: string | null
+          error_stack?: string | null
+          finished_at?: string | null
+          id?: string
+          job_name?: string
+          metadata?: Json | null
+          processed_count?: number | null
+          started_at?: string
+          status?: string
         }
         Relationships: []
       }
@@ -3256,6 +3478,131 @@ export type Database = {
         }
         Relationships: []
       }
+      inbound_email_attachments: {
+        Row: {
+          created_at: string | null
+          filename: string
+          id: string
+          inbound_email_id: string
+          mimetype: string | null
+          sha256: string | null
+          size_bytes: number
+          storage_bucket: string | null
+          storage_path: string
+        }
+        Insert: {
+          created_at?: string | null
+          filename: string
+          id?: string
+          inbound_email_id: string
+          mimetype?: string | null
+          sha256?: string | null
+          size_bytes: number
+          storage_bucket?: string | null
+          storage_path: string
+        }
+        Update: {
+          created_at?: string | null
+          filename?: string
+          id?: string
+          inbound_email_id?: string
+          mimetype?: string | null
+          sha256?: string | null
+          size_bytes?: number
+          storage_bucket?: string | null
+          storage_path?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inbound_email_attachments_inbound_email_id_fkey"
+            columns: ["inbound_email_id"]
+            isOneToOne: false
+            referencedRelation: "inbound_emails"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inbound_emails: {
+        Row: {
+          attachments_count: number | null
+          attachments_total_bytes: number | null
+          body_html: string | null
+          body_text: string | null
+          body_text_normalized: string | null
+          cc_emails: Json | null
+          created_at: string | null
+          date_sent: string | null
+          error_code: string | null
+          error_detail: string | null
+          folder: string | null
+          from_email: string | null
+          from_name: string | null
+          id: string
+          imap_uid: string | null
+          in_reply_to: string | null
+          ingestion_source: string | null
+          message_id: string
+          processed_at: string | null
+          processed_status: string
+          subject: string | null
+          subject_normalized: string | null
+          thread_references: string | null
+          to_emails: Json | null
+        }
+        Insert: {
+          attachments_count?: number | null
+          attachments_total_bytes?: number | null
+          body_html?: string | null
+          body_text?: string | null
+          body_text_normalized?: string | null
+          cc_emails?: Json | null
+          created_at?: string | null
+          date_sent?: string | null
+          error_code?: string | null
+          error_detail?: string | null
+          folder?: string | null
+          from_email?: string | null
+          from_name?: string | null
+          id?: string
+          imap_uid?: string | null
+          in_reply_to?: string | null
+          ingestion_source?: string | null
+          message_id: string
+          processed_at?: string | null
+          processed_status?: string
+          subject?: string | null
+          subject_normalized?: string | null
+          thread_references?: string | null
+          to_emails?: Json | null
+        }
+        Update: {
+          attachments_count?: number | null
+          attachments_total_bytes?: number | null
+          body_html?: string | null
+          body_text?: string | null
+          body_text_normalized?: string | null
+          cc_emails?: Json | null
+          created_at?: string | null
+          date_sent?: string | null
+          error_code?: string | null
+          error_detail?: string | null
+          folder?: string | null
+          from_email?: string | null
+          from_name?: string | null
+          id?: string
+          imap_uid?: string | null
+          in_reply_to?: string | null
+          ingestion_source?: string | null
+          message_id?: string
+          processed_at?: string | null
+          processed_status?: string
+          subject?: string | null
+          subject_normalized?: string | null
+          thread_references?: string | null
+          to_emails?: Json | null
+        }
+        Relationships: []
+      }
       insurer_assa_codes: {
         Row: {
           active: boolean
@@ -3570,6 +3917,36 @@ export type Database = {
           id?: string
           token?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      master_routing_config: {
+        Row: {
+          backup_master_user_id: string | null
+          bucket: string
+          effective_master_user_id: string | null
+          id: string
+          primary_master_user_id: string
+          primary_on_vacation: boolean | null
+          updated_at: string | null
+        }
+        Insert: {
+          backup_master_user_id?: string | null
+          bucket: string
+          effective_master_user_id?: string | null
+          id?: string
+          primary_master_user_id: string
+          primary_on_vacation?: boolean | null
+          updated_at?: string | null
+        }
+        Update: {
+          backup_master_user_id?: string | null
+          bucket?: string
+          effective_master_user_id?: string | null
+          id?: string
+          primary_master_user_id?: string
+          primary_on_vacation?: boolean | null
+          updated_at?: string | null
         }
         Relationships: []
       }
@@ -4398,6 +4775,48 @@ export type Database = {
           },
         ]
       }
+      security_audit_logs: {
+        Row: {
+          action: string
+          actor_type: string
+          actor_user_id: string | null
+          after: Json | null
+          before: Json | null
+          created_at: string | null
+          entity_id: string | null
+          entity_type: string | null
+          id: string
+          ip: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          action: string
+          actor_type: string
+          actor_user_id?: string | null
+          after?: Json | null
+          before?: Json | null
+          created_at?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          ip?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          action?: string
+          actor_type?: string
+          actor_user_id?: string | null
+          after?: Json | null
+          before?: Json | null
+          created_at?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          ip?: string | null
+          user_agent?: string | null
+        }
+        Relationships: []
+      }
       temp_client_import: {
         Row: {
           birth_date: string | null
@@ -4589,6 +5008,36 @@ export type Database = {
           source?: string | null
           start_date?: string | null
           status?: string | null
+        }
+        Relationships: []
+      }
+      ticket_counters: {
+        Row: {
+          aamm: string
+          aseg_code: string
+          current: number
+          id: string
+          ramo_code: string
+          tramite_code: string
+          updated_at: string | null
+        }
+        Insert: {
+          aamm: string
+          aseg_code: string
+          current?: number
+          id?: string
+          ramo_code: string
+          tramite_code: string
+          updated_at?: string | null
+        }
+        Update: {
+          aamm?: string
+          aseg_code?: string
+          current?: number
+          id?: string
+          ramo_code?: string
+          tramite_code?: string
+          updated_at?: string | null
         }
         Relationships: []
       }
@@ -5302,6 +5751,19 @@ export type Database = {
           },
         ]
       }
+      cron_runs_summary: {
+        Row: {
+          avg_duration_seconds: number | null
+          currently_running: number | null
+          failed_runs: number | null
+          job_name: string | null
+          last_run_at: string | null
+          successful_runs: number | null
+          total_processed: number | null
+          total_runs: number | null
+        }
+        Relationships: []
+      }
       fortnight_details_full: {
         Row: {
           assa_code: string | null
@@ -5578,6 +6040,15 @@ export type Database = {
         Returns: string
       }
       fix_text_encoding: { Args: { input_text: string }; Returns: string }
+      generate_next_ticket: {
+        Args: {
+          p_aamm: string
+          p_aseg_code: string
+          p_ramo_code: string
+          p_tramite_code: string
+        }
+        Returns: string
+      }
       generate_ticket_number: {
         Args: {
           p_aseguradora_code: string
@@ -5688,6 +6159,17 @@ export type Database = {
       get_valid_is_token: { Args: { env: string }; Returns: string }
       is_master: { Args: never; Returns: boolean }
       is_self: { Args: { broker: string }; Returns: boolean }
+      log_cron_finish: {
+        Args: {
+          p_error_message?: string
+          p_metadata?: Json
+          p_processed_count?: number
+          p_run_id: string
+          p_status: string
+        }
+        Returns: undefined
+      }
+      log_cron_start: { Args: { p_job_name: string }; Returns: string }
       metrics_broker: {
         Args: { p_broker: string; p_fortnight: string }
         Returns: {
@@ -5701,6 +6183,7 @@ export type Database = {
         Returns: undefined
       }
       normalize_name: { Args: { text_input: string }; Returns: string }
+      pause_case_sla: { Args: { p_case_id: string }; Returns: undefined }
       profile_sync_from_auth: {
         Args: { p_user_id: string }
         Returns: undefined
@@ -5718,6 +6201,7 @@ export type Database = {
         Args: { p_case_id: string; p_create_new_ticket?: boolean }
         Returns: string
       }
+      resume_case_sla: { Args: { p_case_id: string }; Returns: undefined }
       set_user_role:
         | {
             Args: {

@@ -148,13 +148,6 @@ export default function CaseDetailModal({
                     </div>
                   )}
                   
-                  {caso.tipo_poliza && (
-                    <div>
-                      <label className="text-sm font-semibold text-gray-600">Tipo de Póliza</label>
-                      <p className="mt-1 text-sm">{caso.tipo_poliza}</p>
-                    </div>
-                  )}
-                  
                   {caso.sla_due_date && (
                     <div>
                       <label className="text-sm font-semibold text-gray-600 flex items-center gap-1">

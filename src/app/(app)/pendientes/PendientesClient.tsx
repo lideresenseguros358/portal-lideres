@@ -82,9 +82,8 @@ export default function PendientesClient({
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(c => 
         c.ticket?.toLowerCase().includes(query) ||
-        c.detected_broker_email?.toLowerCase().includes(query) ||
-        c.brokers?.name?.toLowerCase().includes(query) ||
-        c.tipo_poliza?.toLowerCase().includes(query)
+        c.client_name?.toLowerCase().includes(query) ||
+        c.detected_broker_email?.toLowerCase().includes(query)
       );
     }
 

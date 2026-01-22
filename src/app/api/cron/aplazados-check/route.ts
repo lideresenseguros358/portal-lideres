@@ -79,14 +79,13 @@ export async function GET(request: NextRequest) {
 
     for (const caso of aplazadosVencidos) {
       // Crear notificación para master asignado
-      // @ts-ignore
       const { error: notifError } = await supabase.from('notifications').insert({
-        user_id: caso.assigned_master_id,
-        type: 'APLAZADO_VENCIDO',
+        broker_id: caso.assigned_master_id,
+        notification_type: 'other',
         title: 'Caso Aplazado Vencido',
-        message: `El caso ${caso.ticket} venció su plazo de aplazamiento. Requiere decisión: reabrir o cerrar definitivo.`,
-        link: `/pendientes/${caso.id}`,
-        read: false,
+        body: `El caso ${caso.ticket} venció su plazo de aplazamiento. Requiere decisión: reabrir o cerrar definitivo.`,
+        target: `/pendientes/${caso.id}`,
+        meta: { case_id: caso.id, ticket: caso.ticket, type: 'aplazado_vencido' },
       });
 
       if (!notifError) {

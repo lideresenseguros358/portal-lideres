@@ -40,7 +40,7 @@ async function PendientesContent() {
     .from('cases')
     .select(`
       *,
-      brokers(name),
+      brokers!broker_id(name),
       profiles!assigned_master_id(full_name, email)
     `)
     .is('deleted_at', null)
@@ -75,7 +75,7 @@ async function PendientesContent() {
       casos={casosConConteo}
       isMaster={isMaster}
       userId={user.id}
-      userRole={profile.role}
+      userRole={profile.role || 'broker'}
     />
   );
 }
