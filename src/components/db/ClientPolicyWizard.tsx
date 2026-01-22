@@ -482,6 +482,12 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
 
         if (!response.ok) {
           console.error('[ClientPolicyWizard] Error en respuesta:', result);
+          
+          // Manejar error de póliza duplicada específicamente
+          if (result.error?.includes('duplicate key') || result.error?.includes('policies_policy_number_key')) {
+            throw new Error(`El número de póliza "${formData.policy_number}" ya existe en el sistema. Por favor use un número diferente.`);
+          }
+          
           throw new Error(result.error || 'Error al crear cliente');
         }
 
@@ -492,7 +498,14 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
       onSuccess();
       onClose();
     } catch (error: any) {
-      toast.error('Error al crear', { description: error.message });
+      console.error('[ClientPolicyWizard] Error catch:', error);
+      
+      // Mostrar mensaje de error claro
+      const errorMessage = error.message || 'Error desconocido al crear cliente y póliza';
+      toast.error('Error al crear cliente y póliza', { 
+        description: errorMessage,
+        duration: 6000 // Más tiempo para leer el mensaje
+      });
     } finally {
       setLoading(false);
     }
