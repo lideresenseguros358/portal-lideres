@@ -173,6 +173,14 @@ export async function createClientWithPolicy(clientData: unknown, policyData: un
   const supabase = await getSupabaseServer();
   const { data: { user } } = await supabase.auth.getUser();
 
+  // LOG DETALLADO PARA DEBUG
+  console.log('[DEBUG] clientData recibido:', JSON.stringify(clientData, null, 2));
+  console.log('[DEBUG] Tipo de email:', typeof (clientData as any)?.email);
+  console.log('[DEBUG] Valor exacto de email:', (clientData as any)?.email);
+  console.log('[DEBUG] Email es undefined:', (clientData as any)?.email === undefined);
+  console.log('[DEBUG] Email es null:', (clientData as any)?.email === null);
+  console.log('[DEBUG] Email es string vacío:', (clientData as any)?.email === '');
+
   const clientParsed = ClientInsertSchema.parse(clientData);
   const policyParsed = PolicyInsertSchema.parse(policyData);
 
