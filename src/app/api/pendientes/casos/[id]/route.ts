@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseServer } from '@/lib/supabase/server';
+import { 
+  notifyCaseUpdated,
+  notifyCaseClosedApproved,
+  notifyCaseClosedRejected,
+  notifyCasePostponed
+} from '@/lib/email/pendientes';
 
 export async function PATCH(
   request: NextRequest,
@@ -21,7 +27,7 @@ export async function PATCH(
     // Obtener perfil
     const { data: profile } = await supabase
       .from('profiles')
-      .select('role')
+      .select('role, full_name')
       .eq('id', user.id)
       .single();
 
@@ -34,6 +40,13 @@ export async function PATCH(
         { status: 403 }
       );
     }
+
+    // Obtener caso actual para comparar cambios
+    const { data: currentCase } = await supabase
+      .from('cases')
+      .select('*')
+      .eq('id', caseId)
+      .single();
 
     // Obtener updates del body
     const updates = await request.json();

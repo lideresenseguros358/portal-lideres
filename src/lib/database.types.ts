@@ -2765,6 +2765,42 @@ export type Database = {
           },
         ]
       }
+      email_logs: {
+        Row: {
+          created_at: string | null
+          dedupe_key: string | null
+          error: string | null
+          id: string
+          metadata: Json | null
+          status: string
+          subject: string
+          template: string | null
+          to: string
+        }
+        Insert: {
+          created_at?: string | null
+          dedupe_key?: string | null
+          error?: string | null
+          id?: string
+          metadata?: Json | null
+          status: string
+          subject: string
+          template?: string | null
+          to: string
+        }
+        Update: {
+          created_at?: string | null
+          dedupe_key?: string | null
+          error?: string | null
+          id?: string
+          metadata?: Json | null
+          status?: string
+          subject?: string
+          template?: string | null
+          to?: string
+        }
+        Relationships: []
+      }
       event_attendees: {
         Row: {
           broker_id: string
@@ -4775,6 +4811,51 @@ export type Database = {
           },
         ]
       }
+      scheduled_jobs: {
+        Row: {
+          created_at: string | null
+          error: string | null
+          executed_at: string | null
+          id: string
+          job_type: string
+          max_retries: number | null
+          metadata: Json | null
+          payload: Json
+          retry_count: number | null
+          scheduled_for: string
+          status: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          error?: string | null
+          executed_at?: string | null
+          id?: string
+          job_type: string
+          max_retries?: number | null
+          metadata?: Json | null
+          payload: Json
+          retry_count?: number | null
+          scheduled_for: string
+          status?: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          error?: string | null
+          executed_at?: string | null
+          id?: string
+          job_type?: string
+          max_retries?: number | null
+          metadata?: Json | null
+          payload?: Json
+          retry_count?: number | null
+          scheduled_for?: string
+          status?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       security_audit_logs: {
         Row: {
           action: string
@@ -6003,6 +6084,7 @@ export type Database = {
         Returns: string
       }
       clean_expired_is_tokens: { Args: never; Returns: undefined }
+      cleanup_old_email_logs: { Args: never; Returns: undefined }
       cleanup_old_notification_hashes: { Args: never; Returns: undefined }
       cleanup_processed_temp_imports: { Args: never; Returns: number }
       commissions_monthly_summary: {
@@ -6128,6 +6210,16 @@ export type Database = {
           status: string
           total_commission: number
           total_items: number
+        }[]
+      }
+      get_pending_jobs: {
+        Args: never
+        Returns: {
+          id: string
+          job_type: string
+          payload: Json
+          retry_count: number
+          scheduled_for: string
         }[]
       }
       get_pending_transfers: {

@@ -13,6 +13,7 @@
 import { createClient } from '@/lib/supabase/server';
 import type { EmailClassificationResult } from '@/lib/vertex/vertexClient';
 import { getCurrentAAMM } from '@/lib/timezone/time';
+import { notifyCaseCreated } from '@/lib/email/pendientes';
 
 export interface CaseCreationInput {
   inboundEmailId: string;
@@ -140,6 +141,16 @@ export async function processInboundEmail(
       entity_id: newCase.id,
       after: { caseId: newCase.id, ticket, estado: caseData.estado_simple },
     });
+
+    // 9. Enviar notificación por correo (solo si no es provisional)
+    if (!isProvisional) {
+      try {
+        await notifyCaseCreated(newCase.id);
+      } catch (emailError) {
+        console.error('[CASE ENGINE] Error sending email notification:', emailError);
+        // No fallar la creación del caso si el correo falla
+      }
+    }
 
     return {
       success: true,
