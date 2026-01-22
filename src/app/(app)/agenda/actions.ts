@@ -286,12 +286,21 @@ export async function actionCreateEvent(payload: {
         console.log(`[actionCreateEvent] ✅ ${brokersToNotify.length} notificaciones SELECTED creadas para evento ${event.id}`);
       }
     } catch (notifError) {
-      console.error('[actionCreateEvent] Error en sistema de notificaciones:', notifError);
-      // No fallar si las notificaciones fallan
+      console.error('[actionCreateEvent] Error enviando notificación:', notifError);
+      // No fallar la operación si la notificación falla
+    }
+
+    // NUEVO: Enviar correos SMTP profesionales
+    try {
+      const { notifyEventCreated } = await import('@/lib/email/agenda');
+      await notifyEventCreated(event.id);
+      console.log(`[actionCreateEvent] ✅ Correos SMTP enviados para evento ${event.id}`);
+    } catch (emailError) {
+      console.error('[actionCreateEvent] ⚠️ Error enviando correos SMTP:', emailError);
+      // No fallar la operación si el correo falla
     }
 
     revalidatePath('/agenda');
-    
     return { ok: true, data: event, message: 'Evento creado exitosamente' };
   } catch (error: any) {
     return { ok: false, error: error.message };
