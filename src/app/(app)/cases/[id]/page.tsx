@@ -32,7 +32,7 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ id:
         *,
         profiles!brokers_p_id_fkey(id, email, name, full_name, role)
       ),
-      client:clients(id, name, national_id, email, phone),
+      client:clients!cases_client_id_fkey(id, name, national_id, email, phone),
       insurer:insurers(id, name, active)
     `)
     .eq('id', resolvedParams.id)

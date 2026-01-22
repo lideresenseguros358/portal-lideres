@@ -11,6 +11,7 @@ import SearchModal from '@/components/cases/SearchModal';
 import NewCaseWizardModal from '@/components/cases/NewCaseWizardModal';
 import QuickEditModal from '@/components/cases/QuickEditModal';
 import { CASE_SECTION_LABELS } from '@/lib/constants/cases';
+import { exportCasesByBrokerPDF } from '@/lib/utils/exportCasesPDF';
 
 type UserProfile = {
   id: string;
@@ -146,13 +147,19 @@ export default function CasesMainClient({ userProfile, brokers, insurers }: Case
     setShowNewCaseModal(true);
   };
 
-  const handleExportPDF = () => {
-    if (selectedCases.length === 0) {
-      toast.warning('Selecciona al menos un caso');
-      return;
+  const handleExportPDF = async () => {
+    try {
+      if (selectedCases.length === 0) {
+        toast.warning('Selecciona al menos un caso para exportar');
+        return;
+      }
+      toast.info('Generando PDF...');
+      await exportCasesByBrokerPDF(cases, selectedCases);
+      toast.success('PDF generado correctamente');
+    } catch (error: any) {
+      console.error('Error exporting PDF:', error);
+      toast.error(error.message || 'Error al generar PDF');
     }
-    // TODO: Implement PDF export
-    toast.info('Exportando PDF...');
   };
 
   const handleSendEmail = () => {

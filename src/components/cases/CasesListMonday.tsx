@@ -52,12 +52,12 @@ export default function CasesListMonday({
     });
 
     sortedCases.forEach(caseItem => {
-      // Usar management_type o 'OTROS' como fallback
-      const managementType = caseItem.management_type || 'OTROS';
-      if (!groups[managementType]) {
-        groups[managementType] = [];
+      // Agrupar por broker
+      const brokerKey = caseItem.broker_id || 'SIN_BROKER';
+      if (!groups[brokerKey]) {
+        groups[brokerKey] = [];
       }
-      groups[managementType].push(caseItem);
+      groups[brokerKey].push(caseItem);
     });
 
     return groups;
@@ -119,23 +119,23 @@ export default function CasesListMonday({
         </label>
       </div>
 
-      {/* Grupos por tipo de trámite */}
-      {Object.entries(groupedCases).map(([managementType, groupCases]) => {
-        const isExpanded = expandedGroups.includes(managementType);
-        const managementLabel = MANAGEMENT_TYPES[managementType as keyof typeof MANAGEMENT_TYPES] || 
-                                (managementType === 'OTROS' ? 'Otros / Sin clasificar' : managementType);
+      {/* Grupos por broker */}
+      {Object.entries(groupedCases).map(([brokerId, groupCases]) => {
+        const isExpanded = expandedGroups.includes(brokerId);
+        const firstCase = groupCases[0];
+        const brokerLabel = firstCase?.broker?.name || firstCase?.broker?.profiles?.full_name || 'Sin broker asignado';
 
         return (
-          <div key={managementType} className="bg-white rounded-xl shadow-lg border-2 border-gray-100 overflow-hidden">
+          <div key={brokerId} className="bg-white rounded-xl shadow-lg border-2 border-gray-100 overflow-hidden">
             {/* Group Header */}
             <button
-              onClick={() => toggleGroup(managementType)}
+              onClick={() => toggleGroup(brokerId)}
               className="w-full px-6 py-4 bg-gradient-to-r from-gray-50 to-gray-100 hover:from-gray-100 hover:to-gray-200 transition-all flex items-center justify-between border-b-2 border-gray-200"
             >
               <div className="flex items-center gap-3">
                 {isExpanded ? <FaChevronUp className="text-[#010139]" /> : <FaChevronDown className="text-[#010139]" />}
-                <h3 className="text-lg font-bold text-[#010139]">{managementLabel}</h3>
-                <span className="px-3 py-1 bg-[#010139] text-white rounded-full text-sm font-semibold">
+                <h3 className="text-lg font-bold text-[#8AAA19]">{brokerLabel}</h3>
+                <span className="px-3 py-1 bg-[#8AAA19] text-white rounded-full text-sm font-semibold">
                   {groupCases.length}
                 </span>
               </div>
@@ -158,7 +158,7 @@ export default function CasesListMonday({
                       }`}
                     >
                       {/* Desktop: Tabla tipo Monday */}
-                      <div className="hidden md:grid md:grid-cols-12 gap-4 items-center">
+                      <div className="hidden md:grid md:grid-cols-13 gap-4 items-center">
                         {/* Checkbox */}
                         <div className="col-span-1">
                           <input
@@ -185,9 +185,16 @@ export default function CasesListMonday({
                           </p>
                         </div>
 
-                        {/* Aseguradora */}
+                        {/* Broker */}
                         <div className="col-span-2">
-                          <p className="text-sm text-gray-700 truncate">
+                          <p className="text-sm font-semibold text-[#8AAA19] truncate">
+                            {caseItem.broker?.name || caseItem.broker?.profiles?.full_name || 'Sin broker'}
+                          </p>
+                        </div>
+
+                        {/* Aseguradora */}
+                        <div className="col-span-1">
+                          <p className="text-xs text-gray-700 truncate">
                             {caseItem.insurer?.name || 'Sin aseguradora'}
                           </p>
                         </div>
@@ -275,6 +282,9 @@ export default function CasesListMonday({
                           <div className="flex-1 min-w-0">
                             <p className="font-bold text-[#010139] mb-1">
                               {caseItem.client_name || caseItem.client?.name || 'Sin nombre'}
+                            </p>
+                            <p className="text-sm font-semibold text-[#8AAA19] mb-1">
+                              Broker: {caseItem.broker?.name || caseItem.broker?.profiles?.full_name || 'Sin broker'}
                             </p>
                             <p className="text-sm text-gray-600 mb-2">
                               {caseItem.insurer?.name || 'Sin aseguradora'}
