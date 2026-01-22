@@ -53,7 +53,7 @@ export async function actionGetCases(filters?: {
           *,
           profiles!brokers_p_id_fkey(id, email, full_name, role)
         ),
-        client:clients(id, name, national_id),
+        client:clients!cases_client_id_fkey(id, name, national_id),
         insurer:insurers(id, name, active)
       `)
       .order('created_at', { ascending: false });
@@ -128,7 +128,7 @@ export async function actionGetCase(caseId: string) {
           *,
           profiles!brokers_p_id_fkey(id, email, full_name, role)
         ),
-        client:clients(id, name, national_id, email, phone),
+        client:clients!cases_client_id_fkey(id, name, national_id, email, phone),
         insurer:insurers(id, name, active)
       `)
       .eq('id', caseId)
