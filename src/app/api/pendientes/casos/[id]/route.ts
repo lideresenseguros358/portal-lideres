@@ -3,11 +3,11 @@ import { getSupabaseServer } from '@/lib/supabase/server';
 
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id: caseId } = await params;
     const supabase = await getSupabaseServer();
-    const caseId = params.id;
 
     // Verificar autenticación
     const {
