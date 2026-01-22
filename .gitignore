@@ -14,6 +14,10 @@ yarn-error.log*
 *.log
 *.lock
 
+# TypeScript cache
+*.tsbuildinfo
+tsconfig.tsbuildinfo
+
 # =======================================
 # Vercel
 # =======================================
