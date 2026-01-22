@@ -9,6 +9,7 @@ import { getAuthContext } from '@/lib/db/context';
 import { revalidatePath } from 'next/cache';
 import { normalizeDescription } from '@/lib/banco/bancoParser';
 import type { BankTransferCommRow } from '@/lib/banco/bancoParser';
+import { formatDateConsistent } from '@/lib/banco/dateHelpers';
 
 // ============================================
 // TIPOS
@@ -1598,11 +1599,11 @@ export async function actionIncludeTransferInCurrentFortnight(
     }
     console.log('[INCLUDE] ✅ Corte destino obtenido');
 
-    // 3. Preparar nota de rastreo
+    // 3. Preparar nota de rastreo (usando formato consistente entre entornos)
     console.log('[INCLUDE] 📝 Paso 3: Preparando notas...');
-    const targetCutoffLabel = `${new Date(targetCutoff.start_date).toLocaleDateString('es-PA')} - ${new Date(targetCutoff.end_date).toLocaleDateString('es-PA')}`;
+    const targetCutoffLabel = `${formatDateConsistent(targetCutoff.start_date)} - ${formatDateConsistent(targetCutoff.end_date)}`;
     const originalNotes = transfer.notes_internal || '';
-    const trackingNote = `📌 Incluida en corte: ${targetCutoffLabel} (${new Date().toLocaleDateString('es-PA')})`;
+    const trackingNote = `📌 Incluida en corte: ${targetCutoffLabel} (${formatDateConsistent(new Date().toISOString())})`;
     const updatedNotes = originalNotes 
       ? `${originalNotes}\n${trackingNote}` 
       : trackingNote;
@@ -1667,8 +1668,8 @@ export async function actionGetIncludedTransfers(
       return { ok: false, error: 'Error al obtener información del corte' };
     }
 
-    // 2. Construir el label exacto que se usa en las notas
-    const targetCutoffLabel = `${new Date(targetCutoff.start_date).toLocaleDateString('es-PA')} - ${new Date(targetCutoff.end_date).toLocaleDateString('es-PA')}`;
+    // 2. Construir el label exacto que se usa en las notas (usando formato consistente)
+    const targetCutoffLabel = `${formatDateConsistent(targetCutoff.start_date)} - ${formatDateConsistent(targetCutoff.end_date)}`;
     const searchPattern = `%📌 Incluida en corte: ${targetCutoffLabel}%`;
 
     console.log('[BANCO] Buscando transferencias incluidas con patrón:', searchPattern);

@@ -75,3 +75,36 @@ export function formatDateLongLocal(dateStr: string, locale: string = 'es-PA'): 
     return dateStr;
   }
 }
+
+/**
+ * Formato de fecha CONSISTENTE entre entornos (local y Vercel)
+ * Retorna formato: DD/MM/YYYY
+ * NO usar toLocaleDateString() ya que da resultados diferentes en Windows vs Linux
+ */
+export function formatDateConsistent(dateStr: string): string {
+  if (!dateStr) return '';
+  
+  try {
+    // Parsear fecha desde formato YYYY-MM-DD o YYYY-MM-DDTHH:mm:ss
+    const splitDate = dateStr.split('T');
+    const datePart = splitDate[0];
+    if (!datePart) return dateStr;
+    
+    const parts = datePart.split('-');
+    if (parts.length !== 3) return dateStr;
+    
+    const year = parts[0];
+    const month = parts[1];
+    const day = parts[2];
+    
+    if (!year || !month || !day) return dateStr;
+    
+    // Formato manual DD/MM/YYYY para consistencia total
+    const dayPadded = day.padStart(2, '0');
+    const monthPadded = month.padStart(2, '0');
+    
+    return `${dayPadded}/${monthPadded}/${year}`;
+  } catch (error) {
+    return dateStr;
+  }
+}
