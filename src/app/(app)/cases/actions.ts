@@ -38,10 +38,10 @@ export async function actionGetCases(filters?: {
       return { ok: false as const, error: 'No autenticado' };
     }
 
-    // Get user profile to check role
+    // Get user profile to check role and broker_id
     const { data: profile } = await supabase
       .from('profiles')
-      .select('role')
+      .select('role, broker_id')
       .eq('id', user.id)
       .single();
 
@@ -59,8 +59,8 @@ export async function actionGetCases(filters?: {
       .order('created_at', { ascending: false });
 
     // RLS: Broker only sees their cases
-    if (profile?.role === 'broker') {
-      query = query.eq('broker_id', user.id);
+    if (profile?.role === 'broker' && profile?.broker_id) {
+      query = query.eq('broker_id', profile.broker_id);
     }
 
     // Apply filters

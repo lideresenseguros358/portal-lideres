@@ -443,10 +443,10 @@ export async function actionGetCaseStats() {
       return { ok: false as const, error: 'No autenticado' };
     }
 
-    // Get user profile to check role
+    // Get user profile to check role and broker_id
     const { data: profile } = await supabase
       .from('profiles')
-      .select('role')
+      .select('role, broker_id')
       .eq('id', user.id)
       .single();
 
@@ -456,8 +456,8 @@ export async function actionGetCaseStats() {
       .eq('is_deleted', false);
 
     // RLS: Broker only sees their cases
-    if (profile?.role === 'broker') {
-      query = query.eq('broker_id', user.id);
+    if (profile?.role === 'broker' && profile?.broker_id) {
+      query = query.eq('broker_id', profile.broker_id);
     }
 
     const { data, error, count } = await query;
@@ -500,11 +500,11 @@ export async function actionGetCaseStats() {
     });
 
     // Count unseen (only for broker)
-    if (profile?.role === 'broker') {
+    if (profile?.role === 'broker' && profile?.broker_id) {
       const { count: unseenCount } = await supabase
         .from('cases')
         .select('*', { count: 'exact', head: true })
-        .eq('broker_id', user.id)
+        .eq('broker_id', profile.broker_id)
         .eq('seen_by_broker', false)
         .eq('is_deleted', false);
 

@@ -43,7 +43,7 @@ export default async function CaseDetailPage({ params }: { params: Promise<{ id:
   }
 
   // RLS: Broker only sees their own cases
-  if (profile.role === 'broker' && caseData.broker_id !== user.id) {
+  if (profile.role === 'broker' && profile.broker_id && caseData.broker_id !== profile.broker_id) {
     notFound();
   }
 
