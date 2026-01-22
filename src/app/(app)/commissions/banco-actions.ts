@@ -1657,28 +1657,11 @@ export async function actionGetIncludedTransfers(
 
     const supabase = await getSupabaseServer();
 
-    // 1. Obtener información del corte actual para construir el label de búsqueda
-    const { data: targetCutoff, error: cutoffError } = await supabase
-      .from('bank_cutoffs')
-      .select('id, start_date, end_date')
-      .eq('id', cutoffId)
-      .single();
+    console.log('[BANCO] actionGetIncludedTransfers - cutoffId:', cutoffId);
 
-    if (cutoffError || !targetCutoff) {
-      console.error('[BANCO] Error obteniendo corte:', cutoffError);
-      return { ok: false, error: 'Error al obtener información del corte' };
-    }
-
-    // 2. Buscar transferencias incluidas de forma FLEXIBLE
-    // Buscamos cualquier nota que contenga "Incluida en corte:" seguido del label del corte
-    // IMPORTANTE: Usamos MÚLTIPLES patrones para compatibilidad con formatos antiguos
-    const targetCutoffLabel = `${formatDateConsistent(targetCutoff.start_date)} - ${formatDateConsistent(targetCutoff.end_date)}`;
-    
-    console.log('[BANCO] Buscando transferencias incluidas para corte:', targetCutoffLabel);
-
-    // 3. Buscar de forma más flexible: cualquier transferencia con "Incluida en corte:" en las notas
-    // y que NO pertenezca al corte actual (son de otros cortes)
-    const { data: allIncluded, error } = await supabase
+    // Query SIMPLE: obtener TODAS las transferencias con "Incluida en corte:" en notes
+    // Sin filtros complejos - dejar que el filtro en memoria lo maneje
+    const { data: allTransfers, error } = await supabase
       .from('bank_transfers_comm')
       .select(`
         *,
@@ -1686,46 +1669,32 @@ export async function actionGetIncludedTransfers(
         original_cutoff:bank_cutoffs!cutoff_id(id, start_date, end_date)
       `)
       .like('notes_internal', '%Incluida en corte:%')
-      .neq('cutoff_id', cutoffId)
       .order('date', { ascending: false });
 
     if (error) {
-      console.error('[BANCO] Error obteniendo transferencias incluidas:', error);
+      console.error('[BANCO] Error obteniendo transferencias:', error);
       return { ok: false, error: 'Error al obtener transferencias incluidas' };
     }
 
-    console.log(`[BANCO] Total de transferencias con "Incluida en corte:": ${allIncluded?.length || 0}`);
-    console.log(`[BANCO] Buscando por cutoff ID: ${cutoffId}`);
-    console.log(`[BANCO] Target cutoff label: ${targetCutoffLabel}`);
-    
-    // 4. Filtrar de forma RETROCOMPATIBLE: por [ID:xxx] O por fechas
-    const transfers = (allIncluded || []).filter((t: any) => {
+    console.log(`[BANCO] Total transferencias con "Incluida en corte:": ${allTransfers?.length || 0}`);
+
+    // Filtro SIMPLE en memoria (como hace Pendientes)
+    const includedInThisCutoff = (allTransfers || []).filter((t: any) => {
       const notes = t.notes_internal || '';
       
-      // MÉTODO 1: Buscar por [ID:cutoff_id] (transferencias nuevas)
-      const idPattern = `[ID:${cutoffId}]`;
-      const hasId = notes.includes(idPattern);
+      // Buscar si esta transferencia fue incluida en ESTE corte específico
+      // Simplemente verificar si las notas contienen [ID:cutoffId]
+      const hasThisCutoffId = notes.includes(`[ID:${cutoffId}]`);
       
-      if (hasId) {
-        console.log(`[BANCO] ✅ Transfer ${t.reference_number} matched by ID`);
-        return true;
-      }
+      console.log(`[BANCO] Transfer ${t.reference_number} - has ID: ${hasThisCutoffId}, notes: ${notes.substring(0, 150)}`);
       
-      // MÉTODO 2: Buscar por label de fechas (transferencias viejas sin ID)
-      // Buscar el label exacto del corte en las notas
-      const hasLabel = notes.includes(targetCutoffLabel);
-      
-      if (hasLabel) {
-        console.log(`[BANCO] ✅ Transfer ${t.reference_number} matched by label`);
-        return true;
-      }
-      
-      console.log(`[BANCO] ❌ Transfer ${t.reference_number} no match - notes fragment: ${notes.substring(0, 100)}`);
-      return false;
+      return hasThisCutoffId;
     });
 
-    // 5. Transformar datos para simplificar estructura
-    const includedTransfers = (transfers || []).map((t: any) => ({
+    console.log(`[BANCO] Transferencias incluidas en corte ${cutoffId}: ${includedInThisCutoff.length}`);
+
+    // Transformar datos
+    const result = includedInThisCutoff.map((t: any) => ({
       id: t.id,
       reference_number: t.reference_number,
       date: t.date,
@@ -1740,8 +1709,7 @@ export async function actionGetIncludedTransfers(
       updated_at: t.updated_at
     }));
 
-    console.log(`[BANCO] Transferencias incluidas encontradas: ${includedTransfers.length} para corte ${targetCutoffLabel}`);
-    return { ok: true, data: includedTransfers };
+    return { ok: true, data: result };
   } catch (error) {
     console.error('[BANCO] Error en actionGetIncludedTransfers:', error);
     return { ok: false, error: 'Error inesperado' };
