@@ -1693,35 +1693,30 @@ export async function actionGetIncludedTransfers(
       return { ok: false, error: 'Error al obtener transferencias incluidas' };
     }
 
+    console.log(`[BANCO] Total de transferencias con "Incluida en corte:": ${allIncluded?.length || 0}`);
+    
     // 4. Filtrar en memoria para encontrar solo las que corresponden a ESTE corte
     // (necesario porque el formato de fecha puede variar)
     const transfers = (allIncluded || []).filter((t: any) => {
       const notes = t.notes_internal || '';
-      // Buscar cualquier mención del label del corte en las notas
-      // Esto funciona con cualquier formato: "1/12/2025", "01/12/2025", "2025-1-12", etc.
-      const startParts = targetCutoff.start_date.split('-');
-      const endParts = targetCutoff.end_date.split('-');
       
-      // Extraer día y mes (sin padding)
-      const startDay = parseInt(startParts[2] || '0', 10);
-      const startMonth = parseInt(startParts[1] || '0', 10);
-      const endDay = parseInt(endParts[2] || '0', 10);
-      const endMonth = parseInt(endParts[1] || '0', 10);
-      
-      // Buscar si las notas contienen estos números cerca de "Incluida en corte:"
+      // Buscar si las notas contienen EXACTAMENTE el label del corte
       const includeMarkerIndex = notes.indexOf('Incluida en corte:');
       if (includeMarkerIndex === -1) return false;
       
-      // Tomar fragmento de 100 caracteres después del marcador
-      const fragment = notes.substring(includeMarkerIndex, includeMarkerIndex + 100);
+      // Tomar fragmento después del marcador (hasta 150 chars)
+      const fragment = notes.substring(includeMarkerIndex, includeMarkerIndex + 150);
       
-      // Verificar si contiene los días/meses del rango (flexiblemente)
-      const hasStartDate = fragment.includes(`${startDay}/${startMonth}`) || 
-                           fragment.includes(`${String(startDay).padStart(2, '0')}/${String(startMonth).padStart(2, '0')}`);
-      const hasEndDate = fragment.includes(`${endDay}/${endMonth}`) || 
-                         fragment.includes(`${String(endDay).padStart(2, '0')}/${String(endMonth).padStart(2, '0')}`);
+      console.log(`[BANCO] Checking transfer ${t.reference_number}:`);
+      console.log(`[BANCO]   - Fragment: "${fragment}"`);
+      console.log(`[BANCO]   - Looking for: "${targetCutoffLabel}"`);
       
-      return hasStartDate && hasEndDate;
+      // Buscar el label EXACTO del corte en el fragmento
+      const matches = fragment.includes(targetCutoffLabel);
+      
+      console.log(`[BANCO]   - Matches: ${matches}`);
+      
+      return matches;
     });
 
     // 5. Transformar datos para simplificar estructura
