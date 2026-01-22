@@ -1599,11 +1599,12 @@ export async function actionIncludeTransferInCurrentFortnight(
     }
     console.log('[INCLUDE] ✅ Corte destino obtenido');
 
-    // 3. Preparar nota de rastreo (usando formato consistente entre entornos)
+    // 3. Preparar nota de rastreo con ID del corte (más confiable que fechas)
     console.log('[INCLUDE] 📝 Paso 3: Preparando notas...');
     const targetCutoffLabel = `${formatDateConsistent(targetCutoff.start_date)} - ${formatDateConsistent(targetCutoff.end_date)}`;
     const originalNotes = transfer.notes_internal || '';
-    const trackingNote = `📌 Incluida en corte: ${targetCutoffLabel} (${formatDateConsistent(new Date().toISOString())})`;
+    // Guardar tanto el label legible como el ID para búsqueda confiable
+    const trackingNote = `📌 Incluida en corte: ${targetCutoffLabel} [ID:${currentCutoffId}] (${formatDateConsistent(new Date().toISOString())})`;
     const updatedNotes = originalNotes 
       ? `${originalNotes}\n${trackingNote}` 
       : trackingNote;
@@ -1694,29 +1695,21 @@ export async function actionGetIncludedTransfers(
     }
 
     console.log(`[BANCO] Total de transferencias con "Incluida en corte:": ${allIncluded?.length || 0}`);
+    console.log(`[BANCO] Buscando por cutoff ID: ${cutoffId}`);
     
-    // 4. Filtrar en memoria para encontrar solo las que corresponden a ESTE corte
-    // (necesario porque el formato de fecha puede variar)
+    // 4. Filtrar por cutoff_id en las notas (más confiable que fechas)
     const transfers = (allIncluded || []).filter((t: any) => {
       const notes = t.notes_internal || '';
       
-      // Buscar si las notas contienen EXACTAMENTE el label del corte
-      const includeMarkerIndex = notes.indexOf('Incluida en corte:');
-      if (includeMarkerIndex === -1) return false;
+      // Buscar el patrón [ID:cutoff_id] en las notas
+      const idPattern = `[ID:${cutoffId}]`;
+      const hasId = notes.includes(idPattern);
       
-      // Tomar fragmento después del marcador (hasta 150 chars)
-      const fragment = notes.substring(includeMarkerIndex, includeMarkerIndex + 150);
+      if (hasId) {
+        console.log(`[BANCO] ✅ Transfer ${t.reference_number} matched by ID`);
+      }
       
-      console.log(`[BANCO] Checking transfer ${t.reference_number}:`);
-      console.log(`[BANCO]   - Fragment: "${fragment}"`);
-      console.log(`[BANCO]   - Looking for: "${targetCutoffLabel}"`);
-      
-      // Buscar el label EXACTO del corte en el fragmento
-      const matches = fragment.includes(targetCutoffLabel);
-      
-      console.log(`[BANCO]   - Matches: ${matches}`);
-      
-      return matches;
+      return hasId;
     });
 
     // 5. Transformar datos para simplificar estructura
