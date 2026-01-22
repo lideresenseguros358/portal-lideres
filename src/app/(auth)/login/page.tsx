@@ -5,10 +5,12 @@ import Link from "next/link";
 import AuthShell from "../_AuthShell";
 import { supabaseClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
+import { FaEye, FaEyeSlash } from "react-icons/fa";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -60,17 +62,31 @@ export default function LoginPage() {
           <label className="auth-label" htmlFor="password">
             Contraseña
           </label>
-          <input
-            id="password"
-            name="password"
-            type="password"
-            className="auth-input"
-            placeholder="Ingresa tu contraseña"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoComplete="current-password"
-          />
+          <div className="relative">
+            <input
+              id="password"
+              name="password"
+              type={showPassword ? "text" : "password"}
+              className="auth-input pr-10"
+              placeholder="Ingresa tu contraseña"
+              required
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              autoComplete="current-password"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 transition-colors duration-200"
+              style={{
+                color: showPassword ? '#8AAA19' : '#cbd5e1',
+                opacity: showPassword ? 1 : 0.6,
+              }}
+              tabIndex={-1}
+            >
+              {showPassword ? <FaEye size={18} /> : <FaEyeSlash size={18} />}
+            </button>
+          </div>
         </div>
 
         {error && (

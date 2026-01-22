@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseClient as getSupabaseClient } from "@/lib/supabase/client";
 import AuthShell from "../_AuthShell";
+import { FaEye, FaEyeSlash } from "react-icons/fa";
 
 const UpdatePasswordPage = () => {
   const router = useRouter();
@@ -11,6 +12,8 @@ const UpdatePasswordPage = () => {
 
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -110,30 +113,58 @@ const UpdatePasswordPage = () => {
           <label className="auth-label" htmlFor="password">
             Nueva contraseña
           </label>
-          <input
-            id="password"
-            type="password"
-            className="auth-input"
-            placeholder="Mínimo 8 caracteres"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            autoComplete="new-password"
-          />
+          <div className="relative">
+            <input
+              id="password"
+              type={showPassword ? "text" : "password"}
+              className="auth-input pr-10"
+              placeholder="Mínimo 8 caracteres"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              autoComplete="new-password"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 transition-colors duration-200"
+              style={{
+                color: showPassword ? '#8AAA19' : '#cbd5e1',
+                opacity: showPassword ? 1 : 0.6,
+              }}
+              tabIndex={-1}
+            >
+              {showPassword ? <FaEye size={18} /> : <FaEyeSlash size={18} />}
+            </button>
+          </div>
         </div>
 
         <div className="auth-field">
           <label className="auth-label" htmlFor="confirmPassword">
             Confirmar contraseña
           </label>
-          <input
-            id="confirmPassword"
-            type="password"
-            className="auth-input"
-            placeholder="Repite tu contraseña"
-            value={confirmPassword}
-            onChange={(event) => setConfirmPassword(event.target.value)}
-            autoComplete="new-password"
-          />
+          <div className="relative">
+            <input
+              id="confirmPassword"
+              type={showConfirmPassword ? "text" : "password"}
+              className="auth-input pr-10"
+              placeholder="Repite tu contraseña"
+              value={confirmPassword}
+              onChange={(event) => setConfirmPassword(event.target.value)}
+              autoComplete="new-password"
+            />
+            <button
+              type="button"
+              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 transition-colors duration-200"
+              style={{
+                color: showConfirmPassword ? '#8AAA19' : '#cbd5e1',
+                opacity: showConfirmPassword ? 1 : 0.6,
+              }}
+              tabIndex={-1}
+            >
+              {showConfirmPassword ? <FaEye size={18} /> : <FaEyeSlash size={18} />}
+            </button>
+          </div>
         </div>
 
         <button type="submit" className="auth-primary-button" disabled={loading}>
