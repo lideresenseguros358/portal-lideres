@@ -27,9 +27,9 @@ export const CASE_STATUS_LABELS = {
 } as const;
 
 export const CASE_SECTIONS = {
-  RAMOS_GENERALES: 'Ramos Generales',
   VIDA_ASSA: 'Vida ASSA',
-  OTROS_PERSONAS: 'Otros Personas',
+  RAMOS_GENERALES: 'Ramos Generales',
+  OTROS_PERSONAS: 'Ramo Personas',
   SIN_CLASIFICAR: 'Sin clasificar',
 } as const;
 

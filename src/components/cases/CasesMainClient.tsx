@@ -201,9 +201,9 @@ export default function CasesMainClient({ userProfile, brokers, insurers }: Case
   };
 
   const tabs = [
-    { key: 'RAMOS_GENERALES', label: 'Ramos Generales', badge: stats?.by_section?.RAMOS_GENERALES || 0 },
     { key: 'VIDA_ASSA', label: 'Vida ASSA', badge: stats?.by_section?.VIDA_ASSA || 0, priority: userProfile.role === 'broker' },
-    { key: 'OTROS_PERSONAS', label: 'Otros Personas', badge: stats?.by_section?.OTROS_PERSONAS || 0 },
+    { key: 'RAMOS_GENERALES', label: 'Ramos Generales', badge: stats?.by_section?.RAMOS_GENERALES || 0 },
+    { key: 'OTROS_PERSONAS', label: 'Ramo Personas', badge: stats?.by_section?.OTROS_PERSONAS || 0 },
   ];
 
   if (userProfile.role === 'master') {
