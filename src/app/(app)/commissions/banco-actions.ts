@@ -1696,20 +1696,32 @@ export async function actionGetIncludedTransfers(
 
     console.log(`[BANCO] Total de transferencias con "Incluida en corte:": ${allIncluded?.length || 0}`);
     console.log(`[BANCO] Buscando por cutoff ID: ${cutoffId}`);
+    console.log(`[BANCO] Target cutoff label: ${targetCutoffLabel}`);
     
-    // 4. Filtrar por cutoff_id en las notas (más confiable que fechas)
+    // 4. Filtrar de forma RETROCOMPATIBLE: por [ID:xxx] O por fechas
     const transfers = (allIncluded || []).filter((t: any) => {
       const notes = t.notes_internal || '';
       
-      // Buscar el patrón [ID:cutoff_id] en las notas
+      // MÉTODO 1: Buscar por [ID:cutoff_id] (transferencias nuevas)
       const idPattern = `[ID:${cutoffId}]`;
       const hasId = notes.includes(idPattern);
       
       if (hasId) {
         console.log(`[BANCO] ✅ Transfer ${t.reference_number} matched by ID`);
+        return true;
       }
       
-      return hasId;
+      // MÉTODO 2: Buscar por label de fechas (transferencias viejas sin ID)
+      // Buscar el label exacto del corte en las notas
+      const hasLabel = notes.includes(targetCutoffLabel);
+      
+      if (hasLabel) {
+        console.log(`[BANCO] ✅ Transfer ${t.reference_number} matched by label`);
+        return true;
+      }
+      
+      console.log(`[BANCO] ❌ Transfer ${t.reference_number} no match - notes fragment: ${notes.substring(0, 100)}`);
+      return false;
     });
 
     // 5. Transformar datos para simplificar estructura
