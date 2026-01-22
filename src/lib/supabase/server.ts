@@ -5,7 +5,7 @@ import type { Database } from "../database.types";
 export async function getSupabaseServer() {
   const cookieStore = await cookies();
 
-  const supabase = createServerClient<Database>(
+  return createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
@@ -13,21 +13,22 @@ export async function getSupabaseServer() {
         getAll() {
           return cookieStore.getAll();
         },
-        setAll(cookiesToSet: any) {
+        setAll(cookiesToSet) {
           try {
-            cookiesToSet.forEach(({ name, value, options }: any) =>
+            cookiesToSet.forEach(({ name, value, options }) =>
               cookieStore.set(name, value, options)
             );
-          } catch (error) {
-            // Server Component can't set cookies
+          } catch {
+            // Server Component: ignore set errors
           }
         },
       },
-    } as any
+    }
   );
-
-  return supabase;
 }
+
+// Alias export para compatibilidad con código que usa createClient
+export const createClient = getSupabaseServer;
 
 // Type exports for use across the app
 export type DB = Database['public'];
