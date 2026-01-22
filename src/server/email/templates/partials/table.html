@@ -1,0 +1,22 @@
+<table style="width: 100%; border-collapse: collapse; margin: 20px 0; border: 1px solid #e0e0e0; border-radius: 6px; overflow: hidden;">
+  <thead>
+    <tr style="background-color: #f8f9fa;">
+      {{#each headers}}
+      <th style="padding: 12px; text-align: left; border-bottom: 2px solid #e0e0e0; font-weight: 600; color: #010139;">
+        {{this}}
+      </th>
+      {{/each}}
+    </tr>
+  </thead>
+  <tbody>
+    {{#each rows}}
+    <tr style="border-bottom: 1px solid #e0e0e0;">
+      {{#each cells}}
+      <td style="padding: 12px; color: #333;">
+        {{this}}
+      </td>
+      {{/each}}
+    </tr>
+    {{/each}}
+  </tbody>
+</table>

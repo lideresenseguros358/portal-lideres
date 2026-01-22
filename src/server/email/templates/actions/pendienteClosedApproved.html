@@ -1,0 +1,40 @@
+<h1>✅ Caso Cerrado - APROBADO</h1>
+
+<p>Hola <strong>{{brokerName}}</strong>,</p>
+
+<p>El caso <strong>{{ticket}}</strong> ha sido cerrado con estado <strong style="color: #4caf50;">APROBADO</strong>.</p>
+
+<div class="alert alert-success">
+  <p style="margin: 0;"><strong>Cliente:</strong> {{clientName}}</p>
+  <p style="margin: 8px 0 0 0;"><strong>Tipo de trámite:</strong> {{caseType}}</p>
+  <p style="margin: 8px 0 0 0;"><strong>Aseguradora:</strong> {{insurerName}}</p>
+  <p style="margin: 8px 0 0 0;"><strong>Cerrado por:</strong> {{closedBy}}</p>
+  <p style="margin: 8px 0 0 0;"><strong>Fecha de cierre:</strong> {{closedAt}}</p>
+</div>
+
+{{#if policyNumber}}
+<p><strong>Número de póliza generado:</strong> <code style="background-color: #f0f0f0; padding: 4px 8px; border-radius: 4px; font-family: monospace;">{{policyNumber}}</code></p>
+{{/if}}
+
+{{#if closingNotes}}
+<p><strong>Notas de cierre:</strong></p>
+<div style="background-color: #f8f9fa; padding: 16px; border-radius: 6px; border-left: 4px solid #4caf50;">
+  {{closingNotes}}
+</div>
+{{/if}}
+
+<p>Puedes ver el historial completo del caso en el portal:</p>
+
+<a href="{{portalUrl}}/pendientes" class="button">
+  Ver en Pendientes
+</a>
+
+<hr class="divider">
+
+<p style="font-size: 14px; color: #666;">
+  {{#if premium}}
+  <strong>Prima:</strong> ${{premium}}<br>
+  {{/if}}
+  <strong>Tiempo de resolución:</strong> {{resolutionTime}}<br>
+  <strong>Ramo:</strong> {{ramo}}
+</p>

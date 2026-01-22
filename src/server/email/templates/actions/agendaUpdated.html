@@ -1,0 +1,35 @@
+<h1>🔄 Evento Actualizado</h1>
+
+<p>Hola <strong>{{userName}}</strong>,</p>
+
+<p>Se ha actualizado un evento en la agenda:</p>
+
+<div class="alert alert-info">
+  <p style="margin: 0; font-size: 18px;"><strong>{{eventTitle}}</strong></p>
+  <p style="margin: 12px 0 0 0;"><strong>📅 Nueva fecha:</strong> {{eventDate}}</p>
+  <p style="margin: 8px 0 0 0;"><strong>🕐 Nueva hora:</strong> {{eventTime}}</p>
+  {{#if location}}
+  <p style="margin: 8px 0 0 0;"><strong>📍 Lugar:</strong> {{location}}</p>
+  {{/if}}
+  <p style="margin: 8px 0 0 0;"><strong>Actualizado por:</strong> {{updatedBy}}</p>
+</div>
+
+{{#if changes}}
+<p><strong>Cambios realizados:</strong></p>
+<ul style="margin: 10px 0; padding-left: 20px; background-color: #fff3e0; padding: 16px; border-radius: 6px;">
+  {{#each changes}}
+  <li><strong>{{field}}:</strong> {{oldValue}} → {{newValue}}</li>
+  {{/each}}
+</ul>
+{{/if}}
+
+{{#if description}}
+<p><strong>Descripción actualizada:</strong></p>
+<div style="background-color: #f8f9fa; padding: 16px; border-radius: 6px;">
+  {{description}}
+</div>
+{{/if}}
+
+<a href="{{portalUrl}}/agenda" class="button">
+  Ver en Agenda
+</a>

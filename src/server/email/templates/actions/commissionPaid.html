@@ -1,0 +1,29 @@
+<h1>💰 Quincena Pagada</h1>
+
+<p>Hola <strong>{{brokerName}}</strong>,</p>
+
+<p>Te informamos que la quincena <strong>{{fortnightName}}</strong> ha sido marcada como pagada.</p>
+
+<div class="alert alert-success">
+  <p style="margin: 0;"><strong>Período:</strong> {{startDate}} - {{endDate}}</p>
+  <p style="margin: 8px 0 0 0;"><strong>Total comisiones:</strong> ${{totalAmount}}</p>
+  <p style="margin: 8px 0 0 0;"><strong>Fecha de pago:</strong> {{paidDate}}</p>
+</div>
+
+<p>Puedes ver el detalle completo en el portal:</p>
+
+<a href="{{portalUrl}}/commissions" class="button">
+  Ver Detalle de Comisiones
+</a>
+
+<hr class="divider">
+
+<p style="font-size: 14px; color: #666;">
+  <strong>Número de items:</strong> {{itemCount}}<br>
+  <strong>Prima total:</strong> ${{totalPremium}}<br>
+  <strong>Porcentaje promedio:</strong> {{avgPercentage}}%
+</p>
+
+<p style="font-size: 13px; color: #999; margin-top: 20px;">
+  Si tienes alguna duda sobre este pago, por favor contacta al departamento de administración.
+</p>

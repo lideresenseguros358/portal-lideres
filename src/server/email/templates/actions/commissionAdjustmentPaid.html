@@ -1,0 +1,29 @@
+<h1>💵 Ajuste de Comisión Pagado</h1>
+
+<p>Hola <strong>{{brokerName}}</strong>,</p>
+
+<p>Te informamos que se ha procesado un ajuste de comisión:</p>
+
+<div class="alert alert-info">
+  <p style="margin: 0;"><strong>Tipo de ajuste:</strong> {{adjustmentType}}</p>
+  <p style="margin: 8px 0 0 0;"><strong>Monto:</strong> ${{amount}}</p>
+  <p style="margin: 8px 0 0 0;"><strong>Fecha:</strong> {{paidDate}}</p>
+  <p style="margin: 8px 0 0 0;"><strong>Concepto:</strong> {{concept}}</p>
+</div>
+
+{{#if description}}
+<p><strong>Descripción:</strong></p>
+<div style="background-color: #f8f9fa; padding: 16px; border-radius: 6px;">
+  {{description}}
+</div>
+{{/if}}
+
+<p>Puedes ver el detalle en tu historial de comisiones:</p>
+
+<a href="{{portalUrl}}/commissions" class="button">
+  Ver Comisiones
+</a>
+
+<p style="font-size: 14px; color: #666; margin-top: 20px;">
+  Si tienes dudas sobre este ajuste, contacta al departamento de administración.
+</p>

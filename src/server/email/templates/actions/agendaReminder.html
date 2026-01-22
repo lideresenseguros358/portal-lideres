@@ -1,0 +1,40 @@
+<h1>📅 Recordatorio de Evento</h1>
+
+<p>Hola <strong>{{userName}}</strong>,</p>
+
+<p>Te recordamos que mañana tienes el siguiente evento en tu agenda:</p>
+
+<div class="alert alert-info">
+  <p style="margin: 0; font-size: 18px;"><strong>{{eventTitle}}</strong></p>
+  <p style="margin: 12px 0 0 0;"><strong>📅 Fecha:</strong> {{eventDate}}</p>
+  <p style="margin: 8px 0 0 0;"><strong>🕐 Hora:</strong> {{eventTime}}</p>
+  {{#if location}}
+  <p style="margin: 8px 0 0 0;"><strong>📍 Lugar:</strong> {{location}}</p>
+  {{/if}}
+</div>
+
+{{#if description}}
+<p><strong>Descripción:</strong></p>
+<div style="background-color: #f8f9fa; padding: 16px; border-radius: 6px;">
+  {{description}}
+</div>
+{{/if}}
+
+{{#if attendees}}
+<p><strong>Participantes:</strong></p>
+<ul style="margin: 10px 0; padding-left: 20px;">
+  {{#each attendees}}
+  <li>{{name}} {{#if rsvp}}<span style="color: #4caf50;">✓</span>{{/if}}</li>
+  {{/each}}
+</ul>
+{{/if}}
+
+<div style="text-align: center; margin: 30px 0;">
+  <a href="{{portalUrl}}/agenda" class="button">
+    Ver en Agenda
+  </a>
+</div>
+
+<p style="font-size: 14px; color: #666; margin-top: 20px;">
+  Este recordatorio se envía automáticamente 1 día antes del evento.
+</p>

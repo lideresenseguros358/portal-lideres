@@ -1,0 +1,32 @@
+<h1>🔄 Caso Actualizado</h1>
+
+<p>Hola <strong>{{brokerName}}</strong>,</p>
+
+<p>El caso <strong>{{ticket}}</strong> ha sido actualizado:</p>
+
+<div class="alert alert-info">
+  <p style="margin: 0;"><strong>Cliente:</strong> {{clientName}}</p>
+  <p style="margin: 8px 0 0 0;"><strong>Nuevo estado:</strong> {{newStatus}}</p>
+  <p style="margin: 8px 0 0 0;"><strong>Actualizado por:</strong> {{updatedBy}}</p>
+  <p style="margin: 8px 0 0 0;"><strong>Fecha:</strong> {{updatedAt}}</p>
+</div>
+
+{{#if changes}}
+<p><strong>Cambios realizados:</strong></p>
+<ul style="margin: 10px 0; padding-left: 20px;">
+  {{#each changes}}
+  <li><strong>{{field}}:</strong> {{oldValue}} → {{newValue}}</li>
+  {{/each}}
+</ul>
+{{/if}}
+
+{{#if notes}}
+<p><strong>Notas:</strong></p>
+<div style="background-color: #f8f9fa; padding: 16px; border-radius: 6px; border-left: 4px solid #8AAA19;">
+  {{notes}}
+</div>
+{{/if}}
+
+<a href="{{portalUrl}}/pendientes" class="button">
+  Ver Caso
+</a>

@@ -1,0 +1,29 @@
+<h1>⏸️ Caso Aplazado</h1>
+
+<p>Hola <strong>{{brokerName}}</strong>,</p>
+
+<p>El caso <strong>{{ticket}}</strong> ha sido aplazado:</p>
+
+<div class="alert alert-warning">
+  <p style="margin: 0;"><strong>Cliente:</strong> {{clientName}}</p>
+  <p style="margin: 8px 0 0 0;"><strong>Aplazado hasta:</strong> {{aplazadoUntil}}</p>
+  <p style="margin: 8px 0 0 0;"><strong>Meses de aplazamiento:</strong> {{aplazadoMonths}}</p>
+  <p style="margin: 8px 0 0 0;"><strong>Aplazado por:</strong> {{aplazadoBy}}</p>
+</div>
+
+{{#if reason}}
+<p><strong>Motivo del aplazamiento:</strong></p>
+<div style="background-color: #fff3e0; padding: 16px; border-radius: 6px; border-left: 4px solid #ff9800;">
+  {{reason}}
+</div>
+{{/if}}
+
+<p>El caso se reactivará automáticamente en la fecha indicada. Mientras tanto, el SLA está pausado.</p>
+
+<a href="{{portalUrl}}/pendientes" class="button">
+  Ver Caso
+</a>
+
+<p style="font-size: 14px; color: #666; margin-top: 20px;">
+  <strong>Recordatorio:</strong> Recibirás una notificación cuando el caso se reactive.
+</p>

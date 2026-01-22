@@ -1,0 +1,159 @@
+/**
+ * FUNCIÓN CENTRAL DE ENVÍO DE CORREOS
+ * ====================================
+ * Maneja envío, dedupe, logging y errores
+ */
+
+import { createClient } from '@supabase/supabase-js';
+import { getTransport, getFromAddress } from './mailer';
+import { checkDedupe } from './dedupe';
+import { htmlToText } from './renderer';
+import type { SendEmailParams, EmailLogRecord } from './types';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+
+const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+/**
+ * Enviar correo electrónico
+ */
+export async function sendEmail(params: SendEmailParams): Promise<{
+  success: boolean;
+  messageId?: string;
+  error?: string;
+  skipped?: boolean;
+}> {
+  const { to, subject, html, text, fromType, dedupeKey, metadata, template } = params;
+
+  try {
+    // 1. Verificar dedupe
+    if (dedupeKey) {
+      const isDuplicate = await checkDedupe(dedupeKey);
+      if (isDuplicate) {
+        console.log(`[EMAIL] Correo duplicado omitido: ${dedupeKey}`);
+        
+        // Registrar como skipped
+        await logEmail({
+          to: Array.isArray(to) ? to.join(',') : to,
+          subject,
+          template: template || null,
+          dedupe_key: dedupeKey,
+          status: 'skipped',
+          error: 'Duplicate detected',
+          metadata: metadata || {},
+        });
+
+        return { success: true, skipped: true };
+      }
+    }
+
+    // 2. Obtener transporte y dirección FROM
+    const transport = getTransport(fromType);
+    const from = getFromAddress(fromType);
+
+    // 3. Generar texto plano si no se proporcionó
+    const plainText = text || htmlToText(html);
+
+    // 4. Enviar correo
+    const info = await transport.sendMail({
+      from,
+      to,
+      subject,
+      html,
+      text: plainText,
+    });
+
+    console.log(`[EMAIL] Enviado correctamente: ${info.messageId}`);
+
+    // 5. Registrar éxito en DB
+    await logEmail({
+      to: Array.isArray(to) ? to.join(',') : to,
+      subject,
+      template: template || null,
+      dedupe_key: dedupeKey || null,
+      status: 'sent',
+      error: null,
+      metadata: {
+        messageId: info.messageId,
+        fromType,
+        ...(metadata || {}),
+      },
+    });
+
+    return { success: true, messageId: info.messageId };
+
+  } catch (error: any) {
+    console.error('[EMAIL] Error enviando correo:', error);
+
+    // Registrar fallo en DB
+    await logEmail({
+      to: Array.isArray(to) ? to.join(',') : to,
+      subject,
+      template: template || null,
+      dedupe_key: dedupeKey || null,
+      status: 'failed',
+      error: error.message || 'Unknown error',
+      metadata: metadata || {},
+    });
+
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Registrar envío en email_logs
+ */
+async function logEmail(record: Omit<EmailLogRecord, 'id' | 'created_at'>): Promise<void> {
+  try {
+    const { error } = await supabase.from('email_logs').insert({
+      to: record.to,
+      subject: record.subject,
+      template: record.template,
+      dedupe_key: record.dedupe_key,
+      status: record.status,
+      error: record.error,
+      metadata: record.metadata,
+    });
+
+    if (error) {
+      console.error('[EMAIL] Error registrando log:', error);
+    }
+  } catch (err) {
+    console.error('[EMAIL] Error crítico en logging:', err);
+  }
+}
+
+/**
+ * Enviar correo masivo (batch)
+ */
+export async function sendEmailBatch(emails: SendEmailParams[]): Promise<{
+  total: number;
+  sent: number;
+  failed: number;
+  skipped: number;
+}> {
+  const results = {
+    total: emails.length,
+    sent: 0,
+    failed: 0,
+    skipped: 0,
+  };
+
+  for (const email of emails) {
+    const result = await sendEmail(email);
+    
+    if (result.success && result.skipped) {
+      results.skipped++;
+    } else if (result.success) {
+      results.sent++;
+    } else {
+      results.failed++;
+    }
+
+    // Pequeño delay para no saturar SMTP
+    await new Promise(resolve => setTimeout(resolve, 100));
+  }
+
+  return results;
+}

@@ -1,0 +1,37 @@
+<h1>❌ Caso Cerrado - RECHAZADO</h1>
+
+<p>Hola <strong>{{brokerName}}</strong>,</p>
+
+<p>El caso <strong>{{ticket}}</strong> ha sido cerrado con estado <strong style="color: #d32f2f;">RECHAZADO</strong>.</p>
+
+<div class="alert alert-warning">
+  <p style="margin: 0;"><strong>Cliente:</strong> {{clientName}}</p>
+  <p style="margin: 8px 0 0 0;"><strong>Tipo de trámite:</strong> {{caseType}}</p>
+  <p style="margin: 8px 0 0 0;"><strong>Aseguradora:</strong> {{insurerName}}</p>
+  <p style="margin: 8px 0 0 0;"><strong>Cerrado por:</strong> {{closedBy}}</p>
+  <p style="margin: 8px 0 0 0;"><strong>Fecha de cierre:</strong> {{closedAt}}</p>
+</div>
+
+{{#if reason}}
+<p><strong>Motivo del rechazo:</strong></p>
+<div style="background-color: #ffebee; padding: 16px; border-radius: 6px; border-left: 4px solid #d32f2f;">
+  {{reason}}
+</div>
+{{/if}}
+
+{{#if closingNotes}}
+<p><strong>Notas adicionales:</strong></p>
+<div style="background-color: #f8f9fa; padding: 16px; border-radius: 6px;">
+  {{closingNotes}}
+</div>
+{{/if}}
+
+<p>Puedes revisar el historial completo del caso en el portal:</p>
+
+<a href="{{portalUrl}}/pendientes" class="button">
+  Ver en Pendientes
+</a>
+
+<p style="font-size: 14px; color: #666; margin-top: 20px;">
+  Si consideras que el rechazo fue por error o deseas reabrir el caso, contacta al departamento correspondiente.
+</p>

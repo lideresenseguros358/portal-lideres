@@ -1,0 +1,37 @@
+<h1>🗑️ Evento Cancelado</h1>
+
+<p>Hola <strong>{{userName}}</strong>,</p>
+
+<p>Se ha cancelado el siguiente evento de la agenda:</p>
+
+<div class="alert alert-warning">
+  <p style="margin: 0; font-size: 18px;"><strong>{{eventTitle}}</strong></p>
+  <p style="margin: 12px 0 0 0;"><strong>Fecha original:</strong> {{eventDate}}</p>
+  <p style="margin: 8px 0 0 0;"><strong>Hora:</strong> {{eventTime}}</p>
+  {{#if location}}
+  <p style="margin: 8px 0 0 0;"><strong>Lugar:</strong> {{location}}</p>
+  {{/if}}
+  <p style="margin: 8px 0 0 0;"><strong>Cancelado por:</strong> {{deletedBy}}</p>
+</div>
+
+{{#if reason}}
+<p><strong>Motivo de cancelación:</strong></p>
+<div style="background-color: #ffebee; padding: 16px; border-radius: 6px; border-left: 4px solid #d32f2f;">
+  {{reason}}
+</div>
+{{/if}}
+
+{{#if rescheduled}}
+<div class="alert alert-info" style="margin-top: 20px;">
+  <p style="margin: 0;"><strong>Este evento ha sido reprogramado</strong></p>
+  <p style="margin: 8px 0 0 0;">Nueva fecha: {{newDate}} a las {{newTime}}</p>
+</div>
+{{/if}}
+
+<a href="{{portalUrl}}/agenda" class="button">
+  Ver Agenda
+</a>
+
+<p style="font-size: 14px; color: #666; margin-top: 20px;">
+  Si tienes dudas sobre esta cancelación, contacta a {{deletedBy}}.
+</p>

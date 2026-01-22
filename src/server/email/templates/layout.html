@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{subject}}</title>
+  <style>
+    /* Reset */
+    body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+    table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
+    img { -ms-interpolation-mode: bicubic; border: 0; height: auto; line-height: 100%; outline: none; text-decoration: none; }
+    
+    /* Variables de color */
+    :root {
+      --primary: #8AAA19;
+      --primary-dark: #6d8814;
+      --secondary: #010139;
+      --text: #333333;
+      --text-light: #666666;
+      --border: #e0e0e0;
+      --bg-light: #f8f9fa;
+    }
+    
+    /* Base */
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background-color: #f4f4f4;
+      color: var(--text);
+      line-height: 1.6;
+    }
+    
+    /* Contenedor principal */
+    .email-wrapper {
+      width: 100%;
+      background-color: #f4f4f4;
+      padding: 20px 0;
+    }
+    
+    .email-container {
+      max-width: 600px;
+      margin: 0 auto;
+      background-color: #ffffff;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    
+    /* Header */
+    .email-header {
+      background: linear-gradient(135deg, var(--secondary) 0%, #020252 100%);
+      padding: 30px 20px;
+      text-align: center;
+    }
+    
+    .logo {
+      color: #ffffff;
+      font-size: 24px;
+      font-weight: bold;
+      margin: 0;
+      letter-spacing: 0.5px;
+    }
+    
+    .logo-accent {
+      color: var(--primary);
+    }
+    
+    /* Contenido */
+    .email-content {
+      padding: 40px 30px;
+    }
+    
+    h1 {
+      color: var(--secondary);
+      font-size: 24px;
+      margin: 0 0 20px 0;
+      font-weight: 600;
+    }
+    
+    h2 {
+      color: var(--secondary);
+      font-size: 20px;
+      margin: 30px 0 15px 0;
+      font-weight: 600;
+    }
+    
+    p {
+      margin: 0 0 16px 0;
+      color: var(--text);
+      font-size: 16px;
+    }
+    
+    /* Botones */
+    .button {
+      display: inline-block;
+      padding: 14px 32px;
+      background-color: var(--primary);
+      color: #ffffff !important;
+      text-decoration: none;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 16px;
+      margin: 10px 0;
+      transition: background-color 0.3s;
+    }
+    
+    .button:hover {
+      background-color: var(--primary-dark);
+    }
+    
+    .button-secondary {
+      background-color: var(--secondary);
+    }
+    
+    .button-secondary:hover {
+      background-color: #020252;
+    }
+    
+    /* Footer */
+    .email-footer {
+      background-color: var(--bg-light);
+      padding: 30px;
+      text-align: center;
+      border-top: 1px solid var(--border);
+    }
+    
+    .footer-text {
+      color: var(--text-light);
+      font-size: 14px;
+      margin: 8px 0;
+    }
+    
+    .footer-links {
+      margin: 15px 0;
+    }
+    
+    .footer-link {
+      color: var(--primary);
+      text-decoration: none;
+      margin: 0 10px;
+      font-size: 14px;
+    }
+    
+    /* Divisores */
+    .divider {
+      border: none;
+      border-top: 1px solid var(--border);
+      margin: 30px 0;
+    }
+    
+    /* Alertas */
+    .alert {
+      padding: 16px;
+      border-radius: 6px;
+      margin: 20px 0;
+    }
+    
+    .alert-info {
+      background-color: #e3f2fd;
+      border-left: 4px solid #2196f3;
+      color: #0d47a1;
+    }
+    
+    .alert-warning {
+      background-color: #fff3e0;
+      border-left: 4px solid #ff9800;
+      color: #e65100;
+    }
+    
+    .alert-success {
+      background-color: #e8f5e9;
+      border-left: 4px solid #4caf50;
+      color: #1b5e20;
+    }
+    
+    /* Responsive */
+    @media only screen and (max-width: 600px) {
+      .email-container {
+        width: 100% !important;
+        border-radius: 0 !important;
+      }
+      
+      .email-content {
+        padding: 30px 20px !important;
+      }
+      
+      h1 {
+        font-size: 22px !important;
+      }
+      
+      .button {
+        display: block !important;
+        width: 100% !important;
+        text-align: center !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="email-wrapper">
+    <div class="email-container">
+      <!-- Header con logo -->
+      <div class="email-header">
+        <h1 class="logo">
+          Líderes <span class="logo-accent">en Seguros</span>
+        </h1>
+      </div>
+      
+      <!-- Contenido principal -->
+      <div class="email-content">
+        {{content}}
+      </div>
+      
+      <!-- Footer -->
+      <div class="email-footer">
+        <p class="footer-text">
+          © {{year}} Líderes en Seguros. Todos los derechos reservados.
+        </p>
+        <div class="footer-links">
+          <a href="{{appUrl}}" class="footer-link">Portal</a>
+          <a href="{{appUrl}}/guides" class="footer-link">Guías</a>
+          <a href="mailto:portal@lideresenseguros.com" class="footer-link">Soporte</a>
+        </div>
+        <p class="footer-text" style="font-size: 12px; color: #999;">
+          Este es un correo automático, por favor no responder.
+        </p>
+      </div>
+    </div>
+  </div>
+</body>
+</html>

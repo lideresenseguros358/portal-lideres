@@ -1,0 +1,29 @@
+<h1>🔔 Recordatorio de Renovación</h1>
+
+<p>Hola <strong>{{brokerName}}</strong>,</p>
+
+<p>Te recordamos que la póliza de tu cliente <strong>{{clientName}}</strong> está próxima a vencer:</p>
+
+<div class="alert alert-warning">
+  <p style="margin: 0;"><strong>Póliza:</strong> {{policyNumber}}</p>
+  <p style="margin: 8px 0 0 0;"><strong>Fecha de vencimiento:</strong> {{renewalDate}}</p>
+  <p style="margin: 8px 0 0 0;"><strong>Días restantes:</strong> {{daysRemaining}}</p>
+</div>
+
+<p>{{#if isUrgent}}
+  <strong style="color: #d32f2f;">⚠️ Esta renovación es URGENTE. Por favor toma acción inmediata.</strong>
+{{/if}}</p>
+
+<p>Ingresa al portal para gestionar esta renovación:</p>
+
+<a href="{{portalUrl}}/db?search={{policyNumber}}" class="button">
+  Ver Póliza en Portal
+</a>
+
+<hr class="divider">
+
+<p style="font-size: 14px; color: #666;">
+  <strong>Aseguradora:</strong> {{insurerName}}<br>
+  <strong>Ramo:</strong> {{ramo}}<br>
+  <strong>Prima:</strong> ${{premium}}
+</p>

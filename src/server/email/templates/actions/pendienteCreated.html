@@ -1,0 +1,42 @@
+<h1>📋 Nuevo Caso Asignado</h1>
+
+<p>Hola <strong>{{brokerName}}</strong>,</p>
+
+<p>Se ha creado un nuevo caso en <strong>Pendientes</strong> asignado a ti:</p>
+
+<div class="alert alert-info">
+  <p style="margin: 0;"><strong>Ticket:</strong> {{ticket}}</p>
+  <p style="margin: 8px 0 0 0;"><strong>Cliente:</strong> {{clientName}}</p>
+  <p style="margin: 8px 0 0 0;"><strong>Tipo:</strong> {{caseType}}</p>
+  <p style="margin: 8px 0 0 0;"><strong>Ramo:</strong> {{ramo}}</p>
+  <p style="margin: 8px 0 0 0;"><strong>Estado:</strong> {{status}}</p>
+</div>
+
+{{#if notes}}
+<p><strong>Notas:</strong></p>
+<div style="background-color: #f8f9fa; padding: 16px; border-radius: 6px; border-left: 4px solid #8AAA19;">
+  {{notes}}
+</div>
+{{/if}}
+
+{{#if slaDate}}
+<p style="color: #d32f2f;">
+  <strong>⏰ Fecha límite SLA:</strong> {{slaDate}}
+</p>
+{{/if}}
+
+<p>Ingresa al módulo de Pendientes para gestionar este caso:</p>
+
+<a href="{{portalUrl}}/pendientes" class="button">
+  Ver Caso en Pendientes
+</a>
+
+<hr class="divider">
+
+<p style="font-size: 14px; color: #666;">
+  <strong>Aseguradora:</strong> {{insurerName}}<br>
+  {{#if emailsCount}}
+  <strong>Correos vinculados:</strong> {{emailsCount}}<br>
+  {{/if}}
+  <strong>Creado:</strong> {{createdAt}}
+</p>

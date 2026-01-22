@@ -1,0 +1,59 @@
+<h1>📊 Resumen Diario de Pendientes</h1>
+
+<p>Hola <strong>{{brokerName}}</strong>,</p>
+
+<p>Este es tu resumen de casos pendientes para hoy:</p>
+
+<div class="alert alert-info">
+  <p style="margin: 0; font-size: 18px;"><strong>Total de casos abiertos: {{totalCases}}</strong></p>
+</div>
+
+<h2>🔴 Casos Urgentes ({{urgentCount}})</h2>
+{{#if urgentCases}}
+<table style="width: 100%; border-collapse: collapse; margin: 20px 0; border: 1px solid #e0e0e0;">
+  <thead>
+    <tr style="background-color: #fff3e0;">
+      <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ff9800;">Ticket</th>
+      <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ff9800;">Cliente</th>
+      <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ff9800;">SLA</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{#each urgentCases}}
+    <tr style="border-bottom: 1px solid #e0e0e0;">
+      <td style="padding: 10px;">{{ticket}}</td>
+      <td style="padding: 10px;">{{clientName}}</td>
+      <td style="padding: 10px; color: #d32f2f; font-weight: bold;">{{slaDate}}</td>
+    </tr>
+    {{/each}}
+  </tbody>
+</table>
+{{else}}
+<p style="color: #4caf50;">✅ No tienes casos urgentes</p>
+{{/if}}
+
+<h2>📋 Por Estado</h2>
+<ul style="list-style: none; padding: 0;">
+  <li style="padding: 8px 0; border-bottom: 1px solid #e0e0e0;">
+    <strong>Nuevos:</strong> <span style="color: #2196f3; font-weight: bold;">{{newCount}}</span>
+  </li>
+  <li style="padding: 8px 0; border-bottom: 1px solid #e0e0e0;">
+    <strong>En Proceso:</strong> <span style="color: #ff9800; font-weight: bold;">{{inProgressCount}}</span>
+  </li>
+  <li style="padding: 8px 0; border-bottom: 1px solid #e0e0e0;">
+    <strong>Pendiente Cliente:</strong> <span style="color: #9c27b0; font-weight: bold;">{{pendingClientCount}}</span>
+  </li>
+  <li style="padding: 8px 0;">
+    <strong>Aplazados:</strong> <span style="color: #f57c00; font-weight: bold;">{{postponedCount}}</span>
+  </li>
+</ul>
+
+<div style="margin: 30px 0; text-align: center;">
+  <a href="{{portalUrl}}/pendientes" class="button">
+    Ir a Pendientes
+  </a>
+</div>
+
+<p style="font-size: 14px; color: #666; margin-top: 30px;">
+  <strong>Tip del día:</strong> Revisa primero los casos con SLA próximo a vencer para evitar retrasos.
+</p>

@@ -1,0 +1,11 @@
+{
+  "dependencies_to_add": {
+    "nodemailer": "^6.9.8",
+    "luxon": "^3.4.4"
+  },
+  "devDependencies_to_add": {
+    "@types/nodemailer": "^6.4.14",
+    "@types/luxon": "^3.4.2"
+  },
+  "instructions": "Run: npm install nodemailer luxon @types/nodemailer @types/luxon"
+}

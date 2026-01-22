@@ -1,0 +1,38 @@
+<h1>⚠️ Clientes Preliminares Incompletos</h1>
+
+<p>Hola <strong>{{brokerName}}</strong>,</p>
+
+<p>Tienes <strong>{{incompleteCount}}</strong> cliente(s) en la sección Preliminar con información incompleta que requiere tu atención:</p>
+
+<div class="alert alert-warning">
+  <p style="margin: 0;">Es importante completar la información para poder convertirlos en clientes oficiales y emitir sus pólizas.</p>
+</div>
+
+{{#if clients}}
+<table style="width: 100%; border-collapse: collapse; margin: 20px 0; border: 1px solid #e0e0e0;">
+  <thead>
+    <tr style="background-color: #fff3e0;">
+      <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ff9800;">Cliente</th>
+      <th style="padding: 10px; text-align: left; border-bottom: 2px solid #ff9800;">Faltante</th>
+    </tr>
+  </thead>
+  <tbody>
+    {{#each clients}}
+    <tr style="border-bottom: 1px solid #e0e0e0;">
+      <td style="padding: 10px;"><strong>{{name}}</strong></td>
+      <td style="padding: 10px; font-size: 13px;">{{missingFields}}</td>
+    </tr>
+    {{/each}}
+  </tbody>
+</table>
+{{/if}}
+
+<p>Ingresa a la sección Preliminar para completar la información:</p>
+
+<a href="{{portalUrl}}/db/import" class="button">
+  Ir a Preliminar
+</a>
+
+<p style="font-size: 14px; color: #666; margin-top: 20px;">
+  Completa la información lo antes posible para agilizar la emisión de pólizas.
+</p>

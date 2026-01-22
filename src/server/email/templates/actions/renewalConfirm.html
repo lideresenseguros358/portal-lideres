@@ -1,0 +1,31 @@
+<h1>✅ Confirmar Renovación de Póliza</h1>
+
+<p>Hola <strong>{{masterName}}</strong>,</p>
+
+<p>La siguiente póliza ha vencido y requiere acción inmediata:</p>
+
+<div class="alert alert-info">
+  <p style="margin: 0;"><strong>Cliente:</strong> {{clientName}}</p>
+  <p style="margin: 8px 0 0 0;"><strong>Póliza:</strong> {{policyNumber}}</p>
+  <p style="margin: 8px 0 0 0;"><strong>Broker:</strong> {{brokerName}}</p>
+  <p style="margin: 8px 0 0 0;"><strong>Fecha de vencimiento:</strong> {{renewalDate}}</p>
+  <p style="margin: 8px 0 0 0;"><strong>Días vencida:</strong> {{daysOverdue}}</p>
+</div>
+
+<p>Para proceder con la renovación, haz clic en el botón. Esto creará automáticamente un caso en <strong>Pendientes</strong> asignado al broker correspondiente:</p>
+
+<a href="{{confirmUrl}}" class="button">
+  🔄 Confirmar y Crear Caso de Renovación
+</a>
+
+<p style="font-size: 14px; color: #666; margin-top: 20px;">
+  Al confirmar se creará un trámite de tipo "Renovación" en el módulo Pendientes con toda la información necesaria.
+</p>
+
+<hr class="divider">
+
+<p style="font-size: 14px; color: #666;">
+  <strong>Aseguradora:</strong> {{insurerName}}<br>
+  <strong>Ramo:</strong> {{ramo}}<br>
+  <strong>Prima actual:</strong> ${{premium}}
+</p>

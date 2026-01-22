@@ -1,0 +1,28 @@
+<h1>🎂 Cumpleaños de Cliente</h1>
+
+<p>Hola <strong>{{brokerName}}</strong>,</p>
+
+<p>Tu cliente <strong>{{clientName}}</strong> está de cumpleaños {{#if isToday}}hoy{{else}}el {{birthdayDate}}{{/if}}! 🎉</p>
+
+<div class="alert alert-success">
+  <p style="margin: 0;">Es un buen momento para fortalecer la relación con tu cliente.</p>
+</div>
+
+<p>Considera:</p>
+<ul style="margin: 16px 0; padding-left: 20px;">
+  <li>Enviarle un mensaje de felicitación personalizado</li>
+  <li>Recordarle las coberturas de sus pólizas activas</li>
+  <li>Ofrecerle una revisión de sus seguros</li>
+</ul>
+
+<a href="{{portalUrl}}/db?search={{clientId}}" class="button">
+  Ver Ficha del Cliente
+</a>
+
+<hr class="divider">
+
+<p style="font-size: 14px; color: #666;">
+  <strong>Email:</strong> {{clientEmail}}<br>
+  <strong>Teléfono:</strong> {{clientPhone}}<br>
+  <strong>Pólizas activas:</strong> {{activePolicies}}
+</p>
