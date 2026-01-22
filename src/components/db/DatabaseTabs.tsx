@@ -1473,8 +1473,8 @@ export default function DatabaseTabs({
         <ClientPolicyWizard
           onClose={() => router.push('/db?tab=clients')}
           onSuccess={() => {
+            // Navegar directamente - el cambio de URL refresca automáticamente
             router.push('/db?tab=clients');
-            router.refresh();
           }}
           role={role}
           userEmail={userEmail}

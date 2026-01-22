@@ -14,6 +14,8 @@ export const ClientInsertSchema = z.object({
     (val) => {
       // Convertir undefined, null, o string vacío a null antes de validar
       if (val === '' || val === undefined || val === null) return null;
+      // Normalizar a minúsculas (viene en MAYÚSCULAS por CSS uppercase)
+      if (typeof val === 'string') return val.toLowerCase().trim();
       return val;
     },
     z.string().email('Email inválido').nullable()
@@ -172,14 +174,6 @@ export async function updateClient(clientId: string, input: z.infer<typeof Clien
 export async function createClientWithPolicy(clientData: unknown, policyData: unknown) {
   const supabase = await getSupabaseServer();
   const { data: { user } } = await supabase.auth.getUser();
-
-  // LOG DETALLADO PARA DEBUG
-  console.log('[DEBUG] clientData recibido:', JSON.stringify(clientData, null, 2));
-  console.log('[DEBUG] Tipo de email:', typeof (clientData as any)?.email);
-  console.log('[DEBUG] Valor exacto de email:', (clientData as any)?.email);
-  console.log('[DEBUG] Email es undefined:', (clientData as any)?.email === undefined);
-  console.log('[DEBUG] Email es null:', (clientData as any)?.email === null);
-  console.log('[DEBUG] Email es string vacío:', (clientData as any)?.email === '');
 
   const clientParsed = ClientInsertSchema.parse(clientData);
   const policyParsed = PolicyInsertSchema.parse(policyData);
