@@ -94,7 +94,32 @@ export async function POST(request: NextRequest) {
 
     console.log(`[revert-discount] ✓ Validación pasada: descuento no está amarrado a pagos PAID`);
 
-    // 3. Eliminar el advance_log
+    // 3. Buscar el pago pendiente asociado ANTES de eliminar el log
+    const { data: pendingPayment, error: paymentFetchError } = await supabase
+      .from('pending_payments')
+      .select('id, status, notes')
+      .eq('status', 'paid')
+      .ilike('notes', `%${advance_id}%`)
+      .single();
+
+    if (paymentFetchError && paymentFetchError.code !== 'PGRST116') {
+      console.error('[revert-discount] Error buscando pago pendiente:', paymentFetchError);
+    }
+
+    let paymentId: string | null = null;
+    if (pendingPayment) {
+      try {
+        const metadata = typeof pendingPayment.notes === 'string' ? JSON.parse(pendingPayment.notes) : pendingPayment.notes;
+        if (metadata && metadata.advance_id === advance_id) {
+          paymentId = pendingPayment.id;
+          console.log(`[revert-discount] Pago pendiente encontrado: ${paymentId}`);
+        }
+      } catch (e) {
+        // Si no se puede parsear, continuar
+      }
+    }
+
+    // 4. Eliminar el advance_log (esto restaura el saldo del adelanto automáticamente)
     const { error: deleteError } = await supabase
       .from('advance_logs')
       .delete()
@@ -105,15 +130,50 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: false, error: deleteError.message }, { status: 500 });
     }
 
-    console.log('[revert-discount] ✓ Descuento eliminado correctamente');
+    console.log('[revert-discount] ✓ Advance_log eliminado, saldo restaurado');
 
-    // 4. Revalidar páginas relacionadas
+    // 5. CRÍTICO: Cambiar adelanto a status='PENDING' para que vuelva a "Deudas Activas"
+    const { error: advanceUpdateError } = await supabase
+      .from('advances')
+      .update({ status: 'PENDING' })
+      .eq('id', advance_id);
+
+    if (advanceUpdateError) {
+      console.error('[revert-discount] Error restaurando adelanto a PENDING:', advanceUpdateError);
+      return NextResponse.json({ ok: false, error: advanceUpdateError.message }, { status: 500 });
+    }
+
+    console.log('[revert-discount] ✓ Adelanto restaurado a status=PENDING (Deudas Activas)');
+
+    // 6. CRÍTICO: Si hay pago pendiente asociado, des-conciliarlo (volver a pending)
+    if (paymentId) {
+      const { error: paymentUpdateError } = await supabase
+        .from('pending_payments')
+        .update({ 
+          status: 'pending',
+          can_be_paid: false, // Mantener false hasta que se vuelva a conciliar
+          paid_at: null
+        })
+        .eq('id', paymentId);
+
+      if (paymentUpdateError) {
+        console.error('[revert-discount] Error des-conciliando pago pendiente:', paymentUpdateError);
+        return NextResponse.json({ ok: false, error: paymentUpdateError.message }, { status: 500 });
+      }
+
+      console.log('[revert-discount] ✓ Pago pendiente des-conciliado (vuelto a pending)');
+    }
+
+    // 7. Revalidar páginas relacionadas
     revalidatePath('/commissions');
+    revalidatePath('/checks');
 
     return NextResponse.json({ 
       ok: true, 
-      message: 'Descuento eliminado correctamente',
-      amount: advanceLog.amount
+      message: 'Descuento eliminado correctamente. Adelanto restaurado a Deudas Activas.',
+      amount: advanceLog.amount,
+      advance_restored: true,
+      payment_unconciled: paymentId ? true : false
     });
   } catch (error) {
     console.error('[revert-discount] Error:', error);

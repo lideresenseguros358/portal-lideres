@@ -2646,10 +2646,34 @@ export async function actionDeleteAdvance(advanceId: string) {
       };
     }
     
-    // Si llegamos aquí, no se cumplió ninguna condición anterior
+    // 4. Si SÍ tiene historial: Marcar como PAID para moverlo a "Deudas Saldadas"
+    // NO se elimina porque ya fue usado en pagos de quincenas
+    if (hasPaymentHistory) {
+      console.log(`📦 Adelanto ${advanceId} con historial: marcando como PAID (Deudas Saldadas)`);
+      
+      const { error: updateError } = await supabase
+        .from('advances')
+        .update({ status: 'PAID' })
+        .eq('id', advanceId);
+      
+      if (updateError) {
+        return {
+          ok: false as const,
+          error: `Error al marcar adelanto como pagado: ${updateError.message}`,
+        };
+      }
+      
+      revalidatePath('/(app)/commissions');
+      return { 
+        ok: true as const,
+        message: 'Adelanto movido a "Deudas Saldadas" porque tiene historial de uso',
+      };
+    }
+    
+    // Si llegamos aquí, algo salió mal
     return {
       ok: false as const,
-      error: 'El adelanto tiene historial de pagos y no se puede eliminar',
+      error: 'Error inesperado al procesar adelanto',
     };
   } catch (error) {
     return {
