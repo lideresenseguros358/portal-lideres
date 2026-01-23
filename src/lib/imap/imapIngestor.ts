@@ -20,6 +20,7 @@ import {
 } from './imapClient';
 import { classifyInboundEmail } from '@/lib/vertex/vertexClient';
 import { processInboundEmail } from '@/lib/cases/caseEngine';
+import { logImapDebug } from '@/lib/debug/imapLogger';
 
 export interface IngestionResult {
   success: boolean;
@@ -57,9 +58,22 @@ export async function runIngestionCycle(): Promise<IngestionResult> {
     console.log('[INGESTOR] Starting ingestion cycle');
     console.log(`[INGESTOR] Window: ${windowMinutes} min, Max: ${maxMessages} messages`);
 
+    await logImapDebug({
+      stage: 'imap_connect',
+      status: 'info',
+      message: 'Iniciando ciclo de ingestion',
+      payload: { windowMinutes, maxMessages, folder },
+    });
+
     // 1. Conectar a IMAP
     client = await createImapConnection();
     console.log('[INGESTOR] IMAP connection established');
+
+    await logImapDebug({
+      stage: 'imap_connect',
+      status: 'success',
+      message: 'Conexión IMAP establecida',
+    });
 
     // 2. Fetch mensajes
     const messages = await fetchMessagesInWindow(
@@ -70,6 +84,16 @@ export async function runIngestionCycle(): Promise<IngestionResult> {
     );
 
     console.log(`[INGESTOR] Fetched ${messages.length} messages from IMAP`);
+
+    await logImapDebug({
+      stage: 'imap_fetch',
+      status: messages.length > 0 ? 'success' : 'info',
+      message: `IMAP fetch: ${messages.length} mensajes encontrados`,
+      payload: { 
+        messagesCount: messages.length,
+        messageIds: messages.map(m => m.messageId),
+      },
+    });
 
     // 3. Procesar cada mensaje
     for (const msg of messages) {
@@ -128,6 +152,12 @@ async function processMessage(msg: EmailMessage): Promise<any> {
 
   if (existing) {
     console.log(`[INGESTOR] Message ${msg.messageId} already exists, skipping`);
+    await logImapDebug({
+      messageId: msg.messageId,
+      stage: 'imap_dedupe',
+      status: 'info',
+      message: 'Mensaje ya existe - deduplicado',
+    });
     return { action: 'skipped' };
   }
 
@@ -164,6 +194,19 @@ async function processMessage(msg: EmailMessage): Promise<any> {
 
   console.log(`[INGESTOR] Saved inbound_email ${inboundEmail.id}`);
 
+  await logImapDebug({
+    messageId: msg.messageId,
+    inboundEmailId: inboundEmail.id,
+    stage: 'db_insert',
+    status: 'success',
+    message: 'Email guardado en inbound_emails',
+    payload: {
+      inbound_email_id: inboundEmail.id,
+      from: msg.from?.email,
+      subject: msg.subject,
+    },
+  });
+
   // 3. Guardar attachments (si hay)
   // TODO: Implementar guardado en Supabase Storage si es necesario
   // Por ahora solo metadata
@@ -178,6 +221,20 @@ async function processMessage(msg: EmailMessage): Promise<any> {
   });
 
   console.log(`[INGESTOR] AI classification: bucket=${aiResult.ramo_bucket}, confidence=${aiResult.confidence}`);
+
+  await logImapDebug({
+    messageId: msg.messageId,
+    inboundEmailId: inboundEmail.id,
+    stage: 'ai_classify',
+    status: 'success',
+    message: 'Clasificación AI completada',
+    payload: {
+      ramo_bucket: aiResult.ramo_bucket,
+      confidence: aiResult.confidence,
+      missing_fields: aiResult.missing_fields,
+      broker_detected: aiResult.broker_email_detected,
+    },
+  });
 
   // 5. Crear/vincular caso
   const caseResult = await processInboundEmail({
@@ -203,6 +260,21 @@ async function processMessage(msg: EmailMessage): Promise<any> {
     .eq('id', inboundEmail.id);
 
   console.log(`[INGESTOR] Email ${inboundEmail.id} processed: ${caseResult.action}`);
+
+  await logImapDebug({
+    messageId: msg.messageId,
+    inboundEmailId: inboundEmail.id,
+    caseId: caseResult.caseId,
+    stage: 'case_create',
+    status: caseResult.success ? 'success' : 'error',
+    message: caseResult.message,
+    payload: {
+      action: caseResult.action,
+      case_id: caseResult.caseId,
+      ticket: caseResult.ticket,
+    },
+    errorDetail: caseResult.success ? undefined : caseResult.message,
+  });
 
   return caseResult;
 }

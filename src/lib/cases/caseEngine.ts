@@ -14,6 +14,7 @@ import { createClient } from '@/lib/supabase/server';
 import type { EmailClassificationResult } from '@/lib/vertex/vertexClient';
 import { getCurrentAAMM } from '@/lib/timezone/time';
 import { notifyCaseCreated } from '@/lib/email/pendientes';
+import { logImapDebug } from '@/lib/debug/imapLogger';
 
 export interface CaseCreationInput {
   inboundEmailId: string;
@@ -40,7 +41,7 @@ export async function processInboundEmail(
   const supabase = await createClient();
 
   try {
-    // 1. Determinar broker asignado
+    // 1. Determinar broker asignado (puede ser null para externos)
     const brokerId = await determineBroker(
       supabase,
       input.aiClassification.broker_email_detected,
@@ -48,13 +49,20 @@ export async function processInboundEmail(
       input.emailCc
     );
 
-    if (!brokerId) {
-      return {
-        success: false,
-        action: 'error',
-        message: 'No se pudo determinar broker asignado',
-      };
-    }
+    await logImapDebug({
+      inboundEmailId: input.inboundEmailId,
+      stage: 'broker_detect',
+      status: brokerId ? 'success' : 'warning',
+      message: brokerId ? 'Broker detectado' : 'Sin broker detectado - cliente externo',
+      payload: {
+        broker_id: brokerId,
+        detected_from_ai: input.aiClassification.broker_email_detected,
+        email_from: input.emailFrom,
+      },
+    });
+
+    // CORRECCIÓN: Permitir casos sin broker (clientes externos)
+    // Solo generar warning pero NO fallar
 
     // 2. Determinar master asignado por bucket
     const masterId = await determineMaster(
@@ -62,13 +70,13 @@ export async function processInboundEmail(
       input.aiClassification.ramo_bucket
     );
 
-    // 3. Verificar si debe agruparse con caso existente
-    const existingCaseId = await findExistingCase(
+    // 3. Verificar si debe agruparse con caso existente (solo si hay broker)
+    const existingCaseId = brokerId ? await findExistingCase(
       supabase,
       input.emailSubject,
       input.emailFrom,
       brokerId
-    );
+    ) : null;
 
     if (existingCaseId) {
       // VINCULAR a caso existente
@@ -86,7 +94,7 @@ export async function processInboundEmail(
     const isProvisional = shouldBeProvisional(input.aiClassification);
 
     const caseData: any = {
-      broker_id: brokerId,
+      broker_id: brokerId || null, // Permitir null para externos
       assigned_master_id: masterId,
       ramo_bucket: input.aiClassification.ramo_bucket,
       ramo_code: input.aiClassification.ramo_code,
@@ -111,6 +119,13 @@ export async function processInboundEmail(
 
     if (caseError || !newCase) {
       console.error('[CASE ENGINE] Error creating case:', caseError);
+      await logImapDebug({
+        inboundEmailId: input.inboundEmailId,
+        stage: 'case_create',
+        status: 'error',
+        message: 'Error al insertar caso en BD',
+        errorDetail: caseError?.message,
+      });
       return {
         success: false,
         action: 'error',
@@ -120,6 +135,14 @@ export async function processInboundEmail(
 
     // 5. Vincular correo al caso
     await linkEmailToCase(supabase, newCase.id, input.inboundEmailId);
+
+    await logImapDebug({
+      inboundEmailId: input.inboundEmailId,
+      caseId: newCase.id,
+      stage: 'case_link',
+      status: 'success',
+      message: 'Correo vinculado a caso',
+    });
 
     // 6. Crear evento de historial
     await createHistoryEvent(supabase, newCase.id, 'created', {
