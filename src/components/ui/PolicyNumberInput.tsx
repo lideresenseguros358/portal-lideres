@@ -44,66 +44,73 @@ export default function PolicyNumberInput({
   useEffect(() => {
     if (!config) return;
     
-    // Si no hay value, limpiar todo
-    if (!value || value.trim() === '') {
-      if (lastValueRef.current !== '') {
-        lastValueRef.current = '';
-        setInputs(Array(config.inputCount).fill(''));
+    try {
+      // Si no hay value, limpiar todo
+      if (!value || value.trim() === '') {
+        if (lastValueRef.current !== '') {
+          lastValueRef.current = '';
+          setInputs(Array(config.inputCount).fill(''));
+        }
+        return;
       }
-      return;
-    }
-    
-    // Si el value no ha cambiado, no hacer nada
-    if (value === lastValueRef.current) {
-      return;
-    }
-    
-    // Actualizar lastValueRef
-    lastValueRef.current = value;
-    hasInitialized.current = true;
-    
-    // Separar el valor según el separador configurado
-    if (config.inputCount === 1) {
-      setInputs([value]);
-    } else {
-      const separator = config.joinWith || '-';
-      const parts = value.split(separator);
       
-      if (parts.length === config.inputCount) {
-        // Caso perfecto: el número de partes coincide con el esperado
-        setInputs(parts);
-      } else if (parts.length === 1 && parts[0] && parts[0].trim() !== '') {
-        // Caso especial para ASSA: formato sin separador (ej: 02B123456)
-        if (config.slug === 'assa' && config.inputCount === 3) {
-          const raw = parts[0];
-          // Formato ASSA: 02B123456 → [02, B, 123456]
-          // Extraer: primeros 2 dígitos, letras intermedias, resto de números
-          const match = raw.match(/^(\d{1,2})([A-Z]{1,2})(\d+)$/i);
-          if (match && match[1] && match[2] && match[3]) {
-            setInputs([match[1], match[2].toUpperCase(), match[3]]);
+      // Si el value no ha cambiado, no hacer nada
+      if (value === lastValueRef.current) {
+        return;
+      }
+      
+      // Actualizar lastValueRef
+      lastValueRef.current = value;
+      hasInitialized.current = true;
+      
+      // Separar el valor según el separador configurado
+      if (config.inputCount === 1) {
+        setInputs([value]);
+      } else {
+        const separator = config.joinWith || '-';
+        const parts = value.split(separator);
+        
+        if (parts.length === config.inputCount) {
+          // Caso perfecto: el número de partes coincide con el esperado
+          setInputs(parts);
+        } else if (parts.length === 1 && parts[0] && parts[0].trim() !== '') {
+          // Caso especial para ASSA: formato sin separador (ej: 02B123456)
+          if (config.slug === 'assa' && config.inputCount === 3) {
+            const raw = parts[0];
+            // Formato ASSA: 02B123456 → [02, B, 123456]
+            // Extraer: primeros 2 dígitos, letras intermedias, resto de números
+            const match = raw.match(/^(\d{1,2})([A-Z]{1,2})(\d+)$/i);
+            if (match && match[1] && match[2] && match[3]) {
+              setInputs([match[1], match[2].toUpperCase(), match[3]]);
+            } else {
+              // Si no coincide el patrón, poner todo en el último input como fallback
+              const newInputs = Array(config.inputCount).fill('');
+              newInputs[config.inputCount - 1] = parts[0];
+              setInputs(newInputs);
+            }
           } else {
-            // Si no coincide el patrón, poner todo en el último input como fallback
+            // Caso sin guiones para otras aseguradoras: poner en el último input
             const newInputs = Array(config.inputCount).fill('');
             newInputs[config.inputCount - 1] = parts[0];
             setInputs(newInputs);
           }
+        } else if (parts.length > config.inputCount) {
+          // Más partes de las esperadas: tomar solo las primeras
+          setInputs(parts.slice(0, config.inputCount));
         } else {
-          // Caso sin guiones para otras aseguradoras: poner en el último input
-          const newInputs = Array(config.inputCount).fill('');
-          newInputs[config.inputCount - 1] = parts[0];
+          // Menos partes de las esperadas: rellenar con vacíos
+          const newInputs = [...parts];
+          while (newInputs.length < config.inputCount) {
+            newInputs.push('');
+          }
           setInputs(newInputs);
         }
-      } else if (parts.length > config.inputCount) {
-        // Más partes de las esperadas: tomar solo las primeras
-        setInputs(parts.slice(0, config.inputCount));
-      } else {
-        // Menos partes de las esperadas: rellenar con vacíos
-        const newInputs = [...parts];
-        while (newInputs.length < config.inputCount) {
-          newInputs.push('');
-        }
-        setInputs(newInputs);
       }
+    } catch (error) {
+      // Si hay error al parsear, simplemente limpiar los inputs
+      console.error('[PolicyNumberInput] Error al parsear value:', error);
+      setInputs(Array(config.inputCount).fill(''));
+      lastValueRef.current = '';
     }
   }, [value, config]);
 

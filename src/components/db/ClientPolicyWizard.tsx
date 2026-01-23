@@ -782,10 +782,14 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                 <Select 
                   value={formData.insurer_id} 
                   onValueChange={(value) => {
-                    setFormData({ ...formData, insurer_id: value });
+                    // LIMPIAR policy_number al cambiar aseguradora
+                    // Esto evita que PolicyNumberInput intente parsear un número con formato de otra aseguradora
+                    setFormData({ ...formData, insurer_id: value, policy_number: '' });
                     if (validationErrors.insurer_id && value) {
                       setValidationErrors(prev => ({ ...prev, insurer_id: false }));
                     }
+                    // Limpiar error de duplicado
+                    setDuplicatePolicyError(null);
                   }}
                 >
                   <SelectTrigger className={`w-full border-2 ${
