@@ -385,8 +385,8 @@ export default function ProductionAnalyticsView({ year, brokers }: ProductionAna
         </div>
       </div>
 
-      {/* Proyección Global */}
-      {porcentajeCumplidoGlobal < 100 && mesesRestantes > 0 && (
+      {/* Proyección Global - Solo mostrar en año actual */}
+      {porcentajeCumplidoGlobal < 100 && mesesRestantes > 0 && year === new Date().getFullYear() && (
         <div className="bg-gradient-to-r from-orange-50 to-red-50 border-2 border-orange-300 rounded-xl p-6">
           <div className="flex items-start gap-4">
             <FaUsers className="text-3xl text-orange-600 mt-1" />

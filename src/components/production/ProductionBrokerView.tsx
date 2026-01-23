@@ -340,8 +340,8 @@ export default function ProductionBrokerView({ year, brokerId }: ProductionBroke
         </div>
       </div>
 
-      {/* Proyección y Alerta */}
-      {porcentajeCumplido < 100 && mesesRestantes > 0 && (() => {
+      {/* Proyección y Alerta - Solo mostrar en año actual */}
+      {porcentajeCumplido < 100 && mesesRestantes > 0 && year === new Date().getFullYear() && (() => {
         const mesesTranscurridos = 12 - mesesRestantes;
         const promedioActual = mesesTranscurridos > 0 ? brutoYTD / mesesTranscurridos : 0;
         const porcentajeMejoraNecesaria = promedioActual > 0 ? ((promedioNecesario / promedioActual - 1) * 100) : 0;
