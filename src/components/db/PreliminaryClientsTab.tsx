@@ -1,13 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FaExclamationTriangle, FaEdit, FaSave, FaTimes, FaTrash, FaCheckCircle, FaCalendar, FaUser, FaFileAlt, FaBuilding } from 'react-icons/fa';
+import { FaExclamationTriangle, FaEdit, FaSave, FaTimes, FaTrash, FaCheckCircle, FaCalendar, FaUser, FaFileAlt, FaBuilding, FaFolder } from 'react-icons/fa';
 import { formatDateForDisplay } from '@/lib/utils/dates';
 import { getTodayLocalDate, addOneYearToDate } from '@/lib/utils/dates';
 import { toast } from 'sonner';
 import { actionGetPreliminaryClients, actionUpdatePreliminaryClient, actionDeletePreliminaryClient, actionTriggerMigration } from '@/app/(app)/db/preliminary-actions';
 import { createUppercaseHandler, uppercaseInputClass } from '@/lib/utils/uppercase';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import ExpedienteManager from '@/components/expediente/ExpedienteManager';
 
 interface PreliminaryClientsTabProps {
   insurers: any[];
@@ -22,6 +23,7 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
   const [editForm, setEditForm] = useState<any>({});
   const [saving, setSaving] = useState(false);
   const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set());
+  const [expandedExpedientes, setExpandedExpedientes] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     loadPreliminaryClients();
@@ -48,6 +50,19 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
 
   const toggleExpand = (clientId: string) => {
     setExpandedClients(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(clientId)) {
+        newSet.delete(clientId);
+      } else {
+        newSet.add(clientId);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleExpediente = (clientId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setExpandedExpedientes(prev => {
       const newSet = new Set(prev);
       if (newSet.has(clientId)) {
         newSet.delete(clientId);
@@ -287,6 +302,18 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
                       </div>
                     )}
                     <button
+                      onClick={(e) => toggleExpediente(client.id, e)}
+                      className={`px-4 py-2 rounded-lg transition-all font-semibold text-sm flex items-center gap-2 ${
+                        expandedExpedientes.has(client.id)
+                          ? 'bg-[#8AAA19] text-white'
+                          : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
+                      }`}
+                      title="Gestionar expediente"
+                    >
+                      <FaFolder />
+                      <span className="hidden sm:inline">Expediente</span>
+                    </button>
+                    <button
                       onClick={(e) => {
                         e.stopPropagation();
                         startEdit(client);
@@ -383,6 +410,23 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
                       </div>
                     </div>
                   </div>
+
+                  {/* Expediente Manager */}
+                  {expandedExpedientes.has(client.id) && (
+                    <div className="mt-4 p-4 bg-blue-50 border-2 border-blue-200 rounded-lg">
+                      <h4 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                        <FaFolder className="text-[#8AAA19]" />
+                        Expediente del Cliente
+                      </h4>
+                      <ExpedienteManager
+                        clientId={client.id}
+                        showClientDocs={true}
+                        showPolicyDocs={false}
+                        showOtros={true}
+                        readOnly={false}
+                      />
+                    </div>
+                  )}
                 </div>
               )}
 

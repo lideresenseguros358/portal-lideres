@@ -3,13 +3,14 @@
 import { useState, useEffect, useCallback } from 'react';
 import { FaSearch, FaPlus, FaDownload, FaEnvelope, FaFilter, FaList, FaThLarge, FaTrash } from 'react-icons/fa';
 import { toast } from 'sonner';
-import { actionGetCases, actionDeleteCase, actionUpdateCase } from '@/app/(app)/cases/actions';
+import { actionGetCases, actionDeleteCase, actionUpdateCase, actionUpdateCaseStatus } from '@/app/(app)/cases/actions';
 import { actionGetCaseStats } from '@/app/(app)/cases/actions-details';
 import CasesList from '@/components/cases/CasesList';
 import CasesListMonday from '@/components/cases/CasesListMonday';
 import SearchModal from '@/components/cases/SearchModal';
 import NewCaseWizardModal from '@/components/cases/NewCaseWizardModal';
 import QuickEditModal from '@/components/cases/QuickEditModal';
+import EmitidoConfirmModal from '@/components/cases/EmitidoConfirmModal';
 import { CASE_SECTION_LABELS } from '@/lib/constants/cases';
 import { exportCasesByBrokerPDF } from '@/lib/utils/exportCasesPDF';
 
@@ -70,6 +71,11 @@ export default function CasesMainClient({ userProfile, brokers, insurers }: Case
     insurer_id?: string;
     search?: string;
   }>({});
+  const [emitidoModal, setEmitidoModal] = useState<{
+    isOpen: boolean;
+    caseId: string | null;
+    caseData: any;
+  }>({ isOpen: false, caseId: null, caseData: null });
 
   const loadCases = useCallback(async () => {
     setLoading(true);
@@ -209,11 +215,61 @@ export default function CasesMainClient({ userProfile, brokers, insurers }: Case
   };
 
   const handleChangeStatus = async (caseId: string, newStatus: string) => {
+    // Si está cambiando a EMITIDO, abrir modal de confirmación
+    if (newStatus === 'EMITIDO') {
+      const caseData = cases.find(c => c.id === caseId);
+      if (!caseData) {
+        toast.error('Caso no encontrado');
+        return;
+      }
+      
+      setEmitidoModal({
+        isOpen: true,
+        caseId,
+        caseData: {
+          client_name: caseData.client_name,
+          policy_number: caseData.policy_number,
+          management_type: caseData.management_type || caseData.ctype,
+          insurer_name: caseData.insurer?.name
+        }
+      });
+      return;
+    }
+    
+    // Para otros estados, actualizar directamente
     const result = await actionUpdateCase(caseId, { status: newStatus as any });
     if (result.ok) {
       toast.success('Estado actualizado');
-      await loadCases();
-      await loadStats();
+      loadCases();
+    } else {
+      toast.error(result.error);
+    }
+  };
+  
+  const handleEmitidoConfirm = async (data: {
+    saveToDatabase: boolean;
+    documents: string[];
+  }) => {
+    if (!emitidoModal.caseId) return;
+    
+    const result = await actionUpdateCaseStatus(
+      emitidoModal.caseId,
+      'EMITIDO',
+      undefined,
+      data.saveToDatabase ? {
+        save_to_preliminar: true,
+        documents_to_save: data.documents
+      } : undefined
+    );
+    
+    if (result.ok) {
+      if (data.saveToDatabase) {
+        toast.success('✅ Cliente marcado como EMITIDO y agregado a base de datos preliminar');
+      } else {
+        toast.success('Estado actualizado a EMITIDO');
+      }
+      setEmitidoModal({ isOpen: false, caseId: null, caseData: null });
+      loadCases();
     } else {
       toast.error(result.error);
     }
@@ -499,10 +555,19 @@ export default function CasesMainClient({ userProfile, brokers, insurers }: Case
             setEditingCaseId(null);
           }}
           onSuccess={() => {
+            setShowQuickEdit(false);
+            setEditingCaseId(null);
             loadCases();
-            loadStats();
           }}
-          onOpenFullWizard={handleOpenFullWizard}
+        />
+      )}
+
+      {emitidoModal.isOpen && emitidoModal.caseData && (
+        <EmitidoConfirmModal
+          isOpen={emitidoModal.isOpen}
+          onClose={() => setEmitidoModal({ isOpen: false, caseId: null, caseData: null })}
+          onConfirm={handleEmitidoConfirm}
+          caseData={emitidoModal.caseData}
         />
       )}
     </>

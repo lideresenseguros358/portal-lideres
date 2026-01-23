@@ -369,7 +369,15 @@ export async function actionCreateCase(payload: {
 // UPDATE CASE STATUS
 // =====================================================
 
-export async function actionUpdateCaseStatus(caseId: string, status: string, notes?: string) {
+export async function actionUpdateCaseStatus(
+  caseId: string, 
+  status: string, 
+  notes?: string,
+  options?: {
+    save_to_preliminar?: boolean;
+    documents_to_save?: string[];
+  }
+) {
   try {
     const supabase = await getSupabaseServer();
     const { data: { user } } = await supabase.auth.getUser();
@@ -391,9 +399,9 @@ export async function actionUpdateCaseStatus(caseId: string, status: string, not
 
     // If changing to EMITIDO, policy_number must exist
     if (status === 'EMITIDO') {
-      const { data: caseData } = await supabase
+      const { data: caseData } = await (supabase as any)
         .from('cases')
-        .select('policy_number, ctype, client_name, insurer_id')
+        .select('policy_number, ctype, client_name, insurer_id, broker_id, ramo, national_id')
         .eq('id', caseId)
         .single();
 
@@ -401,26 +409,41 @@ export async function actionUpdateCaseStatus(caseId: string, status: string, not
         return { ok: false as const, error: 'Número de póliza es obligatorio para EMITIDO' };
       }
 
-      // Check if policy exists in DB (only if NOT VIDA ASSA WEB)
-      if (caseData.ctype !== 'EMISION_VIDA_ASSA_WEB') {
-        const { data: existingPolicy } = await supabase
-          .from('policies')
+      // Si se solicita guardar en preliminar
+      if (options?.save_to_preliminar) {
+        // Crear/actualizar cliente preliminar usando as any para bypasear tipos
+        const { data: existingPreliminar } = await (supabase as any)
+          .from('preliminary_clients')
           .select('id')
           .eq('policy_number', caseData.policy_number)
           .single();
 
-        // If policy doesn't exist, flag for preliminar creation
-        if (!existingPolicy) {
-          return { 
-            ok: true as const, 
-            data: caseData as any,
-            requires_preliminar: true,
-            preliminar_data: {
-              client_name: caseData.client_name,
-              policy_number: caseData.policy_number,
-              insurer_id: caseData.insurer_id
-            }
-          };
+        const preliminarData = {
+          client_name: caseData.client_name,
+          policy_number: caseData.policy_number,
+          insurer_id: caseData.insurer_id,
+          broker_id: caseData.broker_id,
+          ramo: caseData.ramo || null,
+          national_id: caseData.national_id || null,
+          status: 'ACTIVA',
+          notes: JSON.stringify({
+            source: 'case_emitido',
+            case_id: caseId,
+            documents_requested: options.documents_to_save || []
+          })
+        };
+
+        if (existingPreliminar) {
+          // Actualizar existente
+          await (supabase as any)
+            .from('preliminary_clients')
+            .update(preliminarData)
+            .eq('id', existingPreliminar.id);
+        } else {
+          // Crear nuevo
+          await (supabase as any)
+            .from('preliminary_clients')
+            .insert([preliminarData]);
         }
       }
     }
