@@ -72,6 +72,7 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
   const [selectedAdvanceId, setSelectedAdvanceId] = useState<string | null>(null);
   const [editingAdvance, setEditingAdvance] = useState<Advance | null>(null);
   const [expandedBrokers, setExpandedBrokers] = useState<Set<string>>(new Set());
+  const [isRecurringExpanded, setIsRecurringExpanded] = useState(false);
   const [paymentModal, setPaymentModal] = useState<{
     isOpen: boolean;
     brokerId: string | null;
@@ -912,25 +913,43 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
     return (
       <div className="advances-table-wrapper space-y-6">
         
-        {/* SECCIÓN 1: RECORDATORIOS DE DESCUENTOS RECURRENTES */}
+        {/* SECCIÓN 1: RECORDATORIOS DE DESCUENTOS RECURRENTES - DESPLEGABLE */}
         {Object.values(groupedData).some(b => b.recurring_reminders.length > 0) && (
-          <div className="bg-gradient-to-r from-purple-50 to-blue-50 border-2 border-purple-300 rounded-lg p-4">
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <h3 className="text-lg font-bold text-purple-900 flex items-center gap-2">
-                  🔔 Recordatorios de Descuentos Recurrentes
-                </h3>
-                <p className="text-sm text-purple-700 mt-1">
-                  Estos NO suman al total de deuda. Son recordatorios para aplicar cada quincena.
-                </p>
+          <div className="border-2 border-purple-300 rounded-lg overflow-hidden">
+            {/* Header desplegable - SIEMPRE visible */}
+            <button
+              onClick={() => setIsRecurringExpanded(!isRecurringExpanded)}
+              className="w-full bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 transition-all p-3 sm:p-4 flex items-center justify-between cursor-pointer"
+            >
+              <div className="flex items-center gap-2 sm:gap-3">
+                {isRecurringExpanded ? (
+                  <FaChevronDown className="text-white text-sm sm:text-base flex-shrink-0" />
+                ) : (
+                  <FaChevronRight className="text-white text-sm sm:text-base flex-shrink-0" />
+                )}
+                <div className="text-left">
+                  <h3 className="text-sm sm:text-base font-bold text-white">
+                    🔔 Descuentos Recurrentes
+                  </h3>
+                  <p className="text-[10px] sm:text-xs text-purple-100 mt-0.5">
+                    {Object.values(groupedData).reduce((sum, b) => sum + b.recurring_reminders.length, 0)} recordatorio{Object.values(groupedData).reduce((sum, b) => sum + b.recurring_reminders.length, 0) !== 1 ? 's' : ''}
+                  </p>
+                </div>
               </div>
-              <span className="text-xs bg-purple-200 text-purple-900 px-3 py-1 rounded-full font-semibold">
-                NO SUMA AL TOTAL
+              <span className="text-[10px] sm:text-xs bg-purple-200 text-purple-900 px-2 sm:px-3 py-1 rounded-full font-semibold flex-shrink-0">
+                NO SUMA
               </span>
-            </div>
+            </button>
             
-            {/* Tabla de recordatorios - Desktop */}
-            <div className="hidden md:block bg-white rounded-lg overflow-hidden border border-purple-200">
+            {/* Contenido desplegable */}
+            {isRecurringExpanded && (
+              <div className="bg-gradient-to-r from-purple-50 to-blue-50 p-3 sm:p-4">
+                <p className="text-xs sm:text-sm text-purple-700 mb-3">
+                  💡 <strong>Recordatorio:</strong> Estos NO suman al total de deuda. Son sugerencias para aplicar cada quincena.
+                </p>
+                
+                {/* Tabla de recordatorios - Desktop */}
+                <div className="hidden md:block bg-white rounded-lg overflow-hidden border border-purple-200">
               <Table>
                 <TableHeader>
                   <TableRow className="bg-purple-100">
@@ -1006,10 +1025,10 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
                     ))}
                 </TableBody>
               </Table>
-            </div>
+                </div>
 
-            {/* Cards de recordatorios - Mobile */}
-            <div className="md:hidden space-y-2 mt-3">
+                {/* Cards de recordatorios - Mobile */}
+                <div className="md:hidden space-y-2">
               {Object.entries(groupedData)
                 .filter(([, brokerData]) => brokerData.recurring_reminders.length > 0)
                 .map(([bId, brokerData]) => (
@@ -1020,32 +1039,37 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
                       </div>
                     )}
                     {brokerData.recurring_reminders.map(advance => (
-                      <div key={advance.id} className="bg-white border border-purple-200 rounded-lg p-3">
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-sm font-semibold text-purple-900">{advance.reason}</span>
-                          <span className="text-xs bg-purple-200 text-purple-900 px-2 py-0.5 rounded-full font-bold">
-                            📌
-                          </span>
+                      <div key={advance.id} className="bg-white border border-purple-200 rounded-lg p-3 shadow-sm">
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-purple-900 line-clamp-2">{advance.reason}</p>
+                            <p className="text-xs text-purple-600 mt-1">
+                              {(advance.reason || '').includes('Q1 y Q2') ? '📅 Q1 y Q2' : 
+                               (advance.reason || '').includes('Q1') ? '📅 Q1' : '📅 Q2'}
+                            </p>
+                          </div>
+                          <div className="text-right flex-shrink-0">
+                            <p className="text-sm font-mono font-bold text-purple-900">${advance.amount.toFixed(2)}</p>
+                            <p className="text-[10px] text-purple-600">sugerido</p>
+                          </div>
                         </div>
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-purple-700">Monto sugerido:</span>
-                          <span className="font-mono font-bold text-purple-900">${advance.amount.toFixed(2)}</span>
-                        </div>
-                        <div className="flex gap-2 mt-2 pt-2 border-t border-purple-200">
+                        <div className="grid gap-2 mt-2 pt-2 border-t border-purple-200" style={{ gridTemplateColumns: role === 'master' ? '1fr 1fr' : '1fr' }}>
                           {role === 'master' && (
-                            <Button size="sm" onClick={() => setEditingAdvance(advance)} className="flex-1 bg-purple-600 hover:bg-purple-700 text-white text-xs">
-                              <FaEdit /> Editar
+                            <Button size="sm" onClick={() => setEditingAdvance(advance)} className="bg-purple-600 hover:bg-purple-700 text-white text-xs py-2">
+                              <FaEdit className="text-xs" /> Editar
                             </Button>
                           )}
-                          <Button size="sm" variant="outline" onClick={() => setSelectedAdvanceId(advance.id)} className="flex-1 text-xs">
-                            <FaHistory /> Ver
+                          <Button size="sm" variant="outline" onClick={() => setSelectedAdvanceId(advance.id)} className="text-xs py-2">
+                            <FaHistory className="text-xs" /> Historial
                           </Button>
                         </div>
                       </div>
                     ))}
                   </div>
                 ))}
-            </div>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
