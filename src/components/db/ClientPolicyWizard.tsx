@@ -117,12 +117,18 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
       return;
     }
 
+    // Guard: No validar si no hay aseguradora seleccionada
+    if (!formData.insurer_id) {
+      setDuplicatePolicyError(null);
+      return;
+    }
+
     const timer = setTimeout(() => {
       validatePolicyNumber(formData.policy_number);
     }, 800); // Esperar 800ms después de que el usuario deja de escribir
 
     return () => clearTimeout(timer);
-  }, [formData.policy_number]);
+  }, [formData.policy_number, formData.insurer_id]);
   
   // Verificar condición especial ASSA + VIDA
   useEffect(() => {

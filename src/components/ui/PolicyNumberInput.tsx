@@ -33,16 +33,37 @@ export default function PolicyNumberInput({
 }: PolicyNumberInputProps) {
   const lastValueRef = useRef('');
   const hasInitialized = useRef(false);
+  const lastInsurerRef = useRef('');
   
-  // Obtener configuración de la aseguradora
-  const config = getPolicyFormatConfig(insurerName.toLowerCase().replace(/\s+/g, '-') as InsurerSlug);
+  // Obtener configuración de la aseguradora con null-safe
+  const config = insurerName ? getPolicyFormatConfig(insurerName.toLowerCase().replace(/\s+/g, '-') as InsurerSlug) : null;
   
   // Estados para múltiples inputs
   const [inputs, setInputs] = useState<string[]>([]);
 
+  // Resetear estado cuando cambia la aseguradora
+  useEffect(() => {
+    if (insurerName !== lastInsurerRef.current) {
+      console.log('[PolicyNumberInput] Aseguradora cambió de', lastInsurerRef.current, 'a', insurerName);
+      lastInsurerRef.current = insurerName;
+      lastValueRef.current = '';
+      hasInitialized.current = false;
+      if (config) {
+        setInputs(Array(config.inputCount).fill(''));
+      } else {
+        setInputs([]);
+      }
+      // Si el value también está vacío, notificar onChange con string vacío
+      if (!value || value.trim() === '') {
+        onChange('');
+      }
+    }
+  }, [insurerName, config, onChange, value]);
+
   // Inicializar inputs desde el value prop - REPLICANDO LÓGICA DE NationalIdInput
   useEffect(() => {
-    if (!config) return;
+    // Guard: Si no hay config O si la aseguradora acaba de cambiar, no procesar
+    if (!config || !insurerName) return;
     
     try {
       // Si no hay value, limpiar todo
@@ -109,14 +130,19 @@ export default function PolicyNumberInput({
     } catch (error) {
       // Si hay error al parsear, simplemente limpiar los inputs
       console.error('[PolicyNumberInput] Error al parsear value:', error);
-      setInputs(Array(config.inputCount).fill(''));
+      if (config) {
+        setInputs(Array(config.inputCount).fill(''));
+      }
       lastValueRef.current = '';
     }
-  }, [value, config]);
+  }, [value, config, insurerName]);
 
   // Actualizar el valor cuando cambien los inputs
   useEffect(() => {
-    if (hasInitialized.current && config && inputs.length === config.inputCount) {
+    // Guard: Solo si tenemos config válido y aseguradora
+    if (!config || !insurerName) return;
+    
+    if (hasInitialized.current && inputs.length === config.inputCount) {
       // Filtrar inputs vacíos para no incluirlos
       const filledInputs = inputs.filter(i => i.trim() !== '');
       
@@ -136,7 +162,7 @@ export default function PolicyNumberInput({
         onChange(normalized);
       }
     }
-  }, [inputs, config, onChange]);
+  }, [inputs, config, onChange, insurerName]);
 
   const handleInputChange = (index: number, newValue: string) => {
     hasInitialized.current = true; // Marcar como inicializado al primer cambio manual
