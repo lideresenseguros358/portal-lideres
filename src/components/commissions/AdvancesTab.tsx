@@ -785,7 +785,13 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
                           </div>
 
                           {/* Adelantos del broker */}
-                          {isBrokerExpanded && brokerData.advances.map(advance => (
+                          {isBrokerExpanded && brokerData.advances.map(advance => {
+                            // Calcular monto pagado en ESTA FECHA específica
+                            const paidOnThisDate = (advance.payment_logs || [])
+                              .filter(log => log.date === dateKey)
+                              .reduce((sum, log) => sum + log.amount, 0);
+                            
+                            return (
                             <div key={`mobile-${advance.id}`} className="bg-white border-2 border-gray-200 rounded-lg p-3 space-y-2 ml-4">
                               <div className="flex items-start justify-between gap-2">
                                 <div className="flex-1 min-w-0">
@@ -800,36 +806,55 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
                                 </div>
                                 <div className="text-right flex-shrink-0">
                                   <p className="font-bold text-[#8AAA19] font-mono text-base">
-                                    {(advance.total_paid || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                                    {paidOnThisDate.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
                                   </p>
                                 </div>
                               </div>
                               
-                              <div className="flex items-center gap-2 pt-2 border-t border-gray-200">
+                              <div className="grid grid-cols-3 gap-2 pt-2 border-t border-gray-200">
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleRevertDiscount(advance.id, dateKey);
+                                  }}
+                                  className="bg-red-500 hover:bg-red-600 text-white text-xs py-2"
+                                  title="Eliminar descuento"
+                                >
+                                  <FaTrash className="text-xs" />
+                                </Button>
                                 <Button
                                   size="sm"
                                   onClick={() => setEditingAdvance(advance)}
-                                  className="flex-1 bg-[#010139] hover:bg-[#020270] text-white text-xs"
+                                  className="bg-[#010139] hover:bg-[#020270] text-white text-xs py-2"
                                 >
-                                  <FaEdit className="text-xs text-white" /> Editar
+                                  <FaEdit className="text-xs" />
                                 </Button>
                                 <Button
                                   size="sm"
                                   variant="outline"
                                   onClick={() => setSelectedAdvanceId(advance.id)}
-                                  className="flex-1 text-xs"
+                                  className="text-xs py-2"
                                 >
-                                  <FaHistory className="text-xs" /> Historial
+                                  <FaHistory className="text-xs" />
                                 </Button>
                               </div>
                             </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       );
                     })
                   ) : isDateExpanded ? (
                     // Vista Broker: Mostrar adelantos directamente (sin nombre de broker)
-                    dateGroup.advances.map(advance => (
+                    dateGroup.advances.map(advance => {
+                      // Calcular monto pagado en ESTA FECHA específica
+                      const paidOnThisDate = (advance.payment_logs || [])
+                        .filter(log => log.date === dateKey)
+                        .reduce((sum, log) => sum + log.amount, 0);
+                      
+                      return (
                       <div key={`mobile-${advance.id}`} className="bg-white border-2 border-gray-200 rounded-lg p-3 space-y-2 ml-4">
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex-1 min-w-0">
@@ -844,23 +869,36 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
                           </div>
                           <div className="text-right flex-shrink-0">
                             <p className="font-bold text-[#8AAA19] font-mono text-base">
-                              {(advance.total_paid || 0).toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                              {paidOnThisDate.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
                             </p>
                           </div>
                         </div>
                         
-                        <div className="flex items-center gap-2 pt-2 border-t border-gray-200">
+                        <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-200">
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRevertDiscount(advance.id, dateKey);
+                            }}
+                            className="bg-red-500 hover:bg-red-600 text-white text-xs py-2"
+                            title="Eliminar descuento"
+                          >
+                            <FaTrash className="text-xs" /> Eliminar
+                          </Button>
                           <Button
                             size="sm"
                             variant="outline"
                             onClick={() => setSelectedAdvanceId(advance.id)}
-                            className="flex-1 text-xs"
+                            className="text-xs py-2"
                           >
                             <FaHistory className="text-xs" /> Historial
                           </Button>
                         </div>
                       </div>
-                    ))
+                      );
+                    })
                   ) : null}
                 </div>
               );
