@@ -45,6 +45,14 @@ export default function BancoTab({ role, insurers }: BancoTabProps) {
     groups: false
   });
   
+  // Memoria de datos anteriores para "congelar" durante carga
+  const [frozenTransfers, setFrozenTransfers] = useState<any[]>([]);
+  const [frozenGroups, setFrozenGroups] = useState<any[]>([]);
+  const [frozenIncluded, setFrozenIncluded] = useState<any[]>([]);
+  
+  // Track del último cutoff para detectar cambios reales
+  const [lastSelectedCutoff, setLastSelectedCutoff] = useState<string | null>(null);
+  
   const [filters, setFilters] = useState({
     status: 'all',
     insurerId: '',
@@ -75,13 +83,18 @@ export default function BancoTab({ role, insurers }: BancoTabProps) {
     if (selectedCutoff) {
       loadTransfers();
       loadGroups();
-      // Cerrar todas las secciones al cambiar de corte
-      setExpandedSections({
-        pending: false,
-        transfers: false,
-        included: false,
-        groups: false,
-      });
+      
+      // Solo cerrar secciones si cambió el corte o filtros, NO si solo es refreshKey
+      const cutoffChanged = selectedCutoff !== lastSelectedCutoff;
+      if (cutoffChanged) {
+        setExpandedSections({
+          pending: false,
+          transfers: false,
+          included: false,
+          groups: false,
+        });
+        setLastSelectedCutoff(selectedCutoff);
+      }
     }
   }, [selectedCutoff, filters, refreshKey]);
 
@@ -113,6 +126,8 @@ export default function BancoTab({ role, insurers }: BancoTabProps) {
     if (!selectedCutoff) {
       setGroups([]);
       setIncludedTransfers([]);
+      setFrozenGroups([]);
+      setFrozenIncluded([]);
       return;
     }
     
@@ -146,6 +161,8 @@ export default function BancoTab({ role, insurers }: BancoTabProps) {
         );
       });
       
+      // Congelar datos anteriores antes de actualizar
+      setFrozenGroups(groups);
       setGroups(normalGroups);
     } else {
       toast.error('Error al cargar grupos');
@@ -153,6 +170,8 @@ export default function BancoTab({ role, insurers }: BancoTabProps) {
     
     // Procesar transferencias incluidas directamente de la BD
     if (includedResult.ok) {
+      // Congelar datos anteriores antes de actualizar
+      setFrozenIncluded(includedTransfers);
       setIncludedTransfers(includedResult.data || []);
     } else {
       setIncludedTransfers([]);
@@ -172,6 +191,8 @@ export default function BancoTab({ role, insurers }: BancoTabProps) {
     });
     
     if (result.ok) {
+      // Congelar datos anteriores antes de actualizar
+      setFrozenTransfers(transfers);
       setTransfers(result.data || []);
     } else {
       toast.error('Error al cargar transferencias');
@@ -429,7 +450,7 @@ export default function BancoTab({ role, insurers }: BancoTabProps) {
                       </div>
                     </div>
                     <TransfersTable
-                      transfers={transfers}
+                      transfers={loading && frozenTransfers.length > 0 ? frozenTransfers : transfers}
                       loading={loading}
                       insurers={insurers}
                       onRefresh={() => setRefreshKey(prev => prev + 1)}
@@ -466,9 +487,9 @@ export default function BancoTab({ role, insurers }: BancoTabProps) {
                 </button>
                 {expandedSections.included && (
                   <div className="border-t-2 border-purple-100 animate-fadeIn">
-                    {includedTransfers.length > 0 ? (
+                    {(loadingGroups && frozenIncluded.length > 0 ? frozenIncluded : includedTransfers).length > 0 ? (
                       <IncludedTransfersList
-                        transfers={includedTransfers}
+                        transfers={loadingGroups && frozenIncluded.length > 0 ? frozenIncluded : includedTransfers}
                         onRefresh={handleRefresh}
                       />
                     ) : (
@@ -511,7 +532,7 @@ export default function BancoTab({ role, insurers }: BancoTabProps) {
                   {expandedSections.groups && (
                     <div className="border-t-2 border-green-100 animate-fadeIn">
                       <GroupsTable
-                        groups={groups}
+                        groups={loadingGroups && frozenGroups.length > 0 ? frozenGroups : groups}
                         loading={loadingGroups}
                         onGroupDeleted={() => setRefreshKey(prev => prev + 1)}
                       />
