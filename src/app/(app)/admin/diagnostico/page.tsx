@@ -31,11 +31,33 @@ export default async function DiagnosticoPage() {
   }
 
   // Obtener últimas 20 ejecuciones de diagnóstico
-  const { data: diagnosticRuns } = await (supabase as any)
-    .from('diagnostic_runs')
-    .select('*')
-    .order('started_at', { ascending: false })
-    .limit(20);
+  let diagnosticRuns: any[] = [];
+  let migrationNeeded = false;
+  
+  try {
+    const { data, error } = await (supabase as any)
+      .from('diagnostic_runs')
+      .select('*')
+      .order('started_at', { ascending: false })
+      .limit(20);
+    
+    if (error) {
+      // Si la tabla no existe (code 42P01), necesitamos aplicar migration
+      if (error.code === '42P01' || error.message?.includes('does not exist')) {
+        console.log('[DIAGNOSTICO] Tabla diagnostic_runs no existe - migration necesaria');
+        migrationNeeded = true;
+      } else {
+        console.error('[DIAGNOSTICO] Error query diagnostic_runs:', error);
+      }
+    } else {
+      diagnosticRuns = data || [];
+    }
+  } catch (err) {
+    console.error('[DIAGNOSTICO] Error inesperado:', err);
+  }
 
-  return <DiagnosticoClient diagnosticRuns={diagnosticRuns || []} />;
+  return <DiagnosticoClient 
+    diagnosticRuns={diagnosticRuns} 
+    migrationNeeded={migrationNeeded}
+  />;
 }

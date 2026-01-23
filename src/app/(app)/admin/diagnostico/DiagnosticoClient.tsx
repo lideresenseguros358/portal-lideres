@@ -44,12 +44,15 @@ interface DiagnosticRun {
 
 interface DiagnosticoClientProps {
   diagnosticRuns: any[]; // DiagnosticRun[] - any por incompatibilidad temporal con DB types
+  migrationNeeded?: boolean;
 }
 
-export default function DiagnosticoClient({ diagnosticRuns: initialRuns }: DiagnosticoClientProps) {
+export default function DiagnosticoClient({ diagnosticRuns: initialRuns, migrationNeeded = false }: DiagnosticoClientProps) {
   const [diagnosticRuns, setDiagnosticRuns] = useState(initialRuns);
   const [loading, setLoading] = useState<string | null>(null);
   const [results, setResults] = useState<any>(null);
+  const [applyingMigration, setApplyingMigration] = useState(false);
+  const [showMigrationAlert, setShowMigrationAlert] = useState(migrationNeeded);
 
   const runTest = async (testType: string, endpoint: string, method: 'GET' | 'POST' = 'GET') => {
     setLoading(testType);
@@ -118,6 +121,35 @@ export default function DiagnosticoClient({ diagnosticRuns: initialRuns }: Diagn
             Panel de autodiagnóstico del flujo IMAP → Vertex → CaseEngine → UI
           </p>
         </div>
+
+        {/* Alerta: Migration necesaria */}
+        {showMigrationAlert && (
+          <Card className="border-2 border-red-500 bg-red-50">
+            <CardContent className="pt-6">
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-6 h-6 text-red-600" />
+                  <h3 className="text-lg font-semibold text-red-900">
+                    ❌ Tabla diagnostic_runs NO existe
+                  </h3>
+                </div>
+                <div className="text-red-800 space-y-2">
+                  <p className="font-semibold">
+                    La migration debe ejecutarse en Supabase Dashboard:
+                  </p>
+                  <ol className="list-decimal list-inside space-y-1 text-sm">
+                    <li>Ir a Supabase Dashboard → SQL Editor</li>
+                    <li>Ejecutar: <code className="bg-red-100 px-2 py-1 rounded">supabase/migrations/20260123_diagnostic_runs.sql</code></li>
+                    <li>Recargar esta página</li>
+                  </ol>
+                  <p className="text-xs mt-2">
+                    Sin esta tabla, los tests E2E NO pueden guardar resultados.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Tests rápidos */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
