@@ -1406,7 +1406,7 @@ export async function previewMapping(options: PreviewMappingOptions) {
     
     // Para comisiones, aplicar lógica especial si hay múltiples columnas mapeadas a gross_amount
     if (targetField === 'COMMISSIONS') {
-      // Si hay múltiples columnas, aplicar lógica first_non_zero
+      // Si hay múltiples columnas, SUMARLAS (ASSA: Generales + Vida 1er año + Vida renovación)
       if (grossAmountColumns.length > 1) {
         let finalAmount = 0;
         
@@ -1415,9 +1415,8 @@ export async function previewMapping(options: PreviewMappingOptions) {
           const numValue = parseFloat(String(value || '0').replace(/[^\d.-]/g, ''));
           
           if (Math.abs(numValue) > 0.001) {
-            finalAmount = numValue;
-            log(`  Row ${rowIndex + 1}: Using value ${numValue} from column "${colName}"`);
-            break;
+            finalAmount += numValue; // SUMAR en lugar de break
+            log(`  Row ${rowIndex + 1}: Adding ${numValue} from column "${colName}" (total: ${finalAmount})`);
           }
         }
         
