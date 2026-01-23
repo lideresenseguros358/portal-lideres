@@ -51,6 +51,8 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
   const [specialOverride, setSpecialOverride] = useState<{ hasSpecialOverride: boolean; overrideValue: number | null; condition?: string }>({ hasSpecialOverride: false, overrideValue: null });
   const [validationErrors, setValidationErrors] = useState<Record<string, boolean>>({});
   const [documentType, setDocumentType] = useState<'cedula' | 'pasaporte' | 'ruc'>('cedula');
+  const [duplicatePolicyError, setDuplicatePolicyError] = useState<string | null>(null);
+  const [checkingPolicy, setCheckingPolicy] = useState(false);
   const today = getTodayLocalDate();
   
   const [formData, setFormData] = useState<FormData>({
@@ -107,6 +109,20 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
       setFormData(prev => ({ ...prev, renewal_date: calculatedRenewalDate }));
     }
   }, [formData.start_date, formData.renewal_date]);
+
+  // Validar número de póliza en tiempo real (con debounce)
+  useEffect(() => {
+    if (!formData.policy_number || formData.policy_number.trim() === '') {
+      setDuplicatePolicyError(null);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      validatePolicyNumber(formData.policy_number);
+    }, 800); // Esperar 800ms después de que el usuario deja de escribir
+
+    return () => clearTimeout(timer);
+  }, [formData.policy_number]);
   
   // Verificar condición especial ASSA + VIDA
   useEffect(() => {
@@ -242,15 +258,27 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
   };
 
   const validatePolicyNumber = async (policyNumber: string): Promise<boolean> => {
-    if (!policyNumber) return true;
+    if (!policyNumber) {
+      setDuplicatePolicyError(null);
+      return true;
+    }
 
+    setCheckingPolicy(true);
     const { data } = await supabaseClient()
       .from('policies')
-      .select('id')
+      .select('id, policy_number')
       .eq('policy_number', policyNumber)
       .single();
 
-    return !data; // true si no existe, false si ya existe
+    setCheckingPolicy(false);
+    
+    if (data) {
+      setDuplicatePolicyError(policyNumber);
+      return false; // Ya existe
+    }
+    
+    setDuplicatePolicyError(null);
+    return true; // No existe, está disponible
   };
 
   const validateStep = async () => {
@@ -317,7 +345,10 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
       if (!isValid) {
         errors.policy_number = true;
         setValidationErrors(errors);
-        toast.error('Esta póliza ya existe en el sistema');
+        toast.error('Número de póliza duplicado', {
+          description: `La póliza "${formData.policy_number}" ya existe en el sistema. Por favor ingrese un número diferente.`,
+          duration: 6000
+        });
         return false;
       }
     } else if (step === 3) {
@@ -724,6 +755,26 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                 <h3 className="text-lg sm:text-xl font-bold">Datos de la Póliza</h3>
               </div>
 
+              {/* BANNER DE ALERTA: Póliza duplicada */}
+              {duplicatePolicyError && (
+                <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg shadow-sm animate-fadeIn">
+                  <div className="flex items-start gap-3">
+                    <div className="flex-shrink-0">
+                      <svg className="h-6 w-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="text-sm font-bold text-red-800 mb-1">⚠️ Esta Póliza Ya Existe en el Sistema</h4>
+                      <p className="text-sm text-red-700">
+                        El número de póliza <strong className="font-mono bg-red-100 px-2 py-0.5 rounded">{duplicatePolicyError}</strong> ya está registrado. 
+                        Por favor ingrese un número diferente para continuar.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Aseguradora <span className="text-red-500">*</span>
@@ -764,12 +815,33 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                       if (validationErrors.policy_number && value.trim()) {
                         setValidationErrors(prev => ({ ...prev, policy_number: false }));
                       }
+                      // Limpiar error de duplicado cuando el usuario cambia el valor
+                      if (duplicatePolicyError && value !== duplicatePolicyError) {
+                        setDuplicatePolicyError(null);
+                      }
                     }}
                     label="Número de Póliza"
                     required
-                    hasError={validationErrors.policy_number}
+                    hasError={validationErrors.policy_number || !!duplicatePolicyError}
                   />
-                  {validationErrors.policy_number && (
+                  {checkingPolicy && (
+                    <p className="text-xs text-blue-600 mt-1 flex items-center gap-1">
+                      <svg className="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Verificando disponibilidad...
+                    </p>
+                  )}
+                  {duplicatePolicyError && (
+                    <p className="text-xs text-red-600 mt-1 font-semibold flex items-center gap-1">
+                      <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                      </svg>
+                      Esta póliza ya existe en el sistema
+                    </p>
+                  )}
+                  {!duplicatePolicyError && !checkingPolicy && validationErrors.policy_number && (
                     <p className="text-xs text-red-500 mt-1">⚠️ Este campo es obligatorio</p>
                   )}
                 </>
