@@ -37,16 +37,18 @@ export async function GET(request: Request) {
     // Intentar intercambiar código por sesión
     const { data, error } = await supabase.auth.exchangeCodeForSession(code);
     
-    // Si falla por PKCE, es un flujo de recovery - redirigir a update-password
-    if (error && error.message.includes('code verifier')) {
-      console.log('[CALLBACK] Recovery detectado - redirigiendo a update-password con code');
-      return NextResponse.redirect(
-        new URL(`/update-password?code=${code}`, request.url)
-      );
-    }
-
     if (error) {
-      console.error('Error en exchangeCodeForSession:', error);
+      console.error('[CALLBACK] Error en exchangeCodeForSession:', error);
+      
+      // Si falla por PKCE (code verifier), probablemente es recovery
+      // Supabase maneja recovery automáticamente - solo redirigir
+      if (error.message.includes('code verifier')) {
+        console.log('[CALLBACK] Recovery flow detectado - redirigiendo a update-password');
+        return NextResponse.redirect(
+          new URL('/update-password', request.url)
+        );
+      }
+      
       return NextResponse.redirect(
         new URL(`/login?error=${encodeURIComponent(error.message)}`, request.url)
       );
@@ -69,8 +71,8 @@ export async function GET(request: Request) {
     const isRecovery = !!data.session.user.recovery_sent_at;
 
     if (isRecovery) {
-      // IMPORTANTE: Pasar el code para que update-password pueda crear sesión válida
-      return NextResponse.redirect(new URL(`/update-password?code=${code}`, request.url));
+      // Redirigir a update-password sin el code - Supabase ya manejó la sesión
+      return NextResponse.redirect(new URL('/update-password', request.url));
     }
 
     // Verificar si debe cambiar contraseña

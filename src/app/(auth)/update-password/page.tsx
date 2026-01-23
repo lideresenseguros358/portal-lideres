@@ -25,46 +25,26 @@ const UpdatePasswordPage = () => {
       console.log('========== UPDATE-PASSWORD DEBUG ==========');
       console.log('[1] Verificando sesión de recovery...');
       
-      // Verificar si hay un code en la URL (viene del callback)
-      const urlParams = new URLSearchParams(window.location.search);
-      const code = urlParams.get('code');
+      // Supabase maneja automáticamente la sesión cuando el usuario hace click en el link de recovery
+      // NO necesitamos hacer exchangeCodeForSession manualmente - eso causa el error PKCE
       
-      if (code) {
-        console.log('[2] Code detectado en URL - intercambiando por sesión...');
-        const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-        
-        if (exchangeError) {
-          console.error('[3] ❌ Error al intercambiar code:', exchangeError.message);
-          setError("Sesión inválida o expirada. Por favor solicita un nuevo enlace de recuperación.");
-          setSessionChecked(true);
-          return;
-        }
-        
-        console.log('[3] ✅ Code intercambiado exitosamente');
-        
-        // Limpiar el code de la URL
-        window.history.replaceState({}, '', '/update-password');
-      }
-      
-      // Ahora verificar la sesión
+      // Verificar la sesión actual
       const { data: { session }, error: sessionError } = await supabase.auth.getSession();
       
-      console.log('[4] Session error:', sessionError);
-      console.log('[5] Session data:', session ? {
+      console.log('[2] Session error:', sessionError);
+      console.log('[3] Session data:', session ? {
         user_id: session.user.id,
         email: session.user.email,
         recovery_sent_at: session.user.recovery_sent_at,
         aud: session.user.aud,
         role: session.user.role,
-        created_at: session.user.created_at
       } : null);
       
       if (!session) {
-        console.error('[6] ❌ No hay sesión activa - usuario debe solicitar nuevo link');
+        console.error('[4] ❌ No hay sesión activa');
         setError("Sesión inválida o expirada. Por favor solicita un nuevo enlace de recuperación.");
       } else {
-        console.log('[6] ✅ Sesión de recovery válida para:', session.user.email);
-        console.log('[7] Recovery sent at:', session.user.recovery_sent_at);
+        console.log('[4] ✅ Sesión válida para:', session.user.email);
       }
       
       console.log('==========================================');
