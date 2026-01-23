@@ -1225,7 +1225,7 @@ export async function actionGetAvailableForImport(): Promise<ActionResult<{
     
     const groupedIds = new Set((groupedTransferIds || []).map((gt: any) => gt.transfer_id));
 
-    // SEGUNDO: Obtener TODAS las transferencias que NO están PAGADAS
+    // SEGUNDO: Obtener SOLO las transferencias con status REPORTADO
     const { data: transfers, error: transfersError } = await supabase
       .from('bank_transfers_comm')
       .select(`
@@ -1234,7 +1234,7 @@ export async function actionGetAvailableForImport(): Promise<ActionResult<{
         bank_cutoffs:cutoff_id (start_date, end_date),
         bank_transfer_imports!left (id, is_temporary)
       `)
-      .neq('status', 'PAGADO')
+      .eq('status', 'REPORTADO')
       .order('description_raw', { ascending: true }); // Orden alfabético
 
     if (transfersError) {
