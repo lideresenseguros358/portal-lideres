@@ -165,6 +165,11 @@ export default function ProductionMatrix({ year, role, brokerId, brokers }: Prod
     setSavingCell(cellKey);
 
     try {
+      // ACTUALIZAR ESTADO LOCAL PRIMERO - mantiene valor exacto
+      setProduction(prev => prev.map(b => 
+        b.broker_id === brokerId ? { ...b, canceladas_ytd: value } : b
+      ));
+
       const response = await fetch('/api/production', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -177,8 +182,7 @@ export default function ProductionMatrix({ year, role, brokerId, brokers }: Prod
       });
 
       if (response.ok) {
-        // Recargar datos del API para asegurar que todo se actualice
-        await loadProduction();
+        // NO recargar - el valor exacto ya está en el estado
         toast.success('Guardado');
       } else {
         toast.error('Error al guardar');
