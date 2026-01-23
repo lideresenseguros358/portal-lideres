@@ -190,7 +190,7 @@ export default function ImportBankCutoffModal({ onClose, onSuccess, lastCutoffIn
             <>
               {/* Fechas del corte */}
               <div className="mb-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
+                <div className="w-full max-w-full overflow-hidden">
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
                     <FaCalendar className="inline mr-2" />
                     Fecha Inicio *
@@ -199,12 +199,13 @@ export default function ImportBankCutoffModal({ onClose, onSuccess, lastCutoffIn
                     type="date"
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
-                    className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-[#8AAA19]"
+                    className="w-full max-w-full px-3 sm:px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-[#8AAA19] text-sm sm:text-base"
+                    style={{ WebkitAppearance: 'none' }}
                     required
                   />
                 </div>
 
-                <div>
+                <div className="w-full max-w-full overflow-hidden">
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
                     <FaCalendar className="inline mr-2" />
                     Fecha Fin *
@@ -213,7 +214,8 @@ export default function ImportBankCutoffModal({ onClose, onSuccess, lastCutoffIn
                     type="date"
                     value={endDate}
                     onChange={(e) => setEndDate(e.target.value)}
-                    className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-[#8AAA19]"
+                    className="w-full max-w-full px-3 sm:px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-[#8AAA19] text-sm sm:text-base"
+                    style={{ WebkitAppearance: 'none' }}
                     required
                   />
                 </div>
