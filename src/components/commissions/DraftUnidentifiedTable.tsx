@@ -34,6 +34,9 @@ export default function DraftUnidentifiedTable({ fortnightId, brokers, onUpdate,
   const [selectedBroker, setSelectedBroker] = useState<Record<string, string>>({});
   const [processing, setProcessing] = useState<string | null>(null);
   const [assigningItem, setAssigningItem] = useState<string | null>(null);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [assigningGroup, setAssigningGroup] = useState<string | null>(null);
+  const [selectedBrokerGroup, setSelectedBrokerGroup] = useState<Record<string, string>>({});
 
   const loadItems = async () => {
     // Solo mostrar loading en la primera carga

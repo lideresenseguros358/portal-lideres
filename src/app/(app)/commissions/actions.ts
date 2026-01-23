@@ -5892,6 +5892,98 @@ export async function actionGetDraftUnidentified(fortnightId: string): Promise<A
 }
 
 /**
+ * Identificar masivamente múltiples items en zona de trabajo
+ * Usado cuando se asigna un broker a un grupo de items (mismo cliente o misma póliza)
+ */
+export async function actionTempIdentifyMultiple(itemIds: string[], brokerId: string): Promise<ActionResult> {
+  try {
+    const { role } = await getAuthContext();
+    if (role !== 'master') {
+      return { ok: false, error: 'Acceso denegado' };
+    }
+
+    const supabase = getSupabaseAdmin();
+
+    // Procesar cada item
+    let successCount = 0;
+    let fortnightId: string | null = null;
+
+    for (const itemId of itemIds) {
+      // 1. Obtener item
+      const { data: item, error: fetchError } = await (supabase as any)
+        .from('draft_unidentified_items')
+        .select('*')
+        .eq('id', itemId)
+        .single();
+
+      if (fetchError || !item) {
+        console.error(`[actionTempIdentifyMultiple] Error obteniendo item ${itemId}:`, fetchError);
+        continue;
+      }
+
+      fortnightId = item.fortnight_id;
+
+      // 2. Obtener percent_default del broker
+      const { data: broker } = await supabase
+        .from('brokers')
+        .select('percent_default')
+        .eq('id', brokerId)
+        .single();
+
+      const percent = broker?.percent_default || 1.0;
+      const grossAmount = item.commission_raw * percent;
+
+      // 3. Insertar en comm_items
+      const { error: commInsertError } = await supabase
+        .from('comm_items')
+        .insert({
+          import_id: item.import_id,
+          insurer_id: item.insurer_id,
+          policy_number: item.policy_number,
+          gross_amount: grossAmount,
+          insured_name: item.insured_name,
+          raw_row: item.raw_row || {},
+          broker_id: brokerId,
+        });
+
+      if (commInsertError) {
+        console.error(`[actionTempIdentifyMultiple] Error insertando item ${itemId}:`, commInsertError);
+        continue;
+      }
+
+      // 4. Marcar como identificado en draft
+      const { error: updateError } = await (supabase as any)
+        .from('draft_unidentified_items')
+        .update({
+          temp_assigned_broker_id: brokerId,
+          temp_assigned_at: new Date().toISOString(),
+        })
+        .eq('id', itemId);
+
+      if (updateError) {
+        console.error(`[actionTempIdentifyMultiple] Error actualizando draft ${itemId}:`, updateError);
+      } else {
+        successCount++;
+      }
+    }
+
+    // 5. Recalcular totales de la quincena
+    if (fortnightId) {
+      await actionRecalculateFortnight(fortnightId);
+    }
+
+    console.log(`[actionTempIdentifyMultiple] ✅ ${successCount}/${itemIds.length} items identificados`);
+
+    return { ok: true, data: { processed: successCount, total: itemIds.length } };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : 'Error inesperado',
+    };
+  }
+}
+
+/**
  * Identificar temporalmente un cliente en zona de trabajo
  * NUEVO: Al identificar, inserta inmediatamente en comm_items para que aparezca en listado del corredor
  */
