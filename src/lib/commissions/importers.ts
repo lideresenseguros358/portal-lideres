@@ -96,12 +96,22 @@ async function parseXlsxFile(file: File, mappingRules: MappingRule[] = [], inver
 
           console.log('[UNIVIVIR PARSER] Extraídas', univivirRows.length, 'filas');
 
-          return univivirRows.map(row => ({
-            policy_number: row.policy_number,
-            client_name: row.client_name,
-            commission_amount: row.gross_amount,
-            raw_row: row
-          }));
+          return univivirRows.map(row => {
+            let amount = row.gross_amount;
+            
+            // Aplicar inversión de signos si está configurado
+            if (invertNegatives) {
+              console.log(`[UNIVIVIR] 🔄 INVIRTIENDO SIGNO: ${amount} → ${amount * -1}`);
+              amount = amount * -1;
+            }
+            
+            return {
+              policy_number: row.policy_number,
+              client_name: row.client_name,
+              commission_amount: amount,
+              raw_row: row
+            };
+          });
         }
       } catch (error) {
         console.error('[UNIVIVIR PARSER] Error:', error);
@@ -130,12 +140,22 @@ async function parseXlsxFile(file: File, mappingRules: MappingRule[] = [], inver
         
         console.log('[BANESCO PARSER] Extraídas', banescoRows.length, 'filas');
         
-        return banescoRows.map(row => ({
-          policy_number: row.policy_number,
-          client_name: row.client_name,
-          commission_amount: row.gross_amount,
-          raw_row: row
-        }));
+        return banescoRows.map(row => {
+          let amount = row.gross_amount;
+          
+          // Aplicar inversión de signos si está configurado
+          if (invertNegatives) {
+            console.log(`[BANESCO] 🔄 INVIRTIENDO SIGNO: ${amount} → ${amount * -1}`);
+            amount = amount * -1;
+          }
+          
+          return {
+            policy_number: row.policy_number,
+            client_name: row.client_name,
+            commission_amount: amount,
+            raw_row: row
+          };
+        });
       } catch (error) {
         console.error('[BANESCO PARSER] Error:', error);
         throw new Error('Error al parsear archivo de BANESCO: ' + (error instanceof Error ? error.message : 'Error desconocido'));
@@ -163,12 +183,22 @@ async function parseXlsxFile(file: File, mappingRules: MappingRule[] = [], inver
         
         console.log('[MERCANTIL PARSER] Extraídas', mercantilRows.length, 'filas');
         
-        return mercantilRows.map(row => ({
-          policy_number: row.policy_number,
-          client_name: row.client_name,
-          commission_amount: row.gross_amount,
-          raw_row: row
-        }));
+        return mercantilRows.map(row => {
+          let amount = row.gross_amount;
+          
+          // Aplicar inversión de signos si está configurado
+          if (invertNegatives) {
+            console.log(`[MERCANTIL] 🔄 INVIRTIENDO SIGNO: ${amount} → ${amount * -1}`);
+            amount = amount * -1;
+          }
+          
+          return {
+            policy_number: row.policy_number,
+            client_name: row.client_name,
+            commission_amount: amount,
+            raw_row: row
+          };
+        });
       } catch (error) {
         console.error('[MERCANTIL PARSER] Error:', error);
         throw new Error('Error al parsear archivo de MERCANTIL: ' + (error instanceof Error ? error.message : 'Error desconocido'));
@@ -190,12 +220,22 @@ async function parseXlsxFile(file: File, mappingRules: MappingRule[] = [], inver
 
           console.log('[REGIONAL PARSER] Extraídas', regionalRows.length, 'filas');
 
-          return regionalRows.map(row => ({
-            policy_number: row.policy_number,
-            client_name: row.client_name,
-            commission_amount: row.gross_amount,
-            raw_row: row
-          }));
+          return regionalRows.map(row => {
+            let amount = row.gross_amount;
+            
+            // Aplicar inversión de signos si está configurado
+            if (invertNegatives) {
+              console.log(`[REGIONAL] 🔄 INVIRTIENDO SIGNO: ${amount} → ${amount * -1}`);
+              amount = amount * -1;
+            }
+            
+            return {
+              policy_number: row.policy_number,
+              client_name: row.client_name,
+              commission_amount: amount,
+              raw_row: row
+            };
+          });
         }
       } catch (error) {
         console.error('[REGIONAL PARSER] Error:', error);
@@ -218,12 +258,22 @@ async function parseXlsxFile(file: File, mappingRules: MappingRule[] = [], inver
 
           console.log('[ACERTA PARSER] Extraídas', acertaRows.length, 'filas');
 
-          return acertaRows.map(row => ({
-            policy_number: row.policy_number,
-            client_name: row.client_name,
-            commission_amount: row.gross_amount,
-            raw_row: row
-          }));
+          return acertaRows.map(row => {
+            let amount = row.gross_amount;
+            
+            // Aplicar inversión de signos si está configurado
+            if (invertNegatives) {
+              console.log(`[ACERTA] 🔄 INVIRTIENDO SIGNO: ${amount} → ${amount * -1}`);
+              amount = amount * -1;
+            }
+            
+            return {
+              policy_number: row.policy_number,
+              client_name: row.client_name,
+              commission_amount: amount,
+              raw_row: row
+            };
+          });
         }
       } catch (error) {
         console.error('[ACERTA PARSER] Error:', error);
@@ -246,12 +296,22 @@ async function parseXlsxFile(file: File, mappingRules: MappingRule[] = [], inver
 
           console.log('[GENERAL PARSER] Extraídas', generalRows.length, 'filas');
 
-          return generalRows.map(row => ({
-            policy_number: row.policy_number,
-            client_name: row.client_name,
-            commission_amount: row.gross_amount,
-            raw_row: row
-          }));
+          return generalRows.map(row => {
+            let amount = row.gross_amount;
+            
+            // Aplicar inversión de signos si está configurado
+            if (invertNegatives) {
+              console.log(`[GENERAL] 🔄 INVIRTIENDO SIGNO: ${amount} → ${amount * -1}`);
+              amount = amount * -1;
+            }
+            
+            return {
+              policy_number: row.policy_number,
+              client_name: row.client_name,
+              commission_amount: amount,
+              raw_row: row
+            };
+          });
         }
       } catch (error) {
         console.error('[GENERAL PARSER] Error:', error);
@@ -274,12 +334,22 @@ async function parseXlsxFile(file: File, mappingRules: MappingRule[] = [], inver
 
           console.log('[OPTIMA PARSER] Extraídas', optimaRows.length, 'filas');
 
-          return optimaRows.map(row => ({
-            policy_number: row.policy_number,
-            client_name: row.client_name,
-            commission_amount: row.gross_amount,
-            raw_row: row
-          }));
+          return optimaRows.map(row => {
+            let amount = row.gross_amount;
+            
+            // Aplicar inversión de signos si está configurado
+            if (invertNegatives) {
+              console.log(`[OPTIMA] 🔄 INVIRTIENDO SIGNO: ${amount} → ${amount * -1}`);
+              amount = amount * -1;
+            }
+            
+            return {
+              policy_number: row.policy_number,
+              client_name: row.client_name,
+              commission_amount: amount,
+              raw_row: row
+            };
+          });
         }
       } catch (error) {
         console.error('[OPTIMA PARSER] Error:', error);
@@ -302,12 +372,22 @@ async function parseXlsxFile(file: File, mappingRules: MappingRule[] = [], inver
 
           console.log('[MB PARSER] Extraídas', mbRows.length, 'filas');
 
-          return mbRows.map(row => ({
-            policy_number: row.policy_number,
-            client_name: row.client_name,
-            commission_amount: row.gross_amount,
-            raw_row: row
-          }));
+          return mbRows.map(row => {
+            let amount = row.gross_amount;
+            
+            // Aplicar inversión de signos si está configurado
+            if (invertNegatives) {
+              console.log(`[MB] 🔄 INVIRTIENDO SIGNO: ${amount} → ${amount * -1}`);
+              amount = amount * -1;
+            }
+            
+            return {
+              policy_number: row.policy_number,
+              client_name: row.client_name,
+              commission_amount: amount,
+              raw_row: row
+            };
+          });
         }
       } catch (error) {
         console.error('[MB PARSER] Error:', error);
@@ -330,12 +410,22 @@ async function parseXlsxFile(file: File, mappingRules: MappingRule[] = [], inver
 
           console.log('[ALIADO PARSER] Extraídas', aliadoRows.length, 'filas');
 
-          return aliadoRows.map(row => ({
-            policy_number: row.policy_number,
-            client_name: row.client_name,
-            commission_amount: row.gross_amount,
-            raw_row: row
-          }));
+          return aliadoRows.map(row => {
+            let amount = row.gross_amount;
+            
+            // Aplicar inversión de signos si está configurado
+            if (invertNegatives) {
+              console.log(`[ALIADO] 🔄 INVIRTIENDO SIGNO: ${amount} → ${amount * -1}`);
+              amount = amount * -1;
+            }
+            
+            return {
+              policy_number: row.policy_number,
+              client_name: row.client_name,
+              commission_amount: amount,
+              raw_row: row
+            };
+          });
         }
       } catch (error) {
         console.error('[ALIADO PARSER] Error:', error);
@@ -358,12 +448,22 @@ async function parseXlsxFile(file: File, mappingRules: MappingRule[] = [], inver
 
           console.log('[PALIG PARSER] Extraídas', paligRows.length, 'filas');
 
-          return paligRows.map(row => ({
-            policy_number: row.policy_number,
-            client_name: row.client_name,
-            commission_amount: row.gross_amount,
-            raw_row: row
-          }));
+          return paligRows.map(row => {
+            let amount = row.gross_amount;
+            
+            // Aplicar inversión de signos si está configurado
+            if (invertNegatives) {
+              console.log(`[PALIG] 🔄 INVIRTIENDO SIGNO: ${amount} → ${amount * -1}`);
+              amount = amount * -1;
+            }
+            
+            return {
+              policy_number: row.policy_number,
+              client_name: row.client_name,
+              commission_amount: amount,
+              raw_row: row
+            };
+          });
         }
       } catch (error) {
         console.error('[PALIG PARSER] Error:', error);
@@ -386,12 +486,22 @@ async function parseXlsxFile(file: File, mappingRules: MappingRule[] = [], inver
 
           console.log('[VUMI PARSER] Extraídas', vumiRows.length, 'filas');
 
-          return vumiRows.map(row => ({
-            policy_number: row.policy_number,
-            client_name: row.client_name,
-            commission_amount: row.gross_amount,
-            raw_row: row
-          }));
+          return vumiRows.map(row => {
+            let amount = row.gross_amount;
+            
+            // Aplicar inversión de signos si está configurado
+            if (invertNegatives) {
+              console.log(`[VUMI] 🔄 INVIRTIENDO SIGNO: ${amount} → ${amount * -1}`);
+              amount = amount * -1;
+            }
+            
+            return {
+              policy_number: row.policy_number,
+              client_name: row.client_name,
+              commission_amount: amount,
+              raw_row: row
+            };
+          });
         }
       } catch (error) {
         console.error('[VUMI PARSER] Error:', error);
