@@ -69,7 +69,8 @@ export async function GET(request: Request) {
     const isRecovery = !!data.session.user.recovery_sent_at;
 
     if (isRecovery) {
-      return NextResponse.redirect(new URL("/update-password", request.url));
+      // IMPORTANTE: Pasar el code para que update-password pueda crear sesión válida
+      return NextResponse.redirect(new URL(`/update-password?code=${code}`, request.url));
     }
 
     // Verificar si debe cambiar contraseña
