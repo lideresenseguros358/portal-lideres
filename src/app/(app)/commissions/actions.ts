@@ -14,6 +14,7 @@ import {
   ResolvePendingSchema,
   AdvanceSchema,
   ToggleNotifySchema,
+  ParsedRow,
 } from '@/lib/commissions/schemas';
 import { calculateDiscounts } from '@/lib/commissions/rules';
 import { buildBankACH } from '@/lib/commissions/bankACH';
@@ -45,6 +46,369 @@ type AdvanceRow = Tables<'advances'>;
 type AdvanceIns = TablesInsert<'advances'>;
 type AdvanceLogRow = Tables<'advance_logs'>;
 type AdvanceLogIns = TablesInsert<'advance_logs'>;
+
+/**
+ * Upload and import MULTIPLE commission files as ONE consolidated import
+ * Parsea todos los archivos, consolida las filas y crea un solo comm_imports
+ */
+export async function actionUploadMultipleImports(
+  files: Array<{ file: File; insurerId: string; isLife: boolean }>,
+  fortnightId: string,
+  totalAmount: string,
+  bankTransferId?: string | null,
+  bankGroupIds?: string[]
+) {
+  try {
+    console.log(`\n========== BATCH IMPORT: ${files.length} archivos ==========`);
+    
+    const { userId } = await getAuthContext();
+    const supabase = getSupabaseAdmin();
+    
+    // Array para consolidar TODAS las filas de TODOS los archivos
+    let allConsolidatedRows: ParsedRow[] = [];
+    let totalAmountParsed = 0;
+    
+    if (files.length === 0) {
+      return { ok: false as const, error: 'No se proporcionaron archivos para importar' };
+    }
+    
+    const firstFile = files[0];
+    if (!firstFile) {
+      return { ok: false as const, error: 'Archivo inicial no válido' };
+    }
+    
+    // 1. PARSEAR TODOS LOS ARCHIVOS Y CONSOLIDAR FILAS
+    for (let i = 0; i < files.length; i++) {
+      const fileData = files[i];
+      if (!fileData) continue;
+      const { file, insurerId, isLife } = fileData;
+      console.log(`\n--- Parseando archivo ${i + 1}/${files.length}: ${file.name} ---`);
+      
+      // Obtener info de aseguradora
+      const { data: insurerData } = await supabase
+        .from('insurers')
+        .select('name, invert_negatives, use_multi_commission_columns')
+        .eq('id', insurerId)
+        .single();
+      
+      const insurerName = String((insurerData as any)?.name || '').toUpperCase();
+      console.log(`Aseguradora: ${insurerName}`);
+      
+      // Obtener reglas de mapeo
+      const { data: mappingRules } = await supabase
+        .from('insurer_mapping_rules')
+        .select('target_field, aliases, commission_column_2_aliases, commission_column_3_aliases')
+        .eq('insurer_id', insurerId) as any;
+      
+      const invertNegatives = (insurerData as any)?.invert_negatives || false;
+      const useMultiColumns = (insurerData as any)?.use_multi_commission_columns || false;
+      
+      // Procesar archivo (OCR si es necesario)
+      let processedFile: File = file;
+      const needsOCR = /\.(jpg|jpeg|png|gif|bmp|webp|tiff|tif|pdf)$/i.test(file.name);
+      
+      if (needsOCR) {
+        const insurerSlug = getInsurerSlug(insurerName);
+        const hasPdfParser = ['banesco', 'mercantil', 'sura', 'regional', 'acerta', 'general', 
+                             'univivir', 'ww-medical', 'ifs', 'optima', 'mb', 'aliado', 
+                             'palig', 'vumi'].includes(insurerSlug || '');
+        
+        if (!hasPdfParser) {
+          console.log(`[BATCH] Aplicando OCR a ${file.name}`);
+          const arrayBuffer = await file.arrayBuffer();
+          const ocrResult = await processDocumentOCR(arrayBuffer, file.name);
+          
+          if (ocrResult.success && ocrResult.xlsxBuffer) {
+            const xlsxBlob = new Blob([ocrResult.xlsxBuffer], {
+              type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            });
+            processedFile = new File([xlsxBlob], file.name.replace(/\.[^.]+$/, '.xlsx'), {
+              type: xlsxBlob.type
+            });
+          }
+        }
+      }
+      
+      // PARSEAR ARCHIVO
+      const rows = await parseCsvXlsx(processedFile, mappingRules || [], invertNegatives, useMultiColumns, insurerId);
+      console.log(`✅ Extraídas ${rows.length} filas de ${file.name}`);
+      
+      // CONSOLIDAR filas de este archivo al total
+      allConsolidatedRows = allConsolidatedRows.concat(rows);
+    }
+    
+    totalAmountParsed = parseFloat(totalAmount) || 0;
+    
+    console.log(`\n========== CONSOLIDACIÓN COMPLETA ==========`);
+    console.log(`Total de filas consolidadas: ${allConsolidatedRows.length}`);
+    console.log(`Monto total: $${totalAmountParsed.toFixed(2)}`);
+    
+    if (allConsolidatedRows.length === 0) {
+      return { ok: false as const, error: 'No se extrajeron filas de ningún archivo' };
+    }
+    
+    // 2. CREAR UN SOLO comm_imports (sin insurer_id específico ya que son múltiples)
+    const { data: importRecord, error: importError } = await supabase
+      .from('comm_imports')
+      .insert([{
+        insurer_id: firstFile.insurerId, // Usar primera aseguradora como referencia
+        period_label: fortnightId,
+        uploaded_by: userId,
+        total_amount: totalAmountParsed,
+        is_life_insurance: files.some(f => f?.isLife), // true si alguno es vida
+      }])
+      .select()
+      .single<CommImportRow>();
+    
+    if (importError || !importRecord) {
+      throw new Error('Error al crear registro de importación');
+    }
+    
+    console.log(`✅ comm_imports creado: ${importRecord.id}`);
+    
+    // 3. PROCESAR TODAS LAS FILAS CONSOLIDADAS (matching de pólizas/clientes)
+    const policyNumbers = allConsolidatedRows.map(r => r.policy_number).filter(Boolean) as string[];
+    const clientNames = Array.from(new Set(allConsolidatedRows.map(r => r.client_name?.trim().toUpperCase()).filter(Boolean))) as string[];
+    
+    // Buscar pólizas existentes
+    const { data: existingPolicies } = await supabase
+      .from('policies')
+      .select(`
+        policy_number, 
+        broker_id, 
+        client_id, 
+        percent_override,
+        clients(national_id),
+        brokers!inner(percent_default)
+      `)
+      .in('policy_number', policyNumbers.length > 0 ? policyNumbers : ['__NONE__']);
+    
+    const policyMap = new Map<string, { 
+      broker_id: string | null; 
+      client_id: string; 
+      percent: number;
+    }>();
+    
+    (existingPolicies || []).forEach((p: any) => {
+      const percent = p.percent_override ?? p.brokers?.percent_default ?? 1.0;
+      policyMap.set(p.policy_number, {
+        broker_id: p.broker_id,
+        client_id: p.client_id,
+        percent: percent,
+      });
+    });
+    
+    // NIVEL 2 ELIMINADO: Ya NO se buscan clientes por nombre
+    // Solo se identifica por número de póliza exacto
+    
+    // Separar en identificados y no identificados
+    const itemsToInsert: CommItemIns[] = [];
+    const pendingItemsToInsert: any[] = [];
+    
+    for (const row of allConsolidatedRows) {
+      const policyData = row.policy_number ? policyMap.get(row.policy_number) : null;
+      
+      // SOLO NIVEL 1: Match ESTRICTO por número de póliza existente
+      if (policyData && policyData.broker_id) {
+        // Identificado por póliza existente en BD
+        const commissionRaw = row.commission_amount || 0;
+        const grossAmount = commissionRaw * policyData.percent;
+        
+        itemsToInsert.push({
+          import_id: importRecord.id,
+          insurer_id: firstFile.insurerId,
+          policy_number: row.policy_number || 'UNKNOWN',
+          gross_amount: grossAmount,
+          insured_name: row.client_name || 'UNKNOWN',
+          raw_row: row.raw_row,
+          broker_id: policyData.broker_id,
+        });
+      } else {
+        // Sin identificar - Va a pending_items para identificación manual
+        // NO se identifica por nombre de cliente para evitar asignaciones incorrectas
+        pendingItemsToInsert.push({
+          insured_name: row.client_name || null,
+          policy_number: row.policy_number || 'UNKNOWN',
+          insurer_id: firstFile.insurerId,
+          commission_raw: row.commission_amount || 0,
+          fortnight_id: fortnightId,
+          import_id: importRecord.id,
+          status: 'open',
+          assigned_broker_id: null,
+        });
+      }
+    }
+    
+    console.log(`\n--- RESULTADO MATCHING ---`);
+    console.log(`Identificados: ${itemsToInsert.length}`);
+    console.log(`Sin identificar: ${pendingItemsToInsert.length}`);
+    
+    // 4. DEDUPLICAR Y INSERTAR comm_items
+    if (itemsToInsert.length > 0) {
+      // ESTRATEGIA DE DEDUPLICACIÓN HÍBRIDA:
+      // 1. Si raw_row existe → usarlo (más preciso para diferenciar transacciones)
+      // 2. Si raw_row es null → usar datos básicos del registro
+      const deduplicatedMap = new Map<string, typeof itemsToInsert[0]>();
+      itemsToInsert.forEach(item => {
+        let key: string;
+        
+        if (item.raw_row && typeof item.raw_row === 'object' && Object.keys(item.raw_row).length > 0) {
+          // CASO 1: Tenemos raw_row - la fuente de verdad para identificar duplicados del parser
+          const rawRowKey = JSON.stringify(item.raw_row);
+          key = `${item.import_id}|${rawRowKey}`;
+        } else {
+          // CASO 2: Sin raw_row - usar datos del registro (puede pasar en imports antiguos o ciertos parsers)
+          // Aquí SÍ debemos eliminar duplicados con mismo cliente + póliza + monto
+          key = `${item.import_id}|${item.policy_number}|${item.broker_id}|${item.insured_name}|${item.gross_amount}`;
+        }
+        
+        const existing = deduplicatedMap.get(key);
+        if (existing) {
+          console.log(`[BATCH] ⚠️ DUPLICADO: ${item.insured_name} / ${item.policy_number} - $${item.gross_amount}`);
+          console.log(`[BATCH]   Eliminando duplicado (se mantiene la primera ocurrencia)`);
+        } else {
+          deduplicatedMap.set(key, item);
+        }
+      });
+      
+      const uniqueItems = Array.from(deduplicatedMap.values());
+      const duplicatesCount = itemsToInsert.length - uniqueItems.length;
+      
+      if (duplicatesCount > 0) {
+        console.log(`[BATCH] 🚨 Eliminados ${duplicatesCount} duplicados (${itemsToInsert.length} → ${uniqueItems.length})`);
+      } else {
+        console.log(`[BATCH] ✅ Sin duplicados - Todas las ${itemsToInsert.length} transacciones son únicas`);
+      }
+      
+      const { error: itemsError } = await supabase
+        .from('comm_items')
+        .insert(uniqueItems);
+      
+      if (itemsError) throw itemsError;
+    }
+    
+    // 5. INSERTAR draft_unidentified_items (zona de trabajo temporal, NO pending_items)
+    if (pendingItemsToInsert.length > 0) {
+      console.log(`[BATCH] Preparando ${pendingItemsToInsert.length} items para draft_unidentified_items...`);
+      
+      const draftItems = pendingItemsToInsert.map(item => ({
+        fortnight_id: item.fortnight_id,
+        import_id: item.import_id,
+        insurer_id: item.insurer_id,
+        policy_number: item.policy_number,
+        insured_name: item.insured_name,
+        commission_raw: item.commission_raw,
+        raw_row: item.raw_row || null, // Incluir raw_row para deduplicación precisa
+        temp_assigned_broker_id: item.assigned_broker_id || null,
+        temp_assigned_at: item.assigned_broker_id ? new Date().toISOString() : null,
+      }));
+      
+      // DEDUPLICAR usando raw_row: Si el raw_row es idéntico, es un duplicado real
+      // Si raw_row es diferente, son transacciones separadas legítimas (aunque tengan mismo cliente/póliza)
+      const deduplicatedMap = new Map<string, typeof draftItems[0]>();
+      draftItems.forEach(item => {
+        let key: string;
+        
+        if (item.raw_row && typeof item.raw_row === 'object' && Object.keys(item.raw_row).length > 0) {
+          // CASO 1: Tenemos raw_row - usarlo como fuente de verdad
+          const rawRowKey = JSON.stringify(item.raw_row);
+          key = `${item.fortnight_id}|${item.import_id}|${rawRowKey}`;
+        } else {
+          // CASO 2: Sin raw_row - usar datos básicos (fallback para compatibilidad)
+          key = `${item.fortnight_id}|${item.import_id}|${item.policy_number}|${item.insured_name}|${item.commission_raw}`;
+        }
+        
+        const existing = deduplicatedMap.get(key);
+        if (existing) {
+          // Solo aquí es realmente un duplicado (mismo raw_row = mismo registro parseado dos veces)
+          console.log(`[BATCH] ⚠️ DUPLICADO REAL: ${item.insured_name} / ${item.policy_number} - $${item.commission_raw}`);
+          console.log(`[BATCH]   Eliminando duplicado (se mantiene la primera ocurrencia)`);
+        } else {
+          deduplicatedMap.set(key, item);
+        }
+      });
+      
+      const uniqueDraftItems = Array.from(deduplicatedMap.values());
+      const duplicatesCount = draftItems.length - uniqueDraftItems.length;
+      
+      if (duplicatesCount > 0) {
+        console.log(`[BATCH] 🚨 Eliminados ${duplicatesCount} duplicados reales (${draftItems.length} → ${uniqueDraftItems.length})`);
+      } else {
+        console.log(`[BATCH] ✅ Sin duplicados - Todas las ${draftItems.length} transacciones son únicas`);
+      }
+      
+      console.log(`[BATCH] Insertando ${uniqueDraftItems.length} items únicos en draft_unidentified_items con upsert...`);
+      const { error: draftError, count } = await (supabase as any)
+        .from('draft_unidentified_items')
+        .upsert(uniqueDraftItems, { 
+          onConflict: 'fortnight_id,import_id,policy_number,insured_name',
+          ignoreDuplicates: false  // Actualizar si existe
+        });
+      
+      if (draftError) {
+        console.error(`[BATCH] ❌ ERROR insertando draft items:`, draftError);
+        console.error(`[BATCH] Error details:`, {
+          code: draftError.code,
+          message: draftError.message,
+          details: draftError.details,
+          hint: draftError.hint
+        });
+        console.log(`[BATCH] Continuando a pesar del error...`);
+      } else {
+        console.log(`[BATCH] ✅ ${draftItems.length} items procesados en draft_unidentified_items (upsert completado)`);
+      }
+    }
+    
+    // 6. VINCULAR transferencia/grupo bancario (solo una vez al final)
+    if (bankTransferId) {
+      await (supabase as any)
+        .from('bank_transfer_imports')
+        .insert([{
+          transfer_id: bankTransferId,
+          import_id: importRecord.id,
+          amount_assigned: totalAmountParsed,
+          cutoff_origin_id: null,
+          fortnight_paid_id: null,
+          notes: `Batch consolidado de ${files.length} reportes`,
+          is_temporary: true
+        }]);
+    }
+    
+    if (bankGroupIds && bankGroupIds.length > 0) {
+      const groupInserts = bankGroupIds.map(gid => ({
+        group_id: gid,
+        import_id: importRecord.id,
+        amount_assigned: totalAmountParsed,
+        cutoff_origin_id: null,
+        fortnight_paid_id: null,
+        notes: `Batch consolidado de ${files.length} reportes`,
+        is_temporary: true
+      }));
+      await (supabase as any).from('bank_group_imports').insert(groupInserts);
+    }
+    
+    console.log(`\n========== BATCH IMPORT COMPLETADO ==========`);
+    console.log(`Import ID: ${importRecord.id}`);
+    console.log(`Total filas procesadas: ${allConsolidatedRows.length}`);
+    
+    return {
+      ok: true as const,
+      data: {
+        import_id: importRecord.id,
+        total_rows: allConsolidatedRows.length,
+        identified: itemsToInsert.length,
+        unidentified: pendingItemsToInsert.length
+      }
+    };
+    
+  } catch (error) {
+    console.error('[BATCH IMPORT] Error:', error);
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : 'Error en importación batch'
+    };
+  }
+}
 
 /**
  * Upload and import commission file (CSV/XLSX/PDF)
@@ -210,11 +574,9 @@ export async function actionUploadImport(formData: FormData) {
     if (importError) throw importError;
     if (!importRecord) throw new Error('Failed to create import record');
 
-    // 2. Buscar pólizas existentes Y clientes por nombre para matching en dos niveles
-    // Nivel 1: Match por número de póliza
-    // Nivel 2: Match por nombre exacto del cliente (para pólizas nuevas)
+    // 2. Buscar pólizas existentes - SOLO NIVEL 1: Match por número de póliza
+    // NIVEL 2 ELIMINADO: Ya NO se identifica por nombre de cliente para evitar asignaciones incorrectas
     const policyNumbers = rows.map(r => r.policy_number).filter(Boolean) as string[];
-    const clientNames = Array.from(new Set(rows.map(r => r.client_name?.trim().toUpperCase()).filter(Boolean))) as string[];
     const insurerSlug = getInsurerSlug(insurerName);
     const usesPartialMatch = insurerSlug ? getPolicySearchTerm(insurerSlug, '1-1-1') !== '1-1-1' : false;
 
@@ -285,38 +647,9 @@ export async function actionUploadImport(formData: FormData) {
       });
     });
 
-    // Buscar clientes existentes por nombre exacto (para matching nivel 2)
-    let existingClients: any[] = [];
-    if (clientNames.length > 0) {
-      const { data: clientsData } = await supabase
-        .from('clients')
-        .select(`
-          id,
-          name,
-          broker_id,
-          brokers!inner(percent_default)
-        `)
-        .in('name', clientNames);
-      
-      existingClients = clientsData || [];
-    }
-
-    const clientsMap = new Map<string, {
-      client_id: string;
-      broker_id: string | null;
-      percent: number;
-    }>();
-    
-    existingClients.forEach((c: any) => {
-      const percent = c.brokers?.percent_default ?? 1.0;
-      clientsMap.set(c.name.trim().toUpperCase(), {
-        client_id: c.id,
-        broker_id: c.broker_id,
-        percent: percent,
-      });
-    });
-
-    console.log(`[SERVER][${insurerName}] Clientes encontrados para matching: ${clientsMap.size}`);
+    // NIVEL 2 ELIMINADO: Ya NO se buscan clientes por nombre para matching automático
+    // Esto previene asignaciones incorrectas cuando hay nombres similares o duplicados
+    console.log(`[SERVER][${insurerName}] Clientes encontrados para matching: 0`);
 
     const findPolicyData = (rawPolicyNumber: string | null, clientName: string | null) => {
       if (!rawPolicyNumber) return { 
@@ -367,21 +700,9 @@ export async function actionUploadImport(formData: FormData) {
         }
       }
 
-      // NIVEL 2: Match por nombre exacto del cliente (póliza nueva)
-      if (clientName) {
-        const normalizedClientName = clientName.trim().toUpperCase();
-        const clientMatch = clientsMap.get(normalizedClientName);
-        if (clientMatch) {
-          console.log(`[SERVER][${insurerName}] ✅ Match por CLIENTE: ${clientName} → Broker identificado, Póliza NUEVA`);
-          return {
-            matchedPolicyNumber: rawPolicyNumber,
-            policyData: null, // No hay póliza existente
-            clientData: clientMatch, // Datos del cliente encontrado
-            matchType: 'client' as const
-          };
-        }
-      }
-
+      // NIVEL 2 DESHABILITADO: Ya no se identifica por nombre de cliente
+      // Esto permite crear pólizas nuevas en el sistema para clientes existentes
+      
       return { 
         matchedPolicyNumber: rawPolicyNumber, 
         policyData: null,
@@ -390,14 +711,12 @@ export async function actionUploadImport(formData: FormData) {
       };
     };
 
-    // 3. Separar en 3 categorías:
-    // A) comm_items: Póliza existente con broker identificado
-    // B) pending_items con client_id: Cliente identificado pero póliza NUEVA (ir a preliminar de pólizas)
-    // C) pending_items sin client_id: Completamente sin identificar
+    // 3. Separar en 2 categorías - SOLO MATCHING POR PÓLIZA EXACTA:
+    // A) comm_items: Póliza existente con broker identificado (match por policy_number)
+    // B) pending_items: TODO lo demás va sin identificar para revisión manual
     const itemsToInsert: CommItemIns[] = [];
     const pendingItemsToInsert: any[] = [];
     let policyMatchCount = 0;
-    let clientMatchCount = 0;
     let noMatchCount = 0;
 
     for (const row of rows) {
@@ -420,38 +739,8 @@ export async function actionUploadImport(formData: FormData) {
           broker_id: policyData.broker_id,
         });
       }
-      // CASO B: Match por cliente → Cliente existente pero PÓLIZA NUEVA (preliminar)
-      else if (matchType === 'client' && clientData && clientData.broker_id) {
-        clientMatchCount++;
-        const commissionRaw = row.commission_amount || 0;
-        const percent = clientData.percent;
-        const grossAmount = commissionRaw * percent;
-        
-        // Va a comm_items pero también necesita registrarse como póliza preliminar
-        itemsToInsert.push({
-          import_id: importRecord.id,
-          insurer_id: parsed.insurer_id,
-          policy_number: matchedPolicyNumber || row.policy_number || 'UNKNOWN',
-          gross_amount: grossAmount,
-          insured_name: row.client_name || 'UNKNOWN',
-          raw_row: row.raw_row,
-          broker_id: clientData.broker_id,
-        });
-        
-        // TAMBIÉN agregar a pending_items para que aparezca en "Preliminar de Pólizas"
-        pendingItemsToInsert.push({
-          insured_name: row.client_name || null,
-          policy_number: matchedPolicyNumber || row.policy_number || 'UNKNOWN',
-          insurer_id: parsed.insurer_id,
-          commission_raw: commissionRaw,
-          fortnight_id: parsed.fortnight_id,
-          import_id: importRecord.id,
-          status: 'preliminary_policy', // Nuevo estado para distinguir
-          assigned_broker_id: clientData.broker_id,
-          client_id: clientData.client_id, // Cliente identificado
-        });
-      }
-      // CASO C: Sin match → Completamente sin identificar
+      // CASO B ELIMINADO: Ya no hay matching por cliente
+      // CASO C: Sin match → Sin identificar (va a draft)
       else {
         noMatchCount++;
         pendingItemsToInsert.push({
@@ -463,15 +752,13 @@ export async function actionUploadImport(formData: FormData) {
           import_id: importRecord.id,
           status: 'open',
           assigned_broker_id: null,
-          client_id: null,
         });
       }
     }
 
-    console.log(`[SERVER][${insurerName}] ========== RESULTADO DEL MATCHING ==========`);
-    console.log(`[SERVER][${insurerName}] ✅ Match por PÓLIZA: ${policyMatchCount}`);
-    console.log(`[SERVER][${insurerName}] 🆕 Match por CLIENTE (póliza nueva): ${clientMatchCount}`);
-    console.log(`[SERVER][${insurerName}] ❌ Sin identificar: ${noMatchCount}`);
+    console.log(`[SERVER][${insurerName}] ========== RESULTADO DEL MATCHING (SOLO NIVEL 1) ==========`);
+    console.log(`[SERVER][${insurerName}] ✅ Match EXACTO por PÓLIZA: ${policyMatchCount}`);
+    console.log(`[SERVER][${insurerName}] ⚠️ Sin identificar (requiere revisión manual): ${noMatchCount}`);
     console.log(`[SERVER][${insurerName}] Total comm_items: ${itemsToInsert.length}`);
     console.log(`[SERVER][${insurerName}] Total pending_items: ${pendingItemsToInsert.length}`);
     
@@ -614,7 +901,17 @@ export async function actionUploadImport(formData: FormData) {
 
     console.log(`✅ Import OK: ${result.insertedCount + result.pendingCount} items`);
     revalidatePath('/(app)/commissions');
-    return { ok: true as const, data: result };
+    
+    // Retornar estadísticas detalladas (igual que batch import)
+    return { 
+      ok: true as const, 
+      data: {
+        ...result,
+        total_rows: result.insertedCount + result.pendingCount,
+        identified: result.insertedCount,
+        unidentified: result.pendingCount
+      }
+    };
   } catch (error) {
     console.error('[SERVER] Import error:', error);
     
@@ -3119,6 +3416,20 @@ export async function actionDeleteImport(importId: string) {
     }
     console.log('[actionDeleteImport] Items eliminados:', itemsCount);
 
+    // Delete draft_unidentified_items associated with this import (before deleting the import itself)
+    console.log('[actionDeleteImport] Eliminando draft_unidentified_items...');
+    const { error: draftError, count: draftCount } = await (supabase as any)
+      .from('draft_unidentified_items')
+      .delete({ count: 'exact' })
+      .eq('import_id', importId);
+
+    if (draftError) {
+      console.error('[actionDeleteImport] Error eliminando draft items:', draftError);
+      // No lanzamos error, continuamos (podría no haber draft items)
+    } else {
+      console.log('[actionDeleteImport] Draft items eliminados:', draftCount);
+    }
+
     // Delete the import record
     console.log('[actionDeleteImport] Eliminando import...');
     const { error: importError } = await supabase
@@ -3400,7 +3711,8 @@ export async function actionGetDraftDetails(fortnightId: string) {
         id,
         gross_amount,
         insured_name,
-        brokers (id, name),
+        policy_number,
+        brokers (id, name, email, percent_default),
         insurers (id, name)
       `)
       .in('import_id', importIds)
@@ -3877,6 +4189,247 @@ export async function actionExportBankCsv(fortnightId: string) {
     return {
       ok: false as const,
       error: error instanceof Error ? error.message : 'Error desconocido',
+    };
+  }
+}
+
+/**
+ * Refresh commission items from database - updates broker assignments and percentages
+ * Used when brokers are reassigned or percent_default is changed in the database
+ */
+export async function actionRefreshCommItems(fortnight_id: string) {
+  try {
+    const supabase = getSupabaseAdmin();
+    const { userId } = await getAuthContext();
+    
+    console.log('[actionRefreshCommItems] ========== INICIO REFRESH ==========');
+    console.log('[actionRefreshCommItems] Fortnight ID:', fortnight_id);
+    
+    // 1. Obtener todos los imports del draft
+    const { data: imports, error: importsError } = await supabase
+      .from('comm_imports')
+      .select('id')
+      .eq('period_label', fortnight_id);
+    
+    if (importsError) throw importsError;
+    
+    if (!imports || imports.length === 0) {
+      return { ok: true as const, data: { message: 'No hay imports para refrescar' } };
+    }
+    
+    const importIds = imports.map(i => i.id);
+    console.log(`[actionRefreshCommItems] 📦 Procesando ${importIds.length} imports`);
+    
+    // 2. Obtener todos los comm_items de estos imports con su gross_amount actual
+    const { data: items, error: itemsError } = await supabase
+      .from('comm_items')
+      .select('id, import_id, policy_number, insured_name, gross_amount, broker_id')
+      .in('import_id', importIds);
+    
+    if (itemsError) throw itemsError;
+    
+    console.log(`[actionRefreshCommItems] 💰 Items encontrados: ${items?.length || 0}`);
+    
+    if (!items || items.length === 0) {
+      return { ok: true as const, data: { message: 'No hay items para refrescar' } };
+    }
+    
+    // 3. Obtener policy numbers únicos para batch query
+    const policyNumbers = [...new Set(items.map(i => i.policy_number).filter(Boolean))] as string[];
+    const clientNames = [...new Set(items.map(i => i.insured_name).filter(Boolean))] as string[];
+    
+    console.log(`[actionRefreshCommItems] 🔍 Buscando ${policyNumbers.length} pólizas y ${clientNames.length} clientes`);
+    
+    // 4. Buscar políticas CON SUS CLIENTES para obtener el broker correcto
+    // PRIORIDAD: broker del cliente > broker de la póliza
+    const { data: policies } = await supabase
+      .from('policies')
+      .select(`
+        policy_number, 
+        broker_id, 
+        percent_override, 
+        client_id,
+        clients!inner(broker_id, brokers(percent_default)),
+        brokers(percent_default)
+      `)
+      .in('policy_number', policyNumbers.length > 0 ? policyNumbers : ['__NONE__']);
+    
+    const policyMap = new Map<string, { broker_id: string | null; percent: number; source: 'client' | 'policy' }>();
+    (policies || []).forEach((p: any) => {
+      // PRIORIDAD 1: Broker del CLIENTE (fuente de verdad)
+      const clientBrokerId = p.clients?.broker_id;
+      const clientPercent = p.clients?.brokers?.percent_default;
+      
+      // PRIORIDAD 2: Broker de la PÓLIZA (fallback si cliente no tiene)
+      const policyBrokerId = p.broker_id;
+      const policyPercent = p.percent_override ?? p.brokers?.percent_default;
+      
+      // Usar broker del cliente si existe, sino usar el de la póliza
+      const finalBrokerId = clientBrokerId || policyBrokerId;
+      const finalPercent = clientBrokerId ? (clientPercent ?? 1.0) : (policyPercent ?? 1.0);
+      
+      policyMap.set(p.policy_number, {
+        broker_id: finalBrokerId,
+        percent: finalPercent,
+        source: clientBrokerId ? 'client' : 'policy',
+      });
+    });
+    
+    console.log(`[actionRefreshCommItems] 📋 Políticas por fuente - Cliente: ${[...policyMap.values()].filter(p => p.source === 'client').length}, Póliza: ${[...policyMap.values()].filter(p => p.source === 'policy').length}`);
+    
+    // 5. Buscar clientes con broker y porcentaje actual (fallback) - usar LEFT JOIN para incluir todos los clientes
+    const { data: clients } = await supabase
+      .from('clients')
+      .select('name, broker_id, brokers(percent_default)')
+      .in('name', clientNames.length > 0 ? clientNames : ['__NONE__']);
+    
+    const clientMap = new Map<string, { broker_id: string | null; percent: number }>();
+    (clients || []).forEach((c: any) => {
+      // Solo agregar si tiene broker asignado
+      if (c.broker_id) {
+        const percent = c.brokers?.percent_default ?? 1.0;
+        clientMap.set(c.name.trim().toUpperCase(), {
+          broker_id: c.broker_id,
+          percent: percent,
+        });
+      }
+    });
+    
+    console.log(`[actionRefreshCommItems] ✅ Encontrados ${policyMap.size} políticas y ${clientMap.size} clientes en BD`);
+    console.log(`[actionRefreshCommItems] 🔍 Clientes con broker: ${[...clientMap.keys()].slice(0, 5).join(', ')}...`);
+    
+    // 6. Actualizar comm_items con nuevos brokers y porcentajes
+    let updatedCount = 0;
+    let unchangedCount = 0;
+    let noMatchCount = 0;
+    
+    for (const item of items) {
+      // Buscar primero por policy (que ya trae el broker del cliente), luego por client name
+      let newBrokerId: string | null = null;
+      let newPercent: number = 1.0;
+      let matchedBy: 'policy' | 'client-name' | 'none' = 'none';
+      let brokerSource: 'client' | 'policy' | 'none' = 'none';
+      
+      if (item.policy_number) {
+        const policyData = policyMap.get(item.policy_number);
+        if (policyData && policyData.broker_id) {
+          newBrokerId = policyData.broker_id;
+          newPercent = policyData.percent;
+          matchedBy = 'policy';
+          brokerSource = policyData.source;
+        }
+      }
+      
+      // Fallback a búsqueda directa por nombre de cliente si no se encontró por póliza
+      if (!newBrokerId && item.insured_name) {
+        const clientData = clientMap.get(item.insured_name.trim().toUpperCase());
+        if (clientData && clientData.broker_id) {
+          newBrokerId = clientData.broker_id;
+          newPercent = clientData.percent;
+          matchedBy = 'client-name';
+          brokerSource = 'client';
+        }
+      }
+      
+      // Si no hay broker en BD, skip (mantener como estaba)
+      if (!newBrokerId || matchedBy === 'none') {
+        noMatchCount++;
+        continue;
+      }
+      
+      // Verificar si necesita actualización (cambió broker O cambió porcentaje)
+      const brokerChanged = item.broker_id !== newBrokerId;
+      const updateSource = `fuente: ${brokerSource}, match: ${matchedBy}`;
+      
+      if (!brokerChanged) {
+        // Broker no cambió, verificar si el porcentaje cambió
+        const { data: currentBroker } = await supabase
+          .from('brokers')
+          .select('percent_default')
+          .eq('id', item.broker_id!)
+          .single();
+        
+        const currentPercent = currentBroker?.percent_default ?? 1.0;
+        const percentChanged = Math.abs(currentPercent - newPercent) > 0.0001;
+        
+        if (!percentChanged) {
+          unchangedCount++;
+          continue;
+        }
+        
+        // Solo cambió el porcentaje, recalcular gross_amount
+        const commissionRaw = currentPercent !== 0 ? (item.gross_amount || 0) / currentPercent : 0;
+        const newGrossAmount = commissionRaw * newPercent;
+        
+        const { error: updateError } = await supabase
+          .from('comm_items')
+          .update({ gross_amount: newGrossAmount })
+          .eq('id', item.id);
+        
+        if (!updateError) {
+          updatedCount++;
+          console.log(`[actionRefreshCommItems] ✅ ${item.insured_name} [${item.policy_number}] - % actualizado: ${currentPercent} → ${newPercent} (${updateSource})`);
+        }
+        continue;
+      }
+      
+      // El broker cambió - obtener porcentaje anterior para recalcular
+      let currentPercent = 1.0;
+      if (item.broker_id) {
+        const { data: oldBroker } = await supabase
+          .from('brokers')
+          .select('percent_default')
+          .eq('id', item.broker_id)
+          .single();
+        currentPercent = oldBroker?.percent_default || 1.0;
+      }
+      
+      // Calcular commission_raw original: gross_amount / percent_anterior
+      const commissionRaw = currentPercent !== 0 ? (item.gross_amount || 0) / currentPercent : 0;
+      
+      // Recalcular gross_amount con nuevo porcentaje: commission_raw * percent_nuevo
+      const newGrossAmount = commissionRaw * newPercent;
+      
+      // Actualizar broker y gross_amount
+      const { error: updateError } = await supabase
+        .from('comm_items')
+        .update({
+          broker_id: newBrokerId,
+          gross_amount: newGrossAmount,
+        })
+        .eq('id', item.id);
+      
+      if (updateError) {
+        console.error(`[actionRefreshCommItems] ❌ Error actualizando item ${item.id}:`, updateError);
+      } else {
+        updatedCount++;
+        console.log(`[actionRefreshCommItems] ✅ ${item.insured_name} [${item.policy_number}] - Broker: ${item.broker_id?.slice(0,8)} → ${newBrokerId.slice(0,8)} (${updateSource})`);
+      }
+    }
+    
+    console.log(`[actionRefreshCommItems] 🔄 Actualizados: ${updatedCount}, Sin cambios: ${unchangedCount}, Sin match en BD: ${noMatchCount}`);
+    
+    // 7. Recalcular totales
+    console.log('[actionRefreshCommItems] Recalculando totales...');
+    await actionRecalculateFortnight(fortnight_id);
+    
+    console.log('[actionRefreshCommItems] ========== FIN REFRESH ==========');
+    
+    revalidatePath('/(app)/commissions');
+    return { 
+      ok: true as const, 
+      data: { 
+        message: `${updatedCount} actualizados, ${unchangedCount} sin cambios, ${noMatchCount} sin match en BD`,
+        updated: updatedCount,
+        unchanged: unchangedCount,
+        noMatch: noMatchCount,
+      } 
+    };
+  } catch (error) {
+    console.error('[actionRefreshCommItems] ERROR:', error);
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : 'Error al refrescar comisiones',
     };
   }
 }
@@ -5895,7 +6448,7 @@ export async function actionGetDraftUnidentified(fortnightId: string): Promise<A
  * Identificar masivamente múltiples items en zona de trabajo
  * Usado cuando se asigna un broker a un grupo de items (mismo cliente o misma póliza)
  */
-export async function actionTempIdentifyMultiple(itemIds: string[], brokerId: string): Promise<ActionResult> {
+export async function actionTempIdentifyMultiple(itemIds: string[], brokerId: string, overridePercent?: number): Promise<ActionResult> {
   try {
     const { role } = await getAuthContext();
     if (role !== 'master') {
@@ -5923,32 +6476,70 @@ export async function actionTempIdentifyMultiple(itemIds: string[], brokerId: st
 
       fortnightId = item.fortnight_id;
 
-      // 2. Obtener percent_default del broker
-      const { data: broker } = await supabase
-        .from('brokers')
-        .select('percent_default')
-        .eq('id', brokerId)
-        .single();
+      // 2. Determinar porcentaje a usar (override si existe, sino percent_default del broker)
+      let percent: number;
+      if (overridePercent !== undefined) {
+        percent = overridePercent;
+      } else {
+        const { data: broker } = await supabase
+          .from('brokers')
+          .select('percent_default')
+          .eq('id', brokerId)
+          .single();
+        percent = broker?.percent_default || 1.0;
+      }
 
-      const percent = broker?.percent_default || 1.0;
       const grossAmount = item.commission_raw * percent;
 
-      // 3. Insertar en comm_items
-      const { error: commInsertError } = await supabase
+      // 3. Verificar si ya existe en comm_items (para evitar duplicados al reasignar)
+      const { data: existingItems } = await supabase
         .from('comm_items')
-        .insert({
-          import_id: item.import_id,
-          insurer_id: item.insurer_id,
-          policy_number: item.policy_number,
-          gross_amount: grossAmount,
-          insured_name: item.insured_name,
-          raw_row: item.raw_row || {},
-          broker_id: brokerId,
-        });
+        .select('id, broker_id, gross_amount')
+        .eq('import_id', item.import_id)
+        .eq('policy_number', item.policy_number)
+        .eq('insured_name', item.insured_name || 'UNKNOWN');
 
-      if (commInsertError) {
-        console.error(`[actionTempIdentifyMultiple] Error insertando item ${itemId}:`, commInsertError);
-        continue;
+      if (existingItems && existingItems.length > 0 && existingItems[0]) {
+        const firstItem = existingItems[0];
+        
+        // Ya existe, actualizar en lugar de insertar
+        const { error: updateError } = await supabase
+          .from('comm_items')
+          .update({
+            broker_id: brokerId,
+            gross_amount: grossAmount,
+          })
+          .eq('id', firstItem.id);
+
+        if (updateError) {
+          console.error(`[actionTempIdentifyMultiple] Error actualizando item ${item.id}:`, updateError);
+        } else {
+          successCount++;
+          // Eliminar duplicados si hay más de 1
+          if (existingItems.length > 1) {
+            const duplicateIds = existingItems.slice(1).map(ei => ei.id);
+            await supabase.from('comm_items').delete().in('id', duplicateIds);
+          }
+        }
+      } else {
+        // No existe, insertar nuevo
+        const { error: commInsertError } = await supabase
+          .from('comm_items')
+          .insert({
+            import_id: item.import_id,
+            insurer_id: item.insurer_id,
+            policy_number: item.policy_number,
+            gross_amount: grossAmount,
+            insured_name: item.insured_name || 'UNKNOWN',
+            raw_row: item.raw_row,
+            broker_id: brokerId,
+          });
+
+        if (commInsertError) {
+          console.error(`[actionTempIdentifyMultiple] Error insertando item ${item.id}:`, commInsertError);
+        } else {
+          successCount++;
+        }
       }
 
       // 4. Marcar como identificado en draft
@@ -5987,7 +6578,7 @@ export async function actionTempIdentifyMultiple(itemIds: string[], brokerId: st
  * Identificar temporalmente un cliente en zona de trabajo
  * NUEVO: Al identificar, inserta inmediatamente en comm_items para que aparezca en listado del corredor
  */
-export async function actionTempIdentifyClient(itemId: string, brokerId: string): Promise<ActionResult> {
+export async function actionTempIdentifyClient(itemId: string, brokerId: string, overridePercent?: number): Promise<ActionResult> {
   try {
     const { role } = await getAuthContext();
     if (role !== 'master') {
@@ -6008,40 +6599,101 @@ export async function actionTempIdentifyClient(itemId: string, brokerId: string)
       return { ok: false, error: 'Item no encontrado' };
     }
 
-    // 2. Obtener percent_default del broker
-    const { data: broker } = await supabase
-      .from('brokers')
-      .select('percent_default')
-      .eq('id', brokerId)
-      .single();
+    // 2. Determinar porcentaje a usar (override si existe, sino percent_default del broker)
+    let percent: number;
+    if (overridePercent !== undefined) {
+      percent = overridePercent;
+      console.log(`[actionTempIdentifyClient] 💰 Usando override percent: ${percent} (Vida)`);
+    } else {
+      const { data: broker } = await supabase
+        .from('brokers')
+        .select('percent_default')
+        .eq('id', brokerId)
+        .single();
+      percent = broker?.percent_default || 1.0;
+      console.log(`[actionTempIdentifyClient] 💰 Usando percent_default del broker: ${percent}`);
+    }
 
-    const percent = broker?.percent_default || 1.0;
     const grossAmount = item.commission_raw * percent;
 
     console.log(`[actionTempIdentifyClient] 💰 Cálculo comisión:`);
     console.log(`  - commission_raw: ${item.commission_raw}`);
-    console.log(`  - percent_default: ${broker?.percent_default} (usando: ${percent})`);
+    console.log(`  - percent usado: ${percent}`);
     console.log(`  - gross_amount calculado: ${grossAmount}`);
 
-    // 3. Insertar en comm_items (como si el parser lo hubiera identificado)
-    const { error: commInsertError } = await supabase
+    // 3. Verificar si ya existe en comm_items (para evitar duplicados al reasignar)
+    const { data: existingItems } = await supabase
       .from('comm_items')
-      .insert({
-        import_id: item.import_id,
-        insurer_id: item.insurer_id,
-        policy_number: item.policy_number,
-        gross_amount: grossAmount,
-        insured_name: item.insured_name || 'UNKNOWN',
-        raw_row: item.raw_row,
-        broker_id: brokerId,
+      .select('id, broker_id, gross_amount')
+      .eq('import_id', item.import_id)
+      .eq('policy_number', item.policy_number)
+      .eq('insured_name', item.insured_name || 'UNKNOWN');
+
+    if (existingItems && existingItems.length > 0) {
+      console.log(`[actionTempIdentifyClient] ⚠️ YA EXISTE en comm_items - actualizando en lugar de insertar`);
+      console.log(`  Encontrados ${existingItems.length} items existentes:`);
+      existingItems.forEach(ei => {
+        console.log(`    - ID: ${ei.id}, Broker: ${ei.broker_id}, Monto: ${ei.gross_amount}`);
       });
+      
+      // Actualizar el PRIMERO (debería ser solo uno)
+      const firstItem = existingItems[0];
+      if (!firstItem) {
+        console.error('[actionTempIdentifyClient] Error: existingItems[0] es undefined');
+        return { ok: false, error: 'Error al obtener item existente' };
+      }
 
-    if (commInsertError) {
-      console.error('[actionTempIdentifyClient] Error insertando en comm_items:', commInsertError);
-      return { ok: false, error: 'Error al insertar comisión' };
+      const { error: updateError } = await supabase
+        .from('comm_items')
+        .update({
+          broker_id: brokerId,
+          gross_amount: grossAmount,
+        })
+        .eq('id', firstItem.id);
+
+      if (updateError) {
+        console.error('[actionTempIdentifyClient] Error actualizando comm_items:', updateError);
+        return { ok: false, error: 'Error al actualizar comisión' };
+      }
+
+      console.log(`[actionTempIdentifyClient] ✅ Item actualizado en comm_items (ID: ${firstItem.id})`);
+      
+      // Si había más de 1, eliminar duplicados
+      if (existingItems.length > 1) {
+        console.log(`[actionTempIdentifyClient] 🧹 Eliminando ${existingItems.length - 1} duplicados...`);
+        const duplicateIds = existingItems.slice(1).map(ei => ei.id);
+        const { error: deleteError } = await supabase
+          .from('comm_items')
+          .delete()
+          .in('id', duplicateIds);
+        
+        if (deleteError) {
+          console.error('[actionTempIdentifyClient] Error eliminando duplicados:', deleteError);
+        } else {
+          console.log(`[actionTempIdentifyClient] ✅ ${duplicateIds.length} duplicados eliminados`);
+        }
+      }
+    } else {
+      // No existe, insertar nuevo
+      const { error: commInsertError } = await supabase
+        .from('comm_items')
+        .insert({
+          import_id: item.import_id,
+          insurer_id: item.insurer_id,
+          policy_number: item.policy_number,
+          gross_amount: grossAmount,
+          insured_name: item.insured_name || 'UNKNOWN',
+          raw_row: item.raw_row,
+          broker_id: brokerId,
+        });
+
+      if (commInsertError) {
+        console.error('[actionTempIdentifyClient] Error insertando en comm_items:', commInsertError);
+        return { ok: false, error: 'Error al insertar comisión' };
+      }
+
+      console.log(`[actionTempIdentifyClient] ✅ Item insertado en comm_items para broker ${brokerId}`);
     }
-
-    console.log(`[actionTempIdentifyClient] ✅ Item insertado en comm_items para broker ${brokerId}`);
 
     // 4. Marcar como identificado en draft
     const { error: updateError } = await (supabase as any)

@@ -680,7 +680,7 @@ export function exportCompleteReportToPDF(
       }
 
       // Insurer header integrado con la tabla
-      const tableWidth = 146; // 25+65+22+12+22
+      const tableWidth = 145; // 30+85+30 (ancho total de las 3 columnas)
       const leftMargin = (pageWidth - tableWidth) / 2;
       
       doc.setFillColor(...secondaryColor);
@@ -697,24 +697,20 @@ export function exportCompleteReportToPDF(
       const tableData = insurer.policies.map(policy => [
         policy.policy_number,
         policy.insured_name.substring(0, 30),
-        formatCurrency(policy.gross_amount),
-        `${(policy.percentage * 100).toFixed(0)}%`,
         formatCurrency(policy.net_amount),
       ]);
 
       autoTable(doc, {
         startY: yPos,
-        head: [['Póliza', 'Cliente', 'Prima', '%', 'Comisión']],
+        head: [['Póliza', 'Cliente', 'Comisión']],
         body: tableData,
         theme: 'grid',
         styles: { fontSize: 7, cellPadding: 1.5 },
         headStyles: { fillColor: primaryColor, fontSize: 7 },
         columnStyles: {
-          0: { cellWidth: 25 },
-          1: { cellWidth: 65 },
-          2: { cellWidth: 22, halign: 'right' },
-          3: { cellWidth: 12, halign: 'center' },
-          4: { cellWidth: 22, halign: 'right' },
+          0: { cellWidth: 30 },
+          1: { cellWidth: 85 },
+          2: { cellWidth: 30, halign: 'right' },
         },
         margin: { left: leftMargin, right: leftMargin },
       });

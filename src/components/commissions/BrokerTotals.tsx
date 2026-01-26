@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { actionGetDraftDetails, actionRetainBrokerPayment, actionUnretainBrokerPayment } from '@/app/(app)/commissions/actions';
+import { actionGetDraftDetails, actionRetainBrokerPayment, actionUnretainBrokerPayment, actionRefreshCommItems } from '@/app/(app)/commissions/actions';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,21 +13,25 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { FaChevronDown, FaChevronRight, FaHandHoldingUsd, FaUndo, FaEllipsisV, FaMoneyBillWave } from 'react-icons/fa';
+import { FaChevronDown, FaChevronRight, FaHandHoldingUsd, FaUndo, FaEllipsisV, FaMoneyBillWave, FaFilePdf, FaSyncAlt } from 'react-icons/fa';
 import { AdvancesManagementModal } from './AdvancesManagementModal';
+import { exportBrokerToPDF, exportCompleteReportToPDF } from '@/lib/commission-export-utils';
 
 // Types
 interface CommItem {
   id: string;
   gross_amount: number;
   insured_name: string | null;
-  brokers: { id: string; name: string | null } | null;
+  policy_number: string | null;
+  brokers: { id: string; name: string | null; email: string | null; percent_default: number | null } | null;
   insurers: { id: string; name: string | null } | null;
 }
 
 interface GroupedData {
   [brokerId: string]: {
     broker_name: string;
+    broker_email: string | null;
+    percent_default: number;
     total_gross: number;
     total_discounts: number;
     total_net: number;
@@ -36,7 +40,7 @@ interface GroupedData {
       [insurerId: string]: {
         insurer_name: string;
         total_gross: number;
-        clients: { name: string; gross: number }[];
+        clients: { name: string; gross: number; policy_number: string }[];
       };
     };
   };
@@ -44,14 +48,16 @@ interface GroupedData {
 
 interface Props {
   draftFortnightId: string;
+  fortnightLabel?: string;
+  totalImported?: number;
   onManageAdvances: (brokerId: string) => void;
   brokerTotals?: Array<{ broker_id: string; is_retained?: boolean }>;
   onRetentionChange?: () => void;
   onTotalNetChange?: (totalNet: number) => void;
-  recalculationKey?: number; // Key para forzar recarga de datos
+  recalculationKey?: number;
 }
 
-export default function BrokerTotals({ draftFortnightId, onManageAdvances, brokerTotals = [], onRetentionChange = () => {}, onTotalNetChange, recalculationKey = 0 }: Props) {
+export default function BrokerTotals({ draftFortnightId, fortnightLabel = 'Quincena', totalImported = 0, onManageAdvances, brokerTotals = [], onRetentionChange = () => {}, onTotalNetChange, recalculationKey = 0 }: Props) {
   const [details, setDetails] = useState<CommItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [isInitialLoad, setIsInitialLoad] = useState(true); // Solo mostrar spinner en primera carga
@@ -65,6 +71,8 @@ export default function BrokerTotals({ draftFortnightId, onManageAdvances, broke
     grossAmount: number;
   } | null>(null);
   const [openMenuBroker, setOpenMenuBroker] = useState<string | null>(null);
+  const [isExportingAll, setIsExportingAll] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
     const loadDetails = async () => {
@@ -120,13 +128,14 @@ export default function BrokerTotals({ draftFortnightId, onManageAdvances, broke
       const insurerId = item.insurers.id;
 
       if (!acc[brokerId]) {
-        const brokerTotal = brokerTotals.find(bt => bt.broker_id === brokerId);
         acc[brokerId] = {
           broker_name: item.brokers.name || 'N/A',
+          broker_email: item.brokers.email || null,
+          percent_default: item.brokers.percent_default || 1.0,
           total_gross: 0,
           total_discounts: 0,
           total_net: 0,
-          is_retained: brokerTotal?.is_retained || false,
+          is_retained: brokerTotals.find(bt => bt.broker_id === brokerId)?.is_retained || false,
           insurers: {},
         };
       }
@@ -146,6 +155,7 @@ export default function BrokerTotals({ draftFortnightId, onManageAdvances, broke
       acc[brokerId]!.insurers[insurerId]!.clients.push({
         name: item.insured_name || 'N/A',
         gross: grossAmount,
+        policy_number: item.policy_number || 'N/A',
       });
 
       return acc;
@@ -173,11 +183,13 @@ export default function BrokerTotals({ draftFortnightId, onManageAdvances, broke
     setExpandedInsurers(newSet);
   };
 
-  // Calcular y emitir total neto - Se ejecuta cada vez que groupedData cambia
+  // Calcular y emitir total neto (EXCLUIR LISSA) - Se ejecuta cada vez que groupedData cambia
   useEffect(() => {
     if (onTotalNetChange) {
       const totalNet = Object.keys(groupedData).length > 0
-        ? Object.values(groupedData).reduce((sum, broker) => sum + broker.total_net, 0)
+        ? Object.values(groupedData)
+            .filter(broker => broker.broker_email?.toLowerCase() !== 'contacto@lideresenseguros.com')
+            .reduce((sum, broker) => sum + broker.total_net, 0)
         : 0;
       onTotalNetChange(totalNet);
     }
@@ -199,12 +211,115 @@ export default function BrokerTotals({ draftFortnightId, onManageAdvances, broke
     }
   };
 
+  const handleRefreshCommissions = async () => {
+    setIsRefreshing(true);
+    try {
+      const result = await actionRefreshCommItems(draftFortnightId);
+      
+      if (result.ok) {
+        toast.success('Comisiones actualizadas', {
+          description: result.data?.message || 'Los cálculos se han actualizado correctamente',
+        });
+        
+        // Recargar datos
+        const reloadResult = await actionGetDraftDetails(draftFortnightId);
+        if (reloadResult.ok) {
+          setDetails(reloadResult.data || []);
+        }
+        
+        // Notificar cambio para actualizar otros componentes
+        onRetentionChange();
+      } else {
+        toast.error('Error al actualizar', {
+          description: result.error,
+        });
+      }
+    } catch (error) {
+      console.error('Error refrescando comisiones:', error);
+      toast.error('Error inesperado al actualizar');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  const handleExportAll = async () => {
+    setIsExportingAll(true);
+    try {
+      // Transformar todos los corredores al formato BrokerDetail[]
+      const allBrokers = Object.entries(groupedData).map(([brokerId, brokerData]) => ({
+        broker_name: brokerData.broker_name,
+        broker_email: brokerData.broker_email || 'sin-email@ejemplo.com',
+        percent_default: brokerData.percent_default,
+        total_gross: brokerData.total_gross,
+        total_net: brokerData.total_net,
+        insurers: Object.values(brokerData.insurers).map(insurer => ({
+          insurer_name: insurer.insurer_name,
+          total_gross: insurer.total_gross,
+          policies: insurer.clients.map(client => ({
+            policy_number: client.policy_number,
+            insured_name: client.name,
+            gross_amount: client.gross,
+            percentage: brokerData.percent_default,
+            net_amount: client.gross,
+          })),
+        })),
+      }));
+
+      // Calcular totales
+      const totalPaidToBrokers = allBrokers.reduce((sum, b) => sum + b.total_net, 0);
+      const officeProfit = totalImported - totalPaidToBrokers;
+
+      // Generar UN SOLO PDF con todos los corredores
+      exportCompleteReportToPDF(
+        allBrokers,
+        fortnightLabel,
+        {
+          total_imported: totalImported,
+          total_paid_net: totalPaidToBrokers,
+          total_office_profit: officeProfit,
+        }
+      );
+      
+      toast.success('Reporte completo generado exitosamente');
+    } catch (error) {
+      console.error('Error generando reporte:', error);
+      toast.error('Error al generar reporte');
+    } finally {
+      setIsExportingAll(false);
+    }
+  };
+
   if (loading) {
     return <div className="p-4 text-center">Cargando totales...</div>;
   }
 
   return (
-    <div className="w-full">
+    <div className="w-full space-y-4">
+      {/* Botones globales */}
+      <div className="flex justify-end gap-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handleRefreshCommissions}
+          disabled={isRefreshing || Object.keys(groupedData).length === 0}
+          className="text-gray-600 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+          title="Actualizar comisiones desde la base de datos"
+        >
+          <FaSyncAlt className={`mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
+          {isRefreshing ? 'Actualizando...' : 'Refrescar'}
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handleExportAll}
+          disabled={isExportingAll || Object.keys(groupedData).length === 0}
+          className="text-gray-600 hover:text-green-600 hover:bg-green-50 transition-colors"
+        >
+          <FaFilePdf className="mr-2" />
+          {isExportingAll ? 'Generando...' : 'Descargar PDF'}
+        </Button>
+      </div>
+
       {/* Vista Mobile - Cards */}
       <div className="block lg:hidden space-y-3">
         {Object.entries(groupedData)

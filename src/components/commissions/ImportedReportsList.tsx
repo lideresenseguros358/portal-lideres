@@ -57,7 +57,7 @@ export default function ImportedReportsList({ reports, onDelete }: Props) {
             <div className="report-details">
               <div className="report-header">
                 <span className="insurer-name">{report.insurer_name}</span>
-                {report.is_life_insurance && (
+                {(report.is_life_insurance || report.is_assa_codigos) && (
                   <span className="life-badge">Vida</span>
                 )}
               </div>
@@ -73,10 +73,10 @@ export default function ImportedReportsList({ reports, onDelete }: Props) {
                 <div className="total-item">
                   <span className="label">Total Oficina:</span>
                   <span className="value text-[#8AAA19]">${report.office_total?.toLocaleString()}</span>
-                  {/* No mostrar warning para Códigos ASSA (es normal que oficina sea 0%) */}
-                  <span className={`percentage ${!report.is_assa_codigos && report.office_percentage && report.office_percentage <= 20 ? 'low' : 'normal'}`}>
+                  {/* No mostrar warning para Códigos ASSA ni VIDA (es normal que oficina sea 0%) */}
+                  <span className={`percentage ${!report.is_assa_codigos && !report.is_life_insurance && report.office_percentage && Math.round(report.office_percentage) <= 19 ? 'low' : 'normal'}`}>
                     {report.office_percentage?.toFixed(1)}%
-                    {!report.is_assa_codigos && report.office_percentage && report.office_percentage <= 20 && (
+                    {!report.is_assa_codigos && !report.is_life_insurance && report.office_percentage && Math.round(report.office_percentage) <= 19 && (
                       <FaExclamationTriangle className="warning-icon" />
                     )}
                   </span>

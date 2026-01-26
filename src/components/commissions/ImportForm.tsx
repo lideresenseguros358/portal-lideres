@@ -114,6 +114,16 @@ export default function ImportForm({ insurers, draftFortnightId, onImport }: Pro
       return;
     }
     
+    // VALIDACIÓN: Todos los reportes deben ser de la MISMA aseguradora
+    const firstReport = pendingReports[0];
+    if (pendingReports.length > 0 && firstReport && firstReport.insurerId !== selectedInsurer) {
+      showAlert(
+        `Todos los reportes deben ser de la misma aseguradora.\n\nYa tiene reportes de: ${firstReport.insurerName}\n\nNo puede agregar reportes de otra aseguradora.`,
+        'Aseguradora diferente'
+      );
+      return;
+    }
+    
     const insurerName = selectedInsurer === 'ASSA_CODIGOS' 
       ? 'Códigos ASSA'
       : insurers.find(i => i.id === selectedInsurer)?.name || 'Desconocido';
@@ -126,10 +136,9 @@ export default function ImportForm({ insurers, draftFortnightId, onImport }: Pro
       amount: totalAmount || '0'
     }]);
     
-    // Limpiar campos para agregar otro reporte
+    // Limpiar solo el archivo, mantener aseguradora fija
     setFile(null);
-    setSelectedInsurer('');
-    setIsLifeInsurance(false);
+    // NO limpiar selectedInsurer - debe mantenerse fijo para todos los reportes del batch
     // NO limpiar totalAmount ni selectedOption (se mantienen para toda la operación)
   };
 
@@ -138,7 +147,7 @@ export default function ImportForm({ insurers, draftFortnightId, onImport }: Pro
     setPendingReports(prev => prev.filter((_, i) => i !== index));
   };
 
-  // Importar todos los reportes del batch
+  // Importar todos los reportes del batch CONSOLIDADOS EN UN SOLO IMPORT
   const handleImportAll = async () => {
     if (pendingReports.length === 0) {
       await showAlert('No hay reportes agregados para importar', 'Sin reportes');
@@ -214,65 +223,62 @@ export default function ImportForm({ insurers, draftFortnightId, onImport }: Pro
     setUploading(true);
     
     try {
-      console.log(`=== BATCH IMPORT: ${pendingReports.length} reportes ===`);
+      console.log(`=== BATCH IMPORT CONSOLIDADO: ${pendingReports.length} reportes → 1 solo import ===`);
       
-      // Procesar cada reporte secuencialmente
-      let allSuccess = true;
-      const results = [];
-      
-      for (let i = 0; i < pendingReports.length; i++) {
-        const report = pendingReports[i];
-        if (!report) continue;
-        
-        console.log(`Procesando reporte ${i + 1}/${pendingReports.length}: ${report.insurerName}`);
-        
-        const formData = new FormData();
-        formData.append('file', report.file);
-        formData.append('insurer_id', report.insurerId);
-        formData.append('total_amount', report.amount || totalAmount);
-        formData.append('fortnight_id', draftFortnightId);
-        formData.append('is_life_insurance', String(report.isLife));
-        
-        // Solo vincular transferencia/grupo en el ÚLTIMO reporte
-        if (i === pendingReports.length - 1 && selectedOption) {
-          const option = availableOptions.find(o => o.id === selectedOption);
-          if (option) {
-            // Auto-asignar aseguradora si no tiene
-            if (!option.hasInsurer && report.insurerId) {
-              console.log('[BATCH] Auto-asignando aseguradora a', option.type, selectedOption);
-              if (option.type === 'group') {
-                await actionAutoAssignInsurerToGroup(option.id, report.insurerId);
-              } else {
-                await actionAutoAssignInsurerToTransfer(option.id, report.insurerId);
-              }
-            }
-            
-            // Vincular
-            if (option.type === 'group') {
-              formData.append('bank_group_ids', JSON.stringify([option.id]));
-            } else {
-              formData.append('bank_transfer_id', option.id);
-            }
+      // Auto-asignar aseguradora a transferencia/grupo si es necesario
+      if (selectedOption) {
+        const option = availableOptions.find(o => o.id === selectedOption);
+        if (option && !option.hasInsurer && pendingReports[0]) {
+          console.log('[BATCH] Auto-asignando aseguradora a', option.type, selectedOption);
+          if (option.type === 'group') {
+            await actionAutoAssignInsurerToGroup(option.id, pendingReports[0].insurerId);
+          } else {
+            await actionAutoAssignInsurerToTransfer(option.id, pendingReports[0].insurerId);
           }
-        }
-        
-        // Get invert_negatives setting
-        const invertNegatives = localStorage.getItem(`invert_negatives_${report.insurerId}`) === 'true';
-        formData.append('invert_negatives', String(invertNegatives));
-        
-        const result = await actionUploadImport(formData);
-        results.push(result);
-        
-        if (!result.ok) {
-          allSuccess = false;
-          console.error(`Error en reporte ${i + 1}:`, result.error);
-          await showAlert(`Error en reporte ${i + 1} (${report.insurerName}): ${result.error}`, 'Error parcial', 'error');
-          break;
         }
       }
       
-      if (allSuccess) {
-        await success(`✅ ${pendingReports.length} reportes importados exitosamente`, 'Importación Batch Completa');
+      // Preparar datos para nueva función batch consolidada
+      const filesData = pendingReports.map(report => ({
+        file: report.file,
+        insurerId: report.insurerId,
+        isLife: report.isLife
+      }));
+      
+      // Obtener bank_transfer_id o bank_group_ids
+      let bankTransferId: string | null = null;
+      let bankGroupIds: string[] = [];
+      
+      if (selectedOption) {
+        const option = availableOptions.find(o => o.id === selectedOption);
+        if (option) {
+          if (option.type === 'group') {
+            bankGroupIds = [option.id];
+          } else {
+            bankTransferId = option.id;
+          }
+        }
+      }
+      
+      // NUEVA FUNCIÓN: Importa todos los archivos consolidados en UN SOLO comm_imports
+      const { actionUploadMultipleImports } = await import('@/app/(app)/commissions/actions');
+      const result = await actionUploadMultipleImports(
+        filesData,
+        draftFortnightId,
+        totalAmount,
+        bankTransferId,
+        bankGroupIds
+      );
+      
+      if (result.ok) {
+        await success(
+          `✅ ${pendingReports.length} reportes consolidados exitosamente\n\n` +
+          `Total filas: ${result.data?.total_rows || 0}\n` +
+          `Identificadas: ${result.data?.identified || 0}\n` +
+          `Sin identificar: ${result.data?.unidentified || 0}`,
+          'Importación Consolidada Completa'
+        );
+        
         // Limpiar todo
         setPendingReports([]);
         setFile(null);
@@ -281,10 +287,12 @@ export default function ImportForm({ insurers, draftFortnightId, onImport }: Pro
         setIsLifeInsurance(false);
         setSelectedOption('');
         
-        // Recargar opciones bancarias (usa función centralizada)
+        // Recargar opciones bancarias
         await loadBankOptions();
         
         onImport();
+      } else {
+        await showAlert(`Error en importación consolidada: ${result.error}`, 'Error', 'error');
       }
     } catch (err) {
       console.error('Batch import error:', err);
@@ -486,7 +494,15 @@ export default function ImportForm({ insurers, draftFortnightId, onImport }: Pro
       const result = await actionUploadImport(formData);
       
       if (result.ok) {
-        await success('Importación exitosa', 'Éxito');
+        // Modal unificado con estadísticas detalladas
+        const data = result.data as any;
+        await success(
+          `✅ Reporte importado exitosamente\n\n` +
+          `Total clientes extraídos: ${data?.total_rows || 0}\n` +
+          `Identificados: ${data?.identified || 0}\n` +
+          `Sin identificar: ${data?.unidentified || 0}`,
+          'Importación Completa'
+        );
         setFile(null);
         setSelectedInsurer('');
         setTotalAmount('');
@@ -745,7 +761,13 @@ export default function ImportForm({ insurers, draftFortnightId, onImport }: Pro
             disabled={uploading || (pendingReports.length === 0 && (!file || !selectedInsurer))} 
             className="flex-1 btn-primary"
           >
-            {uploading ? 'Importando...' : pendingReports.length > 0 ? `Importar ${pendingReports.length} Reporte${pendingReports.length > 1 ? 's' : ''}` : 'Importar Archivo'}
+            {uploading 
+              ? 'Importando...' 
+              : pendingReports.length > 1 
+                ? `Importar ${pendingReports.length} Reportes Consolidados` 
+                : pendingReports.length === 1 
+                  ? 'Importar 1 Reporte' 
+                  : 'Importar Archivo'}
           </button>
         </div>
 

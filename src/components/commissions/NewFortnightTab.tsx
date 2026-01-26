@@ -84,6 +84,7 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
         id,
         created_at,
         total_amount,
+        is_life_insurance,
         insurers (
           name
         )
@@ -102,25 +103,59 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
       return;
     }
 
+    // Obtener broker_id de LISSA (contacto@lideresenseguros.com)
+    const { data: lissaBroker } = await supabaseClient()
+      .from('brokers')
+      .select('id')
+      .eq('email', 'contacto@lideresenseguros.com')
+      .single();
+    
+    const lissaBrokerId = lissaBroker?.id || null;
+
     // Get items count and commission totals for each import
     const reportsWithDetails = await Promise.all(
       imports.map(async (imp: any) => {
         const { data: items } = await supabaseClient()
           .from('comm_items')
-          .select('id, gross_amount, broker_id, policy_number')
+          .select('id, gross_amount, broker_id, policy_number, insured_name')
           .eq('import_id', imp.id);
         
-        // Calculate broker commissions (items with broker_id assigned)
+        console.log(`[${imp.insurers?.name}] Import ${imp.id}:`);
+        console.log(`  📦 Total items en comm_items: ${items?.length || 0}`);
+        console.log(`  💰 Total Reporte (total_amount): $${imp.total_amount}`);
+        
+        // DEBUG: Detectar duplicados por policy_number
+        const policyCount = new Map<string, number>();
+        (items || []).forEach(item => {
+          const count = policyCount.get(item.policy_number) || 0;
+          policyCount.set(item.policy_number, count + 1);
+        });
+        const duplicates = Array.from(policyCount.entries()).filter(([_, count]) => count > 1);
+        if (duplicates.length > 0) {
+          console.log(`  🚨 DUPLICADOS en comm_items para import ${imp.id}:`);
+          duplicates.forEach(([policy, count]) => {
+            console.log(`    - Póliza ${policy}: ${count} veces`);
+            const dupeItems = (items || []).filter(i => i.policy_number === policy);
+            dupeItems.forEach(di => {
+              console.log(`      → ID: ${di.id}, Broker: ${di.broker_id}, Monto: $${di.gross_amount}, Cliente: ${di.insured_name}`);
+            });
+          });
+        }
+        
+        // Calculate broker commissions (items with broker_id assigned, EXCLUIR LISSA)
         const brokerCommissions = (items || [])
-          .filter(item => item.broker_id !== null)
+          .filter(item => item.broker_id !== null && item.broker_id !== lissaBrokerId)
           .reduce((sum, item) => sum + (Number(item.gross_amount) || 0), 0);
+        
+        console.log(`  💵 Suma broker_commissions: $${brokerCommissions.toFixed(2)}`);
+        console.log(`  🏢 Diferencia (Oficina): $${(imp.total_amount - brokerCommissions).toFixed(2)}`);
         
         // Detectar si es un reporte de Códigos ASSA (cuando todos los items tienen códigos PJ750-xxx)
         const isAssaCodigos = (items || []).length > 0 && (items || []).every(item => 
           item.policy_number?.startsWith('PJ750-') || item.policy_number === 'PJ750'
         );
         
-        return {
+        const reportData = {
           id: imp.id,
           insurer_name: imp.insurers?.name || 'Desconocido',
           total_amount: imp.total_amount || 0,
@@ -128,7 +163,13 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
           broker_commissions: brokerCommissions,
           created_at: imp.created_at,
           is_assa_codigos: isAssaCodigos,
+          is_life_insurance: imp.is_life_insurance || false,
         };
+        
+        console.log(`[${reportData.insurer_name}] is_life_insurance desde BD:`, imp.is_life_insurance, '| en objeto:', reportData.is_life_insurance);
+        
+        return reportData;
+
       })
     );
 
@@ -259,6 +300,15 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
       return;
     }
     
+    // 0. Obtener broker_id de LISSA
+    const { data: lissaBroker } = await supabaseClient()
+      .from('brokers')
+      .select('id')
+      .eq('email', 'contacto@lideresenseguros.com')
+      .single();
+    
+    const lissaBrokerId = lissaBroker?.id || null;
+    
     // 1. Obtener imports de esta quincena
     const { data: imports } = await supabaseClient()
       .from('comm_imports')
@@ -286,9 +336,15 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
       return;
     }
     
-    // 3. Agrupar por broker
+    // 3. Agrupar por broker (EXCLUIR LISSA)
     const brokerGroups = items.reduce((acc, item) => {
       const brokerId = item.broker_id!;
+      
+      // Excluir LISSA
+      if (brokerId === lissaBrokerId) {
+        return acc;
+      }
+      
       if (!acc[brokerId]) {
         acc[brokerId] = 0;
       }
@@ -796,12 +852,18 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
         <CardContent>
           <BrokerTotals 
             draftFortnightId={draftFortnight.id}
+            fortnightLabel={formatFortnightPeriod(draftFortnight.period_start, draftFortnight.period_end)}
+            totalImported={officeTotal.totalImported}
             brokerTotals={brokerTotalsData}
             onManageAdvances={(brokerId: string) => {
               setSelectedBroker({ id: brokerId, name: 'Corredor' });
               setIsModalOpen(true);
             }}
-            onTotalNetChange={(totalNet) => setTotalNetToPay(totalNet)}
+            onRetentionChange={() => {
+              loadBrokerTotals();
+              forceRecalculate();
+            }}
+            onTotalNetChange={setTotalNetToPay}
             recalculationKey={recalculationKey}
           />
         </CardContent>

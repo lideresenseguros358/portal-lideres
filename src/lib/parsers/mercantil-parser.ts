@@ -55,21 +55,26 @@ export async function parseMercantilPDF(fileBuffer: ArrayBuffer): Promise<Mercan
     console.log(`[MERCANTIL PDF] Procesando póliza: ${policyNumber}`);
     console.log(`[MERCANTIL PDF] Línea: ${line.substring(0, 200)}`);
     
-    // 2) Extraer comisión y nombre (formato: "XX.YYZZ.ZZ###.##NOMBRE DEL CLIENTERecibos")
-    // La comisión es el primer XX.YY que aparece antes del nombre
-    // El nombre son las letras mayúsculas que aparecen antes de "Recibos Cobrados" o "USD"
+    // 2) Extraer comisión y nombre
+    // Formato común: "26.98 20.00 134.90 ERIC ABDEL CHICHACO Recibos Cobrados"
+    // O pegado: "26.9820.00134.90ERIC ABDEL CHICHACO"
+    // La comisión CORRECTA es el primer número (más a la izquierda después de la póliza)
     
-    // Buscar la última ocurrencia de dígitos pegados antes del nombre
-    // Formato: "26.9820.00134.90ERIC ABDEL CHICHACO"
-    const dataMatch = line.match(/(\d+\.\d{2})\d+\.\d{2}\d+\.\d{2}([A-ZÑÁÉÍÓÚÜ][A-ZÑÁÉÍÓÚÜ\s]{4,}?)(?:Recibos|USD)/);
+    // ESTRATEGIA: Buscar todos los números decimales antes del nombre del cliente
+    // y tomar el PRIMERO como la comisión
+    const numbersBeforeName = line.match(/Factura\s+\d+.*?(\d+\.\d{2})\s*(\d+\.\d{2})?\s*(\d+\.\d{2})?\s*([A-ZÑÁÉÍÓÚÜ][A-ZÑÁÉÍÓÚÜ\s]{4,}?)(?:Recibos|USD|Bs)/);
     
-    if (dataMatch && dataMatch[1] && dataMatch[2]) {
-      const commission = parseFloat(dataMatch[1]);
-      const clientName = dataMatch[2].trim();
+    if (numbersBeforeName && numbersBeforeName[1]) {
+      // El primer grupo capturado es la comisión
+      const commission = parseFloat(numbersBeforeName[1]!);
+      const clientName = numbersBeforeName[4]?.trim() || '';
+      
+      console.log(`[MERCANTIL PDF] 🔍 Números encontrados: ${numbersBeforeName[1]}, ${numbersBeforeName[2]}, ${numbersBeforeName[3]}`);
+      console.log(`[MERCANTIL PDF] 🔍 Nombre extraído: "${clientName}"`);
       
       // Validar
-      if (commission > 0 && clientName.length > 3 && !clientName.includes('TOTAL')) {
-        console.log(`[MERCANTIL PDF] ✅ Extraído: Póliza=${policyNumber}, Cliente=${clientName}, Comisión=${commission}`);
+      if (commission > 0 && clientName.length > 3 && !clientName.includes('TOTAL') && !clientName.includes('DESCUENTO')) {
+        console.log(`[MERCANTIL PDF] ✅ VÁLIDO - Póliza=${policyNumber}, Cliente="${clientName}", Comisión=$${commission}`);
         rows.push({
           policy_number: policyNumber,
           client_name: clientName,
@@ -79,7 +84,7 @@ export async function parseMercantilPDF(fileBuffer: ArrayBuffer): Promise<Mercan
         console.log(`[MERCANTIL PDF] ⏭️ Rechazado (validación): ${clientName} - ${commission}`);
       }
     } else {
-      console.log(`[MERCANTIL PDF] ⏭️ No se pudo extraer comisión/nombre`);
+      console.log(`[MERCANTIL PDF] ⏭️ No se pudo extraer comisión/nombre de la línea`);
     }
   }
   
@@ -178,5 +183,23 @@ export function parseMercantilExcel(fileBuffer: ArrayBuffer): MercantilRow[] {
   }
   
   console.log('[MERCANTIL PARSER] Total extraído:', rows.length, 'filas');
+  
+  // DEBUG: Calcular suma total de comisiones
+  const totalCommissions = rows.reduce((sum, row) => sum + row.gross_amount, 0);
+  console.log(`[MERCANTIL PARSER] 💰 Suma total de comisiones: $${totalCommissions.toFixed(2)}`);
+  
+  // DEBUG: Detectar duplicados por póliza
+  const policyCount = new Map<string, number>();
+  rows.forEach(row => {
+    policyCount.set(row.policy_number, (policyCount.get(row.policy_number) || 0) + 1);
+  });
+  const duplicates = Array.from(policyCount.entries()).filter(([_, count]) => count > 1);
+  if (duplicates.length > 0) {
+    console.log(`[MERCANTIL PARSER] 🚨 DUPLICADOS DETECTADOS:`);
+    duplicates.forEach(([policy, count]) => {
+      console.log(`[MERCANTIL PARSER]   - Póliza ${policy}: ${count} veces`);
+    });
+  }
+  
   return rows;
 }
