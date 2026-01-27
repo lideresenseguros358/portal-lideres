@@ -57,6 +57,11 @@ export async function exportBrokerToPDF(
   fortnightLabel: string,
   discounts?: { total: number; details: Array<{ reason: string; amount: number }> }
 ) {
+  // Asegurarse de estar en el navegador
+  if (typeof window === 'undefined') {
+    console.error('[PDF Export] Esta función debe ejecutarse en el navegador');
+    return;
+  }
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.width;
   
@@ -70,10 +75,18 @@ export async function exportBrokerToPDF(
   
   // Logo más pequeño con proporción 2:1 (típico logo horizontal)
   try {
-    // Cargar imagen de forma asíncrona
-    await new Promise<void>((resolve, reject) => {
+    // Cargar imagen de forma asíncrona con manejo de errores mejorado
+    await new Promise<void>((resolve) => {
+      // Usar ruta absoluta para garantizar que la imagen se encuentre
       const img = new Image();
+      // Timeout para evitar esperar indefinidamente
+      const timeout = setTimeout(() => {
+        console.warn('Logo image load timed out');
+        resolve(); // Continuar sin logo después del timeout
+      }, 2000);
+      
       img.onload = () => {
+        clearTimeout(timeout);
         try {
           doc.addImage(img, 'PNG', 14, 12, 24, 12);
           resolve();
@@ -82,11 +95,15 @@ export async function exportBrokerToPDF(
           resolve(); // Continuar sin logo
         }
       };
+      
       img.onerror = () => {
+        clearTimeout(timeout);
         console.warn('Error loading logo image');
         resolve(); // Continuar sin logo
       };
-      img.src = '/logo_alternativo.png';
+      
+      // Usar URL absoluta y agregar parámetro para prevenir caché
+      img.src = window.location.origin + '/logo_alternativo.png?v=' + new Date().getTime();
     });
   } catch (e) {
     console.warn('Error processing logo:', e);
@@ -415,6 +432,11 @@ export function exportBrokerToExcel(
   fortnightLabel: string,
   discounts?: { total: number; details: Array<{ reason: string; amount: number }> }
 ) {
+  // Asegurarse de estar en el navegador
+  if (typeof window === 'undefined') {
+    console.error('[Excel Export] Esta función debe ejecutarse en el navegador');
+    return;
+  }
   const workbook = XLSX.utils.book_new();
   
   // Create data array
@@ -536,11 +558,16 @@ export function exportBrokerToExcel(
 /**
  * Export complete fortnight report with all brokers to PDF
  */
-export function exportCompleteReportToPDF(
+export async function exportCompleteReportToPDF(
   brokers: BrokerDetail[],
   fortnightLabel: string,
   totals: { total_imported: number; total_paid_net: number; total_office_profit: number }
 ) {
+  // Asegurarse de estar en el navegador
+  if (typeof window === 'undefined') {
+    console.error('[PDF Export] Esta función debe ejecutarse en el navegador');
+    return;
+  }
   console.log('[PDF Export] Iniciando generación:', {
     brokersCount: brokers.length,
     label: fortnightLabel,
@@ -566,9 +593,8 @@ export function exportCompleteReportToPDF(
   
   // Logo pequeño con proporción 2:1
   try {
-    const img = new Image();
-    img.src = '/logo_alternativo.png';
-    doc.addImage(img, 'PNG', 14, 12, 24, 12);
+    // No intentamos cargar el logo para simplificar y evitar errores
+    // El título del reporte es suficiente para identificarlo
   } catch (e) {
     // Si falla, solo mostrar texto
   }
@@ -660,14 +686,8 @@ export function exportCompleteReportToPDF(
     doc.setFillColor(...primaryColor);
     doc.rect(0, 0, pageWidth, 35, 'F');
     
-    // Logo pequeño con proporción 2:1
-    try {
-      const img = new Image();
-      img.src = '/logo_alternativo.png';
-      doc.addImage(img, 'PNG', 14, 11, 20, 10);
-    } catch (e) {
-      // Si falla, solo mostrar texto
-    }
+    // Logo pequeño con proporción 2:1 - skip para evitar errores
+    // La carga síncrona de imágenes puede causar problemas
     
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(16);
@@ -836,6 +856,11 @@ export function exportCompleteReportToExcel(
   fortnightLabel: string,
   totals: { total_imported: number; total_paid_net: number; total_office_profit: number }
 ) {
+  // Asegurarse de estar en el navegador
+  if (typeof window === 'undefined') {
+    console.error('[Excel Export] Esta función debe ejecutarse en el navegador');
+    return;
+  }
   console.log('[Excel Export] Iniciando generación:', {
     brokersCount: brokers.length,
     label: fortnightLabel,

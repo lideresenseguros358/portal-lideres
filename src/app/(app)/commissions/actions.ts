@@ -3683,7 +3683,7 @@ export async function actionGetClosedFortnights(year: number, month: number, for
       }
 
       // Filtrar brokers inactivos y LISSA para calcular totales
-      const validBrokers = brokerTotals.filter(bt => {
+      const validBrokers = brokerTotals.filter((bt: any) => {
         if (bt.broker_id === lissaBrokerId) {
           console.log('[actionGetClosedFortnights] Excluyendo LISSA del total:', bt.brokers?.name || 'Sin nombre');
           return false;

@@ -118,7 +118,7 @@ export default function FortnightDetailView({ fortnightId, fortnightData }: Fort
         const brokersData = data.brokers || [];
         
         // Filtrar LISSA de los brokers si está presente
-        const lissaBroker = brokersData.find(b => b.broker_email === LISSA_EMAIL);
+        const lissaBroker = brokersData.find((b: any) => b.broker_email === LISSA_EMAIL);
         if (lissaBroker) {
           console.log('Encontrado LISSA broker en los datos:', lissaBroker.broker_name, 'con monto:', lissaBroker.gross_amount);
         }

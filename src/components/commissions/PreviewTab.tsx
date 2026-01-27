@@ -208,7 +208,7 @@ export function PreviewTab({ role, brokerId }: Props) {
 
       try {
         if (format === 'pdf') {
-          exportCompleteReportToPDF(brokersWithData, fortnightLabel, totals);
+          await exportCompleteReportToPDF(brokersWithData, fortnightLabel, totals);
         } else {
           exportCompleteReportToExcel(brokersWithData, fortnightLabel, totals);
         }
