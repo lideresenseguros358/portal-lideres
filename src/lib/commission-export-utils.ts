@@ -187,8 +187,10 @@ export async function exportBrokerToPDF(
     yPos += 5;
   }
 
-  // Insurers and Policies
-  broker.insurers.forEach((insurer, insurerIdx) => {
+  // Insurers and Policies (ordenados alfabéticamente)
+  [...broker.insurers]
+    .sort((a, b) => a.insurer_name.localeCompare(b.insurer_name))
+    .forEach((insurer, insurerIdx) => {
     // Check if we need a new page
     if (yPos > 250) {
       doc.addPage();
@@ -211,8 +213,10 @@ export async function exportBrokerToPDF(
     
     yPos += 7;
 
-    // Policies table
-    const tableData = insurer.policies.map(policy => [
+    // Policies table (ordenados alfabéticamente por cliente)
+    const tableData = [...insurer.policies]
+      .sort((a, b) => a.insured_name.localeCompare(b.insured_name))
+      .map(policy => [
       policy.policy_number,
       policy.insured_name.substring(0, 35),
       formatCurrency(policy.gross_amount),
@@ -447,12 +451,16 @@ export function exportBrokerToExcel(
     });
   }
 
-  // Insurers and policies
-  broker.insurers.forEach((insurer) => {
+  // Insurers and policies (ordenados alfabéticamente)
+  [...broker.insurers]
+    .sort((a, b) => a.insurer_name.localeCompare(b.insurer_name))
+    .forEach((insurer) => {
     data.push([insurer.insurer_name, '', '', '', formatCurrency(insurer.total_gross)]);
     data.push(['Póliza', 'Cliente', 'Prima', '%', 'Comisión']);
     
-    insurer.policies.forEach(policy => {
+    [...insurer.policies]
+      .sort((a, b) => a.insured_name.localeCompare(b.insured_name))
+      .forEach(policy => {
       data.push([
         policy.policy_number,
         policy.insured_name,
@@ -672,8 +680,10 @@ export function exportCompleteReportToPDF(
 
     yPos = 45;
 
-    // Insurers and policies for this broker
-    broker.insurers.forEach((insurer) => {
+    // Insurers and policies for this broker (ordenados alfabéticamente)
+    [...broker.insurers]
+      .sort((a, b) => a.insurer_name.localeCompare(b.insurer_name))
+      .forEach((insurer) => {
       if (yPos > 250) {
         doc.addPage();
         yPos = 20;
@@ -694,7 +704,9 @@ export function exportCompleteReportToPDF(
       
       yPos += 7;
 
-      const tableData = insurer.policies.map(policy => [
+      const tableData = [...insurer.policies]
+        .sort((a, b) => a.insured_name.localeCompare(b.insured_name))
+        .map(policy => [
         policy.policy_number,
         policy.insured_name.substring(0, 30),
         formatCurrency(policy.net_amount),
@@ -888,12 +900,16 @@ export function exportCompleteReportToExcel(
     brokerData.push(['Porcentaje:', `${(broker.percent_default * 100).toFixed(0)}%`]);
     brokerData.push([]);
 
-    broker.insurers.forEach((insurer: any) => {
+    [...broker.insurers]
+      .sort((a: any, b: any) => a.insurer_name.localeCompare(b.insurer_name))
+      .forEach((insurer: any) => {
       // Total aseguradora = suma de comisiones calculadas (neto de cada cliente)
       brokerData.push([insurer.insurer_name, '', '', '', formatCurrency(insurer.total_gross)]);
       brokerData.push(['Póliza', 'Cliente', 'Bruto', '%', 'Comisión']);
       
-      insurer.policies.forEach((policy: any) => {
+      [...insurer.policies]
+        .sort((a: any, b: any) => a.insured_name.localeCompare(b.insured_name))
+        .forEach((policy: any) => {
         brokerData.push([
           policy.policy_number,
           policy.insured_name,

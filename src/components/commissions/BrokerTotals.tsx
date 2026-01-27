@@ -439,7 +439,9 @@ export default function BrokerTotals({ draftFortnightId, fortnightLabel = 'Quinc
               {/* Aseguradoras expandidas */}
               {expandedBrokers.has(brokerId) && (
                 <div className="border-t border-gray-200 bg-white">
-                  {Object.entries(brokerData.insurers).map(([insurerId, insurerData]) => (
+                  {Object.entries(brokerData.insurers)
+                    .sort(([, a], [, b]) => a.insurer_name.localeCompare(b.insurer_name))
+                    .map(([insurerId, insurerData]) => (
                     <div key={insurerId} className="border-b border-gray-100 last:border-b-0">
                       <div className="p-3 flex items-center justify-between">
                         <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -459,7 +461,9 @@ export default function BrokerTotals({ draftFortnightId, fortnightLabel = 'Quinc
                       </div>
                       {expandedInsurers.has(insurerId) && (
                         <div className="px-3 pb-3 space-y-1">
-                          {insurerData.clients.map((client, index) => (
+                          {[...insurerData.clients]
+                            .sort((a, b) => a.name.localeCompare(b.name))
+                            .map((client, index) => (
                             <div key={index} className="flex items-center justify-between text-xs bg-gray-50 p-2 rounded">
                               <span className="text-gray-600 flex-1 min-w-0 truncate">
                                 <span className="inline-block w-1 h-1 bg-gray-400 rounded-full mr-2"></span>
@@ -583,7 +587,9 @@ export default function BrokerTotals({ draftFortnightId, fortnightLabel = 'Quinc
                   </TableCell>
                 </TableRow>
 
-                {expandedBrokers.has(brokerId) && Object.entries(brokerData.insurers).map(([insurerId, insurerData]) => (
+                {expandedBrokers.has(brokerId) && Object.entries(brokerData.insurers)
+                  .sort(([, a], [, b]) => a.insurer_name.localeCompare(b.insurer_name))
+                  .map(([insurerId, insurerData]) => (
                   <>
                     <TableRow key={insurerId} className="bg-white hover:bg-gray-50 transition-colors">
                       <TableCell className="py-3"></TableCell>
@@ -606,7 +612,9 @@ export default function BrokerTotals({ draftFortnightId, fortnightLabel = 'Quinc
                       <TableCell className="py-3"></TableCell>
                     </TableRow>
 
-                    {expandedInsurers.has(insurerId) && insurerData.clients.map((client, index) => (
+                    {expandedInsurers.has(insurerId) && [...insurerData.clients]
+                      .sort((a, b) => a.name.localeCompare(b.name))
+                      .map((client, index) => (
                       <TableRow key={`${insurerId}-${index}`} className="bg-gray-50/50 hover:bg-gray-100/50 transition-colors">
                         <TableCell className="py-2"></TableCell>
                         <TableCell className="pl-20 text-sm text-gray-600 py-2">
