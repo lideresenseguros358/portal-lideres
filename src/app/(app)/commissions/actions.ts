@@ -659,6 +659,62 @@ export async function actionUploadImport(formData: FormData) {
         matchType: 'none' as 'policy' | 'client' | 'none'
       };
 
+      // UNIVIVIR: match ESTRICTO por el último segmento (3er input)
+      // Ejemplo: 01-009-2735 => el número real a matchear es 2735
+      // Si hay múltiples candidatos para ese término, NO se elige ninguno (va a sin identificar)
+      if (insurerSlug === 'univivir') {
+        const parts = String(rawPolicyNumber).split('-').map(p => p.trim()).filter(Boolean);
+        const term = parts.length > 0 ? parts[parts.length - 1] : String(rawPolicyNumber).trim();
+
+        // 1) Exact match directo (si el reporte ya trae algo igual a BD)
+        const exactUnivivir = policyMap.get(String(rawPolicyNumber).trim());
+        if (exactUnivivir) {
+          return {
+            matchedPolicyNumber: String(rawPolicyNumber).trim(),
+            policyData: exactUnivivir,
+            clientData: null,
+            matchType: 'policy' as const,
+          };
+        }
+
+        // 2) Exact match por término (póliza guardada solo como 2735)
+        const exactTerm = policyMap.get(String(term));
+        if (exactTerm) {
+          return {
+            matchedPolicyNumber: String(term),
+            policyData: exactTerm,
+            clientData: null,
+            matchType: 'policy' as const,
+          };
+        }
+
+        // 3) Match por segmento: buscar pólizas cuyo último segmento sea EXACTAMENTE term
+        const candidates = (existingPolicies || []).filter((p: any) => {
+          const pn = String(p.policy_number || '');
+          const pnParts = pn.split('-').map(x => x.trim()).filter(Boolean);
+          const last = pnParts.length > 0 ? pnParts[pnParts.length - 1] : pn;
+          return last === String(term);
+        });
+
+        if (candidates.length === 1) {
+          const pn = String(candidates[0].policy_number);
+          return {
+            matchedPolicyNumber: pn,
+            policyData: policyMap.get(pn) || null,
+            clientData: null,
+            matchType: 'policy' as const,
+          };
+        }
+
+        // 0 o múltiples => NO MATCH (no se improvisa)
+        return {
+          matchedPolicyNumber: String(term),
+          policyData: null,
+          clientData: null,
+          matchType: 'none' as const,
+        };
+      }
+
       // NIVEL 1: Match por número de póliza
       // 1A) Exact match
       const exact = policyMap.get(rawPolicyNumber);
@@ -683,20 +739,8 @@ export async function actionUploadImport(formData: FormData) {
               matchType: 'policy' as const
             };
           }
-          if (candidates.length > 1) {
-            // Preferir coincidencia exacta en algún segmento del número (cuando esté separado por '-')
-            const preferred = candidates.find((p: any) => {
-              const parts = String(p.policy_number || '').split('-');
-              return parts.includes(String(term));
-            }) || candidates[0];
-            const pn = preferred ? String(preferred.policy_number) : null;
-            return { 
-              matchedPolicyNumber: pn, 
-              policyData: pn ? (policyMap.get(pn) || null) : null,
-              clientData: null,
-              matchType: 'policy' as const
-            };
-          }
+          // IMPORTANTE: Si hay múltiples candidatos, NO seleccionar ninguno.
+          // Esto evita "inventar" una póliza cuando el match no es único.
         }
       }
 

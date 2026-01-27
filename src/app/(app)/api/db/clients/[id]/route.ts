@@ -20,6 +20,13 @@ export async function PUT(
     const body = await request.json();
     const { id } = await params;
 
+    // Determinar rol del usuario (para permitir cambios de broker solo a Master)
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+
     // Validar datos
     if (!body.name || body.name.trim() === '') {
       return NextResponse.json(
@@ -91,8 +98,19 @@ export async function PUT(
       // birth_date: mantener como string YYYY-MM-DD sin conversión de zona horaria
       birth_date: body.birth_date?.trim() || null,
       active: body.active ?? true,
-      broker_id: body.broker_id || null, // ← CRÍTICO: guardar cambio de broker
     };
+
+    // CRÍTICO: Solo actualizar broker_id si viene explícitamente y el usuario es Master
+    // Esto evita que un update normal (o con datos antiguos) revierta el broker asignado.
+    if (Object.prototype.hasOwnProperty.call(body, 'broker_id')) {
+      if (profile?.role !== 'master') {
+        return NextResponse.json(
+          { error: 'Solo Master puede cambiar el corredor asignado' },
+          { status: 403 }
+        );
+      }
+      (updatePayload as any).broker_id = body.broker_id || null;
+    }
 
     // Actualizar cliente
     const { data, error } = await supabase
