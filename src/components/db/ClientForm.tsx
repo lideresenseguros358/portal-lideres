@@ -117,7 +117,9 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
     }
   }, [editPolicyId, client]);
 
-  // Cargar lista de brokers y rol del usuario
+  // Cargar lista de brokers y rol del usuario - SOLO AL MONTAR
+  // IMPORTANTE: No usar client?.broker_id como dependencia porque causaba que
+  // se sobrescribiera el formData.broker_id cuando el componente se re-renderizaba
   useEffect(() => {
     const loadBrokersAndRole = async () => {
       try {
@@ -145,8 +147,9 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
           console.log('[ClientForm] Broker ID del cliente:', client?.broker_id);
           setBrokers(brokersData || []);
           
-          // Establecer el broker_id inicial del cliente
-          if (client?.broker_id) {
+          // Establecer el broker_id inicial del cliente SOLO SI NO SE HA ESTABLECIDO YA
+          // Esto evita sobrescribir el valor si el usuario ya lo cambió
+          if (client?.broker_id && !previousBrokerId) {
             setFormData(prev => ({ ...prev, broker_id: client.broker_id }));
             setPreviousBrokerId(client.broker_id);
           }
@@ -157,7 +160,8 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
     };
 
     loadBrokersAndRole();
-  }, [client?.broker_id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [client?.id]); // Solo ejecutar cuando cambie el ID del cliente (nuevo cliente abierto)
 
   // Detectar cambio de corredor y verificar comisiones
   useEffect(() => {
