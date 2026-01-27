@@ -31,7 +31,12 @@ const formatCurrency = (amount: number) => {
 };
 
 const capitalizeText = (text: string) => {
-  return text.charAt(0).toUpperCase() + text.slice(1).toLowerCase();
+  return String(text || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ');
 };
 
 export function BrokerDetailSection({ fortnightId, fortnightLabel, brokers, role }: Props) {

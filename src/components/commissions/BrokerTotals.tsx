@@ -46,6 +46,15 @@ interface GroupedData {
   };
 }
 
+const toTitleCaseName = (value: string) => {
+  return String(value || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ');
+};
+
 interface Props {
   draftFortnightId: string;
   fortnightLabel?: string;
@@ -323,7 +332,7 @@ export default function BrokerTotals({ draftFortnightId, fortnightLabel = 'Quinc
       {/* Vista Mobile - Cards */}
       <div className="block lg:hidden space-y-3">
         {Object.entries(groupedData)
-          .sort(([, a], [, b]) => a.broker_name.localeCompare(b.broker_name))
+          .sort(([, a], [, b]) => toTitleCaseName(a.broker_name).localeCompare(toTitleCaseName(b.broker_name)))
           .map(([brokerId, brokerData]) => (
             <div key={brokerId} className={`rounded-lg border-l-4 overflow-hidden ${
               brokerData.is_retained 
@@ -343,7 +352,7 @@ export default function BrokerTotals({ draftFortnightId, fortnightLabel = 'Quinc
                       >
                         {expandedBrokers.has(brokerId) ? <FaChevronDown size={14} /> : <FaChevronRight size={14} />}
                       </Button>
-                      <h3 className="font-bold text-[#010139] text-sm">{brokerData.broker_name}</h3>
+                      <h3 className="font-bold text-[#010139] text-sm">{toTitleCaseName(brokerData.broker_name)}</h3>
                       {brokerData.is_retained && (
                         <span className="text-xs bg-red-600 text-white px-2 py-0.5 rounded-full font-semibold">RET</span>
                       )}
@@ -486,7 +495,7 @@ export default function BrokerTotals({ draftFortnightId, fortnightLabel = 'Quinc
           </TableHeader>
           <TableBody>
             {Object.entries(groupedData)
-              .sort(([, a], [, b]) => a.broker_name.localeCompare(b.broker_name))
+              .sort(([, a], [, b]) => toTitleCaseName(a.broker_name).localeCompare(toTitleCaseName(b.broker_name)))
               .map(([brokerId, brokerData]) => (
               <>
                 <TableRow key={brokerId} className={`font-semibold transition-colors ${brokerData.is_retained ? 'bg-red-50 hover:bg-red-100 border-l-4 border-red-500' : 'bg-blue-50/50 hover:bg-blue-100/50 border-l-4 border-blue-500'}`}>
@@ -502,7 +511,7 @@ export default function BrokerTotals({ draftFortnightId, fortnightLabel = 'Quinc
                   </TableCell>
                   <TableCell className="font-bold text-[#010139] text-base py-4">
                     <div className="flex items-center gap-2">
-                      <span>{brokerData.broker_name}</span>
+                      <span>{toTitleCaseName(brokerData.broker_name)}</span>
                       {brokerData.is_retained && (
                         <span className="text-xs bg-red-600 text-white px-2.5 py-1 rounded-full font-semibold shadow-sm">RETENIDO</span>
                       )}
