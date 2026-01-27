@@ -185,8 +185,8 @@ export default function BrokerPreviewTab({ brokerId }: Props) {
     return fortnights.filter(fortnight => fortnight.brokers && fortnight.brokers.length > 0);
   }, [fortnights]);
 
-  const loadFortnightDetails = async (fortnightId: string) => {
-    if (fortnightDetails[fortnightId]) return;
+  const loadFortnightDetails = async (fortnightId: string): Promise<BrokerDetail | null> => {
+    if (fortnightDetails[fortnightId]) return fortnightDetails[fortnightId];
     
     setLoadingDetails(prev => ({ ...prev, [fortnightId]: true }));
     try {
@@ -196,13 +196,16 @@ export default function BrokerPreviewTab({ brokerId }: Props) {
       if (data.ok && data.brokers) {
         const myBroker = data.brokers.find((b: any) => b.broker_id === brokerId);
         setFortnightDetails(prev => ({ ...prev, [fortnightId]: myBroker || null }));
+        return myBroker || null;
       } else {
         setFortnightDetails(prev => ({ ...prev, [fortnightId]: null }));
+        return null;
       }
     } catch (error) {
       console.error('Error loading fortnight details:', error);
       setFortnightDetails(prev => ({ ...prev, [fortnightId]: null }));
       toast.error('Error al cargar detalles');
+      return null;
     } finally {
       setLoadingDetails(prev => ({ ...prev, [fortnightId]: false }));
     }
@@ -237,10 +240,16 @@ export default function BrokerPreviewTab({ brokerId }: Props) {
   };
 
   const handleDownload = async (fortnightId: string, fortnightLabel: string, format: 'pdf' | 'xlsx') => {
-    const details = fortnightDetails[fortnightId];
+    // Si no hay detalles cargados, cargarlos primero
+    let details = fortnightDetails[fortnightId];
     if (!details) {
-      toast.error('No hay detalles disponibles para descargar');
-      return;
+      toast.info('Cargando detalles de comisiones...');
+      details = await loadFortnightDetails(fortnightId);
+      
+      if (!details) {
+        toast.error('No se pudieron cargar los detalles de comisiones');
+        return;
+      }
     }
 
     try {
