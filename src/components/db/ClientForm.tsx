@@ -302,15 +302,20 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
 
     try {
       if (client) {
-        const payload = {
+        // Payload base sin broker_id
+        const payload: Record<string, any> = {
           name: normalizeToUpperCase(formData.name),
           national_id: formData.national_id ? formData.national_id.toUpperCase() : null,
           email: formData.email || null,
           phone: formData.phone || null,
           birth_date: formData.birth_date,
           active: formData.active,
-          broker_id: formData.broker_id || null,
         };
+        
+        // Solo incluir broker_id si el usuario es Master (API rechaza broker_id de no-masters)
+        if (userRole === 'master') {
+          payload.broker_id = formData.broker_id || null;
+        }
 
         // Si hay cambio de broker con ajustes, usar endpoint especial
         if (makeAdjustments && formData.broker_id !== client.broker_id && commissionData) {
