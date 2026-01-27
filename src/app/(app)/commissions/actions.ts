@@ -574,28 +574,40 @@ export async function actionUploadImport(formData: FormData) {
     if (importError) throw importError;
     if (!importRecord) throw new Error('Failed to create import record');
 
-    // 2. Buscar pólizas existentes - SOLO NIVEL 1: Match por número de póliza
-    // NIVEL 2 ELIMINADO: Ya NO se identifica por nombre de cliente para evitar asignaciones incorrectas
+    // 2. Buscar pólizas existentes - SOLO NIVEL 1: match exacto por número de póliza
+    // NIVEL 2 ELIMINADO y MATCH PARCIAL ELIMINADO: NO se usa contains/ilike.%term% para ninguna aseguradora
     const policyNumbers = rows.map(r => r.policy_number).filter(Boolean) as string[];
     const insurerSlug = getInsurerSlug(insurerName);
-    const usesPartialMatch = insurerSlug ? getPolicySearchTerm(insurerSlug, '1-1-1') !== '1-1-1' : false;
 
     let existingPolicies: any[] = [];
-    if (policyNumbers.length > 0 && insurerSlug && usesPartialMatch) {
-      const searchTerms = Array.from(
+
+    // Caso especial UNIVIVIR: el match es por el último segmento (ej 2735), y BD puede tener "2735" o "01-009-2735".
+    // Aquí solo permitimos:
+    // - eq(term)  (cuando BD guarda solo 2735)
+    // - ilike("%-term") (cuando BD guarda el número completo con guiones)
+    if (insurerSlug === 'univivir' && policyNumbers.length > 0) {
+      const terms = Array.from(
         new Set(
           policyNumbers
-            .map(pn => getPolicySearchTerm(insurerSlug, pn))
+            .map(pn => String(pn || '').trim())
+            .filter(Boolean)
+            .map(pn => {
+              const parts = pn.split('-').map(x => x.trim()).filter(Boolean);
+              return parts.length > 0 ? parts[parts.length - 1] : pn;
+            })
             .map(t => String(t || '').trim())
             .filter(Boolean)
         )
       );
 
       const batchSize = 40;
-      for (let i = 0; i < searchTerms.length; i += batchSize) {
-        const batch = searchTerms.slice(i, i + batchSize);
+      for (let i = 0; i < terms.length; i += batchSize) {
+        const batch = terms.slice(i, i + batchSize);
         const orClause = batch
-          .map(term => `policy_number.ilike.%${term.replace(/%/g, '')}%`)
+          .map(term => {
+            const clean = String(term).replace(/%/g, '');
+            return `policy_number.eq.${clean},policy_number.ilike.%-${clean}`;
+          })
           .join(',');
 
         const { data } = await supabase
@@ -613,6 +625,7 @@ export async function actionUploadImport(formData: FormData) {
         existingPolicies.push(...(data || []));
       }
     } else {
+      // Todas las demás aseguradoras: SOLO exact match
       const { data } = await supabase
         .from('policies')
         .select(`
@@ -725,24 +738,8 @@ export async function actionUploadImport(formData: FormData) {
         matchType: 'policy' as const
       };
 
-      // 1B) Match parcial por aseguradora (ANCON/ACERTA/MB/FEDPA/REGIONAL/OPTIMA/ALIADO/UNIVIVIR/BANESCO)
-      if (insurerSlug && usesPartialMatch) {
-        const term = getPolicySearchTerm(insurerSlug, rawPolicyNumber);
-        if (term) {
-          const candidates = (existingPolicies || []).filter((p: any) => String(p.policy_number || '').includes(String(term)));
-          if (candidates.length === 1) {
-            const pn = String(candidates[0].policy_number);
-            return { 
-              matchedPolicyNumber: pn, 
-              policyData: policyMap.get(pn) || null,
-              clientData: null,
-              matchType: 'policy' as const
-            };
-          }
-          // IMPORTANTE: Si hay múltiples candidatos, NO seleccionar ninguno.
-          // Esto evita "inventar" una póliza cuando el match no es único.
-        }
-      }
+      // MATCH PARCIAL ELIMINADO: No hay búsqueda por contains/term para ninguna aseguradora.
+      // Si no hay match exacto, se va a sin identificar.
 
       // NIVEL 2 DESHABILITADO: Ya no se identifica por nombre de cliente
       // Esto permite crear pólizas nuevas en el sistema para clientes existentes
