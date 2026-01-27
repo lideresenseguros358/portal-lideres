@@ -689,228 +689,248 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
         </div>
       )}
 
-      {/* Lista de Ajustes - Mobile First */}
-      <div className="space-y-3">
+      {/* Lista de Ajustes - Organizado por Aseguradora */}
+      <div className="space-y-6">
         {pendingGroups.length === 0 ? (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
             <FaCheckCircle className="text-5xl text-gray-300 mx-auto mb-4" />
             <p className="text-gray-600 font-medium">No hay comisiones pendientes</p>
             <p className="text-sm text-gray-500 mt-1">Todas las comisiones están asignadas</p>
           </div>
-        ) : (
-          pendingGroups.map((group) => {
-            const groupKey = `${group.policy_number}-${group.client_name}`;
-            const isExpanded = expandedGroups.has(groupKey);
-            const hasMultipleItems = group.items.length > 1;
-            
-            return (
-              <Card key={groupKey} className="shadow-sm hover:shadow-md transition-all border border-gray-200">
-                <CardContent className="p-4">
-                  {/* Main Card Content */}
-                  <div className="flex flex-col sm:flex-row sm:items-start gap-4">
-                    {/* Left Section - Policy Info */}
-                    <div className="flex-1">
-                      <div className="flex items-start gap-3">
-                        {/* Expand Button */}
-                        {hasMultipleItems && (
-                          <button
-                            onClick={() => {
-                              const newExpanded = new Set(expandedGroups);
-                              if (isExpanded) {
-                                newExpanded.delete(groupKey);
-                              } else {
-                                newExpanded.add(groupKey);
-                              }
-                              setExpandedGroups(newExpanded);
-                            }}
-                            className="flex-shrink-0 mt-1 p-1.5 hover:bg-gray-100 rounded transition-colors"
-                          >
-                            {isExpanded ? (
-                              <FaChevronDown className="text-[#010139]" size={14} />
-                            ) : (
-                              <FaChevronRight className="text-gray-400" size={14} />
-                            )}
-                          </button>
-                        )}
-                        
-                        {/* Info */}
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="font-semibold text-[#010139] text-base">
-                              {group.policy_number}
-                            </span>
-                            {hasMultipleItems && (
-                              <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
-                                {group.items.length} items
-                              </span>
-                            )}
-                          </div>
-                          
-                          <p className="text-sm text-gray-900 font-medium truncate">
-                            {group.client_name}
-                          </p>
-                          
-                          <div className="flex flex-wrap items-center gap-2 mt-2">
-                            {group.insurer_names.map((insurer, idx) => (
-                              <span key={idx} className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded">
-                                {insurer}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    {/* Right Section - Amount & Actions */}
-                    <div className="flex flex-col sm:items-end gap-3">
-                      {/* Amount */}
-                      <div className="text-left sm:text-right">
-                        <div className="text-xl font-bold text-gray-900">
-                          {group.total_amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
-                        </div>
-                        {role === 'broker' && brokerPercent > 0 && (
-                          <div className="text-sm text-[#8AAA19] font-semibold mt-1">
-                            Tu comisión: {(group.total_amount * brokerPercent).toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
-                            <span className="text-xs text-gray-600 ml-1">({(brokerPercent * 100).toFixed(0)}%)</span>
-                          </div>
-                        )}
-                        <div className="flex items-center gap-1 mt-1">
-                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                            group.status === 'open'
-                              ? 'bg-amber-100 text-amber-700'
-                              : group.status === 'claimed'
-                              ? 'bg-blue-100 text-blue-700'
-                              : 'bg-gray-100 text-gray-700'
-                          }`}>
-                            {group.status === 'open' ? 'Pendiente' : group.status === 'claimed' ? 'Solicitado' : group.status}
-                          </span>
-                        </div>
-                      </div>
-                      
-                      {/* Actions */}
-                      <div className="flex flex-wrap gap-2">
-                        {role === 'master' ? (
-                          !selectionMode ? (
-                            <AssignBrokerDropdown
-                              itemGroup={{
-                                policy_number: group.policy_number,
-                                items: group.items.map(item => ({ id: item.id })),
-                              }}
-                              brokers={brokers}
-                              onSuccess={() => {}}
-                              onSelectBroker={async (brokerId, brokerName) => {
-                                // Activar modo selección
-                                setSelectedBroker(brokerId);
-                                setSelectedBrokerName(brokerName);
-                                
-                                // Obtener porcentaje del broker seleccionado
-                                const { supabaseClient } = await import('@/lib/supabase/client');
-                                const supabase = supabaseClient();
-                                const { data: brokerData } = await supabase
-                                  .from('brokers')
-                                  .select('percent_default')
-                                  .eq('id', brokerId)
-                                  .single();
-                                if (brokerData) {
-                                  setBrokerPercent(brokerData.percent_default || 0);
-                                }
-                                
-                                setSelectionMode(true);
-                                // Pre-seleccionar los items de esta póliza
-                                const itemIds = group.items.map(i => i.id);
-                                setSelectedItems(new Set(itemIds));
-                                toast.info(`Selecciona más pólizas para asignar a ${brokerName}`);
-                              }}
-                            />
-                          ) : selectedBroker ? (
-                            <input
-                              type="checkbox"
-                              checked={group.items.every(i => selectedItems.has(i.id))}
-                              onChange={() => {
-                                const itemIds = group.items.map(i => i.id);
-                                setSelectedItems(prev => {
-                                  const next = new Set(prev);
-                                  const allSelected = itemIds.every(id => next.has(id));
-                                  if (allSelected) {
-                                    itemIds.forEach(id => next.delete(id));
-                                  } else {
-                                    itemIds.forEach(id => next.add(id));
-                                  }
-                                  return next;
-                                });
-                              }}
-                              className="w-5 h-5 rounded border-gray-300"
-                            />
-                          ) : null
-                        ) : (
-                          !selectionMode ? (
-                            <Button
-                              size="sm"
-                              disabled={group.status !== 'open'}
-                              className="bg-gradient-to-r from-[#8AAA19] to-[#7a9617] text-white hover:from-[#7a9617] hover:to-[#6b8514] border-0 shadow-md font-semibold"
-                              onClick={() => handleClaimItem(group.items.map(i => i.id))}
-                            >
-                              <FaUserCheck className="mr-2" size={14} />
-                              Marcar Mío
-                            </Button>
-                          ) : (
-                            <input
-                              type="checkbox"
-                              checked={group.items.every(i => selectedItems.has(i.id))}
-                              onChange={() => {
-                                const itemIds = group.items.map(i => i.id);
-                                setSelectedItems(prev => {
-                                  const next = new Set(prev);
-                                  const allSelected = itemIds.every(id => next.has(id));
-                                  if (allSelected) {
-                                    itemIds.forEach(id => next.delete(id));
-                                  } else {
-                                    itemIds.forEach(id => next.add(id));
-                                  }
-                                  return next;
-                                });
-                              }}
-                              className="w-5 h-5 rounded border-gray-300"
-                            />
-                          )
-                        )}
-                      </div>
-                    </div>
-                  </div>
+        ) : (() => {
+          // Agrupar por aseguradora
+          const byInsurer = new Map<string, PendingGroup[]>();
+          pendingGroups.forEach(group => {
+            // Usar la primera aseguradora del array como clave principal
+            const insurerName = group.insurer_names[0] || 'Sin Aseguradora';
+            if (!byInsurer.has(insurerName)) {
+              byInsurer.set(insurerName, []);
+            }
+            byInsurer.get(insurerName)!.push(group);
+          });
+
+          // Ordenar aseguradoras alfabéticamente
+          const sortedInsurers = Array.from(byInsurer.entries()).sort(([a], [b]) => 
+            a.localeCompare(b, 'es', { numeric: true, sensitivity: 'base' })
+          );
+
+          // Ordenar grupos dentro de cada aseguradora por nombre de cliente
+          sortedInsurers.forEach(([_, groups]) => {
+            groups.sort((a, b) => 
+              (a.client_name || '').localeCompare(b.client_name || '', 'es', { numeric: true, sensitivity: 'base' })
+            );
+          });
+
+          return sortedInsurers.map(([insurerName, groups]) => (
+            <div key={insurerName} className="space-y-3">
+              {/* Subtítulo de Aseguradora */}
+              <h5 className="text-sm font-bold text-amber-700 flex items-center gap-2 bg-amber-50 px-3 py-2 rounded-lg border-l-4 border-amber-600">
+                {insurerName}
+              </h5>
+              
+              {/* Grid de 2 columnas */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                {groups.map((group) => {
+                  const groupKey = `${group.policy_number}-${group.client_name}`;
+                  const isExpanded = expandedGroups.has(groupKey);
+                  const hasMultipleItems = group.items.length > 1;
                   
-                  {/* Expanded Details */}
-                  {isExpanded && hasMultipleItems && (
-                    <div className="mt-4 pt-4 border-t border-gray-200">
-                      <p className="text-sm font-semibold text-gray-700 mb-3">
-                        Detalle de Items ({group.items.length})
-                      </p>
-                      <div className="space-y-2">
-                        {group.items.map((item) => (
-                          <div key={item.id} className="bg-gray-50 rounded-lg p-3 text-sm">
-                            <div className="flex justify-between items-start gap-4">
-                              <div className="flex-1">
-                                <p className="font-medium text-gray-900">{item.insured_name || 'N/A'}</p>
-                                <p className="text-gray-600 text-xs mt-1">{item.insurer_name || 'N/A'}</p>
-                              </div>
-                              <div className="text-right">
-                                <p className="font-semibold text-gray-900">
-                                  {item.gross_amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
-                                </p>
-                                <p className="text-xs text-gray-500 mt-1">
-                                  {new Date(item.created_at).toLocaleDateString('es-PA')}
+                  return (
+                    <Card key={groupKey} className="shadow-sm hover:shadow-md transition-all border-2 border-amber-200">
+                      <CardContent className="p-3">
+                        {/* Main Card Content */}
+                        <div className="space-y-2">
+                          {/* Header con póliza y checkbox/botón */}
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-start gap-2 flex-1 min-w-0">
+                              {/* Expand Button */}
+                              {hasMultipleItems && (
+                                <button
+                                  onClick={() => {
+                                    const newExpanded = new Set(expandedGroups);
+                                    if (isExpanded) {
+                                      newExpanded.delete(groupKey);
+                                    } else {
+                                      newExpanded.add(groupKey);
+                                    }
+                                    setExpandedGroups(newExpanded);
+                                  }}
+                                  className="flex-shrink-0 mt-0.5 p-1 hover:bg-gray-100 rounded transition-colors"
+                                >
+                                  {isExpanded ? (
+                                    <FaChevronDown className="text-amber-600" size={12} />
+                                  ) : (
+                                    <FaChevronRight className="text-gray-400" size={12} />
+                                  )}
+                                </button>
+                              )}
+                              
+                              {/* Info */}
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="font-semibold text-[#010139] text-sm truncate">
+                                    {group.policy_number}
+                                  </span>
+                                  {hasMultipleItems && (
+                                    <Badge className="bg-amber-600 text-white text-xs px-2 py-0.5">
+                                      {group.items.length}
+                                    </Badge>
+                                  )}
+                                </div>
+                                
+                                <p className="text-sm text-gray-900 font-medium truncate">
+                                  {group.client_name}
                                 </p>
                               </div>
                             </div>
+                            
+                            {/* Checkbox o Botón Marcar Mío */}
+                            <div className="flex-shrink-0">
+                              {role === 'master' ? (
+                                !selectionMode ? (
+                                  <AssignBrokerDropdown
+                                    itemGroup={{
+                                      policy_number: group.policy_number,
+                                      items: group.items.map(item => ({ id: item.id })),
+                                    }}
+                                    brokers={brokers}
+                                    onSuccess={() => {}}
+                                    onSelectBroker={async (brokerId, brokerName) => {
+                                      setSelectedBroker(brokerId);
+                                      setSelectedBrokerName(brokerName);
+                                      
+                                      const { supabaseClient } = await import('@/lib/supabase/client');
+                                      const supabase = supabaseClient();
+                                      const { data: brokerData } = await supabase
+                                        .from('brokers')
+                                        .select('percent_default')
+                                        .eq('id', brokerId)
+                                        .single();
+                                      if (brokerData) {
+                                        setBrokerPercent(brokerData.percent_default || 0);
+                                      }
+                                      
+                                      setSelectionMode(true);
+                                      const itemIds = group.items.map(i => i.id);
+                                      setSelectedItems(new Set(itemIds));
+                                      toast.info(`Selecciona más pólizas para asignar a ${brokerName}`);
+                                    }}
+                                  />
+                                ) : selectedBroker ? (
+                                  <input
+                                    type="checkbox"
+                                    checked={group.items.every(i => selectedItems.has(i.id))}
+                                    onChange={() => {
+                                      const itemIds = group.items.map(i => i.id);
+                                      setSelectedItems(prev => {
+                                        const next = new Set(prev);
+                                        const allSelected = itemIds.every(id => next.has(id));
+                                        if (allSelected) {
+                                          itemIds.forEach(id => next.delete(id));
+                                        } else {
+                                          itemIds.forEach(id => next.add(id));
+                                        }
+                                        return next;
+                                      });
+                                    }}
+                                    className="w-5 h-5 rounded border-gray-300"
+                                  />
+                                ) : null
+                              ) : (
+                                !selectionMode ? (
+                                  <Button
+                                    size="sm"
+                                    disabled={group.status !== 'open'}
+                                    className="bg-gradient-to-r from-[#8AAA19] to-[#7a9617] text-white hover:from-[#7a9617] hover:to-[#6b8514] border-0 shadow-md font-semibold text-xs px-3 py-1.5"
+                                    onClick={() => handleClaimItem(group.items.map(i => i.id))}
+                                  >
+                                    <FaUserCheck className="mr-1" size={12} />
+                                    Marcar Mío
+                                  </Button>
+                                ) : (
+                                  <input
+                                    type="checkbox"
+                                    checked={group.items.every(i => selectedItems.has(i.id))}
+                                    onChange={() => {
+                                      const itemIds = group.items.map(i => i.id);
+                                      setSelectedItems(prev => {
+                                        const next = new Set(prev);
+                                        const allSelected = itemIds.every(id => next.has(id));
+                                        if (allSelected) {
+                                          itemIds.forEach(id => next.delete(id));
+                                        } else {
+                                          itemIds.forEach(id => next.add(id));
+                                        }
+                                        return next;
+                                      });
+                                    }}
+                                    className="w-5 h-5 rounded border-gray-300"
+                                  />
+                                )
+                              )}
+                            </div>
                           </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })
-        )}
+                          
+                          {/* Monto y estado */}
+                          <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                            <div className="text-lg font-bold text-gray-900">
+                              {group.total_amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                            </div>
+                            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                              group.status === 'open'
+                                ? 'bg-amber-100 text-amber-700'
+                                : group.status === 'claimed'
+                                ? 'bg-blue-100 text-blue-700'
+                                : 'bg-gray-100 text-gray-700'
+                            }`}>
+                              {group.status === 'open' ? 'Pendiente' : group.status === 'claimed' ? 'Solicitado' : group.status}
+                            </span>
+                          </div>
+                          
+                          {role === 'broker' && brokerPercent > 0 && (
+                            <div className="text-xs text-[#8AAA19] font-semibold">
+                              Tu comisión: {(group.total_amount * brokerPercent).toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                              <span className="text-xs text-gray-600 ml-1">({(brokerPercent * 100).toFixed(0)}%)</span>
+                            </div>
+                          )}
+                        </div>
+                        
+                        {/* Expanded Details */}
+                        {isExpanded && hasMultipleItems && (
+                          <div className="mt-3 pt-3 border-t border-gray-200">
+                            <p className="text-xs font-semibold text-gray-700 mb-2">
+                              Detalle de Items ({group.items.length})
+                            </p>
+                            <div className="space-y-2">
+                              {group.items.map((item) => (
+                                <div key={item.id} className="bg-gray-50 rounded-lg p-2 text-xs">
+                                  <div className="flex justify-between items-start gap-2">
+                                    <div className="flex-1 min-w-0">
+                                      <p className="font-medium text-gray-900 truncate">{item.insured_name || 'N/A'}</p>
+                                      <p className="text-gray-600 text-xs mt-0.5">{item.insurer_name || 'N/A'}</p>
+                                    </div>
+                                    <div className="text-right flex-shrink-0">
+                                      <p className="font-semibold text-gray-900">
+                                        {item.gross_amount.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                                      </p>
+                                      <p className="text-xs text-gray-500 mt-0.5">
+                                        {new Date(item.created_at).toLocaleDateString('es-PA')}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            </div>
+          ));
+        })()}
       </div>
     </div>
   );
