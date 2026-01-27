@@ -381,17 +381,20 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
     setBrokerTotalsData(totalsData);
   }, [draftFortnight]);
 
-  // Calculate office total - usar useMemo para que se recalcule automáticamente
+  // Calculate office total - usar totalNetToPay como fuente única de verdad (igual que sticky bar)
+  // brokerCommissions = totalNetToPay + descuentos (actualmente 0, pero preparado para cuando haya)
   const officeTotal = useMemo(() => {
     const totalImported = importedReports.reduce((sum, r) => sum + r.total_amount, 0);
-    const brokerCommissions = brokerCommissionsTotal;
+    // Usar totalNetToPay como base para garantizar consistencia con sticky bar
+    // totalNetToPay ya viene de BrokerTotals con todos los cálculos aplicados (excluyendo LISSA, etc.)
+    const brokerCommissions = totalNetToPay; // Sin descuentos = igual al neto
     return {
       totalImported,
       brokerCommissions,
       officeProfit: totalImported - brokerCommissions,
       percentage: totalImported > 0 ? ((totalImported - brokerCommissions) / totalImported * 100) : 0
     };
-  }, [importedReports, brokerCommissionsTotal]);
+  }, [importedReports, totalNetToPay]);
 
   useEffect(() => {
     if (draftFortnight) {
