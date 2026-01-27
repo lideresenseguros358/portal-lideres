@@ -880,6 +880,9 @@ export async function actionUploadImport(formData: FormData) {
     if (pendingItemsToInsert.length > 0) {
       console.log(`[SERVER][${insurerName}] Preparando ${pendingItemsToInsert.length} items para draft_unidentified_items...`);
       
+      // IMPORTANTE: Añadir un UUID único a cada registro para permitir duplicados
+      // Esto asegura que cada entrada se inserte como un registro independiente
+      // incluso si policy_number e insured_name son idénticos
       const draftItems = pendingItemsToInsert.map(item => ({
         fortnight_id: item.fortnight_id,
         import_id: item.import_id,
@@ -889,15 +892,15 @@ export async function actionUploadImport(formData: FormData) {
         commission_raw: item.commission_raw,
         raw_row: item.raw_row || null,
         temp_assigned_broker_id: null,
+        // Cada item tiene un ID único para evitar deduplicación
+        unique_import_id: crypto.randomUUID()
       }));
 
-      console.log(`[SERVER][${insurerName}] Insertando en draft_unidentified_items con ON CONFLICT DO NOTHING...`);
+      console.log(`[SERVER][${insurerName}] Insertando en draft_unidentified_items SIN deduplicación...`);
+      // Usar insert en lugar de upsert para garantizar que todos los registros se inserten
       const { error: draftError, count } = await (supabase as any)
         .from('draft_unidentified_items')
-        .upsert(draftItems, { 
-          onConflict: 'fortnight_id,import_id,policy_number,insured_name',
-          ignoreDuplicates: true 
-        });
+        .insert(draftItems);
       
       if (draftError) {
         console.error(`[SERVER][${insurerName}] ❌ ERROR insertando draft unidentified:`, draftError);
