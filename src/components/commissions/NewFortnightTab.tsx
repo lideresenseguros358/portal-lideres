@@ -789,7 +789,7 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
                         <Cell key={`cell-${index}`} fill={entry.color} />
                       ))}
                     </Pie>
-                    <Tooltip />
+                    <Tooltip formatter={(value) => `$${Number(value).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} />
                     <Legend />
                   </PieChart>
                 </ResponsiveContainer>
@@ -799,22 +799,22 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
               <div className="p-4 bg-gray-50 rounded-lg">
                 <p className="text-sm text-gray-600">Total Importado</p>
                 <p className="text-2xl font-bold text-[#010139]">
-                  ${officeTotal.totalImported.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                  ${officeTotal.totalImported.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </p>
               </div>
               <div className="p-4 bg-gray-50 rounded-lg">
                 <p className="text-sm text-gray-600">Comisiones Corredores</p>
                 <p className="text-2xl font-bold text-[#8AAA19]">
-                  ${officeTotal.brokerCommissions.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                  ${officeTotal.brokerCommissions.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </p>
               </div>
               <div className="p-4 bg-[#010139]/10 rounded-lg">
                 <p className="text-sm text-gray-600">Ganancia Oficina</p>
                 <p className="text-2xl font-bold text-[#010139]">
-                  ${officeTotal.officeProfit.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                  ${officeTotal.officeProfit.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </p>
                 <p className="text-sm text-gray-500 mt-1">
-                  {officeTotal.percentage.toFixed(1)}% del total
+                  {officeTotal.percentage.toFixed(2)}% del total
                 </p>
               </div>
             </div>
@@ -832,14 +832,14 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
             <div className="p-6 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl border-l-4 border-blue-500">
               <p className="text-sm text-blue-700 font-semibold mb-2">VIDA</p>
               <p className="text-3xl font-bold text-blue-900">
-                ${ramosTotals.vida.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                ${ramosTotals.vida.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
               <p className="text-xs text-blue-600 mt-1">Seguros de vida</p>
             </div>
             <div className="p-6 bg-gradient-to-br from-green-50 to-green-100 rounded-xl border-l-4 border-green-500">
               <p className="text-sm text-green-700 font-semibold mb-2">RAMOS GENERALES</p>
               <p className="text-3xl font-bold text-green-900">
-                ${ramosTotals.generales.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                ${ramosTotals.generales.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
               <p className="text-xs text-green-600 mt-1">Otros seguros (auto, hogar, etc.)</p>
             </div>
