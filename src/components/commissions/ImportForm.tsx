@@ -531,7 +531,7 @@ export default function ImportForm({ insurers, draftFortnightId, onImport }: Pro
         <div className="field">
           <label className="flex items-center gap-2 text-sm font-semibold text-gray-700 mb-2">
             <FaUniversity className="text-blue-600" />
-            Vincular con Transferencia Bancaria (Opcional)
+            Vincular con Transferencia Bancaria
           </label>
           
           {loadingOptions ? (
