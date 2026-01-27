@@ -3788,7 +3788,7 @@ export async function actionGetDraftDetails(fortnightId: string) {
     
     const importIds = imports.map(i => i.id);
     
-    // Luego obtener comm_items de esos imports
+    // Luego obtener comm_items de esos imports (incluir active del broker)
     const { data, error } = await supabase
       .from('comm_items')
       .select(`
@@ -3796,7 +3796,7 @@ export async function actionGetDraftDetails(fortnightId: string) {
         gross_amount,
         insured_name,
         policy_number,
-        brokers (id, name, email, percent_default),
+        brokers (id, name, email, percent_default, active),
         insurers (id, name)
       `)
       .in('import_id', importIds)
@@ -3804,11 +3804,39 @@ export async function actionGetDraftDetails(fortnightId: string) {
 
     if (error) throw error;
 
+    // Obtener el broker LISSA (oficina) para redirigir comisiones de inactivos
+    const OFICINA_EMAIL = 'contacto@lideresenseguros.com';
+    const { data: lissaBroker } = await supabase
+      .from('brokers')
+      .select('id, name, email, percent_default')
+      .eq('email', OFICINA_EMAIL)
+      .single();
+
     // Convert gross_amount from unknown to number
-    const formattedData = (data || []).map((item: any) => ({
-      ...item,
-      gross_amount: Number(item.gross_amount) || 0
-    }));
+    // Y redirigir comisiones de brokers inactivos a LISSA
+    const formattedData = (data || []).map((item: any) => {
+      const broker = item.brokers;
+      const isInactive = broker && broker.active === false;
+      
+      // Si el broker está inactivo y existe LISSA, redirigir
+      if (isInactive && lissaBroker) {
+        return {
+          ...item,
+          gross_amount: Number(item.gross_amount) || 0,
+          brokers: {
+            id: lissaBroker.id,
+            name: lissaBroker.name,
+            email: lissaBroker.email,
+            percent_default: lissaBroker.percent_default,
+          }
+        };
+      }
+      
+      return {
+        ...item,
+        gross_amount: Number(item.gross_amount) || 0
+      };
+    });
 
     return { ok: true as const, data: formattedData };
   } catch (error) {
@@ -4563,16 +4591,45 @@ export async function actionRecalculateFortnight(fortnight_id: string) {
     
     console.log(`[actionRecalculateFortnight] 💰 Comm_items encontrados: ${items?.length || 0}`);
     
-    // 3. Agrupar por broker
-    const brokerTotals = (items || []).reduce((acc, item) => {
-      const brokerId = item.broker_id!;
+    // 2.5. Obtener brokers con su estado active y encontrar LISSA para redirigir inactivos
+    const brokerIds = [...new Set((items || []).map(i => i.broker_id).filter(Boolean))] as string[];
+    const { data: brokersData } = await supabase
+      .from('brokers')
+      .select('id, active, email')
+      .in('id', brokerIds.length > 0 ? brokerIds : ['__NONE__']);
+    
+    const OFICINA_EMAIL = 'contacto@lideresenseguros.com';
+    const { data: lissaBroker } = await supabase
+      .from('brokers')
+      .select('id')
+      .eq('email', OFICINA_EMAIL)
+      .single();
+    
+    const inactiveBrokerIds = new Set(
+      (brokersData || [])
+        .filter(b => b.active === false)
+        .map(b => b.id)
+    );
+    
+    console.log(`[actionRecalculateFortnight] 🚫 Brokers inactivos: ${inactiveBrokerIds.size}`);
+    
+    // 3. Agrupar por broker (redirigiendo inactivos a LISSA)
+    const brokerTotals = (items || []).reduce<Record<string, { gross: number; items_count: number }>>((acc, item) => {
+      let brokerId = item.broker_id!;
+      
+      // Si el broker está inactivo y existe LISSA, redirigir
+      if (inactiveBrokerIds.has(brokerId) && lissaBroker) {
+        brokerId = lissaBroker.id;
+      }
+      
       if (!acc[brokerId]) {
         acc[brokerId] = { gross: 0, items_count: 0 };
       }
-      acc[brokerId].gross += Number(item.gross_amount) || 0;
-      acc[brokerId].items_count += 1;
+      const entry = acc[brokerId]!;
+      entry.gross += Number(item.gross_amount) || 0;
+      entry.items_count += 1;
       return acc;
-    }, {} as Record<string, { gross: number; items_count: number }>);
+    }, {});
     
     // 4. Obtener descuentos aplicados desde advance_logs (no desde comm_metadata para evitar duplicados)
     const { data: advanceLogs } = await supabase
