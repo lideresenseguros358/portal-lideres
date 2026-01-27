@@ -5,6 +5,7 @@ import { FaDownload } from 'react-icons/fa';
 import { actionToggleNotify, actionPayFortnight } from '@/app/(app)/commissions/actions';
 import { useConfirmDialog } from '@/hooks/useConfirmDialog';
 import ConfirmDialog from '@/components/shared/ConfirmDialog';
+import PaymentLoadingModal from '@/components/commissions/PaymentLoadingModal';
 
 interface Props {
   draftFortnightId: string;
@@ -16,6 +17,7 @@ export default function PaymentActions({ draftFortnightId, initialNotifyState, o
   const { dialogState, closeDialog, confirm, alert: showAlert, success, error } = useConfirmDialog();
   const [notifyBrokers, setNotifyBrokers] = useState(initialNotifyState);
   const [paying, setPaying] = useState(false);
+  const [showLoadingModal, setShowLoadingModal] = useState(false);
 
   const handleToggleNotify = async () => {
     const newValue = !notifyBrokers;
@@ -34,15 +36,13 @@ export default function PaymentActions({ draftFortnightId, initialNotifyState, o
     }
 
     setPaying(true);
-    const result = await actionPayFortnight(draftFortnightId);
-    
-    if (result.ok) {
-      await success('Quincena cerrada exitosamente', 'Éxito');
-      window.location.reload();
-    } else {
-      await showAlert(`Error: ${(result as any).error}`, 'Error al cerrar quincena', 'error');
-    }
-    setPaying(false);
+    // Mostrar el modal de loading para el proceso de cierre
+    setShowLoadingModal(true);
+  };
+  
+  // Esta función se pasa al modal y se ejecuta allí
+  const executePayFortnight = async (fortnightId: string) => {
+    return actionPayFortnight(fortnightId);
   };
 
   return (
@@ -119,6 +119,17 @@ export default function PaymentActions({ draftFortnightId, initialNotifyState, o
         type={dialogState.type}
         confirmText={dialogState.confirmText}
         cancelText={dialogState.cancelText}
+      />
+      
+      {/* Modal de loading para proceso de cierre */}
+      <PaymentLoadingModal
+        isOpen={showLoadingModal}
+        onClose={() => {
+          setShowLoadingModal(false);
+          setPaying(false);
+        }}
+        fortnightId={draftFortnightId}
+        payFortnightAction={executePayFortnight}
       />
     </div>
   );
