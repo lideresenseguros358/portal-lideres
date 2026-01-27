@@ -1343,7 +1343,6 @@ export async function actionGetYTDCommissions(year: number, brokerId?: string | 
     const { data: fortnights, error: fortnightsError } = await fortnightsQuery;
 
     console.log('📊 [actionGetYTDCommissions] fortnights encontrados:', fortnights?.length || 0);
-    console.log('📊 [actionGetYTDCommissions] fortnights:', fortnights);
 
     if (fortnightsError) throw new Error(fortnightsError.message);
     if (!fortnights || fortnights.length === 0) {
@@ -1352,8 +1351,8 @@ export async function actionGetYTDCommissions(year: number, brokerId?: string | 
       return {
         ok: true as const,
         data: {
-          currentYear: { byMonth: {}, byInsurer: {}, total: 0 },
-          previousYear: { byMonth: {}, byInsurer: {}, total: 0 }
+          currentYear: { byMonth: {}, byInsurer: {}, total: 0, totalBruto: 0, totalNeto: 0 },
+          previousYear: { byMonth: {}, byInsurer: {}, total: 0, totalBruto: 0, totalNeto: 0 }
         }
       };
     }
@@ -1370,6 +1369,25 @@ export async function actionGetYTDCommissions(year: number, brokerId?: string | 
       console.log('📊 [actionGetYTDCommissions] assa_code del broker:', assaCode);
     }
 
+    // Obtener LISSA broker ID para filtrar
+    const { data: lissaBroker } = await supabase
+      .from('brokers')
+      .select('id')
+      .eq('email', 'contacto@lideresenseguros.com')
+      .single();
+
+    const lissaBrokerId = lissaBroker?.id || null;
+    console.log('📊 [actionGetYTDCommissions] LISSA broker ID:', lissaBrokerId);
+    
+    // Obtener lista de brokers activos
+    const { data: activeBrokers } = await supabase
+      .from('brokers')
+      .select('id')
+      .eq('active', true);
+    
+    const activeBrokerIds = (activeBrokers || []).map(b => b.id);
+    console.log('📊 [actionGetYTDCommissions] Cantidad de brokers activos:', activeBrokerIds.length);
+    
     // Obtener detalles de todas las quincenas
     const fortnightIds = fortnights.map(f => f.id);
     
@@ -1377,10 +1395,11 @@ export async function actionGetYTDCommissions(year: number, brokerId?: string | 
       .from('fortnight_details')
       .select(`
         fortnight_id,
+        commission_raw,
         commission_calculated,
         broker_id,
         assa_code,
-        brokers (id, name),
+        brokers (id, name, active),
         insurers (id, name),
         fortnights!inner (period_end)
       `)
@@ -1404,45 +1423,82 @@ export async function actionGetYTDCommissions(year: number, brokerId?: string | 
     if (detailsError) throw new Error(detailsError.message);
 
     // Agrupar por año, mes y aseguradora
-    const currentYearData: any = { byMonth: {}, byInsurer: {}, total: 0 };
-    const previousYearData: any = { byMonth: {}, byInsurer: {}, total: 0 };
+    const currentYearData: any = { 
+      byMonth: {}, 
+      byInsurer: {}, 
+      total: 0,
+      totalBruto: 0,
+      totalNeto: 0
+    };
+    const previousYearData: any = { 
+      byMonth: {}, 
+      byInsurer: {}, 
+      total: 0,
+      totalBruto: 0,
+      totalNeto: 0
+    };
 
     (details || []).forEach((detail: any) => {
       const periodEnd = detail.fortnights?.period_end;
       if (!periodEnd) return;
+      
+      // Filtrar broker LISSA y corredores inactivos
+      const currentBrokerId = detail.broker_id;
+      const brokerActive = detail.brokers?.active !== false; // si es undefined, asumimos activo
+      
+      // Excluir LISSA y corredores inactivos (a menos que estemos filtrando por un broker específico)
+      if (!brokerId && (currentBrokerId === lissaBrokerId || !brokerActive)) {
+        // Saltamos este registro
+        console.log(`📊 [actionGetYTDCommissions] Excluyendo: ${currentBrokerId === lissaBrokerId ? 'LISSA' : 'Inactivo'} - ${detail.brokers?.name || 'Sin nombre'}`);
+        return;
+      }
 
       const date = new Date(periodEnd);
       const itemYear = date.getFullYear();
       const month = date.getMonth() + 1; // 1-12
       const insurerName = detail.insurers?.name || 'Sin Aseguradora';
-      const commission = Number(detail.commission_calculated) || 0;
+      const commissionRaw = Number(detail.commission_raw) || 0; // Comisión bruta
+      const commissionCalculated = Number(detail.commission_calculated) || 0; // Comisión neta (después de aplicar porcentaje)
 
       const targetData = itemYear === year ? currentYearData : previousYearData;
 
-      // Agregar por mes
+      // Agregar por mes (usando comisión neta para cálculos detallados)
       if (!targetData.byMonth[month]) {
         targetData.byMonth[month] = 0;
       }
-      targetData.byMonth[month] += commission;
+      targetData.byMonth[month] += commissionCalculated;
 
-      // Agregar por aseguradora
+      // Agregar por aseguradora (usando comisión neta para cálculos detallados)
       if (!targetData.byInsurer[insurerName]) {
         targetData.byInsurer[insurerName] = 0;
       }
-      targetData.byInsurer[insurerName] += commission;
+      targetData.byInsurer[insurerName] += commissionCalculated;
 
-      // Total
-      targetData.total += commission;
+      // Total comisión neta (para gráficos y datos detallados)
+      targetData.total += commissionCalculated;
+      
+      // Total bruto (con porcentaje aplicado pero sin descuentos) - para mostrar en totales de comisión bruta
+      targetData.totalBruto += commissionCalculated;
+      
+      // Total neto (comisión despues de descuentos) - para mostrar en totales de comisión neta
+      targetData.totalNeto += commissionCalculated; // En realidad son iguales porque no hay descuentos aún
     });
 
     console.log('✅ [actionGetYTDCommissions] currentYearData:', currentYearData);
-    console.log('✅ [actionGetYTDCommissions] total:', currentYearData.total);
+    console.log('✅ [actionGetYTDCommissions] totalBruto:', currentYearData.totalBruto);
+    console.log('✅ [actionGetYTDCommissions] totalNeto:', currentYearData.totalNeto);
 
     return {
       ok: true as const,
       data: {
         currentYear: currentYearData,
-        previousYear: includePreviousYear ? previousYearData : { byMonth: {}, byInsurer: {}, total: 0 }
+        previousYear: includePreviousYear ? previousYearData : { 
+          byMonth: {}, 
+          byInsurer: {}, 
+          total: 0,
+          totalBruto: 0,
+          totalNeto: 0 
+        }
       }
     };
   } catch (error) {
@@ -1450,8 +1506,8 @@ export async function actionGetYTDCommissions(year: number, brokerId?: string | 
       ok: false as const,
       error: error instanceof Error ? error.message : 'Error desconocido',
       data: {
-        currentYear: { byMonth: {}, byInsurer: {}, total: 0 },
-        previousYear: { byMonth: {}, byInsurer: {}, total: 0 }
+        currentYear: { byMonth: {}, byInsurer: {}, total: 0, totalBruto: 0, totalNeto: 0 },
+        previousYear: { byMonth: {}, byInsurer: {}, total: 0, totalBruto: 0, totalNeto: 0 }
       }
     };
   }
@@ -3595,6 +3651,25 @@ export async function actionGetClosedFortnights(year: number, month: number, for
     if (fError) throw fError;
 
     // SIMPLIFICADO: Solo leer lo que ya está guardado, NO recalcular
+    // Obtener LISSA broker ID para filtrar
+    const { data: lissaBroker } = await supabase
+      .from('brokers')
+      .select('id')
+      .eq('email', 'contacto@lideresenseguros.com')
+      .single();
+
+    const lissaBrokerId = lissaBroker?.id || null;
+    console.log('[actionGetClosedFortnights] LISSA broker ID:', lissaBrokerId);
+    
+    // Obtener lista de brokers activos
+    const { data: activeBrokers } = await supabase
+      .from('brokers')
+      .select('id')
+      .eq('active', true);
+    
+    const activeBrokerIds = new Set((activeBrokers || []).map(b => b.id));
+    console.log('[actionGetClosedFortnights] Cantidad de brokers activos:', activeBrokerIds.size);
+
     const formattedData = await Promise.all((fortnights || []).map(async (f: any) => {
       const brokerTotals = f.fortnight_broker_totals || [];
       const fortnightStart = new Date(f.period_start);
@@ -3607,9 +3682,22 @@ export async function actionGetClosedFortnights(year: number, month: number, for
         return null;
       }
 
-      // Calcular totales DESDE fortnight_broker_totals (ya guardados)
-      const total_paid_gross = brokerTotals.reduce((sum: number, bt: any) => sum + (Number(bt.gross_amount) || 0), 0);
-      const total_paid_net = brokerTotals.reduce((sum: number, bt: any) => sum + (Number(bt.net_amount) || 0), 0);
+      // Filtrar brokers inactivos y LISSA para calcular totales
+      const validBrokers = brokerTotals.filter(bt => {
+        if (bt.broker_id === lissaBrokerId) {
+          console.log('[actionGetClosedFortnights] Excluyendo LISSA del total:', bt.brokers?.name || 'Sin nombre');
+          return false;
+        }
+        if (!activeBrokerIds.has(bt.broker_id)) {
+          console.log('[actionGetClosedFortnights] Excluyendo broker inactivo del total:', bt.brokers?.name || 'Sin nombre');
+          return false;
+        }
+        return true;
+      });
+
+      // Calcular totales DESDE fortnight_broker_totals (ya guardados) EXCLUYENDO LISSA y brokers inactivos
+      const total_paid_gross = validBrokers.reduce((sum: number, bt: any) => sum + (Number(bt.gross_amount) || 0), 0);
+      const total_paid_net = validBrokers.reduce((sum: number, bt: any) => sum + (Number(bt.net_amount) || 0), 0);
       
       // CRÍTICO: Calcular total_imported desde comm_imports de ESTA quincena
       const { data: fnImports } = await supabase
@@ -5011,54 +5099,63 @@ export async function actionPayFortnight(fortnight_id: string) {
               console.log(`[actionPayFortnight]   ℹ️ Ya existe en comm_items`);
             }
             
-            // Registrar en preliminar
-            const { data: existingPolicy, error: policyError } = await supabase
-              .from('policies')
-              .select('id, client_id')
+            // Registrar en preliminar DIRECTAMENTE sin depender de buscar la póliza primero
+            console.log(`[actionPayFortnight]   📋 Verificando si ya existe en preliminar...`);
+
+            // Verificar si ya existe en temp_client_import
+            const { data: existingPrelim, error: prelimError } = await supabase
+              .from('temp_client_import')
+              .select('id')
               .eq('policy_number', item.policy_number)
+              .eq('broker_id', item.temp_assigned_broker_id)
               .maybeSingle();
             
-            if (policyError) {
-              console.error(`[actionPayFortnight]   ❌ Error buscando póliza:`, policyError);
+            if (prelimError) {
+              console.error(`[actionPayFortnight]   ❌ Error verificando temp_client_import:`, prelimError);
             }
             
-            if (existingPolicy) {
-              console.log(`[actionPayFortnight]   📄 Póliza encontrada - Client ID: ${existingPolicy.client_id}`);
-              
-              const { data: existingPrelim, error: prelimError } = await supabase
+            // Insertar directamente en preliminar sin depender de encontrar la póliza en BD
+            if (!existingPrelim) {
+              const { error: prelimInsertError } = await supabase
                 .from('temp_client_import')
-                .select('id')
-                .eq('client_id', existingPolicy.client_id)
-                .eq('broker_id', item.temp_assigned_broker_id)
-                .maybeSingle();
+                .insert({
+                  policy_number: item.policy_number,
+                  client_name: item.insured_name,
+                  insurer_id: item.insurer_id,
+                  broker_id: item.temp_assigned_broker_id,
+                  renewal_date: null,
+                  migrated: false,
+                  source: 'draft_identified',
+                  notes: 'Identificado en zona de trabajo de Nueva Quincena',
+                  fortnight_id: fortnight_id  // Agregar ID de la quincena para referencia
+                });
               
-              if (prelimError) {
-                console.error(`[actionPayFortnight]   ❌ Error verificando temp_client_import:`, prelimError);
-              }
-              
-              if (!existingPrelim) {
-                const { error: prelimInsertError } = await supabase
-                  .from('temp_client_import')
-                  .insert({
-                    client_id: existingPolicy.client_id,
-                    broker_id: item.temp_assigned_broker_id,
-                    policy_number: item.policy_number,
-                    insurer_id: item.insurer_id,
-                    notes: 'Identificado en zona de trabajo de Nueva Quincena',
-                    source: 'draft_identified'
-                  });
-                
-                if (prelimInsertError) {
-                  console.error(`[actionPayFortnight]   ❌ Error insertando temp_client_import:`, prelimInsertError);
-                } else {
-                  preliminarInserted++;
-                  console.log(`[actionPayFortnight]   ✅✅✅ CLIENTE REGISTRADO EN PRELIMINAR (temp_client_import) ✅✅✅`);
-                }
+              if (prelimInsertError) {
+                console.error(`[actionPayFortnight]   ❌ Error insertando temp_client_import:`, prelimInsertError);
               } else {
-                console.log(`[actionPayFortnight]   ℹ️ Ya existe en temp_client_import`);
+                preliminarInserted++;
+                console.log(`[actionPayFortnight]   ✅✅✅ CLIENTE REGISTRADO EN PRELIMINAR (temp_client_import) ✅✅✅`);
               }
             } else {
-              console.log(`[actionPayFortnight]   ⚠️ Póliza NO encontrada en BD`);
+              console.log(`[actionPayFortnight]   ℹ️ Ya existe en temp_client_import`);
+            }
+            
+            // Intentar buscar la póliza solo para fines de registro
+            try {
+              const { data: existingPolicy } = await supabase
+                .from('policies')
+                .select('id, client_id')
+                .eq('policy_number', item.policy_number)
+                .maybeSingle();
+                
+              if (existingPolicy) {
+                console.log(`[actionPayFortnight]   📄 Póliza encontrada - Client ID: ${existingPolicy.client_id} (solo informativo)`);
+              } else {
+                console.log(`[actionPayFortnight]   ℹ️ Póliza no encontrada en BD (se registra en preliminar de todas formas)`);
+              }
+            } catch (policyError) {
+              // Solo para fines de log, no afecta el flujo
+              console.log(`[actionPayFortnight]   ℹ️ Error al buscar póliza (solo informativo):`, policyError);
             }
           } catch (itemError) {
             console.error(`[actionPayFortnight]   ❌❌❌ ERROR CRÍTICO:`, itemError);

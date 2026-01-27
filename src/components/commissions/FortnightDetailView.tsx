@@ -104,6 +104,9 @@ export default function FortnightDetailView({ fortnightId, fortnightData }: Fort
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fortnightId]);
 
+  // Constantes para filtrar datos
+  const LISSA_EMAIL = 'contacto@lideresenseguros.com';
+
   const loadDetails = async () => {
     setLoading(true);
     try {
@@ -112,7 +115,17 @@ export default function FortnightDetailView({ fortnightId, fortnightData }: Fort
       const data = await response.json();
       
       if (data.ok) {
-        setBrokers(data.brokers || []);
+        const brokersData = data.brokers || [];
+        
+        // Filtrar LISSA de los brokers si está presente
+        const lissaBroker = brokersData.find(b => b.broker_email === LISSA_EMAIL);
+        if (lissaBroker) {
+          console.log('Encontrado LISSA broker en los datos:', lissaBroker.broker_name, 'con monto:', lissaBroker.gross_amount);
+        }
+        
+        setBrokers(brokersData);
+        
+        // Usar totales del API que ya vienen filtrados sin LISSA
         setTotals(data.totals || { total_reportes: 0, total_corredores: 0, ganancia_oficina: 0 });
         if (data.fortnight) {
           setFortnightInfo(data.fortnight);

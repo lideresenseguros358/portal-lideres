@@ -17,6 +17,25 @@ export async function GET(request: NextRequest) {
     console.log('[Fortnight Export API] Obteniendo datos para:', fortnightId);
 
     const supabase = getSupabaseAdmin();
+    
+    // Obtener LISSA broker ID para filtrar
+    const { data: lissaBroker } = await supabase
+      .from('brokers')
+      .select('id')
+      .eq('email', 'contacto@lideresenseguros.com')
+      .single();
+
+    const lissaBrokerId = lissaBroker?.id || null;
+    console.log('[Fortnight Export API] LISSA broker ID:', lissaBrokerId);
+    
+    // Obtener lista de brokers activos
+    const { data: activeBrokersData } = await supabase
+      .from('brokers')
+      .select('id, active')
+      .eq('active', true);
+    
+    const activeBrokerIds = new Set((activeBrokersData || []).map(b => b.id));
+    console.log('[Fortnight Export API] Cantidad de brokers activos:', activeBrokerIds.size);
 
     // 1. Obtener totales de brokers con descuentos y retenciones
     const { data: brokerTotals } = await supabase
@@ -203,50 +222,72 @@ export async function GET(request: NextRequest) {
     });
 
     // 4. Convertir Map a Array, agregar descuentos/retenciones y ordenar
-    const result = Array.from(brokerMap.values()).map(broker => {
-      // Usar totales de fortnight_broker_totals si existen, sino calcular
-      const totalsFromDB = totalsMap.get(broker.broker_id);
-      
-      // Calcular totales desde las pólizas
-      let calculatedGross = 0;
-      let calculatedNet = 0;
-      broker.insurers.forEach((ins: any) => {
-        ins.policies.forEach((pol: any) => {
-          calculatedGross += pol.gross_amount;
-          calculatedNet += pol.net_amount;
+    let result = Array.from(brokerMap.values())
+      .filter(broker => {
+        // Filtrar LISSA y brokers inactivos
+        const isLissa = broker.broker_id === lissaBrokerId;
+        const isActive = activeBrokerIds.has(broker.broker_id);
+        
+        if (isLissa) {
+          console.log('[Fortnight Export API] Filtrando LISSA de los resultados:', broker.broker_name);
+          // Mantenemos LISSA en el resultado (para que se muestre en la interfaz) pero lo marcaremos
+          broker.is_lissa = true;
+          return true;
+        }
+        
+        if (!isActive) {
+          console.log('[Fortnight Export API] Filtrando broker inactivo de los resultados:', broker.broker_name);
+          return false;
+        }
+        
+        return true;
+      })
+      .map(broker => {
+        // Usar totales de fortnight_broker_totals si existen, sino calcular
+        const totalsFromDB = totalsMap.get(broker.broker_id);
+        
+        // Calcular totales desde las pólizas
+        let calculatedGross = 0;
+        let calculatedNet = 0;
+        broker.insurers.forEach((ins: any) => {
+          ins.policies.forEach((pol: any) => {
+            calculatedGross += pol.gross_amount;
+            calculatedNet += pol.net_amount;
+          });
         });
-      });
-      
-      return {
-        broker_id: broker.broker_id,
-        broker_name: broker.broker_name,
-        broker_email: broker.broker_email,
-        percent_default: broker.percent_default,
-        total_gross: totalsFromDB?.gross || calculatedGross,
-        total_net: totalsFromDB?.net || calculatedNet,
-        discounts_json: totalsFromDB?.discounts || {},
-        is_retained: totalsFromDB?.is_retained || false,
-        adjustments: adjustmentsMap.has(broker.broker_id) ? {
-          total: adjustmentsMap.get(broker.broker_id).total_adjustments,
-          insurers: Array.from(adjustmentsMap.get(broker.broker_id).insurers.values())
+        
+        return {
+          broker_id: broker.broker_id,
+          broker_name: broker.broker_name,
+          broker_email: broker.broker_email,
+          percent_default: broker.percent_default,
+          total_gross: totalsFromDB?.gross || calculatedGross,
+          total_net: totalsFromDB?.net || calculatedNet,
+          discounts_json: totalsFromDB?.discounts || {},
+          is_retained: totalsFromDB?.is_retained || false,
+          is_lissa: broker.broker_id === lissaBrokerId, // Marcar como LISSA para que la interfaz pueda filtrarlo
+          adjustments: adjustmentsMap.has(broker.broker_id) ? {
+            total: adjustmentsMap.get(broker.broker_id).total_adjustments,
+            insurers: Array.from(adjustmentsMap.get(broker.broker_id).insurers.values())
+              .map((ins: any) => ({
+                insurer_id: ins.insurer_id,
+                insurer_name: ins.insurer_name,
+                total: ins.total,
+                items: ins.items.sort((a: any, b: any) => b.broker_commission - a.broker_commission)
+              }))
+              .sort((a: any, b: any) => b.total - a.total)
+          } : null,
+          insurers: Array.from(broker.insurers.values())
             .map((ins: any) => ({
               insurer_id: ins.insurer_id,
               insurer_name: ins.insurer_name,
-              total: ins.total,
-              items: ins.items.sort((a: any, b: any) => b.broker_commission - a.broker_commission)
+              total_gross: ins.total_gross,
+              policies: ins.policies.sort((a: any, b: any) => b.gross_amount - a.gross_amount),
             }))
-            .sort((a: any, b: any) => b.total - a.total)
-        } : null,
-        insurers: Array.from(broker.insurers.values())
-          .map((ins: any) => ({
-            insurer_id: ins.insurer_id,
-            insurer_name: ins.insurer_name,
-            total_gross: ins.total_gross,
-            policies: ins.policies.sort((a: any, b: any) => b.gross_amount - a.gross_amount),
-          }))
-          .sort((a: any, b: any) => b.total_gross - a.total_gross),
-      };
-    }).sort((a, b) => a.broker_name.localeCompare(b.broker_name)); // Orden alfabético
+            .sort((a: any, b: any) => b.total_gross - a.total_gross),
+        };
+      })
+      .sort((a, b) => a.broker_name.localeCompare(b.broker_name)); // Orden alfabético
 
     console.log('[Fortnight Export API] Procesados', result.length, 'brokers');
     

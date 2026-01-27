@@ -11,6 +11,16 @@ export async function GET(request: NextRequest) {
     }
 
     const supabase = getSupabaseAdmin();
+    
+    // Obtener LISSA broker ID para filtrar
+    const { data: lissaBroker } = await supabase
+      .from('brokers')
+      .select('id')
+      .eq('email', 'contacto@lideresenseguros.com')
+      .single();
+
+    const lissaBrokerId = lissaBroker?.id || null;
+    console.log('[fortnight-details] LISSA broker ID:', lissaBrokerId);
 
     // 1. Obtener info de la quincena
     const { data: fortnight } = await supabase
@@ -128,6 +138,15 @@ export async function GET(request: NextRequest) {
       }
     });
 
+    // Obtener lista de brokers activos
+    const { data: activeBrokersData } = await supabase
+      .from('brokers')
+      .select('id, active')
+      .eq('active', true);
+    
+    const activeBrokerIds = new Set((activeBrokersData || []).map(b => b.id));
+    console.log('[fortnight-details] Cantidad de brokers activos:', activeBrokerIds.size);
+
     // 5. Convertir Map a Array y agregar totales
     const brokers = Array.from(brokerMap.values()).map(broker => {
       const totals = totalsMap.get(broker.broker_id) || { 
@@ -148,8 +167,33 @@ export async function GET(request: NextRequest) {
       };
     }).sort((a, b) => a.broker_name.localeCompare(b.broker_name)); // Orden alfabético
 
-    // 6. Calcular totales
+    // 6. Calcular totales (sin filtrar para mantener consistencia con los totales del historial)
+    // IMPORTANTE: Este valor debe coincidir con el total_paid_net que se muestra en la UI del historial
+    // Sumamos todos los brokers sin filtrar para consistencia con la vista principal
     const totalCorredores = brokers.reduce((sum, b) => sum + b.gross_amount, 0);
+    
+    // Para diagnóstico, calculamos también lo que sería sin LISSA y sin inactivos
+    const totalCorredoresFiltrado = brokers
+      .filter(b => {
+        const isLissa = b.broker_id === lissaBrokerId;
+        const isActive = activeBrokerIds.has(b.broker_id);
+        
+        if (isLissa) {
+          console.log('[fortnight-details] (diagnóstico) LISSA ignorado del total filtrado:', b.broker_name, b.gross_amount);
+          return false;
+        }
+        
+        if (!isActive) {
+          console.log('[fortnight-details] (diagnóstico) Broker inactivo ignorado del total filtrado:', b.broker_name, b.gross_amount);
+          return false;
+        }
+        
+        return true;
+      })
+      .reduce((sum, b) => sum + b.gross_amount, 0);
+    
+    console.log('[fortnight-details] Total sin filtrar:', totalCorredores, 'Total filtrado:', totalCorredoresFiltrado);
+      
     const gananciaOficina = totalReportes - totalCorredores;
 
     return NextResponse.json({

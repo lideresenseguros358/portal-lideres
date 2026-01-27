@@ -170,14 +170,14 @@ export function YTDTab({ role, brokerId, brokers = [] }: Props) {
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-bold text-gray-700 flex items-center gap-2">
               <FaDollarSign className="text-[#010139]" />
-              Total Anual (Bruto)
+              Total Comisión Bruta
             </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-3xl font-bold text-[#010139] font-mono">
-              {formatCurrency(totalCurrent)}
+              {formatCurrency(ytdData?.currentYear?.totalBruto || totalCurrent)}
             </p>
-            <p className="text-xs text-gray-600 mt-2 font-semibold">Año {year}</p>
+            <p className="text-xs text-gray-600 mt-2 font-semibold">Antes de adelantos/descuentos</p>
           </CardContent>
         </Card>
         

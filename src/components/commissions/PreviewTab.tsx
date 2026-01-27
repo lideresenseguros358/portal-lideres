@@ -224,10 +224,17 @@ export function PreviewTab({ role, brokerId }: Props) {
     }
   };
 
+  // Constante para identificar a LISSA
+  const LISSA_EMAIL = 'contacto@lideresenseguros.com';
+
   const summary = useMemo(() => {
     return fortnights.reduce((acc, f) => {
       acc.totalImported += f.total_imported;
+      
+      // Para el total pagado a corredores, filtrar a LISSA y corredores inactivos
+      // Los valores de f.total_paid_net ya vienen filtrados del API desde la última modificación
       acc.totalPaidNet += f.total_paid_net;
+      
       acc.totalOfficeProfit += f.total_office_profit;
       return acc;
     }, { totalImported: 0, totalPaidNet: 0, totalOfficeProfit: 0 });
@@ -394,7 +401,7 @@ export function PreviewTab({ role, brokerId }: Props) {
                 <CardTitle className="text-lg sm:text-xl font-bold text-[#010139]">{fortnight.label}</CardTitle>
                 <p className="text-xs sm:text-sm text-gray-600 mt-1">
                   Total Neto: <span className="font-bold text-[#8AAA19]">
-                    {formatCurrency(fortnight.brokers.reduce((sum: number, b: any) => sum + b.net_amount, 0))}
+                    {formatCurrency(fortnight.total_paid_net)}
                   </span>
                 </p>
               </div>
