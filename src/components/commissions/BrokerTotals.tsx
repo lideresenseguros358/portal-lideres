@@ -254,6 +254,8 @@ export default function BrokerTotals({ draftFortnightId, fortnightLabel = 'Quinc
   const handleExportAll = async () => {
     setIsExportingAll(true);
     try {
+      const LISSA_EMAIL = 'contacto@lideresenseguros.com';
+      
       // Transformar todos los corredores al formato BrokerDetail[]
       const allBrokers = Object.entries(groupedData).map(([brokerId, brokerData]) => ({
         broker_name: brokerData.broker_name,
@@ -274,8 +276,11 @@ export default function BrokerTotals({ draftFortnightId, fortnightLabel = 'Quinc
         })),
       }));
 
-      // Calcular totales
-      const totalPaidToBrokers = allBrokers.reduce((sum, b) => sum + b.total_net, 0);
+      // Calcular totales EXCLUYENDO LISSA (igual que la UI)
+      const brokersForTotals = allBrokers.filter(b => 
+        b.broker_email?.toLowerCase() !== LISSA_EMAIL
+      );
+      const totalPaidToBrokers = brokersForTotals.reduce((sum, b) => sum + b.total_gross, 0);
       const officeProfit = totalImported - totalPaidToBrokers;
 
       // Generar UN SOLO PDF con todos los corredores
