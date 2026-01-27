@@ -574,26 +574,36 @@ export async function actionUploadImport(formData: FormData) {
     if (importError) throw importError;
     if (!importRecord) throw new Error('Failed to create import record');
 
-    // 2. Buscar pólizas existentes - SOLO NIVEL 1: match exacto por número de póliza
-    // NIVEL 2 ELIMINADO y MATCH PARCIAL ELIMINADO: NO se usa contains/ilike.%term% para ninguna aseguradora
+    // 2. Buscar pólizas existentes - SOLO NIVEL 1
+    // - Exact match por policy_number
+    // - Match por segmento (ESTRICTO, sin fuzzy) para aseguradoras donde el número real está en un input específico
     const policyNumbers = rows.map(r => r.policy_number).filter(Boolean) as string[];
     const insurerSlug = getInsurerSlug(insurerName);
 
+    // Aseguradoras con match por segmento (estricto):
+    // - MB/FEDPA/REGIONAL/OPTIMA/ALIADO: tercer input
+    // - ACERTA: segundo input
+    const usesStrictSegmentMatch = insurerSlug
+      ? ['mb', 'fedpa', 'regional', 'optima', 'aliado', 'acerta'].includes(insurerSlug)
+      : false;
+
     let existingPolicies: any[] = [];
 
-    // Caso especial UNIVIVIR: el match es por el último segmento (ej 2735), y BD puede tener "2735" o "01-009-2735".
-    // Aquí solo permitimos:
-    // - eq(term)  (cuando BD guarda solo 2735)
-    // - ilike("%-term") (cuando BD guarda el número completo con guiones)
-    if (insurerSlug === 'univivir' && policyNumbers.length > 0) {
+    if (policyNumbers.length > 0 && insurerSlug && (insurerSlug === 'univivir' || usesStrictSegmentMatch)) {
+      // Construir términos a buscar:
+      // - UNIVIVIR: último segmento
+      // - Resto: usar getPolicySearchTerm (configurado por aseguradora) => segundo/tercer input según corresponda
       const terms = Array.from(
         new Set(
           policyNumbers
             .map(pn => String(pn || '').trim())
             .filter(Boolean)
             .map(pn => {
-              const parts = pn.split('-').map(x => x.trim()).filter(Boolean);
-              return parts.length > 0 ? parts[parts.length - 1] : pn;
+              if (insurerSlug === 'univivir') {
+                const parts = pn.split('-').map(x => x.trim()).filter(Boolean);
+                return parts.length > 0 ? parts[parts.length - 1] : pn;
+              }
+              return getPolicySearchTerm(insurerSlug, pn);
             })
             .map(t => String(t || '').trim())
             .filter(Boolean)
@@ -606,7 +616,18 @@ export async function actionUploadImport(formData: FormData) {
         const orClause = batch
           .map(term => {
             const clean = String(term).replace(/%/g, '');
-            return `policy_number.eq.${clean},policy_number.ilike.%-${clean}`;
+
+            if (insurerSlug === 'univivir') {
+              // "2735" puede estar como "2735" o terminar en "-2735"
+              return `policy_number.eq.${clean},policy_number.ilike.%-${clean}`;
+            }
+
+            // Segment match estricto: traer candidatos por delimitadores, y luego validar por segmentos exactos en JS.
+            // Incluye:
+            // - policy_number = term
+            // - contiene "-term-" (segmento interno)
+            // - empieza con "term-" o termina con "-term" (segmento borde)
+            return `policy_number.eq.${clean},policy_number.ilike.%-${clean}-%25,policy_number.ilike.${clean}-%25,policy_number.ilike.%-${clean}`;
           })
           .join(',');
 
@@ -625,7 +646,7 @@ export async function actionUploadImport(formData: FormData) {
         existingPolicies.push(...(data || []));
       }
     } else {
-      // Todas las demás aseguradoras: SOLO exact match
+      // Aseguradoras restantes: SOLO exact match completo
       const { data } = await supabase
         .from('policies')
         .select(`
@@ -738,8 +759,30 @@ export async function actionUploadImport(formData: FormData) {
         matchType: 'policy' as const
       };
 
-      // MATCH PARCIAL ELIMINADO: No hay búsqueda por contains/term para ninguna aseguradora.
-      // Si no hay match exacto, se va a sin identificar.
+      // Match por segmento (ESTRICTO, sin fuzzy):
+      // - UNIVIVIR ya está manejado arriba
+      // - MB/FEDPA/REGIONAL/OPTIMA/ALIADO/ACERTA: usar el input configurado (getPolicySearchTerm)
+      if (insurerSlug && ['mb', 'fedpa', 'regional', 'optima', 'aliado', 'acerta'].includes(insurerSlug)) {
+        const term = String(getPolicySearchTerm(insurerSlug, rawPolicyNumber) || '').trim();
+        if (term) {
+          const strictCandidates = (existingPolicies || []).filter((p: any) => {
+            const pn = String(p.policy_number || '').trim();
+            if (pn === term) return true;
+            const parts = pn.split('-').map(x => x.trim()).filter(Boolean);
+            return parts.includes(term);
+          });
+
+          if (strictCandidates.length === 1) {
+            const pn = String(strictCandidates[0].policy_number);
+            return {
+              matchedPolicyNumber: pn,
+              policyData: policyMap.get(pn) || null,
+              clientData: null,
+              matchType: 'policy' as const,
+            };
+          }
+        }
+      }
 
       // NIVEL 2 DESHABILITADO: Ya no se identifica por nombre de cliente
       // Esto permite crear pólizas nuevas en el sistema para clientes existentes
