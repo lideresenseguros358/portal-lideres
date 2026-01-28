@@ -34,6 +34,7 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
   const [openMenuClient, setOpenMenuClient] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const [expedienteModalOpen, setExpedienteModalOpen] = useState<Record<string, boolean>>({});
+  const [showExpedienteInEdit, setShowExpedienteInEdit] = useState(false);
 
   useEffect(() => {
     loadPreliminaryClients();
@@ -148,6 +149,11 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
     setEditingId(client.id);
     setExpandedClients(prev => new Set(prev).add(client.id));
     setExistingPolicyClient(null);
+    setShowExpedienteInEdit(false);
+    
+    // Obtener broker_id desde la relación brokers
+    const brokerId = client.broker_id || client.brokers?.id || '';
+    
     setEditForm({
       client_name: client.client_name || '',
       national_id: client.national_id || '',
@@ -160,7 +166,7 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
       start_date: client.start_date || today,
       renewal_date: client.renewal_date || '',
       status: client.status || 'ACTIVA',
-      broker_id: client.broker_id || '',
+      broker_id: brokerId,
       notes: client.notes || '',
     });
   };
@@ -838,21 +844,6 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
                     />
                   </div>
 
-                  {/* Expediente dentro del Modal */}
-                  <div className="border-t border-gray-200 pt-4">
-                    <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                      <FaFolder className="text-[#8AAA19]" />
-                      Expediente del Cliente
-                    </h4>
-                    <ExpedienteManager
-                      clientId={editingId}
-                      showClientDocs={true}
-                      showPolicyDocs={false}
-                      showOtros={true}
-                      readOnly={userRole !== 'master'}
-                    />
-                  </div>
-
                   {/* Action Buttons */}
                   <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 pt-4 border-t border-gray-200">
                     <button
@@ -861,7 +852,15 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
                       className="flex-1 px-4 py-2.5 bg-[#8AAA19] hover:bg-[#7a9916] text-white rounded-lg transition-all font-semibold text-sm flex items-center justify-center gap-2 disabled:opacity-50"
                     >
                       <FaSave size={14} />
-                      {saving ? 'Guardando...' : 'Guardar Cambios'}
+                      {saving ? 'Guardando...' : 'Guardar'}
+                    </button>
+                    <button
+                      onClick={() => setShowExpedienteInEdit(true)}
+                      disabled={saving}
+                      className="px-4 py-2.5 bg-gradient-to-r from-[#010139] to-[#020270] hover:from-[#020270] hover:to-[#010139] text-white rounded-lg transition-all font-semibold text-sm flex items-center justify-center gap-2 disabled:opacity-50"
+                    >
+                      <FaFolder size={14} className="text-white" />
+                      Expediente
                     </button>
                     <button
                       onClick={cancelEdit}
@@ -873,6 +872,22 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
                     </button>
                   </div>
           </div>
+        </Modal>
+      )}
+
+      {/* Modal de Expediente */}
+      {showExpedienteInEdit && editingId && (
+        <Modal 
+          title="Expediente del Cliente" 
+          onClose={() => setShowExpedienteInEdit(false)}
+        >
+          <ExpedienteManager
+            clientId={editingId}
+            showClientDocs={true}
+            showPolicyDocs={false}
+            showOtros={true}
+            readOnly={userRole !== 'master'}
+          />
         </Modal>
       )}
     </div>
