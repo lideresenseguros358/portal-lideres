@@ -170,15 +170,29 @@ export default function NationalIdInput({
   // Actualizar el valor cuando cambien las partes de la cédula
   useEffect(() => {
     if (documentType === 'cedula' && hasInitialized.current) {
-      const fullCedula = [cedulaPart1, cedulaPart2, cedulaPart3]
-        .filter(part => part) // Eliminar partes vacías
-        .join('-');
+      // CRÍTICO: Solo actualizar cuando las 3 partes estén completas
+      // Evita búsquedas prematuras mientras el usuario está escribiendo
+      const hasPart1 = cedulaPart1 && cedulaPart1.trim() !== '';
+      const hasPart2 = cedulaPart2 && cedulaPart2.trim() !== '';
+      const hasPart3 = cedulaPart3 && cedulaPart3.trim() !== '';
       
-      console.log('[NationalIdInput] Actualizando cédula:', fullCedula);
-      
-      if (fullCedula !== lastValueRef.current) {
-        lastValueRef.current = fullCedula;
-        onChange(fullCedula);
+      if (hasPart1 && hasPart2 && hasPart3) {
+        // Todas las partes completas - formar cédula
+        const fullCedula = [cedulaPart1, cedulaPart2, cedulaPart3].join('-');
+        
+        console.log('[NationalIdInput] Cédula completa:', fullCedula);
+        
+        if (fullCedula !== lastValueRef.current) {
+          lastValueRef.current = fullCedula;
+          onChange(fullCedula);
+        }
+      } else {
+        // Partes incompletas - limpiar valor si había algo antes
+        if (lastValueRef.current !== '') {
+          console.log('[NationalIdInput] Cédula incompleta, limpiando valor');
+          lastValueRef.current = '';
+          onChange('');
+        }
       }
     }
   }, [cedulaPart1, cedulaPart2, cedulaPart3, documentType, onChange]);
