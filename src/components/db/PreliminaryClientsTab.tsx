@@ -950,10 +950,19 @@ export default function PreliminaryClientsTab({ insurers, brokers: brokersProp, 
                     <button
                       onClick={saveEdit}
                       disabled={saving}
-                      className="flex-1 px-4 py-2.5 bg-[#8AAA19] hover:bg-[#7a9916] text-white rounded-lg transition-all font-semibold text-sm flex items-center justify-center gap-2 disabled:opacity-50"
+                      className="flex-1 px-4 py-2.5 bg-[#8AAA19] hover:bg-[#7a9916] text-white rounded-lg transition-all font-semibold text-sm flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <FaSave size={14} />
-                      {saving ? 'Guardando...' : 'Guardar'}
+                      {saving ? (
+                        <>
+                          <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full"></div>
+                          <span>Guardando...</span>
+                        </>
+                      ) : (
+                        <>
+                          <FaSave size={14} />
+                          <span>Guardar</span>
+                        </>
+                      )}
                     </button>
                   </div>
           </div>
