@@ -789,7 +789,7 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
                             Corredor <span className="text-red-500">*</span>
                           </label>
                           <Select value={editForm.broker_id} onValueChange={(value) => setEditForm({ ...editForm, broker_id: value })}>
-                            <SelectTrigger className="w-full h-9 text-sm">
+                            <SelectTrigger className="w-full h-9 text-sm border-2 border-gray-300 focus:border-[#8AAA19]">
                               <SelectValue placeholder="Seleccionar corredor...">
                                 {editForm.broker_id 
                                   ? (brokers.find((b: any) => b.id === editForm.broker_id)?.name || 'Seleccionar corredor...')
@@ -798,11 +798,15 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
                               </SelectValue>
                             </SelectTrigger>
                             <SelectContent className="max-h-[300px] overflow-auto">
-                              {brokers.map((broker: any) => (
-                                <SelectItem key={broker.id} value={broker.id}>
-                                  {broker.name || 'Sin nombre'}
-                                </SelectItem>
-                              ))}
+                              {brokers.length > 0 ? (
+                                brokers.map((broker: any) => (
+                                  <SelectItem key={broker.id} value={broker.id}>
+                                    {broker.name || 'Sin nombre'}
+                                  </SelectItem>
+                                ))
+                              ) : (
+                                <div className="p-2 text-sm text-gray-500">No hay corredores disponibles</div>
+                              )}
                             </SelectContent>
                           </Select>
                         </div>
@@ -821,6 +825,9 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
                       <div>
                         <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                           Fecha Renovación <span className="text-red-500">*</span>
+                          {editForm.start_date && (
+                            <span className="text-xs text-green-600 ml-2">✓ Auto-calculada (un año desde inicio)</span>
+                          )}
                         </label>
                         <input
                           type="date"
