@@ -10,16 +10,7 @@ type ClientUpd = TablesUpdate<"clients">;
 export const ClientInsertSchema = z.object({
   name: z.string().min(1, 'Nombre requerido'),
   national_id: z.string().trim().optional().nullable(),
-  email: z.preprocess(
-    (val) => {
-      // Convertir undefined, null, o string vacío a null antes de validar
-      if (val === '' || val === undefined || val === null) return null;
-      // Normalizar a minúsculas (viene en MAYÚSCULAS por CSS uppercase)
-      if (typeof val === 'string') return val.toLowerCase().trim();
-      return val;
-    },
-    z.string().email('Email inválido').nullable()
-  ).optional(),
+  email: z.string().trim().toLowerCase().optional().nullable(),
   phone: z.string().trim().optional().nullable(),
   birth_date: z.string().optional().nullable(),
   active: z.boolean().default(true),
