@@ -32,6 +32,7 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
   const [existingPolicyClient, setExistingPolicyClient] = useState<any>(null);
   const [openMenuClient, setOpenMenuClient] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const [expedienteModalOpen, setExpedienteModalOpen] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     loadPreliminaryClients();
@@ -613,7 +614,11 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
                         showClientDocs={true}
                         showPolicyDocs={false}
                         showOtros={true}
-                        readOnly={false}
+                        readOnly={userRole !== 'master'}
+                        externalModalOpen={expedienteModalOpen[client.id]}
+                        onExternalModalChange={(open) => {
+                          setExpedienteModalOpen(prev => ({ ...prev, [client.id]: open }));
+                        }}
                       />
                     </div>
                   )}
