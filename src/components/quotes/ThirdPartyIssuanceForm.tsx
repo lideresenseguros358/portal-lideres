@@ -1,9 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { FaUser, FaCar, FaIdCard, FaCheck, FaCreditCard } from 'react-icons/fa';
 import { toast } from 'sonner';
 import CreditCardInput from '@/components/is/CreditCardInput';
+import { useISCatalogs } from '@/hooks/useISCatalogs';
+import Autocomplete, { AutocompleteOption } from '@/components/ui/Autocomplete';
 
 interface FormData {
   // Datos Personales
@@ -44,11 +46,6 @@ interface ThirdPartyIssuanceFormProps {
   onSubmit: (data: FormData) => Promise<void>;
 }
 
-const CAR_BRANDS = [
-  'Toyota', 'Honda', 'Nissan', 'Mazda', 'Hyundai', 'Kia', 'Ford', 'Chevrolet',
-  'Mitsubishi', 'Suzuki', 'Volkswagen', 'Mercedes-Benz', 'BMW', 'Audi', 'Otros'
-];
-
 const MARITAL_STATUS = ['Soltero/a', 'Casado/a', 'Divorciado/a', 'Viudo/a', 'Unión Libre'];
 
 const TRANSMISSION_TYPES = ['Manual', 'Automático'];
@@ -75,6 +72,37 @@ export default function ThirdPartyIssuanceForm({
   annualPremium,
   onSubmit,
 }: ThirdPartyIssuanceFormProps) {
+  const { marcas, modelos, selectedMarca, setSelectedMarca, loading: catalogsLoading } = useISCatalogs();
+  const [currentStep, setCurrentStep] = useState(1);
+  const [loading, setLoading] = useState(false);
+  
+  // Credit card data
+  const [cardData, setCardData] = useState({
+    cardNumber: '',
+    expiry: '',
+    cvv: '',
+    cardholderName: '',
+  });
+  const [paymentValid, setPaymentValid] = useState(false);
+
+  // Convertir marcas a opciones de autocomplete
+  const marcasOptions = useMemo<AutocompleteOption[]>(() => 
+    marcas.map(m => ({
+      value: m.COD_MARCA,
+      label: m.TXT_MARCA
+    })),
+    [marcas]
+  );
+
+  // Convertir modelos a opciones de autocomplete
+  const modelosOptions = useMemo<AutocompleteOption[]>(() => 
+    modelos.map(m => ({
+      value: m.COD_MODELO,
+      label: m.TXT_MODELO
+    })),
+    [modelos]
+  );
+
   const [formData, setFormData] = useState<FormData>({
     firstName: '',
     lastName: '',
@@ -100,18 +128,6 @@ export default function ThirdPartyIssuanceForm({
     driverNationalId: '',
     driverBirthDate: '',
   });
-
-  const [currentStep, setCurrentStep] = useState(1);
-  const [loading, setLoading] = useState(false);
-  
-  // Credit card data
-  const [cardData, setCardData] = useState({
-    cardNumber: '',
-    expiry: '',
-    cvv: '',
-    cardholderName: '',
-  });
-  const [paymentValid, setPaymentValid] = useState(false);
 
   // Auto-fill driver data when "same as contractor" is checked
   useEffect(() => {
@@ -381,29 +397,48 @@ export default function ThirdPartyIssuanceForm({
         <div>
           <label className="block text-sm font-semibold text-gray-700 mb-2">
             Marca <span className="text-red-500">*</span>
+            {catalogsLoading && <span className="text-xs text-gray-500 ml-2">(Cargando...)</span>}
           </label>
-          <select
-            value={formData.brand}
-            onChange={(e) => handleChange('brand', e.target.value)}
-            className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition"
-          >
-            <option value="">Seleccionar...</option>
-            {CAR_BRANDS.map((brand) => (
-              <option key={brand} value={brand}>{brand}</option>
-            ))}
-          </select>
+          <Autocomplete
+            options={marcasOptions}
+            value={selectedMarca || ''}
+            onChange={(value, option) => {
+              if (option) {
+                const codMarca = option.value as number;
+                setSelectedMarca(codMarca);
+                handleChange('brand', option.label);
+              } else {
+                setSelectedMarca(null);
+                handleChange('brand', '');
+                handleChange('model', '');
+              }
+            }}
+            placeholder="Buscar marca..."
+            disabled={catalogsLoading}
+            loading={catalogsLoading}
+            emptyMessage="No hay marcas disponibles"
+          />
         </div>
 
         <div>
           <label className="block text-sm font-semibold text-gray-700 mb-2">
             Modelo <span className="text-red-500">*</span>
+            {catalogsLoading && selectedMarca && <span className="text-xs text-gray-500 ml-2">(Cargando...)</span>}
           </label>
-          <input
-            type="text"
+          <Autocomplete
+            options={modelosOptions}
             value={formData.model}
-            onChange={(e) => handleChange('model', e.target.value)}
-            className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition"
-            placeholder="Corolla, Civic, etc."
+            onChange={(value, option) => {
+              if (option) {
+                handleChange('model', option.label);
+              } else {
+                handleChange('model', '');
+              }
+            }}
+            placeholder={!selectedMarca ? 'Primero selecciona una marca' : 'Buscar modelo...'}
+            disabled={!selectedMarca || catalogsLoading}
+            loading={catalogsLoading && !!selectedMarca}
+            emptyMessage={!selectedMarca ? 'Selecciona una marca primero' : 'No hay modelos disponibles'}
           />
         </div>
 

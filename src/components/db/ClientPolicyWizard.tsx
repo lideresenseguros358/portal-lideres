@@ -53,6 +53,7 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
   const [documentType, setDocumentType] = useState<'cedula' | 'pasaporte' | 'ruc'>('cedula');
   const [duplicatePolicyError, setDuplicatePolicyError] = useState<{policyNumber: string; brokerName: string; isSameBroker: boolean} | null>(null);
   const [existingClientData, setExistingClientData] = useState<any>(null);
+  const [existingClientWarning, setExistingClientWarning] = useState<{clientName: string; brokerName: string; isOtherBroker: boolean} | null>(null);
   const [searchingClient, setSearchingClient] = useState(false);
   const [checkingPolicy, setCheckingPolicy] = useState(false);
   const today = getTodayLocalDate();
@@ -258,6 +259,64 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
     }, 400); // Esperar 400ms después de que el usuario deja de escribir
 
     setSearchDebounceTimer(timer);
+  };
+
+  // Buscar cliente por cédula/national_id
+  const searchClientByNationalId = async (nationalId: string) => {
+    if (!nationalId || nationalId.length < 5) {
+      setExistingClientWarning(null);
+      setExistingClientData(null);
+      return;
+    }
+
+    setSearchingClient(true);
+    
+    try {
+      const { data: clientData } = await supabaseClient()
+        .from('clients')
+        .select('id, name, national_id, email, phone, birth_date, broker_id, brokers(name, p_id, profiles(email))')
+        .eq('national_id', nationalId)
+        .single();
+
+      if (clientData) {
+        const brokerName = (clientData as any).brokers?.name || 'Desconocido';
+        const brokerEmail = (clientData as any).brokers?.profiles?.email || '';
+        const isCurrentUserBroker = role === 'broker' ? brokerEmail === userEmail : false;
+        const isOtherBroker = !isCurrentUserBroker && role === 'broker';
+
+        // Guardar datos del cliente para autocompletar
+        setExistingClientData(clientData);
+        
+        // Si es otro broker, mostrar advertencia amarilla
+        if (isOtherBroker) {
+          setExistingClientWarning({
+            clientName: clientData.name,
+            brokerName,
+            isOtherBroker: true
+          });
+        } else {
+          setExistingClientWarning(null);
+        }
+
+        // Auto-completar campos
+        setFormData(prev => ({
+          ...prev,
+          client_name: clientData.name || prev.client_name,
+          email: clientData.email || prev.email,
+          phone: clientData.phone || prev.phone,
+          birth_date: clientData.birth_date || prev.birth_date,
+        }));
+      } else {
+        setExistingClientData(null);
+        setExistingClientWarning(null);
+      }
+    } catch (error) {
+      console.error('[searchClientByNationalId] Error:', error);
+      setExistingClientData(null);
+      setExistingClientWarning(null);
+    } finally {
+      setSearchingClient(false);
+    }
   };
 
   const selectExistingClient = async (client: any) => {
@@ -719,6 +778,17 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                   if (validationErrors.national_id && value.trim()) {
                     setValidationErrors(prev => ({ ...prev, national_id: false }));
                   }
+                  // Limpiar advertencias al cambiar
+                  if (value !== existingClientData?.national_id) {
+                    setExistingClientWarning(null);
+                    setExistingClientData(null);
+                  }
+                }}
+                onBlur={(e) => {
+                  const value = e.target.value.trim();
+                  if (value && value.length >= 5) {
+                    searchClientByNationalId(value);
+                  }
                 }}
                 helperText={searchingClient ? (
                   <span className="text-blue-600 flex items-center gap-1">
@@ -730,7 +800,7 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                   </span>
                 ) : existingClientData ? (
                   <span className="text-green-700 font-medium">
-                    ✅ Cliente encontrado: {existingClientData.name}. El nombre que escribas actualizará este cliente.
+                    ✅ Cliente encontrado: {existingClientData.name}. Puedes actualizar cualquier información al guardar.
                   </span>
                 ) : null}
                 onDocumentTypeChange={(type) => {
@@ -742,6 +812,34 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
               />
               {validationErrors.national_id && (
                 <p className="text-xs text-red-500 mt-1">⚠️ Este campo es obligatorio</p>
+              )}
+              
+              {/* ADVERTENCIA AMARILLA: Cliente existe con otro broker */}
+              {existingClientWarning && existingClientWarning.isOtherBroker && (
+                <div className="bg-yellow-50 border-l-4 border-yellow-500 p-3 rounded-lg shadow-sm animate-fadeIn mt-2">
+                  <div className="flex items-start gap-2">
+                    <div className="flex-shrink-0">
+                      <svg className="h-5 w-5 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      </svg>
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="text-sm font-bold text-yellow-800 mb-1">⚠️ Cliente Existente Asignado a Otro Corredor</h4>
+                      <p className="text-sm text-yellow-700 mb-2">
+                        El cliente <strong>{existingClientWarning.clientName}</strong> ya existe en la base de datos y está asignado al corredor:
+                      </p>
+                      <div className="bg-yellow-100 border border-yellow-300 rounded px-3 py-2 mb-2">
+                        <p className="text-sm font-semibold text-yellow-900">👤 {existingClientWarning.brokerName}</p>
+                      </div>
+                      <p className="text-xs text-yellow-700 leading-relaxed">
+                        ℹ️ <strong>Puedes continuar</strong> agregando una nueva póliza para este cliente. La póliza que ingreses se registrará en tu cartera, pero el cliente seguirá asignado a {existingClientWarning.brokerName}.
+                      </p>
+                      <p className="text-xs text-yellow-700 mt-2">
+                        📞 Si tienes dudas o necesitas transferir el cliente a tu cartera, <strong>consulta con un administrativo</strong>.
+                      </p>
+                    </div>
+                  </div>
+                </div>
               )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
@@ -843,21 +941,28 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                       {!duplicatePolicyError.isSameBroker && (
                         <div className="bg-red-100 border border-red-300 rounded-lg p-3 mt-2">
                           <p className="text-sm font-semibold text-red-900 mb-1">👤 Esta póliza está asignada a otro corredor:</p>
-                          <p className="text-sm text-red-800">
+                          <p className="text-sm text-red-800 mb-2">
                             <strong>{duplicatePolicyError.brokerName}</strong>
                           </p>
+                          <p className="text-xs text-red-700 leading-relaxed">
+                            🚫 <strong>NO puedes registrar esta póliza</strong> porque ya existe en el sistema asignada a otro corredor.
+                          </p>
                           <p className="text-xs text-red-700 mt-2">
-                            ℹ️ <strong>Esta póliza NO aparecerá en tu lista de clientes</strong> porque está asignada a otro corredor.
+                            📞 <strong>Contacta al equipo administrativo</strong> si necesitas:
                           </p>
-                          <p className="text-xs text-red-700 mt-1">
-                            📞 <strong>Por favor contacta al equipo administrativo</strong> para solicitar la reasignación de esta póliza si corresponde.
-                          </p>
+                          <ul className="text-xs text-red-700 mt-1 ml-4 list-disc space-y-1">
+                            <li>Solicitar la transferencia de esta póliza a tu cartera</li>
+                            <li>Verificar si hay algún error en el número de póliza</li>
+                            <li>Aclarar cualquier duda sobre la asignación</li>
+                          </ul>
                         </div>
                       )}
                       {duplicatePolicyError.isSameBroker && (
-                        <p className="text-sm text-red-700 mt-2">
-                          Esta póliza ya está en tu lista de clientes. Por favor verifica tu base de datos.
-                        </p>
+                        <div className="bg-red-100 border border-red-300 rounded-lg p-3 mt-2">
+                          <p className="text-sm text-red-700">
+                            🚫 Esta póliza <strong>ya está en tu cartera de clientes</strong>. Por favor verifica tu base de datos o ingresa un número de póliza diferente.
+                          </p>
+                        </div>
                       )}
                     </div>
                   </div>

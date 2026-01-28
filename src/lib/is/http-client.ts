@@ -36,12 +36,22 @@ const tokenCache: Map<ISEnvironment, TokenCacheEntry> = new Map();
  * Cifrado simple para audit_payloads
  */
 function encrypt(text: string): string {
-  // En producción usar una key del .env
-  const key = process.env.AUDIT_ENCRYPTION_KEY || 'default-key-change-me';
-  const cipher = crypto.createCipher('aes-256-cbc', key);
-  let encrypted = cipher.update(text, 'utf8', 'hex');
-  encrypted += cipher.final('hex');
-  return encrypted;
+  try {
+    // En producción usar una key del .env
+    const key = process.env.AUDIT_ENCRYPTION_KEY || 'default-key-change-me-32chars!';
+    // createCipher está deprecado, usar createCipheriv
+    const algorithm = 'aes-256-cbc';
+    const keyBuffer = Buffer.from(key.padEnd(32, '0').substring(0, 32));
+    const iv = Buffer.alloc(16, 0); // IV de 16 bytes (para desarrollo, en prod usar random)
+    
+    const cipher = crypto.createCipheriv(algorithm, keyBuffer, iv);
+    let encrypted = cipher.update(text, 'utf8', 'hex');
+    encrypted += cipher.final('hex');
+    return encrypted;
+  } catch (error) {
+    console.error('[IS] Error en encriptación, guardando sin cifrar:', error);
+    return text; // Fallback: guardar sin cifrar en caso de error
+  }
 }
 
 /**

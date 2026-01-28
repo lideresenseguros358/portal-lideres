@@ -129,13 +129,21 @@ export async function getModelos(env: ISEnvironment = 'development'): Promise<Mo
 
 /**
  * Obtener modelos filtrados por marca
+ * La API de IS retorna TODOS los modelos, filtramos localmente por marca
  */
 export async function getModelosByMarca(
   vcodmarca: string,
   env: ISEnvironment = 'development'
 ): Promise<Modelo[]> {
+  // Obtener TODOS los modelos (cacheados)
   const allModelos = await getModelos(env);
-  return allModelos.filter(m => m.vcodmarca === vcodmarca);
+  
+  // Filtrar por marca localmente (comparar como string)
+  const filteredModelos = allModelos.filter(m => m.vcodmarca === String(vcodmarca));
+  
+  console.log(`[IS Catalogs] Modelos filtrados para marca ${vcodmarca}: ${filteredModelos.length} de ${allModelos.length} totales`);
+  
+  return filteredModelos;
 }
 
 /**

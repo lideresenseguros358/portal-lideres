@@ -5,16 +5,35 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { FaCar, FaShieldAlt, FaArrowLeft, FaUser } from 'react-icons/fa';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { useISCatalogs } from '@/hooks/useISCatalogs';
+import Autocomplete, { AutocompleteOption } from '@/components/ui/Autocomplete';
 
 export default function FormAutoCoberturaCompleta() {
   const router = useRouter();
   const { marcas, modelos, selectedMarca, setSelectedMarca, loading: catalogsLoading } = useISCatalogs();
+
+  // Convertir marcas a opciones de autocomplete
+  const marcasOptions = useMemo<AutocompleteOption[]>(() => 
+    marcas.map(m => ({
+      value: m.COD_MARCA,
+      label: m.TXT_MARCA
+    })),
+    [marcas]
+  );
+
+  // Convertir modelos a opciones de autocomplete
+  const modelosOptions = useMemo<AutocompleteOption[]>(() => 
+    modelos.map(m => ({
+      value: m.COD_MODELO,
+      label: m.TXT_MODELO
+    })),
+    [modelos]
+  );
   
   const [formData, setFormData] = useState({
     // Datos del cliente (para cotizar)
@@ -150,34 +169,37 @@ export default function FormAutoCoberturaCompleta() {
                   Marca <span className="text-red-500">*</span>
                   {catalogsLoading && <span className="text-xs text-gray-500 ml-2">(Cargando...)</span>}
                 </label>
-                <select
+                <Autocomplete
+                  options={marcasOptions}
                   value={selectedMarca || ''}
-                  onChange={(e) => {
-                    const codMarca = parseInt(e.target.value);
-                    const marca = marcas.find(m => m.COD_MARCA === codMarca);
-                    if (marca) {
+                  onChange={(value, option) => {
+                    if (option) {
+                      const codMarca = option.value as number;
                       setSelectedMarca(codMarca);
                       setFormData({
                         ...formData,
-                        marca: marca.TXT_MARCA,
+                        marca: option.label,
                         marcaCodigo: codMarca,
-                        modelo: '', // Reset modelo cuando cambia marca
+                        modelo: '',
+                        modeloCodigo: 0,
+                      });
+                    } else {
+                      setSelectedMarca(null);
+                      setFormData({
+                        ...formData,
+                        marca: '',
+                        marcaCodigo: 0,
+                        modelo: '',
                         modeloCodigo: 0,
                       });
                     }
                   }}
-                  disabled={catalogsLoading || marcas.length === 0}
-                  className={`w-full px-3 py-2.5 md:px-4 md:py-3 text-base border-2 rounded-lg focus:outline-none transition-colors ${
-                    errors.marca ? 'border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
-                  } disabled:bg-gray-100 disabled:cursor-not-allowed`}
-                >
-                  <option value="">Selecciona una marca...</option>
-                  {marcas.map((marca) => (
-                    <option key={marca.COD_MARCA} value={marca.COD_MARCA}>
-                      {marca.TXT_MARCA}
-                    </option>
-                  ))}
-                </select>
+                  placeholder="Buscar marca..."
+                  disabled={catalogsLoading}
+                  error={!!errors.marca}
+                  loading={catalogsLoading}
+                  emptyMessage="No hay marcas disponibles"
+                />
                 {errors.marca && <p className="text-red-500 text-sm mt-1">{errors.marca}</p>}
               </div>
 
@@ -186,33 +208,30 @@ export default function FormAutoCoberturaCompleta() {
                   Modelo <span className="text-red-500">*</span>
                   {catalogsLoading && selectedMarca && <span className="text-xs text-gray-500 ml-2">(Cargando...)</span>}
                 </label>
-                <select
+                <Autocomplete
+                  options={modelosOptions}
                   value={formData.modeloCodigo || ''}
-                  onChange={(e) => {
-                    const codModelo = parseInt(e.target.value);
-                    const modelo = modelos.find(m => m.COD_MODELO === codModelo);
-                    if (modelo) {
+                  onChange={(value, option) => {
+                    if (option) {
                       setFormData({
                         ...formData,
-                        modelo: modelo.TXT_MODELO,
-                        modeloCodigo: codModelo,
+                        modelo: option.label,
+                        modeloCodigo: option.value as number,
+                      });
+                    } else {
+                      setFormData({
+                        ...formData,
+                        modelo: '',
+                        modeloCodigo: 0,
                       });
                     }
                   }}
-                  disabled={!selectedMarca || catalogsLoading || modelos.length === 0}
-                  className={`w-full px-3 py-2.5 md:px-4 md:py-3 text-base border-2 rounded-lg focus:outline-none transition-colors ${
-                    errors.modelo ? 'border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
-                  } disabled:bg-gray-100 disabled:cursor-not-allowed`}
-                >
-                  <option value="">
-                    {!selectedMarca ? 'Primero selecciona una marca' : 'Selecciona un modelo...'}
-                  </option>
-                  {modelos.map((modelo) => (
-                    <option key={modelo.COD_MODELO} value={modelo.COD_MODELO}>
-                      {modelo.TXT_MODELO}
-                    </option>
-                  ))}
-                </select>
+                  placeholder={!selectedMarca ? 'Primero selecciona una marca' : 'Buscar modelo...'}
+                  disabled={!selectedMarca || catalogsLoading}
+                  error={!!errors.modelo}
+                  loading={catalogsLoading && !!selectedMarca}
+                  emptyMessage={!selectedMarca ? 'Selecciona una marca primero' : 'No hay modelos disponibles'}
+                />
                 {errors.modelo && <p className="text-red-500 text-sm mt-1">{errors.modelo}</p>}
               </div>
 

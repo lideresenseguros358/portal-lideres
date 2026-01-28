@@ -7,6 +7,7 @@ interface NationalIdInputProps {
   value: string;
   onChange: (value: string) => void;
   onDocumentTypeChange?: (type: 'cedula' | 'pasaporte' | 'ruc') => void;
+  onBlur?: (e: React.FocusEvent<HTMLInputElement>) => void;
   label?: string;
   required?: boolean;
   error?: string;
@@ -42,6 +43,7 @@ export default function NationalIdInput({
   value,
   onChange,
   onDocumentTypeChange,
+  onBlur,
   label = 'Documento de Identidad',
   required = false,
   error,
@@ -340,6 +342,7 @@ export default function NationalIdInput({
                 placeholder="Asiento"
                 value={cedulaPart3}
                 onChange={handleCedulaPart3Change}
+                onBlur={onBlur}
                 maxLength={10}
                 className={`w-full px-1 sm:px-3 py-2 border-2 rounded-lg focus:outline-none h-11 text-center font-mono text-sm sm:text-base ${
                   hasError ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
@@ -373,6 +376,7 @@ export default function NationalIdInput({
             placeholder="PA123456789"
             value={singleValue}
             onChange={handleSingleValueChange}
+            onBlur={onBlur}
             className={`w-full px-4 py-2 border-2 rounded-lg focus:outline-none h-11 font-mono ${
               hasError ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
             }`}
@@ -398,6 +402,7 @@ export default function NationalIdInput({
             placeholder="475690-1-434939"
             value={singleValue}
             onChange={handleSingleValueChange}
+            onBlur={onBlur}
             className={`w-full px-4 py-2 border-2 rounded-lg focus:outline-none h-11 font-mono ${
               hasError ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
             }`}
