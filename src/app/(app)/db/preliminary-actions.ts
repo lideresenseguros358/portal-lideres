@@ -46,19 +46,40 @@ export async function actionGetPreliminaryClients() {
       return { ok: false as const, error: error.message };
     }
 
-    // Calculate missing fields for each record - SOLO los campos REQUERIDOS por SQL para migración
+    // Calculate missing fields for each record - TODOS los campos OBLIGATORIOS
     const enrichedData = (data || []).map((record: any) => {
       const missingFields: string[] = [];
 
-      // Campos OBLIGATORIOS según migrate_temp_client_to_production() en SQL
-      // Solo estos 5 campos son requeridos para la migración automática:
+      // Todos los campos son OBLIGATORIOS (excepto Notas) según banner actualizado:
       
+      // Datos del Cliente
       if (!record.client_name || record.client_name.trim() === '') {
         missingFields.push('Nombre del cliente');
       }
       
+      if (!record.national_id || record.national_id.trim() === '') {
+        missingFields.push('Cédula/RUC');
+      }
+      
+      if (!record.email || record.email.trim() === '') {
+        missingFields.push('Email');
+      }
+      
+      if (!record.phone || record.phone.trim() === '') {
+        missingFields.push('Teléfono');
+      }
+      
+      if (!record.birth_date) {
+        missingFields.push('Fecha de nacimiento');
+      }
+      
+      // Datos de la Póliza
       if (!record.policy_number || record.policy_number.trim() === '') {
         missingFields.push('Número de póliza');
+      }
+      
+      if (!record.ramo || record.ramo.trim() === '') {
+        missingFields.push('Tipo de póliza');
       }
       
       if (!record.insurer_id) {
@@ -72,10 +93,6 @@ export async function actionGetPreliminaryClients() {
       if (!record.broker_id) {
         missingFields.push('Corredor asignado');
       }
-
-      // Nota: Los siguientes campos son OPCIONALES y se pueden completar después:
-      // - national_id, email, phone, birth_date (datos del cliente)
-      // - ramo, start_date, status (datos de la póliza)
 
       return {
         ...record,
