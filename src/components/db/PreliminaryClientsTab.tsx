@@ -691,7 +691,8 @@ export default function PreliminaryClientsTab({ insurers, brokers: brokersProp, 
                           type="text"
                           value={editForm.client_name}
                           onChange={createUppercaseHandler((e) => setEditForm({ ...editForm, client_name: e.target.value }))}
-                          className={`w-full px-3 py-2 text-sm sm:text-base border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none ${uppercaseInputClass}`}
+                          className={`w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none min-h-[44px] ${uppercaseInputClass}`}
+                          style={{ WebkitAppearance: 'none' }}
                           placeholder="NOMBRE COMPLETO DEL CLIENTE"
                         />
                       </div>
@@ -720,7 +721,8 @@ export default function PreliminaryClientsTab({ insurers, brokers: brokersProp, 
                           type="email"
                           value={editForm.email}
                           onChange={(e) => setEditForm({ ...editForm, email: e.target.value.toLowerCase() })}
-                          className="w-full px-3 py-2 text-sm border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+                          className="w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none min-h-[44px]"
+                          style={{ WebkitAppearance: 'none' }}
                           placeholder="correo@ejemplo.com"
                         />
                       </div>
@@ -732,7 +734,8 @@ export default function PreliminaryClientsTab({ insurers, brokers: brokersProp, 
                           type="tel"
                           value={editForm.phone}
                           onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
-                          className="w-full px-3 py-2 text-sm border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+                          className="w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none min-h-[44px]"
+                          style={{ WebkitAppearance: 'none' }}
                           placeholder="6000-0000"
                         />
                       </div>
@@ -788,7 +791,8 @@ export default function PreliminaryClientsTab({ insurers, brokers: brokersProp, 
                               type="text"
                               value={editForm.policy_number}
                               onChange={createUppercaseHandler((e) => setEditForm({ ...editForm, policy_number: e.target.value }))}
-                              className={`w-full px-3 py-2 text-sm sm:text-base border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none ${uppercaseInputClass} ${userRole !== 'master' ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                              className={`w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none min-h-[44px] ${uppercaseInputClass} ${userRole !== 'master' ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                              style={{ WebkitAppearance: 'none' }}
                               placeholder="Selecciona aseguradora primero"
                               disabled={true}
                             />

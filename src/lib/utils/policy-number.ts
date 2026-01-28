@@ -325,7 +325,10 @@ export function normalizePolicyNumber(insurerSlug: InsurerSlug, parts: string[])
   }
 
   // Unir con el separador configurado
-  return normalizedParts.filter(p => p).join(config.joinWith);
+  // IMPORTANTE: NO filtrar partes vacías - permitir formato con espacios en blanco
+  // Ejemplo UNIVIVIR: "01--22514" (parte 1 y 2 vacías, solo parte 3 llena)
+  // Esto permite que broker guarde aunque no pueda editar todas las partes
+  return normalizedParts.join(config.joinWith);
 }
 
 /**
@@ -378,15 +381,19 @@ export function validatePolicyFormat(insurerSlug: InsurerSlug, parts: string[]):
   // Verificar cantidad de inputs
   if (parts.length !== config.inputCount) return false;
 
-  // Verificar que no estén vacíos
-  if (parts.some(p => !p || p.trim() === '')) return false;
+  // IMPORTANTE: Permitir partes vacías para casos como UNIVIVIR
+  // Broker no puede editar, entonces puede quedar con partes vacías
+  // Al menos una parte debe tener contenido
+  const hasContent = parts.some(p => p && p.trim() !== '');
+  if (!hasContent) return false;
 
-  // Verificar tipos
+  // Verificar tipos SOLO para partes que tienen contenido
   for (let i = 0; i < parts.length; i++) {
     const type = config.inputTypes[i];
     const value = parts[i];
 
-    if (!value) return false; // value no debe ser undefined
+    // Si está vacío, saltar validación
+    if (!value || value.trim() === '') continue;
 
     if (type === 'numeric') {
       // Solo debe contener números
