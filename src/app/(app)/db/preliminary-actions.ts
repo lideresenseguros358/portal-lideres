@@ -172,9 +172,14 @@ export async function actionUpdatePreliminaryClient(id: string, updates: any) {
       cleanedUpdates.notes = updates.notes?.trim() || null;
     }
 
+    // WORKAROUND: Omitir status del update para evitar error de tipo enum
+    // El status rara vez cambia en preliminar, se asigna en creación
+    // TODO: Regenerar database.types.ts cuando sea posible
+    const { status: _, ...updateWithoutStatus } = cleanedUpdates;
+    
     const { data, error } = await supabase
       .from('temp_client_import')
-      .update(cleanedUpdates)
+      .update(updateWithoutStatus)
       .eq('id', id)
       .select()
       .single();
