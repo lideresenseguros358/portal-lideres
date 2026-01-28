@@ -154,17 +154,8 @@ export async function actionUpdatePreliminaryClient(id: string, updates: any) {
     if (updates.renewal_date !== undefined) {
       cleanedUpdates.renewal_date = updates.renewal_date || null;
     }
-    if (updates.status !== undefined) {
-      // Asegurar que sea un valor válido del enum policy_status_enum
-      const statusUpper = updates.status?.toUpperCase() || 'ACTIVA';
-      // Validación estricta - solo permitir valores exactos del enum
-      const validStatuses = ['ACTIVA', 'VENCIDA', 'CANCELADA'];
-      if (validStatuses.includes(statusUpper)) {
-        cleanedUpdates.status = statusUpper as 'ACTIVA' | 'VENCIDA' | 'CANCELADA';
-      } else {
-        cleanedUpdates.status = 'ACTIVA'; // Default si el valor no es válido
-      }
-    }
+    // OMITIR status completamente - tipo enum causa error
+    // Status se asigna en creación y no cambia en updates
     if (updates.broker_id !== undefined) {
       cleanedUpdates.broker_id = updates.broker_id || null;
     }
@@ -172,14 +163,9 @@ export async function actionUpdatePreliminaryClient(id: string, updates: any) {
       cleanedUpdates.notes = updates.notes?.trim() || null;
     }
 
-    // WORKAROUND: Omitir status del update para evitar error de tipo enum
-    // El status rara vez cambia en preliminar, se asigna en creación
-    // TODO: Regenerar database.types.ts cuando sea posible
-    const { status: _, ...updateWithoutStatus } = cleanedUpdates;
-    
     const { data, error } = await supabase
       .from('temp_client_import')
-      .update(updateWithoutStatus)
+      .update(cleanedUpdates)
       .eq('id', id)
       .select()
       .single();
