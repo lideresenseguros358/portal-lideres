@@ -421,8 +421,12 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
               <div 
                 className="p-3 hover:bg-gray-50 transition-colors flex items-center justify-between gap-3"
               >
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-base font-semibold text-gray-900 mb-0.5">
+                <div 
+                  className="flex-1 min-w-0 cursor-pointer"
+                  onClick={() => toggleExpand(client.id)}
+                >
+                  <h3 className="text-base font-semibold text-gray-900 mb-0.5 flex items-center gap-2">
+                    {expandedClients.has(client.id) ? '▼' : '▶'}
                     {client.client_name || '(Sin nombre)'}
                   </h3>
                   <p className="text-xs text-gray-600">
@@ -529,9 +533,9 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
                 </div>
               </div>
 
-              {/* Sección Expandible */}
+              {/* Sección Expandible - Info del cliente */}
               {expandedClients.has(client.id) && (
-                <div className="border-t border-gray-200 bg-gray-50 p-4 sm:p-6">
+                <div className="border-t border-gray-200 bg-gray-50 p-4">
                   {/* Campos faltantes con chips */}
                   {client.missing_fields.length > 0 && (
                     <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
@@ -602,26 +606,24 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
                     </div>
                   </div>
 
-                  {/* Expediente Manager */}
-                  {expandedExpedientes.has(client.id) && (
-                    <div className="mt-4 p-4 bg-blue-50 border-2 border-blue-200 rounded-lg">
-                      <h4 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                        <FaFolder className="text-[#8AAA19]" />
-                        Expediente del Cliente
-                      </h4>
-                      <ExpedienteManager
-                        clientId={client.id}
-                        showClientDocs={true}
-                        showPolicyDocs={false}
-                        showOtros={true}
-                        readOnly={userRole !== 'master'}
-                        externalModalOpen={expedienteModalOpen[client.id]}
-                        onExternalModalChange={(open) => {
-                          setExpedienteModalOpen(prev => ({ ...prev, [client.id]: open }));
-                        }}
-                      />
-                    </div>
-                  )}
+                  {/* Expediente del Cliente */}
+                  <div className="mt-4 border-t border-gray-200 pt-4">
+                    <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                      <FaFolder className="text-[#8AAA19]" />
+                      Expediente del Cliente
+                    </h4>
+                    <ExpedienteManager
+                      clientId={client.id}
+                      showClientDocs={true}
+                      showPolicyDocs={false}
+                      showOtros={true}
+                      readOnly={userRole !== 'master'}
+                      externalModalOpen={expedienteModalOpen[client.id]}
+                      onExternalModalChange={(open) => {
+                        setExpedienteModalOpen(prev => ({ ...prev, [client.id]: open }));
+                      }}
+                    />
+                  </div>
                 </div>
               )}
 
@@ -831,6 +833,21 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
                       rows={2}
                       className="w-full px-3 py-2 text-sm border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none"
                       placeholder="Notas adicionales..."
+                    />
+                  </div>
+
+                  {/* Expediente dentro del Modal */}
+                  <div className="border-t border-gray-200 pt-4">
+                    <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                      <FaFolder className="text-[#8AAA19]" />
+                      Expediente del Cliente
+                    </h4>
+                    <ExpedienteManager
+                      clientId={editingId}
+                      showClientDocs={true}
+                      showPolicyDocs={false}
+                      showOtros={true}
+                      readOnly={userRole !== 'master'}
                     />
                   </div>
 
