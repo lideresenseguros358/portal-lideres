@@ -4,11 +4,11 @@ import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { actionUpdateAdvance, actionDeleteAdvance, actionCheckAdvanceHasHistory } from '@/app/(app)/commissions/actions';
+import { actionUpdateAdvance, actionDeleteAdvance, actionCheckAdvanceHasHistory, actionUpdateAdvanceRecurrence } from '@/app/(app)/commissions/actions';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { FaTimes } from 'react-icons/fa';
+import { FaTimes, FaCalendarAlt } from 'react-icons/fa';
 import {
   Form,
   FormControl,
@@ -18,10 +18,13 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { FaMoneyBillWave, FaDollarSign, FaFileAlt, FaTrash, FaExclamationTriangle } from 'react-icons/fa';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const EditAdvanceSchema = z.object({
   amount: z.coerce.number().positive('El monto debe ser mayor a cero'),
   reason: z.string().min(3, 'La razón es requerida'),
+  fortnight_type: z.enum(['Q1', 'Q2', 'BOTH']).optional(),
+  end_date: z.string().optional(),
 });
 
 type EditAdvanceForm = z.infer<typeof EditAdvanceSchema>;
@@ -32,6 +35,9 @@ interface Advance {
   reason: string | null;
   brokers: { id: string; name: string | null } | null;
   is_recurring?: boolean;
+  recurrence_id?: string | null;
+  fortnight_type?: 'Q1' | 'Q2' | 'BOTH' | null;
+  end_date?: string | null;
 }
 
 interface Props {
@@ -58,6 +64,8 @@ export function EditAdvanceModal({ advance, onClose, onSuccess }: Props) {
       form.reset({
         amount: advance.amount,
         reason: advance.reason || '',
+        fortnight_type: advance.fortnight_type || undefined,
+        end_date: advance.end_date || '',
       });
       
       // Verificar si el adelanto tiene historial de pagos
@@ -74,13 +82,44 @@ export function EditAdvanceModal({ advance, onClose, onSuccess }: Props) {
   const onSubmit = async (values: EditAdvanceForm) => {
     if (!advance) return;
 
-    const result = await actionUpdateAdvance(advance.id, values);
-    if (result.ok) {
-      toast.success('Adelanto actualizado exitosamente');
-      onSuccess();
-      onClose();
+    // Si es recurrente, actualizar la recurrencia
+    if (advance.is_recurring && advance.recurrence_id) {
+      const payload: any = {
+        amount: values.amount,
+        reason: values.reason,
+      };
+
+      // Solo incluir campos de recurrencia si fueron proporcionados
+      if (values.fortnight_type) {
+        payload.fortnight_type = values.fortnight_type;
+      }
+      if (values.end_date !== undefined) {
+        payload.end_date = values.end_date || null;
+      }
+
+      const result = await actionUpdateAdvanceRecurrence(advance.recurrence_id, payload);
+      if (result.ok) {
+        toast.success('Adelanto recurrente actualizado', {
+          description: 'Los cambios se aplicarán a partir de la próxima quincena'
+        });
+        onSuccess();
+        onClose();
+      } else {
+        toast.error('Error al actualizar', { description: result.error });
+      }
     } else {
-      toast.error('Error al actualizar el adelanto', { description: result.error });
+      // Adelanto normal (no recurrente)
+      const result = await actionUpdateAdvance(advance.id, {
+        amount: values.amount,
+        reason: values.reason
+      });
+      if (result.ok) {
+        toast.success('Adelanto actualizado exitosamente');
+        onSuccess();
+        onClose();
+      } else {
+        toast.error('Error al actualizar el adelanto', { description: result.error });
+      }
     }
   };
 
@@ -198,20 +237,91 @@ export function EditAdvanceModal({ advance, onClose, onSuccess }: Props) {
                 )}
               />
 
-              {/* Info sobre recurrencia */}
-              {advance.is_recurring && (
-                <div className="p-2.5 bg-amber-50 border-2 border-amber-200 rounded-lg">
-                  <div className="flex items-start gap-2">
-                    <div className="text-amber-600 text-lg flex-shrink-0">⚠️</div>
-                    <div className="text-xs text-gray-700">
-                      <p className="font-semibold text-amber-800 mb-0.5">Nota sobre adelantos recurrentes</p>
-                      <p className="text-xs">
-                        Los cambios solo afectarán este adelanto específico. Para modificar todos los adelantos futuros,
-                        edita la configuración en "Gestionar Adelantos Recurrentes".
-                      </p>
-                    </div>
+              {/* Campos adicionales para recurrentes */}
+              {advance.is_recurring && advance.recurrence_id && (
+                <>
+                  <div className="p-2.5 bg-purple-50 border-2 border-purple-200 rounded-lg">
+                    <p className="text-xs font-semibold text-purple-900 mb-1">🔁 Configuración de Recurrencia</p>
+                    <p className="text-xs text-purple-700">
+                      Edita aquí la configuración que se aplicará a todas las futuras quincenas.
+                    </p>
                   </div>
-                </div>
+
+                  {/* Tipo de Quincena */}
+                  <FormField
+                    control={form.control}
+                    name="fortnight_type"
+                    render={({ field }) => (
+                      <FormItem className="space-y-1">
+                        <FormLabel className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+                          <FaCalendarAlt className="text-purple-600" />
+                          ¿En qué quincena(s) se aplicará?
+                        </FormLabel>
+                        <Select 
+                          onValueChange={field.onChange} 
+                          value={field.value}
+                        >
+                          <FormControl>
+                            <SelectTrigger className="h-10 border-2 border-gray-300 focus:border-[#8AAA19]">
+                              <SelectValue placeholder="Selecciona quincena..." />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="Q1">
+                              <div className="flex flex-col items-start">
+                                <span className="font-semibold">Primera Quincena (Q1)</span>
+                                <span className="text-xs text-gray-500">Días 1-15 de cada mes</span>
+                              </div>
+                            </SelectItem>
+                            <SelectItem value="Q2">
+                              <div className="flex flex-col items-start">
+                                <span className="font-semibold">Segunda Quincena (Q2)</span>
+                                <span className="text-xs text-gray-500">Días 16-fin de cada mes</span>
+                              </div>
+                            </SelectItem>
+                            <SelectItem value="BOTH">
+                              <div className="flex flex-col items-start">
+                                <span className="font-semibold">Ambas Quincenas (2x mes)</span>
+                                <span className="text-xs text-gray-500">Se aplicará dos veces al mes</span>
+                              </div>
+                            </SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <FormMessage className="text-xs" />
+                      </FormItem>
+                    )}
+                  />
+
+                  {/* Fecha de Fin */}
+                  <FormField
+                    control={form.control}
+                    name="end_date"
+                    render={({ field }) => (
+                      <FormItem className="space-y-1">
+                        <FormLabel className="text-sm font-semibold text-gray-700">
+                          Fecha de Finalización (Opcional)
+                        </FormLabel>
+                        <FormControl>
+                          <Input
+                            type="date"
+                            {...field}
+                            className="h-10 border-2 border-gray-300 focus:border-[#8AAA19]"
+                          />
+                        </FormControl>
+                        <p className="text-xs text-gray-500">
+                          Dejar vacío para que sea indefinido
+                        </p>
+                        <FormMessage className="text-xs" />
+                      </FormItem>
+                    )}
+                  />
+
+                  <div className="p-2.5 bg-blue-50 border-2 border-blue-200 rounded-lg">
+                    <p className="text-xs text-blue-900">
+                      <span className="font-semibold">ℹ️ Nota:</span> Los cambios se aplicarán a partir de la próxima quincena. Los adelantos ya generados no se modificarán.
+                    </p>
+                  </div>
+                </>
               )}
             </form>
           </Form>

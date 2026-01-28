@@ -2163,13 +2163,20 @@ export async function actionGetAdvances(brokerId?: string, year?: number) {
       );
       
       // Agregar total_paid, last_payment_date, payment_logs y payment_details a cada adelanto
-      dataWithExtras = data.map((adv: any) => ({
-        ...adv,
-        total_paid: paymentsByAdvance[adv.id]?.total || 0,
-        last_payment_date: paymentsByAdvance[adv.id]?.lastDate || null,
-        payment_logs: paymentsByAdvance[adv.id]?.logs || [],
-        payment_details: paymentDetailsByAdvance[adv.id] || null,
-      }));
+      // También aplanar datos de advance_recurrences para facilitar edición
+      dataWithExtras = data.map((adv: any) => {
+        const recurrence = adv.advance_recurrences;
+        return {
+          ...adv,
+          total_paid: paymentsByAdvance[adv.id]?.total || 0,
+          last_payment_date: paymentsByAdvance[adv.id]?.lastDate || null,
+          payment_logs: paymentsByAdvance[adv.id]?.logs || [],
+          payment_details: paymentDetailsByAdvance[adv.id] || null,
+          // Aplanar datos de recurrencia si existen
+          fortnight_type: recurrence?.fortnight_type || null,
+          end_date: recurrence?.end_date || null,
+        };
+      });
       
       console.log('[actionGetAdvances] Added payment history to', Object.keys(paymentsByAdvance).length, 'advances');
       console.log('[actionGetAdvances] Added payment details to', Object.keys(paymentDetailsByAdvance).length, 'advances');
