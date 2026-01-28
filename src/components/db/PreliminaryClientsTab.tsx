@@ -307,7 +307,7 @@ export default function PreliminaryClientsTab({ insurers, brokers: brokersProp, 
           <FaExclamationTriangle className="text-amber-600 mt-1 flex-shrink-0" size={20} />
           <div className="flex-1">
             <h3 className="font-bold text-amber-900 mb-2 text-base">
-              ⚠️ Clientes Preliminares - Datos Incompletos
+              Clientes Preliminares - Datos Incompletos
             </h3>
             <p className="text-sm text-amber-800 mb-3">
               Estos clientes están pendientes de completar información para migración a la base de datos principal.
