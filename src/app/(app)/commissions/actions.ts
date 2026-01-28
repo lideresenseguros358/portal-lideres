@@ -2854,7 +2854,7 @@ export async function actionCreateAdvanceRecurrence(payload: {
       advancesToCreate.push({
         broker_id: payload.broker_id,
         amount: payload.amount,
-        reason: `${payload.reason} (Recurrente Q1)`,
+        reason: payload.reason,
         status: 'pending',
         created_by: userId,
         is_recurring: true,
@@ -2863,7 +2863,7 @@ export async function actionCreateAdvanceRecurrence(payload: {
       advancesToCreate.push({
         broker_id: payload.broker_id,
         amount: payload.amount,
-        reason: `${payload.reason} (Recurrente Q2)`,
+        reason: payload.reason,
         status: 'pending',
         created_by: userId,
         is_recurring: true,
@@ -2875,7 +2875,7 @@ export async function actionCreateAdvanceRecurrence(payload: {
       advancesToCreate.push({
         broker_id: payload.broker_id,
         amount: payload.amount,
-        reason: `${payload.reason} (Recurrente ${quincenaText})`,
+        reason: payload.reason,
         status: 'pending',
         created_by: userId,
         is_recurring: true,

@@ -34,6 +34,7 @@ interface Advance {
   brokers: { id: string; name: string | null } | null;
   is_recurring?: boolean;
   recurrence_id?: string | null;
+  fortnight_type?: 'Q1' | 'Q2' | 'BOTH' | null; // Tipo de quincena para recurrentes
   advance_recurrences?: AdvanceRecurrence | null; // Info de recurrencia con end_date
   total_paid?: number; // Total pagado desde advance_logs
   last_payment_date?: string | null; // Fecha del último pago desde advance_logs
@@ -73,6 +74,7 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
   const [editingAdvance, setEditingAdvance] = useState<Advance | null>(null);
   const [expandedBrokers, setExpandedBrokers] = useState<Set<string>>(new Set());
   const [isRecurringExpanded, setIsRecurringExpanded] = useState(false);
+  const [expandedRecurringBrokers, setExpandedRecurringBrokers] = useState<Set<string>>(new Set()); // Cerrados por defecto
   const [paymentModal, setPaymentModal] = useState<{
     isOpen: boolean;
     brokerId: string | null;
@@ -270,7 +272,7 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
           id: base.id,
           broker_id: base.broker_id,
           amount: base.amount, // Monto individual (no suma)
-          reason: base.reason?.replace(/ \(Recurrente Q[12]\)/, '') + ' (Recurrente Q1 y Q2)',
+          reason: base.reason?.replace(/ \(Recurrente Q[12]\)/, '').replace(/ \(Recurrente Q1 y Q2\)/, '') || null,
           status: base.status,
           created_at: base.created_at,
           brokers: base.brokers,
@@ -340,6 +342,12 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
     console.log('[AdvancesTab] Merged recurring advances:', Object.values(recurrenceMap).filter(g => g.length > 1).length);
     return grouped;
   }, [allAdvances]);
+
+  const toggleRecurringBroker = (id: string) => {
+    const newSet = new Set(expandedRecurringBrokers);
+    newSet.has(id) ? newSet.delete(id) : newSet.add(id);
+    setExpandedRecurringBrokers(newSet);
+  };
 
   const toggleBroker = (id: string) => {
     const newSet = new Set(expandedBrokers);
@@ -964,12 +972,21 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
                   {Object.entries(groupedData)
                     .filter(([, brokerData]) => brokerData.recurring_reminders.length > 0)
                     .sort(([, a], [, b]) => a.broker_name.localeCompare(b.broker_name))
-                    .map(([bId, brokerData]) => (
+                    .map(([bId, brokerData]) => {
+                      const isExpanded = expandedRecurringBrokers.has(bId);
+                      return (
                       <React.Fragment key={`recurring-${bId}`}>
                         {role === 'master' && (
-                          <TableRow className="bg-purple-50 font-semibold">
+                          <TableRow 
+                            onClick={() => toggleRecurringBroker(bId)}
+                            className="bg-purple-50 font-semibold cursor-pointer hover:bg-purple-100 transition-colors"
+                          >
                             <TableCell>
-                              <FaChevronRight className="text-purple-600" />
+                              {isExpanded ? (
+                                <FaChevronDown className="text-purple-600" />
+                              ) : (
+                                <FaChevronRight className="text-purple-600" />
+                              )}
                             </TableCell>
                             <TableCell className="font-bold text-purple-900">{brokerData.broker_name}</TableCell>
                             <TableCell colSpan={3} className="text-sm text-purple-700">
@@ -977,7 +994,7 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
                             </TableCell>
                           </TableRow>
                         )}
-                        {brokerData.recurring_reminders.map(advance => (
+                        {(role === 'broker' || isExpanded) && brokerData.recurring_reminders.map(advance => (
                           <TableRow key={advance.id} className="hover:bg-purple-50/50">
                             {role === 'master' && <TableCell></TableCell>}
                             <TableCell className={role === 'master' ? 'pl-12' : ''}>
@@ -992,8 +1009,11 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
                               ${advance.amount.toFixed(2)}
                             </TableCell>
                             <TableCell className="text-center text-sm text-purple-700">
-                              {(advance.reason || '').includes('Q1 y Q2') ? 'Q1 y Q2' : 
-                               (advance.reason || '').includes('Q1') ? 'Q1' : 'Q2'}
+                              {advance.fortnight_type === 'BOTH' ? (
+                                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-purple-200 text-purple-900 border border-purple-400">
+                                  📅 Ambas Quincenas
+                                </span>
+                              ) : advance.fortnight_type === 'Q1' ? 'Q1' : 'Q2'}
                             </TableCell>
                             <TableCell className="text-center">
                               <div className="flex items-center justify-center gap-1">
@@ -1022,7 +1042,7 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
                           </TableRow>
                         ))}
                       </React.Fragment>
-                    ))}
+                    )})}
                 </TableBody>
               </Table>
                 </div>
@@ -1031,21 +1051,34 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
                 <div className="md:hidden space-y-2">
               {Object.entries(groupedData)
                 .filter(([, brokerData]) => brokerData.recurring_reminders.length > 0)
-                .map(([bId, brokerData]) => (
+                .map(([bId, brokerData]) => {
+                  const isExpanded = expandedRecurringBrokers.has(bId);
+                  return (
                   <div key={`mobile-rec-${bId}`} className="space-y-2">
                     {role === 'master' && (
-                      <div className="bg-purple-100 rounded-lg p-2 font-bold text-purple-900 text-sm">
-                        {brokerData.broker_name}
+                      <div 
+                        onClick={() => toggleRecurringBroker(bId)}
+                        className="bg-purple-100 rounded-lg p-2 font-bold text-purple-900 text-sm cursor-pointer hover:bg-purple-200 transition-colors flex items-center justify-between"
+                      >
+                        <span>{brokerData.broker_name}</span>
+                        {isExpanded ? (
+                          <FaChevronDown className="text-purple-600" />
+                        ) : (
+                          <FaChevronRight className="text-purple-600" />
+                        )}
                       </div>
                     )}
-                    {brokerData.recurring_reminders.map(advance => (
+                    {(role === 'broker' || isExpanded) && brokerData.recurring_reminders.map(advance => (
                       <div key={advance.id} className="bg-white border border-purple-200 rounded-lg p-3 shadow-sm">
                         <div className="flex items-start justify-between gap-2 mb-2">
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-semibold text-purple-900 line-clamp-2">{advance.reason}</p>
                             <p className="text-xs text-purple-600 mt-1">
-                              {(advance.reason || '').includes('Q1 y Q2') ? '📅 Q1 y Q2' : 
-                               (advance.reason || '').includes('Q1') ? '📅 Q1' : '📅 Q2'}
+                              {advance.fortnight_type === 'BOTH' ? (
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-200 text-purple-900">
+                                  📅 Ambas Quincenas
+                                </span>
+                              ) : advance.fortnight_type === 'Q1' ? '📅 Q1' : '📅 Q2'}
                             </p>
                           </div>
                           <div className="text-right flex-shrink-0">
@@ -1066,7 +1099,8 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
                       </div>
                     ))}
                   </div>
-                ))}
+                )})}
+                
                 </div>
               </div>
             )}

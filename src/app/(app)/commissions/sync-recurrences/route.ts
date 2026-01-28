@@ -81,7 +81,7 @@ export async function POST() {
           advancesToCreate.push({
             broker_id: recurrence.broker_id,
             amount: recurrence.amount,
-            reason: `${recurrence.reason} (Recurrente Q1)`,
+            reason: recurrence.reason,
             status: 'pending',
             created_by: recurrence.created_by || userId,
             is_recurring: true,
@@ -90,7 +90,7 @@ export async function POST() {
           advancesToCreate.push({
             broker_id: recurrence.broker_id,
             amount: recurrence.amount,
-            reason: `${recurrence.reason} (Recurrente Q2)`,
+            reason: recurrence.reason,
             status: 'pending',
             created_by: recurrence.created_by || userId,
             is_recurring: true,
@@ -102,7 +102,7 @@ export async function POST() {
           advancesToCreate.push({
             broker_id: recurrence.broker_id,
             amount: recurrence.amount,
-            reason: `${recurrence.reason} (Recurrente ${quincenaText})`,
+            reason: recurrence.reason,
             status: 'pending',
             created_by: recurrence.created_by || userId,
             is_recurring: true,
