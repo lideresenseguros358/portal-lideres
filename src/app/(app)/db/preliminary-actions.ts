@@ -77,8 +77,6 @@ export async function actionGetPreliminaryClients() {
       // - national_id, email, phone, birth_date (datos del cliente)
       // - ramo, start_date, status (datos de la póliza)
 
-      console.log(`[Preliminar] Cliente: ${record.client_name || 'Sin nombre'} - Campos obligatorios faltantes: ${missingFields.length}`, missingFields);
-
       return {
         ...record,
         missing_fields: missingFields,
