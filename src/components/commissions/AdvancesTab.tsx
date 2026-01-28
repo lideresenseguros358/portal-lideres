@@ -994,12 +994,14 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
                             </TableCell>
                           </TableRow>
                         )}
-                        {(role === 'broker' || isExpanded) && brokerData.recurring_reminders.map(advance => (
+                        {(role === 'broker' || isExpanded) && brokerData.recurring_reminders.map(advance => {
+                          const cleanReason = (advance.reason || 'Sin motivo').replace(/ \(Recurrente Q[12]\)/, '').replace(/ \(Recurrente Q1 y Q2\)/, '');
+                          return (
                           <TableRow key={advance.id} className="hover:bg-purple-50/50">
                             {role === 'master' && <TableCell></TableCell>}
                             <TableCell className={role === 'master' ? 'pl-12' : ''}>
                               <div className="flex items-center gap-2">
-                                <span className="text-sm">{advance.reason || 'Sin motivo'}</span>
+                                <span className="text-sm">{cleanReason}</span>
                                 <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-200 text-purple-900 border border-purple-400">
                                   📌 RECORDATORIO
                                 </span>
@@ -1013,7 +1015,13 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
                                 <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-purple-200 text-purple-900 border border-purple-400">
                                   📅 Ambas Quincenas
                                 </span>
-                              ) : advance.fortnight_type === 'Q1' ? 'Q1' : 'Q2'}
+                              ) : advance.fortnight_type === 'Q1' ? 'Q1' : 
+                                advance.fortnight_type === 'Q2' ? 'Q2' : 
+                                advance.advance_recurrences?.fortnight_type === 'BOTH' ? (
+                                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold bg-purple-200 text-purple-900 border border-purple-400">
+                                    📅 Ambas Quincenas
+                                  </span>
+                                ) : advance.advance_recurrences?.fortnight_type || 'N/A'}
                             </TableCell>
                             <TableCell className="text-center">
                               <div className="flex items-center justify-center gap-1">
@@ -1040,7 +1048,7 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
                               </div>
                             </TableCell>
                           </TableRow>
-                        ))}
+                        )})}
                       </React.Fragment>
                     )})}
                 </TableBody>
@@ -1068,17 +1076,25 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
                         )}
                       </div>
                     )}
-                    {(role === 'broker' || isExpanded) && brokerData.recurring_reminders.map(advance => (
+                    {(role === 'broker' || isExpanded) && brokerData.recurring_reminders.map(advance => {
+                      const cleanReason = (advance.reason || 'Sin motivo').replace(/ \(Recurrente Q[12]\)/, '').replace(/ \(Recurrente Q1 y Q2\)/, '');
+                      return (
                       <div key={advance.id} className="bg-white border border-purple-200 rounded-lg p-3 shadow-sm">
                         <div className="flex items-start justify-between gap-2 mb-2">
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-semibold text-purple-900 line-clamp-2">{advance.reason}</p>
+                            <p className="text-sm font-semibold text-purple-900 line-clamp-2">{cleanReason}</p>
                             <p className="text-xs text-purple-600 mt-1">
                               {advance.fortnight_type === 'BOTH' ? (
                                 <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-200 text-purple-900">
                                   📅 Ambas Quincenas
                                 </span>
-                              ) : advance.fortnight_type === 'Q1' ? '📅 Q1' : '📅 Q2'}
+                              ) : advance.fortnight_type === 'Q1' ? '📅 Q1' : 
+                                advance.fortnight_type === 'Q2' ? '📅 Q2' : 
+                                advance.advance_recurrences?.fortnight_type === 'BOTH' ? (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-200 text-purple-900">
+                                    📅 Ambas Quincenas
+                                  </span>
+                                ) : advance.advance_recurrences?.fortnight_type ? `📅 ${advance.advance_recurrences.fortnight_type}` : '📅 N/A'}
                             </p>
                           </div>
                           <div className="text-right flex-shrink-0">
@@ -1097,10 +1113,9 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
                           </Button>
                         </div>
                       </div>
-                    ))}
+                    )})}
                   </div>
                 )})}
-                
                 </div>
               </div>
             )}
