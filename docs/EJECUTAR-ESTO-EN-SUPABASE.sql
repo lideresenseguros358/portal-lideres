@@ -89,7 +89,8 @@ BEGIN
     SET 
       national_id = COALESCE(clients.national_id, temp_record.national_id),
       email = COALESCE(clients.email, temp_record.email),
-      phone = COALESCE(clients.phone, temp_record.phone)
+      phone = COALESCE(clients.phone, temp_record.phone),
+      birth_date = COALESCE(clients.birth_date, temp_record.birth_date)
     WHERE id = existing_client_id;
   ELSE
     -- Crear nuevo cliente
@@ -98,6 +99,7 @@ BEGIN
       national_id,
       email,
       phone,
+      birth_date,
       broker_id,
       active
     ) VALUES (
@@ -105,6 +107,7 @@ BEGIN
       NULLIF(UPPER(TRIM(temp_record.national_id)), ''),
       NULLIF(LOWER(TRIM(temp_record.email)), ''),
       NULLIF(TRIM(temp_record.phone), ''),
+      temp_record.birth_date,
       temp_record.broker_id,
       true
     )
