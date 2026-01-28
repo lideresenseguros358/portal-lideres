@@ -25,6 +25,9 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
   const [loading, setLoading] = useState(true);
   const [preliminaryClients, setPreliminaryClients] = useState<any[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
+  
+  // Debug brokers
+  console.log('[PreliminaryClientsTab] Brokers recibidos:', brokers);
   const [editForm, setEditForm] = useState<any>({});
   const [saving, setSaving] = useState(false);
   const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set());
