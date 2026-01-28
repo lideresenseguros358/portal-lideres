@@ -73,6 +73,25 @@ export default function ClientDetailsModal({ client, onClose, onEdit, onOpenExpe
     return formatDateLongNoTimezone(date);
   };
 
+  // Formatear quincena como "Q1 Enero 2026" o "Q2 Febrero 2026"
+  const formatFortnight = (periodStart: string | null, periodEnd: string | null) => {
+    if (!periodStart || !periodEnd) return null;
+    
+    const startDate = new Date(periodStart + 'T00:00:00');
+    const endDate = new Date(periodEnd + 'T00:00:00');
+    const startDay = startDate.getDate();
+    
+    // Determinar si es Q1 (día 1-15) o Q2 (día 16-31)
+    const quinc = startDay <= 15 ? 'Q1' : 'Q2';
+    
+    // Obtener mes en español
+    const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+    const mes = meses[startDate.getMonth()];
+    const año = startDate.getFullYear();
+    
+    return `${quinc} ${mes} ${año}`;
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'ACTIVA':
@@ -160,7 +179,7 @@ export default function ClientDetailsModal({ client, onClose, onEdit, onOpenExpe
       
       console.log('[Comisiones] Términos de búsqueda (incluye segmentos):', policySearchTerms);
       
-      // Obtener comm_items con period_label únicamente
+      // Obtener comm_items con period_label únicamente (query simple que funciona)
       const { data: items, error: itemsError } = await (supabaseClient() as any)
         .from('comm_items')
         .select(`
@@ -191,6 +210,24 @@ export default function ClientDetailsModal({ client, onClose, onEdit, onOpenExpe
         return;
       }
 
+      // Obtener IDs únicos de quincenas para hacer lookup de fechas
+      const fortnightIds = [...new Set(items.map((item: any) => item.comm_imports?.period_label).filter(Boolean))];
+      console.log('[Comisiones] IDs de quincenas a buscar:', fortnightIds);
+      
+      // Query separado para obtener fechas de fortnights
+      const { data: fortnights } = await (supabaseClient() as any)
+        .from('fortnights')
+        .select('id, period_start, period_end')
+        .in('id', fortnightIds);
+      
+      console.log('[Comisiones] Fortnights obtenidos:', fortnights?.length || 0);
+      
+      // Crear mapa de fechas por fortnight_id
+      const fortnightMap = new Map<string, { period_start: string; period_end: string }>();
+      (fortnights || []).forEach((f: any) => {
+        fortnightMap.set(f.id, { period_start: f.period_start, period_end: f.period_end });
+      });
+
       const grouped = (items || []).reduce((acc: Record<string, PolicyCommissions>, item: any) => {
         const policyNumber = item.policy_number;
         if (!policyNumber) return acc;
@@ -214,14 +251,16 @@ export default function ClientDetailsModal({ client, onClose, onEdit, onOpenExpe
         acc[policyId].total_commissions += amount;
         acc[policyId].commissions_count += 1;
         
-        // Agregar item con datos de quincena (sin fechas por ahora)
+        // Agregar item con datos de quincena (lookup desde mapa)
         const commImport = item.comm_imports;
+        const periodLabel = commImport?.period_label;
+        const fortnightData = periodLabel ? fortnightMap.get(periodLabel) : null;
         
         acc[policyId].items.push({
           amount,
-          fortnight_id: commImport?.period_label || 'Sin quincena',
-          period_start: '',
-          period_end: ''
+          fortnight_id: periodLabel || 'Sin quincena',
+          period_start: fortnightData?.period_start || '',
+          period_end: fortnightData?.period_end || ''
         });
         
         return acc;
@@ -592,7 +631,7 @@ export default function ClientDetailsModal({ client, onClose, onEdit, onOpenExpe
                               <p className="text-xs font-semibold text-gray-900">
                                 {item.period_start && item.period_end ? (
                                   <>
-                                    {formatDate(item.period_start)} - {formatDate(item.period_end)}
+                                    {formatFortnight(item.period_start, item.period_end) || `${formatDate(item.period_start)} - ${formatDate(item.period_end)}`}
                                   </>
                                 ) : item.fortnight_id ? (
                                   <>Quincena ID: {item.fortnight_id}</>
