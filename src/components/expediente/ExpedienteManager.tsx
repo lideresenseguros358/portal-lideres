@@ -350,22 +350,22 @@ export default function ExpedienteManager({
                     className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-all disabled:opacity-50"
                     title="Previsualizar"
                   >
-                    <FaEye size={14} />
+                    <FaEye size={16} />
                   </button>
                   <button
                     onClick={() => handleDownload(doc)}
                     className="p-1.5 text-green-600 hover:bg-green-50 rounded transition-all"
                     title="Descargar"
                   >
-                    <FaDownload size={14} />
+                    <FaDownload size={16} />
                   </button>
                   {!readOnly && (
                     <button
                       onClick={() => handleDelete(doc.id)}
-                      className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-all"
-                      title="Eliminar"
+                      className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-all hover:scale-110"
+                      title="Eliminar documento"
                     >
-                      <FaTrash size={14} />
+                      <FaTrash size={18} className="text-red-600" />
                     </button>
                   )}
                 </div>
@@ -441,22 +441,22 @@ export default function ExpedienteManager({
                   className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-all disabled:opacity-50"
                   title="Previsualizar"
                 >
-                  <FaEye size={14} />
+                  <FaEye size={16} />
                 </button>
                 <button
                   onClick={() => handleDownload(doc)}
                   className="p-1.5 text-green-600 hover:bg-green-50 rounded transition-all"
                   title="Descargar"
                 >
-                  <FaDownload size={14} />
+                  <FaDownload size={16} />
                 </button>
                 {!readOnly && (
                   <button
                     onClick={() => handleDelete(doc.id)}
-                    className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-all"
-                    title="Eliminar"
+                    className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-all hover:scale-110"
+                    title="Eliminar documento"
                   >
-                    <FaTrash size={14} />
+                    <FaTrash size={18} className="text-red-600" />
                   </button>
                 )}
               </div>

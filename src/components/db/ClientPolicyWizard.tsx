@@ -73,34 +73,47 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
   });
 
   useEffect(() => {
-    loadInsurers();
-    if (role === 'master') {
-      loadBrokers();
-    }
-    
-    // Obtener broker_id y percent_default si es broker
-    if (role === 'broker') {
-      const fetchBrokerInfo = async () => {
-        const { data: { user } } = await supabaseClient().auth.getUser();
-        if (user) {
-          const { data: broker } = await supabaseClient()
-            .from('brokers')
-            .select('id, percent_default')
-            .eq('p_id', user.id)
-            .single();
-          
-          if (broker) {
-            setUserBrokerId(broker.id);
-            // Establecer el porcentaje default del broker
-            setFormData(prev => ({
-              ...prev,
-              percent_override: broker.percent_default?.toString() || ''
-            }));
+    // OPTIMIZACIÓN: Cargar todo en paralelo
+    const loadData = async () => {
+      const promises = [];
+      
+      // Cargar aseguradoras (siempre)
+      promises.push(loadInsurers());
+      
+      // Cargar brokers (solo master)
+      if (role === 'master') {
+        promises.push(loadBrokers());
+      }
+      
+      // Obtener broker_id y percent_default si es broker
+      if (role === 'broker') {
+        const brokerPromise = (async () => {
+          const { data: { user } } = await supabaseClient().auth.getUser();
+          if (user) {
+            const { data: broker } = await supabaseClient()
+              .from('brokers')
+              .select('id, percent_default')
+              .eq('p_id', user.id)
+              .single();
+            
+            if (broker) {
+              setUserBrokerId(broker.id);
+              // Establecer el porcentaje default del broker
+              setFormData(prev => ({
+                ...prev,
+                percent_override: broker.percent_default?.toString() || ''
+              }));
+            }
           }
-        }
-      };
-      fetchBrokerInfo();
-    }
+        })();
+        promises.push(brokerPromise);
+      }
+      
+      // Ejecutar todas las queries en paralelo
+      await Promise.all(promises);
+    };
+    
+    loadData();
   }, [role]);
 
   useEffect(() => {
@@ -407,10 +420,10 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
             throw new Error('No se encontró el corredor seleccionado');
           }
         } else {
-          const { data: userData } = await supabaseClient().auth.getUser();
-          broker_id = userData.user?.id;
+          // FIX CRÍTICO: Usar userBrokerId (broker.id) en lugar de user.id (p_id)
+          broker_id = userBrokerId || undefined;
           if (!broker_id) {
-            throw new Error('No se pudo obtener el ID del usuario');
+            throw new Error('No se pudo obtener el ID del broker. Intenta recargar la página.');
           }
         }
 
@@ -462,10 +475,10 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
             throw new Error('No se encontró el corredor seleccionado');
           }
         } else {
-          const { data: userData } = await supabaseClient().auth.getUser();
-          broker_id = userData.user?.id;
+          // FIX CRÍTICO: Usar userBrokerId (broker.id) en lugar de user.id (p_id)
+          broker_id = userBrokerId || undefined;
           if (!broker_id) {
-            throw new Error('No se pudo obtener el ID del usuario');
+            throw new Error('No se pudo obtener el ID del broker. Intenta recargar la página.');
           }
         }
 
