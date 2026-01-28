@@ -51,7 +51,9 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
   const [specialOverride, setSpecialOverride] = useState<{ hasSpecialOverride: boolean; overrideValue: number | null; condition?: string }>({ hasSpecialOverride: false, overrideValue: null });
   const [validationErrors, setValidationErrors] = useState<Record<string, boolean>>({});
   const [documentType, setDocumentType] = useState<'cedula' | 'pasaporte' | 'ruc'>('cedula');
-  const [duplicatePolicyError, setDuplicatePolicyError] = useState<string | null>(null);
+  const [duplicatePolicyError, setDuplicatePolicyError] = useState<{policyNumber: string; brokerName: string; isSameBroker: boolean} | null>(null);
+  const [existingClientData, setExistingClientData] = useState<any>(null);
+  const [searchingClient, setSearchingClient] = useState(false);
   const [checkingPolicy, setCheckingPolicy] = useState(false);
   const today = getTodayLocalDate();
   
@@ -122,6 +124,48 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
       setFormData(prev => ({ ...prev, renewal_date: calculatedRenewalDate }));
     }
   }, [formData.start_date, formData.renewal_date]);
+
+  // Buscar cliente existente por cédula
+  useEffect(() => {
+    if (!formData.national_id || formData.national_id.trim() === '') {
+      setExistingClientData(null);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setSearchingClient(true);
+      try {
+        const { data: client } = await supabaseClient()
+          .from('clients')
+          .select('*')
+          .eq('national_id', formData.national_id.toUpperCase())
+          .single();
+
+        if (client) {
+          setExistingClientData(client);
+          // Autocompletar SOLO los campos vacíos, mantener el nombre escrito
+          setFormData(prev => ({
+            ...prev,
+            email: prev.email || client.email || '',
+            phone: prev.phone || client.phone || '',
+            birth_date: prev.birth_date || client.birth_date || '',
+          }));
+          
+          toast.info(`Cliente encontrado: ${client.name}`, {
+            description: 'Datos autocompletados. El nombre que escribas actualizará el cliente en BD.'
+          });
+        } else {
+          setExistingClientData(null);
+        }
+      } catch (error) {
+        setExistingClientData(null);
+      } finally {
+        setSearchingClient(false);
+      }
+    }, 800);
+
+    return () => clearTimeout(timer);
+  }, [formData.national_id]);
 
   // Validar número de póliza en tiempo real (con debounce)
   useEffect(() => {
@@ -270,14 +314,22 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
     setCheckingPolicy(true);
     const { data } = await supabaseClient()
       .from('policies')
-      .select('id, policy_number')
+      .select('id, policy_number, broker_id, brokers(name, p_id, profiles(email))')
       .eq('policy_number', policyNumber)
       .single();
 
     setCheckingPolicy(false);
     
     if (data) {
-      setDuplicatePolicyError(policyNumber);
+      const brokerName = (data as any).brokers?.name || 'Desconocido';
+      const brokerEmail = (data as any).brokers?.profiles?.email || '';
+      const isSameBroker = role === 'broker' ? brokerEmail === userEmail : false;
+      
+      setDuplicatePolicyError({
+        policyNumber,
+        brokerName,
+        isSameBroker
+      });
       return false; // Ya existe
     }
     
@@ -668,6 +720,19 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                     setValidationErrors(prev => ({ ...prev, national_id: false }));
                   }
                 }}
+                helperText={searchingClient ? (
+                  <span className="text-blue-600 flex items-center gap-1">
+                    <svg className="animate-spin h-3 w-3" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Buscando cliente en base de datos...
+                  </span>
+                ) : existingClientData ? (
+                  <span className="text-green-700 font-medium">
+                    ✅ Cliente encontrado: {existingClientData.name}. El nombre que escribas actualizará este cliente.
+                  </span>
+                ) : null}
                 onDocumentTypeChange={(type) => {
                   setDocumentType(type);
                 }}
@@ -769,11 +834,29 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                       </svg>
                     </div>
                     <div className="flex-1">
-                      <h4 className="text-sm font-bold text-red-800 mb-1">⚠️ Esta Póliza Ya Existe en el Sistema</h4>
-                      <p className="text-sm text-red-700">
-                        El número de póliza <strong className="font-mono bg-red-100 px-2 py-0.5 rounded">{duplicatePolicyError}</strong> ya está registrado. 
-                        Por favor ingrese un número diferente para continuar.
+                      <h4 className="text-sm font-bold text-red-800 mb-2">⚠️ Esta Póliza Ya Existe en el Sistema</h4>
+                      <p className="text-sm text-red-700 mb-2">
+                        El número de póliza <strong className="font-mono bg-red-100 px-2 py-0.5 rounded">{duplicatePolicyError.policyNumber}</strong> ya está registrado.
                       </p>
+                      {!duplicatePolicyError.isSameBroker && (
+                        <div className="bg-red-100 border border-red-300 rounded-lg p-3 mt-2">
+                          <p className="text-sm font-semibold text-red-900 mb-1">👤 Esta póliza está asignada a otro corredor:</p>
+                          <p className="text-sm text-red-800">
+                            <strong>{duplicatePolicyError.brokerName}</strong>
+                          </p>
+                          <p className="text-xs text-red-700 mt-2">
+                            ℹ️ <strong>Esta póliza NO aparecerá en tu lista de clientes</strong> porque está asignada a otro corredor.
+                          </p>
+                          <p className="text-xs text-red-700 mt-1">
+                            📞 <strong>Por favor contacta al equipo administrativo</strong> para solicitar la reasignación de esta póliza si corresponde.
+                          </p>
+                        </div>
+                      )}
+                      {duplicatePolicyError.isSameBroker && (
+                        <p className="text-sm text-red-700 mt-2">
+                          Esta póliza ya está en tu lista de clientes. Por favor verifica tu base de datos.
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -824,7 +907,7 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                         setValidationErrors(prev => ({ ...prev, policy_number: false }));
                       }
                       // Limpiar error de duplicado cuando el usuario cambia el valor
-                      if (duplicatePolicyError && value !== duplicatePolicyError) {
+                      if (duplicatePolicyError && value !== duplicatePolicyError.policyNumber) {
                         setDuplicatePolicyError(null);
                       }
                     }}
@@ -842,12 +925,14 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                     </p>
                   )}
                   {duplicatePolicyError && (
-                    <p className="text-xs text-red-600 mt-1 font-semibold flex items-center gap-1">
-                      <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                      </svg>
-                      Esta póliza ya existe en el sistema
-                    </p>
+                    <div className="bg-red-50 border border-red-300 rounded p-2 mt-1">
+                      <p className="text-xs text-red-700 font-semibold flex items-center gap-1">
+                        <svg className="h-4 w-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                        </svg>
+                        <span>Póliza duplicada - Asignada a: <strong>{duplicatePolicyError.brokerName}</strong></span>
+                      </p>
+                    </div>
                   )}
                   {!duplicatePolicyError && !checkingPolicy && validationErrors.policy_number && (
                     <p className="text-xs text-red-500 mt-1">⚠️ Este campo es obligatorio</p>

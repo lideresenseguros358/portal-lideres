@@ -12,6 +12,7 @@ interface NationalIdInputProps {
   error?: string;
   className?: string;
   hasError?: boolean;
+  helperText?: React.ReactNode;
 }
 
 type DocumentType = 'cedula' | 'pasaporte' | 'ruc';
@@ -45,7 +46,8 @@ export default function NationalIdInput({
   required = false,
   error,
   className = '',
-  hasError = false
+  hasError = false,
+  helperText
 }: NationalIdInputProps) {
   const [documentType, setDocumentType] = useState<DocumentType>('cedula');
   const isInitialMount = useRef(true);
@@ -262,6 +264,11 @@ export default function NationalIdInput({
             <SelectItem value="ruc">🏢 RUC</SelectItem>
           </SelectContent>
         </Select>
+        {helperText && (
+          <div className="mt-2">
+            {helperText}
+          </div>
+        )}
       </div>
 
       {/* Inputs según tipo de documento */}
