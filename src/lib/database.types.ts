@@ -1014,6 +1014,7 @@ export type Database = {
           beneficiary_name: string | null
           birth_date: string | null
           broker_type: Database["public"]["Enums"]["broker_type_enum"] | null
+          canceladas_ytd: number
           carnet_expiry_date: string | null
           created_at: string | null
           email: string | null
@@ -1037,6 +1038,7 @@ export type Database = {
           beneficiary_name?: string | null
           birth_date?: string | null
           broker_type?: Database["public"]["Enums"]["broker_type_enum"] | null
+          canceladas_ytd?: number
           carnet_expiry_date?: string | null
           created_at?: string | null
           email?: string | null
@@ -1060,6 +1062,7 @@ export type Database = {
           beneficiary_name?: string | null
           birth_date?: string | null
           broker_type?: Database["public"]["Enums"]["broker_type_enum"] | null
+          canceladas_ytd?: number
           carnet_expiry_date?: string | null
           created_at?: string | null
           email?: string | null

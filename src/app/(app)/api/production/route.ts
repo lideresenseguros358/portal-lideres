@@ -35,7 +35,9 @@ export async function GET(request: NextRequest) {
         brokers!production_broker_id_fkey (
           id,
           name,
-          assa_code
+          assa_code,
+          meta_personal,
+          canceladas_ytd
         )
       `)
       .eq('year', year);
@@ -71,7 +73,7 @@ export async function GET(request: NextRequest) {
       console.log('👑 Master user - Fetching all brokers');
       const { data: allBrokers, error: brokersError } = await supabase
         .from('brokers')
-        .select('id, name, assa_code, meta_personal')
+        .select('id, name, assa_code, meta_personal, canceladas_ytd')
         .order('name');
 
       console.log('📋 All brokers fetched:', allBrokers?.length, 'brokers');
@@ -85,20 +87,20 @@ export async function GET(request: NextRequest) {
           assa_code: broker.assa_code || '',
           meta_personal: parseFloat(broker.meta_personal as any) || 0,
           months: {
-            jan: { bruto: 0, num_polizas: 0, canceladas: 0, persistencia: null },
-            feb: { bruto: 0, num_polizas: 0, canceladas: 0, persistencia: null },
-            mar: { bruto: 0, num_polizas: 0, canceladas: 0, persistencia: null },
-            apr: { bruto: 0, num_polizas: 0, canceladas: 0, persistencia: null },
-            may: { bruto: 0, num_polizas: 0, canceladas: 0, persistencia: null },
-            jun: { bruto: 0, num_polizas: 0, canceladas: 0, persistencia: null },
-            jul: { bruto: 0, num_polizas: 0, canceladas: 0, persistencia: null },
-            aug: { bruto: 0, num_polizas: 0, canceladas: 0, persistencia: null },
-            sep: { bruto: 0, num_polizas: 0, canceladas: 0, persistencia: null },
-            oct: { bruto: 0, num_polizas: 0, canceladas: 0, persistencia: null },
-            nov: { bruto: 0, num_polizas: 0, canceladas: 0, persistencia: null },
-            dec: { bruto: 0, num_polizas: 0, canceladas: 0, persistencia: null },
+            jan: { bruto: 0, num_polizas: 0, persistencia: null },
+            feb: { bruto: 0, num_polizas: 0, persistencia: null },
+            mar: { bruto: 0, num_polizas: 0, persistencia: null },
+            apr: { bruto: 0, num_polizas: 0, persistencia: null },
+            may: { bruto: 0, num_polizas: 0, persistencia: null },
+            jun: { bruto: 0, num_polizas: 0, persistencia: null },
+            jul: { bruto: 0, num_polizas: 0, persistencia: null },
+            aug: { bruto: 0, num_polizas: 0, persistencia: null },
+            sep: { bruto: 0, num_polizas: 0, persistencia: null },
+            oct: { bruto: 0, num_polizas: 0, persistencia: null },
+            nov: { bruto: 0, num_polizas: 0, persistencia: null },
+            dec: { bruto: 0, num_polizas: 0, persistencia: null },
           },
-          canceladas_ytd: 0,
+          canceladas_ytd: broker.canceladas_ytd || 0,
           previous_year: { bruto_ytd: 0, neto_ytd: 0, num_polizas_ytd: 0 }
         });
       });
@@ -112,10 +114,11 @@ export async function GET(request: NextRequest) {
       const brokerIds = [...new Set(productionData.map((r: any) => r.broker_id))].filter((id): id is string => typeof id === 'string');
       const { data: brokersWithMeta } = await supabase
         .from('brokers')
-        .select('id, meta_personal')
+        .select('id, meta_personal, canceladas_ytd')
         .in('id', brokerIds);
       
       const metaMap = new Map(brokersWithMeta?.map(b => [b.id, parseFloat(b.meta_personal as any) || 0]) || []);
+      const canceladasMap = new Map(brokersWithMeta?.map(b => [b.id, b.canceladas_ytd || 0]) || []);
       
       // Inicializar brokers con sus metas personales
       brokerIds.forEach(bId => {
@@ -127,20 +130,20 @@ export async function GET(request: NextRequest) {
             assa_code: record?.brokers?.assa_code || '',
             meta_personal: metaMap.get(bId as string) || 0,
             months: {
-              jan: { bruto: 0, num_polizas: 0, canceladas: 0 },
-              feb: { bruto: 0, num_polizas: 0, canceladas: 0 },
-              mar: { bruto: 0, num_polizas: 0, canceladas: 0 },
-              apr: { bruto: 0, num_polizas: 0, canceladas: 0 },
-              may: { bruto: 0, num_polizas: 0, canceladas: 0 },
-              jun: { bruto: 0, num_polizas: 0, canceladas: 0 },
-              jul: { bruto: 0, num_polizas: 0, canceladas: 0 },
-              aug: { bruto: 0, num_polizas: 0, canceladas: 0 },
-              sep: { bruto: 0, num_polizas: 0, canceladas: 0 },
-              oct: { bruto: 0, num_polizas: 0, canceladas: 0 },
-              nov: { bruto: 0, num_polizas: 0, canceladas: 0 },
-              dec: { bruto: 0, num_polizas: 0, canceladas: 0 },
+              jan: { bruto: 0, num_polizas: 0 },
+              feb: { bruto: 0, num_polizas: 0 },
+              mar: { bruto: 0, num_polizas: 0 },
+              apr: { bruto: 0, num_polizas: 0 },
+              may: { bruto: 0, num_polizas: 0 },
+              jun: { bruto: 0, num_polizas: 0 },
+              jul: { bruto: 0, num_polizas: 0 },
+              aug: { bruto: 0, num_polizas: 0 },
+              sep: { bruto: 0, num_polizas: 0 },
+              oct: { bruto: 0, num_polizas: 0 },
+              nov: { bruto: 0, num_polizas: 0 },
+              dec: { bruto: 0, num_polizas: 0 },
             },
-            canceladas_ytd: 0,
+            canceladas_ytd: canceladasMap.get(bId as string) || 0,
             previous_year: { bruto_ytd: 0, neto_ytd: 0, num_polizas_ytd: 0 }
           });
         }
@@ -155,22 +158,22 @@ export async function GET(request: NextRequest) {
           broker_id: record.broker_id,
           broker_name: record.brokers?.name || 'Sin nombre',
           assa_code: record.brokers?.assa_code || '',
-          meta_personal: 0,
+          meta_personal: record.brokers?.meta_personal || 0,
           months: {
-            jan: { bruto: 0, num_polizas: 0, canceladas: 0 },
-            feb: { bruto: 0, num_polizas: 0, canceladas: 0 },
-            mar: { bruto: 0, num_polizas: 0, canceladas: 0 },
-            apr: { bruto: 0, num_polizas: 0, canceladas: 0 },
-            may: { bruto: 0, num_polizas: 0, canceladas: 0 },
-            jun: { bruto: 0, num_polizas: 0, canceladas: 0 },
-            jul: { bruto: 0, num_polizas: 0, canceladas: 0 },
-            aug: { bruto: 0, num_polizas: 0, canceladas: 0 },
-            sep: { bruto: 0, num_polizas: 0, canceladas: 0 },
-            oct: { bruto: 0, num_polizas: 0, canceladas: 0 },
-            nov: { bruto: 0, num_polizas: 0, canceladas: 0 },
-            dec: { bruto: 0, num_polizas: 0, canceladas: 0 },
+            jan: { bruto: 0, num_polizas: 0 },
+            feb: { bruto: 0, num_polizas: 0 },
+            mar: { bruto: 0, num_polizas: 0 },
+            apr: { bruto: 0, num_polizas: 0 },
+            may: { bruto: 0, num_polizas: 0 },
+            jun: { bruto: 0, num_polizas: 0 },
+            jul: { bruto: 0, num_polizas: 0 },
+            aug: { bruto: 0, num_polizas: 0 },
+            sep: { bruto: 0, num_polizas: 0 },
+            oct: { bruto: 0, num_polizas: 0 },
+            nov: { bruto: 0, num_polizas: 0 },
+            dec: { bruto: 0, num_polizas: 0 },
           },
-          canceladas_ytd: 0,
+          canceladas_ytd: record.brokers?.canceladas_ytd || 0,
           previous_year: { bruto_ytd: 0, neto_ytd: 0, num_polizas_ytd: 0 }
         });
       }
@@ -183,11 +186,9 @@ export async function GET(request: NextRequest) {
         broker.months[monthKey] = {
           bruto: parseFloat(record.bruto) || 0,
           num_polizas: parseInt(record.num_polizas) || 0,
-          canceladas: parseFloat(record.canceladas) || 0,
           persistencia: record.persistencia !== null && record.persistencia !== undefined ? parseFloat(record.persistencia) : null,
         };
-        // Acumular canceladas YTD
-        broker.canceladas_ytd += parseFloat(record.canceladas) || 0;
+        // canceladas_ytd ya viene de brokers, no se acumula
       }
     });
 
@@ -295,28 +296,18 @@ export async function PUT(request: NextRequest) {
     const { field, value } = body;
     
     if (field === 'canceladas_ytd') {
-      if (!broker_id || !year) {
-        return NextResponse.json({ error: 'broker_id y year son requeridos' }, { status: 400 });
+      if (!broker_id) {
+        return NextResponse.json({ error: 'broker_id es requerido' }, { status: 400 });
       }
 
       // Redondear a 2 decimales EXACTOS para evitar errores de punto flotante
       const exactValue = Math.round(value * 100) / 100;
 
-      // Primero, limpiar todas las canceladas mensuales a 0
-      await supabase
-        .from('production')
-        .update({ canceladas: 0 })
-        .eq('broker_id', broker_id)
-        .eq('year', year);
-
-      // Luego, guardar el valor COMPLETO en diciembre (mes 12)
-      // Esto mantiene el total exacto sin división que causa decimales infinitos
+      // Guardar DIRECTAMENTE en la tabla brokers (campo anual, NO mensual)
       const { error: updateError } = await supabase
-        .from('production')
-        .update({ canceladas: exactValue })
-        .eq('broker_id', broker_id)
-        .eq('year', year)
-        .eq('month', 12);
+        .from('brokers')
+        .update({ canceladas_ytd: exactValue })
+        .eq('id', broker_id);
 
       if (updateError) {
         console.error('Error updating canceladas_ytd:', updateError);
