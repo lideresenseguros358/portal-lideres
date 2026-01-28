@@ -414,7 +414,7 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
           return (
             <div
               key={client.id}
-              className="bg-white rounded-lg shadow border border-gray-200 hover:shadow-md transition-all overflow-hidden"
+              className="bg-white rounded-lg shadow border border-gray-200 hover:shadow-md transition-all"
             >
               {/* Header Comprimido - Clickeable */}
               <div 
@@ -435,8 +435,7 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
                       <span className="text-xs font-medium text-amber-600 bg-amber-50 px-2 py-1 rounded cursor-help">
                         ⚠️ {client.missing_fields.length}
                       </span>
-                      <div className="fixed w-80 bg-red-900 text-white text-xs rounded-lg shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 p-4 z-[50000] pointer-events-none" 
-                           style={{transform: 'translateY(-100%)', marginTop: '-0.5rem'}}>
+                      <div className="absolute right-0 bottom-full mb-2 w-80 bg-red-900 text-white text-xs rounded-lg shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 p-4 z-[50000] pointer-events-none">
                         <div className="space-y-2">
                           <p className="font-bold text-sm">⚠️ {client.missing_fields.length} campo{client.missing_fields.length !== 1 ? 's' : ''} faltante{client.missing_fields.length !== 1 ? 's' : ''}</p>
                           <p className="text-xs font-semibold text-red-200">Mientras no se complete la información:</p>
@@ -473,7 +472,7 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
                     {openMenuClient === client.id && (
                       <>
                         <div className="fixed inset-0 z-[49999]" onClick={() => setOpenMenuClient(null)}></div>
-                        <div className="fixed w-48 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-[50000]" style={{right: '1rem', marginTop: '0.25rem'}}>
+                        <div className="absolute right-0 mt-1 w-48 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-[50000]">
                           {client.is_complete && (
                             <button
                               onClick={(e) => {
