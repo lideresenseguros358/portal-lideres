@@ -233,32 +233,98 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
         <div className="flex items-start gap-3">
           <FaExclamationTriangle className="text-amber-600 mt-1 flex-shrink-0" size={20} />
           <div className="flex-1">
-            <h3 className="font-bold text-amber-900 mb-1">
+            <h3 className="font-bold text-amber-900 mb-2 text-base">
               ⚠️ Clientes Preliminares - Datos Incompletos
             </h3>
-            <p className="text-sm text-amber-800 mb-2">
-              Estos clientes están pendientes de completar información obligatoria para migración.
+            <p className="text-sm text-amber-800 mb-3">
+              Estos clientes están pendientes de completar información para migración a la base de datos principal.
             </p>
-            <div className="bg-white/50 rounded p-3 mb-2">
-              <p className="text-xs font-semibold text-amber-900 mb-1">📝 Campos obligatorios para migrar:
+            
+            {/* Campos Obligatorios */}
+            <div className="bg-white/60 rounded-lg p-3 mb-3 border border-amber-200">
+              <p className="text-sm font-bold text-amber-900 mb-2">� Todos los datos son OBLIGATORIOS (excepto Notas):</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
+                <ul className="text-xs text-amber-800 space-y-1">
+                  <li className="flex items-start gap-2">
+                    <span className="text-amber-600 font-bold">•</span>
+                    <span><strong>Nombre del cliente</strong></span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-amber-600 font-bold">•</span>
+                    <span><strong>Cédula/RUC</strong></span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-amber-600 font-bold">•</span>
+                    <span><strong>Email</strong></span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-amber-600 font-bold">•</span>
+                    <span><strong>Teléfono</strong></span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-amber-600 font-bold">•</span>
+                    <span><strong>Fecha de nacimiento</strong></span>
+                  </li>
+                </ul>
+                <ul className="text-xs text-amber-800 space-y-1">
+                  <li className="flex items-start gap-2">
+                    <span className="text-amber-600 font-bold">•</span>
+                    <span><strong>Número de póliza</strong></span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-amber-600 font-bold">•</span>
+                    <span><strong>Tipo de póliza</strong></span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-amber-600 font-bold">•</span>
+                    <span><strong>Aseguradora</strong></span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-amber-600 font-bold">•</span>
+                    <span><strong>Fecha de renovación</strong></span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <span className="text-amber-600 font-bold">•</span>
+                    <span><strong>Corredor asignado</strong></span>
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            {/* Instructivo de Cliente Existente */}
+            <div className="bg-green-50 rounded-lg p-3 mb-3 border border-green-300">
+              <p className="text-sm font-bold text-green-900 mb-2">💡 ¿El cliente YA existe en base de datos?</p>
+              <p className="text-xs text-green-800 mb-2">
+                Si ingresas el <strong>número de póliza</strong> y el cliente ya existe, el sistema:
               </p>
-              <ul className="text-xs text-amber-800 space-y-0.5 list-disc list-inside ml-2">
-                <li>Nombre del cliente</li>
-                <li>Número de póliza</li>
-                <li>Aseguradora</li>
-                <li>Fecha de renovación</li>
-                <li>Corredor asignado</li>
+              <ul className="text-xs text-green-800 space-y-1 ml-4">
+                <li className="flex items-start gap-2">
+                  <span className="text-green-600">✓</span>
+                  <span>Autocompletará <strong>todos los datos del cliente</strong></span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-green-600">✓</span>
+                  <span>Solo necesitas <strong>completar los datos de la póliza</strong></span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-green-600">✓</span>
+                  <span>Al guardar, creará la póliza y la <strong>anexará al cliente existente</strong></span>
+                </li>
               </ul>
-              <p className="text-xs text-amber-700 mt-2 italic">
-                Los demás datos (cédula, email, teléfono, etc.) se pueden completar después de la migración.
+              <p className="text-xs text-green-700 mt-2 italic">
+                Igual que el Wizard de Nuevo Cliente - evita duplicados automáticamente.
               </p>
             </div>
-            <ul className="text-xs text-amber-700 space-y-1 list-disc list-inside">
-              <li><strong>NO calculan comisiones</strong> hasta que sean migrados</li>
-              <li><strong>NO aparecen en reportes de morosidad</strong></li>
-              <li><strong>NO están incluidos en la base de datos principal</strong></li>
-              <li><strong>Se migrarán automáticamente</strong> al completar los 5 campos obligatorios</li>
-            </ul>
+
+            {/* Limitaciones */}
+            <div className="bg-white/40 rounded p-2">
+              <p className="text-xs font-semibold text-amber-900 mb-1">⚠️ Mientras estén en Preliminar:</p>
+              <ul className="text-xs text-amber-700 space-y-0.5 ml-4">
+                <li>• NO calculan comisiones</li>
+                <li>• NO aparecen en reportes de morosidad</li>
+                <li>• NO están incluidos en la base de datos principal</li>
+              </ul>
+            </div>
           </div>
         </div>
       </div>
