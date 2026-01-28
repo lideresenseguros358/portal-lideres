@@ -146,7 +146,7 @@ export default function ClientDetailsModal({ client, onClose, onEdit, onOpenExpe
         return;
       }
 
-      // Obtener comm_items con información de quincenas
+      // Obtener comm_items con información de quincenas (LEFT JOIN para no filtrar)
       const { data: items, error: itemsError } = await (supabaseClient() as any)
         .from('comm_items')
         .select(`
@@ -154,7 +154,7 @@ export default function ClientDetailsModal({ client, onClose, onEdit, onOpenExpe
           gross_amount,
           insurer_id,
           insurers(name),
-          comm_imports!inner(
+          comm_imports(
             period_label,
             fortnights(
               period_start,
@@ -167,9 +167,16 @@ export default function ClientDetailsModal({ client, onClose, onEdit, onOpenExpe
 
       console.log('[Comisiones] Items encontrados:', items?.length || 0);
       console.log('[Comisiones] Error:', itemsError);
+      console.log('[Comisiones] Items raw data:', items);
       
       if (itemsError) {
         console.error('[Comisiones] Error en query:', itemsError);
+        setComisionesData([]);
+        return;
+      }
+      
+      if (!items || items.length === 0) {
+        console.log('[Comisiones] No se encontraron comm_items para estas pólizas');
         setComisionesData([]);
         return;
       }
@@ -564,7 +571,11 @@ export default function ClientDetailsModal({ client, onClose, onEdit, onOpenExpe
                     <div className="mt-3 space-y-2 max-h-60 overflow-y-auto">
                       <p className="text-xs font-semibold text-gray-700 mb-2">Comisiones por Quincena:</p>
                       {policy.items
-                        .sort((a, b) => new Date(b.period_start).getTime() - new Date(a.period_start).getTime())
+                        .sort((a, b) => {
+                          const dateA = a.period_start ? new Date(a.period_start).getTime() : 0;
+                          const dateB = b.period_start ? new Date(b.period_start).getTime() : 0;
+                          return dateB - dateA;
+                        })
                         .map((item, index) => (
                         <div key={index} className="bg-gray-50 border border-gray-200 rounded-lg p-2.5 hover:bg-gray-100 transition">
                           <div className="flex items-center justify-between">
@@ -574,8 +585,10 @@ export default function ClientDetailsModal({ client, onClose, onEdit, onOpenExpe
                                   <>
                                     {formatDate(item.period_start)} - {formatDate(item.period_end)}
                                   </>
+                                ) : item.fortnight_id ? (
+                                  <>Quincena ID: {item.fortnight_id}</>
                                 ) : (
-                                  'Quincena: ' + item.fortnight_id
+                                  <>Comisión registrada</>
                                 )}
                               </p>
                             </div>
