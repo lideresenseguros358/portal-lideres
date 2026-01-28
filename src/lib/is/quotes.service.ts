@@ -80,6 +80,9 @@ export async function generarCotizacionAuto(
     vehiculo: `${request.vcodmarca} ${request.vcodmodelo} ${request.vanioauto}`,
   });
   
+  // Trigger auto-actualización de catálogos en background (no bloquea)
+  import('@/lib/is/catalog-updater').then(m => m.triggerCatalogUpdate('IS')).catch(() => {});
+  
   const response = await isPost<CotizacionAutoResponse>(
     IS_ENDPOINTS.GENERAR_COTIZACION,
     request,

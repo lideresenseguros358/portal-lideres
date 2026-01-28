@@ -294,16 +294,6 @@ export default function FinalQuoteSummary({
           </div>
         </div>
       </div>
-
-      {/* Back Button */}
-      <div className="mt-6 text-center">
-        <button
-          onClick={() => router.back()}
-          className="text-gray-600 hover:text-[#010139] font-semibold text-sm"
-        >
-          ← Volver a modificar
-        </button>
-      </div>
     </div>
   );
 }

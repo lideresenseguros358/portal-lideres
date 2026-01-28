@@ -112,38 +112,125 @@ async function getCatalog<T>(
 }
 
 /**
- * Obtener marcas de vehículos
+ * Obtener marcas de vehículos desde BD LOCAL (instantáneo)
+ * NO llama a API externa - solo lee de catálogo local
  */
 export async function getMarcas(env: ISEnvironment = 'development'): Promise<Marca[]> {
-  const data = await getCatalog<Marca>('marcas', IS_ENDPOINTS.MARCAS, env);
-  return data || [];
+  const cacheKey = `marcas_${env}`;
+  
+  // 1. Cache en memoria (instantáneo < 5ms)
+  const memoryCached = memoryCache.get(cacheKey);
+  if (memoryCached) {
+    console.log('[IS Catalogs] ⚡ Memoria: marcas');
+    return memoryCached.data;
+  }
+  
+  // 2. Leer de BD local (rápido ~50ms) - NUNCA llama a API
+  const supabase = getSupabaseAdmin();
+  const { data: dbCache, error } = await supabase
+    .from('is_catalogs')
+    .select('catalog_data')
+    .eq('catalog_type', 'marcas')
+    .eq('environment', env)
+    .single();
+  
+  if (dbCache && !error) {
+    const marcas = dbCache.catalog_data as unknown as Marca[];
+    memoryCache.set(cacheKey, { data: marcas, timestamp: Date.now() });
+    console.log(`[IS Catalogs] ⚡ BD local: ${marcas.length} marcas`);
+    return marcas;
+  }
+  
+  // 3. Si no hay datos locales, retornar vacío
+  console.error('[IS Catalogs] ❌ No hay datos locales de marcas. Ejecutar script de carga inicial.');
+  return [];
 }
 
 /**
- * Obtener modelos de vehículos
+ * Obtener modelos de vehículos desde BD LOCAL (instantáneo)
+ * NO llama a API externa - solo lee de catálogo local
  */
 export async function getModelos(env: ISEnvironment = 'development'): Promise<Modelo[]> {
-  const data = await getCatalog<Modelo>('modelos', IS_ENDPOINTS.MODELOS, env);
-  return data || [];
+  const cacheKey = `modelos_${env}`;
+  
+  // 1. Cache en memoria (instantáneo < 5ms)
+  const memoryCached = memoryCache.get(cacheKey);
+  if (memoryCached) {
+    console.log('[IS Catalogs] ⚡ Memoria: modelos');
+    return memoryCached.data;
+  }
+  
+  // 2. Leer de BD local (rápido ~100ms) - NUNCA llama a API
+  const supabase = getSupabaseAdmin();
+  const { data: dbCache, error } = await supabase
+    .from('is_catalogs')
+    .select('catalog_data')
+    .eq('catalog_type', 'modelos')
+    .eq('environment', env)
+    .single();
+  
+  if (dbCache && !error) {
+    const modelos = dbCache.catalog_data as unknown as Modelo[];
+    memoryCache.set(cacheKey, { data: modelos, timestamp: Date.now() });
+    console.log(`[IS Catalogs] ⚡ BD local: ${modelos.length} modelos`);
+    return modelos;
+  }
+  
+  // 3. Si no hay datos locales, retornar vacío
+  console.error('[IS Catalogs] ❌ No hay datos locales de modelos. Ejecutar script de carga inicial.');
+  return [];
 }
 
 /**
- * Obtener modelos filtrados por marca
- * La API de IS retorna TODOS los modelos, filtramos localmente por marca
+ * Obtener modelos filtrados por marca (OPTIMIZADO)
+ * Usa cache si está disponible, sino carga todos una vez
  */
 export async function getModelosByMarca(
   vcodmarca: string,
   env: ISEnvironment = 'development'
 ): Promise<Modelo[]> {
-  // Obtener TODOS los modelos (cacheados)
+  const cacheKey = `modelos_${env}`;
+  
+  // 1. Intentar desde cache en memoria primero (instantáneo)
+  const memoryCached = memoryCache.get(cacheKey);
+  if (memoryCached && Date.now() - memoryCached.timestamp < CACHE_TTL.CATALOGS) {
+    const filtered = memoryCached.data.filter((m: Modelo) => m.vcodmarca === String(vcodmarca));
+    console.log(`[IS Catalogs] ⚡ Cache hit (memoria): ${filtered.length} modelos para marca ${vcodmarca}`);
+    return filtered;
+  }
+  
+  // 2. Intentar desde BD (más rápido que API)
+  const supabase = getSupabaseAdmin();
+  const { data: dbCache } = await supabase
+    .from('is_catalogs')
+    .select('catalog_data, updated_at')
+    .eq('catalog_type', 'modelos')
+    .eq('environment', env)
+    .single();
+  
+  if (dbCache) {
+    const age = Date.now() - new Date(dbCache.updated_at).getTime();
+    if (age < CACHE_TTL.CATALOGS) {
+      const allModelos = dbCache.catalog_data as unknown as Modelo[];
+      const filtered = allModelos.filter(m => m.vcodmarca === String(vcodmarca));
+      
+      // Guardar en memoria para próximas llamadas
+      memoryCache.set(cacheKey, { data: allModelos, timestamp: Date.now() });
+      
+      console.log(`[IS Catalogs] ⚡ Cache hit (BD): ${filtered.length} modelos para marca ${vcodmarca}`);
+      return filtered;
+    }
+  }
+  
+  // 3. Si no hay cache válido, cargar todos (solo primera vez o cache expirado)
+  console.log(`[IS Catalogs] 📥 Cache miss - cargando todos los modelos (esto solo pasa una vez al día)...`);
   const allModelos = await getModelos(env);
   
-  // Filtrar por marca localmente (comparar como string)
-  const filteredModelos = allModelos.filter(m => m.vcodmarca === String(vcodmarca));
+  // Filtrar por marca
+  const filtered = allModelos.filter(m => m.vcodmarca === String(vcodmarca));
+  console.log(`[IS Catalogs] ✅ Modelos filtrados: ${filtered.length} de ${allModelos.length} para marca ${vcodmarca}`);
   
-  console.log(`[IS Catalogs] Modelos filtrados para marca ${vcodmarca}: ${filteredModelos.length} de ${allModelos.length} totales`);
-  
-  return filteredModelos;
+  return filtered;
 }
 
 /**

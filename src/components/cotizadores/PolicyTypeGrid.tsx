@@ -23,8 +23,8 @@ const policyTypes = [
   {
     id: 'vida',
     title: 'Vida',
-    description: 'Exclusivo ASSA - Protección familiar garantizada',
-    badge: 'Exclusivo ASSA',
+    description: 'Protección familiar garantizada',
+    badge: 'Termino',
     icon: FaHeart,
     href: '/cotizadores/vida',
     gradient: 'from-[#010139] to-[#020270]',
@@ -97,9 +97,15 @@ export default function PolicyTypeGrid() {
                 
                 {/* CTA Button */}
                 <div className="flex items-center justify-between mt-auto">
-                  <div className={`inline-flex items-center gap-2 px-4 py-2.5 sm:py-2 rounded-lg bg-gradient-to-r ${policy.gradient} text-white text-sm font-bold shadow-lg group-hover:shadow-xl transition-shadow`}>
-                    <span className="hidden sm:inline">COTIZAR Y EMITIR</span>
-                    <span className="sm:hidden">COTIZAR</span>
+                  <div className={`inline-flex items-center justify-center gap-2 px-4 py-2.5 sm:py-2 rounded-lg bg-gradient-to-r ${policy.gradient} text-white text-sm font-bold shadow-lg group-hover:shadow-xl transition-shadow min-w-[120px] sm:min-w-[180px]`}>
+                    {policy.id === 'auto' ? (
+                      <>
+                        <span className="hidden sm:inline">COTIZAR Y EMITIR</span>
+                        <span className="sm:hidden">COTIZAR</span>
+                      </>
+                    ) : (
+                      <span>COTIZAR</span>
+                    )}
                   </div>
                   <span className="text-[#8AAA19] font-bold text-2xl group-hover:translate-x-1 transition-transform">
                     →
@@ -108,7 +114,7 @@ export default function PolicyTypeGrid() {
               </div>
               
               {/* Decorative Element */}
-              <div className="absolute -bottom-6 -right-6 w-28 h-28 bg-gradient-to-br from-gray-50 to-gray-100 rounded-full opacity-50 group-hover:opacity-100 transition-opacity"></div>
+              <div className="absolute -bottom-6 -right-6 w-28 h-28 bg-gradient-to-br from-gray-50 to-gray-100 rounded-full opacity-50 group-hover:opacity-100 transition-opacity -z-10"></div>
             </div>
           </Link>
         );

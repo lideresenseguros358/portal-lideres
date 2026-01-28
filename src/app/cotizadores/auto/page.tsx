@@ -1,10 +1,34 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { FaCar, FaShieldAlt, FaArrowLeft } from 'react-icons/fa';
+import { FaCar, FaShieldAlt } from 'react-icons/fa';
+import Breadcrumb from '@/components/ui/Breadcrumb';
 
 export default function CotizarAutoPage() {
   const router = useRouter();
+  const [minPriceDT, setMinPriceDT] = useState<number | null>(null);
+  const [loadingPrice, setLoadingPrice] = useState(true);
+
+  // Cargar precio mínimo de Daños a Terceros al montar
+  useEffect(() => {
+    const fetchMinPrice = async () => {
+      try {
+        const response = await fetch('/api/quotes/third-party-min-price');
+        const data = await response.json();
+        
+        if (data.success && data.minPrice) {
+          setMinPriceDT(data.minPrice);
+        }
+      } catch (error) {
+        console.error('Error cargando precio mínimo DT:', error);
+      } finally {
+        setLoadingPrice(false);
+      }
+    };
+
+    fetchMinPrice();
+  }, []);
 
   const handleCoverageSelection = (type: 'third-party' | 'full-coverage') => {
     if (type === 'third-party') {
@@ -18,16 +42,17 @@ export default function CotizarAutoPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4">
       <div className="max-w-6xl mx-auto">
+        {/* Breadcrumb */}
+        <div className="mb-6">
+          <Breadcrumb 
+            items={[
+              { label: 'Auto', icon: <FaCar /> },
+            ]}
+          />
+        </div>
+
         {/* Header */}
         <div className="mb-8">
-          <a
-            href="https://www.lideresenseguros.com"
-            className="inline-flex items-center gap-2 text-[#010139] hover:text-[#8AAA19] transition-colors mb-4 font-semibold"
-          >
-            <FaArrowLeft />
-            <span>Volver al sitio web</span>
-          </a>
-
           <div className="text-center">
             <div className="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-r from-[#010139] to-[#020270] rounded-full mb-4">
               <FaCar className="text-white text-4xl" />
@@ -48,12 +73,12 @@ export default function CotizarAutoPage() {
             onClick={() => handleCoverageSelection('third-party')}
             className="group bg-white rounded-2xl shadow-lg border-2 border-gray-100 hover:border-[#8AAA19] hover:shadow-2xl transition-all duration-300 cursor-pointer overflow-hidden"
           >
-            <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-8 text-white">
+            <div className="bg-gradient-to-br from-[#010139] to-[#020270] p-8 text-white">
               <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
                 <FaShieldAlt className="text-3xl" />
               </div>
               <h2 className="text-3xl font-bold mb-2">Daños a Terceros</h2>
-              <p className="text-blue-100">Cobertura legal obligatoria</p>
+              <p className="text-gray-300">Cobertura legal obligatoria</p>
             </div>
 
             <div className="p-8">
@@ -83,13 +108,21 @@ export default function CotizarAutoPage() {
                     <span className="text-green-600 text-sm">✓</span>
                   </div>
                   <div>
-                    <div className="font-semibold text-gray-900">Desde B/.115/año</div>
+                    <div className="font-semibold text-gray-900">
+                      {loadingPrice ? (
+                        <span className="text-gray-400">Cargando...</span>
+                      ) : minPriceDT ? (
+                        `Desde B/.${minPriceDT}/año`
+                      ) : (
+                        'Desde B/.115/año'
+                      )}
+                    </div>
                     <div className="text-sm text-gray-600">Planes básicos y premium disponibles</div>
                   </div>
                 </div>
               </div>
 
-              <div className="bg-gradient-to-r from-blue-50 to-blue-100 border-2 border-blue-200 rounded-xl p-4 mb-6">
+              <div className="bg-gradient-to-r from-blue-50 to-gray-50 border-2 border-gray-200 rounded-xl p-4 mb-6">
                 <div className="font-bold text-[#010139] mb-2">Incluye:</div>
                 <ul className="text-sm text-gray-700 space-y-1">
                   <li>• Responsabilidad civil</li>
@@ -99,7 +132,7 @@ export default function CotizarAutoPage() {
                 </ul>
               </div>
 
-              <button className="w-full bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white py-4 rounded-xl font-bold text-lg transition-all shadow-md hover:shadow-lg group-hover:scale-105">
+              <button className="w-full bg-gradient-to-r from-[#010139] to-[#020270] hover:from-[#020270] hover:to-[#010139] text-white py-4 rounded-xl font-bold text-lg transition-all shadow-md hover:shadow-lg group-hover:scale-105">
                 Ver Planes y Tarifas →
               </button>
             </div>
@@ -176,7 +209,7 @@ export default function CotizarAutoPage() {
               <h3 className="text-2xl font-bold text-[#010139] mb-4">¿Cuál es la diferencia?</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                  <div className="font-bold text-blue-600 mb-2">Daños a Terceros</div>
+                  <div className="font-bold text-[#010139] mb-2">Daños a Terceros</div>
                   <p className="text-sm text-gray-700">
                     Cubre los daños que <strong>tu vehículo cause a otros</strong>. Es el seguro 
                     mínimo legal obligatorio en Panamá. Ideal si tu auto es antiguo o de bajo 

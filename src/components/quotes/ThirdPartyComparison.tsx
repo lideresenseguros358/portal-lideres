@@ -314,9 +314,9 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
               {/* Todas las coberturas */}
               <div className="space-y-2 mb-4">
                 {Object.entries(insurer.basicPlan.coverages).map(([key, value]) => (
-                  <div key={key} className="flex items-start justify-between gap-2 text-sm">
-                    <span className="text-gray-700">{COVERAGE_LABELS[key as keyof typeof COVERAGE_LABELS]}</span>
-                    <div className="text-right flex-shrink-0">
+                  <div key={key} className="text-sm">
+                    <div className="text-gray-700 font-medium mb-1">{COVERAGE_LABELS[key as keyof typeof COVERAGE_LABELS]}</div>
+                    <div className="break-words">
                       {renderCoverageValue(value)}
                     </div>
                   </div>
@@ -362,9 +362,9 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
               {/* Todas las coberturas */}
               <div className="space-y-2 mb-4">
                 {Object.entries(insurer.premiumPlan.coverages).map(([key, value]) => (
-                  <div key={key} className="flex items-start justify-between gap-2 text-sm">
-                    <span className="text-gray-700 font-medium">{COVERAGE_LABELS[key as keyof typeof COVERAGE_LABELS]}</span>
-                    <div className="text-right flex-shrink-0">
+                  <div key={key} className="text-sm">
+                    <div className="text-gray-700 font-medium mb-1">{COVERAGE_LABELS[key as keyof typeof COVERAGE_LABELS]}</div>
+                    <div className="break-words">
                       {renderCoverageValue(value)}
                     </div>
                   </div>

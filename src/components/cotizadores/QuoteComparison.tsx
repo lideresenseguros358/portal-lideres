@@ -7,9 +7,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FaStar, FaShieldAlt, FaCheckCircle, FaCog } from 'react-icons/fa';
+import { FaStar, FaShieldAlt, FaCheckCircle, FaCog, FaArrowUp, FaEdit } from 'react-icons/fa';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 import InsurerLogo from '@/components/shared/InsurerLogo';
+import PremiumUpgradeModal from './PremiumUpgradeModal';
 
 interface Coverage {
   name: string;
@@ -25,6 +27,13 @@ interface QuotePlan {
   annualPremium: number;
   coverages: Coverage[];
   deductible: number;
+  // Propiedades adicionales para cotizaciones reales
+  _isReal?: boolean;
+  _idCotizacion?: string;
+  _vIdOpt?: number;
+  _endosoIncluido?: string;
+  _deducibleOriginal?: string;
+  [key: string]: any; // Para otras propiedades dinámicas
 }
 
 interface QuoteComparisonProps {
@@ -37,6 +46,9 @@ export default function QuoteComparison({ policyType, quotes, quoteData }: Quote
   const router = useRouter();
   const [selectedQuote, setSelectedQuote] = useState<string | null>(null);
   const [insurerLogos, setInsurerLogos] = useState<Record<string, string | null>>({});
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [selectedBasicPlan, setSelectedBasicPlan] = useState<QuotePlan | null>(null);
+  const [correspondingPremiumPlan, setCorrespondingPremiumPlan] = useState<QuotePlan | null>(null);
 
   useEffect(() => {
     // Cargar logos de aseguradoras desde la API
@@ -103,8 +115,36 @@ export default function QuoteComparison({ policyType, quotes, quoteData }: Quote
   const handleSelectPlan = (quoteId: string) => {
     setSelectedQuote(quoteId);
     
-    // Guardar selección y datos
     const selectedPlan = quotes.find(q => q.id === quoteId);
+    if (!selectedPlan) return;
+    
+    // Si seleccionó un plan básico Y no escogió manualmente el endoso premium
+    const isPlanBasico = selectedPlan.planType === 'basico';
+    const isRealQuote = selectedPlan._isReal;
+    const manuallySelectedPremium = selectedPlan._deducibleOriginal === 'alto';
+    
+    if (isPlanBasico && isRealQuote && !manuallySelectedPremium) {
+      // Buscar el plan premium correspondiente de la misma aseguradora
+      const premiumPlan = quotes.find(q => 
+        q.insurerName === selectedPlan.insurerName && 
+        q.planType === 'premium'
+      );
+      
+      if (premiumPlan) {
+        // Mostrar modal de upgrade
+        setSelectedBasicPlan(selectedPlan);
+        setCorrespondingPremiumPlan(premiumPlan);
+        setShowUpgradeModal(true);
+        return; // No proceder a emitir todavía
+      }
+    }
+    
+    // Si no hay upgrade disponible o seleccionó premium, proceder directamente
+    proceedToEmission(selectedPlan);
+  };
+  
+  const proceedToEmission = (selectedPlan: QuotePlan) => {
+    // Guardar selección y datos
     sessionStorage.setItem('selectedQuote', JSON.stringify({
       ...selectedPlan,
       quoteData
@@ -112,17 +152,48 @@ export default function QuoteComparison({ policyType, quotes, quoteData }: Quote
 
     // Redirigir según tipo de póliza
     if (policyType === 'auto-completa') {
-      // Auto completa: inicia con selección de cuotas
       router.push('/cotizadores/emitir?step=payment');
     } else {
-      // Vida/Incendio/Contenido: directo a información de pago
       router.push('/cotizadores/emitir?step=payment-info');
     }
   };
 
   const handleImprove = (quoteId: string) => {
-    // TODO: Implementar cuando tengamos endpoints
-    console.log('Mejorar plan:', quoteId);
+    const selectedPlan = quotes.find(q => q.id === quoteId);
+    if (!selectedPlan) return;
+    
+    // Buscar el plan premium correspondiente
+    const premiumPlan = quotes.find(q => 
+      q.insurerName === selectedPlan.insurerName && 
+      q.planType === 'premium'
+    );
+    
+    if (premiumPlan) {
+      setSelectedBasicPlan(selectedPlan);
+      setCorrespondingPremiumPlan(premiumPlan);
+      setShowUpgradeModal(true);
+    } else {
+      toast.error('No hay plan premium disponible para esta aseguradora');
+    }
+  };
+  
+  const handleUpgradeToPremium = () => {
+    if (correspondingPremiumPlan) {
+      setShowUpgradeModal(false);
+      proceedToEmission(correspondingPremiumPlan);
+    }
+  };
+  
+  const handleContinueBasic = () => {
+    if (selectedBasicPlan) {
+      setShowUpgradeModal(false);
+      proceedToEmission(selectedBasicPlan);
+    }
+  };
+
+  const handleEdit = () => {
+    // Regresar al formulario con datos prellenados
+    router.push('/cotizadores/auto-cobertura-completa');
   };
 
   return (
@@ -181,12 +252,10 @@ export default function QuoteComparison({ policyType, quotes, quoteData }: Quote
             >
               {/* Recommended Badge */}
               {quote.isRecommended && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-10">
-                  <div className="bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white px-4 py-1 rounded-full text-xs font-bold shadow-lg flex items-center gap-1">
-                    <FaStar className="text-yellow-300" />
-                    RECOMENDADO
-                  </div>
-                </div>
+                <span className="inline-flex items-center gap-1 px-3 py-1 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white text-xs font-bold rounded-full shadow-md">
+                  <FaStar className="text-white" />
+                  RECOMENDADA
+                </span>
               )}
 
               {/* Header con Logo */}
@@ -257,32 +326,50 @@ export default function QuoteComparison({ policyType, quotes, quoteData }: Quote
                 {/* Actions */}
                 <div className="space-y-2 flex-shrink-0">
                   {/* Improve Button */}
-                  <button
-                    onClick={() => handleImprove(quote.id)}
-                    className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg font-semibold text-[11px] hover:bg-gray-200 transition-colors"
-                    disabled
-                    title="Próximamente disponible"
-                  >
-                    <FaCog className="text-gray-400 text-xs" />
-                    Mejorar Plan
-                  </button>
-
-                  {/* Select Button */}
-                  <button
-                    onClick={() => handleSelectPlan(quote.id)}
-                    className={`w-full px-3 py-2.5 rounded-lg font-bold text-xs transition-all ${
-                      quote.isRecommended
-                        ? 'bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white hover:shadow-xl'
-                        : 'bg-gradient-to-r from-[#010139] to-[#020270] text-white hover:shadow-xl'
-                    }`}
-                  >
-                    {selectedQuote === quote.id ? '✓ SELECCIONADO' : 'SELECCIONAR'}
-                  </button>
+                  <div className="space-y-2">
+                    <button
+                      onClick={() => handleSelectPlan(quote.id)}
+                      className="w-full py-3 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg font-bold hover:shadow-xl transition-all cursor-pointer flex items-center justify-center gap-2"
+                    >
+                      <FaCheckCircle className="text-white" />
+                      Seleccionar Plan
+                    </button>
+                    {quote._isReal && quote.planType === 'basico' && (
+                      <button
+                        onClick={() => handleImprove(quote.id)}
+                        className="w-full py-2 bg-[#010139] text-white rounded-lg font-medium hover:opacity-90 transition-all cursor-pointer flex items-center justify-center gap-2"
+                      >
+                        <FaArrowUp className="text-white" />
+                        Mejorar Plan
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
           ))}
         </div>
+
+        {/* Premium Upgrade Modal */}
+        {showUpgradeModal && selectedBasicPlan && correspondingPremiumPlan && (
+          <PremiumUpgradeModal
+            isOpen={showUpgradeModal}
+            onClose={() => setShowUpgradeModal(false)}
+            onUpgrade={handleUpgradeToPremium}
+            onContinueBasic={handleContinueBasic}
+            insurerName={selectedBasicPlan.insurerName}
+            basicPlan={{
+              premium: selectedBasicPlan.annualPremium,
+              deductible: selectedBasicPlan.deductible,
+              coverages: selectedBasicPlan.coverages.map(c => c.name),
+            }}
+            premiumPlan={{
+              premium: correspondingPremiumPlan.annualPremium,
+              deductible: correspondingPremiumPlan.deductible,
+              coverages: correspondingPremiumPlan.coverages.map(c => c.name),
+            }}
+          />
+        )}
 
         {/* Info Box */}
         <div className="mt-8 bg-blue-50 border-l-4 border-blue-500 p-4 rounded-lg max-w-3xl mx-auto">

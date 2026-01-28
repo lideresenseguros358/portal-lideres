@@ -142,15 +142,23 @@ export default function Autocomplete({
   return (
     <div ref={containerRef} className="relative w-full">
       <div
-        className={`relative flex items-center ${
-          disabled || loading ? 'cursor-not-allowed' : 'cursor-text'
-        }`}
+        className={`flex items-center gap-2 border-2 rounded-lg transition-colors px-3 py-3 md:px-4 md:py-3 ${
+          error
+            ? 'border-red-500 focus-within:border-red-600'
+            : 'border-gray-300 focus-within:border-[#8AAA19]'
+        } ${
+          disabled || loading
+            ? 'bg-gray-100 cursor-not-allowed'
+            : 'bg-white cursor-text'
+        } ${className}`}
         onClick={handleInputClick}
       >
-        <div className="absolute left-3 text-gray-400">
+        {/* Search Icon */}
+        <div className="flex-shrink-0 text-gray-400">
           <FaSearch className="text-sm" />
         </div>
 
+        {/* Input */}
         <input
           ref={inputRef}
           type="text"
@@ -159,18 +167,15 @@ export default function Autocomplete({
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
           disabled={disabled || loading}
-          className={`w-full pl-10 pr-20 py-2.5 md:py-3 text-base border-2 rounded-lg focus:outline-none transition-colors ${
-            error
-              ? 'border-red-500 focus:border-red-600'
-              : 'border-gray-300 focus:border-[#8AAA19]'
-          } ${
-            disabled || loading
-              ? 'bg-gray-100 cursor-not-allowed'
-              : 'bg-white'
-          } ${className}`}
+          className="flex-1 min-w-0 border-0 focus:outline-none focus:ring-0 text-gray-700 placeholder-gray-400 text-base bg-transparent p-0"
+          style={{ 
+            WebkitTextSizeAdjust: '100%',
+            WebkitAppearance: 'none'
+          }}
         />
 
-        <div className="absolute right-3 flex items-center gap-2">
+        {/* Right Icons */}
+        <div className="flex items-center gap-1 flex-shrink-0">
           {loading && (
             <div className="animate-spin rounded-full h-4 w-4 border-2 border-gray-300 border-t-[#8AAA19]" />
           )}
@@ -179,18 +184,20 @@ export default function Autocomplete({
             <button
               type="button"
               onClick={handleClear}
-              className="text-gray-400 hover:text-gray-600 transition-colors p-1"
+              className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
               disabled={disabled}
             >
               <FaTimes className="text-sm" />
             </button>
           )}
 
-          <FaChevronDown
-            className={`text-gray-400 text-sm transition-transform ${
-              isOpen ? 'rotate-180' : ''
-            }`}
-          />
+          <div className="text-gray-400">
+            <FaChevronDown
+              className={`text-sm transition-transform ${
+                isOpen ? 'rotate-180' : ''
+              }`}
+            />
+          </div>
         </div>
       </div>
 

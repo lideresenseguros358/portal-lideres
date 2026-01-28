@@ -1,15 +1,36 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
-import { FaArrowLeft, FaShieldAlt, FaClock, FaCheckCircle } from 'react-icons/fa';
+import { FaShieldAlt, FaClock, FaCheckCircle, FaCar } from 'react-icons/fa';
 import ThirdPartyComparison from '@/components/quotes/ThirdPartyComparison';
 import { AutoThirdPartyPlan } from '@/lib/constants/auto-quotes';
+import Breadcrumb from '@/components/ui/Breadcrumb';
 
 export default function ThirdPartyPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [minPriceDT, setMinPriceDT] = useState<number | null>(null);
+  const [loadingPrice, setLoadingPrice] = useState(true);
+
+  // Cargar precio mínimo dinámico de Daños a Terceros
+  useEffect(() => {
+    const fetchMinPrice = async () => {
+      try {
+        const response = await fetch('/api/quotes/third-party-min-price');
+        const data = await response.json();
+        if (data.success && data.minPrice) {
+          setMinPriceDT(data.minPrice);
+        }
+      } catch (error) {
+        console.error('Error cargando precio mínimo:', error);
+      } finally {
+        setLoadingPrice(false);
+      }
+    };
+
+    fetchMinPrice();
+  }, []);
 
   const handleSelectPlan = (insurerId: string, planType: 'basic' | 'premium', plan: AutoThirdPartyPlan) => {
     setLoading(true);
@@ -22,15 +43,15 @@ export default function ThirdPartyPage() {
       {/* Hero Section */}
       <div className="bg-gradient-to-r from-[#010139] to-[#020270] text-white py-8 px-4 shadow-xl">
         <div className="max-w-7xl mx-auto">
-          <Link
-            href="/cotizadores/auto"
-            className="inline-flex items-center gap-2 text-white/80 hover:text-white transition-colors mb-6 font-semibold"
-          >
-            <FaArrowLeft />
-            <span>Volver</span>
-          </Link>
+          {/* Breadcrumb */}
+          <Breadcrumb 
+            items={[
+              { label: 'Auto', href: '/cotizadores/auto' },
+              { label: 'Daños a Terceros', icon: <FaCar /> },
+            ]}
+          />
 
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6 mt-6">
             <div className="flex-1">
               <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-full px-4 py-2 mb-4">
                 <FaShieldAlt className="text-[#8AAA19]" />
@@ -46,9 +67,13 @@ export default function ThirdPartyPage() {
 
             <div className="flex-shrink-0">
               <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 border-2 border-white/20">
-                <div className="text-5xl md:text-6xl font-black text-[#8AAA19] mb-2">
-                  B/.115
-                </div>
+                {loadingPrice ? (
+                  <div className="text-3xl text-white/60 mb-2">Cargando...</div>
+                ) : (
+                  <div className="text-5xl md:text-6xl font-black text-[#8AAA19] mb-2">
+                    B/.{minPriceDT || 130}
+                  </div>
+                )}
                 <div className="text-sm text-white/80">Desde / año</div>
               </div>
             </div>
@@ -68,7 +93,7 @@ export default function ThirdPartyPage() {
             </div>
             <div className="bg-white/10 backdrop-blur-sm rounded-xl p-4 border border-white/20">
               <FaShieldAlt className="text-[#8AAA19] text-2xl mb-2" />
-              <div className="font-bold mb-1">5 Aseguradoras</div>
+              <div className="font-bold mb-1">4 Aseguradoras</div>
               <div className="text-sm text-white/80">Compara y elige la mejor</div>
             </div>
           </div>

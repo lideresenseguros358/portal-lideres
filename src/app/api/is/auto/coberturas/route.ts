@@ -6,6 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { obtenerCoberturasCotizacion } from '@/lib/is/quotes.service';
 import { ISEnvironment } from '@/lib/is/config';
+import { updateThirdPartyMinPrice } from '@/lib/services/third-party-price-updater';
 
 export async function GET(request: NextRequest) {
   try {
@@ -28,6 +29,17 @@ export async function GET(request: NextRequest) {
         { success: false, error: result.error },
         { status: 500 }
       );
+    }
+    
+    // Si es Daños a Terceros (sumaAsegurada = 0) y tiene precio, actualizar mínimo
+    const sumaAsegurada = searchParams.get('vsumaaseg');
+    const isDanosTerceros = sumaAsegurada === '0' || sumaAsegurada === null;
+    if (isDanosTerceros && result.data?.primaTotal) {
+      // Actualizar precio mínimo en background (no bloquea respuesta)
+      updateThirdPartyMinPrice({
+        insurer: 'INTERNACIONAL',
+        price: result.data.primaTotal,
+      }).catch(err => console.error('[IS] Error actualizando precio mínimo:', err));
     }
     
     return NextResponse.json({

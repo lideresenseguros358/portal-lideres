@@ -7,8 +7,25 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
+import { FaCar, FaCompressArrowsAlt } from 'react-icons/fa';
 import LoadingSkeleton from '@/components/cotizadores/LoadingSkeleton';
 import QuoteComparison from '@/components/cotizadores/QuoteComparison';
+import Breadcrumb from '@/components/ui/Breadcrumb';
+
+/**
+ * Mapeo de deducibles del formulario a vIdOpt de INTERNACIONAL
+ * Bajo = 500 (básico) -> vIdOpt: 1
+ * Medio = 250 (medio) -> vIdOpt: 2  
+ * Alto = 100 (premium) -> vIdOpt: 3
+ */
+const mapDeductibleToVIdOpt = (deductible: string): 1 | 2 | 3 => {
+  switch (deductible) {
+    case 'bajo': return 1;  // Deducible alto = cobertura básica
+    case 'medio': return 2; // Deducible medio = cobertura media
+    case 'alto': return 3;  // Deducible bajo = cobertura premium
+    default: return 1;
+  }
+};
 
 /**
  * Genera cotización REAL con INTERNACIONAL usando las APIs
@@ -21,6 +38,7 @@ const generateInternacionalRealQuote = async (quoteData: any) => {
     const vcodmodelo = quoteData.modeloCodigo || 1234; // Default Corolla si no viene
     const vcodplancobertura = 14; // Plan 14 = Cobertura Completa Comercial
     const vcodgrupotarifa = 1; // Grupo tarifa standard
+    const vIdOpt = mapDeductibleToVIdOpt(quoteData.deducible || 'bajo'); // Mapear deducible
     
     console.log('[INTERNACIONAL] Usando códigos:', {
       marca: `${quoteData.marca} (${vcodmarca})`,
@@ -64,8 +82,8 @@ const generateInternacionalRealQuote = async (quoteData: any) => {
     const idCotizacion = quoteResult.idCotizacion;
     console.log('[INTERNACIONAL] ID Cotización:', idCotizacion);
     
-    // Obtener coberturas y precio real
-    const coberturasResponse = await fetch(`/api/is/auto/coberturas?vIdPv=${idCotizacion}&env=development`);
+    // Obtener coberturas y precio real con vIdOpt según deducible
+    const coberturasResponse = await fetch(`/api/is/auto/coberturas?vIdPv=${idCotizacion}&vIdOpt=${vIdOpt}&env=development`);
     
     if (!coberturasResponse.ok) {
       console.error('Error en API coberturas:', await coberturasResponse.text());
@@ -83,15 +101,19 @@ const generateInternacionalRealQuote = async (quoteData: any) => {
     
     console.log('[INTERNACIONAL] Prima Total REAL:', primaTotal);
     console.log('[INTERNACIONAL] Coberturas:', coberturas.length);
+    console.log('[INTERNACIONAL] Deducible seleccionado:', quoteData.deducible, '-> vIdOpt:', vIdOpt);
+    
+    // Mapear deducible a valor numérico
+    const deductibleValue = quoteData.deducible === 'alto' ? 100 : quoteData.deducible === 'medio' ? 250 : 500;
     
     // Retornar en formato compatible con QuoteComparison
     return {
       id: 'internacional-real',
       insurerName: 'INTERNACIONAL de Seguros',
-      planType: 'premium' as const,
+      planType: vIdOpt === 3 ? 'premium' as const : 'basico' as const,
       isRecommended: true,
       annualPremium: primaTotal,
-      deductible: 250,
+      deductible: deductibleValue,
       coverages: coberturas.map((c: any) => ({
         name: c.descripcion || c.nombre,
         included: true,
@@ -103,6 +125,8 @@ const generateInternacionalRealQuote = async (quoteData: any) => {
       _vcodmodelo: vcodmodelo,
       _vcodplancobertura: vcodplancobertura,
       _vcodgrupotarifa: vcodgrupotarifa,
+      _vIdOpt: vIdOpt,
+      _deducibleOriginal: quoteData.deducible,
       // También guardar nombres para el resumen
       _marcaNombre: quoteData.marca,
       _modeloNombre: quoteData.modelo,
@@ -113,93 +137,82 @@ const generateInternacionalRealQuote = async (quoteData: any) => {
   }
 };
 
-// Datos de prueba - 5 aseguradoras para auto, 2 para incendio/contenido
-const generateMockQuotes = (policyType: string, quoteData: any) => {
-  if (policyType === 'auto-completa') {
-    // 5 aseguradoras con 2 planes cada una - Las mismas de daños a terceros
-    const insurers = [
-      { name: 'INTERNACIONAL de Seguros', basePremium: 1200 },
-      { name: 'FEDPA Seguros', basePremium: 1150 },
-      { name: 'MAPFRE Panamá', basePremium: 1180 },
-      { name: 'ASSA Seguros', basePremium: 1100 },
-      { name: 'ANCÓN Seguros', basePremium: 1250 },
-    ];
-
-    const quotes = [];
-    for (const insurer of insurers) {
-      // Plan Básico
-      quotes.push({
-        id: `${insurer.name.toLowerCase()}-basico`,
-        insurerName: insurer.name,
-        planType: 'basico' as const,
-        annualPremium: insurer.basePremium,
-        deductible: 500,
-        coverages: [
-          { name: 'Daños propios por colisión', included: true },
-          { name: 'Responsabilidad civil', included: true },
-          { name: 'Robo total', included: true },
-          { name: 'Asistencia vial básica', included: true },
-          { name: 'Cristales', included: false },
-          { name: 'Grua especializada', included: false },
-        ]
-      });
-
-      // Plan Premium
-      quotes.push({
-        id: `${insurer.name.toLowerCase()}-premium`,
-        insurerName: insurer.name,
-        planType: 'premium' as const,
-        isRecommended: insurer.name === 'ASSA Seguros', // ASSA premium recomendado
-        annualPremium: insurer.basePremium * 1.4,
-        deductible: 250,
-        coverages: [
-          { name: 'Daños propios por colisión', included: true },
-          { name: 'Responsabilidad civil', included: true },
-          { name: 'Robo total y parcial', included: true },
-          { name: 'Asistencia vial 24/7', included: true },
-          { name: 'Cristales y luces', included: true },
-          { name: 'Grua especializada ilimitada', included: true },
-          { name: 'Auto de reemplazo', included: true },
-          { name: 'Protección de accesorios', included: true },
-        ]
-      });
+/**
+ * Genera cotización REAL con FEDPA usando las APIs
+ */
+const generateFedpaRealQuote = async (quoteData: any) => {
+  try {
+    // Mapear deducible del formulario a EndosoIncluido
+    // Bajo (500) = sin endoso (N), Medio (250) = con algunos endosos, Alto (100) = con todos los endosos (S)
+    const endosoIncluido = quoteData.deducible === 'alto' ? 'S' : 'N';
+    const deductibleValue = quoteData.deducible === 'alto' ? 100 : quoteData.deducible === 'medio' ? 250 : 500;
+    
+    console.log('[FEDPA] Generando cotización real...');
+    console.log('[FEDPA] Deducible seleccionado:', quoteData.deducible, '-> EndosoIncluido:', endosoIncluido);
+    
+    // Llamar API FEDPA para cotización
+    const cotizacionResponse = await fetch('/api/fedpa/cotizacion', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        Ano: quoteData.anio || new Date().getFullYear(),
+        Uso: '10', // Uso particular
+        CantidadPasajeros: 5,
+        SumaAsegurada: quoteData.valorVehiculo || 15000,
+        CodLimiteLesiones: '1',
+        CodLimitePropiedad: '1',
+        CodLimiteGastosMedico: '1',
+        EndosoIncluido: endosoIncluido,
+        CodPlan: '411', // Plan 411 = Cobertura Completa Particular
+        CodMarca: quoteData.marcaCodigo || 'TOY',
+        CodModelo: quoteData.modeloCodigo || 'COROLLA',
+        Nombre: quoteData.nombreCompleto?.split(' ')[0] || 'Cliente',
+        Apellido: quoteData.nombreCompleto?.split(' ').slice(1).join(' ') || 'Potencial',
+        Cedula: quoteData.cedula || '8-999-9999',
+        Telefono: quoteData.telefono || '6000-0000',
+        Email: quoteData.email || 'cliente@example.com',
+        environment: 'PROD',
+      }),
+    });
+    
+    if (!cotizacionResponse.ok) {
+      console.error('[FEDPA] Error en API:', await cotizacionResponse.text());
+      return null;
     }
-    return quotes;
-  } else if (policyType === 'incendio' || policyType === 'contenido') {
-    // 2 aseguradoras: Ancón e Internacional
-    return [
-      {
-        id: 'ancon-standard',
-        insurerName: 'ANCÓN Seguros',
-        planType: 'basico' as const,
-        annualPremium: 450,
-        deductible: 100,
-        coverages: [
-          { name: 'Incendio y rayo', included: true },
-          { name: 'Daños por agua', included: true },
-          { name: 'Robo', included: policyType === 'contenido' },
-          { name: 'Responsabilidad civil', included: true },
-        ]
-      },
-      {
-        id: 'internacional-premium',
-        insurerName: 'INTERNACIONAL de Seguros',
-        planType: 'premium' as const,
-        isRecommended: true,
-        annualPremium: 520,
-        deductible: 50,
-        coverages: [
-          { name: 'Incendio y rayo', included: true },
-          { name: 'Daños por agua y humedad', included: true },
-          { name: 'Robo y vandalismo', included: true },
-          { name: 'Responsabilidad civil ampliada', included: true },
-          { name: 'Desastres naturales', included: true },
-          { name: 'Gastos de habitación temporal', included: policyType === 'incendio' },
-        ]
-      },
-    ];
+    
+    const cotizacionResult = await cotizacionResponse.json();
+    if (!cotizacionResult.success) {
+      console.error('[FEDPA] No se obtuvo cotización válida');
+      return null;
+    }
+    
+    console.log('[FEDPA] Prima Total REAL:', cotizacionResult.primaTotal);
+    console.log('[FEDPA] Coberturas:', cotizacionResult.coberturas?.length || 0);
+    
+    // Retornar en formato compatible con QuoteComparison
+    return {
+      id: 'fedpa-real',
+      insurerName: 'FEDPA Seguros',
+      planType: endosoIncluido === 'S' ? 'premium' as const : 'basico' as const,
+      isRecommended: false,
+      annualPremium: cotizacionResult.primaTotal || 0,
+      deductible: deductibleValue,
+      coverages: (cotizacionResult.coberturas || []).map((c: any) => ({
+        name: c.descripcion || 'Cobertura',
+        included: true,
+      })),
+      // Datos adicionales
+      _isReal: true,
+      _idCotizacion: cotizacionResult.idCotizacion,
+      _endosoIncluido: endosoIncluido,
+      _deducibleOriginal: quoteData.deducible,
+      _marcaNombre: quoteData.marca,
+      _modeloNombre: quoteData.modelo,
+    };
+  } catch (error) {
+    console.error('[FEDPA] Error generando cotización real:', error);
+    return null;
   }
-  return [];
 };
 
 export default function ComparePage() {
@@ -225,29 +238,59 @@ export default function ComparePage() {
         
         const policyType = input.cobertura === 'COMPLETA' ? 'auto-completa' : input.policyType;
         
-        // Generar cotizaciones mock (las otras 4 aseguradoras)
-        const mockQuotes = generateMockQuotes(policyType, input);
-        
-        // Si es Auto Cobertura Completa, intentar obtener cotización REAL de INTERNACIONAL
+        // Solo procesar si es Auto Cobertura Completa
         if (policyType === 'auto-completa') {
+          const realQuotes: any[] = [];
+          
+          // INTERNACIONAL: generar plan básico y premium
           try {
-            const internacionalQuote = await generateInternacionalRealQuote(input);
-            if (internacionalQuote) {
-              // Reemplazar la cotización mock de INTERNACIONAL con la real
-              const quotesWithReal = mockQuotes.filter(q => !q.insurerName.includes('INTERNACIONAL'));
-              quotesWithReal.unshift(internacionalQuote); // INTERNACIONAL primero
-              setQuotes(quotesWithReal);
-            } else {
-              // Si falla, usar mock
-              setQuotes(mockQuotes);
+            // Plan Básico (vIdOpt: 1, deducible 500)
+            const intBasico = await generateInternacionalRealQuote({ ...input, deducible: 'bajo' });
+            if (intBasico) {
+              intBasico.id = 'internacional-basico';
+              realQuotes.push(intBasico);
+            }
+            
+            // Plan Premium (vIdOpt: 3, deducible 100)
+            const intPremium = await generateInternacionalRealQuote({ ...input, deducible: 'alto' });
+            if (intPremium) {
+              intPremium.id = 'internacional-premium';
+              realQuotes.push(intPremium);
             }
           } catch (error) {
-            console.error('Error obteniendo cotización INTERNACIONAL:', error);
-            toast.warning('Usando cotización estimada para INTERNACIONAL');
-            setQuotes(mockQuotes);
+            console.error('Error obteniendo cotizaciones INTERNACIONAL:', error);
+            toast.error('Error al obtener cotizaciones de INTERNACIONAL');
+          }
+          
+          // FEDPA: generar plan básico y premium
+          try {
+            // Plan Básico (EndosoIncluido: N, deducible 500)
+            const fedpaBasico = await generateFedpaRealQuote({ ...input, deducible: 'bajo' });
+            if (fedpaBasico) {
+              fedpaBasico.id = 'fedpa-basico';
+              realQuotes.push(fedpaBasico);
+            }
+            
+            // Plan Premium (EndosoIncluido: S, deducible 100)
+            const fedpaPremium = await generateFedpaRealQuote({ ...input, deducible: 'alto' });
+            if (fedpaPremium) {
+              fedpaPremium.id = 'fedpa-premium';
+              realQuotes.push(fedpaPremium);
+            }
+          } catch (error) {
+            console.error('Error obteniendo cotizaciones FEDPA:', error);
+            toast.error('Error al obtener cotizaciones de FEDPA');
+          }
+          
+          if (realQuotes.length > 0) {
+            setQuotes(realQuotes);
+            toast.success(`${realQuotes.length} cotización(es) generada(s): INTERNACIONAL y FEDPA`);
+          } else {
+            toast.error('No se pudieron generar cotizaciones. Intenta nuevamente.');
           }
         } else {
-          setQuotes(mockQuotes);
+          // Para otros tipos de póliza, mostrar mensaje
+          toast.info('Las cotizaciones automáticas solo están disponibles para Auto Cobertura Completa');
         }
         
       } catch (err) {
@@ -269,7 +312,7 @@ export default function ComparePage() {
           <h2 className="text-2xl font-bold text-gray-700 mb-4">No hay cotizaciones disponibles</h2>
           <button
             onClick={() => router.push('/cotizadores')}
-            className="px-6 py-3 bg-gradient-to-r from-[#010139] to-[#8AAA19] text-white rounded-lg font-semibold"
+            className="px-6 py-3 bg-[#010139] hover:bg-[#8AAA19] text-white rounded-lg font-semibold transition-colors cursor-pointer"
           >
             Volver a Cotizar
           </button>
@@ -281,10 +324,23 @@ export default function ComparePage() {
   const policyType = quoteData.cobertura === 'COMPLETA' ? 'auto-completa' : quoteData.policyType;
 
   return (
-    <QuoteComparison
-      policyType={policyType}
-      quotes={quotes}
-      quoteData={quoteData}
-    />
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4">
+      <div className="max-w-7xl mx-auto">
+        {/* Breadcrumb */}
+        <Breadcrumb 
+          items={[
+            { label: 'Auto', href: '/cotizadores/auto' },
+            { label: 'Cobertura Completa', href: '/cotizadores/auto/completa' },
+            { label: 'Comparar Cotizaciones', icon: <FaCompressArrowsAlt /> },
+          ]}
+        />
+
+        <QuoteComparison
+          policyType={policyType}
+          quotes={quotes}
+          quoteData={quoteData}
+        />
+      </div>
+    </div>
   );
 }

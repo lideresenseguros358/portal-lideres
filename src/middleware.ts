@@ -88,7 +88,8 @@ export const config = {
      * - public folder
      * - api routes
      * - login, forgot, new-user, update-password pages
+     * - cotizadores (public quotation forms)
      */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$|api|login|forgot|new-user|update-password|auth).*)',
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$|api|login|forgot|new-user|update-password|auth|cotizadores).*)',
   ],
 };

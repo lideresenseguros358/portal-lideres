@@ -69,58 +69,9 @@ export default function ClientDataInput({
   }, []);
 
   // Buscar cliente cuando cambia la cédula
-  useEffect(() => {
-    const searchClient = async () => {
-      if (!cedula || cedula.length < 5) return;
-
-      setIsSearching(true);
-      
-      try {
-        let query = supabaseClient()
-          .from('clients')
-          .select('*')
-          .eq('national_id', cedula);
-        
-        // Si es broker, solo buscar en sus clientes
-        if (role === 'broker' && userBrokerId) {
-          query = query.eq('broker_id', userBrokerId);
-        }
-        
-        const { data, error } = await query.single();
-
-        if (error) {
-          if (error.code !== 'PGRST116') { // Not found is OK
-            console.error('Error buscando cliente:', error);
-          }
-          return;
-        }
-
-        if (data) {
-          // Cliente encontrado en BD
-          toast.success('¡Cliente encontrado en el sistema!');
-          
-          // Autocompletar datos
-          onNombreChange(data.name || '');
-          if (onEmailChange && data.email) onEmailChange(data.email);
-          if (onTelefonoChange && data.phone) onTelefonoChange(data.phone);
-          
-          // Notificar al padre con todos los datos
-          if (onClientFound) {
-            onClientFound(data);
-          }
-        }
-      } catch (err) {
-        console.error('Error buscando cliente:', err);
-      } finally {
-        setIsSearching(false);
-      }
-    };
-
-    // Debounce
-    const timer = setTimeout(searchClient, 800);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cedula]);
+  // DESHABILITADO EN COTIZADORES PÚBLICOS - No requiere auth
+  // El usuario ingresa datos manualmente
+  // TODO: Habilitar búsqueda solo en portal interno con sesión activa
 
   const handleScanSuccess = (qrData: CedulaQRData) => {
     // Llenar cédula (esto disparará la búsqueda automática)

@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { generarCotizacion } from '@/lib/fedpa/cotizacion.service';
 import type { CotizacionRequest } from '@/lib/fedpa/types';
 import type { FedpaEnvironment } from '@/lib/fedpa/config';
+import { updateThirdPartyMinPrice } from '@/lib/services/third-party-price-updater';
 
 export async function POST(request: NextRequest) {
   try {
@@ -53,6 +54,16 @@ export async function POST(request: NextRequest) {
         { success: false, error: result.error },
         { status: 400 }
       );
+    }
+    
+    // Si es Daños a Terceros (SumaAsegurada = 0) y cotización exitosa, actualizar precio mínimo
+    const isDanosTerceros = cotizacionRequest.SumaAsegurada === '0' || cotizacionRequest.SumaAsegurada === 0;
+    if (isDanosTerceros && result.primaTotal) {
+      // Actualizar precio mínimo en background (no bloquea respuesta)
+      updateThirdPartyMinPrice({
+        insurer: 'FEDPA',
+        price: result.primaTotal,
+      }).catch(err => console.error('[FEDPA] Error actualizando precio mínimo:', err));
     }
     
     return NextResponse.json({

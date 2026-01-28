@@ -33,23 +33,16 @@ interface TokenCacheEntry {
 const tokenCache: Map<ISEnvironment, TokenCacheEntry> = new Map();
 
 /**
- * Cifrado simple para audit_payloads
+ * Cifrado simple para audit_payloads usando Base64
+ * Temporal mientras se arregla el problema de crypto en Turbopack
  */
 function encrypt(text: string): string {
   try {
-    // En producción usar una key del .env
-    const key = process.env.AUDIT_ENCRYPTION_KEY || 'default-key-change-me-32chars!';
-    // createCipher está deprecado, usar createCipheriv
-    const algorithm = 'aes-256-cbc';
-    const keyBuffer = Buffer.from(key.padEnd(32, '0').substring(0, 32));
-    const iv = Buffer.alloc(16, 0); // IV de 16 bytes (para desarrollo, en prod usar random)
-    
-    const cipher = crypto.createCipheriv(algorithm, keyBuffer, iv);
-    let encrypted = cipher.update(text, 'utf8', 'hex');
-    encrypted += cipher.final('hex');
-    return encrypted;
+    // Por ahora solo codificar en Base64 para evitar errores
+    // TODO: Implementar encriptación real cuando Turbopack soporte crypto correctamente
+    return Buffer.from(text, 'utf8').toString('base64');
   } catch (error) {
-    console.error('[IS] Error en encriptación, guardando sin cifrar:', error);
+    console.error('[IS] Error en codificación, guardando sin cifrar:', error);
     return text; // Fallback: guardar sin cifrar en caso de error
   }
 }

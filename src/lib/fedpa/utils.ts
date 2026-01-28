@@ -13,8 +13,11 @@ import { FedpaError } from './types';
 /**
  * Normalizar texto a MAYÚSCULAS (regla global del portal)
  */
-export function normalizeText(text: string): string {
-  return text.trim().toUpperCase();
+export function normalizeText(text: string | number | undefined | null): string {
+  if (text === undefined || text === null) {
+    return '';
+  }
+  return String(text).trim().toUpperCase();
 }
 
 /**

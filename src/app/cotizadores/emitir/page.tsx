@@ -190,7 +190,7 @@ export default function EmitirPage() {
           <h2 className="text-2xl font-bold text-gray-700 mb-4">No hay datos disponibles</h2>
           <button
             onClick={() => router.push('/cotizadores')}
-            className="px-6 py-3 bg-gradient-to-r from-[#010139] to-[#8AAA19] text-white rounded-lg font-semibold"
+            className="px-6 py-3 bg-[#010139] hover:bg-[#8AAA19] text-white rounded-lg font-semibold transition-colors cursor-pointer"
           >
             Volver a Cotizar
           </button>
