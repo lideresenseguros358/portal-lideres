@@ -160,7 +160,7 @@ export default function ClientDetailsModal({ client, onClose, onEdit, onOpenExpe
       
       console.log('[Comisiones] Términos de búsqueda (incluye segmentos):', policySearchTerms);
       
-      // Obtener comm_items con información de quincenas (LEFT JOIN para no filtrar)
+      // Obtener comm_items con period_label únicamente
       const { data: items, error: itemsError } = await (supabaseClient() as any)
         .from('comm_items')
         .select(`
@@ -169,11 +169,7 @@ export default function ClientDetailsModal({ client, onClose, onEdit, onOpenExpe
           insurer_id,
           insurers(name),
           comm_imports(
-            period_label,
-            fortnight_details(
-              period_start,
-              period_end
-            )
+            period_label
           )
         `)
         .in('policy_number', policySearchTerms)
@@ -218,15 +214,14 @@ export default function ClientDetailsModal({ client, onClose, onEdit, onOpenExpe
         acc[policyId].total_commissions += amount;
         acc[policyId].commissions_count += 1;
         
-        // Agregar item con datos de quincena
+        // Agregar item con datos de quincena (sin fechas por ahora)
         const commImport = item.comm_imports;
-        const fortnight = commImport?.fortnight_details;
         
         acc[policyId].items.push({
           amount,
-          fortnight_id: commImport?.period_label || '',
-          period_start: fortnight?.period_start || '',
-          period_end: fortnight?.period_end || ''
+          fortnight_id: commImport?.period_label || 'Sin quincena',
+          period_start: '',
+          period_end: ''
         });
         
         return acc;
