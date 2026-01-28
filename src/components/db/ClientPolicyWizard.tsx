@@ -405,10 +405,10 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
             throw new Error('No se encontró el corredor seleccionado');
           }
         } else {
-          // FIX CRÍTICO: Usar userBrokerId (broker.id) en lugar de user.id (p_id)
-          broker_id = userBrokerId || undefined;
+          const { data: userData } = await supabaseClient().auth.getUser();
+          broker_id = userData.user?.id;
           if (!broker_id) {
-            throw new Error('No se pudo obtener el ID del broker. Intenta recargar la página.');
+            throw new Error('No se pudo obtener el ID del usuario');
           }
         }
 
@@ -460,10 +460,10 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
             throw new Error('No se encontró el corredor seleccionado');
           }
         } else {
-          // FIX CRÍTICO: Usar userBrokerId (broker.id) en lugar de user.id (p_id)
-          broker_id = userBrokerId || undefined;
+          const { data: userData } = await supabaseClient().auth.getUser();
+          broker_id = userData.user?.id;
           if (!broker_id) {
-            throw new Error('No se pudo obtener el ID del broker. Intenta recargar la página.');
+            throw new Error('No se pudo obtener el ID del usuario');
           }
         }
 
