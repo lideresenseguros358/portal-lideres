@@ -183,24 +183,12 @@ export async function createClientWithPolicy(clientData: unknown, policyData: un
 
   const clientPayload = toInsertPayload(brokerId, clientParsed);
 
-  console.log('[FECHA DEBUG - API] Payload de cliente antes de insertar:', {
-    birth_date: clientPayload.birth_date,
-    birth_date_type: typeof clientPayload.birth_date
-  });
-
-  // Create client
-  const { data: newClient, error: clientError } = await supabase
-    .from('clients')
-    .insert(clientPayload)
-    .select()
-    .single<ClientRow>();
-
-  if (clientError) throw new Error(`Error creando cliente: ${clientError.message}`);
-  if (!newClient) throw new Error('Fallo al crear el cliente');
-
-  // Create policy
+  // OPTIMIZACIÓN: Preparar policy_number ANTES de insertar cliente
+  // Solo hacer query de insurer si el policy_number contiene dígitos (posible Univivir)
   let policyNumber = policyParsed.policy_number;
-  if (policyParsed.insurer_id && policyParsed.policy_number) {
+  const hasDigits = /\d/.test(policyParsed.policy_number);
+  
+  if (policyParsed.insurer_id && hasDigits) {
     const { data: insurer } = await supabase
       .from('insurers')
       .select('name')
@@ -216,6 +204,16 @@ export async function createClientWithPolicy(clientData: unknown, policyData: un
     }
   }
 
+  // OPTIMIZACIÓN: Insertar cliente y póliza en secuencia rápida
+  const { data: newClient, error: clientError } = await supabase
+    .from('clients')
+    .insert(clientPayload)
+    .select()
+    .single<ClientRow>();
+
+  if (clientError) throw new Error(`Error creando cliente: ${clientError.message}`);
+  if (!newClient) throw new Error('Fallo al crear el cliente');
+
   const policyPayload = {
     ...policyParsed,
     policy_number: policyNumber,
@@ -223,17 +221,10 @@ export async function createClientWithPolicy(clientData: unknown, policyData: un
     broker_id: brokerId,
   };
 
-  console.log('[FECHA DEBUG - API] Payload de póliza antes de insertar:', {
-    start_date: policyPayload.start_date,
-    renewal_date: policyPayload.renewal_date,
-    start_date_type: typeof policyPayload.start_date,
-    renewal_date_type: typeof policyPayload.renewal_date
-  });
-
   const { error: policyError } = await supabase.from('policies').insert(policyPayload);
 
   if (policyError) {
-    // Rollback client creation if policy creation fails
+    // Rollback: eliminar cliente si falla la póliza
     await supabase.from('clients').delete().eq('id', newClient.id);
     throw new Error(`Error creando póliza: ${policyError.message}`);
   }
