@@ -211,8 +211,25 @@ export default function PreliminaryClientsTab({ insurers, brokers: brokersProp, 
     if (!editingId) return;
 
     setSaving(true);
-    // CRÍTICO: Omitir status del update - causa error de tipo enum
-    const { status, ...updateData } = editForm;
+    
+    // CRÍTICO: Crear objeto sin status explícitamente
+    const updateData = {
+      client_name: editForm.client_name,
+      national_id: editForm.national_id,
+      email: editForm.email,
+      phone: editForm.phone,
+      birth_date: editForm.birth_date,
+      policy_number: editForm.policy_number,
+      ramo: editForm.ramo,
+      insurer_id: editForm.insurer_id,
+      start_date: editForm.start_date,
+      renewal_date: editForm.renewal_date,
+      broker_id: editForm.broker_id,
+      notes: editForm.notes,
+      // ❌ NO INCLUIR status
+    };
+    
+    console.log('[PreliminaryClientsTab] Enviando update SIN status:', updateData);
     const result = await actionUpdatePreliminaryClient(editingId, updateData);
 
     if (result.ok) {

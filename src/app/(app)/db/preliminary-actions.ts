@@ -121,6 +121,10 @@ export async function actionUpdatePreliminaryClient(id: string, updates: any) {
       return { ok: false as const, error: 'No autenticado' };
     }
 
+    // DEBUG: Ver exactamente qué llega
+    console.log('[actionUpdatePreliminaryClient] PAYLOAD RECIBIDO:', JSON.stringify(updates, null, 2));
+    console.log('[actionUpdatePreliminaryClient] ¿Tiene status?:', 'status' in updates, updates.status);
+
     // Normalize data
     const cleanedUpdates: any = {};
     
