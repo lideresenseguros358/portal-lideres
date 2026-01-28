@@ -158,10 +158,9 @@ export default async function DatabasePage({
   // Get brokers for preliminary clients tab
   const { data: brokers } = await supabase
     .from('brokers')
-    .select('*, profiles!p_id(id, full_name, email)')
+    .select('id, name')
     .eq('active', true)
-    .order('name')
-    .limit(10000);
+    .order('name');
 
   const [clients, insurers] = await Promise.all([
     getClientsWithPolicies(searchQuery),
