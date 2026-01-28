@@ -277,9 +277,10 @@ function removeLeadingZeros(value: string): string {
  * 
  * @param insurerSlug - Slug de la aseguradora
  * @param parts - Array de strings con cada parte del número
+ * @param allowEmptyParts - Permitir partes vacías (default: false para wizard, true para preliminar)
  * @returns Número normalizado para guardar en BD
  */
-export function normalizePolicyNumber(insurerSlug: InsurerSlug, parts: string[]): string {
+export function normalizePolicyNumber(insurerSlug: InsurerSlug, parts: string[], allowEmptyParts: boolean = false): string {
   const config = POLICY_FORMATS[insurerSlug];
   if (!config) return parts.join('-');
 
@@ -301,7 +302,13 @@ export function normalizePolicyNumber(insurerSlug: InsurerSlug, parts: string[])
     const ramo = (ramoRaw || '').padStart(3, '0').slice(-3);
     const poliza = removeLeadingZeros(polRaw);
 
-    if (!ramo || !poliza) return ['01', ramo, poliza].filter(Boolean).join('-');
+    // Si allowEmptyParts, permitir partes vacías
+    if (!ramo || !poliza) {
+      if (allowEmptyParts) {
+        return ['01', ramo, poliza].join('-');
+      }
+      return ['01', ramo, poliza].filter(Boolean).join('-');
+    }
     return `01-${ramo}-${poliza}`;
   }
 
@@ -325,10 +332,15 @@ export function normalizePolicyNumber(insurerSlug: InsurerSlug, parts: string[])
   }
 
   // Unir con el separador configurado
-  // IMPORTANTE: NO filtrar partes vacías - permitir formato con espacios en blanco
-  // Ejemplo UNIVIVIR: "01--22514" (parte 1 y 2 vacías, solo parte 3 llena)
-  // Esto permite que broker guarde aunque no pueda editar todas las partes
-  return normalizedParts.join(config.joinWith);
+  // allowEmptyParts = true: NO filtrar (PRELIMINAR - broker bloqueado)
+  // allowEmptyParts = false: Filtrar vacíos (WIZARD - requiere completo)
+  if (allowEmptyParts) {
+    // PRELIMINAR: Permitir "01--22514" (partes vacías)
+    return normalizedParts.join(config.joinWith);
+  } else {
+    // WIZARD: Solo partes llenas "01-009-22514"
+    return normalizedParts.filter(p => p && p.trim() !== '').join(config.joinWith);
+  }
 }
 
 /**

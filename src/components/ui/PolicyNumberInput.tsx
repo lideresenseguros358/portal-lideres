@@ -19,6 +19,7 @@ interface PolicyNumberInputProps {
   error?: string;
   className?: string;
   hasError?: boolean;
+  allowEmptyParts?: boolean; // Permitir partes vacías (default: false - strict)
 }
 
 export default function PolicyNumberInput({
@@ -29,7 +30,8 @@ export default function PolicyNumberInput({
   required = false,
   error,
   className = '',
-  hasError = false
+  hasError = false,
+  allowEmptyParts = false // Default: strict - requiere todas las partes
 }: PolicyNumberInputProps) {
   const lastValueRef = useRef('');
   const hasInitialized = useRef(false);
@@ -143,26 +145,34 @@ export default function PolicyNumberInput({
     if (!config || !insurerName) return;
     
     if (hasInitialized.current && inputs.length === config.inputCount) {
-      // Filtrar inputs vacíos para no incluirlos
-      const filledInputs = inputs.filter(i => i.trim() !== '');
-      
-      if (filledInputs.length === 0) {
-        if (lastValueRef.current !== '') {
-          lastValueRef.current = '';
-          onChange('');
+      // Validar según allowEmptyParts
+      if (!allowEmptyParts) {
+        // Modo STRICT: Requiere todas las partes llenas
+        if (inputs.some(i => !i || i.trim() === '')) {
+          // Si alguna parte está vacía, no normalizar aún
+          return;
         }
-        return;
+      } else {
+        // Modo FLEXIBLE: Permite partes vacías
+        const filledInputs = inputs.filter(i => i.trim() !== '');
+        if (filledInputs.length === 0) {
+          if (lastValueRef.current !== '') {
+            lastValueRef.current = '';
+            onChange('');
+          }
+          return;
+        }
       }
       
       // Normalizar según reglas de la aseguradora
-      const normalized = normalizePolicyNumber(config.slug, inputs);
+      const normalized = normalizePolicyNumber(config.slug, inputs, allowEmptyParts);
       
       if (normalized !== lastValueRef.current) {
         lastValueRef.current = normalized;
         onChange(normalized);
       }
     }
-  }, [inputs, config, onChange, insurerName]);
+  }, [inputs, config, onChange, insurerName, allowEmptyParts]);
 
   const handleInputChange = (index: number, newValue: string) => {
     hasInitialized.current = true; // Marcar como inicializado al primer cambio manual

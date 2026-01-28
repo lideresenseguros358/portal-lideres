@@ -777,6 +777,7 @@ export default function PreliminaryClientsTab({ insurers, brokers: brokersProp, 
                               }}
                               label="Número de Póliza"
                               required
+                              allowEmptyParts={true}
                             />
                             {userRole !== 'master' && (
                               <p className="text-xs text-amber-600 mt-1">ℹ️ Solo Master puede editar el número de póliza</p>
