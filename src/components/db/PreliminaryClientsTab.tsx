@@ -211,7 +211,9 @@ export default function PreliminaryClientsTab({ insurers, brokers: brokersProp, 
     if (!editingId) return;
 
     setSaving(true);
-    const result = await actionUpdatePreliminaryClient(editingId, editForm);
+    // CRÍTICO: Omitir status del update - causa error de tipo enum
+    const { status, ...updateData } = editForm;
+    const result = await actionUpdatePreliminaryClient(editingId, updateData);
 
     if (result.ok) {
       toast.success('Cliente preliminar actualizado');
