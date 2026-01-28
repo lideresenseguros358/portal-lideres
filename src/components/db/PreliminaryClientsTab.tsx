@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { FaExclamationTriangle, FaEdit, FaSave, FaTimes, FaTrash, FaCheckCircle, FaCalendar, FaUser, FaFileAlt, FaBuilding, FaFolder, FaSearch } from 'react-icons/fa';
+import { MoreVertical } from 'lucide-react';
 import { supabaseClient } from '@/lib/supabase/client';
 import { formatDateForDisplay } from '@/lib/utils/dates';
 import { getTodayLocalDate, addOneYearToDate } from '@/lib/utils/dates';
@@ -29,9 +30,22 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
   const [expandedExpedientes, setExpandedExpedientes] = useState<Set<string>>(new Set());
   const [searchingPolicy, setSearchingPolicy] = useState(false);
   const [existingPolicyClient, setExistingPolicyClient] = useState<any>(null);
+  const [openMenuClient, setOpenMenuClient] = useState<string | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     loadPreliminaryClients();
+  }, []);
+
+  // Cerrar menú al hacer click fuera
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setOpenMenuClient(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   useEffect(() => {
@@ -41,50 +55,49 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
     }
   }, [editForm.start_date, editingId, editForm.renewal_date]);
 
-  // Buscar póliza existente cuando se ingresa número de póliza
+  // Buscar cliente existente cuando se ingresa cédula
   useEffect(() => {
-    if (!editForm.policy_number || editForm.policy_number.trim() === '' || !editingId) {
+    if (!editForm.national_id || editForm.national_id.trim() === '' || !editingId) {
       setExistingPolicyClient(null);
       return;
     }
 
     const timer = setTimeout(async () => {
-      await searchExistingPolicy(editForm.policy_number);
+      await searchExistingClient(editForm.national_id);
     }, 800);
 
     return () => clearTimeout(timer);
-  }, [editForm.policy_number, editingId]);
+  }, [editForm.national_id, editingId]);
 
-  const searchExistingPolicy = async (policyNumber: string) => {
+  const searchExistingClient = async (nationalId: string) => {
     setSearchingPolicy(true);
     try {
-      const { data: policy } = await supabaseClient()
-        .from('policies')
-        .select('*, clients(*)')
-        .eq('policy_number', policyNumber.toUpperCase())
+      const { data: client } = await supabaseClient()
+        .from('clients')
+        .select('*')
+        .eq('national_id', nationalId.toUpperCase())
         .single();
 
-      if (policy && policy.clients) {
-        setExistingPolicyClient(policy.clients);
+      if (client) {
+        setExistingPolicyClient(client);
         
-        // Autocompletar datos del cliente
+        // Autocompletar datos del cliente existente
         setEditForm((prev: any) => ({
           ...prev,
-          client_name: policy.clients.name || prev.client_name,
-          national_id: policy.clients.national_id || prev.national_id,
-          email: policy.clients.email || prev.email,
-          phone: policy.clients.phone || prev.phone,
-          birth_date: policy.clients.birth_date || prev.birth_date,
+          client_name: client.name || prev.client_name,
+          email: client.email || prev.email,
+          phone: client.phone || prev.phone,
+          birth_date: client.birth_date || prev.birth_date,
         }));
 
-        toast.success(`Cliente encontrado: ${policy.clients.name}`, {
-          description: 'Datos del cliente autocompletados. Solo actualiza los datos de la póliza.'
+        toast.success(`Cliente encontrado: ${client.name}`, {
+          description: 'Datos autocompletados. Completa los datos de la póliza y actualiza cualquier dato faltante del cliente.'
         });
       } else {
         setExistingPolicyClient(null);
       }
     } catch (error) {
-      console.error('Error buscando póliza:', error);
+      console.error('Error buscando cliente:', error);
       setExistingPolicyClient(null);
     } finally {
       setSearchingPolicy(false);
@@ -330,24 +343,28 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
             <div className="bg-green-50 rounded-lg p-3 mb-3 border border-green-300">
               <p className="text-sm font-bold text-green-900 mb-2">💡 ¿El cliente YA existe en base de datos?</p>
               <p className="text-xs text-green-800 mb-2">
-                Si ingresas el <strong>número de póliza</strong> y el cliente ya existe, el sistema:
+                Si ingresas el <strong>número de cédula</strong> y el cliente ya existe, el sistema:
               </p>
               <ul className="text-xs text-green-800 space-y-1 ml-4">
                 <li className="flex items-start gap-2">
                   <span className="text-green-600">✓</span>
-                  <span>Autocompletará <strong>todos los datos del cliente</strong></span>
+                  <span>Autocompletará <strong>todos los datos del cliente</strong> que ya tenga en BD</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-green-600">✓</span>
-                  <span>Solo necesitas <strong>completar los datos de la póliza</strong></span>
+                  <span>Completa los <strong>datos de la póliza</strong> (la póliza no existe, por eso está en preliminar)</span>
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-green-600">✓</span>
-                  <span>Al guardar, creará la póliza y la <strong>anexará al cliente existente</strong></span>
+                  <span>Si faltan datos del cliente, <strong>complétalos aquí</strong> - actualizará el cliente en BD</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-green-600">✓</span>
+                  <span>Al guardar, creará la nueva póliza y la <strong>anexará al cliente existente</strong></span>
                 </li>
               </ul>
               <p className="text-xs text-green-700 mt-2 italic">
-                Igual que el Wizard de Nuevo Cliente - evita duplicados automáticamente.
+                La cédula conecta el preliminar con el cliente existente - evita duplicados.
               </p>
             </div>
 
@@ -397,86 +414,97 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
           return (
             <div
               key={client.id}
-              className="bg-white rounded-xl shadow-lg border-2 border-amber-200 hover:border-amber-400 transition-all overflow-hidden"
+              className="bg-white rounded-lg shadow border border-gray-200 hover:shadow-md transition-all overflow-hidden"
             >
               {/* Header Comprimido - Clickeable */}
               <div 
-                className="p-3 cursor-pointer hover:bg-gray-50 transition-colors flex items-start justify-between gap-3"
-                onClick={() => !isEditing && toggleExpand(client.id)}
+                className="p-3 hover:bg-gray-50 transition-colors flex items-center justify-between gap-3"
               >
                 <div className="flex-1 min-w-0">
-                  <h3 className="text-xl font-bold text-gray-900 mb-1">
+                  <h3 className="text-base font-semibold text-gray-900 mb-0.5">
                     {client.client_name || '(Sin nombre)'}
                   </h3>
-                  <p className="text-sm text-gray-600 mb-1">
-                    {insurerName} • Póliza: <span className="font-mono font-semibold">{client.policy_number || '(Sin número)'}</span>
+                  <p className="text-xs text-gray-600">
+                    {insurerName} • Póliza: <span className="font-mono">{client.policy_number || '(Sin número)'}</span>
                   </p>
-                  {client.missing_fields.length > 0 && (
-                    <span className="text-xs font-medium text-red-600">
-                      ⚠️ {client.missing_fields.length} campo{client.missing_fields.length !== 1 ? 's' : ''} faltante{client.missing_fields.length !== 1 ? 's' : ''}
-                    </span>
-                  )}
                 </div>
 
-                {/* Action Buttons */}
-                {!isEditing && (
-                  <div className="flex items-center gap-1.5 flex-shrink-0">
-                    {client.is_complete && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleManualMigration(client.id);
-                        }}
-                        className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-medium"
-                        title="Migrar a BD"
-                      >
-                        <FaCheckCircle size={12} className="inline" />
-                      </button>
-                    )}
-                    {!client.is_complete && (
-                      <button
-                        className="px-2 py-1 bg-amber-500 text-white rounded text-xs cursor-not-allowed opacity-75"
-                        disabled
-                        title="Datos Incompletos"
-                      >
-                        <FaExclamationTriangle size={12} />
-                      </button>
-                    )}
-                    <button
-                      onClick={(e) => toggleExpediente(client.id, e)}
-                      className={`px-2 py-1 rounded text-xs ${
-                        expandedExpedientes.has(client.id)
-                          ? 'bg-[#8AAA19] text-white'
-                          : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
-                      }`}
-                      title="Expediente"
-                    >
-                      <FaFolder size={12} />
-                    </button>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {client.missing_fields.length > 0 && (
+                    <span className="text-xs font-medium text-amber-600 bg-amber-50 px-2 py-1 rounded" title={`${client.missing_fields.length} campos faltantes`}>
+                      ⚠️ {client.missing_fields.length}
+                    </span>
+                  )}
+                  
+                  {/* Menú 3 puntos */}
+                  <div className="relative" ref={openMenuClient === client.id ? menuRef : null}>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        startEdit(client);
+                        setOpenMenuClient(openMenuClient === client.id ? null : client.id);
                       }}
-                      className="px-2 py-1 bg-[#010139] hover:bg-[#8AAA19] text-white rounded text-xs font-medium"
-                      title="Editar"
+                      className="p-2 hover:bg-gray-100 rounded-lg transition-all"
+                      aria-label="Acciones"
                     >
-                      <FaEdit size={12} />
+                      <MoreVertical size={18} className="text-gray-600" />
                     </button>
-                    {userRole === 'master' && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDelete(client.id, client.client_name);
-                        }}
-                        className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs"
-                        title="Eliminar"
-                      >
-                        <FaTrash size={12} />
-                      </button>
+                    {openMenuClient === client.id && (
+                      <>
+                        <div className="fixed inset-0 z-40" onClick={() => setOpenMenuClient(null)}></div>
+                        <div className="absolute right-0 mt-1 w-48 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-50">
+                          {client.is_complete && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleManualMigration(client.id);
+                                setOpenMenuClient(null);
+                              }}
+                              className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-green-700"
+                            >
+                              <FaCheckCircle size={14} />
+                              Migrar a BD
+                            </button>
+                          )}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleExpediente(client.id, e);
+                              setOpenMenuClient(null);
+                            }}
+                            className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
+                          >
+                            <FaFolder size={14} />
+                            Expediente
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              startEdit(client);
+                              setOpenMenuClient(null);
+                            }}
+                            className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
+                          >
+                            <FaEdit size={14} />
+                            Editar
+                          </button>
+                          {userRole === 'master' && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDelete(client.id, client.client_name);
+                                setOpenMenuClient(null);
+                              }}
+                              className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2 text-red-600"
+                            >
+                              <FaTrash size={14} />
+                              Eliminar
+                            </button>
+                          )}
+                        </div>
+                      </>
                     )}
                   </div>
-                )}
+                </div>
               </div>
 
               {/* Sección Expandible */}
@@ -605,13 +633,29 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
                         <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                           Cédula / RUC
                         </label>
-                        <input
-                          type="text"
-                          value={editForm.national_id}
-                          onChange={createUppercaseHandler((e) => setEditForm({ ...editForm, national_id: e.target.value }))}
-                          className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none ${uppercaseInputClass}`}
-                          placeholder="8-123-4567"
-                        />
+                        <div className="relative">
+                          <input
+                            type="text"
+                            value={editForm.national_id}
+                            onChange={createUppercaseHandler((e) => setEditForm({ ...editForm, national_id: e.target.value }))}
+                            className={`w-full px-3 py-2 pr-10 text-sm border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none ${uppercaseInputClass}`}
+                            placeholder="8-123-4567"
+                          />
+                          {searchingPolicy && (
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                              <div className="animate-spin rounded-full h-4 w-4 border-2 border-[#8AAA19] border-t-transparent"></div>
+                            </div>
+                          )}
+                        </div>
+                        {existingPolicyClient && (
+                          <div className="mt-1 p-2 bg-green-50 border border-green-200 rounded-lg">
+                            <p className="text-xs text-green-800 flex items-center gap-1">
+                              <FaCheckCircle className="text-green-600" />
+                              <strong>Cliente existente:</strong> {existingPolicyClient.name}
+                            </p>
+                            <p className="text-xs text-green-700 mt-1">Datos autocompletados. Completa la póliza y actualiza datos faltantes.</p>
+                          </div>
+                        )}
                       </div>
                       <div>
                         <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
@@ -663,29 +707,13 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
                         <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                           Número de Póliza <span className="text-red-500">*</span>
                         </label>
-                        <div className="relative">
-                          <input
-                            type="text"
-                            value={editForm.policy_number}
-                            onChange={createUppercaseHandler((e) => setEditForm({ ...editForm, policy_number: e.target.value }))}
-                            className={`w-full px-3 py-2 pr-10 text-sm border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none ${uppercaseInputClass}`}
-                            placeholder="02B3427460"
-                          />
-                          {searchingPolicy && (
-                            <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                              <div className="animate-spin rounded-full h-4 w-4 border-2 border-[#8AAA19] border-t-transparent"></div>
-                            </div>
-                          )}
-                        </div>
-                        {existingPolicyClient && (
-                          <div className="mt-1 p-2 bg-green-50 border border-green-200 rounded-lg">
-                            <p className="text-xs text-green-800 flex items-center gap-1">
-                              <FaCheckCircle className="text-green-600" />
-                              <strong>Cliente existente:</strong> {existingPolicyClient.name}
-                            </p>
-                            <p className="text-xs text-green-700 mt-1">Solo actualiza los datos de la póliza</p>
-                          </div>
-                        )}
+                        <input
+                          type="text"
+                          value={editForm.policy_number}
+                          onChange={createUppercaseHandler((e) => setEditForm({ ...editForm, policy_number: e.target.value }))}
+                          className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none ${uppercaseInputClass}`}
+                          placeholder="02B3427460"
+                        />
                       </div>
                       <div>
                         <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
