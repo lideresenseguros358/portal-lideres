@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FaExclamationTriangle, FaEdit, FaSave, FaTimes, FaTrash, FaCheckCircle, FaCalendar, FaUser, FaFileAlt, FaBuilding, FaFolder } from 'react-icons/fa';
+import { FaExclamationTriangle, FaEdit, FaSave, FaTimes, FaTrash, FaCheckCircle, FaCalendar, FaUser, FaFileAlt, FaBuilding, FaFolder, FaSearch } from 'react-icons/fa';
+import { supabaseClient } from '@/lib/supabase/client';
 import { formatDateForDisplay } from '@/lib/utils/dates';
 import { getTodayLocalDate, addOneYearToDate } from '@/lib/utils/dates';
 import { toast } from 'sonner';
@@ -24,6 +25,8 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
   const [saving, setSaving] = useState(false);
   const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set());
   const [expandedExpedientes, setExpandedExpedientes] = useState<Set<string>>(new Set());
+  const [searchingPolicy, setSearchingPolicy] = useState(false);
+  const [existingPolicyClient, setExistingPolicyClient] = useState<any>(null);
 
   useEffect(() => {
     loadPreliminaryClients();
@@ -35,6 +38,56 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
       setEditForm((prev: any) => ({ ...prev, renewal_date: calculatedRenewalDate }));
     }
   }, [editForm.start_date, editingId, editForm.renewal_date]);
+
+  // Buscar póliza existente cuando se ingresa número de póliza
+  useEffect(() => {
+    if (!editForm.policy_number || editForm.policy_number.trim() === '' || !editingId) {
+      setExistingPolicyClient(null);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      await searchExistingPolicy(editForm.policy_number);
+    }, 800);
+
+    return () => clearTimeout(timer);
+  }, [editForm.policy_number, editingId]);
+
+  const searchExistingPolicy = async (policyNumber: string) => {
+    setSearchingPolicy(true);
+    try {
+      const { data: policy } = await supabaseClient()
+        .from('policies')
+        .select('*, clients(*)')
+        .eq('policy_number', policyNumber.toUpperCase())
+        .single();
+
+      if (policy && policy.clients) {
+        setExistingPolicyClient(policy.clients);
+        
+        // Autocompletar datos del cliente
+        setEditForm((prev: any) => ({
+          ...prev,
+          client_name: policy.clients.name || prev.client_name,
+          national_id: policy.clients.national_id || prev.national_id,
+          email: policy.clients.email || prev.email,
+          phone: policy.clients.phone || prev.phone,
+          birth_date: policy.clients.birth_date || prev.birth_date,
+        }));
+
+        toast.success(`Cliente encontrado: ${policy.clients.name}`, {
+          description: 'Datos del cliente autocompletados. Solo actualiza los datos de la póliza.'
+        });
+      } else {
+        setExistingPolicyClient(null);
+      }
+    } catch (error) {
+      console.error('Error buscando póliza:', error);
+      setExistingPolicyClient(null);
+    } finally {
+      setSearchingPolicy(false);
+    }
+  };
 
   const loadPreliminaryClients = async () => {
     setLoading(true);
@@ -77,6 +130,7 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
     const today = getTodayLocalDate();
     setEditingId(client.id);
     setExpandedClients(prev => new Set(prev).add(client.id));
+    setExistingPolicyClient(null);
     setEditForm({
       client_name: client.client_name || '',
       national_id: client.national_id || '',
@@ -97,6 +151,7 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
   const cancelEdit = () => {
     setEditingId(null);
     setEditForm({});
+    setExistingPolicyClient(null);
   };
 
   const saveEdit = async () => {
@@ -528,13 +583,29 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
                         <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                           Número de Póliza <span className="text-red-500">*</span>
                         </label>
-                        <input
-                          type="text"
-                          value={editForm.policy_number}
-                          onChange={createUppercaseHandler((e) => setEditForm({ ...editForm, policy_number: e.target.value }))}
-                          className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none ${uppercaseInputClass}`}
-                          placeholder="02B3427460"
-                        />
+                        <div className="relative">
+                          <input
+                            type="text"
+                            value={editForm.policy_number}
+                            onChange={createUppercaseHandler((e) => setEditForm({ ...editForm, policy_number: e.target.value }))}
+                            className={`w-full px-3 py-2 pr-10 text-sm border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none ${uppercaseInputClass}`}
+                            placeholder="02B3427460"
+                          />
+                          {searchingPolicy && (
+                            <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                              <div className="animate-spin rounded-full h-4 w-4 border-2 border-[#8AAA19] border-t-transparent"></div>
+                            </div>
+                          )}
+                        </div>
+                        {existingPolicyClient && (
+                          <div className="mt-1 p-2 bg-green-50 border border-green-200 rounded-lg">
+                            <p className="text-xs text-green-800 flex items-center gap-1">
+                              <FaCheckCircle className="text-green-600" />
+                              <strong>Cliente existente:</strong> {existingPolicyClient.name}
+                            </p>
+                            <p className="text-xs text-green-700 mt-1">Solo actualiza los datos de la póliza</p>
+                          </div>
+                        )}
                       </div>
                       <div>
                         <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
