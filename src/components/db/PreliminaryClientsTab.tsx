@@ -14,6 +14,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import ExpedienteManager from '@/components/expediente/ExpedienteManager';
 import { POLICY_TYPES } from '@/lib/constants/policy-types';
 import Modal from '@/components/Modal';
+import NationalIdInput from '@/components/ui/NationalIdInput';
+import PolicyNumberInput from '@/components/ui/PolicyNumberInput';
 
 interface PreliminaryClientsTabProps {
   insurers: any[];
@@ -36,6 +38,7 @@ export default function PreliminaryClientsTab({ insurers, brokers: brokersProp, 
   const menuRef = useRef<HTMLDivElement>(null);
   const [expedienteModalOpen, setExpedienteModalOpen] = useState<Record<string, boolean>>({});
   const [showExpedienteInEdit, setShowExpedienteInEdit] = useState(false);
+  const [documentType, setDocumentType] = useState<'cedula' | 'pasaporte' | 'ruc'>('cedula');
 
   useEffect(() => {
     loadPreliminaryClients();
@@ -171,9 +174,19 @@ export default function PreliminaryClientsTab({ insurers, brokers: brokersProp, 
     // Obtener broker_id desde la relación brokers
     const brokerId = client.broker_id || client.brokers?.id || '';
     
+    // Detectar tipo de documento desde national_id
+    const nationalId = client.national_id || '';
+    let detectedType: 'cedula' | 'pasaporte' | 'ruc' = 'cedula';
+    if (nationalId.includes('E-') || nationalId.includes('N-') || nationalId.includes('PE-')) {
+      detectedType = 'pasaporte';
+    } else if (nationalId.length > 0 && !nationalId.match(/^\d{1,2}-\d{1,4}-\d{1,5}$/)) {
+      detectedType = 'ruc';
+    }
+    setDocumentType(detectedType);
+    
     setEditForm({
       client_name: client.client_name || '',
-      national_id: client.national_id || '',
+      national_id: nationalId,
       email: client.email || '',
       phone: client.phone || '',
       birth_date: client.birth_date || '',
@@ -682,33 +695,22 @@ export default function PreliminaryClientsTab({ insurers, brokers: brokersProp, 
                           placeholder="NOMBRE COMPLETO DEL CLIENTE"
                         />
                       </div>
-                      <div>
-                        <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
-                          Cédula / RUC
-                        </label>
-                        <div className="relative">
-                          <input
-                            type="text"
-                            value={editForm.national_id}
-                            onChange={createUppercaseHandler((e) => setEditForm({ ...editForm, national_id: e.target.value }))}
-                            className={`w-full px-3 py-2 pr-10 text-sm border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none ${uppercaseInputClass}`}
-                            placeholder="8-123-4567"
-                          />
-                          {searchingPolicy && (
-                            <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                              <div className="animate-spin rounded-full h-4 w-4 border-2 border-[#8AAA19] border-t-transparent"></div>
+                      <div className="sm:col-span-2">
+                        <NationalIdInput
+                          value={editForm.national_id}
+                          onChange={(value) => setEditForm({ ...editForm, national_id: value })}
+                          onDocumentTypeChange={(type) => setDocumentType(type)}
+                          label="Documento de Identidad"
+                          helperText={existingPolicyClient ? (
+                            <div className="mt-1 p-2 bg-green-50 border border-green-200 rounded-lg">
+                              <p className="text-xs text-green-800 flex items-center gap-1">
+                                <FaCheckCircle className="text-green-600" />
+                                <strong>Cliente existente:</strong> {existingPolicyClient.name}
+                              </p>
+                              <p className="text-xs text-green-700 mt-1">Datos autocompletados. Completa la póliza y actualiza datos faltantes.</p>
                             </div>
-                          )}
-                        </div>
-                        {existingPolicyClient && (
-                          <div className="mt-1 p-2 bg-green-50 border border-green-200 rounded-lg">
-                            <p className="text-xs text-green-800 flex items-center gap-1">
-                              <FaCheckCircle className="text-green-600" />
-                              <strong>Cliente existente:</strong> {existingPolicyClient.name}
-                            </p>
-                            <p className="text-xs text-green-700 mt-1">Datos autocompletados. Completa la póliza y actualiza datos faltantes.</p>
-                          </div>
-                        )}
+                          ) : null}
+                        />
                       </div>
                       <div>
                         <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
@@ -736,16 +738,19 @@ export default function PreliminaryClientsTab({ insurers, brokers: brokersProp, 
                       </div>
                       <div className="w-full max-w-full overflow-hidden">
                         <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
-                          Fecha de Nacimiento
+                          Fecha de Nacimiento {documentType !== 'ruc' && <span className="text-red-500">*</span>}
                         </label>
                         <input
                           type="date"
-                          required
+                          required={documentType !== 'ruc'}
                           value={editForm.birth_date}
                           onChange={(e) => setEditForm({ ...editForm, birth_date: e.target.value })}
                           className="w-full max-w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none"
                           style={{ WebkitAppearance: 'none' }}
                         />
+                        {documentType === 'ruc' && (
+                          <p className="text-xs text-gray-500 mt-1">💼 RUC: No requiere fecha de nacimiento (es empresa)</p>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -757,18 +762,40 @@ export default function PreliminaryClientsTab({ insurers, brokers: brokersProp, 
                       Información de la Póliza
                     </h4>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                      <div>
-                        <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
-                          Número de Póliza <span className="text-red-500">*</span>
-                        </label>
-                        <input
-                          type="text"
-                          value={editForm.policy_number}
-                          onChange={createUppercaseHandler((e) => setEditForm({ ...editForm, policy_number: e.target.value }))}
-                          className={`w-full px-3 py-2 text-sm sm:text-base border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none ${uppercaseInputClass} ${userRole !== 'master' ? 'bg-gray-100 cursor-not-allowed' : ''}`}
-                          placeholder="02B3427460"
-                          disabled={userRole !== 'master'}
-                        />
+                      <div className="sm:col-span-2">
+                        {editForm.insurer_id ? (
+                          <>
+                            <PolicyNumberInput
+                              insurerName={insurers.find(i => i.id === editForm.insurer_id)?.name || ''}
+                              value={editForm.policy_number}
+                              onChange={(value) => {
+                                if (userRole === 'master') {
+                                  setEditForm({ ...editForm, policy_number: value });
+                                }
+                              }}
+                              label="Número de Póliza"
+                              required
+                            />
+                            {userRole !== 'master' && (
+                              <p className="text-xs text-amber-600 mt-1">ℹ️ Solo Master puede editar el número de póliza</p>
+                            )}
+                          </>
+                        ) : (
+                          <div>
+                            <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                              Número de Póliza <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="text"
+                              value={editForm.policy_number}
+                              onChange={createUppercaseHandler((e) => setEditForm({ ...editForm, policy_number: e.target.value }))}
+                              className={`w-full px-3 py-2 text-sm sm:text-base border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none ${uppercaseInputClass} ${userRole !== 'master' ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                              placeholder="Selecciona aseguradora primero"
+                              disabled={true}
+                            />
+                            <p className="text-xs text-amber-600 mt-1">⚠️ Selecciona una aseguradora para ver el formato correcto</p>
+                          </div>
+                        )}
                       </div>
                       <div>
                         <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
