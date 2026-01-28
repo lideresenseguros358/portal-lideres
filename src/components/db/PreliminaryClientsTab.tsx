@@ -584,19 +584,19 @@ export default function PreliminaryClientsTab({ insurers, brokers: brokersProp, 
                     </div>
                     <div className="pol-row">
                       <div className="pol-main">
-                        <div className="pol-meta">
-                          <span><strong>Nombre:</strong> {client.client_name || '—'}</span>
+                        <div className="pol-meta flex-wrap">
+                          <span className="break-words max-w-full"><strong>Nombre:</strong> <span className="break-words">{client.client_name || '—'}</span></span>
                           <span>•</span>
-                          <span><strong>Cédula:</strong> {client.national_id || '—'}</span>
+                          <span className="break-words"><strong>Cédula:</strong> {client.national_id || '—'}</span>
                           <span>•</span>
-                          <span><strong>Email:</strong> {client.email || '—'}</span>
+                          <span className="break-words max-w-full truncate"><strong>Email:</strong> {client.email || '—'}</span>
                         </div>
-                        <div className="pol-meta">
+                        <div className="pol-meta flex-wrap">
                           <span><strong>Teléfono:</strong> {client.phone || '—'}</span>
                           <span>•</span>
                           <span><strong>Nacimiento:</strong> {client.birth_date || '—'}</span>
                           <span>•</span>
-                          <span><strong>Corredor:</strong> {brokerName}</span>
+                          <span className="break-words"><strong>Corredor:</strong> {brokerName}</span>
                         </div>
                       </div>
                     </div>
@@ -678,7 +678,7 @@ export default function PreliminaryClientsTab({ insurers, brokers: brokersProp, 
                           type="text"
                           value={editForm.client_name}
                           onChange={createUppercaseHandler((e) => setEditForm({ ...editForm, client_name: e.target.value }))}
-                          className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none ${uppercaseInputClass}`}
+                          className={`w-full px-3 py-2 text-sm sm:text-base border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none ${uppercaseInputClass}`}
                           placeholder="NOMBRE COMPLETO DEL CLIENTE"
                         />
                       </div>
@@ -734,7 +734,7 @@ export default function PreliminaryClientsTab({ insurers, brokers: brokersProp, 
                           placeholder="6000-0000"
                         />
                       </div>
-                      <div>
+                      <div className="w-full max-w-full overflow-hidden">
                         <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                           Fecha de Nacimiento
                         </label>
@@ -743,7 +743,8 @@ export default function PreliminaryClientsTab({ insurers, brokers: brokersProp, 
                           required
                           value={editForm.birth_date}
                           onChange={(e) => setEditForm({ ...editForm, birth_date: e.target.value })}
-                          className="w-full px-3 py-2 text-sm border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+                          className="w-full max-w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+                          style={{ WebkitAppearance: 'none' }}
                         />
                       </div>
                     </div>
@@ -764,8 +765,9 @@ export default function PreliminaryClientsTab({ insurers, brokers: brokersProp, 
                           type="text"
                           value={editForm.policy_number}
                           onChange={createUppercaseHandler((e) => setEditForm({ ...editForm, policy_number: e.target.value }))}
-                          className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none ${uppercaseInputClass}`}
+                          className={`w-full px-3 py-2 text-sm sm:text-base border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none ${uppercaseInputClass} ${userRole !== 'master' ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                           placeholder="02B3427460"
+                          disabled={userRole !== 'master'}
                         />
                       </div>
                       <div>
@@ -789,8 +791,12 @@ export default function PreliminaryClientsTab({ insurers, brokers: brokersProp, 
                         <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                           Aseguradora <span className="text-red-500">*</span>
                         </label>
-                        <Select value={editForm.insurer_id} onValueChange={(value) => setEditForm({ ...editForm, insurer_id: value })}>
-                          <SelectTrigger className="w-full h-9 text-sm">
+                        <Select 
+                          value={editForm.insurer_id} 
+                          onValueChange={(value) => setEditForm({ ...editForm, insurer_id: value })}
+                          disabled={userRole !== 'master'}
+                        >
+                          <SelectTrigger className={`w-full h-9 text-sm sm:text-base ${userRole !== 'master' ? 'bg-gray-100 cursor-not-allowed' : ''}`}>
                             <SelectValue placeholder="Seleccionar..." />
                           </SelectTrigger>
                           <SelectContent className="max-h-60">
@@ -828,7 +834,7 @@ export default function PreliminaryClientsTab({ insurers, brokers: brokersProp, 
                           </Select>
                         </div>
                       )}
-                      <div>
+                      <div className="w-full max-w-full overflow-hidden">
                         <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                           Fecha Inicio
                         </label>
@@ -836,22 +842,24 @@ export default function PreliminaryClientsTab({ insurers, brokers: brokersProp, 
                           type="date"
                           value={editForm.start_date}
                           onChange={(e) => setEditForm({ ...editForm, start_date: e.target.value })}
-                          className="w-full px-3 py-2 text-sm border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+                          className="w-full max-w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+                          style={{ WebkitAppearance: 'none' }}
                         />
                       </div>
-                      <div>
+                      <div className="w-full max-w-full overflow-hidden">
                         <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                           Fecha Renovación <span className="text-red-500">*</span>
-                          {editForm.start_date && (
-                            <span className="text-xs text-green-600 ml-2">✓ Auto-calculada (un año desde inicio)</span>
-                          )}
                         </label>
                         <input
                           type="date"
                           value={editForm.renewal_date}
                           onChange={(e) => setEditForm({ ...editForm, renewal_date: e.target.value })}
-                          className="w-full px-3 py-2 text-sm border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+                          className="w-full max-w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+                          style={{ WebkitAppearance: 'none' }}
                         />
+                        {editForm.start_date && (
+                          <p className="text-xs text-green-600 mt-1">✓ Auto-calculada (un año desde inicio)</p>
+                        )}
                       </div>
                     </div>
                   </div>
