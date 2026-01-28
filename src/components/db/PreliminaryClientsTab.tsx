@@ -21,14 +21,12 @@ interface PreliminaryClientsTabProps {
   userRole: string;
 }
 
-export default function PreliminaryClientsTab({ insurers, brokers, userRole }: PreliminaryClientsTabProps) {
+export default function PreliminaryClientsTab({ insurers, brokers: brokersProp, userRole }: PreliminaryClientsTabProps) {
   const [loading, setLoading] = useState(true);
   const [preliminaryClients, setPreliminaryClients] = useState<any[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
-  
-  // Debug brokers
-  console.log('[PreliminaryClientsTab] Brokers recibidos:', brokers);
   const [editForm, setEditForm] = useState<any>({});
+  const [brokers, setBrokers] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
   const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set());
   const [expandedExpedientes, setExpandedExpedientes] = useState<Set<string>>(new Set());
@@ -41,7 +39,23 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
 
   useEffect(() => {
     loadPreliminaryClients();
+    loadBrokers();
   }, []);
+  
+  const loadBrokers = async () => {
+    try {
+      const { data: brokersData } = await supabaseClient()
+        .from('brokers')
+        .select('id, name')
+        .eq('active', true)
+        .order('name');
+      
+      console.log('[PreliminaryClientsTab] Brokers cargados:', brokersData);
+      setBrokers(brokersData || []);
+    } catch (error) {
+      console.error('[PreliminaryClientsTab] Error loading brokers:', error);
+    }
+  };
 
   // Cerrar menú al hacer click fuera
   useEffect(() => {
