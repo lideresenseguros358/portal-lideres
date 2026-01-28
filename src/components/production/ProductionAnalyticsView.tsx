@@ -176,52 +176,88 @@ export default function ProductionAnalyticsView({ year, brokers }: ProductionAna
     ? aggregateMonthlyData.reduce((max, m) => m.anterior > (max?.anterior || 0) ? m : max)
     : undefined;
 
-  // Calcular última persistencia registrada (carry-forward desde año anterior si es necesario)
+  // Calcular última persistencia PONDERADA (promedio ponderado por producción)
   const ultimaPersistencia = (() => {
-    // 1. Buscar en año actual desde DICIEMBRE hacia ENERO (último mes registrado)
-    // NO limitarse al mes actual - buscar en todos los meses del año
+    // Buscar mes más reciente con persistencias registradas (de diciembre a enero)
     for (let i = 11; i >= 0; i--) {
       const monthKey = MONTH_KEYS[i];
       if (!monthKey) continue;
-      for (const broker of allBrokersData) {
-        if (!broker.months) continue;
+      
+      // Calcular persistencia PONDERADA para este mes
+      let sumaPonderada = 0;
+      let sumaProduccion = 0;
+      let hayDatos = false;
+      
+      allBrokersData.forEach(broker => {
+        if (!broker.months) return;
         const monthData = broker.months[monthKey as keyof typeof broker.months];
         const persistencia = monthData?.persistencia;
-        if (persistencia !== null && persistencia !== undefined) {
-          return { value: persistencia, month: MONTH_NAMES[i], year };
+        const produccion = monthData?.bruto || 0;
+        
+        if (persistencia !== null && persistencia !== undefined && produccion > 0) {
+          sumaPonderada += persistencia * produccion;
+          sumaProduccion += produccion;
+          hayDatos = true;
         }
+      });
+      
+      if (hayDatos && sumaProduccion > 0) {
+        const persistenciaPonderada = sumaPonderada / sumaProduccion;
+        return { value: persistenciaPonderada, month: MONTH_NAMES[i], year };
       }
     }
     
-    // 2. Si no hay en año actual, buscar en año anterior (carry-forward)
-    for (const broker of allBrokersData) {
+    // Si no hay en año actual, buscar en año anterior (carry-forward ponderado)
+    let sumaPonderadaAnterior = 0;
+    let sumaProduccionAnterior = 0;
+    let mesAnterior: number | null = null;
+    
+    allBrokersData.forEach(broker => {
       if (broker.previous_year?.last_persistencia) {
-        const monthIndex = broker.previous_year.last_persistencia.month - 1;
-        return { 
-          value: broker.previous_year.last_persistencia.value, 
-          month: MONTH_NAMES[monthIndex],
-          year: year - 1
-        };
+        const persistencia = broker.previous_year.last_persistencia.value;
+        const produccion = broker.previous_year?.bruto_ytd || 0;
+        
+        if (persistencia > 0 && produccion > 0) {
+          sumaPonderadaAnterior += persistencia * produccion;
+          sumaProduccionAnterior += produccion;
+          if (!mesAnterior) {
+            mesAnterior = broker.previous_year.last_persistencia.month;
+          }
+        }
       }
+    });
+    
+    if (sumaProduccionAnterior > 0 && mesAnterior) {
+      const persistenciaPonderada = sumaPonderadaAnterior / sumaProduccionAnterior;
+      const monthIndex = mesAnterior - 1;
+      return { 
+        value: persistenciaPonderada, 
+        month: MONTH_NAMES[monthIndex],
+        year: year - 1
+      };
     }
     
     return null;
   })();
 
-  // Calcular promedio de persistencias del año
+  // Calcular persistencia promedio PONDERADA del año (por producción)
   const persistenciaPromedio = (() => {
-    let sum = 0;
-    let count = 0;
+    let sumaPonderada = 0;
+    let sumaProduccion = 0;
+    
     allBrokersData.forEach(broker => {
       MONTH_KEYS.forEach(key => {
         const persistencia = broker.months[key]?.persistencia;
-        if (persistencia !== null && persistencia !== undefined) {
-          sum += persistencia;
-          count++;
+        const produccion = broker.months[key]?.bruto || 0;
+        
+        if (persistencia !== null && persistencia !== undefined && produccion > 0) {
+          sumaPonderada += persistencia * produccion;
+          sumaProduccion += produccion;
         }
       });
     });
-    return count > 0 ? sum / count : null;
+    
+    return sumaProduccion > 0 ? sumaPonderada / sumaProduccion : null;
   })();
 
   // Tendencia
