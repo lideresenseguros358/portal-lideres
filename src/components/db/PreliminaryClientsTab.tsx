@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { FaExclamationTriangle, FaEdit, FaSave, FaTimes, FaTrash, FaCheckCircle, FaCalendar, FaUser, FaFileAlt, FaBuilding, FaFolder, FaSearch } from 'react-icons/fa';
 import { supabaseClient } from '@/lib/supabase/client';
 import { formatDateForDisplay } from '@/lib/utils/dates';
@@ -204,6 +204,40 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
     }
   };
 
+  // Agrupar clientes por aseguradora y ordenar alfabéticamente
+  const clientsByInsurer = useMemo(() => {
+    const groups: Record<string, any[]> = {};
+    
+    preliminaryClients.forEach((client) => {
+      const insurerName = insurers.find(i => i.id === client.insurer_id)?.name || 'Sin Aseguradora';
+      
+      if (!groups[insurerName]) {
+        groups[insurerName] = [];
+      }
+      
+      groups[insurerName].push(client);
+    });
+    
+    // Ordenar clientes alfabéticamente dentro de cada grupo
+    Object.keys(groups).forEach((insurerName) => {
+      if (groups[insurerName]) {
+        groups[insurerName].sort((a, b) => {
+          const nameA = a.client_name || '';
+          const nameB = b.client_name || '';
+          return nameA.localeCompare(nameB);
+        });
+      }
+    });
+    
+    // Ordenar las aseguradoras alfabéticamente
+    const sortedInsurerNames = Object.keys(groups).sort();
+    
+    return sortedInsurerNames.map((insurerName) => ({
+      insurerName,
+      clients: groups[insurerName]
+    }));
+  }, [preliminaryClients, insurers]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -340,9 +374,21 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
         </div>
       </div>
 
-      {/* List */}
-      <div className="space-y-4">
-        {preliminaryClients.map((client) => {
+      {/* List - Agrupado por Aseguradora en 2 Columnas */}
+      {clientsByInsurer.map(({ insurerName, clients }) => (
+        <div key={insurerName} className="mb-6">
+          {/* Subtítulo de Aseguradora */}
+          <h3 className="text-lg font-bold text-gray-800 mb-3 flex items-center gap-2 border-b-2 border-[#8AAA19] pb-2">
+            <FaBuilding className="text-[#8AAA19]" />
+            {insurerName}
+            <span className="text-sm font-normal text-gray-600 ml-2">
+              ({clients?.length || 0} {clients?.length === 1 ? 'cliente' : 'clientes'})
+            </span>
+          </h3>
+
+          {/* Grid 2 columnas en PC, 1 en mobile */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {clients?.map((client) => {
           const isEditing = editingId === client.id;
           const insurerName = insurers.find(i => i.id === client.insurer_id)?.name || 'Sin asignar';
           const brokerName = client.brokers?.name || (client.brokers?.profiles as any)?.full_name || 'Sin asignar';
@@ -786,7 +832,9 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
             </div>
           );
         })}
-      </div>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
