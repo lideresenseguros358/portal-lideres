@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { FaExclamationTriangle, FaEdit, FaSave, FaTimes, FaTrash, FaCheckCircle, FaCalendar, FaUser, FaFileAlt, FaBuilding, FaFolder, FaSearch } from 'react-icons/fa';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import { MoreVertical } from 'lucide-react';
 import { supabaseClient } from '@/lib/supabase/client';
 import { formatDateForDisplay } from '@/lib/utils/dates';
@@ -418,24 +419,31 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
               className="bg-white rounded-lg shadow border border-gray-200 hover:shadow-md transition-all"
             >
               {/* Header Comprimido - Clickeable */}
-              <div 
-                className="p-3 hover:bg-gray-50 transition-colors flex items-center justify-between gap-3"
-              >
-                <div 
-                  className="flex-1 min-w-0 cursor-pointer"
-                  onClick={() => toggleExpand(client.id)}
-                >
-                  <h3 className="text-base font-semibold text-gray-900 mb-0.5 flex items-center gap-2">
-                    {expandedClients.has(client.id) ? '▼' : '▶'}
-                    {client.client_name || '(Sin nombre)'}
-                  </h3>
-                  <p className="text-xs text-gray-600">
-                    {insurerName} • Póliza: <span className="font-mono">{client.policy_number || '(Sin número)'}</span>
-                  </p>
-                </div>
+              <div className="p-4 bg-gradient-to-r from-gray-50 to-white">
+                <div className="flex items-start gap-3">
+                  <div className="flex-1 min-w-0">
+                    <button
+                      className="w-full text-left group"
+                      onClick={() => toggleExpand(client.id)}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <h3 className="text-base font-semibold text-[#010139] truncate group-hover:text-[#8AAA19] transition-colors">
+                          {client.client_name || '(Sin nombre)'}
+                        </h3>
+                        {expandedClients.has(client.id) ? (
+                          <ChevronUp size={20} className="text-[#8AAA19] flex-shrink-0" />
+                        ) : (
+                          <ChevronDown size={20} className="text-gray-400 flex-shrink-0" />
+                        )}
+                      </div>
+                    </button>
+                    <p className="text-xs text-gray-600 mt-1">
+                      {insurerName} • Póliza: <span className="font-mono">{client.policy_number || '(Sin número)'}</span>
+                    </p>
+                  </div>
 
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  {client.missing_fields.length > 0 && (
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {client.missing_fields.length > 0 && (
                     <div className="relative group">
                       <span className="text-xs font-medium text-amber-600 bg-amber-50 px-2 py-1 rounded cursor-help">
                         ⚠️ {client.missing_fields.length}
@@ -518,6 +526,7 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
                         </div>
                       </>
                     )}
+                    </div>
                   </div>
                 </div>
               </div>
