@@ -10,6 +10,7 @@ import { actionGetPreliminaryClients, actionUpdatePreliminaryClient, actionDelet
 import { createUppercaseHandler, uppercaseInputClass } from '@/lib/utils/uppercase';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import ExpedienteManager from '@/components/expediente/ExpedienteManager';
+import { POLICY_TYPES } from '@/lib/constants/policy-types';
 
 interface PreliminaryClientsTabProps {
   insurers: any[];
@@ -609,15 +610,20 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
                       </div>
                       <div>
                         <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
-                          Ramo
+                          Tipo de Póliza
                         </label>
-                        <input
-                          type="text"
-                          value={editForm.ramo}
-                          onChange={createUppercaseHandler((e) => setEditForm({ ...editForm, ramo: e.target.value }))}
-                          className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none ${uppercaseInputClass}`}
-                          placeholder="AUTO, VIDA, SALUD, ETC."
-                        />
+                        <Select value={editForm.ramo} onValueChange={(value) => setEditForm({ ...editForm, ramo: value })}>
+                          <SelectTrigger className="w-full h-9 text-sm">
+                            <SelectValue placeholder="Seleccionar tipo..." />
+                          </SelectTrigger>
+                          <SelectContent className="max-h-60">
+                            {POLICY_TYPES.map((type) => (
+                              <SelectItem key={type.value} value={type.value}>
+                                {type.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                       <div>
                         <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
@@ -634,23 +640,25 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
                           </SelectContent>
                         </Select>
                       </div>
-                      <div>
-                        <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
-                          Corredor <span className="text-red-500">*</span>
-                        </label>
-                        <Select value={editForm.broker_id} onValueChange={(value) => setEditForm({ ...editForm, broker_id: value })}>
-                          <SelectTrigger className="w-full h-9 text-sm">
-                            <SelectValue placeholder="Seleccionar..." />
-                          </SelectTrigger>
-                          <SelectContent className="max-h-60">
-                            {brokers.map((broker: any) => (
-                              <SelectItem key={broker.id} value={broker.id}>
-                                {broker.name || (broker.profiles as any)?.full_name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
+                      {userRole === 'master' && (
+                        <div>
+                          <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                            Corredor <span className="text-red-500">*</span>
+                          </label>
+                          <Select value={editForm.broker_id} onValueChange={(value) => setEditForm({ ...editForm, broker_id: value })}>
+                            <SelectTrigger className="w-full h-9 text-sm">
+                              <SelectValue placeholder="Seleccionar..." />
+                            </SelectTrigger>
+                            <SelectContent className="max-h-60">
+                              {brokers.map((broker: any) => (
+                                <SelectItem key={broker.id} value={broker.id}>
+                                  {broker.name || (broker.profiles as any)?.full_name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
                       <div>
                         <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                           Fecha Inicio
