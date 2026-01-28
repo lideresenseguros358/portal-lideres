@@ -494,17 +494,6 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              toggleExpediente(client.id, e);
-                              setOpenMenuClient(null);
-                            }}
-                            className="w-full px-4 py-2 text-left text-sm hover:bg-gray-50 flex items-center gap-2"
-                          >
-                            <FaFolder size={14} />
-                            Expediente
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
                               startEdit(client);
                               setOpenMenuClient(null);
                             }}
@@ -535,94 +524,99 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
 
               {/* Sección Expandible - Info del cliente */}
               {expandedClients.has(client.id) && (
-                <div className="border-t border-gray-200 bg-gray-50 p-4">
-                  {/* Campos faltantes con chips */}
-                  {client.missing_fields.length > 0 && (
-                    <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-                      <p className="text-sm font-semibold text-red-900 mb-3">
-                        📋 Campos faltantes para migración:
-                      </p>
-                      <div className="flex flex-wrap gap-2">
-                        {client.missing_fields.map((field: string, idx: number) => (
-                          <span 
-                            key={idx}
-                            className="bg-red-100 text-red-800 px-3 py-1.5 rounded-lg text-xs font-medium border border-red-200"
-                          >
-                            {field}
-                          </span>
-                        ))}
+                <div className="ct-detail">
+                  <div className="pol-panel">
+                    {/* Campos faltantes */}
+                    {client.missing_fields.length > 0 && (
+                      <div className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+                        <p className="text-xs font-semibold text-red-900 mb-2 flex items-center gap-2">
+                          <span>⚠️</span>
+                          Campos faltantes para migración:
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {client.missing_fields.map((field: string, idx: number) => (
+                            <span 
+                              key={idx}
+                              className="px-2 py-0.5 text-xs font-medium bg-white border border-red-300 text-red-700 rounded"
+                            >
+                              {field}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Datos del Cliente */}
+                    <div className="pol-header">
+                      <h4 className="pol-title">Datos del Cliente</h4>
+                    </div>
+                    <div className="pol-row">
+                      <div className="pol-main">
+                        <div className="pol-meta">
+                          <span><strong>Nombre:</strong> {client.client_name || '—'}</span>
+                          <span>•</span>
+                          <span><strong>Cédula:</strong> {client.national_id || '—'}</span>
+                          <span>•</span>
+                          <span><strong>Email:</strong> {client.email || '—'}</span>
+                        </div>
+                        <div className="pol-meta">
+                          <span><strong>Teléfono:</strong> {client.phone || '—'}</span>
+                          <span>•</span>
+                          <span><strong>Nacimiento:</strong> {client.birth_date || '—'}</span>
+                          <span>•</span>
+                          <span><strong>Corredor:</strong> {brokerName}</span>
+                        </div>
                       </div>
                     </div>
-                  )}
 
-                  {/* Datos actuales */}
-                  <div className="bg-white rounded-lg p-4 border border-gray-200">
-                    <h4 className="font-semibold text-gray-700 mb-4 text-sm">📊 Información Actual</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <p className="text-xs text-gray-500 mb-1">Nombre</p>
-                        <p className="font-semibold text-sm">{client.client_name || '—'}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500 mb-1">Cédula/RUC</p>
-                        <p className="font-semibold text-sm">{client.national_id || '—'}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500 mb-1">Email</p>
-                        <p className="font-semibold text-sm">{client.email || '—'}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500 mb-1">Teléfono</p>
-                        <p className="font-semibold text-sm">{client.phone || '—'}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500 mb-1">Fecha de Nacimiento</p>
-                        <p className="font-semibold text-sm">{formatDateForDisplay(client.birth_date)}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500 mb-1">Aseguradora</p>
-                        <p className="font-semibold text-sm">{insurerName}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500 mb-1">Corredor</p>
-                        <p className="font-semibold text-sm">{brokerName}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500 mb-1">Ramo</p>
-                        <p className="font-semibold text-sm">{client.ramo || '—'}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500 mb-1">Estado</p>
-                        <p className="font-semibold text-sm">{client.status || '—'}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500 mb-1">Fecha Inicio</p>
-                        <p className="font-semibold text-sm">{client.start_date || '—'}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-gray-500 mb-1">Fecha Renovación</p>
-                        <p className="font-semibold text-sm">{client.renewal_date || '—'}</p>
+                    {/* Datos de la Póliza */}
+                    <div className="pol-header mt-4">
+                      <h4 className="pol-title">Información de la Póliza</h4>
+                    </div>
+                    <div className="pol-row">
+                      <div className="pol-main">
+                        <div className="pol-number">
+                          📋 {client.policy_number || 'Sin número'}
+                        </div>
+                        <div className="pol-meta">
+                          <span><strong>Aseguradora:</strong> {insurerName}</span>
+                          <span>•</span>
+                          <span><strong>Ramo:</strong> {client.ramo || '—'}</span>
+                        </div>
+                        <div className="pol-meta">
+                          <span><strong>Inicio:</strong> {client.start_date || '—'}</span>
+                          <span>•</span>
+                          <span><strong>Renovación:</strong> {client.renewal_date || '—'}</span>
+                        </div>
+                        {client.notes && (
+                          <div className="pol-notas">
+                            <span className="pol-notas-label">📝 Notas:</span>
+                            <span className="pol-notas-text">{client.notes}</span>
+                          </div>
+                        )}
                       </div>
                     </div>
-                  </div>
 
-                  {/* Expediente del Cliente */}
-                  <div className="mt-4 border-t border-gray-200 pt-4">
-                    <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                      <FaFolder className="text-[#8AAA19]" />
-                      Expediente del Cliente
-                    </h4>
-                    <ExpedienteManager
-                      clientId={client.id}
-                      showClientDocs={true}
-                      showPolicyDocs={false}
-                      showOtros={true}
-                      readOnly={userRole !== 'master'}
-                      externalModalOpen={expedienteModalOpen[client.id]}
-                      onExternalModalChange={(open) => {
-                        setExpedienteModalOpen(prev => ({ ...prev, [client.id]: open }));
-                      }}
-                    />
+                    {/* Expediente del Cliente */}
+                    <div className="mt-4 border-t border-gray-300 pt-4">
+                      <div className="pol-header">
+                        <h4 className="pol-title flex items-center gap-2">
+                          <FaFolder className="text-[#8AAA19]" />
+                          Expediente del Cliente
+                        </h4>
+                      </div>
+                      <ExpedienteManager
+                        clientId={client.id}
+                        showClientDocs={true}
+                        showPolicyDocs={false}
+                        showOtros={true}
+                        readOnly={userRole !== 'master'}
+                        externalModalOpen={expedienteModalOpen[client.id]}
+                        onExternalModalChange={(open) => {
+                          setExpedienteModalOpen(prev => ({ ...prev, [client.id]: open }));
+                        }}
+                      />
+                    </div>
                   </div>
                 </div>
               )}
