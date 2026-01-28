@@ -11,6 +11,7 @@ import { createUppercaseHandler, uppercaseInputClass } from '@/lib/utils/upperca
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import ExpedienteManager from '@/components/expediente/ExpedienteManager';
 import { POLICY_TYPES } from '@/lib/constants/policy-types';
+import Modal from '@/components/Modal';
 
 interface PreliminaryClientsTabProps {
   insurers: any[];
@@ -479,7 +480,7 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
               </div>
 
               {/* Sección Expandible */}
-              {expandedClients.has(client.id) && !isEditing && (
+              {expandedClients.has(client.id) && (
                 <div className="border-t border-gray-200 bg-gray-50 p-4 sm:p-6">
                   {/* Campos faltantes con chips */}
                   {client.missing_fields.length > 0 && (
@@ -570,9 +571,17 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
                 </div>
               )}
 
-              {/* Edit Form */}
-              {isEditing && expandedClients.has(client.id) && (
-                <div className="border-t border-gray-200 bg-gray-50 p-4 sm:p-6">
+            </div>
+          );
+        })}
+          </div>
+        </div>
+      ))}
+
+      {/* Modal para Editar */}
+      {editingId && (
+        <Modal title="Editar Cliente Preliminar" onClose={cancelEdit}>
+          <div className="space-y-6 max-h-[calc(100vh-200px)] overflow-y-auto p-1">
                   {/* Client Info */}
                   <div className="space-y-4">
                     <h4 className="text-sm sm:text-base font-semibold text-gray-700 flex items-center gap-2">
@@ -785,14 +794,9 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
                       Cancelar
                     </button>
                   </div>
-                </div>
-              )}
-            </div>
-          );
-        })}
           </div>
-        </div>
-      ))}
+        </Modal>
+      )}
     </div>
   );
 }
