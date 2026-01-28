@@ -396,9 +396,18 @@ export default function ProductionMatrix({ year, role, brokerId, brokers }: Prod
                           type="text"
                           defaultValue={broker.canceladas_ytd === 0 ? '' : broker.canceladas_ytd}
                           onBlur={(e) => {
-                            const value = e.target.value === '' ? 0 : parseFloat(e.target.value);
-                            if (!isNaN(value) && value !== broker.canceladas_ytd) {
-                              handleCanceladasEdit(broker.broker_id, value);
+                            const inputValue = e.target.value.trim();
+                            if (inputValue === '') {
+                              handleCanceladasEdit(broker.broker_id, 0);
+                              return;
+                            }
+                            // Parsear y redondear SOLO a 2 decimales (EXACTO)
+                            const parsed = parseFloat(inputValue);
+                            if (!isNaN(parsed)) {
+                              const valueToSave = Math.round(parsed * 100) / 100;
+                              if (valueToSave !== broker.canceladas_ytd) {
+                                handleCanceladasEdit(broker.broker_id, valueToSave);
+                              }
                             }
                           }}
                           className="w-full px-2 py-1 text-center border border-red-300 rounded focus:border-red-500 focus:outline-none font-mono text-red-600"
