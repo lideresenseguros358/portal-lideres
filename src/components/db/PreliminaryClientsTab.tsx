@@ -431,9 +431,33 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
 
                 <div className="flex items-center gap-2 flex-shrink-0">
                   {client.missing_fields.length > 0 && (
-                    <span className="text-xs font-medium text-amber-600 bg-amber-50 px-2 py-1 rounded" title={`${client.missing_fields.length} campos faltantes`}>
-                      ⚠️ {client.missing_fields.length}
-                    </span>
+                    <div className="relative group">
+                      <span className="text-xs font-medium text-amber-600 bg-amber-50 px-2 py-1 rounded cursor-help">
+                        ⚠️ {client.missing_fields.length}
+                      </span>
+                      <div className="absolute right-0 bottom-full mb-2 w-80 bg-red-900 text-white text-xs rounded-lg shadow-2xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 p-4 z-[10000] pointer-events-none">
+                        <div className="space-y-2">
+                          <p className="font-bold text-sm">⚠️ {client.missing_fields.length} campo{client.missing_fields.length !== 1 ? 's' : ''} faltante{client.missing_fields.length !== 1 ? 's' : ''}</p>
+                          <p className="text-xs font-semibold text-red-200">Mientras no se complete la información:</p>
+                          <ul className="text-xs space-y-1 ml-4 list-disc">
+                            <li>❌ NO puede ser ingresado en base de datos</li>
+                            <li>❌ NO genera comisiones</li>
+                            <li>❌ NO aparece en reportes de morosidad</li>
+                            <li>❌ NO puede ser utilizado para trámites nuevos</li>
+                          </ul>
+                          <div className="border-t border-red-700 pt-2 mt-2">
+                            <p className="font-semibold text-amber-200">📝 Para actualizar:</p>
+                            <p className="text-xs mt-1">1. Haz click en los <strong>tres puntos (⋮)</strong></p>
+                            <p className="text-xs">2. Selecciona <strong>"Editar"</strong></p>
+                            <p className="text-xs">3. Completa todos los datos pendientes</p>
+                            <p className="text-xs">4. Guarda los cambios</p>
+                          </div>
+                        </div>
+                        <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1">
+                          <div className="border-8 border-transparent border-t-red-900"></div>
+                        </div>
+                      </div>
+                    </div>
                   )}
                   
                   {/* Menú 3 puntos */}
@@ -450,8 +474,8 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
                     </button>
                     {openMenuClient === client.id && (
                       <>
-                        <div className="fixed inset-0 z-40" onClick={() => setOpenMenuClient(null)}></div>
-                        <div className="absolute right-0 mt-1 w-48 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-50">
+                        <div className="fixed inset-0 z-[9998]" onClick={() => setOpenMenuClient(null)}></div>
+                        <div className="absolute right-0 mt-1 w-48 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-[9999]">
                           {client.is_complete && (
                             <button
                               onClick={(e) => {
@@ -609,7 +633,7 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
       {/* Modal para Editar */}
       {editingId && (
         <Modal title="Editar Cliente Preliminar" onClose={cancelEdit}>
-          <div className="space-y-6 max-h-[calc(100vh-200px)] overflow-y-auto p-1">
+          <div className="space-y-6">
                   {/* Client Info */}
                   <div className="space-y-4">
                     <h4 className="text-sm sm:text-base font-semibold text-gray-700 flex items-center gap-2">
@@ -754,9 +778,14 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
                           </label>
                           <Select value={editForm.broker_id} onValueChange={(value) => setEditForm({ ...editForm, broker_id: value })}>
                             <SelectTrigger className="w-full h-9 text-sm">
-                              <SelectValue placeholder="Seleccionar..." />
+                              <SelectValue placeholder="Seleccionar corredor...">
+                                {editForm.broker_id 
+                                  ? (brokers.find((b: any) => b.id === editForm.broker_id)?.name || 'Seleccionar corredor...')
+                                  : 'Seleccionar corredor...'
+                                }
+                              </SelectValue>
                             </SelectTrigger>
-                            <SelectContent className="max-h-60">
+                            <SelectContent className="max-h-[300px] overflow-auto">
                               {brokers.map((broker: any) => (
                                 <SelectItem key={broker.id} value={broker.id}>
                                   {broker.name || 'Sin nombre'}
