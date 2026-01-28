@@ -146,6 +146,20 @@ export default function ClientDetailsModal({ client, onClose, onEdit, onOpenExpe
         return;
       }
 
+      // Para UNIVIVIR: extraer el tercer segmento de números de póliza
+      // Ejemplo: 01-009-21080 → buscar también por 21080
+      const policySearchTerms = policyNumbers.flatMap(pn => {
+        const terms = [pn]; // Número completo
+        const parts = pn.split('-');
+        if (parts.length >= 3 && parts[2]) {
+          // Agregar tercer segmento para aseguradoras como UNIVIVIR
+          terms.push(parts[2]);
+        }
+        return terms;
+      });
+      
+      console.log('[Comisiones] Términos de búsqueda (incluye segmentos):', policySearchTerms);
+      
       // Obtener comm_items con información de quincenas (LEFT JOIN para no filtrar)
       const { data: items, error: itemsError } = await (supabaseClient() as any)
         .from('comm_items')
@@ -156,13 +170,13 @@ export default function ClientDetailsModal({ client, onClose, onEdit, onOpenExpe
           insurers(name),
           comm_imports(
             period_label,
-            fortnights(
+            fortnight_details(
               period_start,
               period_end
             )
           )
         `)
-        .in('policy_number', policyNumbers)
+        .in('policy_number', policySearchTerms)
         .not('gross_amount', 'is', null);
 
       console.log('[Comisiones] Items encontrados:', items?.length || 0);
@@ -206,7 +220,7 @@ export default function ClientDetailsModal({ client, onClose, onEdit, onOpenExpe
         
         // Agregar item con datos de quincena
         const commImport = item.comm_imports;
-        const fortnight = commImport?.fortnights;
+        const fortnight = commImport?.fortnight_details;
         
         acc[policyId].items.push({
           amount,
