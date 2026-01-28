@@ -652,7 +652,7 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
                             <SelectContent className="max-h-60">
                               {brokers.map((broker: any) => (
                                 <SelectItem key={broker.id} value={broker.id}>
-                                  {broker.name || (broker.profiles as any)?.full_name}
+                                  {broker.name || 'Sin nombre'}
                                 </SelectItem>
                               ))}
                             </SelectContent>
