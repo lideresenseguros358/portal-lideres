@@ -193,7 +193,7 @@ export async function actionCreateTempClient(data: any) {
       ramo: data.ramo || null,
       start_date: data.start_date || null,
       renewal_date: data.renewal_date || null,
-      status: data.status || 'active',
+      status: data.status || 'ACTIVA', // Enum: ACTIVA | VENCIDA | CANCELADA
       broker_email: broker_email || '',
       percent_override: data.percent_override || null,
       source: data.source || 'manual',
@@ -259,7 +259,7 @@ export async function actionImportClientsCSV(rows: any[]) {
       ramo: row.ramo || null,
       start_date: row.start_date || null,
       renewal_date: row.renewal_date || null,
-      status: row.status || 'active',
+      status: row.status || 'ACTIVA', // Enum: ACTIVA | VENCIDA | CANCELADA
       broker_email: userRole === 'master' ? row.broker_email : userEmail,
       percent_override: row.percent_override || null,
       source: 'csv_import',

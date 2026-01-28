@@ -138,7 +138,7 @@ export default function ImportPage() {
           ramo: normalizeText(row.ramo?.trim() || '') || undefined,
           start_date: row.start_date?.trim() || undefined,
           renewal_date: row.renewal_date?.trim() || undefined,
-          status: row.status?.trim() || 'active',
+          status: row.status?.trim() || 'ACTIVA', // Enum: ACTIVA | VENCIDA | CANCELADA
           broker_email: row.broker_email?.trim(),
           percent_override: row.percent_override?.trim() || undefined,
         });
