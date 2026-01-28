@@ -400,110 +400,67 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
             >
               {/* Header Comprimido - Clickeable */}
               <div 
-                className="p-4 sm:p-6 cursor-pointer hover:bg-gray-50 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-4"
+                className="p-3 cursor-pointer hover:bg-gray-50 transition-colors flex items-start justify-between gap-3"
                 onClick={() => !isEditing && toggleExpand(client.id)}
               >
-                <div className="flex-1">
-                  <h3 className="text-base sm:text-lg font-bold text-gray-900">
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-xl font-bold text-gray-900 mb-1">
                     {client.client_name || '(Sin nombre)'}
                   </h3>
-                  <p className="text-sm text-gray-600">
+                  <p className="text-sm text-gray-600 mb-1">
                     {insurerName} • Póliza: <span className="font-mono font-semibold">{client.policy_number || '(Sin número)'}</span>
                   </p>
                   {client.missing_fields.length > 0 && (
-                    <div className="mt-2">
-                      <span className="text-xs font-semibold text-red-700 bg-red-50 px-2 py-1 rounded inline-block">
-                        ⚠️ {client.missing_fields.length} campo{client.missing_fields.length !== 1 ? 's' : ''} faltante{client.missing_fields.length !== 1 ? 's' : ''}
-                      </span>
-                    </div>
+                    <span className="text-xs font-medium text-red-600">
+                      ⚠️ {client.missing_fields.length} campo{client.missing_fields.length !== 1 ? 's' : ''} faltante{client.missing_fields.length !== 1 ? 's' : ''}
+                    </span>
                   )}
                 </div>
 
                 {/* Action Buttons */}
                 {!isEditing && (
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
                     {client.is_complete && (
-                      <div className="relative group">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleManualMigration(client.id);
-                          }}
-                          className="px-3 py-1.5 sm:px-4 sm:py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-all font-semibold text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2"
-                        >
-                          <FaCheckCircle size={14} />
-                          <span className="hidden sm:inline">Migrar a BD</span>
-                        </button>
-                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-4 py-3 bg-gray-900 text-white text-xs rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none w-72 z-50">
-                          <div className="space-y-2">
-                            <p className="font-bold text-sm">✅ Cliente Listo para Migrar</p>
-                            <p>Este cliente tiene todos los campos obligatorios completados.</p>
-                            <div className="border-t border-gray-700 pt-2 mt-2">
-                              <p className="font-semibold">Al migrar a la base de datos:</p>
-                              <ul className="list-disc list-inside text-xs space-y-1 mt-1">
-                                <li>Podrá generar comisiones</li>
-                                <li>Aparecerá en reportes de morosidad</li>
-                                <li>Estará en la base de datos oficial</li>
-                              </ul>
-                            </div>
-                          </div>
-                          <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1">
-                            <div className="border-8 border-transparent border-t-gray-900"></div>
-                          </div>
-                        </div>
-                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleManualMigration(client.id);
+                        }}
+                        className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-medium"
+                        title="Migrar a BD"
+                      >
+                        <FaCheckCircle size={12} className="inline" />
+                      </button>
                     )}
                     {!client.is_complete && (
-                      <div className="relative group">
-                        <button
-                          className="px-3 py-1.5 sm:px-4 sm:py-2 bg-amber-500 text-white rounded-lg font-semibold text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2 cursor-not-allowed opacity-75"
-                          disabled
-                        >
-                          <FaExclamationTriangle size={14} />
-                          <span className="hidden sm:inline">Datos Incompletos</span>
-                        </button>
-                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-4 py-3 bg-red-900 text-white text-xs rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none w-80 z-50">
-                          <div className="space-y-2">
-                            <p className="font-bold text-sm">⚠️ Cliente NO se puede migrar</p>
-                            <p>Faltan campos obligatorios. Si se marca como completo sin llenarlos:</p>
-                            <div className="border-t border-red-700 pt-2 mt-2">
-                              <p className="font-semibold text-red-200">Consecuencias:</p>
-                              <ul className="list-disc list-inside text-xs space-y-1 mt-1">
-                                <li>❌ NO se pasará a la base de datos oficial</li>
-                                <li>❌ NO generará comisiones</li>
-                                <li>❌ NO aparecerá en morosidad</li>
-                                <li>❌ NO se podrá usar para trámites</li>
-                              </ul>
-                              <p className="mt-2 text-xs text-amber-200 font-semibold">👉 Completa los campos antes de migrar</p>
-                            </div>
-                          </div>
-                          <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1">
-                            <div className="border-8 border-transparent border-t-red-900"></div>
-                          </div>
-                        </div>
-                      </div>
+                      <button
+                        className="px-2 py-1 bg-amber-500 text-white rounded text-xs cursor-not-allowed opacity-75"
+                        disabled
+                        title="Datos Incompletos"
+                      >
+                        <FaExclamationTriangle size={12} />
+                      </button>
                     )}
                     <button
                       onClick={(e) => toggleExpediente(client.id, e)}
-                      className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg transition-all font-semibold text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2 ${
+                      className={`px-2 py-1 rounded text-xs ${
                         expandedExpedientes.has(client.id)
                           ? 'bg-[#8AAA19] text-white'
                           : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
                       }`}
-                      title="Gestionar expediente"
+                      title="Expediente"
                     >
-                      <FaFolder size={14} />
-                      <span className="hidden sm:inline">Expediente</span>
+                      <FaFolder size={12} />
                     </button>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         startEdit(client);
                       }}
-                      className="px-3 py-1.5 sm:px-4 sm:py-2 bg-[#010139] hover:bg-[#8AAA19] text-white rounded-lg transition-all font-semibold text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2"
+                      className="px-2 py-1 bg-[#010139] hover:bg-[#8AAA19] text-white rounded text-xs font-medium"
+                      title="Editar"
                     >
-                      <FaEdit size={14} />
-                      <span className="hidden sm:inline">Editar</span>
+                      <FaEdit size={12} />
                     </button>
                     {userRole === 'master' && (
                       <button
@@ -511,9 +468,10 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
                           e.stopPropagation();
                           handleDelete(client.id, client.client_name);
                         }}
-                        className="px-3 py-1.5 sm:px-4 sm:py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-all font-semibold text-xs sm:text-sm"
+                        className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs"
+                        title="Eliminar"
                       >
-                        <FaTrash size={14} />
+                        <FaTrash size={12} />
                       </button>
                     )}
                   </div>
