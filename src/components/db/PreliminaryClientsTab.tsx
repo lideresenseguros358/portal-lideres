@@ -181,13 +181,27 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
               ⚠️ Clientes Preliminares - Datos Incompletos
             </h3>
             <p className="text-sm text-amber-800 mb-2">
-              Estos clientes están pendientes de completar información obligatoria.
+              Estos clientes están pendientes de completar información obligatoria para migración.
             </p>
+            <div className="bg-white/50 rounded p-3 mb-2">
+              <p className="text-xs font-semibold text-amber-900 mb-1">📝 Campos obligatorios para migrar:
+              </p>
+              <ul className="text-xs text-amber-800 space-y-0.5 list-disc list-inside ml-2">
+                <li>Nombre del cliente</li>
+                <li>Número de póliza</li>
+                <li>Aseguradora</li>
+                <li>Fecha de renovación</li>
+                <li>Corredor asignado</li>
+              </ul>
+              <p className="text-xs text-amber-700 mt-2 italic">
+                Los demás datos (cédula, email, teléfono, etc.) se pueden completar después de la migración.
+              </p>
+            </div>
             <ul className="text-xs text-amber-700 space-y-1 list-disc list-inside">
               <li><strong>NO calculan comisiones</strong> hasta que sean migrados</li>
               <li><strong>NO aparecen en reportes de morosidad</strong></li>
               <li><strong>NO están incluidos en la base de datos principal</strong></li>
-              <li>Se migrarán automáticamente al completar todos los campos obligatorios</li>
+              <li><strong>Se migrarán automáticamente</strong> al completar los 5 campos obligatorios</li>
             </ul>
           </div>
         </div>
@@ -239,7 +253,7 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
 
                 {/* Action Buttons */}
                 {!isEditing && (
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     {client.is_complete && (
                       <div className="relative group">
                         <button
@@ -247,9 +261,9 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
                             e.stopPropagation();
                             handleManualMigration(client.id);
                           }}
-                          className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-all font-semibold text-sm flex items-center gap-2"
+                          className="px-3 py-1.5 sm:px-4 sm:py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-all font-semibold text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2"
                         >
-                          <FaCheckCircle />
+                          <FaCheckCircle size={14} />
                           <span className="hidden sm:inline">Migrar a BD</span>
                         </button>
                         <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-4 py-3 bg-gray-900 text-white text-xs rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none w-72 z-50">
@@ -274,10 +288,10 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
                     {!client.is_complete && (
                       <div className="relative group">
                         <button
-                          className="px-4 py-2 bg-amber-500 text-white rounded-lg font-semibold text-sm flex items-center gap-2 cursor-not-allowed opacity-75"
+                          className="px-3 py-1.5 sm:px-4 sm:py-2 bg-amber-500 text-white rounded-lg font-semibold text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2 cursor-not-allowed opacity-75"
                           disabled
                         >
-                          <FaExclamationTriangle />
+                          <FaExclamationTriangle size={14} />
                           <span className="hidden sm:inline">Datos Incompletos</span>
                         </button>
                         <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-4 py-3 bg-red-900 text-white text-xs rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none w-80 z-50">
@@ -303,14 +317,14 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
                     )}
                     <button
                       onClick={(e) => toggleExpediente(client.id, e)}
-                      className={`px-4 py-2 rounded-lg transition-all font-semibold text-sm flex items-center gap-2 ${
+                      className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg transition-all font-semibold text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2 ${
                         expandedExpedientes.has(client.id)
                           ? 'bg-[#8AAA19] text-white'
                           : 'bg-gray-200 hover:bg-gray-300 text-gray-700'
                       }`}
                       title="Gestionar expediente"
                     >
-                      <FaFolder />
+                      <FaFolder size={14} />
                       <span className="hidden sm:inline">Expediente</span>
                     </button>
                     <button
@@ -318,9 +332,9 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
                         e.stopPropagation();
                         startEdit(client);
                       }}
-                      className="px-4 py-2 bg-[#010139] hover:bg-[#8AAA19] text-white rounded-lg transition-all font-semibold text-sm flex items-center gap-2"
+                      className="px-3 py-1.5 sm:px-4 sm:py-2 bg-[#010139] hover:bg-[#8AAA19] text-white rounded-lg transition-all font-semibold text-xs sm:text-sm flex items-center gap-1.5 sm:gap-2"
                     >
-                      <FaEdit />
+                      <FaEdit size={14} />
                       <span className="hidden sm:inline">Editar</span>
                     </button>
                     {userRole === 'master' && (
@@ -329,9 +343,9 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
                           e.stopPropagation();
                           handleDelete(client.id, client.client_name);
                         }}
-                        className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-all font-semibold text-sm"
+                        className="px-3 py-1.5 sm:px-4 sm:py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg transition-all font-semibold text-xs sm:text-sm"
                       >
-                        <FaTrash />
+                        <FaTrash size={14} />
                       </button>
                     )}
                   </div>
@@ -432,103 +446,117 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
 
               {/* Edit Form */}
               {isEditing && expandedClients.has(client.id) && (
-                <div className="space-y-4">
+                <div className="border-t border-gray-200 bg-gray-50 p-4 sm:p-6">
                   {/* Client Info */}
-                  <div className="border-t pt-4">
-                    <h4 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                      <FaUser className="text-[#8AAA19]" />
+                  <div className="space-y-4">
+                    <h4 className="text-sm sm:text-base font-semibold text-gray-700 flex items-center gap-2">
+                      <FaUser className="text-[#8AAA19]" size={16} />
                       Información del Cliente
                     </h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                      <div className="sm:col-span-2">
+                        <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                           Nombre <span className="text-red-500">*</span>
                         </label>
                         <input
                           type="text"
                           value={editForm.client_name}
                           onChange={createUppercaseHandler((e) => setEditForm({ ...editForm, client_name: e.target.value }))}
-                          className={`w-full px-4 py-2 border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none ${uppercaseInputClass}`}
+                          className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none ${uppercaseInputClass}`}
+                          placeholder="NOMBRE COMPLETO DEL CLIENTE"
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Cédula / RUC</label>
+                        <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                          Cédula / RUC
+                        </label>
                         <input
                           type="text"
                           value={editForm.national_id}
                           onChange={createUppercaseHandler((e) => setEditForm({ ...editForm, national_id: e.target.value }))}
-                          className={`w-full px-4 py-2 border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none ${uppercaseInputClass}`}
+                          className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none ${uppercaseInputClass}`}
+                          placeholder="8-123-4567"
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                        <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                          Email
+                        </label>
                         <input
                           type="email"
                           value={editForm.email}
-                          onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
-                          className="w-full px-4 py-2 border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+                          onChange={(e) => setEditForm({ ...editForm, email: e.target.value.toLowerCase() })}
+                          className="w-full px-3 py-2 text-sm border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+                          placeholder="correo@ejemplo.com"
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono</label>
+                        <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                          Teléfono
+                        </label>
                         <input
                           type="tel"
                           value={editForm.phone}
                           onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
-                          className="w-full px-4 py-2 border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+                          className="w-full px-3 py-2 text-sm border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+                          placeholder="6000-0000"
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Fecha de Nacimiento <span className="text-red-500">*</span>
+                        <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                          Fecha de Nacimiento
                         </label>
                         <input
                           type="date"
                           required
                           value={editForm.birth_date}
                           onChange={(e) => setEditForm({ ...editForm, birth_date: e.target.value })}
-                          className="w-full px-4 py-2 border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+                          className="w-full px-3 py-2 text-sm border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none"
                         />
                       </div>
                     </div>
                   </div>
 
                   {/* Policy Info */}
-                  <div className="border-t pt-4">
-                    <h4 className="font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                      <FaFileAlt className="text-[#8AAA19]" />
+                  <div className="border-t border-gray-200 pt-4 space-y-4">
+                    <h4 className="text-sm sm:text-base font-semibold text-gray-700 flex items-center gap-2">
+                      <FaFileAlt className="text-[#8AAA19]" size={16} />
                       Información de la Póliza
                     </h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                           Número de Póliza <span className="text-red-500">*</span>
                         </label>
                         <input
                           type="text"
                           value={editForm.policy_number}
                           onChange={createUppercaseHandler((e) => setEditForm({ ...editForm, policy_number: e.target.value }))}
-                          className={`w-full px-4 py-2 border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none ${uppercaseInputClass}`}
+                          className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none ${uppercaseInputClass}`}
+                          placeholder="02B3427460"
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Ramo</label>
+                        <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                          Ramo
+                        </label>
                         <input
                           type="text"
                           value={editForm.ramo}
                           onChange={createUppercaseHandler((e) => setEditForm({ ...editForm, ramo: e.target.value }))}
-                          className={`w-full px-4 py-2 border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none ${uppercaseInputClass}`}
+                          className={`w-full px-3 py-2 text-sm border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none ${uppercaseInputClass}`}
+                          placeholder="AUTO, VIDA, SALUD, ETC."
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                           Aseguradora <span className="text-red-500">*</span>
                         </label>
                         <Select value={editForm.insurer_id} onValueChange={(value) => setEditForm({ ...editForm, insurer_id: value })}>
-                          <SelectTrigger className="w-full">
+                          <SelectTrigger className="w-full h-9 text-sm">
                             <SelectValue placeholder="Seleccionar..." />
                           </SelectTrigger>
-                          <SelectContent>
+                          <SelectContent className="max-h-60">
                             {insurers.map((ins) => (
                               <SelectItem key={ins.id} value={ins.id}>{ins.name}</SelectItem>
                             ))}
@@ -536,14 +564,14 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
                         </Select>
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                           Corredor <span className="text-red-500">*</span>
                         </label>
                         <Select value={editForm.broker_id} onValueChange={(value) => setEditForm({ ...editForm, broker_id: value })}>
-                          <SelectTrigger className="w-full">
+                          <SelectTrigger className="w-full h-9 text-sm">
                             <SelectValue placeholder="Seleccionar..." />
                           </SelectTrigger>
-                          <SelectContent>
+                          <SelectContent className="max-h-60">
                             {brokers.map((broker: any) => (
                               <SelectItem key={broker.id} value={broker.id}>
                                 {broker.name || (broker.profiles as any)?.full_name}
@@ -553,56 +581,58 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
                         </Select>
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Fecha Inicio</label>
+                        <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                          Fecha Inicio
+                        </label>
                         <input
                           type="date"
                           value={editForm.start_date}
                           onChange={(e) => setEditForm({ ...editForm, start_date: e.target.value })}
-                          className="w-full px-4 py-2 border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+                          className="w-full px-3 py-2 text-sm border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none"
                         />
                       </div>
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                        <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                           Fecha Renovación <span className="text-red-500">*</span>
                         </label>
                         <input
                           type="date"
                           value={editForm.renewal_date}
                           onChange={(e) => setEditForm({ ...editForm, renewal_date: e.target.value })}
-                          className="w-full px-4 py-2 border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+                          className="w-full px-3 py-2 text-sm border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none"
                         />
                       </div>
                     </div>
                   </div>
 
                   {/* Notes */}
-                  <div className="border-t pt-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Notas</label>
+                  <div className="border-t border-gray-200 pt-4">
+                    <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">Notas</label>
                     <textarea
                       value={editForm.notes}
                       onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
                       rows={2}
-                      className="w-full px-4 py-2 border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+                      className="w-full px-3 py-2 text-sm border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none"
                       placeholder="Notas adicionales..."
                     />
                   </div>
 
                   {/* Action Buttons */}
-                  <div className="flex gap-3 pt-4">
+                  <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 pt-4 border-t border-gray-200">
                     <button
                       onClick={saveEdit}
                       disabled={saving}
-                      className="flex-1 px-6 py-3 bg-[#8AAA19] hover:bg-[#7a9916] text-white rounded-lg transition-all font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
+                      className="flex-1 px-4 py-2.5 bg-[#8AAA19] hover:bg-[#7a9916] text-white rounded-lg transition-all font-semibold text-sm flex items-center justify-center gap-2 disabled:opacity-50"
                     >
-                      <FaSave />
+                      <FaSave size={14} />
                       {saving ? 'Guardando...' : 'Guardar Cambios'}
                     </button>
                     <button
                       onClick={cancelEdit}
                       disabled={saving}
-                      className="px-6 py-3 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-all font-semibold flex items-center gap-2 disabled:opacity-50"
+                      className="px-4 py-2.5 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-lg transition-all font-semibold text-sm flex items-center justify-center gap-2 disabled:opacity-50"
                     >
-                      <FaTimes />
+                      <FaTimes size={14} />
                       Cancelar
                     </button>
                   </div>

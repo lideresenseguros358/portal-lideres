@@ -518,24 +518,24 @@ export default function NewUserWizard() {
                 >
                   <option value="">Seleccionar banco...</option>
                   <option value="71">BANCO GENERAL</option>
-                  <option value="01">BANCO NACIONAL DE PANAMA</option>
-                  <option value="38">BANISTMO</option>
-                  <option value="11">BANCO DE BOGOTA PANAMA</option>
-                  <option value="18">BANCO ALIADO</option>
-                  <option value="51">MULTI BANK INC</option>
-                  <option value="13">CAJA DE AHORROS</option>
-                  <option value="02">BAC INTERNATIONAL BANK, INC.</option>
-                  <option value="12">CREDICORP BANK</option>
-                  <option value="77">BANCO DELTA</option>
-                  <option value="50">GLOBAL BANK CORPORATION</option>
-                  <option value="28">CITIBANK N.A. SUCURSAL PANAMA</option>
-                  <option value="30">SCOTIABANK (PANAMA), S.A.</option>
-                  <option value="64">BANK OF CHINA LIMITED</option>
-                  <option value="72">BICSA</option>
-                  <option value="52">BANESCO, S.A.</option>
-                  <option value="19">METROBANK, S.A.</option>
-                  <option value="79">TOWERBANK INTERNATIONAL, INC</option>
-                  <option value="78">BANCO INTERNACIONAL DE COSTA RICA</option>
+                  <option value="13">BANCO NACIONAL DE PANAMÁ</option>
+                  <option value="26">BANISTMO</option>
+                  <option value="1384">BAC INTERNACIONAL (BAC CREDOMATIC)</option>
+                  <option value="1083">BANCO ALIADO</option>
+                  <option value="372">MULTIBANK</option>
+                  <option value="770">CAJA DE AHORROS</option>
+                  <option value="1106">CREDICORP BANK</option>
+                  <option value="1562">BANCO DELTA</option>
+                  <option value="1151">GLOBAL BANK</option>
+                  <option value="39">CITIBANK</option>
+                  <option value="424">SCOTIA BANK</option>
+                  <option value="1164">BANK OF CHINA</option>
+                  <option value="518">BICSA (BANCO INTER. DE COSTA RICA)</option>
+                  <option value="1588">BANESCO</option>
+                  <option value="1067">METROBANK</option>
+                  <option value="408">TOWER BANK INTERNATIONAL INC.</option>
+                  <option value="181">BANCO DAVIVIENDA (PANAMÁ)</option>
+                  <option value="1517">BANCO PICHINCHA PANAMÁ</option>
                 </select>
                 {bankData.bank_route && (
                   <div className="mt-2 p-2 bg-green-50 border border-green-200 rounded">
