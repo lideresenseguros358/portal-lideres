@@ -171,33 +171,18 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
   };
 
   const loadBrokers = async () => {
-    // Get brokers
+    // OPTIMIZACIÓN: 1 query con join en lugar de 2 queries secuenciales
     const { data: brokersData } = await supabaseClient()
       .from('brokers')
-      .select('*')
+      .select('*, profile:profiles!p_id(id, full_name, email)')
       .eq('active', true)
       .order('name');
 
-    if (!brokersData) {
-      setBrokers([]);
-      return;
-    }
-
-    // Get profiles for brokers
-    const brokerIds = brokersData.map(b => b.p_id);
-    const { data: profilesData } = await supabaseClient()
-      .from('profiles')
-      .select('id, full_name, email')
-      .in('id', brokerIds);
-
-    // Merge brokers with profiles
-    const merged = brokersData.map(broker => ({
-      ...broker,
-      profile: profilesData?.find(p => p.id === broker.p_id)
-    }));
-
-    setBrokers(merged || []);
+    setBrokers(brokersData || []);
   };
+
+  // Debounce timer para búsqueda de clientes
+  const [searchDebounceTimer, setSearchDebounceTimer] = useState<NodeJS.Timeout | null>(null);
 
   const searchClients = async (searchTerm: string) => {
     if (searchTerm.length < 3) {
@@ -206,20 +191,29 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
       return;
     }
 
-    let query = supabaseClient()
-      .from('clients')
-      .select('id, name, national_id, email, phone, birth_date, broker_id')
-      .ilike('name', `%${searchTerm}%`);
-    
-    // Si es broker, solo mostrar sus clientes
-    if (role === 'broker' && userBrokerId) {
-      query = query.eq('broker_id', userBrokerId);
+    // OPTIMIZACIÓN: Debounce para evitar queries excesivas mientras el usuario escribe
+    if (searchDebounceTimer) {
+      clearTimeout(searchDebounceTimer);
     }
-    
-    const { data } = await query.limit(5);
 
-    setExistingClients(data || []);
-    setShowClientSuggestions(true);
+    const timer = setTimeout(async () => {
+      let query = supabaseClient()
+        .from('clients')
+        .select('id, name, national_id, email, phone, birth_date, broker_id')
+        .ilike('name', `%${searchTerm}%`);
+      
+      // Si es broker, solo mostrar sus clientes
+      if (role === 'broker' && userBrokerId) {
+        query = query.eq('broker_id', userBrokerId);
+      }
+      
+      const { data } = await query.limit(5);
+
+      setExistingClients(data || []);
+      setShowClientSuggestions(true);
+    }, 400); // Esperar 400ms después de que el usuario deja de escribir
+
+    setSearchDebounceTimer(timer);
   };
 
   const selectExistingClient = async (client: any) => {
@@ -230,25 +224,16 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
     // Auto-completar broker del cliente existente (solo para Master)
     if (client.broker_id && role === 'master') {
       try {
-        // Paso 1: Obtener el p_id del broker
+        // OPTIMIZACIÓN: 1 query con join en lugar de 2 queries secuenciales
         const { data: brokerData } = await supabaseClient()
           .from('brokers')
-          .select('p_id')
+          .select('p_id, profile:profiles!p_id(email)')
           .eq('id', client.broker_id)
           .single();
         
-        if (brokerData?.p_id) {
-          // Paso 2: Obtener el email del perfil
-          const { data: profileData } = await supabaseClient()
-            .from('profiles')
-            .select('email')
-            .eq('id', brokerData.p_id)
-            .single();
-          
-          if (profileData?.email) {
-            brokerEmail = profileData.email;
-            console.log('[ClientPolicyWizard] Broker auto-completado:', brokerEmail);
-          }
+        if (brokerData?.profile?.email) {
+          brokerEmail = brokerData.profile.email;
+          console.log('[ClientPolicyWizard] Broker auto-completado:', brokerEmail);
         }
       } catch (error) {
         console.error('[ClientPolicyWizard] Error al obtener broker del cliente:', error);
