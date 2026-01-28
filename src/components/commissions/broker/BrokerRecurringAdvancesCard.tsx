@@ -3,8 +3,9 @@
 import { useState, useEffect } from 'react';
 import { actionGetAdvanceRecurrences } from '@/app/(app)/commissions/actions';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { FaCalendarAlt, FaMoneyBillWave, FaInfinity, FaStopCircle, FaInfoCircle } from 'react-icons/fa';
+import { FaCalendarAlt, FaMoneyBillWave, FaInfinity, FaStopCircle, FaInfoCircle, FaEdit } from 'react-icons/fa';
 import { toast } from 'sonner';
+import { EditRecurringAdvanceModal } from '../EditRecurringAdvanceModal';
 
 interface Recurrence {
   id: string;
@@ -15,6 +16,8 @@ interface Recurrence {
   recurrence_count: number;
   last_generated_at: string | null;
   is_active: boolean;
+  broker_id: string;
+  brokers?: { name: string | null };
 }
 
 interface Props {
@@ -24,6 +27,7 @@ interface Props {
 export function BrokerRecurringAdvancesCard({ brokerId }: Props) {
   const [recurrences, setRecurrences] = useState<Recurrence[]>([]);
   const [loading, setLoading] = useState(true);
+  const [editingRecurrence, setEditingRecurrence] = useState<Recurrence | null>(null);
 
   const loadRecurrences = async () => {
     setLoading(true);
@@ -94,6 +98,7 @@ export function BrokerRecurringAdvancesCard({ brokerId }: Props) {
   }
 
   return (
+    <>
     <Card className="border-2 border-purple-200 shadow-lg">
       <CardHeader className="bg-gradient-to-r from-purple-50 to-blue-50 border-b-2 border-purple-200">
         <CardTitle className="text-lg font-bold text-[#010139] flex items-center gap-2">
@@ -137,11 +142,20 @@ export function BrokerRecurringAdvancesCard({ brokerId }: Props) {
                       </span>
                     )}
                   </div>
-                  <div className="text-right">
-                    <div className="text-2xl font-bold text-[#010139] font-mono">
-                      ${rec.amount.toFixed(2)}
+                  <div className="flex items-center gap-3">
+                    <div className="text-right">
+                      <div className="text-2xl font-bold text-[#010139] font-mono">
+                        ${rec.amount.toFixed(2)}
+                      </div>
+                      <div className="text-xs text-gray-500">por mes</div>
                     </div>
-                    <div className="text-xs text-gray-500">por mes</div>
+                    <button
+                      onClick={() => setEditingRecurrence(rec)}
+                      className="p-2 rounded-lg bg-blue-100 hover:bg-blue-200 text-blue-700 transition-colors"
+                      title="Editar adelanto recurrente"
+                    >
+                      <FaEdit size={16} />
+                    </button>
                   </div>
                 </div>
 
@@ -220,5 +234,18 @@ export function BrokerRecurringAdvancesCard({ brokerId }: Props) {
         </div>
       </CardContent>
     </Card>
+
+      {/* Modal de Edición */}
+      {editingRecurrence && (
+        <EditRecurringAdvanceModal
+          recurrence={editingRecurrence}
+          onClose={() => setEditingRecurrence(null)}
+          onSuccess={() => {
+            setEditingRecurrence(null);
+            loadRecurrences(); // Recargar lista
+          }}
+        />
+      )}
+    </>
   );
 }
