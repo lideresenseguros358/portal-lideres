@@ -790,29 +790,31 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                 </div>
               </div>
 
-              <div className="w-full max-w-full overflow-hidden">
-                <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
-                  Fecha de Nacimiento {documentType !== 'ruc' && <span className="text-red-500">*</span>}
-                </label>
-                <input
-                  type="date"
-                  required={documentType !== 'ruc'}
-                  value={formData.birth_date}
-                  onChange={(e) => {
-                    setFormData({ ...formData, birth_date: e.target.value });
-                    if (validationErrors.birth_date && e.target.value) {
-                      setValidationErrors(prev => ({ ...prev, birth_date: false }));
-                    }
-                  }}
-                  className={`w-full max-w-full px-3 py-2 sm:px-4 text-sm sm:text-base border-2 rounded-lg focus:outline-none transition ${
-                    validationErrors.birth_date ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
-                  }`}
-                  style={{ WebkitAppearance: 'none' }}
-                />
-                {validationErrors.birth_date && (
-                  <p className="text-xs text-red-500 mt-1">⚠️ Este campo es obligatorio</p>
-                )}
-              </div>
+              {documentType !== 'ruc' && (
+                <div className="w-full max-w-full overflow-hidden">
+                  <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                    Fecha de Nacimiento <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={formData.birth_date}
+                    onChange={(e) => {
+                      setFormData({ ...formData, birth_date: e.target.value });
+                      if (validationErrors.birth_date && e.target.value) {
+                        setValidationErrors(prev => ({ ...prev, birth_date: false }));
+                      }
+                    }}
+                    className={`w-full max-w-full px-3 py-2 sm:px-4 text-sm sm:text-base border-2 rounded-lg focus:outline-none transition ${
+                      validationErrors.birth_date ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
+                    }`}
+                    style={{ WebkitAppearance: 'none' }}
+                  />
+                  {validationErrors.birth_date && (
+                    <p className="text-xs text-red-500 mt-1">⚠️ Este campo es obligatorio</p>
+                  )}
+                </div>
+              )}
             </div>
           )}
 

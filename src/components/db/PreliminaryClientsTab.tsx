@@ -712,7 +712,7 @@ export default function PreliminaryClientsTab({ insurers, brokers: brokersProp, 
                           ) : null}
                         />
                       </div>
-                      <div>
+                      <div className="sm:col-span-2">
                         <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                           Email
                         </label>
@@ -736,22 +736,21 @@ export default function PreliminaryClientsTab({ insurers, brokers: brokersProp, 
                           placeholder="6000-0000"
                         />
                       </div>
-                      <div className="w-full max-w-full overflow-hidden">
-                        <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
-                          Fecha de Nacimiento {documentType !== 'ruc' && <span className="text-red-500">*</span>}
-                        </label>
-                        <input
-                          type="date"
-                          required={documentType !== 'ruc'}
-                          value={editForm.birth_date}
-                          onChange={(e) => setEditForm({ ...editForm, birth_date: e.target.value })}
-                          className="w-full max-w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none"
-                          style={{ WebkitAppearance: 'none' }}
-                        />
-                        {documentType === 'ruc' && (
-                          <p className="text-xs text-gray-500 mt-1">💼 RUC: No requiere fecha de nacimiento (es empresa)</p>
-                        )}
-                      </div>
+                      {documentType !== 'ruc' && (
+                        <div className="w-full max-w-full overflow-hidden">
+                          <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
+                            Fecha de Nacimiento <span className="text-red-500">*</span>
+                          </label>
+                          <input
+                            type="date"
+                            required
+                            value={editForm.birth_date}
+                            onChange={(e) => setEditForm({ ...editForm, birth_date: e.target.value })}
+                            className="w-full max-w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+                            style={{ WebkitAppearance: 'none' }}
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -834,7 +833,7 @@ export default function PreliminaryClientsTab({ insurers, brokers: brokersProp, 
                         </Select>
                       </div>
                       {userRole === 'master' && (
-                        <div>
+                        <div className="sm:col-span-2">
                           <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                             Corredor <span className="text-red-500">*</span>
                           </label>
