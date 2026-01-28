@@ -909,14 +909,7 @@ export default function PreliminaryClientsTab({ insurers, brokers: brokersProp, 
 
                   {/* Action Buttons */}
                   <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 pt-4 border-t border-gray-200">
-                    <button
-                      onClick={saveEdit}
-                      disabled={saving}
-                      className="flex-1 px-4 py-2.5 bg-[#8AAA19] hover:bg-[#7a9916] text-white rounded-lg transition-all font-semibold text-sm flex items-center justify-center gap-2 disabled:opacity-50"
-                    >
-                      <FaSave size={14} />
-                      {saving ? 'Guardando...' : 'Guardar'}
-                    </button>
+                    {/* Expediente - Izquierda */}
                     <button
                       onClick={() => setShowExpedienteInEdit(true)}
                       disabled={saving}
@@ -925,6 +918,7 @@ export default function PreliminaryClientsTab({ insurers, brokers: brokersProp, 
                       <FaFolder size={14} className="text-white" />
                       Expediente
                     </button>
+                    {/* Cancelar - Centro */}
                     <button
                       onClick={cancelEdit}
                       disabled={saving}
@@ -932,6 +926,15 @@ export default function PreliminaryClientsTab({ insurers, brokers: brokersProp, 
                     >
                       <FaTimes size={14} />
                       Cancelar
+                    </button>
+                    {/* Guardar - Derecha */}
+                    <button
+                      onClick={saveEdit}
+                      disabled={saving}
+                      className="flex-1 px-4 py-2.5 bg-[#8AAA19] hover:bg-[#7a9916] text-white rounded-lg transition-all font-semibold text-sm flex items-center justify-center gap-2 disabled:opacity-50"
+                    >
+                      <FaSave size={14} />
+                      {saving ? 'Guardando...' : 'Guardar'}
                     </button>
                   </div>
           </div>

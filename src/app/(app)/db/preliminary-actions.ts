@@ -157,7 +157,13 @@ export async function actionUpdatePreliminaryClient(id: string, updates: any) {
     if (updates.status !== undefined) {
       // Asegurar que sea un valor válido del enum policy_status_enum
       const statusUpper = updates.status?.toUpperCase() || 'ACTIVA';
-      cleanedUpdates.status = statusUpper as 'ACTIVA' | 'VENCIDA' | 'CANCELADA';
+      // Validación estricta - solo permitir valores exactos del enum
+      const validStatuses = ['ACTIVA', 'VENCIDA', 'CANCELADA'];
+      if (validStatuses.includes(statusUpper)) {
+        cleanedUpdates.status = statusUpper as 'ACTIVA' | 'VENCIDA' | 'CANCELADA';
+      } else {
+        cleanedUpdates.status = 'ACTIVA'; // Default si el valor no es válido
+      }
     }
     if (updates.broker_id !== undefined) {
       cleanedUpdates.broker_id = updates.broker_id || null;
