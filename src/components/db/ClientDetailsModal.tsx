@@ -36,6 +36,12 @@ interface PolicyCommissions {
   insurer_name: string;
   total_commissions: number;
   commissions_count: number;
+  items: Array<{
+    amount: number;
+    fortnight_id: string;
+    period_start: string;
+    period_end: string;
+  }>;
 }
 
 interface FortnightCommission {
@@ -132,21 +138,41 @@ export default function ClientDetailsModal({ client, onClose, onEdit, onOpenExpe
     try {
       const policyNumbers = client.policies.map(p => p.policy_number);
       
+      console.log('[Comisiones] Buscando comisiones para pólizas:', policyNumbers);
+      
       if (policyNumbers.length === 0) {
+        console.log('[Comisiones] No hay pólizas para buscar');
         setComisionesData([]);
         return;
       }
 
-      const { data: items } = await (supabaseClient() as any)
+      // Obtener comm_items con información de quincenas
+      const { data: items, error: itemsError } = await (supabaseClient() as any)
         .from('comm_items')
         .select(`
           policy_number,
           gross_amount,
           insurer_id,
-          insurers(name)
+          insurers(name),
+          comm_imports!inner(
+            period_label,
+            fortnights(
+              period_start,
+              period_end
+            )
+          )
         `)
         .in('policy_number', policyNumbers)
         .not('gross_amount', 'is', null);
+
+      console.log('[Comisiones] Items encontrados:', items?.length || 0);
+      console.log('[Comisiones] Error:', itemsError);
+      
+      if (itemsError) {
+        console.error('[Comisiones] Error en query:', itemsError);
+        setComisionesData([]);
+        return;
+      }
 
       const grouped = (items || []).reduce((acc: Record<string, PolicyCommissions>, item: any) => {
         const policyNumber = item.policy_number;
@@ -162,17 +188,35 @@ export default function ClientDetailsModal({ client, onClose, onEdit, onOpenExpe
             policy_number: policyNumber,
             insurer_name: (item.insurers as any)?.name || 'N/A',
             total_commissions: 0,
-            commissions_count: 0
+            commissions_count: 0,
+            items: []
           };
         }
-        acc[policyId].total_commissions += Math.abs(item.gross_amount);
+        
+        const amount = Math.abs(item.gross_amount);
+        acc[policyId].total_commissions += amount;
         acc[policyId].commissions_count += 1;
+        
+        // Agregar item con datos de quincena
+        const commImport = item.comm_imports;
+        const fortnight = commImport?.fortnights;
+        
+        acc[policyId].items.push({
+          amount,
+          fortnight_id: commImport?.period_label || '',
+          period_start: fortnight?.period_start || '',
+          period_end: fortnight?.period_end || ''
+        });
+        
         return acc;
       }, {} as Record<string, PolicyCommissions>);
 
-      setComisionesData(Object.values(grouped));
+      const result = Object.values(grouped) as PolicyCommissions[];
+      console.log('[Comisiones] Resultado agrupado:', result.length, 'pólizas');
+      setComisionesData(result);
     } catch (error) {
-      console.error('Error loading comisiones:', error);
+      console.error('[Comisiones] Error loading comisiones:', error);
+      setComisionesData([]);
     } finally {
       setLoadingComisiones(false);
     }
@@ -515,16 +559,33 @@ export default function ClientDetailsModal({ client, onClose, onEdit, onOpenExpe
                         <p className="text-xs text-gray-600">{policy.commissions_count} comisiones</p>
                       </div>
                     </div>
-                    <button
-                      onClick={() => {
-                        setSelectedPolicyForDetail(policy.policy_id);
-                        loadFortnightDetail(policy.policy_id);
-                        setShowFortnightDetailModal(true);
-                      }}
-                      className="w-full px-4 py-2 bg-[#010139] text-white rounded-lg hover:bg-[#020270] transition font-semibold flex items-center justify-center gap-2"
-                    >
-                      <FaEye className="text-white" /> Ver Detalle por Quincena
-                    </button>
+                    
+                    {/* Mostrar detalle de comisiones por quincena */}
+                    <div className="mt-3 space-y-2 max-h-60 overflow-y-auto">
+                      <p className="text-xs font-semibold text-gray-700 mb-2">Comisiones por Quincena:</p>
+                      {policy.items
+                        .sort((a, b) => new Date(b.period_start).getTime() - new Date(a.period_start).getTime())
+                        .map((item, index) => (
+                        <div key={index} className="bg-gray-50 border border-gray-200 rounded-lg p-2.5 hover:bg-gray-100 transition">
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              <p className="text-xs font-semibold text-gray-900">
+                                {item.period_start && item.period_end ? (
+                                  <>
+                                    {formatDate(item.period_start)} - {formatDate(item.period_end)}
+                                  </>
+                                ) : (
+                                  'Quincena: ' + item.fortnight_id
+                                )}
+                              </p>
+                            </div>
+                            <p className="text-sm font-bold text-[#8AAA19] ml-2">
+                              {formatCurrency(item.amount)}
+                            </p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 ))}
               </>
