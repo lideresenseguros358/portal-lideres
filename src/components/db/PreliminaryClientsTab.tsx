@@ -629,7 +629,6 @@ export default function PreliminaryClientsTab({ insurers, brokers, userRole }: P
                   </div>
                 </div>
               )}
-
             </div>
           );
         })}

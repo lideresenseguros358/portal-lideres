@@ -155,7 +155,9 @@ export async function actionUpdatePreliminaryClient(id: string, updates: any) {
       cleanedUpdates.renewal_date = updates.renewal_date || null;
     }
     if (updates.status !== undefined) {
-      cleanedUpdates.status = updates.status?.toUpperCase() || 'ACTIVA';
+      // Asegurar que sea un valor válido del enum policy_status_enum
+      const statusUpper = updates.status?.toUpperCase() || 'ACTIVA';
+      cleanedUpdates.status = statusUpper as 'ACTIVA' | 'VENCIDA' | 'CANCELADA';
     }
     if (updates.broker_id !== undefined) {
       cleanedUpdates.broker_id = updates.broker_id || null;
