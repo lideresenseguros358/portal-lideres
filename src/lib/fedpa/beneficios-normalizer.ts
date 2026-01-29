@@ -300,11 +300,52 @@ export function normalizeAssistanceBenefits(
 }
 
 // ============================================
+// HELPER: FORMATEAR ASISTENCIA
+// ============================================
+
+/**
+ * FEDPA P2: Formatea asistencia para mostrar en UI
+ * Ejemplos:
+ * - "Grúa: 2 servicios/año • Máximo B/.150"
+ * - "Paso de corriente: 2 eventos/año"
+ * - "Cerrajero: 1 evento/año • Máximo B/.75"
+ */
+export function formatAsistencia(asistencia: AsistenciaBeneficio): string {
+  const parts: string[] = [asistencia.label];
+  
+  // Cantidad
+  if (asistencia.qty && asistencia.unit) {
+    parts.push(`${asistencia.qty} ${asistencia.unit}/año`);
+  } else if (asistencia.qty) {
+    parts.push(`${asistencia.qty} eventos/año`);
+  } else if (asistencia.unit) {
+    parts.push(asistencia.unit);
+  }
+  
+  // Monto máximo
+  if (asistencia.maxAmount) {
+    parts.push(`Máximo B/.${asistencia.maxAmount}`);
+  }
+  
+  // Kilómetros (grua)
+  if (asistencia.maxKm) {
+    parts.push(`hasta ${asistencia.maxKm} km`);
+  }
+  
+  // Unir con punto medio
+  return parts.join(' • ');
+}
+
+// ============================================
 // NORMALIZAR DEDUCIBLES
 // ============================================
 
 /**
- * Extrae deducibles reales de beneficios o coberturas
+ * FEDPA P2: Extrae deducibles reales - NUNCA $0
+ * Fuentes:
+ * - beneficios (campo deducible)
+ * - coberturas (campo deducible)
+ * - mapeo interno por nivel (bajo/medio/alto)
  */
 export function normalizeDeductibles(
   beneficios: any[],
@@ -442,31 +483,3 @@ export function calcularDescuentoBuenConductor(
   };
 }
 
-// ============================================
-// FORMATEAR ASISTENCIA
-// ============================================
-
-/**
- * Formatea asistencia para UI
- */
-export function formatAsistencia(asistencia: AsistenciaBeneficio): string {
-  const parts: string[] = [asistencia.label];
-  
-  if (asistencia.qty && asistencia.unit) {
-    parts.push(`${asistencia.qty} ${asistencia.unit}`);
-  }
-  
-  if (asistencia.maxAmount) {
-    if (asistencia.unit === 'galones') {
-      parts.push(`hasta ${asistencia.maxAmount} galones`);
-    } else {
-      parts.push(`máx. B/. ${asistencia.maxAmount.toLocaleString()}`);
-    }
-  }
-  
-  if (asistencia.maxKm) {
-    parts.push(`hasta ${asistencia.maxKm} km`);
-  }
-  
-  return parts.join(' • ');
-}
