@@ -890,7 +890,7 @@ export default function FormAutoCoberturaCompleta() {
         input[type="range"] {
           -webkit-appearance: none;
           appearance: none;
-          height: 6px;
+          height: 20px;
           border-radius: 4px;
           outline: none;
         }
@@ -904,6 +904,7 @@ export default function FormAutoCoberturaCompleta() {
           border-radius: 50%;
           cursor: pointer;
           box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+          margin-top: -7px;
         }
         
         input[type="range"]::-moz-range-thumb {
