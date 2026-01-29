@@ -891,7 +891,6 @@ export default function FormAutoCoberturaCompleta() {
           -webkit-appearance: none;
           appearance: none;
           height: 6px;
-          background: transparent;
           border-radius: 4px;
           outline: none;
         }
