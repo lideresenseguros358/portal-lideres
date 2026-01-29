@@ -18,7 +18,9 @@ export async function POST(request: NextRequest) {
     console.log('[FEDPA Cotización] Generando cotización...', {
       plan: formData.CodPlan || 'auto',
       marca: formData.vcodmarca,
-      modelo: formData.vcodmodelo
+      modelo: formData.vcodmodelo,
+      endoso: body.EndosoIncluido || '(auto)',
+      planType: body.planType || '(no especificado)'
     });
     
     // Normalizar datos del formulario (mapea IS a FEDPA automáticamente)
@@ -42,8 +44,8 @@ export async function POST(request: NextRequest) {
       CodLimiteLesiones: normalized.fedpa?.codLimiteLesiones || '1',
       CodLimitePropiedad: normalized.fedpa?.codLimitePropiedad || '1',
       CodLimiteGastosMedico: normalized.fedpa?.codLimiteGastosMedico || '1',
-      // Endoso de muerte accidental incluido por defecto
-      EndosoIncluido: normalized.fedpa?.endosoIncluido || 'S',
+      // CRÍTICO: Respetar EndosoIncluido del body (básico='N', premium='S')
+      EndosoIncluido: body.EndosoIncluido || normalized.fedpa?.endosoIncluido || 'S',
       CodPlan: plan,
       // Para CC: usar códigos mapeados, para DT: vacíos
       CodMarca: esCoberturabCompleta ? (normalized.fedpa?.codMarca || 'TOY') : '',

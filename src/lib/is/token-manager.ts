@@ -42,6 +42,7 @@ function getPrimaryToken(env: ISEnvironment): string {
 async function fetchDailyToken(env: ISEnvironment): Promise<string> {
   const primaryToken = getPrimaryToken(env);
   const baseUrl = getISBaseUrl(env);
+  // baseUrl ya incluye /api, entonces solo agregamos /tokens
   const endpoint = `${baseUrl}/tokens`;
 
   try {
@@ -66,13 +67,18 @@ async function fetchDailyToken(env: ISEnvironment): Promise<string> {
 
     const data = await response.json();
     
+    // Log completo de la respuesta para debugging
+    console.log('[IS Token Manager] Respuesta completa de /tokens:', JSON.stringify(data));
+    
     // La respuesta puede variar, ajustar según estructura real
-    const dailyToken = data.token || data.Token || data.access_token;
+    const dailyToken = data.token || data.Token || data.access_token || data.data?.token;
     
     if (!dailyToken) {
+      console.error('[IS Token Manager] Estructura de respuesta:', Object.keys(data));
       throw new Error('Token diario no encontrado en respuesta');
     }
 
+    console.log('[IS Token Manager] Token diario obtenido exitosamente');
     return dailyToken;
   } catch (error: any) {
     console.error(`[IS Token Manager] Error obteniendo token diario (${env}):`, error.message);

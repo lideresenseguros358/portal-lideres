@@ -247,25 +247,12 @@ export default function QuoteComparison({ policyType, quotes, quoteData }: Quote
         </div>
 
         {/* Quotes Grid - 2x2 en desktop para mejor espaciado */}
-        <div className={`grid grid-cols-1 ${
-          policyType === 'auto-completa' 
-            ? 'md:grid-cols-2 gap-6 lg:gap-8 max-w-6xl mx-auto' 
-            : 'md:grid-cols-2 gap-6 lg:gap-8 max-w-5xl mx-auto'
-        }`}>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
           {quotes.map((quote) => (
-            <div
-              key={quote.id}
-              className={`relative bg-white rounded-xl shadow-lg border-2 transition-all duration-300 overflow-hidden group flex flex-col h-full ${
-                quote.isRecommended 
-                  ? 'border-[#8AAA19] shadow-[#8AAA19]/20' 
-                  : 'border-gray-200 hover:border-[#010139]'
-              } ${
-                selectedQuote === quote.id ? 'ring-4 ring-[#8AAA19]' : ''
-              }`}
-            >
-              {/* Recommended Badge - Flotante con animación */}
+            <div key={quote.id} className="relative">
+              {/* Recommended Badge - Flotante ARRIBA del card */}
               {quote.isRecommended && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-10 animate-bounce">
+                <div className="absolute -top-5 left-1/2 -translate-x-1/2 z-20 animate-bounce">
                   <div className="relative">
                     <span className="inline-flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white text-xs font-bold rounded-full shadow-lg border-2 border-white">
                       <FaStar className="text-yellow-300 animate-pulse" />
@@ -276,8 +263,18 @@ export default function QuoteComparison({ policyType, quotes, quoteData }: Quote
                   </div>
                 </div>
               )}
-
-              {/* Header con Logo */}
+              
+              {/* Card principal */}
+              <div 
+                className={`bg-white rounded-xl shadow-md border-2 overflow-hidden transition-all duration-300 flex flex-col ${
+                  quote.isRecommended 
+                    ? 'border-[#8AAA19] shadow-[#8AAA19]/20' 
+                    : 'border-gray-200 hover:border-[#010139]'
+                } ${
+                  selectedQuote === quote.id ? 'ring-4 ring-[#8AAA19]' : ''
+                }`}
+              >
+                {/* Header con Logo */}
               <div className="bg-gradient-to-br from-[#010139] to-[#020270] p-4 text-white flex-shrink-0">
                 <div className="flex items-center gap-2 mb-2">
                   <InsurerLogo 
