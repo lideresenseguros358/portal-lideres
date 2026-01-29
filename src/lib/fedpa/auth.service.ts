@@ -54,11 +54,14 @@ export async function generarToken(
     request
   );
   
-  // Log solo status y keys (NO token)
-  console.log('[FEDPA Auth] Respuesta:', {
+  // A1: Log detallado para diagnosticar respuesta
+  console.log('[FEDPA Auth] Respuesta completa:', {
     success: response.success,
+    statusCode: response.statusCode,
     hasData: !!response.data,
     dataKeys: response.data ? Object.keys(response.data) : [],
+    dataType: response.data ? typeof response.data : 'undefined',
+    dataSample: response.data ? JSON.stringify(response.data).substring(0, 200) : null,
     error: response.error,
   });
   
@@ -73,27 +76,47 @@ export async function generarToken(
     };
   }
   
-  // PARSEO ROBUSTO: múltiples formatos posibles
+  // A1: PARSEO ROBUSTO según manual FEDPA
   let token: string | null = null;
   
   if (response.data) {
-    // Intentar diferentes formatos
-    token = response.data.token || response.data.access_token || null;
+    // Según doc FEDPA: response = { "success": true, "registrado": true, "token": "eyJ..." }
+    // Intentar múltiples formatos posibles
+    token = response.data.token || 
+            response.data.Token || 
+            response.data.access_token || 
+            response.data.AccessToken ||
+            response.data.jwt ||
+            null;
     
-    // Si la respuesta es string directo
+    // Si viene anidado en data.data
+    if (!token && response.data.data) {
+      token = response.data.data.token || response.data.data.Token || null;
+    }
+    
+    // Si la respuesta completa es string (token directo)
     if (!token && typeof response.data === 'string') {
       token = response.data;
     }
   }
   
   if (!token) {
-    const errorMsg = 'Token no encontrado en respuesta';
-    console.error('[FEDPA Auth] ERROR:', errorMsg, {
-      dataKeys: response.data ? Object.keys(response.data) : [],
-    });
+    // A1: Logging detallado del error
+    const errorMsg = 'Token no encontrado en respuesta FEDPA';
+    console.error('[FEDPA Auth] ERROR:', errorMsg);
+    console.error('[FEDPA Auth] Response keys:', response.data ? Object.keys(response.data) : 'no data');
+    console.error('[FEDPA Auth] Response sample (primeros 200 chars):', 
+      response.data ? JSON.stringify(response.data).substring(0, 200) : 'null'
+    );
+    
+    // Si la respuesta tiene 'msg', mostrarlo
+    if (response.data && 'msg' in response.data) {
+      console.error('[FEDPA Auth] Mensaje de API:', response.data.msg);
+    }
+    
     return {
       success: false,
-      error: errorMsg,
+      error: `${errorMsg}. ${response.data && 'msg' in response.data ? 'API dice: ' + response.data.msg : 'Revisar credenciales.'}`,
     };
   }
   

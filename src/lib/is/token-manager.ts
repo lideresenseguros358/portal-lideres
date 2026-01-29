@@ -86,6 +86,9 @@ async function fetchDailyToken(env: ISEnvironment): Promise<string> {
 
     const bodyText = await response.text();
     
+    // B2: Log sample de respuesta para diagnóstico
+    console.log('[IS Token Manager] Body sample (primeros 200 chars):', bodyText.substring(0, 200));
+    
     // CASO 1: text/plain - El token viene directo como string
     if (contentType.includes('text/plain') || bodyText.startsWith('eyJ')) {
       const token = bodyText.trim();
@@ -100,6 +103,14 @@ async function fetchDailyToken(env: ISEnvironment): Promise<string> {
     } catch {
       console.error('[IS Token Manager] Body no es JSON:', bodyText.substring(0, 120));
       throw new Error('Respuesta no es JSON válido');
+    }
+    
+    // B2: DETECTAR BLOQUEO/WAF - Si solo viene _event_transid es bloqueo
+    if (data._event_transid && !data.token && !data.Token && !data.access_token) {
+      console.error('[IS Token Manager] BLOQUEO DETECTADO: respuesta solo contiene _event_transid');
+      console.error('[IS Token Manager] Esto indica WAF/bloqueo o endpoint incorrecto');
+      console.error('[IS Token Manager] Response completo:', JSON.stringify(data).substring(0, 300));
+      throw new Error('IS Token endpoint bloqueado o incorrecto - solo devuelve _event_transid');
     }
     
     // B3: Buscar token en múltiples ubicaciones posibles
@@ -120,9 +131,17 @@ async function fetchDailyToken(env: ISEnvironment): Promise<string> {
     
     if (!dailyToken) {
       const keys = Object.keys(data);
-      console.error('[IS Token Manager] Token no encontrado. Estructura:', keys);
-      console.error('[IS Token Manager] Data sample:', JSON.stringify(data).substring(0, 200));
-      throw new Error('Token diario no encontrado en respuesta');
+      console.error('[IS Token Manager] Token no encontrado. Keys disponibles:', keys);
+      console.error('[IS Token Manager] Data completo (primeros 300 chars):', JSON.stringify(data).substring(0, 300));
+      console.error('[IS Token Manager] Content-Type:', contentType);
+      console.error('[IS Token Manager] Status:', status);
+      
+      // Si hay mensaje de error en response, mostrarlo
+      if (data.message || data.error || data.msg) {
+        console.error('[IS Token Manager] Mensaje API:', data.message || data.error || data.msg);
+      }
+      
+      throw new Error('Token diario no encontrado en respuesta IS - verificar endpoint y credenciales');
     }
     
     // B3: VALIDACIÓN JWT ROBUSTA

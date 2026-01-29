@@ -14,6 +14,11 @@ import LoadingSkeleton from '@/components/cotizadores/LoadingSkeleton';
 import QuoteComparison from '@/components/cotizadores/QuoteComparison';
 import Breadcrumb from '@/components/ui/Breadcrumb';
 
+// A7: Scroll to top al montar
+if (typeof window !== 'undefined') {
+  window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+}
+
 /**
  * Mapeo de deducibles del formulario a vIdOpt de INTERNACIONAL
  * Bajo = 500 (básico) -> vIdOpt: 1

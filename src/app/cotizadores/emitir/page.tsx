@@ -18,6 +18,10 @@ import EmissionProgressBar from '@/components/cotizadores/EmissionProgressBar';
 import EmissionBreadcrumb, { type EmissionStep } from '@/components/cotizadores/EmissionBreadcrumb';
 
 export default function EmitirPage() {
+  // A7: Scroll to top al montar
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, []);
   const searchParams = useSearchParams();
   const router = useRouter();
   const step = searchParams.get('step') || 'payment'; // payment, emission-data, inspection, payment-info, review

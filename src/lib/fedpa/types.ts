@@ -18,9 +18,18 @@ export interface TokenRequest {
 export interface TokenResponse {
   success: boolean;
   token?: string;
-  access_token?: string; // Formato alternativo posible
+  Token?: string;
+  access_token?: string;
+  AccessToken?: string;
+  jwt?: string;
+  registrado?: boolean;
+  msg?: string;
   message?: string;
   error?: string;
+  data?: {
+    token?: string;
+    Token?: string;
+  };
 }
 
 // ============================================
@@ -390,6 +399,7 @@ export interface FedpaError {
 
 export interface ApiResponse<T = any> {
   success: boolean;
+  statusCode?: number;
   data?: T;
   error?: FedpaError | string;
   message?: string;

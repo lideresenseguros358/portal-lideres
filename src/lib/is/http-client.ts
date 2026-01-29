@@ -231,7 +231,18 @@ export async function isRequest<T = any>(
         }
       }
       
-      // Manejar errores recuperables (5xx, 429)
+      // B4: NO reintentar 404 - es error permanente (endpoint incorrecto)
+      if (response.status === 404) {
+        console.error('[IS] ERROR 404 - endpoint no existe o path incorrecto - NO REINTENTAR');
+        return {
+          success: false,
+          error: `Endpoint no encontrado (404): ${endpoint}`,
+          statusCode: 404,
+          data: responseData,
+        };
+      }
+      
+      // Manejar errores recuperables (5xx, 429) - NO 404
       if (RETRY_CONFIG.retryableStatusCodes.includes(response.status) && attempt < RETRY_CONFIG.maxRetries) {
         const delay = RETRY_CONFIG.initialDelayMs * Math.pow(RETRY_CONFIG.backoffMultiplier, attempt);
         console.log(`[IS] Error ${response.status}, reintentando en ${delay}ms...`);
