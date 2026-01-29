@@ -590,7 +590,7 @@ export default function FormAutoCoberturaCompleta() {
                   </span>
                   <p className="text-xs sm:text-sm text-gray-600 mt-1">por persona / por accidente</p>
                 </div>
-                <div className="relative px-1">
+                <div className="relative px-1 pt-3">
                   <input
                     type="range"
                     min="0"
@@ -649,7 +649,7 @@ export default function FormAutoCoberturaCompleta() {
                     {formatCurrency(formData.danoPropiedad)}
                   </span>
                 </div>
-                <div className="relative px-1">
+                <div className="relative px-1 pt-3">
                   <input
                     type="range"
                     min="0"
@@ -702,7 +702,7 @@ export default function FormAutoCoberturaCompleta() {
                   </span>
                   <p className="text-xs sm:text-sm text-gray-600 mt-1">por persona / por accidente</p>
                 </div>
-                <div className="relative px-1">
+                <div className="relative px-1 pt-3">
                   <input
                     type="range"
                     min="0"
