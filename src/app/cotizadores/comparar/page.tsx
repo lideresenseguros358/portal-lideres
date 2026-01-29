@@ -5,7 +5,8 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { obtenerPlanPorTipo } from '@/lib/cotizadores/fedpa-plan-resolver';
 import { toast } from 'sonner';
 import { FaCar, FaCompressArrowsAlt } from 'react-icons/fa';
 import LoadingSkeleton from '@/components/cotizadores/LoadingSkeleton';
@@ -234,6 +235,17 @@ const generateInternacionalRealQuote = async (quoteData: any) => {
 const generateFedpaRealQuote = async (quoteData: any) => {
   // Import helpers de features premium
   const { getFedpaPremiumFeatures, calcularPrecioContado } = await import('@/lib/cotizadores/fedpa-premium-features');
+  
+  // CRÍTICO: Obtener el plan correcto según tipo (básico vs premium)
+  const environment = 'DEV';
+  const planInfo = await obtenerPlanPorTipo(quoteData.planType || 'basico', environment);
+  
+  if (!planInfo) {
+    console.error(`[FEDPA] No se pudo obtener plan para tipo: ${quoteData.planType}`);
+    return null;
+  }
+  
+  console.log(`[FEDPA] Usando plan ${planInfo.tipo}:`, planInfo.planId, planInfo.nombre);
   try {
     // MAPEO DE DEDUCIBLE A OPCION FEDPA:
     // bajo = OPCION A (deducible bajo $300, prima alta $563) - cliente paga menos deducible
@@ -271,7 +283,7 @@ const generateFedpaRealQuote = async (quoteData: any) => {
         modelo: quoteData.modelo || 'COROLLA',
         vanioauto: quoteData.anio || new Date().getFullYear(),
         vsumaaseg: quoteData.valorVehiculo || 15000,
-        vcodplancobertura: 14,
+        vcodplancobertura: parseInt(planInfo.planId),
         vcodgrupotarifa: 1,
         // COBERTURAS del formulario
         lesionCorporalPersona: quoteData.lesionCorporalPersona || 10000,
@@ -537,27 +549,49 @@ export default function ComparePage() {
             toast.error('Error al obtener cotizaciones de INTERNACIONAL');
           }
           
-          // FEDPA: generar plan básico y premium
-          // IMPORTANTE: Ambos usan el MISMO deducible del form, diferencia es el ENDOSO PORCELANA
+          // FEDPA: generar plan básico y premium SECUENCIALMENTE
+          // CRÍTICO: NO en paralelo para evitar race conditions
           try {
-            // Plan Básico - SIN Endoso Porcelana
-            const fedpaBasico = await generateFedpaRealQuote({ ...input, planType: 'basico' });
-            if (fedpaBasico) {
-              fedpaBasico.id = 'fedpa-basico';
-              fedpaBasico.planType = 'basico';
-              realQuotes.push(fedpaBasico);
-            }
+            console.log('[FEDPA] Generando cotizaciones SECUENCIALMENTE...');
             
-            // Plan Premium - CON Endoso Porcelana (cobertura máxima)
+            // 1. PRIMERO: Plan Premium - CON Endoso Porcelana (RECOMENDADO)
+            console.log('[FEDPA] 1/2 Cotizando Premium...');
             const fedpaPremium = await generateFedpaRealQuote({ ...input, planType: 'premium' });
             if (fedpaPremium) {
               fedpaPremium.id = 'fedpa-premium';
               fedpaPremium.planType = 'premium';
               fedpaPremium.isRecommended = true;
               realQuotes.push(fedpaPremium);
+              console.log('[FEDPA] ✅ Premium generado: $', fedpaPremium.annualPremium);
+            } else {
+              console.warn('[FEDPA] ⚠️ Premium no disponible');
+            }
+            
+            // 2. SEGUNDO: Plan Básico - SIN Endoso Porcelana
+            console.log('[FEDPA] 2/2 Cotizando Básico...');
+            const fedpaBasico = await generateFedpaRealQuote({ ...input, planType: 'basico' });
+            if (fedpaBasico) {
+              fedpaBasico.id = 'fedpa-basico';
+              fedpaBasico.planType = 'basico';
+              realQuotes.push(fedpaBasico);
+              console.log('[FEDPA] ✅ Básico generado: $', fedpaBasico.annualPremium);
+            } else {
+              console.warn('[FEDPA] ⚠️ Básico no disponible');
+            }
+            
+            // VALIDACIÓN: Verificar que las tarifas sean diferentes
+            if (fedpaPremium && fedpaBasico) {
+              if (fedpaPremium.annualPremium === fedpaBasico.annualPremium) {
+                console.error('[FEDPA] ⚠️ BUG DETECTADO: Ambas tarifas son iguales!');
+                console.error('[FEDPA] Premium:', fedpaPremium.annualPremium, 'Básico:', fedpaBasico.annualPremium);
+                console.error('[FEDPA] Esto NO debería pasar. Revisar planes usados.');
+              } else {
+                console.log('[FEDPA] ✅ Tarifas diferentes confirmadas');
+                console.log('[FEDPA] Diferencia: $', Math.abs(fedpaPremium.annualPremium - fedpaBasico.annualPremium).toFixed(2));
+              }
             }
           } catch (error) {
-            console.error('Error obteniendo cotizaciones FEDPA:', error);
+            console.error('[FEDPA] Error obteniendo cotizaciones:', error);
             toast.error('Error al obtener cotizaciones de FEDPA');
           }
           
