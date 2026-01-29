@@ -22,6 +22,7 @@ interface PremiumUpgradeModalProps {
     coverages: string[];
     beneficios?: any[];
     endosos?: any[];
+    _priceBreakdown?: any;
   };
   premiumPlan: {
     premium: number;
@@ -29,6 +30,7 @@ interface PremiumUpgradeModalProps {
     coverages: string[];
     beneficios?: any[];
     endosos?: any[];
+    _priceBreakdown?: any;
   };
 }
 
@@ -54,7 +56,18 @@ export default function PremiumUpgradeModal({
     setTimeout(onClose, 300);
   };
 
-  const priceDifference = premiumPlan.premium - basicPlan.premium;
+  // Calcular diferencias de precio según método de pago
+  const hasBreakdown = premiumPlan._priceBreakdown && basicPlan._priceBreakdown;
+  
+  const precioBasicoTarjeta = hasBreakdown ? basicPlan._priceBreakdown.totalConTarjeta : basicPlan.premium;
+  const precioBasicoContado = hasBreakdown ? basicPlan._priceBreakdown.totalAlContado : basicPlan.premium;
+  
+  const precioPremiumTarjeta = hasBreakdown ? premiumPlan._priceBreakdown.totalConTarjeta : premiumPlan.premium;
+  const precioPremiumContado = hasBreakdown ? premiumPlan._priceBreakdown.totalAlContado : premiumPlan.premium;
+  
+  const diferenciaTarjeta = precioPremiumTarjeta - precioBasicoTarjeta;
+  const diferenciaContado = precioPremiumContado - precioBasicoContado;
+  
   const newCoverages = premiumPlan.coverages.filter(
     (c) => !basicPlan.coverages.includes(c)
   );
@@ -108,10 +121,26 @@ export default function PremiumUpgradeModal({
                 </span>
               </div>
               <div className="text-center mb-4">
-                <p className="text-3xl font-bold text-gray-700">
-                  ${basicPlan.premium.toFixed(2)}
-                </p>
-                <p className="text-sm text-gray-500">por año</p>
+                {hasBreakdown ? (
+                  <>
+                    <p className="text-xs text-gray-500 mb-1">Con Tarjeta (2-10 cuotas)</p>
+                    <p className="text-2xl font-bold text-gray-700">
+                      ${precioBasicoTarjeta.toFixed(2)}
+                    </p>
+                    <div className="text-xs text-gray-400 my-1">o</div>
+                    <p className="text-xs text-gray-500 mb-1">Al Contado (1 cuota)</p>
+                    <p className="text-xl font-semibold text-gray-600">
+                      ${precioBasicoContado.toFixed(2)}
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-3xl font-bold text-gray-700">
+                      ${basicPlan.premium.toFixed(2)}
+                    </p>
+                    <p className="text-sm text-gray-500">por año</p>
+                  </>
+                )}
               </div>
               <div className="space-y-2">
                 <p className="text-sm font-semibold text-gray-600">
@@ -135,17 +164,39 @@ export default function PremiumUpgradeModal({
                 </span>
               </div>
               <div className="text-center mb-4">
-                <p className="text-3xl font-bold text-[#8AAA19]">
-                  ${premiumPlan.premium.toFixed(2)}
-                </p>
-                <p className="text-sm text-gray-500">por año</p>
-                <p className="text-xs text-[#8AAA19] font-semibold mt-1">
-                  +${priceDifference.toFixed(2)} adicionales
-                </p>
+                {hasBreakdown ? (
+                  <>
+                    <p className="text-xs text-gray-500 mb-1">Con Tarjeta (2-10 cuotas)</p>
+                    <p className="text-2xl font-bold text-[#8AAA19]">
+                      ${precioPremiumTarjeta.toFixed(2)}
+                    </p>
+                    <p className="text-xs text-[#8AAA19] font-semibold mt-1">
+                      +${diferenciaTarjeta.toFixed(2)} adicionales
+                    </p>
+                    <div className="text-xs text-gray-400 my-1">o</div>
+                    <p className="text-xs text-gray-500 mb-1">Al Contado (1 cuota)</p>
+                    <p className="text-xl font-semibold text-green-700">
+                      ${precioPremiumContado.toFixed(2)}
+                    </p>
+                    <p className="text-xs text-green-600 font-semibold mt-1">
+                      +${diferenciaContado.toFixed(2)} adicionales
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-3xl font-bold text-[#8AAA19]">
+                      ${premiumPlan.premium.toFixed(2)}
+                    </p>
+                    <p className="text-sm text-gray-500">por año</p>
+                    <p className="text-xs text-[#8AAA19] font-semibold mt-1">
+                      +${(premiumPlan.premium - basicPlan.premium).toFixed(2)} adicionales
+                    </p>
+                  </>
+                )}
               </div>
               <div className="space-y-2">
                 <p className="text-sm font-semibold text-[#8AAA19]">
-                  Deducible: ${premiumPlan.deductible.toLocaleString()}
+                  Mismo Deducible: ${premiumPlan.deductible.toLocaleString()}
                 </p>
                 <p className="text-xs text-gray-500">
                   {premiumPlan.coverages.length} coberturas
@@ -206,8 +257,13 @@ export default function PremiumUpgradeModal({
           {/* Benefits Highlight */}
           <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-lg">
             <p className="text-sm text-gray-700">
-              💡 <strong>Ventaja del Plan Premium:</strong> Incluye endosos especiales y beneficios adicionales que te brindan mayor protección y tranquilidad, con el mismo deducible que seleccionaste (${premiumPlan.deductible.toLocaleString()}).
+              💡 <strong>Ventaja del Plan Premium:</strong> Incluye endosos especiales y beneficios adicionales que te brindan mayor protección y tranquilidad, <strong>con el mismo deducible que seleccionaste (${premiumPlan.deductible.toLocaleString()})</strong>.
             </p>
+            {hasBreakdown && (
+              <p className="text-xs text-gray-600 mt-2">
+                <strong>Diferencia de inversión:</strong> Solo ${diferenciaTarjeta.toFixed(2)} adicionales con tarjeta, o ${diferenciaContado.toFixed(2)} adicionales al contado para obtener cobertura superior.
+              </p>
+            )}
           </div>
         </div>
 
