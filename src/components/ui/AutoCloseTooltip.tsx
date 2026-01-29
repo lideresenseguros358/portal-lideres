@@ -28,8 +28,11 @@ const AutoCloseTooltip = forwardRef<AutoCloseTooltipRef, AutoCloseTooltipProps>(
 }, ref) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
+  const [position, setPosition] = useState<'left' | 'right' | 'center'>('left');
   const hasAutoOpened = useRef(false);
   const closeTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLDivElement>(null);
 
   useImperativeHandle(ref, () => ({
     open: () => {
@@ -38,6 +41,31 @@ const AutoCloseTooltip = forwardRef<AutoCloseTooltipRef, AutoCloseTooltipProps>(
     },
     close: () => handleClose(),
   }));
+  
+  // Detectar posición óptima para evitar overflow
+  useEffect(() => {
+    if (isOpen && tooltipRef.current && triggerRef.current) {
+      const tooltip = tooltipRef.current;
+      const trigger = triggerRef.current;
+      const triggerRect = trigger.getBoundingClientRect();
+      const tooltipRect = tooltip.getBoundingClientRect();
+      const viewportWidth = window.innerWidth;
+      const margin = 16; // Margen de respeto con el borde
+      
+      // Calcular si se sale por la derecha
+      const wouldOverflowRight = triggerRect.left + tooltipRect.width > viewportWidth - margin;
+      // Calcular si se sale por la izquierda
+      const wouldOverflowLeft = triggerRect.left < margin;
+      
+      if (wouldOverflowRight && !wouldOverflowLeft) {
+        setPosition('right');
+      } else if (wouldOverflowLeft && !wouldOverflowRight) {
+        setPosition('left');
+      } else {
+        setPosition('center');
+      }
+    }
+  }, [isOpen]);
 
   // Auto-cerrar después del delay SOLO cuando se abre con hover
   useEffect(() => {
@@ -77,6 +105,7 @@ const AutoCloseTooltip = forwardRef<AutoCloseTooltipRef, AutoCloseTooltipProps>(
 
   return (
     <div 
+      ref={triggerRef}
       className="relative inline-block"
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
@@ -91,19 +120,25 @@ const AutoCloseTooltip = forwardRef<AutoCloseTooltipRef, AutoCloseTooltipProps>(
 
       {(isOpen || isClosing) && (
         <div 
-          className={`absolute left-1/2 -translate-x-1/2 sm:left-0 sm:translate-x-0 top-full mt-3 z-50 w-[calc(100vw-2rem)] sm:w-80 md:w-96 max-w-[calc(100vw-2rem)] bg-sky-50/95 backdrop-blur-sm rounded-2xl shadow-xl p-4 border border-sky-200/50 transition-all duration-300 ${
+          ref={tooltipRef}
+          className={`absolute top-full mt-3 z-50 w-[calc(100vw-2rem)] sm:w-80 md:w-96 bg-sky-50/95 backdrop-blur-sm rounded-2xl shadow-xl p-4 border border-sky-200/50 transition-all duration-300 ${
             isClosing ? 'opacity-0 translate-y-1' : 'opacity-100 translate-y-0'
+          } ${
+            position === 'right' ? 'right-0' : position === 'left' ? 'left-0' : 'left-1/2 -translate-x-1/2'
           }`}
           style={{
             animation: isClosing ? 'none' : 'fadeInSlideUp 300ms ease-out',
+            maxWidth: 'calc(100vw - 2rem)',
           }}
         >
           <div className="text-sm text-gray-700 leading-relaxed">
             {content}
           </div>
           
-          {/* Flecha arriba con celeste - centrada en mobile, a la izquierda en desktop */}
-          <div className="absolute -top-2 left-1/2 sm:left-6 -translate-x-1/2 sm:translate-x-0 w-4 h-4 bg-sky-50/95 backdrop-blur-sm border-l border-t border-sky-200/50 transform rotate-45"></div>
+          {/* Flecha arriba con celeste - posición dinámica */}
+          <div className={`absolute -top-2 w-4 h-4 bg-sky-50/95 backdrop-blur-sm border-l border-t border-sky-200/50 transform rotate-45 ${
+            position === 'right' ? 'right-6' : position === 'left' ? 'left-6' : 'left-1/2 -translate-x-1/2'
+          }`}></div>
         </div>
       )}
 

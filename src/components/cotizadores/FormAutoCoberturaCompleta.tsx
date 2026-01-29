@@ -442,8 +442,13 @@ export default function FormAutoCoberturaCompleta() {
                 />
               </label>
               <div className="bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl p-4 md:p-6 border-2 border-[#010139]/20">
-                {/* Input editable con diseño mejorado para mobile */}
-                <div className="mb-4">
+                {/* Input editable con diseño DESTACADO para mobile */}
+                <div className="mb-4 bg-white rounded-2xl p-6 border-4 border-[#8AAA19] shadow-2xl">
+                  <div className="mb-3 text-center">
+                    <span className="inline-block px-4 py-2 bg-[#8AAA19] text-white text-sm font-bold rounded-full animate-pulse">
+                      ✏️ Editable - Toque aquí
+                    </span>
+                  </div>
                   <input
                     type="text"
                     inputMode="numeric"
@@ -459,17 +464,16 @@ export default function FormAutoCoberturaCompleta() {
                       const numStr = e.target.value.replace(/[$,]/g, '');
                       const num = parseInt(numStr);
                       if (!isNaN(num) && num >= 5000 && num <= 100000) {
-                        // Guardar el valor exacto que el usuario escribió
-                        // No forzar redondeo - permitir valores personalizados
                         setFormData({ ...formData, valorVehiculo: num });
                       }
                       setValorInputTemp('');
                     }}
-                    className="text-4xl sm:text-4xl md:text-5xl font-bold text-[#010139] bg-transparent px-4 py-3 w-full text-center focus:outline-none focus:ring-0 border-0 transition-all cursor-text"
+                    className="text-5xl sm:text-5xl md:text-6xl font-black text-[#010139] bg-gradient-to-r from-[#8AAA19]/10 to-[#6d8814]/10 px-6 py-6 w-full text-center rounded-xl border-2 border-dashed border-[#8AAA19] focus:outline-none focus:ring-4 focus:ring-[#8AAA19]/50 focus:border-solid transition-all cursor-pointer shadow-inner"
                     placeholder="$15,000"
                   />
-                  <p className="text-xs sm:text-sm text-gray-600 mt-2 text-center">
-                    👆 Toque aquí para editar el valor
+                  <p className="text-sm sm:text-base text-gray-700 font-semibold mt-4 text-center flex items-center justify-center gap-2">
+                    <span className="text-2xl">👆</span>
+                    Toque el número para cambiar el valor
                   </p>
                 </div>
                 
@@ -871,41 +875,72 @@ export default function FormAutoCoberturaCompleta() {
       </div>
 
       <style jsx>{`
-        .slider-thumb::-webkit-slider-thumb {
+        /* Mobile sliders - sincronización mejorada */
+        .slider-thumb {
+          -webkit-appearance: none;
           appearance: none;
-          width: 24px;
-          height: 24px;
+          height: 8px;
+          background: transparent;
+        }
+        
+        .slider-thumb::-webkit-slider-thumb {
+          -webkit-appearance: none;
+          appearance: none;
+          width: 32px;
+          height: 32px;
           border-radius: 50%;
           background: #8AAA19;
           cursor: pointer;
-          border: 3px solid white;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-          margin-top: -10px;
+          border: 4px solid white;
+          box-shadow: 0 3px 10px rgba(0,0,0,0.25);
+          margin-top: 0;
+          position: relative;
         }
+        
         .slider-thumb::-moz-range-thumb {
-          width: 24px;
-          height: 24px;
+          width: 32px;
+          height: 32px;
           border-radius: 50%;
           background: #8AAA19;
           cursor: pointer;
-          border: 3px solid white;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+          border: 4px solid white;
+          box-shadow: 0 3px 10px rgba(0,0,0,0.25);
         }
+        
         .slider-thumb::-webkit-slider-runnable-track {
-          height: 4px;
+          height: 8px;
+          border-radius: 4px;
         }
+        
         .slider-thumb::-moz-range-track {
-          height: 4px;
+          height: 8px;
+          border-radius: 4px;
         }
+        
+        /* Desktop - thumb más pequeño */
         @media (min-width: 640px) {
-          .slider-thumb::-webkit-slider-thumb {
-            width: 20px;
-            height: 20px;
-            margin-top: -8px;
+          .slider-thumb {
+            height: 6px;
           }
+          
+          .slider-thumb::-webkit-slider-thumb {
+            width: 24px;
+            height: 24px;
+            border: 3px solid white;
+          }
+          
           .slider-thumb::-moz-range-thumb {
-            width: 20px;
-            height: 20px;
+            width: 24px;
+            height: 24px;
+            border: 3px solid white;
+          }
+          
+          .slider-thumb::-webkit-slider-runnable-track {
+            height: 6px;
+          }
+          
+          .slider-thumb::-moz-range-track {
+            height: 6px;
           }
         }
       `}</style>

@@ -11,15 +11,31 @@ import { useRouter } from 'next/navigation';
 
 interface PaymentPlanSelectorProps {
   annualPremium: number;
+  priceBreakdown?: {
+    totalAlContado: number;
+    totalConTarjeta: number;
+  };
   onContinue: (installments: number, monthlyPayment: number) => void;
 }
 
-export default function PaymentPlanSelector({ annualPremium, onContinue }: PaymentPlanSelectorProps) {
+export default function PaymentPlanSelector({ annualPremium, priceBreakdown, onContinue }: PaymentPlanSelectorProps) {
   const router = useRouter();
   const [installments, setInstallments] = useState(1);
   
-  // Calcular pago mensual (con pequeño recargo por cuotas)
+  // Calcular pago mensual usando breakdown si existe
   const calculateMonthlyPayment = (numInstallments: number) => {
+    // Si tiene breakdown de contado/tarjeta, usarlo
+    if (priceBreakdown) {
+      if (numInstallments === 1) {
+        // 1 cuota = al contado (con descuento)
+        return priceBreakdown.totalAlContado;
+      } else {
+        // 2-10 cuotas = con tarjeta (sin descuento)
+        return priceBreakdown.totalConTarjeta / numInstallments;
+      }
+    }
+    
+    // Fallback: cálculo tradicional si no hay breakdown
     if (numInstallments === 1) return annualPremium;
     
     // Recargo del 2% por financiamiento
@@ -29,6 +45,11 @@ export default function PaymentPlanSelector({ annualPremium, onContinue }: Payme
   };
 
   const monthlyPayment = calculateMonthlyPayment(installments);
+  
+  // Total a pagar según cuotas
+  const totalToPay = installments === 1 
+    ? monthlyPayment 
+    : (priceBreakdown ? priceBreakdown.totalConTarjeta : monthlyPayment * installments);
 
   const handleContinue = () => {
     onContinue(installments, monthlyPayment);
@@ -56,7 +77,9 @@ export default function PaymentPlanSelector({ annualPremium, onContinue }: Payme
 
   // Descripción según las cuotas
   const getDescription = (numInstallments: number): string => {
-    if (numInstallments === 1) return '¡Excelente decisión! Pago al contado';
+    if (numInstallments === 1) return priceBreakdown 
+      ? '¡Excelente! Con descuento pronto pago' 
+      : '¡Excelente decisión! Pago al contado';
     if (numInstallments === 2) return 'Muy bueno - Cada 6 meses';
     if (numInstallments <= 4) return 'Buena opción - Cuotas trimestrales';
     if (numInstallments <= 6) return 'Opción popular - Más cómodo';
@@ -175,12 +198,12 @@ export default function PaymentPlanSelector({ annualPremium, onContinue }: Payme
             </div>
             {installments > 1 && (
               <div className="text-xs text-gray-500">
-                Total: ${(monthlyPayment * installments).toLocaleString('en-US', { minimumFractionDigits: 2 })}
-                {installments > 1 && (
-                  <span className="text-orange-600 ml-2">
-                    (+2% financiamiento)
-                  </span>
-                )}
+                Total: ${totalToPay.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              </div>
+            )}
+            {installments === 1 && priceBreakdown && priceBreakdown.totalAlContado < priceBreakdown.totalConTarjeta && (
+              <div className="text-xs text-green-600 font-semibold mt-1">
+                ✓ Ahorro: ${(priceBreakdown.totalConTarjeta - priceBreakdown.totalAlContado).toLocaleString('en-US', { minimumFractionDigits: 2 })}
               </div>
             )}
           </div>

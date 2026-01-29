@@ -212,6 +212,7 @@ export default function EmitirPage() {
       <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 py-8 px-4">
         <PaymentPlanSelector
           annualPremium={selectedPlan.annualPremium}
+          priceBreakdown={selectedPlan._priceBreakdown}
           onContinue={handlePaymentPlanSelected}
         />
       </div>
