@@ -484,12 +484,14 @@ export default function FormAutoCoberturaCompleta() {
                       const exactIndex = vehiculoOptions.indexOf(formData.valorVehiculo);
                       if (exactIndex !== -1) return exactIndex;
                       
-                      // Si no existe, encontrar el índice más cercano
+                      // Si no existe, encontrar el índice más cercado
+                      if (vehiculoOptions.length === 0) return 0;
+                      
                       let closestIndex = 0;
-                      let minDiff = Math.abs(vehiculoOptions[0] - formData.valorVehiculo);
+                      let minDiff = Math.abs((vehiculoOptions[0] ?? 0) - formData.valorVehiculo);
                       
                       for (let i = 1; i < vehiculoOptions.length; i++) {
-                        const diff = Math.abs(vehiculoOptions[i] - formData.valorVehiculo);
+                        const diff = Math.abs((vehiculoOptions[i] ?? 0) - formData.valorVehiculo);
                         if (diff < minDiff) {
                           minDiff = diff;
                           closestIndex = i;
@@ -508,10 +510,11 @@ export default function FormAutoCoberturaCompleta() {
                         const exactIndex = vehiculoOptions.indexOf(formData.valorVehiculo);
                         if (exactIndex !== -1) return (exactIndex / (vehiculoOptions.length - 1)) * 100;
                         
+                        if (vehiculoOptions.length === 0) return 0;
                         let closestIndex = 0;
-                        let minDiff = Math.abs(vehiculoOptions[0] - formData.valorVehiculo);
+                        let minDiff = Math.abs((vehiculoOptions[0] ?? 0) - formData.valorVehiculo);
                         for (let i = 1; i < vehiculoOptions.length; i++) {
-                          const diff = Math.abs(vehiculoOptions[i] - formData.valorVehiculo);
+                          const diff = Math.abs((vehiculoOptions[i] ?? 0) - formData.valorVehiculo);
                           if (diff < minDiff) {
                             minDiff = diff;
                             closestIndex = i;
@@ -522,10 +525,11 @@ export default function FormAutoCoberturaCompleta() {
                         const exactIndex = vehiculoOptions.indexOf(formData.valorVehiculo);
                         if (exactIndex !== -1) return (exactIndex / (vehiculoOptions.length - 1)) * 100;
                         
+                        if (vehiculoOptions.length === 0) return 0;
                         let closestIndex = 0;
-                        let minDiff = Math.abs(vehiculoOptions[0] - formData.valorVehiculo);
+                        let minDiff = Math.abs((vehiculoOptions[0] ?? 0) - formData.valorVehiculo);
                         for (let i = 1; i < vehiculoOptions.length; i++) {
-                          const diff = Math.abs(vehiculoOptions[i] - formData.valorVehiculo);
+                          const diff = Math.abs((vehiculoOptions[i] ?? 0) - formData.valorVehiculo);
                           if (diff < minDiff) {
                             minDiff = diff;
                             closestIndex = i;
@@ -539,7 +543,7 @@ export default function FormAutoCoberturaCompleta() {
                   <div className="hidden sm:flex justify-between absolute top-1/2 -translate-y-1/2 left-0 right-0 pointer-events-none px-2">
                     {[0, 20, 40, 60, 80, 100].map((percent) => {
                       const index = Math.floor((vehiculoOptions.length - 1) * (percent / 100));
-                      const value = vehiculoOptions[index];
+                      const value = vehiculoOptions[index] ?? 0;
                       const isActive = formData.valorVehiculo >= value;
                       return (
                         <div key={percent} className={`w-2.5 h-2.5 rounded-full border-2 transition-all duration-200 ${
