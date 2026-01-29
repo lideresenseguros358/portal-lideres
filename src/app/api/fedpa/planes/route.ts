@@ -14,9 +14,13 @@ export async function GET(request: NextRequest) {
     const tipo = searchParams.get('tipo'); // 'DAÑOS A TERCEROS' | 'COBERTURA COMPLETA'
     
     const env = environment as FedpaEnvironment;
+    
+    console.log('[API FEDPA Planes] Obteniendo planes (environment:', env, ', tipo solicitado:', tipo || 'todos', ')');
+    
     const result = await obtenerPlanes(env);
     
     if (!result.success) {
+      console.error('[API FEDPA Planes] Error obteniendo planes:', result.error);
       return NextResponse.json(
         { success: false, error: result.error },
         { status: 400 }
@@ -24,10 +28,18 @@ export async function GET(request: NextRequest) {
     }
     
     let planes = result.data || [];
+    console.log('[API FEDPA Planes] Planes recibidos:', planes.length);
     
-    // Filtrar por tipo si se especifica
+    // Filtrar por tipo si se especifica (filtrado del lado del cliente)
     if (tipo && planes.length > 0) {
-      planes = filtrarPlanesPorTipo(planes, tipo as any);
+      const tipoUpper = tipo.toUpperCase();
+      // Normalizar: "COBERTURA COMPLETA" puede aparecer como "COBERTURA COMPLETA" o similar
+      planes = planes.filter((plan: any) => {
+        const planTipo = (plan.tipoplan || '').toUpperCase();
+        // Match exacto o parcial
+        return planTipo.includes(tipoUpper) || tipoUpper.includes(planTipo);
+      });
+      console.log('[API FEDPA Planes] Planes filtrados por tipo:', planes.length);
     }
     
     return NextResponse.json({
