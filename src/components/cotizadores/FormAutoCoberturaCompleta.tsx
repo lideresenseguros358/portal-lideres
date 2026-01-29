@@ -502,7 +502,7 @@ export default function FormAutoCoberturaCompleta() {
                       const index = parseInt(e.target.value);
                       setFormData({ ...formData, valorVehiculo: vehiculoOptions[index] || 15000 });
                     }}
-                    className="w-full h-8 sm:h-6 md:h-4 bg-gray-300 rounded-lg appearance-none cursor-pointer slider-thumb slider-with-stops transition-all duration-200 ease-out"
+                    className="w-full h-8 sm:h-3 bg-gray-300 rounded-lg appearance-none cursor-pointer slider-thumb slider-with-stops transition-all duration-200 ease-out"
                     style={{
                       background: `linear-gradient(to right, #8AAA19 0%, #8AAA19 ${((() => {
                         const exactIndex = vehiculoOptions.indexOf(formData.valorVehiculo);
@@ -544,7 +544,7 @@ export default function FormAutoCoberturaCompleta() {
                       const value = vehiculoOptions[index] ?? 0;
                       const isActive = formData.valorVehiculo >= value;
                       return (
-                        <div key={percent} className={`w-2.5 h-2.5 rounded-full border-2 transition-all duration-200 ${
+                        <div key={percent} className={`w-1.5 h-1.5 rounded-full border transition-all duration-200 ${
                           isActive ? 'bg-[#8AAA19] border-[#8AAA19] scale-105' : 'bg-white border-gray-400'
                         }`}></div>
                       );
@@ -609,7 +609,7 @@ export default function FormAutoCoberturaCompleta() {
                         });
                       }
                     }}
-                    className="w-full h-8 sm:h-6 md:h-4 bg-gray-300 rounded-lg appearance-none cursor-pointer slider-thumb transition-all duration-200 ease-out"
+                    className="w-full h-8 sm:h-3 bg-gray-300 rounded-lg appearance-none cursor-pointer slider-thumb transition-all duration-200 ease-out"
                     style={{
                       background: `linear-gradient(to right, #8AAA19 0%, #8AAA19 ${(lesionCorporalOptions.findIndex(opt => opt.persona === formData.lesionCorporalPersona) / (lesionCorporalOptions.length - 1)) * 100}%, #e5e7eb ${(lesionCorporalOptions.findIndex(opt => opt.persona === formData.lesionCorporalPersona) / (lesionCorporalOptions.length - 1)) * 100}%, #e5e7eb 100%)`
                     }}
@@ -620,7 +620,7 @@ export default function FormAutoCoberturaCompleta() {
                       const currentIndex = lesionCorporalOptions.findIndex(o => o.persona === formData.lesionCorporalPersona);
                       const isActive = idx <= currentIndex;
                       return (
-                        <div key={idx} className={`w-2.5 h-2.5 rounded-full border-2 transition-all duration-200 ${
+                        <div key={idx} className={`w-1.5 h-1.5 rounded-full border transition-all duration-200 ${
                           isActive ? 'bg-[#8AAA19] border-[#8AAA19] scale-105' : 'bg-white border-gray-400'
                         }`}></div>
                       );
@@ -661,7 +661,7 @@ export default function FormAutoCoberturaCompleta() {
                         setFormData({ ...formData, danoPropiedad: selected });
                       }
                     }}
-                    className="w-full h-8 sm:h-6 md:h-4 bg-gray-300 rounded-lg appearance-none cursor-pointer slider-thumb transition-all duration-200 ease-out"
+                    className="w-full h-8 sm:h-3 bg-gray-300 rounded-lg appearance-none cursor-pointer slider-thumb transition-all duration-200 ease-out"
                     style={{
                       background: `linear-gradient(to right, #8AAA19 0%, #8AAA19 ${(danoPropiedadOptions.indexOf(formData.danoPropiedad) / (danoPropiedadOptions.length - 1)) * 100}%, #e5e7eb ${(danoPropiedadOptions.indexOf(formData.danoPropiedad) / (danoPropiedadOptions.length - 1)) * 100}%, #e5e7eb 100%)`
                     }}
@@ -672,7 +672,7 @@ export default function FormAutoCoberturaCompleta() {
                       const currentIndex = danoPropiedadOptions.indexOf(formData.danoPropiedad);
                       const isActive = idx <= currentIndex;
                       return (
-                        <div key={idx} className={`w-2.5 h-2.5 rounded-full border-2 transition-all duration-200 ${
+                        <div key={idx} className={`w-1.5 h-1.5 rounded-full border transition-all duration-200 ${
                           isActive ? 'bg-[#8AAA19] border-[#8AAA19] scale-105' : 'bg-white border-gray-400'
                         }`}></div>
                       );
@@ -721,7 +721,7 @@ export default function FormAutoCoberturaCompleta() {
                         });
                       }
                     }}
-                    className="w-full h-8 sm:h-6 md:h-4 bg-gray-300 rounded-lg appearance-none cursor-pointer slider-thumb transition-all duration-200 ease-out"
+                    className="w-full h-8 sm:h-3 bg-gray-300 rounded-lg appearance-none cursor-pointer slider-thumb transition-all duration-200 ease-out"
                     style={{
                       background: `linear-gradient(to right, #8AAA19 0%, #8AAA19 ${(gastosMedicosOptions.findIndex(opt => opt.persona === formData.gastosMedicosPersona) / (gastosMedicosOptions.length - 1)) * 100}%, #e5e7eb ${(gastosMedicosOptions.findIndex(opt => opt.persona === formData.gastosMedicosPersona) / (gastosMedicosOptions.length - 1)) * 100}%, #e5e7eb 100%)`
                     }}
@@ -732,7 +732,7 @@ export default function FormAutoCoberturaCompleta() {
                       const currentIndex = gastosMedicosOptions.findIndex(o => o.persona === formData.gastosMedicosPersona);
                       const isActive = idx <= currentIndex;
                       return (
-                        <div key={idx} className={`w-2.5 h-2.5 rounded-full border-2 transition-all duration-200 ${
+                        <div key={idx} className={`w-1.5 h-1.5 rounded-full border transition-all duration-200 ${
                           isActive ? 'bg-[#8AAA19] border-[#8AAA19] scale-105' : 'bg-white border-gray-400'
                         }`}></div>
                       );
@@ -928,30 +928,31 @@ export default function FormAutoCoberturaCompleta() {
           border-radius: 4px;
         }
         
-        /* Desktop - thumb más pequeño */
+        /* Desktop - thumb más pequeño y elegante */
         @media (min-width: 640px) {
           .slider-thumb {
-            height: 6px;
+            height: 4px;
           }
           
           .slider-thumb::-webkit-slider-thumb {
-            width: 24px;
-            height: 24px;
-            border: 3px solid white;
+            width: 18px;
+            height: 18px;
+            border: 2px solid white;
+            margin-top: -7px;
           }
           
           .slider-thumb::-moz-range-thumb {
-            width: 24px;
-            height: 24px;
-            border: 3px solid white;
+            width: 18px;
+            height: 18px;
+            border: 2px solid white;
           }
           
           .slider-thumb::-webkit-slider-runnable-track {
-            height: 6px;
+            height: 4px;
           }
           
           .slider-thumb::-moz-range-track {
-            height: 6px;
+            height: 4px;
           }
         }
       `}</style>
