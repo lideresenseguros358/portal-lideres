@@ -57,7 +57,7 @@ const generateInternacionalRealQuote = async (quoteData: any) => {
         vsumaaseg: quoteData.valorVehiculo || 15000,
         vcodplancobertura,
         vcodgrupotarifa,
-        environment: 'development', // USAR DEVELOPMENT - production da 403/404
+        environment: 'production', // Cambiar a production para pruebas
       }),
     });
     
@@ -76,7 +76,7 @@ const generateInternacionalRealQuote = async (quoteData: any) => {
     console.log('[INTERNACIONAL] ID Cotización:', idCotizacion);
     
     // Obtener coberturas y precio real con vIdOpt según deducible
-    const coberturasResponse = await fetch(`/api/is/auto/coberturas?vIdPv=${idCotizacion}&vIdOpt=${vIdOpt}&env=development`);
+    const coberturasResponse = await fetch(`/api/is/auto/coberturas?vIdPv=${idCotizacion}&vIdOpt=${vIdOpt}&env=production`);
     
     if (!coberturasResponse.ok) {
       console.error('Error en API coberturas:', await coberturasResponse.text());
