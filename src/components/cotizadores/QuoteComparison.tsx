@@ -428,9 +428,9 @@ export default function QuoteComparison({ policyType, quotes, quoteData }: Quote
                           <span className="text-xs text-gray-600 font-medium">
                             {paymentMode[quote.id] === 'contado' ? 'Pago al Contado' : 'Pago con Tarjeta'}
                           </span>
-                          <span title={paymentMode[quote.id] === 'contado' ? preciosTooltips.contado : preciosTooltips.tarjeta} className="inline-block">
-                            <FaQuestionCircle className="text-gray-400 text-xs cursor-help" />
-                          </span>
+                          <AutoCloseTooltip 
+                            content={paymentMode[quote.id] === 'contado' ? preciosTooltips.contado : preciosTooltips.tarjeta}
+                          />
                         </div>
                         <div className={`text-3xl md:text-4xl font-bold mb-2 ${
                           paymentMode[quote.id] === 'contado' ? 'text-[#8AAA19]' : 'text-[#010139]'
@@ -469,9 +469,9 @@ export default function QuoteComparison({ policyType, quotes, quoteData }: Quote
                   <div className="flex items-center justify-center gap-2 mt-3 text-xs text-gray-600">
                     <span>Deducible desde ${quote.deductible.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
                     {quote._deducibleOriginal && (
-                      <span title={getDeducibleTooltip(quote._deducibleOriginal as 'bajo' | 'medio' | 'alto')} className="inline-block">
-                        <FaQuestionCircle className="text-gray-400 cursor-help" />
-                      </span>
+                      <AutoCloseTooltip 
+                        content={getDeducibleTooltip(quote._deducibleOriginal as 'bajo' | 'medio' | 'alto')}
+                      />
                     )}
                   </div>
                 </div>
