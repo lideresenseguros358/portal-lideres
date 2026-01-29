@@ -848,7 +848,12 @@ export default function FormAutoCoberturaCompleta() {
 
           {/* Sticky Bottom Bar con Botones - Solo visible cuando formulario está completo */}
           {isFormComplete && (
-            <div className="fixed inset-x-0 bottom-0 bg-white border-t-2 border-gray-200 shadow-2xl z-50 animate-in slide-in-from-bottom-4 duration-300 m-0 p-0">
+            <div 
+              className="fixed inset-x-0 bottom-0 bg-white border-t-2 border-gray-200 shadow-2xl z-50 m-0 p-0 transition-all duration-500 ease-out"
+              style={{
+                animation: 'slideUpFadeIn 0.6s ease-out',
+              }}
+            >
               <div className="w-full px-4 py-4 sm:py-5">
                 <div className="max-w-4xl mx-auto flex flex-col sm:flex-row gap-2 sm:gap-3">
                   <button
@@ -875,6 +880,18 @@ export default function FormAutoCoberturaCompleta() {
       </div>
 
       <style jsx>{`
+        /* Animación suave del sticky bar */
+        @keyframes slideUpFadeIn {
+          0% {
+            opacity: 0;
+            transform: translateY(100%);
+          }
+          100% {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
         /* Mobile sliders - sincronización mejorada */
         .slider-thumb {
           -webkit-appearance: none;

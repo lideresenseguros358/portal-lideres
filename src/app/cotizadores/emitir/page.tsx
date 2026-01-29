@@ -93,14 +93,115 @@ export default function EmitirPage() {
     toast.error(error);
   };
 
+  // Helper: Convertir fecha YYYY-MM-DD a dd/mm/yyyy (formato FEDPA)
+  const convertToFedpaDate = (dateStr: string): string => {
+    if (!dateStr) return '';
+    const [year, month, day] = dateStr.split('-');
+    return `${day}/${month}/${year}`;
+  };
+
   const handleConfirmEmission = async () => {
     try {
       setIsConfirming(true);
       
-      // Detectar si es INTERNACIONAL con API real
-      const isInternacionalReal = selectedPlan?._isReal === true;
+      // Detectar aseguradora
+      const isFedpaReal = selectedPlan?._isReal && selectedPlan?.insurerName?.includes('FEDPA');
+      const isInternacionalReal = selectedPlan?._isReal && selectedPlan?.insurerName?.includes('INTERNACIONAL');
       
-      if (isInternacionalReal) {
+      // EMISIÓN FEDPA
+      if (isFedpaReal) {
+        console.log('[EMISIÓN FEDPA] Iniciando emisión con API real...');
+        
+        if (!emissionData || !inspectionPhotos.length) {
+          throw new Error('Faltan datos de emisión o fotos de inspección');
+        }
+        
+        // 1. Subir documentos
+        toast.info('Subiendo documentos...');
+        const docsFormData = new FormData();
+        docsFormData.append('environment', 'DEV');
+        docsFormData.append('documento_identidad', emissionData.cedulaFile!, 'documento_identidad');
+        docsFormData.append('licencia_conducir', emissionData.licenciaFile!, 'licencia_conducir');
+        docsFormData.append('registro_vehicular', emissionData.registroFile!, 'registro_vehicular');
+        
+        const docsResponse = await fetch('/api/fedpa/documentos/upload', {
+          method: 'POST',
+          body: docsFormData,
+        });
+        
+        if (!docsResponse.ok) {
+          const errorData = await docsResponse.json();
+          throw new Error(errorData.error || 'Error subiendo documentos');
+        }
+        
+        const docsResult = await docsResponse.json();
+        console.log('[EMISIÓN FEDPA] Documentos subidos:', docsResult.idDoc);
+        
+        // 2. Preparar datos de emisión
+        toast.info('Emitiendo póliza...');
+        const emisionPayload = {
+          environment: 'DEV',
+          Plan: selectedPlan._planCode || 1,
+          idDoc: docsResult.idDoc,
+          
+          // Cliente
+          PrimerNombre: emissionData.primerNombre,
+          PrimerApellido: emissionData.primerApellido,
+          SegundoNombre: emissionData.segundoNombre || undefined,
+          SegundoApellido: emissionData.segundoApellido || undefined,
+          Identificacion: emissionData.cedula,
+          FechaNacimiento: convertToFedpaDate(emissionData.fechaNacimiento),
+          Sexo: emissionData.sexo,
+          Email: emissionData.email,
+          Telefono: parseInt(emissionData.telefono.replace(/\D/g, '')),
+          Celular: parseInt(emissionData.celular.replace(/\D/g, '')),
+          Direccion: emissionData.direccion,
+          esPEP: emissionData.esPEP ? 1 : 0,
+          Acreedor: emissionData.acreedor || undefined,
+          
+          // Vehículo
+          sumaAsegurada: quoteData.valorVehiculo || 0,
+          Uso: quoteData.uso || '10',
+          Marca: selectedPlan._marcaCodigo || quoteData.marca,
+          Modelo: selectedPlan._modeloCodigo || quoteData.modelo,
+          Ano: quoteData.ano?.toString() || new Date().getFullYear().toString(),
+          Motor: emissionData.motor,
+          Placa: emissionData.placa,
+          Vin: emissionData.vin,
+          Color: emissionData.color,
+          Pasajero: emissionData.pasajeros,
+          Puerta: emissionData.puertas,
+          
+          PrimaTotal: selectedPlan.annualPremium,
+        };
+        
+        const emisionResponse = await fetch('/api/fedpa/emision', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(emisionPayload),
+        });
+        
+        if (!emisionResponse.ok) {
+          const errorData = await emisionResponse.json();
+          throw new Error(errorData.error || 'Error emitiendo póliza');
+        }
+        
+        const emisionResult = await emisionResponse.json();
+        console.log('[EMISIÓN FEDPA] Póliza emitida:', emisionResult.nroPoliza);
+        
+        sessionStorage.setItem('emittedPolicy', JSON.stringify({
+          nroPoliza: emisionResult.nroPoliza || emisionResult.poliza,
+          insurer: 'FEDPA Seguros',
+          clientId: emisionResult.clientId,
+          policyId: emisionResult.policyId,
+          vigenciaDesde: emisionResult.desde,
+          vigenciaHasta: emisionResult.hasta,
+        }));
+        
+        toast.success(`¡Póliza FEDPA emitida! Nº ${emisionResult.nroPoliza || emisionResult.poliza}`);
+        router.push('/cotizadores/confirmacion');
+        
+      } else if (isInternacionalReal) {
         console.log('[EMISION INTERNACIONAL] Usando API real...');
         
         // Emitir con API real de INTERNACIONAL
