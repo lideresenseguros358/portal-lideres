@@ -7,6 +7,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { obtenerPlanPorTipo } from '@/lib/cotizadores/fedpa-plan-resolver';
+import { normalizeFedpaBenefits, extractDeductibleInfo, calculateFedpaPriceBreakdown } from '@/lib/cotizadores/fedpa-benefits-normalizer';
 import { toast } from 'sonner';
 import { FaCar, FaCompressArrowsAlt } from 'react-icons/fa';
 import LoadingSkeleton from '@/components/cotizadores/LoadingSkeleton';
@@ -326,27 +327,29 @@ const generateFedpaRealQuote = async (quoteData: any) => {
     // Calcular precio al contado (con descuento pronto pago)
     const totalConTarjeta = primaTotal;
     const totalAlContado = calcularPrecioContado(totalConTarjeta);
-    const descuentoProntoPago = totalConTarjeta - totalAlContado;
+    
+    // NUEVO: Calcular desglose con descuento buen conductor
+    const priceBreakdown = calculateFedpaPriceBreakdown(
+      primaTotal,
+      primaBase,
+      impuesto1,
+      impuesto2,
+      totalAlContado
+    );
     
     console.log(`[FEDPA] Opción ${opcionSeleccionada}: ${apiCoberturas.length} coberturas, Prima: $${primaTotal}, Contado: $${totalAlContado.toFixed(2)}`);
     
-    // OBTENER deducibles REALES: COMPRENSIVO (fijo) y COLISION (variable)
-    const coberturaComprensivo = apiCoberturas.find((c: any) => c.COBERTURA === 'D');
-    const coberturaColision = apiCoberturas.find((c: any) => c.COBERTURA === 'E');
-    
-    const deducibleComprensivo = coberturaComprensivo?.DEDUCIBLE || 0;
-    const deducibleColision = coberturaColision?.DEDUCIBLE || 0;
-    
-    // Mostrar el deducible de COLISION (el que varía)
-    const deducibleValor = deducibleColision;
-    const deducibleReal = deducibleColision > 0 
-      ? `Colisión: $${deducibleColision.toFixed(2)} | Comprensivo: $${deducibleComprensivo.toFixed(2)}`
-      : 'Según póliza';
+    // NUEVO: Extraer deducible con monto real usando normalizador
+    const deducibleExtracted = extractDeductibleInfo(
+      apiCoberturas,
+      quoteData.deducible || 'medio'
+    );
     
     const deducibleInfo = {
-      valor: deducibleValor,
-      tipo: quoteData.deducible || 'medio',
-      descripcion: deducibleReal,
+      valor: deducibleExtracted.montoColision || 0,
+      tipo: deducibleExtracted.nivel,
+      descripcion: deducibleExtracted.descripcion,
+      tooltip: deducibleExtracted.tooltip,
     };
     
     // Mapear coberturas (solo de la opción seleccionada)
@@ -403,37 +406,42 @@ const generateFedpaRealQuote = async (quoteData: any) => {
       });
     }
     
-    // Beneficios según plan type
-    // IMPORTANTE: Básico y Premium deben tener DIFERENTES TARIFAS según endoso
+    // NUEVO: Obtener beneficios REALES desde el plan usando normalizador
     const esPremium = quoteData.planType === 'premium';
     
     // Obtener features premium si es plan premium
     const premiumFeatures = esPremium ? getFedpaPremiumFeatures() : undefined;
-    const beneficios = [];
     
-    // BENEFICIOS COMUNES (están en AMBOS planes)
-    const beneficiosComunes = [
-      { nombre: 'Asistencia Vial Básica', descripcion: '1 evento/año', incluido: true },
-      { nombre: 'Asistencia Médica Telefónica', descripcion: '24/7', incluido: true },
-      { nombre: 'Inspección IN SITU', descripcion: 'Incluido', incluido: true },
-      { nombre: 'Grúa hasta $150', descripcion: '2 eventos/año', incluido: true },
-    ];
+    // Obtener beneficios del plan (consultar API si es necesario)
+    let beneficiosNormalizados: any[] = [];
     
-    beneficios.push(...beneficiosComunes);
-    
-    if (esPremium) {
-      // BENEFICIOS ADICIONALES SOLO EN PREMIUM (Endoso Porcelana)
-      beneficios.push(
-        { nombre: 'Muerte accidental conductor', descripcion: '$500', incluido: true },
-        { nombre: 'Auto de alquiler', descripcion: '10 días', incluido: true },
-        { nombre: 'Cobertura extraterritorial', descripcion: 'Hasta Costa Rica', incluido: true },
-        { nombre: 'Vehículo de reemplazo', descripcion: 'Por robo/hurto', incluido: true },
-        { nombre: 'Defensa penal', descripcion: 'Hasta $2,000', incluido: true },
-        { nombre: 'RC auto sustituto', descripcion: 'Incluido', incluido: true },
-        { nombre: '100% reembolso deducible', descripcion: 'Sin culpa', incluido: true },
-        { nombre: 'Protección objetos personales', descripcion: 'Hasta $100/evento', incluido: true }
-      );
+    try {
+      // Intentar obtener beneficios del plan
+      const beneficiosResponse = await fetch(`/api/fedpa/planes/beneficios?plan=${planInfo.planId}&environment=${environment}`);
+      if (beneficiosResponse.ok) {
+        const beneficiosData = await beneficiosResponse.json();
+        beneficiosNormalizados = normalizeFedpaBenefits(
+          beneficiosData.data || [],
+          quoteData.planType || 'basico'
+        );
+        console.log(`[FEDPA] Beneficios normalizados (${quoteData.planType}):`, beneficiosNormalizados.length);
+      }
+    } catch (error) {
+      console.error('[FEDPA] Error obteniendo beneficios del plan:', error);
     }
+    
+    // Si no se obtuvieron beneficios, usar fallback mínimo
+    const beneficios = beneficiosNormalizados.length > 0 
+      ? beneficiosNormalizados.map((b: any) => ({
+          nombre: b.label,
+          descripcion: b.qty && b.unit ? `${b.qty} ${b.unit}` : b.limit || 'Incluido',
+          incluido: b.included,
+          tooltip: b.tooltip,
+        }))
+      : [
+          { nombre: 'Asistencia vial', descripcion: 'Incluido', incluido: true },
+          { nombre: 'Asistencia médica telefónica', descripcion: '24/7', incluido: true },
+        ];
     
     // Endosos según plan type
     const endosos = [];
@@ -463,14 +471,14 @@ const generateFedpaRealQuote = async (quoteData: any) => {
         name: c.nombre,
         included: true,
       })),
-      // PRICE BREAKDOWN (contado vs tarjeta)
+      // PRICE BREAKDOWN CON DESCUENTO BUEN CONDUCTOR CALCULADO
       _priceBreakdown: {
-        primaBase,
-        descuentoProntoPago,
-        impuesto1,
-        impuesto2,
-        totalConTarjeta,
-        totalAlContado,
+        primaBaseSinImpuesto: priceBreakdown.primaBaseSinImpuesto,
+        descuentoBuenConductor: priceBreakdown.descuentoBuenConductor,
+        impuesto: priceBreakdown.impuesto,
+        totalConTarjeta: priceBreakdown.totalAnualTarjeta,
+        totalAlContado: priceBreakdown.totalAlContado,
+        ahorroContado: priceBreakdown.ahorroContado,
       },
       // FEATURES PREMIUM (solo si es premium)
       _premiumFeatures: premiumFeatures,
