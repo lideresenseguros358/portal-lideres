@@ -9,6 +9,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import PaymentPlanSelector from '@/components/cotizadores/PaymentPlanSelector';
 import EmissionDataForm, { type EmissionData } from '@/components/cotizadores/EmissionDataForm';
+import VehicleDataForm, { type VehicleData } from '@/components/cotizadores/VehicleDataForm';
 import VehicleInspection from '@/components/cotizadores/VehicleInspection';
 import CreditCardInput from '@/components/is/CreditCardInput';
 import FinalQuoteSummary from '@/components/cotizadores/FinalQuoteSummary';
@@ -27,6 +28,7 @@ export default function EmitirPage() {
   const [installments, setInstallments] = useState(1);
   const [monthlyPayment, setMonthlyPayment] = useState(0);
   const [emissionData, setEmissionData] = useState<EmissionData | null>(null);
+  const [vehicleData, setVehicleData] = useState<VehicleData | null>(null);
   const [inspectionPhotos, setInspectionPhotos] = useState<any[]>([]);
   const [paymentToken, setPaymentToken] = useState<string>('');
   const [cardData, setCardData] = useState<{ last4: string; brand: string } | null>(null);
@@ -76,9 +78,20 @@ export default function EmitirPage() {
     // Marcar paso completado
     setCompletedSteps(prev => [...prev, 'emission-data']);
     
+    // Ir a datos del vehículo
+    router.push('/cotizadores/emitir?step=vehicle');
+    toast.success('Datos guardados correctamente');
+  };
+
+  const handleVehicleDataComplete = (data: VehicleData) => {
+    setVehicleData(data);
+    
+    // Marcar paso completado
+    setCompletedSteps(prev => [...prev, 'vehicle']);
+    
     // Ir a inspección vehicular
     router.push('/cotizadores/emitir?step=inspection');
-    toast.success('Datos guardados correctamente');
+    toast.success('Datos del vehículo guardados');
   };
 
   const handleInspectionComplete = (photos: any[]) => {
@@ -390,6 +403,32 @@ export default function EmitirPage() {
           <EmissionDataForm
             quoteData={quoteData}
             onContinue={handleEmissionDataComplete}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  // Step 3: Datos del Vehículo (solo para auto completa)
+  if (currentStep === 'vehicle' && isAutoCompleta) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
+        {/* Progress Bar */}
+        <div className="pt-6">
+          <EmissionProgressBar currentStep={getStepNumber('vehicle')} totalSteps={6} />
+        </div>
+        
+        {/* Breadcrumb */}
+        <EmissionBreadcrumb 
+          currentStep="vehicle" 
+          completedSteps={completedSteps}
+        />
+        
+        {/* Contenido */}
+        <div className="py-8 px-4">
+          <VehicleDataForm
+            quoteData={quoteData}
+            onContinue={handleVehicleDataComplete}
           />
         </div>
       </div>
