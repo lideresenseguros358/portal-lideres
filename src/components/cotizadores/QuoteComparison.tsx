@@ -263,12 +263,18 @@ export default function QuoteComparison({ policyType, quotes, quoteData }: Quote
                 selectedQuote === quote.id ? 'ring-4 ring-[#8AAA19]' : ''
               }`}
             >
-              {/* Recommended Badge */}
+              {/* Recommended Badge - Flotante con animación */}
               {quote.isRecommended && (
-                <span className="inline-flex items-center gap-1 px-3 py-1 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white text-xs font-bold rounded-full shadow-md">
-                  <FaStar className="text-white" />
-                  RECOMENDADA
-                </span>
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-10 animate-bounce">
+                  <div className="relative">
+                    <span className="inline-flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white text-xs font-bold rounded-full shadow-lg border-2 border-white">
+                      <FaStar className="text-yellow-300 animate-pulse" />
+                      RECOMENDADA
+                    </span>
+                    {/* Efecto de brillo */}
+                    <div className="absolute inset-0 rounded-full bg-white opacity-20 blur-sm"></div>
+                  </div>
+                </div>
               )}
 
               {/* Header con Logo */}

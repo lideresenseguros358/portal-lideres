@@ -97,7 +97,7 @@ export default function QuoteDetailsCard({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-6 mb-6 p-4 md:p-5 bg-white rounded-xl border border-gray-100 shadow-sm">
           {sumaAsegurada > 0 && (
             <div>
-              <p className="text-xs text-gray-500 mb-1">Suma Asegurada</p>
+              <p className="text-xs text-gray-500 mb-1">Valor del Vehículo</p>
               <p className="text-base font-bold text-[#010139]">{formatCurrency(sumaAsegurada)}</p>
             </div>
           )}
@@ -258,11 +258,21 @@ export default function QuoteDetailsCard({
           </button>
           {expandedSection === 'prima' && (
             <div className="mt-3 md:mt-4 p-4 md:p-5 bg-white rounded-xl border border-gray-200 space-y-3 text-sm md:text-base">
-              {primaBase !== undefined && (
-                <div className="flex justify-between items-center pb-3 border-b border-gray-200">
-                  <span className="text-gray-700">Costo Base del Seguro:</span>
-                  <span className="font-bold text-[#010139]">{formatCurrency(primaBase)}</span>
-                </div>
+              {primaBase !== undefined && primaBase > 0 && (
+                <>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-600">Prima Base (sin descuentos):</span>
+                    <span className="font-medium text-gray-700">{formatCurrency(primaBase)}</span>
+                  </div>
+                  {/* Mostrar descuento si existe */}
+                  {primaBase > primaTotal * 1.5 && (
+                    <div className="flex justify-between items-center text-green-600">
+                      <span className="font-medium">- Descuentos aplicados:</span>
+                      <span className="font-bold">-{formatCurrency(primaBase - primaTotal + (impuesto1 || 0) + (impuesto2 || 0))}</span>
+                    </div>
+                  )}
+                  <div className="border-t border-gray-200 my-2"></div>
+                </>
               )}
               {impuesto1 !== undefined && impuesto1 > 0 && (
                 <div className="flex justify-between items-center">
@@ -280,6 +290,13 @@ export default function QuoteDetailsCard({
                 <span className="font-bold text-base md:text-lg text-[#010139]">Total a Pagar Anual:</span>
                 <span className="font-bold text-xl md:text-2xl text-[#8AAA19]">{formatCurrency(primaTotal)}</span>
               </div>
+              {primaBase > primaTotal * 1.5 && (
+                <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                  <p className="text-xs text-green-800">
+                    💰 <strong>¡Descuento aplicado!</strong> El precio final incluye descuentos por perfil del cliente.
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </div>

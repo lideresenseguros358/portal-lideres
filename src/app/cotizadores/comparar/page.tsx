@@ -381,43 +381,48 @@ const generateFedpaRealQuote = async (quoteData: any) => {
       });
     }
     
-    // Beneficios según plan type (PREMIUM = Endoso Porcelana)
+    // Beneficios según plan type
+    // IMPORTANTE: Básico y Premium tienen MISMA TARIFA pero diferentes beneficios
     const esPremium = quoteData.planType === 'premium';
     const beneficios = [];
     
+    // BENEFICIOS COMUNES (están en AMBOS planes)
+    const beneficiosComunes = [
+      { nombre: 'Asistencia Vial Básica', descripcion: '1 evento/año', incluido: true },
+      { nombre: 'Asistencia Médica Telefónica', descripcion: '24/7', incluido: true },
+      { nombre: 'Inspección IN SITU', descripcion: 'Incluido', incluido: true },
+      { nombre: 'Grúa hasta $150', descripcion: '2 eventos/año', incluido: true },
+    ];
+    
+    beneficios.push(...beneficiosComunes);
+    
     if (esPremium) {
-      // Plan Premium - CON Endoso Porcelana (máxima cobertura)
+      // BENEFICIOS ADICIONALES SOLO EN PREMIUM (Endoso Porcelana)
       beneficios.push(
-        { nombre: 'Endoso Porcelana - Protección Total', descripcion: 'Cobertura ampliada', incluido: true },
         { nombre: 'Muerte accidental conductor', descripcion: '$500', incluido: true },
-        { nombre: 'Asistencia Vial Premium', descripcion: 'Ilimitado', incluido: true },
-        { nombre: 'Grúa hasta $150', descripcion: '2 eventos/año', incluido: true },
-        { nombre: 'Asistencia Médica Telefónica', descripcion: '24/7', incluido: true },
-        { nombre: 'Inspección IN SITU', descripcion: 'Incluido', incluido: true },
-        { nombre: 'Vehículo de reemplazo', descripcion: 'Hasta 3 días', incluido: true },
-        { nombre: 'Protección de accesorios', descripcion: 'Hasta $1,000', incluido: true }
-      );
-    } else {
-      // Plan Básico - SIN Endoso Porcelana
-      beneficios.push(
-        { nombre: 'Asistencia Vial Básica', descripcion: 'Incluido', incluido: true },
-        { nombre: 'Asistencia Médica Telefónica', descripcion: '24/7', incluido: true }
+        { nombre: 'Auto de alquiler', descripcion: '10 días', incluido: true },
+        { nombre: 'Cobertura extraterritorial', descripcion: 'Hasta Costa Rica', incluido: true },
+        { nombre: 'Vehículo de reemplazo', descripcion: 'Por robo/hurto', incluido: true },
+        { nombre: 'Defensa penal', descripcion: 'Hasta $2,000', incluido: true },
+        { nombre: 'RC auto sustituto', descripcion: 'Incluido', incluido: true },
+        { nombre: '100% reembolso deducible', descripcion: 'Sin culpa', incluido: true },
+        { nombre: 'Protección objetos personales', descripcion: 'Hasta $100/evento', incluido: true }
       );
     }
     
     // Endosos según plan type
     const endosos = [];
+    
+    // FEDPA PACK está en AMBOS planes (básico y premium)
+    endosos.push(
+      { codigo: 'FAB', nombre: 'FEDPA PACK', descripcion: 'Paquete completo de beneficios', incluido: true }
+    );
+    
     if (esPremium) {
-      // Premium incluye Endoso Porcelana
+      // Premium AGREGA Endoso Porcelana (beneficios máximos)
       endosos.push(
         { codigo: 'PORCELANA', nombre: 'Endoso Porcelana', descripcion: 'Cobertura ampliada y beneficios premium', incluido: true },
-        { codigo: 'H-1', nombre: 'Muerte accidental conductor', descripcion: '$500', incluido: true },
-        { codigo: 'FAB', nombre: 'FEDPA PACK', descripcion: 'Paquete completo de beneficios', incluido: true }
-      );
-    } else {
-      // Básico sin endosos especiales
-      endosos.push(
-        { codigo: 'BASICO', nombre: 'Cobertura Estándar', descripcion: 'Coberturas básicas incluidas', incluido: true }
+        { codigo: 'H-1', nombre: 'Muerte accidental conductor', descripcion: '$500', incluido: true }
       );
     }
     
