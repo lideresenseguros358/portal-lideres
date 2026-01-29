@@ -84,9 +84,11 @@ export default function FormAutoCoberturaCompleta() {
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // Cargar datos guardados desde sessionStorage al montar (si viene del comparador)
+  // Cargar datos guardados desde sessionStorage al montar (editMode o regreso de comparador)
   useEffect(() => {
     const savedData = sessionStorage.getItem('quoteInput');
+    const isEditMode = sessionStorage.getItem('editMode') === 'true';
+    
     if (savedData) {
       try {
         const parsed = JSON.parse(savedData);
@@ -115,7 +117,14 @@ export default function FormAutoCoberturaCompleta() {
             setSelectedMarca(parsed.marcaCodigo);
           }
           
-          toast.info('Datos cargados. Puedes editarlos y recotizar.');
+          // Mensaje apropiado según contexto
+          if (isEditMode) {
+            toast.success('📝 Datos cargados para edición. Modifica lo que necesites y recotiza.');
+            // Limpiar flag de editMode después de usarlo
+            sessionStorage.removeItem('editMode');
+          } else {
+            toast.info('Datos cargados. Puedes editarlos y recotizar.');
+          }
         }
       } catch (error) {
         console.error('Error al cargar datos guardados:', error);
