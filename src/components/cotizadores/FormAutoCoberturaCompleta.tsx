@@ -502,7 +502,7 @@ export default function FormAutoCoberturaCompleta() {
                       const index = parseInt(e.target.value);
                       setFormData({ ...formData, valorVehiculo: vehiculoOptions[index] || 15000 });
                     }}
-                    className="w-full h-2 md:h-1.5 bg-gray-300 rounded-lg appearance-none cursor-pointer slider-thumb slider-with-stops transition-all duration-200 ease-out"
+                    className="w-full cursor-pointer"
                     style={{
                       background: `linear-gradient(to right, #8AAA19 0%, #8AAA19 ${((() => {
                         const exactIndex = vehiculoOptions.indexOf(formData.valorVehiculo);
@@ -537,19 +537,6 @@ export default function FormAutoCoberturaCompleta() {
                       })())}%, #e5e7eb 100%)`
                     }}
                   />
-                  {/* Marcadores visuales en stops - ocultos en mobile */}
-                  <div className="hidden sm:flex justify-between absolute top-1/2 -translate-y-1/2 left-0 right-0 pointer-events-none px-2">
-                    {[0, 20, 40, 60, 80, 100].map((percent) => {
-                      const index = Math.floor((vehiculoOptions.length - 1) * (percent / 100));
-                      const value = vehiculoOptions[index] ?? 0;
-                      const isActive = formData.valorVehiculo >= value;
-                      return (
-                        <div key={percent} className={`w-1.5 h-1.5 rounded-full border transition-all duration-200 ${
-                          isActive ? 'bg-[#8AAA19] border-[#8AAA19] scale-105' : 'bg-white border-gray-400'
-                        }`}></div>
-                      );
-                    })}
-                  </div>
                 </div>
                 
                 {/* Instrucciones y rango */}
@@ -609,23 +596,11 @@ export default function FormAutoCoberturaCompleta() {
                         });
                       }
                     }}
-                    className="w-full h-2 md:h-1.5 bg-gray-300 rounded-lg appearance-none cursor-pointer slider-thumb transition-all duration-200 ease-out"
+                    className="w-full cursor-pointer"
                     style={{
                       background: `linear-gradient(to right, #8AAA19 0%, #8AAA19 ${(lesionCorporalOptions.findIndex(opt => opt.persona === formData.lesionCorporalPersona) / (lesionCorporalOptions.length - 1)) * 100}%, #e5e7eb ${(lesionCorporalOptions.findIndex(opt => opt.persona === formData.lesionCorporalPersona) / (lesionCorporalOptions.length - 1)) * 100}%, #e5e7eb 100%)`
                     }}
                   />
-                  {/* Marcadores en cada stop - ocultos en mobile */}
-                  <div className="hidden sm:flex justify-between absolute top-1/2 -translate-y-1/2 left-0 right-0 pointer-events-none px-2">
-                    {lesionCorporalOptions.map((opt, idx) => {
-                      const currentIndex = lesionCorporalOptions.findIndex(o => o.persona === formData.lesionCorporalPersona);
-                      const isActive = idx <= currentIndex;
-                      return (
-                        <div key={idx} className={`w-1.5 h-1.5 rounded-full border transition-all duration-200 ${
-                          isActive ? 'bg-[#8AAA19] border-[#8AAA19] scale-105' : 'bg-white border-gray-400'
-                        }`}></div>
-                      );
-                    })}
-                  </div>
                 </div>
                 <div className="flex justify-between text-xs sm:text-sm text-gray-600 mt-3 font-medium">
                   <span className="text-left">{formatCurrency(lesionCorporalOptions[0]?.persona || 5000)}/{formatCurrency(lesionCorporalOptions[0]?.accidente || 10000)}</span>
@@ -661,23 +636,11 @@ export default function FormAutoCoberturaCompleta() {
                         setFormData({ ...formData, danoPropiedad: selected });
                       }
                     }}
-                    className="w-full h-2 md:h-1.5 bg-gray-300 rounded-lg appearance-none cursor-pointer slider-thumb transition-all duration-200 ease-out"
+                    className="w-full cursor-pointer"
                     style={{
                       background: `linear-gradient(to right, #8AAA19 0%, #8AAA19 ${(danoPropiedadOptions.indexOf(formData.danoPropiedad) / (danoPropiedadOptions.length - 1)) * 100}%, #e5e7eb ${(danoPropiedadOptions.indexOf(formData.danoPropiedad) / (danoPropiedadOptions.length - 1)) * 100}%, #e5e7eb 100%)`
                     }}
                   />
-                  {/* Marcadores en cada stop - ocultos en mobile */}
-                  <div className="hidden sm:flex justify-between absolute top-1/2 -translate-y-1/2 left-0 right-0 pointer-events-none px-2">
-                    {danoPropiedadOptions.map((val, idx) => {
-                      const currentIndex = danoPropiedadOptions.indexOf(formData.danoPropiedad);
-                      const isActive = idx <= currentIndex;
-                      return (
-                        <div key={idx} className={`w-1.5 h-1.5 rounded-full border transition-all duration-200 ${
-                          isActive ? 'bg-[#8AAA19] border-[#8AAA19] scale-105' : 'bg-white border-gray-400'
-                        }`}></div>
-                      );
-                    })}
-                  </div>
                 </div>
                 <div className="flex justify-between text-xs sm:text-sm text-gray-600 mt-3 font-medium">
                   <span>{formatCurrency(danoPropiedadOptions[0] || 5000)}</span>
@@ -721,23 +684,11 @@ export default function FormAutoCoberturaCompleta() {
                         });
                       }
                     }}
-                    className="w-full h-2 md:h-1.5 bg-gray-300 rounded-lg appearance-none cursor-pointer slider-thumb transition-all duration-200 ease-out"
+                    className="w-full cursor-pointer"
                     style={{
                       background: `linear-gradient(to right, #8AAA19 0%, #8AAA19 ${(gastosMedicosOptions.findIndex(opt => opt.persona === formData.gastosMedicosPersona) / (gastosMedicosOptions.length - 1)) * 100}%, #e5e7eb ${(gastosMedicosOptions.findIndex(opt => opt.persona === formData.gastosMedicosPersona) / (gastosMedicosOptions.length - 1)) * 100}%, #e5e7eb 100%)`
                     }}
                   />
-                  {/* Marcadores en cada stop - ocultos en mobile */}
-                  <div className="hidden sm:flex justify-between absolute top-1/2 -translate-y-1/2 left-0 right-0 pointer-events-none px-2">
-                    {gastosMedicosOptions.map((opt, idx) => {
-                      const currentIndex = gastosMedicosOptions.findIndex(o => o.persona === formData.gastosMedicosPersona);
-                      const isActive = idx <= currentIndex;
-                      return (
-                        <div key={idx} className={`w-1.5 h-1.5 rounded-full border transition-all duration-200 ${
-                          isActive ? 'bg-[#8AAA19] border-[#8AAA19] scale-105' : 'bg-white border-gray-400'
-                        }`}></div>
-                      );
-                    })}
-                  </div>
                 </div>
                 <div className="flex justify-between text-xs sm:text-sm text-gray-600 mt-3 font-medium">
                   <span className="text-left">{formatCurrency(gastosMedicosOptions[0]?.persona || 500)}/{formatCurrency(gastosMedicosOptions[0]?.accidente || 2500)}</span>
@@ -886,58 +837,22 @@ export default function FormAutoCoberturaCompleta() {
           }
         }
 
-        /* Sliders - estilos para thumb y track */
-        .slider-thumb {
-          -webkit-appearance: none;
-          appearance: none;
-          background: transparent;
-        }
-        
-        .slider-thumb::-webkit-slider-thumb {
-          -webkit-appearance: none;
-          appearance: none;
-          width: 28px;
-          height: 28px;
-          border-radius: 50%;
-          background: #8AAA19;
-          cursor: pointer;
-          border: 3px solid white;
-          box-shadow: 0 3px 10px rgba(0,0,0,0.25);
-          margin-top: -11px;
-        }
-        
-        .slider-thumb::-moz-range-thumb {
-          width: 28px;
-          height: 28px;
-          border-radius: 50%;
-          background: #8AAA19;
-          cursor: pointer;
-          border: 3px solid white;
-          box-shadow: 0 3px 10px rgba(0,0,0,0.25);
-        }
-        
-        .slider-thumb::-webkit-slider-runnable-track {
+        /* Sliders nativos - sin estilos custom */
+        input[type="range"] {
+          -webkit-appearance: auto;
+          appearance: auto;
+          height: 8px;
+          background: #e5e7eb;
           border-radius: 4px;
+          outline: none;
         }
         
-        .slider-thumb::-moz-range-track {
-          border-radius: 4px;
+        input[type="range"]::-webkit-slider-thumb {
+          -webkit-appearance: auto;
         }
         
-        /* Desktop - thumb más pequeño */
-        @media (min-width: 768px) {
-          .slider-thumb::-webkit-slider-thumb {
-            width: 18px;
-            height: 18px;
-            border: 2px solid white;
-            margin-top: -6px;
-          }
-          
-          .slider-thumb::-moz-range-thumb {
-            width: 18px;
-            height: 18px;
-            border: 2px solid white;
-          }
+        input[type="range"]::-moz-range-thumb {
+          appearance: auto;
         }
       `}</style>
     </div>
