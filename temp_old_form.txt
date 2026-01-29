@@ -441,9 +441,14 @@ export default function FormAutoCoberturaCompleta() {
                   content="Ingrese el valor del vehículo usando el número grande (es editable) o moviendo la barra inferior. El valor debe corresponder al precio de mercado actual o al monto indicado por su banco acreedor si el vehículo está financiado."
                 />
               </label>
-              <div className="bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl p-4 md:p-6 border-2 border-[#8AAA19]">
-                {/* Input editable - SIN fondo blanco, SIN marco verde card */}
-                <div className="mb-4">
+              <div className="bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl p-4 md:p-6 border-2 border-[#010139]/20">
+                {/* Input editable con diseño DESTACADO para mobile */}
+                <div className="mb-4 bg-white rounded-2xl p-6 border-4 border-[#8AAA19] shadow-2xl">
+                  <div className="mb-3 text-center">
+                    <span className="inline-block px-4 py-2 bg-[#8AAA19] text-white text-sm font-bold rounded-full animate-pulse">
+                      ✏️ Editable - Toque aquí
+                    </span>
+                  </div>
                   <input
                     type="text"
                     inputMode="numeric"
@@ -463,11 +468,12 @@ export default function FormAutoCoberturaCompleta() {
                       }
                       setValorInputTemp('');
                     }}
-                    className="text-6xl sm:text-7xl md:text-8xl font-black text-[#8AAA19] w-full text-center focus:outline-none focus:ring-0 bg-transparent transition-all cursor-pointer"
+                    className="text-5xl sm:text-5xl md:text-6xl font-black text-[#010139] bg-gradient-to-r from-[#8AAA19]/10 to-[#6d8814]/10 px-6 py-6 w-full text-center rounded-xl border-2 border-dashed border-[#8AAA19] focus:outline-none focus:ring-4 focus:ring-[#8AAA19]/50 focus:border-solid transition-all cursor-pointer shadow-inner"
                     placeholder="$15,000"
                   />
-                  <p className="text-sm sm:text-base text-gray-600 font-medium mt-2 text-center">
-                    👆 Toque para editar
+                  <p className="text-sm sm:text-base text-gray-700 font-semibold mt-4 text-center flex items-center justify-center gap-2">
+                    <span className="text-2xl">👆</span>
+                    Toque el número para cambiar el valor
                   </p>
                 </div>
                 
@@ -585,7 +591,7 @@ export default function FormAutoCoberturaCompleta() {
               </label>
               <div className="bg-gradient-to-br from-[#8AAA19]/5 to-[#8AAA19]/10 rounded-xl p-4 md:p-6 border-2 border-[#8AAA19]/30 transition-all">
                 <div className="text-center mb-4">
-                  <span className="text-2xl sm:text-3xl md:text-4xl font-bold text-[#010139] block">
+                  <span className="text-xl sm:text-2xl md:text-3xl font-bold text-[#010139] block">
                     {formatCurrency(formData.lesionCorporalPersona)} / {formatCurrency(formData.lesionCorporalAccidente)}
                   </span>
                   <p className="text-xs sm:text-sm text-gray-600 mt-1">por persona / por accidente</p>
@@ -645,7 +651,7 @@ export default function FormAutoCoberturaCompleta() {
               </label>
               <div className="bg-gradient-to-br from-[#010139]/5 to-[#010139]/10 rounded-xl p-4 md:p-6 border-2 border-[#010139]/20 transition-all">
                 <div className="text-center mb-4">
-                  <span className="text-2xl sm:text-3xl md:text-4xl font-bold text-[#010139]">
+                  <span className="text-2xl md:text-3xl font-bold text-[#010139]">
                     {formatCurrency(formData.danoPropiedad)}
                   </span>
                 </div>

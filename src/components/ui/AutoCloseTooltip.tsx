@@ -28,7 +28,7 @@ const AutoCloseTooltip = forwardRef<AutoCloseTooltipRef, AutoCloseTooltipProps>(
 }, ref) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isClosing, setIsClosing] = useState(false);
-  const [position, setPosition] = useState<'left' | 'right' | 'center'>('left');
+  const [tooltipPosition, setTooltipPosition] = useState({ top: 0, left: 0, width: 0 });
   const hasAutoOpened = useRef(false);
   const closeTimerRef = useRef<NodeJS.Timeout | null>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
@@ -42,28 +42,38 @@ const AutoCloseTooltip = forwardRef<AutoCloseTooltipRef, AutoCloseTooltipProps>(
     close: () => handleClose(),
   }));
   
-  // Detectar posición óptima para evitar overflow
+  // Calcular posición fixed del tooltip para NUNCA salirse del viewport
   useEffect(() => {
-    if (isOpen && tooltipRef.current && triggerRef.current) {
-      const tooltip = tooltipRef.current;
+    if (isOpen && triggerRef.current) {
       const trigger = triggerRef.current;
       const triggerRect = trigger.getBoundingClientRect();
-      const tooltipRect = tooltip.getBoundingClientRect();
       const viewportWidth = window.innerWidth;
-      const margin = 16; // Margen de respeto con el borde
+      const viewportHeight = window.innerHeight;
+      const margin = 16; // Margen de seguridad
       
-      // Calcular si se sale por la derecha
-      const wouldOverflowRight = triggerRect.left + tooltipRect.width > viewportWidth - margin;
-      // Calcular si se sale por la izquierda
-      const wouldOverflowLeft = triggerRect.left < margin;
+      // Ancho del tooltip
+      const tooltipWidth = viewportWidth < 640 ? viewportWidth - (margin * 2) : 320; // 80 * 4 = 320px en desktop
       
-      if (wouldOverflowRight && !wouldOverflowLeft) {
-        setPosition('right');
-      } else if (wouldOverflowLeft && !wouldOverflowRight) {
-        setPosition('left');
-      } else {
-        setPosition('center');
+      // Calcular posición inicial (centrado bajo el trigger)
+      let left = triggerRect.left + (triggerRect.width / 2) - (tooltipWidth / 2);
+      let top = triggerRect.bottom + 12; // 12px debajo del trigger
+      
+      // Ajustar si se sale por la izquierda
+      if (left < margin) {
+        left = margin;
       }
+      
+      // Ajustar si se sale por la derecha
+      if (left + tooltipWidth > viewportWidth - margin) {
+        left = viewportWidth - tooltipWidth - margin;
+      }
+      
+      // Si se sale por abajo, mostrar arriba del trigger
+      if (top + 200 > viewportHeight - margin) { // Asumimos altura ~200px
+        top = triggerRect.top - 200 - 12;
+      }
+      
+      setTooltipPosition({ top, left, width: tooltipWidth });
     }
   }, [isOpen]);
 
@@ -121,24 +131,19 @@ const AutoCloseTooltip = forwardRef<AutoCloseTooltipRef, AutoCloseTooltipProps>(
       {(isOpen || isClosing) && (
         <div 
           ref={tooltipRef}
-          className={`absolute top-full mt-3 z-50 w-[calc(100vw-2rem)] sm:w-80 md:w-96 bg-sky-50/95 backdrop-blur-sm rounded-2xl shadow-xl p-4 border border-sky-200/50 transition-all duration-300 ${
-            isClosing ? 'opacity-0 translate-y-1' : 'opacity-100 translate-y-0'
-          } ${
-            position === 'right' ? 'right-0' : position === 'left' ? 'left-0' : 'left-1/2 -translate-x-1/2'
+          className={`fixed z-[9999] bg-sky-50/95 backdrop-blur-sm rounded-2xl shadow-xl p-4 border border-sky-200/50 transition-all duration-300 ${
+            isClosing ? 'opacity-0 scale-95' : 'opacity-100 scale-100'
           }`}
           style={{
+            top: `${tooltipPosition.top}px`,
+            left: `${tooltipPosition.left}px`,
+            width: `${tooltipPosition.width}px`,
             animation: isClosing ? 'none' : 'fadeInSlideUp 300ms ease-out',
-            maxWidth: 'calc(100vw - 2rem)',
           }}
         >
           <div className="text-sm text-gray-700 leading-relaxed">
             {content}
           </div>
-          
-          {/* Flecha arriba con celeste - posición dinámica */}
-          <div className={`absolute -top-2 w-4 h-4 bg-sky-50/95 backdrop-blur-sm border-l border-t border-sky-200/50 transform rotate-45 ${
-            position === 'right' ? 'right-6' : position === 'left' ? 'left-6' : 'left-1/2 -translate-x-1/2'
-          }`}></div>
         </div>
       )}
 
