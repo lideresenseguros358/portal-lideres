@@ -4,7 +4,7 @@
  */
 
 import { NextResponse } from 'next/server';
-import { IS_CONFIG } from '@/lib/is/config';
+import { getISBaseUrl, getISPrimaryToken } from '@/lib/is/config';
 
 export async function GET() {
   const results: any = {
@@ -12,9 +12,8 @@ export async function GET() {
     tests: {},
   };
 
-  const config = IS_CONFIG.development;
-  const baseUrl = config.baseUrl;
-  const token = config.bearerToken;
+  const baseUrl = getISBaseUrl('development');
+  const token = getISPrimaryToken('development');
 
   // Test 1: Obtener marcas directamente
   try {

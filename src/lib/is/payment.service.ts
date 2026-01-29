@@ -5,7 +5,13 @@
  * ⚠️ PLACEHOLDER - Conectar cuando se obtenga la API de pagos real
  */
 
-import { ISEnvironment, IS_CONFIG } from './config';
+import { ISEnvironment, getISBaseUrl } from './config';
+
+// ⚠️ PLACEHOLDER - Endpoints de pago aún no confirmados por IS
+const PAYMENT_ENDPOINTS = {
+  TOKENIZE: '/api/payment/tokenize',
+  PROCESS: '/api/payment/process',
+};
 
 // ============================================
 // INTERFACES - Adaptar según documentación real
@@ -53,16 +59,7 @@ export interface ProcessPaymentResponse {
   error?: string;
 }
 
-// ============================================
-// ENDPOINTS - Actualizar cuando se tengan las APIs
-// ============================================
-
-const PAYMENT_ENDPOINTS = {
-  // TODO: Obtener endpoints reales de INTERNACIONAL
-  TOKENIZE: '/api/payment/tokenize', // Placeholder
-  PROCESS: '/api/payment/process',   // Placeholder
-  VERIFY: '/api/payment/verify',     // Placeholder
-} as const;
+// PAYMENT_ENDPOINTS ya definido arriba (línea 11)
 
 // ============================================
 // TOKENIZAR TARJETA

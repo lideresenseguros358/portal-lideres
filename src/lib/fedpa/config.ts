@@ -6,9 +6,9 @@
 
 export const FEDPA_CONFIG = {
   DEV: {
-    // Credenciales
-    usuario: 'SLIDERES',
-    clave: 'lider836',
+    // Credenciales desde ENV vars
+    usuario: process.env.USUARIO_FEDPA || '',
+    clave: process.env.CLAVE_FEDPA || '',
     ambiente: 'DEV',
     corredor: '836',
     
@@ -17,9 +17,9 @@ export const FEDPA_CONFIG = {
     emisorExternoUrl: 'https://wscanales.segfedpa.com/EmisorFedpa.Api',
   },
   PROD: {
-    // Credenciales
-    usuario: 'SLIDERES',
-    clave: 'lider836',
+    // Credenciales desde ENV vars
+    usuario: process.env.USUARIO_FEDPA || '',
+    clave: process.env.CLAVE_FEDPA || '',
     ambiente: 'PROD',
     corredor: '836',
     

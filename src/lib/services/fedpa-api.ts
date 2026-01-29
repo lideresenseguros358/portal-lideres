@@ -7,9 +7,13 @@
 
 const FEDPA_API_BASE = 'https://wscanales.segfedpa.com/EmisorFedpa.Api/api';
 
-// Credenciales del corredor (deben estar en variables de entorno)
-const FEDPA_USER = process.env.NEXT_PUBLIC_FEDPA_USER || 'lider836';
-const FEDPA_CLAVE = process.env.NEXT_PUBLIC_FEDPA_CLAVE || '123';
+// ⚠️ SEGURIDAD: Credenciales desde variables de entorno
+const FEDPA_USER = process.env.USUARIO_FEDPA;
+const FEDPA_CLAVE = process.env.CLAVE_FEDPA;
+
+if (!FEDPA_USER || !FEDPA_CLAVE) {
+  console.warn('[FEDPA] ADVERTENCIA: Variables de entorno USUARIO_FEDPA y CLAVE_FEDPA no configuradas');
+}
 
 // ============================================================================
 // TIPOS Y INTERFACES

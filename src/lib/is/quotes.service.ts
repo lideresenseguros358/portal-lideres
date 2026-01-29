@@ -3,8 +3,8 @@
  * Internacional de Seguros (IS)
  */
 
-import { ISEnvironment, IS_ENDPOINTS, IS_CONFIG, CORREDOR_FIJO, INSURER_SLUG } from './config';
-import { isPost, isGet } from './http-client';
+import { ISEnvironment, IS_ENDPOINTS, CORREDOR_FIJO, INSURER_SLUG } from './config';
+import { isGet } from './http-client';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { getTodayLocalDate } from '../utils/dates';
 
@@ -180,42 +180,16 @@ export async function emitirPolizaAuto(
   request: EmisionAutoRequest,
   env: ISEnvironment = 'development'
 ): Promise<{ success: boolean; nroPoliza?: string; pdfUrl?: string; error?: string }> {
-  console.log('[IS Quotes] Emitiendo póliza...', {
+  // TODO: Implementar emisión cuando se tenga documentación completa de IS
+  // Según instructivo IS, la emisión requiere pasos adicionales y documentos
+  console.log('[IS Quotes] Emisión solicitada pero no implementada:', {
     idCotizacion: request.vIdPv,
     cliente: `${request.vnombre} ${request.vapellido}`,
   });
   
-  const response = await isPost<EmisionAutoResponse>(
-    IS_ENDPOINTS.EMISION,
-    request,
-    env
-  );
-  
-  if (!response.success) {
-    console.error('[IS Quotes] Error emitiendo póliza:', response.error);
-    return {
-      success: false,
-      error: response.error || 'Error al emitir póliza',
-    };
-  }
-  
-  const nroPoliza = response.data?.nro_poliza;
-  const pdfUrl = response.data?.poliza_pdf_url;
-  
-  if (!nroPoliza) {
-    console.error('[IS Quotes] Respuesta sin número de póliza:', response.data);
-    return {
-      success: false,
-      error: 'No se recibió número de póliza',
-    };
-  }
-  
-  console.log('[IS Quotes] Póliza emitida:', nroPoliza);
-  
   return {
-    success: true,
-    nroPoliza,
-    pdfUrl,
+    success: false,
+    error: 'Emisión de auto no implementada aún - pendiente documentación completa de IS',
   };
 }
 

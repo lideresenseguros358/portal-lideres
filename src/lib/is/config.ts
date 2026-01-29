@@ -1,20 +1,38 @@
 /**
- * Configuración de Internacional de Seguros (IS)
- * Credenciales y URLs por ambiente
+ * Configuración para Internacional de Seguros
+ * ⚠️ SEGURIDAD: Todas las credenciales vienen de variables de entorno
  */
 
-export const IS_CONFIG = {
-  development: {
-    baseUrl: 'https://www.iseguros.com/APIRestIsTester',
-    bearerToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1lIjoiTFNFR1dTIiwiaHR0cDovL3NjaGVtYXMubWljcm9zb2Z0LmNvbS93cy8yMDA4LzA2L2lkZW50aXR5L2NsYWltcy9yb2xlIjoiMzIiLCJpc3MiOiJodHRwczovL3d3dy5pc2VndXJvcy5jb20iLCJhdWQiOiJhcGlWaWRhU2FsdXNDb3JlU0lTRSJ9.HomXGjaD5od8Ob34IUqdjGhy6GpR9iEO9AmUcFPI1PI',
-  },
-  production: {
-    baseUrl: 'https://www.iseguros.com/APIRestIs',
-    bearerToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1lIjoiTFNFR1dTIiwiaHR0cDovL3NjaGVtYXMubWljcm9zb2Z0LmNvbS93cy8yMDA4LzA2L2lkZW50aXR5L2NsYWltcy9yb2xlIjoiMTUiLCJleHAiOjE3OTI2MTE0ODIsImlzcyI6Imh0dHBzOi8vd3d3LmlzZWd1cm9zLmNvbSIsImF1ZCI6ImFwaVZpZGFTYWx1c0NvcmVTSVNFIn0.5eeDKsW_ygQBW1AygpuPGMHnxuvR151VK1ZpCmKesjo',
-  },
-} as const;
+export type ISEnvironment = 'development' | 'production';
 
-export type ISEnvironment = keyof typeof IS_CONFIG;
+/**
+ * Obtener base URL según ambiente
+ */
+export function getISBaseUrl(env: ISEnvironment): string {
+  return env === 'production'
+    ? 'https://www.iseguros.com/APIRestIs/api'
+    : 'https://www.iseguros.com/APIRestIsTester/api';
+}
+
+/**
+ * Obtener token principal desde ENV vars (para obtener token diario)
+ * ⚠️ NO usar directamente en requests - usar token diario desde token-manager
+ */
+export function getISPrimaryToken(env: ISEnvironment): string {
+  const token = env === 'production'
+    ? process.env.KEY_PRODUCCION_IS
+    : process.env.KEY_DESARROLLO_IS;
+
+  if (!token) {
+    throw new Error(
+      `Variable de entorno no configurada: ${
+        env === 'production' ? 'KEY_PRODUCCION_IS' : 'KEY_DESARROLLO_IS'
+      }`
+    );
+  }
+
+  return token;
+}
 
 export const INSURER_SLUG = 'INTERNACIONAL';
 export const CORREDOR_FIJO = 'oficina';

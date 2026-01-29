@@ -3,7 +3,8 @@
  * Incluye: retry con backoff, token refresh, logging, timeout
  */
 
-import { IS_CONFIG, ISEnvironment, RETRY_CONFIG } from './config';
+import { ISEnvironment, RETRY_CONFIG, getISBaseUrl } from './config';
+import { getDailyTokenWithRetry } from './token-manager';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import crypto from 'crypto';
 
@@ -48,96 +49,26 @@ function encrypt(text: string): string {
 }
 
 /**
- * Obtener token diario válido (con cache y refresh automático)
+ * DEPRECADO: Ahora se usa token-manager.ts
+ * Mantener solo para compatibilidad temporal
  */
 async function getDailyToken(env: ISEnvironment): Promise<string | null> {
-  const supabase = getSupabaseAdmin();
-  
-  // 1. Verificar cache en memoria
-  const cached = tokenCache.get(env);
-  if (cached && cached.expiresAt > new Date(Date.now() + 5 * 60 * 1000)) {
-    return cached.token;
+  try {
+    return await getDailyTokenWithRetry(env);
+  } catch (error: any) {
+    console.error('[IS HTTP Client] Error obteniendo token diario:', error.message);
+    return null;
   }
-  
-  // 2. Verificar base de datos
-  const { data: dbToken, error: dbError } = await supabase
-    .from('is_daily_tokens')
-    .select('token, expires_at')
-    .eq('environment', env)
-    .gt('expires_at', new Date(Date.now() + 5 * 60 * 1000).toISOString())
-    .single();
-  
-  if (dbToken && !dbError) {
-    // Actualizar cache
-    tokenCache.set(env, {
-      token: dbToken.token,
-      expiresAt: new Date(dbToken.expires_at),
-    });
-    return dbToken.token;
-  }
-  
-  // 3. Token expirado o no existe - obtener nuevo
-  return await refreshDailyToken(env);
 }
 
 /**
- * Renovar token diario llamando a IS
+ * DEPRECADO: Movido a token-manager.ts
  */
 async function refreshDailyToken(env: ISEnvironment): Promise<string | null> {
-  const config = IS_CONFIG[env];
-  const supabase = getSupabaseAdmin();
-  
   try {
-    console.log(`[IS] Renovando token diario para ${env}...`);
-    
-    const response = await fetch(`${config.baseUrl}/api/tokens`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${config.bearerToken}`,
-        'Content-Type': 'application/json',
-      },
-      signal: AbortSignal.timeout(10000), // 10 segundos
-    });
-    
-    if (!response.ok) {
-      console.error(`[IS] Error al renovar token: ${response.status} ${response.statusText}`);
-      return null;
-    }
-    
-    const data = await response.json();
-    
-    if (!data.token) {
-      console.error('[IS] Respuesta de token no contiene "token":', data);
-      return null;
-    }
-    
-    // Calcular expiración (asumiendo 24 horas si no viene en respuesta)
-    const expiresAt = data.expiresAt 
-      ? new Date(data.expiresAt)
-      : new Date(Date.now() + 24 * 60 * 60 * 1000);
-    
-    // Guardar en base de datos
-    await supabase
-      .from('is_daily_tokens')
-      .upsert({
-        environment: env,
-        token: data.token,
-        expires_at: expiresAt.toISOString(),
-      }, {
-        onConflict: 'environment',
-      });
-    
-    // Actualizar cache
-    tokenCache.set(env, {
-      token: data.token,
-      expiresAt,
-    });
-    
-    console.log(`[IS] Token renovado exitosamente para ${env}`);
-    
-    return data.token;
-  } catch (error) {
-    console.error('[IS] Error al renovar token:', error);
+    return await getDailyTokenWithRetry(env);
+  } catch (error: any) {
+    console.error('[IS HTTP Client] Error renovando token:', error.message);
     return null;
   }
 }
@@ -166,16 +97,24 @@ export async function isRequest<T = any>(
     useEnvironmentToken = false,
   } = options;
   
-  const config = IS_CONFIG[env];
-  const url = `${config.baseUrl}${endpoint}`;
+  const baseUrl = getISBaseUrl(env);
+  const url = `${baseUrl}${endpoint}`;
   
-  // Obtener token
+  // Obtener token diario (recomendado) o usar token principal como fallback
   let authToken: string;
   if (useEnvironmentToken) {
-    authToken = config.bearerToken;
+    // Usar token principal directamente (solo para obtener token diario)
+    const { getISPrimaryToken } = await import('./config');
+    authToken = getISPrimaryToken(env);
   } else {
     const dailyToken = skipTokenRefresh ? null : await getDailyToken(env);
-    authToken = dailyToken || config.bearerToken;
+    if (!dailyToken) {
+      // Fallback a token principal si falla el diario
+      const { getISPrimaryToken } = await import('./config');
+      authToken = getISPrimaryToken(env);
+    } else {
+      authToken = dailyToken;
+    }
   }
   
   let lastError: Error | null = null;
