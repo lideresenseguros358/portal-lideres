@@ -1,7 +1,7 @@
 /**
- * Tooltip con hover y auto-apertura inicial
- * - Se abre automáticamente la primera vez (3s)
- * - Siguientes veces: hover sobre el icono
+ * Tooltip con hover y auto-cierre
+ * - Se abre al pasar el cursor sobre el icono
+ * - Se cierra automáticamente después de 3 segundos
  * - Diseño: celeste suave con transparencia
  */
 
@@ -39,17 +39,7 @@ const AutoCloseTooltip = forwardRef<AutoCloseTooltipRef, AutoCloseTooltipProps>(
     close: () => handleClose(),
   }));
 
-  // Auto-abrir solo la primera vez al montar
-  useEffect(() => {
-    if (autoOpenOnMount && !hasAutoOpened.current) {
-      hasAutoOpened.current = true;
-      setTimeout(() => {
-        setIsOpen(true);
-      }, 500); // Pequeño delay para que se vea natural
-    }
-  }, [autoOpenOnMount]);
-
-  // Auto-cerrar después del delay
+  // Auto-cerrar después del delay SOLO cuando se abre con hover
   useEffect(() => {
     if (isOpen && !isClosing) {
       closeTimerRef.current = setTimeout(() => {
@@ -101,7 +91,7 @@ const AutoCloseTooltip = forwardRef<AutoCloseTooltipRef, AutoCloseTooltipProps>(
 
       {(isOpen || isClosing) && (
         <div 
-          className={`absolute left-0 top-full mt-3 z-50 w-72 sm:w-96 bg-sky-50/90 backdrop-blur-sm rounded-2xl shadow-xl p-4 border border-sky-200/50 transition-all duration-300 ${
+          className={`fixed sm:absolute left-4 right-4 sm:left-0 sm:right-auto top-auto sm:top-full mt-3 z-50 w-auto sm:w-80 md:w-96 max-w-[calc(100vw-2rem)] bg-sky-50/95 backdrop-blur-sm rounded-2xl shadow-xl p-4 border border-sky-200/50 transition-all duration-300 ${
             isClosing ? 'opacity-0 translate-y-1' : 'opacity-100 translate-y-0'
           }`}
           style={{
@@ -112,8 +102,8 @@ const AutoCloseTooltip = forwardRef<AutoCloseTooltipRef, AutoCloseTooltipProps>(
             {content}
           </div>
           
-          {/* Flecha arriba con celeste */}
-          <div className="absolute -top-2 left-6 w-4 h-4 bg-sky-50/90 backdrop-blur-sm border-l border-t border-sky-200/50 transform rotate-45"></div>
+          {/* Flecha arriba con celeste - centrada en mobile, a la izquierda en desktop */}
+          <div className="absolute -top-2 left-1/2 sm:left-6 -translate-x-1/2 sm:translate-x-0 w-4 h-4 bg-sky-50/95 backdrop-blur-sm border-l border-t border-sky-200/50 transform rotate-45"></div>
         </div>
       )}
 

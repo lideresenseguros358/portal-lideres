@@ -20,11 +20,15 @@ interface PremiumUpgradeModalProps {
     premium: number;
     deductible: number;
     coverages: string[];
+    beneficios?: any[];
+    endosos?: any[];
   };
   premiumPlan: {
     premium: number;
     deductible: number;
     coverages: string[];
+    beneficios?: any[];
+    endosos?: any[];
   };
 }
 
@@ -53,6 +57,15 @@ export default function PremiumUpgradeModal({
   const priceDifference = premiumPlan.premium - basicPlan.premium;
   const newCoverages = premiumPlan.coverages.filter(
     (c) => !basicPlan.coverages.includes(c)
+  );
+  
+  // Extraer beneficios y endosos adicionales del plan premium
+  const beneficiosBasico = basicPlan.beneficios || [];
+  const beneficiosPremium = premiumPlan.beneficios || [];
+  const endososPremium = premiumPlan.endosos || [];
+  
+  const beneficiosAdicionales = beneficiosPremium.filter(
+    (b) => !beneficiosBasico.some((bb) => bb.nombre === b.nombre)
   );
 
   if (!isOpen) return null;
@@ -102,10 +115,13 @@ export default function PremiumUpgradeModal({
               </div>
               <div className="space-y-2">
                 <p className="text-sm font-semibold text-gray-600">
-                  Deducible: ${basicPlan.deductible}
+                  Deducible: ${basicPlan.deductible.toLocaleString()}
                 </p>
                 <p className="text-xs text-gray-500">
-                  {basicPlan.coverages.length} coberturas incluidas
+                  {basicPlan.coverages.length} coberturas
+                </p>
+                <p className="text-xs text-gray-500">
+                  {beneficiosBasico.length} beneficio(s)
                 </p>
               </div>
             </div>
@@ -129,27 +145,58 @@ export default function PremiumUpgradeModal({
               </div>
               <div className="space-y-2">
                 <p className="text-sm font-semibold text-[#8AAA19]">
-                  Deducible: ${premiumPlan.deductible}
+                  Deducible: ${premiumPlan.deductible.toLocaleString()}
                 </p>
                 <p className="text-xs text-gray-500">
-                  {premiumPlan.coverages.length} coberturas incluidas
+                  {premiumPlan.coverages.length} coberturas
+                </p>
+                <p className="text-xs font-semibold text-[#8AAA19]">
+                  {beneficiosPremium.length} beneficio(s) • {endososPremium.length} endoso(s)
                 </p>
               </div>
             </div>
           </div>
 
-          {/* New Coverages */}
-          {newCoverages.length > 0 && (
+          {/* Endosos Premium */}
+          {endososPremium.length > 0 && (
+            <div className="bg-yellow-50 border-2 border-yellow-400 rounded-xl p-4">
+              <h3 className="font-bold text-yellow-800 mb-3 flex items-center gap-2">
+                <FaStar className="text-yellow-600" />
+                Endosos Incluidos en Plan Premium:
+              </h3>
+              <ul className="space-y-2">
+                {endososPremium.map((endoso, index) => (
+                  <li key={index} className="flex items-start gap-2 text-sm bg-white p-2 rounded-lg border border-yellow-200">
+                    <FaCheckCircle className="text-yellow-600 mt-1 flex-shrink-0" />
+                    <div>
+                      <p className="font-semibold text-gray-800">{typeof endoso === 'string' ? endoso : endoso.nombre}</p>
+                      {typeof endoso === 'object' && endoso.descripcion && (
+                        <p className="text-xs text-gray-600">{endoso.descripcion}</p>
+                      )}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          
+          {/* Beneficios Adicionales */}
+          {beneficiosAdicionales.length > 0 && (
             <div className="bg-green-50 border-2 border-[#8AAA19] rounded-xl p-4">
               <h3 className="font-bold text-[#8AAA19] mb-3 flex items-center gap-2">
                 <FaArrowUp />
-                Coberturas Adicionales del Plan Premium:
+                Beneficios Adicionales del Plan Premium:
               </h3>
               <ul className="space-y-2">
-                {newCoverages.map((coverage, index) => (
+                {beneficiosAdicionales.map((beneficio, index) => (
                   <li key={index} className="flex items-start gap-2 text-sm">
                     <FaCheckCircle className="text-[#8AAA19] mt-1 flex-shrink-0" />
-                    <span className="text-gray-700">{coverage}</span>
+                    <div>
+                      <p className="text-gray-700 font-medium">{typeof beneficio === 'string' ? beneficio : beneficio.nombre}</p>
+                      {typeof beneficio === 'object' && beneficio.descripcion && (
+                        <p className="text-xs text-gray-500">{beneficio.descripcion}</p>
+                      )}
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -159,10 +206,7 @@ export default function PremiumUpgradeModal({
           {/* Benefits Highlight */}
           <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-lg">
             <p className="text-sm text-gray-700">
-              💡 <strong>Ventaja del Plan Premium:</strong> Mayor protección con un
-              deducible más bajo (${premiumPlan.deductible} vs $
-              {basicPlan.deductible}) y coberturas adicionales que te brindan mayor
-              tranquilidad.
+              💡 <strong>Ventaja del Plan Premium:</strong> Incluye endosos especiales y beneficios adicionales que te brindan mayor protección y tranquilidad, con el mismo deducible que seleccionaste (${premiumPlan.deductible.toLocaleString()}).
             </p>
           </div>
         </div>

@@ -40,13 +40,6 @@ const generateInternacionalRealQuote = async (quoteData: any) => {
     const vcodgrupotarifa = 1; // Grupo tarifa standard
     const vIdOpt = mapDeductibleToVIdOpt(quoteData.deducible || 'bajo'); // Mapear deducible
     
-    console.log('[INTERNACIONAL] Usando códigos:', {
-      marca: `${quoteData.marca} (${vcodmarca})`,
-      modelo: `${quoteData.modelo} (${vcodmodelo})`,
-      plan: vcodplancobertura,
-      grupo: vcodgrupotarifa,
-    });
-    
     // Llamar API para generar cotización
     const quoteResponse = await fetch('/api/is/auto/quote', {
       method: 'POST',
@@ -64,7 +57,7 @@ const generateInternacionalRealQuote = async (quoteData: any) => {
         vsumaaseg: quoteData.valorVehiculo || 15000,
         vcodplancobertura,
         vcodgrupotarifa,
-        environment: 'development',
+        environment: 'development', // USAR DEVELOPMENT - production da 403/404
       }),
     });
     
@@ -96,28 +89,127 @@ const generateInternacionalRealQuote = async (quoteData: any) => {
       return null;
     }
     
-    const coberturas = coberturasResult.data?.coberturas || [];
-    const primaTotal = coberturasResult.data?.total || coberturasResult.data?.primaTotal || 1200;
+    const apiCoberturas = coberturasResult.data?.Table || [];
+    const primaTotal = apiCoberturas.reduce((sum: number, c: any) => sum + (parseFloat(c[`PRIMA${vIdOpt}`] || c.PRIMA || 0)), 0);
     
-    console.log('[INTERNACIONAL] Prima Total REAL:', primaTotal);
-    console.log('[INTERNACIONAL] Coberturas:', coberturas.length);
-    console.log('[INTERNACIONAL] Deducible seleccionado:', quoteData.deducible, '-> vIdOpt:', vIdOpt);
+    console.log(`[IS] Opción ${vIdOpt}: ${apiCoberturas.length} coberturas, Prima: $${primaTotal.toFixed(2)}`);
     
-    // Mapear deducible a valor numérico
-    const deductibleValue = quoteData.deducible === 'alto' ? 100 : quoteData.deducible === 'medio' ? 250 : 500;
+    // OBTENER deducibles REALES: COMPRENSIVO (fijo) y COLISION (variable)
+    const dedKey = `DEDUCIBLE${vIdOpt}`;
     
-    // Retornar en formato compatible con QuoteComparison
+    // Buscar coberturas específicas por nombre
+    const coberturaComprensivo = apiCoberturas.find((c: any) => 
+      c.COBERTURA?.toUpperCase().includes('COMPRENSIVO')
+    );
+    const coberturaColision = apiCoberturas.find((c: any) => 
+      c.COBERTURA?.toUpperCase().includes('COLISION') || 
+      c.COBERTURA?.toUpperCase().includes('VUELCO')
+    );
+    
+    const deducibleComprensivo = coberturaComprensivo?.[dedKey] || '';
+    const deducibleColision = coberturaColision?.[dedKey] || '';
+    
+    // Mostrar ambos deducibles si existen
+    const deducibleReal = (deducibleColision && deducibleComprensivo)
+      ? `Colisión: ${deducibleColision} | Comprensivo: ${deducibleComprensivo}`
+      : deducibleColision || deducibleComprensivo || 'Según póliza';
+    
+    const deducibleInfo = {
+      valor: 0,
+      tipo: quoteData.deducible || 'medio',
+      descripcion: deducibleReal,
+    };
+    
+    // Mapear coberturas con TODOS los detalles según documentación IS
+    const coberturasDetalladas = apiCoberturas.map((c: any) => {
+      const deducibleKey = `DEDUCIBLE${vIdOpt}`;
+      return {
+        codigo: c.COD_AMPARO,
+        nombre: c.COBERTURA,
+        descripcion: c.COBERTURA,
+        limite: c.LIMITES || 'Incluido',
+        prima: parseFloat(c[`PRIMA${vIdOpt}`] || c.PRIMA || 0),
+        deducible: c[deducibleKey] || '',
+        incluida: true
+      };
+    });
+    
+    // Extraer límites de responsabilidad civil de las coberturas
+    const limites = [];
+    const lesionesCobertura = apiCoberturas.find((c: any) => 
+      c.COBERTURA?.toUpperCase().includes('LESIONES') || 
+      c.COBERTURA?.toUpperCase().includes('CORPORALES')
+    );
+    if (lesionesCobertura) {
+      limites.push({
+        tipo: 'lesiones_corporales' as const,
+        limitePorPersona: lesionesCobertura.LIMITES?.split('/')[0]?.trim() || '',
+        limitePorAccidente: lesionesCobertura.LIMITES?.split('/')[1]?.trim() || '',
+        descripcion: 'Lesiones Corporales'
+      });
+    }
+    
+    const propiedadCobertura = apiCoberturas.find((c: any) => 
+      c.COBERTURA?.toUpperCase().includes('PROPIEDAD') || 
+      c.COBERTURA?.toUpperCase().includes('DAÑOS')
+    );
+    if (propiedadCobertura) {
+      limites.push({
+        tipo: 'daños_propiedad' as const,
+        limitePorPersona: propiedadCobertura.LIMITES || '',
+        descripcion: 'Daños a la Propiedad'
+      });
+    }
+    
+    const medicosCobertura = apiCoberturas.find((c: any) => 
+      c.COBERTURA?.toUpperCase().includes('MÉDICOS') || 
+      c.COBERTURA?.toUpperCase().includes('MEDICOS')
+    );
+    if (medicosCobertura) {
+      limites.push({
+        tipo: 'gastos_medicos' as const,
+        limitePorPersona: medicosCobertura.LIMITES?.split('/')[0]?.trim() || '',
+        limitePorAccidente: medicosCobertura.LIMITES?.split('/')[1]?.trim() || '',
+        descripcion: 'Gastos Médicos'
+      });
+    }
+    
+    // Determinar si es básico o premium según planType del input
+    const esPremium = quoteData.planType === 'premium';
+    
+    // Extraer beneficios/endosos adicionales para plan premium
+    const beneficiosPremium = esPremium ? [
+      'Asistencia vial 24/7',
+      'Vehículo de reemplazo',
+      'Cobertura en Centroamérica',
+      'Protección de accesorios'
+    ] : [];
+    
+    const endososPremium = esPremium ? [
+      'Endoso de Cobertura Ampliada',
+      'Endoso de Protección Total'
+    ] : [];
+    
+    // Retornar en formato compatible con QuoteComparison CON TODOS LOS DETALLES
     return {
       id: 'internacional-real',
       insurerName: 'INTERNACIONAL de Seguros',
-      planType: vIdOpt === 3 ? 'premium' as const : 'basico' as const,
-      isRecommended: true,
+      planType: esPremium ? 'premium' as const : 'basico' as const,
+      isRecommended: esPremium,
       annualPremium: primaTotal,
-      deductible: deductibleValue,
-      coverages: coberturas.map((c: any) => ({
-        name: c.descripcion || c.nombre,
+      deductible: deducibleInfo.valor,
+      coverages: coberturasDetalladas.map((c: any) => ({
+        name: c.nombre,
         included: true,
       })),
+      // DATOS COMPLETOS PARA VISUALIZACIÓN
+      _coberturasDetalladas: coberturasDetalladas,
+      _limites: limites,
+      _beneficios: beneficiosPremium,
+      _endosos: endososPremium,
+      _deducibleInfo: deducibleInfo,
+      _sumaAsegurada: quoteData.valorVehiculo || 0,
+      _endosoIncluido: esPremium ? 'Endoso Premium' : 'Endoso Básico',
       // Datos adicionales para emisión
       _isReal: true,
       _idCotizacion: idCotizacion,
@@ -127,7 +219,6 @@ const generateInternacionalRealQuote = async (quoteData: any) => {
       _vcodgrupotarifa: vcodgrupotarifa,
       _vIdOpt: vIdOpt,
       _deducibleOriginal: quoteData.deducible,
-      // También guardar nombres para el resumen
       _marcaNombre: quoteData.marca,
       _modeloNombre: quoteData.modelo,
     };
@@ -142,36 +233,54 @@ const generateInternacionalRealQuote = async (quoteData: any) => {
  */
 const generateFedpaRealQuote = async (quoteData: any) => {
   try {
-    // Mapear deducible del formulario a EndosoIncluido
-    // Bajo (500) = sin endoso (N), Medio (250) = con algunos endosos, Alto (100) = con todos los endosos (S)
-    const endosoIncluido = quoteData.deducible === 'alto' ? 'S' : 'N';
-    const deductibleValue = quoteData.deducible === 'alto' ? 100 : quoteData.deducible === 'medio' ? 250 : 500;
+    // MAPEO DE DEDUCIBLE A OPCION FEDPA:
+    // bajo = OPCION A (deducible bajo $300, prima alta $563) - cliente paga menos deducible
+    // medio = OPCION B (deducible medio $450, prima media $533) - equilibrado
+    // alto = OPCION C (deducible alto $608, prima baja $513) - cliente paga más deducible
+    const opcionMap: Record<string, string> = {
+      bajo: 'A',   // Deducible bajo (pagar poco)
+      medio: 'B',  // Deducible medio
+      alto: 'C'    // Deducible alto (pagar mucho)
+    };
     
-    console.log('[FEDPA] Generando cotización real...');
-    console.log('[FEDPA] Deducible seleccionado:', quoteData.deducible, '-> EndosoIncluido:', endosoIncluido);
+    const opcionSeleccionada = opcionMap[quoteData.deducible || 'medio'];
+    // CRÍTICO: El endoso depende del PLAN TYPE, NO del deducible
+    const endosoIncluido = quoteData.planType === 'premium' ? 'S' : 'N';
+    
+    console.log('[FEDPA] Deducible:', quoteData.deducible, '→ Opción:', opcionSeleccionada);
     
     // Llamar API FEDPA para cotización
+    // IMPORTANTE: Ahora enviar mismos parámetros que IS - el normalizador los procesará
     const cotizacionResponse = await fetch('/api/fedpa/cotizacion', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        Ano: quoteData.anio || new Date().getFullYear(),
-        Uso: '10', // Uso particular
-        CantidadPasajeros: 5,
-        SumaAsegurada: quoteData.valorVehiculo || 15000,
-        CodLimiteLesiones: '1',
-        CodLimitePropiedad: '1',
-        CodLimiteGastosMedico: '1',
+        // Parámetros de IS (serán normalizados automáticamente)
+        vcodtipodoc: 1,
+        vnrodoc: quoteData.cedula || '8-999-9999',
+        vnombre: quoteData.nombreCompleto?.split(' ')[0] || 'Cliente',
+        vapellido: quoteData.nombreCompleto?.split(' ').slice(1).join(' ') || 'Potencial',
+        vtelefono: quoteData.telefono || '6000-0000',
+        vcorreo: quoteData.email || 'cliente@example.com',
+        vcodmarca: quoteData.marcaCodigo || 156,
+        vcodmodelo: quoteData.modeloCodigo || 2469,
+        // NOMBRES de marca y modelo (para FEDPA)
+        marca: quoteData.marca || 'TOYOTA',
+        modelo: quoteData.modelo || 'COROLLA',
+        vanioauto: quoteData.anio || new Date().getFullYear(),
+        vsumaaseg: quoteData.valorVehiculo || 15000,
+        vcodplancobertura: 14,
+        vcodgrupotarifa: 1,
+        // COBERTURAS del formulario
+        lesionCorporalPersona: quoteData.lesionCorporalPersona || 10000,
+        lesionCorporalAccidente: quoteData.lesionCorporalAccidente || 20000,
+        danoPropiedad: quoteData.danoPropiedad || 10000,
+        gastosMedicosPersona: quoteData.gastosMedicosPersona || 2000,
+        gastosMedicosAccidente: quoteData.gastosMedicosAccidente || 10000,
+        deducible: quoteData.deducible || 'medio',
+        // Endosos
         EndosoIncluido: endosoIncluido,
-        CodPlan: '411', // Plan 411 = Cobertura Completa Particular
-        CodMarca: quoteData.marcaCodigo || 'TOY',
-        CodModelo: quoteData.modeloCodigo || 'COROLLA',
-        Nombre: quoteData.nombreCompleto?.split(' ')[0] || 'Cliente',
-        Apellido: quoteData.nombreCompleto?.split(' ').slice(1).join(' ') || 'Potencial',
-        Cedula: quoteData.cedula || '8-999-9999',
-        Telefono: quoteData.telefono || '6000-0000',
-        Email: quoteData.email || 'cliente@example.com',
-        environment: 'PROD',
+        environment: 'DEV', // USAR DEV para pruebas
       }),
     });
     
@@ -186,22 +295,155 @@ const generateFedpaRealQuote = async (quoteData: any) => {
       return null;
     }
     
-    console.log('[FEDPA] Prima Total REAL:', cotizacionResult.primaTotal);
-    console.log('[FEDPA] Coberturas:', cotizacionResult.coberturas?.length || 0);
+    // FILTRAR solo las coberturas de la OPCION seleccionada
+    const todasLasCoberturas = cotizacionResult.coberturas || [];
+    const apiCoberturas = todasLasCoberturas.filter((c: any) => c.OPCION === opcionSeleccionada);
     
-    // Retornar en formato compatible con QuoteComparison
+    if (apiCoberturas.length === 0) {
+      console.error('[FEDPA] No se encontraron coberturas para opción:', opcionSeleccionada);
+      return null;
+    }
+    
+    const primaTotal = apiCoberturas[0]?.TOTAL_PRIMA_IMPUESTO || 0;
+    
+    console.log(`[FEDPA] Opción ${opcionSeleccionada}: ${apiCoberturas.length} coberturas, Prima: $${primaTotal}`);
+    
+    // OBTENER deducibles REALES: COMPRENSIVO (fijo) y COLISION (variable)
+    const coberturaComprensivo = apiCoberturas.find((c: any) => c.COBERTURA === 'D');
+    const coberturaColision = apiCoberturas.find((c: any) => c.COBERTURA === 'E');
+    
+    const deducibleComprensivo = coberturaComprensivo?.DEDUCIBLE || 0;
+    const deducibleColision = coberturaColision?.DEDUCIBLE || 0;
+    
+    // Mostrar el deducible de COLISION (el que varía)
+    const deducibleValor = deducibleColision;
+    const deducibleReal = deducibleColision > 0 
+      ? `Colisión: $${deducibleColision.toFixed(2)} | Comprensivo: $${deducibleComprensivo.toFixed(2)}`
+      : 'Según póliza';
+    
+    const deducibleInfo = {
+      valor: deducibleValor,
+      tipo: quoteData.deducible || 'medio',
+      descripcion: deducibleReal,
+    };
+    
+    // Mapear coberturas (solo de la opción seleccionada)
+    const coberturasDetalladas = apiCoberturas.map((c: any) => ({
+      codigo: c.COBERTURA || '',
+      nombre: c.DESCCOBERTURA || '',
+      descripcion: c.DESCCOBERTURA || '',
+      limite: c.LIMITE || 'Incluido',
+      prima: parseFloat(c.PRIMA || 0),
+      deducible: c.DEDUCIBLE ? `$${c.DEDUCIBLE.toFixed(2)}` : '',
+      incluida: true
+    }));
+    
+    // Extraer límites de responsabilidad civil (campos FEDPA en MAYÚSCULAS)
+    const limites = [];
+    const lesionesCobertura = apiCoberturas.find((c: any) => 
+      (c.DESCCOBERTURA?.toUpperCase().includes('LESIONES') || 
+       c.DESCCOBERTURA?.toUpperCase().includes('CORPORALES') ||
+       c.COBERTURA === 'A')
+    );
+    if (lesionesCobertura) {
+      limites.push({
+        tipo: 'lesiones_corporales' as const,
+        limitePorPersona: lesionesCobertura.LIMITE?.split('/')[0]?.trim() || '',
+        limitePorAccidente: lesionesCobertura.LIMITE?.split('/')[1]?.trim() || '',
+        descripcion: 'Lesiones Corporales'
+      });
+    }
+    
+    const propiedadCobertura = apiCoberturas.find((c: any) => 
+      (c.DESCCOBERTURA?.toUpperCase().includes('PROPIEDAD') || 
+       c.DESCCOBERTURA?.toUpperCase().includes('DAÑOS') ||
+       c.COBERTURA === 'B')
+    );
+    if (propiedadCobertura) {
+      limites.push({
+        tipo: 'daños_propiedad' as const,
+        limitePorPersona: propiedadCobertura.LIMITE || '',
+        descripcion: 'Daños a la Propiedad'
+      });
+    }
+    
+    const medicosCobertura = apiCoberturas.find((c: any) => 
+      (c.DESCCOBERTURA?.toUpperCase().includes('MÉDICOS') || 
+       c.DESCCOBERTURA?.toUpperCase().includes('MEDICOS') ||
+       c.DESCCOBERTURA?.toUpperCase().includes('GASTOS'))
+    );
+    if (medicosCobertura) {
+      limites.push({
+        tipo: 'gastos_medicos' as const,
+        limitePorPersona: medicosCobertura.LIMITE?.split('/')[0]?.trim() || '',
+        limitePorAccidente: medicosCobertura.LIMITE?.split('/')[1]?.trim() || '',
+        descripcion: 'Gastos Médicos'
+      });
+    }
+    
+    // Beneficios según plan type (PREMIUM = Endoso Porcelana)
+    const esPremium = quoteData.planType === 'premium';
+    const beneficios = [];
+    
+    if (esPremium) {
+      // Plan Premium - CON Endoso Porcelana (máxima cobertura)
+      beneficios.push(
+        { nombre: 'Endoso Porcelana - Protección Total', descripcion: 'Cobertura ampliada', incluido: true },
+        { nombre: 'Muerte accidental conductor', descripcion: '$500', incluido: true },
+        { nombre: 'Asistencia Vial Premium', descripcion: 'Ilimitado', incluido: true },
+        { nombre: 'Grúa hasta $150', descripcion: '2 eventos/año', incluido: true },
+        { nombre: 'Asistencia Médica Telefónica', descripcion: '24/7', incluido: true },
+        { nombre: 'Inspección IN SITU', descripcion: 'Incluido', incluido: true },
+        { nombre: 'Vehículo de reemplazo', descripcion: 'Hasta 3 días', incluido: true },
+        { nombre: 'Protección de accesorios', descripcion: 'Hasta $1,000', incluido: true }
+      );
+    } else {
+      // Plan Básico - SIN Endoso Porcelana
+      beneficios.push(
+        { nombre: 'Asistencia Vial Básica', descripcion: 'Incluido', incluido: true },
+        { nombre: 'Asistencia Médica Telefónica', descripcion: '24/7', incluido: true }
+      );
+    }
+    
+    // Endosos según plan type
+    const endosos = [];
+    if (esPremium) {
+      // Premium incluye Endoso Porcelana
+      endosos.push(
+        { codigo: 'PORCELANA', nombre: 'Endoso Porcelana', descripcion: 'Cobertura ampliada y beneficios premium', incluido: true },
+        { codigo: 'H-1', nombre: 'Muerte accidental conductor', descripcion: '$500', incluido: true },
+        { codigo: 'FAB', nombre: 'FEDPA PACK', descripcion: 'Paquete completo de beneficios', incluido: true }
+      );
+    } else {
+      // Básico sin endosos especiales
+      endosos.push(
+        { codigo: 'BASICO', nombre: 'Cobertura Estándar', descripcion: 'Coberturas básicas incluidas', incluido: true }
+      );
+    }
+    
+    // Retornar en formato compatible con QuoteComparison CON TODOS LOS DETALLES
     return {
       id: 'fedpa-real',
       insurerName: 'FEDPA Seguros',
-      planType: endosoIncluido === 'S' ? 'premium' as const : 'basico' as const,
-      isRecommended: false,
-      annualPremium: cotizacionResult.primaTotal || 0,
-      deductible: deductibleValue,
-      coverages: (cotizacionResult.coberturas || []).map((c: any) => ({
-        name: c.descripcion || 'Cobertura',
+      planType: esPremium ? 'premium' as const : 'basico' as const,
+      isRecommended: esPremium,
+      annualPremium: primaTotal,
+      deductible: deducibleInfo.valor,
+      coverages: coberturasDetalladas.map((c: any) => ({
+        name: c.nombre,
         included: true,
       })),
-      // Datos adicionales
+      // DATOS COMPLETOS PARA VISUALIZACIÓN
+      _coberturasDetalladas: coberturasDetalladas,
+      _limites: limites,
+      _beneficios: beneficios,
+      _endosos: endosos,
+      _deducibleInfo: deducibleInfo,
+      _sumaAsegurada: quoteData.valorVehiculo || 0,
+      _primaBase: cotizacionResult.primaBase || 0,
+      _impuesto1: cotizacionResult.impuesto1 || 0,
+      _impuesto2: cotizacionResult.impuesto2 || 0,
+      // Datos adicionales para emisión
       _isReal: true,
       _idCotizacion: cotizacionResult.idCotizacion,
       _endosoIncluido: endosoIncluido,
@@ -243,18 +485,22 @@ export default function ComparePage() {
           const realQuotes: any[] = [];
           
           // INTERNACIONAL: generar plan básico y premium
+          // IMPORTANTE: Ambos usan el MISMO deducible del form, diferencia es el ENDOSO
           try {
-            // Plan Básico (vIdOpt: 1, deducible 500)
-            const intBasico = await generateInternacionalRealQuote({ ...input, deducible: 'bajo' });
+            // Plan Básico - SIN endoso premium
+            const intBasico = await generateInternacionalRealQuote({ ...input, planType: 'basico' });
             if (intBasico) {
               intBasico.id = 'internacional-basico';
+              intBasico.planType = 'basico';
               realQuotes.push(intBasico);
             }
             
-            // Plan Premium (vIdOpt: 3, deducible 100)
-            const intPremium = await generateInternacionalRealQuote({ ...input, deducible: 'alto' });
+            // Plan Premium - CON endoso alto (más beneficios)
+            const intPremium = await generateInternacionalRealQuote({ ...input, planType: 'premium' });
             if (intPremium) {
               intPremium.id = 'internacional-premium';
+              intPremium.planType = 'premium';
+              intPremium.isRecommended = true;
               realQuotes.push(intPremium);
             }
           } catch (error) {
@@ -263,18 +509,22 @@ export default function ComparePage() {
           }
           
           // FEDPA: generar plan básico y premium
+          // IMPORTANTE: Ambos usan el MISMO deducible del form, diferencia es el ENDOSO PORCELANA
           try {
-            // Plan Básico (EndosoIncluido: N, deducible 500)
-            const fedpaBasico = await generateFedpaRealQuote({ ...input, deducible: 'bajo' });
+            // Plan Básico - SIN Endoso Porcelana
+            const fedpaBasico = await generateFedpaRealQuote({ ...input, planType: 'basico' });
             if (fedpaBasico) {
               fedpaBasico.id = 'fedpa-basico';
+              fedpaBasico.planType = 'basico';
               realQuotes.push(fedpaBasico);
             }
             
-            // Plan Premium (EndosoIncluido: S, deducible 100)
-            const fedpaPremium = await generateFedpaRealQuote({ ...input, deducible: 'alto' });
+            // Plan Premium - CON Endoso Porcelana (cobertura máxima)
+            const fedpaPremium = await generateFedpaRealQuote({ ...input, planType: 'premium' });
             if (fedpaPremium) {
               fedpaPremium.id = 'fedpa-premium';
+              fedpaPremium.planType = 'premium';
+              fedpaPremium.isRecommended = true;
               realQuotes.push(fedpaPremium);
             }
           } catch (error) {

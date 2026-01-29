@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { FaCar, FaShieldAlt, FaUser } from 'react-icons/fa';
 import Image from 'next/image';
@@ -18,18 +18,19 @@ import Breadcrumb from '@/components/ui/Breadcrumb';
 
 // Marcas comunes con logos
 const COMMON_BRANDS = [
-  { name: 'TOYOTA', logo: '/logos auto/TOYOTA.png' },
-  { name: 'KIA', logo: '/logos auto/KIA.png' },
-  { name: 'HYUNDAI', logo: '/logos auto/HYUNDAI.png' },
-  { name: 'SUZUKI', logo: '/logos auto/SUZUKI.png' },
-  { name: 'NISSAN', logo: '/logos auto/NISSAN.png' },
-  { name: 'GEELY', logo: '/logos auto/GEELY.png' },
+  { name: 'TOYOTA', logo: '/logos auto/TOYOTA.png', width: 80 },
+  { name: 'KIA', logo: '/logos auto/KIA.png', width: 150 },
+  { name: 'HYUNDAI', logo: '/logos auto/HYUNDAI.png', width: 80 },
+  { name: 'SUZUKI', logo: '/logos auto/SUZUKI.png', width: 150 },
+  { name: 'NISSAN', logo: '/logos auto/NISSAN.png', width: 80 },
+  { name: 'GEELY', logo: '/logos auto/GEELY.png', width: 150 },
 ];
 
 export default function FormAutoCoberturaCompleta() {
   const router = useRouter();
   const { marcas, modelos, selectedMarca, setSelectedMarca, loading: catalogsLoading } = useISCatalogs();
   const [showSearch, setShowSearch] = useState(false); // Toggle para mostrar búsqueda
+  const [valorInputTemp, setValorInputTemp] = useState(''); // Estado temporal para input de valor
   
   // Refs para tooltips
   const lesionesTooltipRef = useRef<AutoCloseTooltipRef>(null);
@@ -82,6 +83,45 @@ export default function FormAutoCoberturaCompleta() {
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Cargar datos guardados desde sessionStorage al montar (si viene del comparador)
+  useEffect(() => {
+    const savedData = sessionStorage.getItem('quoteInput');
+    if (savedData) {
+      try {
+        const parsed = JSON.parse(savedData);
+        // Solo cargar si es del tipo correcto (auto cobertura completa)
+        if (parsed.cobertura === 'COMPLETA') {
+          setFormData({
+            nombreCompleto: parsed.nombreCompleto || '',
+            fechaNacimiento: parsed.fechaNacimiento || '',
+            estadoCivil: parsed.estadoCivil || 'soltero',
+            marca: parsed.marca || '',
+            marcaCodigo: parsed.marcaCodigo || 0,
+            modelo: parsed.modelo || '',
+            modeloCodigo: parsed.modeloCodigo || 0,
+            anno: parsed.anio || new Date().getFullYear(),
+            valorVehiculo: parsed.valorVehiculo || 15000,
+            lesionCorporalPersona: parsed.lesionCorporalPersona || 10000,
+            lesionCorporalAccidente: parsed.lesionCorporalAccidente || 20000,
+            danoPropiedad: parsed.danoPropiedad || 10000,
+            gastosMedicosPersona: parsed.gastosMedicosPersona || 2000,
+            gastosMedicosAccidente: parsed.gastosMedicosAccidente || 10000,
+            deducible: parsed.deducible || 'medio',
+          });
+          
+          // Si tiene marca seleccionada, restaurar la selección para cargar modelos
+          if (parsed.marcaCodigo) {
+            setSelectedMarca(parsed.marcaCodigo);
+          }
+          
+          toast.info('Datos cargados. Puedes editarlos y recotizar.');
+        }
+      } catch (error) {
+        console.error('Error al cargar datos guardados:', error);
+      }
+    }
+  }, [setSelectedMarca]);
 
   // Opciones de coberturas según especificaciones
   const lesionCorporalOptions = [
@@ -180,9 +220,18 @@ export default function FormAutoCoberturaCompleta() {
       ...formData,
       policyType: 'AUTO',
       cobertura: 'COMPLETA',
-      // Asegurar que los códigos numéricos se guarden
+      // Asegurar que códigos Y NOMBRES se guarden
       marcaCodigo: formData.marcaCodigo,
+      marca: formData.marca, // NOMBRE de la marca
       modeloCodigo: formData.modeloCodigo,
+      modelo: formData.modelo, // NOMBRE del modelo
+      // Asegurar coberturas
+      lesionCorporalPersona: formData.lesionCorporalPersona,
+      lesionCorporalAccidente: formData.lesionCorporalAccidente,
+      danoPropiedad: formData.danoPropiedad,
+      gastosMedicosPersona: formData.gastosMedicosPersona,
+      gastosMedicosAccidente: formData.gastosMedicosAccidente,
+      deducible: formData.deducible,
     }));
     
     toast.success('Generando cotización...');
@@ -228,12 +277,12 @@ export default function FormAutoCoberturaCompleta() {
               <FaCar className="text-[#8AAA19]" />
               Datos del Vehículo
             </h2>
-            <p className="flex items-center text-sm text-gray-600 mb-4 md:mb-6">
+            <div className="flex items-center text-sm text-gray-600 mb-4 md:mb-6">
               Primero seleccione la marca y luego el modelo del vehículo
               <AutoCloseTooltip 
                 content="Si no encuentra su marca dentro de las 6 opciones, presione el botón 'Otras Marcas' para buscarla en el listado completo de marcas disponibles."
               />
-            </p>
+            </div>
 
             {/* Selección rápida de marcas comunes */}
             {!showSearch && (
@@ -255,7 +304,7 @@ export default function FormAutoCoberturaCompleta() {
                         <Image
                           src={brand.logo}
                           alt={brand.name}
-                          width={80}
+                          width={brand.width || 80}
                           height={40}
                           className="object-contain max-h-full"
                         />
@@ -389,65 +438,126 @@ export default function FormAutoCoberturaCompleta() {
               <label className="flex items-center text-sm font-semibold text-gray-700 mb-4">
                 Valor del Vehículo <span className="text-red-500 ml-1">*</span>
                 <AutoCloseTooltip 
-                  content="Ingrese el valor del vehículo usando el número grande en la izquierda (es editable) o moviendo la barra inferior. El valor debe corresponder al precio de mercado actual o al monto indicado por su banco acreedor si el vehículo está financiado."
+                  content="Ingrese el valor del vehículo usando el número grande (es editable) o moviendo la barra inferior. El valor debe corresponder al precio de mercado actual o al monto indicado por su banco acreedor si el vehículo está financiado."
                 />
               </label>
               <div className="bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl p-4 md:p-6 border-2 border-[#010139]/20">
-                {/* Input invisible pero editable con apariencia de texto */}
-                <div className="mb-2">
+                {/* Input editable con diseño mejorado para mobile */}
+                <div className="mb-4">
                   <input
                     type="text"
-                    value={`$${formData.valorVehiculo.toLocaleString('en-US')}`}
+                    inputMode="numeric"
+                    value={valorInputTemp || `$${formData.valorVehiculo.toLocaleString('en-US')}`}
                     onChange={(e) => {
+                      setValorInputTemp(e.target.value);
+                    }}
+                    onFocus={(e) => {
+                      setValorInputTemp('');
+                      setTimeout(() => e.target.select(), 0);
+                    }}
+                    onBlur={(e) => {
                       const numStr = e.target.value.replace(/[$,]/g, '');
                       const num = parseInt(numStr);
                       if (!isNaN(num) && num >= 5000 && num <= 100000) {
+                        // Guardar el valor exacto que el usuario escribió
+                        // No forzar redondeo - permitir valores personalizados
                         setFormData({ ...formData, valorVehiculo: num });
                       }
+                      setValorInputTemp('');
                     }}
-                    className="text-2xl md:text-3xl font-bold text-[#010139] bg-transparent border-none outline-none focus:outline-none w-full"
+                    className="text-3xl sm:text-4xl md:text-5xl font-bold text-[#010139] bg-transparent px-4 py-3 w-full text-center focus:outline-none focus:ring-0 border-0 transition-all cursor-text"
                     placeholder="$15,000"
                   />
-                  <p className="text-xs text-gray-600 mt-1">
-                    👆 Ingrese aquí el valor del vehículo
+                  <p className="text-xs sm:text-sm text-gray-600 mt-2 text-center">
+                    👆 Toque aquí para editar el valor
                   </p>
                 </div>
                 
-                {/* Slider */}
-                <div className="relative mt-4">
+                {/* Slider con mejor responsive */}
+                <div className="relative mt-4 px-1">
                   <input
                     type="range"
                     min="0"
                     max={vehiculoOptions.length - 1}
-                    value={Math.max(0, vehiculoOptions.indexOf(formData.valorVehiculo) !== -1 ? vehiculoOptions.indexOf(formData.valorVehiculo) : 0)}
+                    value={(() => {
+                      // Buscar índice exacto si existe
+                      const exactIndex = vehiculoOptions.indexOf(formData.valorVehiculo);
+                      if (exactIndex !== -1) return exactIndex;
+                      
+                      // Si no existe, encontrar el índice más cercano
+                      let closestIndex = 0;
+                      let minDiff = Math.abs(vehiculoOptions[0] - formData.valorVehiculo);
+                      
+                      for (let i = 1; i < vehiculoOptions.length; i++) {
+                        const diff = Math.abs(vehiculoOptions[i] - formData.valorVehiculo);
+                        if (diff < minDiff) {
+                          minDiff = diff;
+                          closestIndex = i;
+                        }
+                      }
+                      
+                      return closestIndex;
+                    })()}
                     onChange={(e) => {
                       const index = parseInt(e.target.value);
                       setFormData({ ...formData, valorVehiculo: vehiculoOptions[index] || 15000 });
                     }}
-                    className="w-full h-4 md:h-3 bg-gray-300 rounded-lg appearance-none cursor-pointer slider-thumb slider-with-stops"
+                    className="w-full h-8 sm:h-6 md:h-4 bg-gray-300 rounded-lg appearance-none cursor-pointer slider-thumb slider-with-stops transition-all duration-200 ease-out"
                     style={{
-                      background: `linear-gradient(to right, #8AAA19 0%, #8AAA19 ${(Math.max(0, vehiculoOptions.indexOf(formData.valorVehiculo)) / (vehiculoOptions.length - 1)) * 100}%, #e5e7eb ${(Math.max(0, vehiculoOptions.indexOf(formData.valorVehiculo)) / (vehiculoOptions.length - 1)) * 100}%, #e5e7eb 100%)`
+                      background: `linear-gradient(to right, #8AAA19 0%, #8AAA19 ${((() => {
+                        const exactIndex = vehiculoOptions.indexOf(formData.valorVehiculo);
+                        if (exactIndex !== -1) return (exactIndex / (vehiculoOptions.length - 1)) * 100;
+                        
+                        let closestIndex = 0;
+                        let minDiff = Math.abs(vehiculoOptions[0] - formData.valorVehiculo);
+                        for (let i = 1; i < vehiculoOptions.length; i++) {
+                          const diff = Math.abs(vehiculoOptions[i] - formData.valorVehiculo);
+                          if (diff < minDiff) {
+                            minDiff = diff;
+                            closestIndex = i;
+                          }
+                        }
+                        return (closestIndex / (vehiculoOptions.length - 1)) * 100;
+                      })())}%, #e5e7eb ${((() => {
+                        const exactIndex = vehiculoOptions.indexOf(formData.valorVehiculo);
+                        if (exactIndex !== -1) return (exactIndex / (vehiculoOptions.length - 1)) * 100;
+                        
+                        let closestIndex = 0;
+                        let minDiff = Math.abs(vehiculoOptions[0] - formData.valorVehiculo);
+                        for (let i = 1; i < vehiculoOptions.length; i++) {
+                          const diff = Math.abs(vehiculoOptions[i] - formData.valorVehiculo);
+                          if (diff < minDiff) {
+                            minDiff = diff;
+                            closestIndex = i;
+                          }
+                        }
+                        return (closestIndex / (vehiculoOptions.length - 1)) * 100;
+                      })())}%, #e5e7eb 100%)`
                     }}
                   />
-                  {/* Marcadores visuales en stops */}
-                  <div className="flex justify-between absolute top-1/2 -translate-y-1/2 left-0 right-0 pointer-events-none px-1">
-                    {[0, 10, 20, 30, 40, 50].map((stop) => {
-                      const index = Math.floor((vehiculoOptions.length - 1) * (stop / 50));
+                  {/* Marcadores visuales en stops - ocultos en mobile */}
+                  <div className="hidden sm:flex justify-between absolute top-1/2 -translate-y-1/2 left-0 right-0 pointer-events-none px-2">
+                    {[0, 20, 40, 60, 80, 100].map((percent) => {
+                      const index = Math.floor((vehiculoOptions.length - 1) * (percent / 100));
+                      const value = vehiculoOptions[index];
+                      const isActive = formData.valorVehiculo >= value;
                       return (
-                        <div key={stop} className="w-2 h-2 bg-white border-2 border-gray-400 rounded-full"></div>
+                        <div key={percent} className={`w-2.5 h-2.5 rounded-full border-2 transition-all duration-200 ${
+                          isActive ? 'bg-[#8AAA19] border-[#8AAA19] scale-105' : 'bg-white border-gray-400'
+                        }`}></div>
                       );
                     })}
                   </div>
                 </div>
                 
                 {/* Instrucciones y rango */}
-                <div className="mt-2 space-y-1">
-                  <div className="flex justify-between text-xs text-gray-600">
+                <div className="mt-3 space-y-1">
+                  <div className="flex justify-between text-xs sm:text-sm text-gray-600 font-semibold">
                     <span>$5,000</span>
                     <span>$100,000</span>
                   </div>
-                  <p className="text-xs text-gray-600 text-center">
-                    💡 Use la barra para ajustar el valor en incrementos de $500
+                  <p className="text-xs sm:text-sm text-gray-600 text-center mt-2">
+                    💡 Deslice la barra para ajustar el valor
                   </p>
                 </div>
               </div>
@@ -464,7 +574,7 @@ export default function FormAutoCoberturaCompleta() {
             {/* Lesión Corporal */}
             <div className="mb-6 md:mb-8">
               <label className="flex items-center text-sm md:text-base font-semibold text-gray-700 mb-3 md:mb-4">
-                Lesiones corporales (por persona/por accidente)
+                Lesiones corporales
                 <AutoCloseTooltip 
                   ref={lesionesTooltipRef}
                   content="Cubren la responsabilidad del conductor asegurado por daños físicos causados a otras personas en un accidente (como atención médica, incapacidad o fallecimiento)."
@@ -472,13 +582,13 @@ export default function FormAutoCoberturaCompleta() {
                 />
               </label>
               <div className="bg-gradient-to-br from-[#8AAA19]/5 to-[#8AAA19]/10 rounded-xl p-4 md:p-6 border-2 border-[#8AAA19]/30 transition-all">
-                <div className="text-center mb-3 md:mb-4">
-                  <span className="text-2xl md:text-3xl font-bold text-[#010139]">
+                <div className="text-center mb-4">
+                  <span className="text-xl sm:text-2xl md:text-3xl font-bold text-[#010139] block">
                     {formatCurrency(formData.lesionCorporalPersona)} / {formatCurrency(formData.lesionCorporalAccidente)}
                   </span>
-                  <p className="text-xs text-gray-600 mt-1">por persona / por accidente</p>
+                  <p className="text-xs sm:text-sm text-gray-600 mt-1">por persona / por accidente</p>
                 </div>
-                <div className="relative">
+                <div className="relative px-1">
                   <input
                     type="range"
                     min="0"
@@ -497,21 +607,27 @@ export default function FormAutoCoberturaCompleta() {
                         });
                       }
                     }}
-                    className="w-full h-4 md:h-3 bg-gray-300 rounded-lg appearance-none cursor-pointer slider-thumb"
+                    className="w-full h-8 sm:h-6 md:h-4 bg-gray-300 rounded-lg appearance-none cursor-pointer slider-thumb transition-all duration-200 ease-out"
                     style={{
                       background: `linear-gradient(to right, #8AAA19 0%, #8AAA19 ${(lesionCorporalOptions.findIndex(opt => opt.persona === formData.lesionCorporalPersona) / (lesionCorporalOptions.length - 1)) * 100}%, #e5e7eb ${(lesionCorporalOptions.findIndex(opt => opt.persona === formData.lesionCorporalPersona) / (lesionCorporalOptions.length - 1)) * 100}%, #e5e7eb 100%)`
                     }}
                   />
-                  {/* Marcadores en cada stop */}
-                  <div className="flex justify-between absolute top-1/2 -translate-y-1/2 left-0 right-0 pointer-events-none px-1">
-                    {lesionCorporalOptions.map((_, idx) => (
-                      <div key={idx} className="w-2 h-2 bg-white border-2 border-gray-400 rounded-full"></div>
-                    ))}
+                  {/* Marcadores en cada stop - ocultos en mobile */}
+                  <div className="hidden sm:flex justify-between absolute top-1/2 -translate-y-1/2 left-0 right-0 pointer-events-none px-2">
+                    {lesionCorporalOptions.map((opt, idx) => {
+                      const currentIndex = lesionCorporalOptions.findIndex(o => o.persona === formData.lesionCorporalPersona);
+                      const isActive = idx <= currentIndex;
+                      return (
+                        <div key={idx} className={`w-2.5 h-2.5 rounded-full border-2 transition-all duration-200 ${
+                          isActive ? 'bg-[#8AAA19] border-[#8AAA19] scale-105' : 'bg-white border-gray-400'
+                        }`}></div>
+                      );
+                    })}
                   </div>
                 </div>
-                <div className="flex justify-between text-xs text-gray-600 mt-2">
-                  <span>{formatCurrency(lesionCorporalOptions[0]?.persona || 5000)}/{formatCurrency(lesionCorporalOptions[0]?.accidente || 10000)}</span>
-                  <span>{formatCurrency(lesionCorporalOptions[lesionCorporalOptions.length - 1]?.persona || 100000)}/{formatCurrency(lesionCorporalOptions[lesionCorporalOptions.length - 1]?.accidente || 300000)}</span>
+                <div className="flex justify-between text-xs sm:text-sm text-gray-600 mt-3 font-medium">
+                  <span className="text-left">{formatCurrency(lesionCorporalOptions[0]?.persona || 5000)}/{formatCurrency(lesionCorporalOptions[0]?.accidente || 10000)}</span>
+                  <span className="text-right">{formatCurrency(lesionCorporalOptions[lesionCorporalOptions.length - 1]?.persona || 100000)}/{formatCurrency(lesionCorporalOptions[lesionCorporalOptions.length - 1]?.accidente || 300000)}</span>
                 </div>
               </div>
             </div>
@@ -526,31 +642,42 @@ export default function FormAutoCoberturaCompleta() {
                 />
               </label>
               <div className="bg-gradient-to-br from-[#010139]/5 to-[#010139]/10 rounded-xl p-4 md:p-6 border-2 border-[#010139]/20 transition-all">
-                <div className="text-center mb-3 md:mb-4">
+                <div className="text-center mb-4">
                   <span className="text-2xl md:text-3xl font-bold text-[#010139]">
                     {formatCurrency(formData.danoPropiedad)}
                   </span>
                 </div>
-                <div className="relative">
+                <div className="relative px-1">
                   <input
                     type="range"
                     min="0"
                     max={danoPropiedadOptions.length - 1}
-                    value={Math.max(0, danoPropiedadOptions.indexOf(formData.danoPropiedad))}
-                    onChange={(e) => setFormData({ ...formData, danoPropiedad: danoPropiedadOptions[parseInt(e.target.value)] || 10000 })}
-                    className="w-full h-4 md:h-3 bg-gray-300 rounded-lg appearance-none cursor-pointer slider-thumb"
+                    value={danoPropiedadOptions.indexOf(formData.danoPropiedad)}
+                    onChange={(e) => {
+                      const selected = danoPropiedadOptions[parseInt(e.target.value)];
+                      if (selected !== undefined) {
+                        setFormData({ ...formData, danoPropiedad: selected });
+                      }
+                    }}
+                    className="w-full h-8 sm:h-6 md:h-4 bg-gray-300 rounded-lg appearance-none cursor-pointer slider-thumb transition-all duration-200 ease-out"
                     style={{
-                      background: `linear-gradient(to right, #8AAA19 0%, #8AAA19 ${(Math.max(0, danoPropiedadOptions.indexOf(formData.danoPropiedad)) / (danoPropiedadOptions.length - 1)) * 100}%, #e5e7eb ${(Math.max(0, danoPropiedadOptions.indexOf(formData.danoPropiedad)) / (danoPropiedadOptions.length - 1)) * 100}%, #e5e7eb 100%)`
+                      background: `linear-gradient(to right, #8AAA19 0%, #8AAA19 ${(danoPropiedadOptions.indexOf(formData.danoPropiedad) / (danoPropiedadOptions.length - 1)) * 100}%, #e5e7eb ${(danoPropiedadOptions.indexOf(formData.danoPropiedad) / (danoPropiedadOptions.length - 1)) * 100}%, #e5e7eb 100%)`
                     }}
                   />
-                  {/* Marcadores en cada stop */}
-                  <div className="flex justify-between absolute top-1/2 -translate-y-1/2 left-0 right-0 pointer-events-none px-1">
-                    {danoPropiedadOptions.map((_, idx) => (
-                      <div key={idx} className="w-2 h-2 bg-white border-2 border-gray-400 rounded-full"></div>
-                    ))}
+                  {/* Marcadores en cada stop - ocultos en mobile */}
+                  <div className="hidden sm:flex justify-between absolute top-1/2 -translate-y-1/2 left-0 right-0 pointer-events-none px-2">
+                    {danoPropiedadOptions.map((val, idx) => {
+                      const currentIndex = danoPropiedadOptions.indexOf(formData.danoPropiedad);
+                      const isActive = idx <= currentIndex;
+                      return (
+                        <div key={idx} className={`w-2.5 h-2.5 rounded-full border-2 transition-all duration-200 ${
+                          isActive ? 'bg-[#8AAA19] border-[#8AAA19] scale-105' : 'bg-white border-gray-400'
+                        }`}></div>
+                      );
+                    })}
                   </div>
                 </div>
-                <div className="flex justify-between text-xs text-gray-600 mt-2">
+                <div className="flex justify-between text-xs sm:text-sm text-gray-600 mt-3 font-medium">
                   <span>{formatCurrency(danoPropiedadOptions[0] || 5000)}</span>
                   <span>{formatCurrency(danoPropiedadOptions[danoPropiedadOptions.length - 1] || 100000)}</span>
                 </div>
@@ -566,20 +693,20 @@ export default function FormAutoCoberturaCompleta() {
                   content="Cubren los costos de atención médica inmediata para el conductor y los ocupantes del vehículo asegurado, independientemente de quién haya tenido la culpa."
                 />
               </label>
-              <div className="bg-gradient-to-br from-slate-50 to-[#8AAA19]/5 rounded-xl p-4 md:p-6 border-2 border-[#8AAA19]/20 transition-all">
-                <div className="text-center mb-3 md:mb-4">
-                  <span className="text-2xl md:text-3xl font-bold text-[#010139]">
+              <div className="bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl p-4 md:p-6 border-2 border-gray-200 transition-all">
+                <div className="text-center mb-4">
+                  <span className="text-2xl md:text-3xl font-bold text-[#010139] block">
                     {formatCurrency(formData.gastosMedicosPersona)} / {formatCurrency(formData.gastosMedicosAccidente)}
                   </span>
-                  <p className="text-xs text-gray-600 mt-1">por persona / por accidente</p>
+                  <p className="text-xs sm:text-sm text-gray-600 mt-1">por persona / por accidente</p>
                 </div>
-                <div className="relative">
+                <div className="relative px-1">
                   <input
                     type="range"
                     min="0"
                     max={gastosMedicosOptions.length - 1}
                     value={gastosMedicosOptions.findIndex(opt => 
-                      opt.persona === formData.gastosMedicosPersona && 
+                      opt.persona === formData.gastosMedicosPersona &&
                       opt.accidente === formData.gastosMedicosAccidente
                     )}
                     onChange={(e) => {
@@ -592,21 +719,27 @@ export default function FormAutoCoberturaCompleta() {
                         });
                       }
                     }}
-                    className="w-full h-4 md:h-3 bg-gray-300 rounded-lg appearance-none cursor-pointer slider-thumb"
+                    className="w-full h-8 sm:h-6 md:h-4 bg-gray-300 rounded-lg appearance-none cursor-pointer slider-thumb transition-all duration-200 ease-out"
                     style={{
                       background: `linear-gradient(to right, #8AAA19 0%, #8AAA19 ${(gastosMedicosOptions.findIndex(opt => opt.persona === formData.gastosMedicosPersona) / (gastosMedicosOptions.length - 1)) * 100}%, #e5e7eb ${(gastosMedicosOptions.findIndex(opt => opt.persona === formData.gastosMedicosPersona) / (gastosMedicosOptions.length - 1)) * 100}%, #e5e7eb 100%)`
                     }}
                   />
-                  {/* Marcadores en cada stop */}
-                  <div className="flex justify-between absolute top-1/2 -translate-y-1/2 left-0 right-0 pointer-events-none px-1">
-                    {gastosMedicosOptions.map((_, idx) => (
-                      <div key={idx} className="w-2 h-2 bg-white border-2 border-gray-400 rounded-full"></div>
-                    ))}
+                  {/* Marcadores en cada stop - ocultos en mobile */}
+                  <div className="hidden sm:flex justify-between absolute top-1/2 -translate-y-1/2 left-0 right-0 pointer-events-none px-2">
+                    {gastosMedicosOptions.map((opt, idx) => {
+                      const currentIndex = gastosMedicosOptions.findIndex(o => o.persona === formData.gastosMedicosPersona);
+                      const isActive = idx <= currentIndex;
+                      return (
+                        <div key={idx} className={`w-2.5 h-2.5 rounded-full border-2 transition-all duration-200 ${
+                          isActive ? 'bg-[#8AAA19] border-[#8AAA19] scale-105' : 'bg-white border-gray-400'
+                        }`}></div>
+                      );
+                    })}
                   </div>
                 </div>
-                <div className="flex justify-between text-xs text-gray-600 mt-2">
-                  <span>{formatCurrency(gastosMedicosOptions[0]?.persona || 500)}/{formatCurrency(gastosMedicosOptions[0]?.accidente || 2500)}</span>
-                  <span>{formatCurrency(gastosMedicosOptions[gastosMedicosOptions.length - 1]?.persona || 10000)}/{formatCurrency(gastosMedicosOptions[gastosMedicosOptions.length - 1]?.accidente || 50000)}</span>
+                <div className="flex justify-between text-xs sm:text-sm text-gray-600 mt-3 font-medium">
+                  <span className="text-left">{formatCurrency(gastosMedicosOptions[0]?.persona || 500)}/{formatCurrency(gastosMedicosOptions[0]?.accidente || 2500)}</span>
+                  <span className="text-right">{formatCurrency(gastosMedicosOptions[gastosMedicosOptions.length - 1]?.persona || 10000)}/{formatCurrency(gastosMedicosOptions[gastosMedicosOptions.length - 1]?.accidente || 50000)}</span>
                 </div>
               </div>
             </div>
@@ -671,7 +804,7 @@ export default function FormAutoCoberturaCompleta() {
                 />
               </div>
 
-              <div>
+              <div className="w-full max-w-full overflow-hidden">
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Fecha de Nacimiento <span className="text-red-500">*</span>
                 </label>
@@ -679,7 +812,7 @@ export default function FormAutoCoberturaCompleta() {
                   type="date"
                   value={formData.fechaNacimiento}
                   onChange={(e) => setFormData({ ...formData, fechaNacimiento: e.target.value })}
-                  className={`w-full px-3 py-3 md:px-4 md:py-3 text-base border-2 rounded-lg focus:outline-none transition-colors ${
+                  className={`w-full max-w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 rounded-lg focus:outline-none transition-colors ${
                     errors.fechaNacimiento ? 'border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
                   }`}
                   max={new Date().toISOString().split('T')[0]}

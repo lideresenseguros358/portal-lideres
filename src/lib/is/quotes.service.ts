@@ -3,7 +3,7 @@
  * Internacional de Seguros (IS)
  */
 
-import { ISEnvironment, IS_ENDPOINTS, CORREDOR_FIJO, INSURER_SLUG } from './config';
+import { ISEnvironment, IS_ENDPOINTS, IS_CONFIG, CORREDOR_FIJO, INSURER_SLUG } from './config';
 import { isPost, isGet } from './http-client';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { getTodayLocalDate } from '../utils/dates';
@@ -75,17 +75,36 @@ export async function generarCotizacionAuto(
   request: CotizacionAutoRequest,
   env: ISEnvironment = 'development'
 ): Promise<{ success: boolean; idCotizacion?: string; error?: string }> {
-  console.log('[IS Quotes] Generando cotización auto...', {
-    cliente: `${request.vnombre} ${request.vapellido}`,
-    vehiculo: `${request.vcodmarca} ${request.vcodmodelo} ${request.vanioauto}`,
-  });
-  
   // Trigger auto-actualización de catálogos en background (no bloquea)
   import('@/lib/is/catalog-updater').then(m => m.triggerCatalogUpdate('IS')).catch(() => {});
   
+  // REMOVER DECIMALES de códigos numéricos (crítico para IS)
+  const cleanMarca = Math.floor(Number(request.vcodmarca));
+  const cleanModelo = Math.floor(Number(request.vcodmodelo));
+  const cleanGrupo = Math.floor(Number(request.vcodgrupotarifa));
+  
+  // Preparar body según documentación IS
+  const body = {
+    vcodtipodoc: request.vcodtipodoc,
+    vnrodoc: request.vnrodoc,
+    vnombre: request.vnombre,
+    vapellido: request.vapellido,
+    vtelefono: request.vtelefono,
+    vcorreo: request.vcorreo,
+    vcodmarca: cleanMarca,
+    vcodmodelo: cleanModelo,
+    vsumaaseg: request.vsumaaseg,
+    vanioauto: request.vanioauto,
+    vcodplancobertura: request.vcodplancobertura,
+    vcodgrupotarifa: cleanGrupo
+  };
+  
+  console.log('[IS] Cotizando con POST:', body);
+  
+  // Según documentación IS - POST con body JSON (NO GET con path params)
   const response = await isPost<CotizacionAutoResponse>(
     IS_ENDPOINTS.GENERAR_COTIZACION,
-    request,
+    body,
     env
   );
   
