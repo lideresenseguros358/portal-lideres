@@ -465,7 +465,7 @@ export default function FormAutoCoberturaCompleta() {
                       }
                       setValorInputTemp('');
                     }}
-                    className="text-3xl sm:text-4xl md:text-5xl font-bold text-[#010139] bg-transparent px-4 py-3 w-full text-center focus:outline-none focus:ring-0 border-0 transition-all cursor-text"
+                    className="text-4xl sm:text-4xl md:text-5xl font-bold text-[#010139] bg-transparent px-4 py-3 w-full text-center focus:outline-none focus:ring-0 border-0 transition-all cursor-text"
                     placeholder="$15,000"
                   />
                   <p className="text-xs sm:text-sm text-gray-600 mt-2 text-center">
@@ -819,6 +819,7 @@ export default function FormAutoCoberturaCompleta() {
                   className={`w-full max-w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 rounded-lg focus:outline-none transition-colors ${
                     errors.fechaNacimiento ? 'border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
                   }`}
+                  style={{ WebkitAppearance: 'none' }}
                   max={new Date().toISOString().split('T')[0]}
                 />
               </div>
@@ -872,31 +873,39 @@ export default function FormAutoCoberturaCompleta() {
       <style jsx>{`
         .slider-thumb::-webkit-slider-thumb {
           appearance: none;
-          width: 28px;
-          height: 28px;
+          width: 24px;
+          height: 24px;
           border-radius: 50%;
           background: #8AAA19;
           cursor: pointer;
           border: 3px solid white;
           box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+          margin-top: -10px;
         }
         .slider-thumb::-moz-range-thumb {
-          width: 28px;
-          height: 28px;
+          width: 24px;
+          height: 24px;
           border-radius: 50%;
           background: #8AAA19;
           cursor: pointer;
           border: 3px solid white;
           box-shadow: 0 2px 8px rgba(0,0,0,0.2);
         }
-        @media (min-width: 768px) {
+        .slider-thumb::-webkit-slider-runnable-track {
+          height: 4px;
+        }
+        .slider-thumb::-moz-range-track {
+          height: 4px;
+        }
+        @media (min-width: 640px) {
           .slider-thumb::-webkit-slider-thumb {
-            width: 24px;
-            height: 24px;
+            width: 20px;
+            height: 20px;
+            margin-top: -8px;
           }
           .slider-thumb::-moz-range-thumb {
-            width: 24px;
-            height: 24px;
+            width: 20px;
+            height: 20px;
           }
         }
       `}</style>

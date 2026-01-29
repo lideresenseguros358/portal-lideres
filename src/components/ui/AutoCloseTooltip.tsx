@@ -91,7 +91,7 @@ const AutoCloseTooltip = forwardRef<AutoCloseTooltipRef, AutoCloseTooltipProps>(
 
       {(isOpen || isClosing) && (
         <div 
-          className={`fixed sm:absolute left-4 right-4 sm:left-0 sm:right-auto top-auto sm:top-full mt-3 z-50 w-auto sm:w-80 md:w-96 max-w-[calc(100vw-2rem)] bg-sky-50/95 backdrop-blur-sm rounded-2xl shadow-xl p-4 border border-sky-200/50 transition-all duration-300 ${
+          className={`absolute left-1/2 -translate-x-1/2 sm:left-0 sm:translate-x-0 top-full mt-3 z-50 w-[calc(100vw-2rem)] sm:w-80 md:w-96 max-w-[calc(100vw-2rem)] bg-sky-50/95 backdrop-blur-sm rounded-2xl shadow-xl p-4 border border-sky-200/50 transition-all duration-300 ${
             isClosing ? 'opacity-0 translate-y-1' : 'opacity-100 translate-y-0'
           }`}
           style={{
