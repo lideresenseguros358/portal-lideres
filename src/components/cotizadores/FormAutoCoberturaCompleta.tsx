@@ -929,29 +929,29 @@ export default function FormAutoCoberturaCompleta() {
         }
         
         /* Desktop - thumb más pequeño */
-        @media (min-width: 640px) {
+        @media (min-width: 768px) {
           .slider-thumb {
-            height: 6px;
+            height: 6px !important;
           }
           
           .slider-thumb::-webkit-slider-thumb {
-            width: 24px;
-            height: 24px;
+            width: 20px !important;
+            height: 20px !important;
             border: 3px solid white;
           }
           
           .slider-thumb::-moz-range-thumb {
-            width: 24px;
-            height: 24px;
+            width: 20px !important;
+            height: 20px !important;
             border: 3px solid white;
           }
           
           .slider-thumb::-webkit-slider-runnable-track {
-            height: 6px;
+            height: 6px !important;
           }
           
           .slider-thumb::-moz-range-track {
-            height: 6px;
+            height: 6px !important;
           }
         }
       `}</style>
