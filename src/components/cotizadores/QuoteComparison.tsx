@@ -374,6 +374,7 @@ export default function QuoteComparison({ policyType, quotes, quoteData }: Quote
                 </div>
               </div>
             </div>
+            </div>
           ))}
         </div>
 

@@ -161,7 +161,7 @@ export default function ThirdPartyIssuanceForm({
 
   // Generar años (desde 1960 hasta un año futuro)
   const currentYear = new Date().getFullYear();
-  const yearOptions = [];
+  const yearOptions: number[] = [];
   for (let year = currentYear + 1; year >= 1960; year--) {
     yearOptions.push(year);
   }
