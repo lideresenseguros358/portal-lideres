@@ -147,16 +147,24 @@ export default function PaymentPlanSelector({ annualPremium, priceBreakdown, onC
             </div>
           </div>
 
-          {/* Selected Option Display - Emoji Central Dinámico */}
+          {/* Selected Option Display - Emoji Central Dinámico CON ANIMACIÓN */}
           <div className="text-center mt-8">
             <div className="relative inline-block">
-              {/* Emoji Grande Central */}
-              <div className="text-8xl mb-4 animate-bounce">
-                {getEmoji(installments)}
+              {/* Emoji Grande Central - Solo 1 con transición */}
+              <div className="relative h-32 flex items-center justify-center mb-4">
+                <div 
+                  key={installments}
+                  className="text-8xl emoji-transition"
+                  style={{
+                    animation: 'emojiEnter 0.5s ease-out',
+                  }}
+                >
+                  {getEmoji(installments)}
+                </div>
               </div>
               
               {/* Información de cuotas */}
-              <div className="bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white px-8 py-4 rounded-2xl shadow-2xl">
+              <div className="bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white px-8 py-4 rounded-2xl shadow-2xl transition-all duration-300">
                 <div className="font-black text-3xl mb-1">
                   {installments} {installments === 1 ? 'Pago' : 'Cuotas'}
                 </div>
@@ -257,6 +265,26 @@ export default function PaymentPlanSelector({ annualPremium, priceBreakdown, onC
           cursor: pointer;
           border: 4px solid white;
           box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+        
+        /* Animación del emoji - entrada con bounce y rotate */
+        @keyframes emojiEnter {
+          0% {
+            opacity: 0;
+            transform: scale(0.3) rotate(-180deg);
+          }
+          50% {
+            transform: scale(1.1) rotate(10deg);
+          }
+          100% {
+            opacity: 1;
+            transform: scale(1) rotate(0deg);
+          }
+        }
+        
+        .emoji-transition {
+          display: inline-block;
+          filter: drop-shadow(0 8px 16px rgba(138, 170, 25, 0.3));
         }
       `}</style>
     </div>
