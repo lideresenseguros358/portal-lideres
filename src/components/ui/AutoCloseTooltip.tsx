@@ -138,7 +138,7 @@ const AutoCloseTooltip = forwardRef<AutoCloseTooltipRef, AutoCloseTooltipProps>(
             top: `${tooltipPosition.top}px`,
             left: `${tooltipPosition.left}px`,
             width: `${tooltipPosition.width}px`,
-            animation: isClosing ? 'none' : 'fadeInSlideUp 300ms ease-out',
+            animation: isClosing ? 'none' : 'fadeIn 300ms ease-out',
           }}
         >
           <div className="text-sm text-gray-700 leading-relaxed">
@@ -148,14 +148,12 @@ const AutoCloseTooltip = forwardRef<AutoCloseTooltipRef, AutoCloseTooltipProps>(
       )}
 
       <style jsx>{`
-        @keyframes fadeInSlideUp {
+        @keyframes fadeIn {
           from {
             opacity: 0;
-            transform: translateY(4px);
           }
           to {
             opacity: 1;
-            transform: translateY(0);
           }
         }
       `}</style>
