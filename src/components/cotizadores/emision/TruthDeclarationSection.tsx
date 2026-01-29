@@ -51,10 +51,7 @@ export default function TruthDeclarationSection({
           />
           <div className="flex-1">
             <p className="text-base sm:text-lg font-bold text-gray-900 leading-relaxed">
-              Declaro que la información suministrada es veraz y correcta
-            </p>
-            <p className="text-sm text-gray-600 mt-2">
-              Al marcar esta casilla, confirmo que he proporcionado información verdadera y completa.
+              Declaro que la información suministrada es veraz, completa y correcta.
             </p>
           </div>
         </label>
@@ -86,91 +83,45 @@ export default function TruthDeclarationSection({
       >
         <div className="bg-gray-50 border-2 border-gray-200 rounded-xl p-6 space-y-4">
           <h5 className="text-lg font-bold text-[#010139] mb-3">
-            DECLARACIÓN DE VERACIDAD Y RESPONSABILIDAD
+            Declaración de Veracidad
           </h5>
 
-          <div className="space-y-3 text-sm text-gray-700 leading-relaxed">
+          <div className="space-y-4 text-sm text-gray-700 leading-relaxed">
             <p>
-              <strong>Yo, el asegurado solicitante,</strong> declaro bajo juramento que:
+              Declaro y certifico, bajo la gravedad de juramento, que toda la información suministrada durante este proceso, incluyendo pero no limitándose a: datos personales del asegurado y/o contratante, información del vehículo, fotografías, documentos adjuntos, inspección visual, condiciones del bien asegurado y cualquier otro dato proporcionado de forma escrita, digital o gráfica, es real, exacta, completa y veraz.
             </p>
 
-            <ol className="list-decimal list-inside space-y-2 pl-4">
-              <li>
-                <strong>Información Verídica:</strong> Toda la información proporcionada en esta 
-                solicitud de seguro es completa, verdadera y correcta a mi leal saber y entender.
-              </li>
-              
-              <li>
-                <strong>Conocimiento de Consecuencias:</strong> Soy consciente de que cualquier 
-                declaración falsa, omisión material o inexactitud en la información suministrada 
-                puede resultar en:
-                <ul className="list-disc list-inside pl-6 mt-1 space-y-1">
-                  <li>La anulación de la póliza de seguro</li>
-                  <li>La pérdida total de coberturas contratadas</li>
-                  <li>La denegación de reclamaciones futuras</li>
-                  <li>Consecuencias legales según la legislación de la República de Panamá</li>
-                </ul>
-              </li>
+            <p>
+              Manifiesto expresamente que no he omitido, alterado ni falseado información alguna que pueda influir directa o indirectamente en la evaluación del riesgo, la aceptación del seguro, la determinación de primas, deducibles, coberturas o condiciones contractuales.
+            </p>
 
-              <li>
-                <strong>Condiciones del Vehículo:</strong> Confirmo que el vehículo objeto del 
-                seguro se encuentra en buenas condiciones de funcionamiento y no presenta daños 
-                preexistentes no declarados.
-              </li>
+            <p>
+              Reconozco que la presentación de información falsa, inexacta, incompleta u omisiones relevantes constituye riesgo moral, y puede dar lugar, conforme a la legislación vigente de la República de Panamá y a las condiciones generales y particulares de la póliza:
+            </p>
 
-              <li>
-                <strong>Documentos Adjuntos:</strong> Los documentos adjuntados (cédula, licencia 
-                de conducir, registro vehicular y fotos de inspección) son auténticos, actualizados 
-                y corresponden al vehículo y al titular declarado.
-              </li>
+            <ul className="list-disc list-inside pl-4 space-y-2">
+              <li>A la nulidad del contrato de seguro</li>
+              <li>A la cancelación de la póliza</li>
+              <li>A la pérdida total o parcial de coberturas</li>
+              <li>Al rechazo de reclamaciones derivadas de siniestros</li>
+            </ul>
 
-              <li>
-                <strong>Términos y Condiciones:</strong> He leído, entendido y acepto los términos 
-                y condiciones de la póliza de seguro, incluyendo coberturas, exclusiones, deducibles 
-                y obligaciones del asegurado.
-              </li>
+            <p>
+              Acepto que la aseguradora y/o el corredor de seguros podrán verificar, auditar y contrastar la información suministrada en cualquier momento, antes o después de la emisión de la póliza.
+            </p>
 
-              <li>
-                <strong>Normativa Aplicable:</strong> Esta declaración se realiza conforme a:
-                <ul className="list-disc list-inside pl-6 mt-1 space-y-1">
-                  <li>Ley 12 de 3 de abril de 2012 sobre Seguros en Panamá</li>
-                  <li>Resoluciones de la Superintendencia de Seguros y Reaseguros de Panamá</li>
-                  <li>Condiciones generales de la póliza contratada</li>
-                </ul>
-              </li>
-
-              <li>
-                <strong>Actualización de Información:</strong> Me comprometo a notificar 
-                inmediatamente a la aseguradora cualquier cambio material en la información 
-                declarada durante la vigencia de la póliza.
-              </li>
-
-              <li>
-                <strong>Inspección Vehicular:</strong> Autorizo a la aseguradora a realizar 
-                inspecciones adicionales del vehículo si lo considera necesario para validar 
-                la información proporcionada.
-              </li>
-            </ol>
-
-            <div className="bg-amber-50 border-l-4 border-amber-500 p-4 mt-4">
-              <p className="font-semibold text-amber-900 mb-2">
-                ⚠️ ADVERTENCIA IMPORTANTE
-              </p>
-              <p className="text-xs text-amber-800">
-                La falsedad u omisión de información material en esta solicitud puede dar lugar 
-                a la cancelación de la póliza de seguro sin derecho a reembolso de primas pagadas, 
-                y puede exponerle a responsabilidades civiles y penales conforme a la legislación 
-                panameña. La aseguradora se reserva el derecho de verificar la autenticidad de 
-                toda la información y documentos suministrados.
-              </p>
-            </div>
-
-            <p className="text-xs text-gray-500 italic mt-4">
-              Al aceptar esta declaración, usted confirma que ha leído y comprendido todo lo 
-              anterior y acepta todas las condiciones establecidas.
+            <p>
+              Declaro que he leído, comprendido y aceptado plenamente el contenido de esta declaración, la cual forma parte integral del proceso de emisión del seguro.
             </p>
           </div>
         </div>
+      </div>
+
+      {/* Texto final fijo (no colapsable) */}
+      <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded">
+        <p className="text-sm text-gray-700 font-medium">
+          Esta declaración es requisito obligatorio para la emisión de la póliza.
+        </p>
       </div>
 
       {/* Validación visual */}

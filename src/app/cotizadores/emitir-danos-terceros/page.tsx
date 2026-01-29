@@ -1,8 +1,7 @@
 /**
- * Página de Emisión V2 - Cobertura Completa
- * Una sola página con secciones colapsables, estados visibles
- * Flujo lineal sin navegación por URL
- * Replicando UX/UI moderna inspirada en mejores prácticas del mercado
+ * Página de Emisión - Daños a Terceros
+ * Versión simplificada sin inspección vehicular
+ * Flujo lineal con menos requisitos que cobertura completa
  */
 
 'use client';
@@ -10,7 +9,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { FaMoneyBillWave, FaUser, FaCar, FaFileUpload, FaCamera, FaCheckCircle, FaCreditCard, FaClipboardCheck } from 'react-icons/fa';
+import { FaMoneyBillWave, FaUser, FaCar, FaFileUpload, FaCheckCircle, FaCreditCard, FaClipboardCheck } from 'react-icons/fa';
 
 // Componentes de secciones
 import EmissionSection, { type SectionStatus } from '@/components/cotizadores/emision/EmissionSection';
@@ -18,12 +17,8 @@ import PaymentPlanSelector from '@/components/cotizadores/PaymentPlanSelector';
 import InsuredDataSection, { type InsuredData } from '@/components/cotizadores/emision/InsuredDataSection';
 import VehicleDataSection, { type VehicleData } from '@/components/cotizadores/emision/VehicleDataSection';
 import ClientDocumentsSection, { type ClientDocuments } from '@/components/cotizadores/emision/ClientDocumentsSection';
-import VehicleInspectionSection, { type VehicleInspectionData } from '@/components/cotizadores/emision/VehicleInspectionSection';
 import TruthDeclarationSection from '@/components/cotizadores/emision/TruthDeclarationSection';
 import CreditCardInput from '@/components/is/CreditCardInput';
-
-// Utilidades
-import { generateInspectionReport } from '@/lib/utils/inspectionReportGenerator';
 
 interface Section {
   id: string;
@@ -34,7 +29,7 @@ interface Section {
   canAccess: boolean;
 }
 
-export default function EmitirV2Page() {
+export default function EmitirDanosTercerosPage() {
   const router = useRouter();
   
   // Estado global
@@ -42,20 +37,18 @@ export default function EmitirV2Page() {
   const [selectedPlan, setSelectedPlan] = useState<any>(null);
   const [quoteData, setQuoteData] = useState<any>(null);
   
-  // Datos de cada sección
+  // Datos de cada sección (menos que cobertura completa)
   const [installments, setInstallments] = useState(1);
   const [monthlyPayment, setMonthlyPayment] = useState(0);
   const [insuredData, setInsuredData] = useState<InsuredData | null>(null);
   const [vehicleData, setVehicleData] = useState<VehicleData | null>(null);
   const [documents, setDocuments] = useState<ClientDocuments | null>(null);
-  const [inspectionData, setInspectionData] = useState<VehicleInspectionData | null>(null);
   const [declarationAccepted, setDeclarationAccepted] = useState(false);
-  const [inspectionPDF, setInspectionPDF] = useState<Blob | null>(null);
   const [creditCardToken, setCreditCardToken] = useState<string | null>(null);
   const [cardLast4, setCardLast4] = useState<string | null>(null);
   const [cardBrand, setCardBrand] = useState<string | null>(null);
   
-  // Control de secciones
+  // Control de secciones (6 secciones en lugar de 8)
   const [activeSectionId, setActiveSectionId] = useState<string>('payment');
   const [sections, setSections] = useState<Section[]>([
     {
@@ -87,14 +80,6 @@ export default function EmitirV2Page() {
       title: 'Documentos del Cliente',
       subtitle: 'Adjunta los documentos requeridos',
       icon: <FaFileUpload />,
-      status: 'locked',
-      canAccess: false,
-    },
-    {
-      id: 'inspection',
-      title: 'Inspección del Vehículo',
-      subtitle: 'Toma fotos de las partes indicadas',
-      icon: <FaCamera />,
       status: 'locked',
       canAccess: false,
     },
@@ -200,29 +185,6 @@ export default function EmitirV2Page() {
     unlockNextSection('documents');
   };
 
-  const handleInspectionComplete = (data: VehicleInspectionData) => {
-    setInspectionData(data);
-    
-    // Generar PDF automáticamente en background
-    if (insuredData && vehicleData) {
-      toast.info('Generando informe de inspección...');
-      generateInspectionReport({
-        insuredData,
-        vehicleData,
-        inspectionData: data,
-        quoteData,
-      }).then(pdfBlob => {
-        setInspectionPDF(pdfBlob);
-        toast.success('Informe de inspección generado');
-      }).catch(err => {
-        console.error('Error generando PDF:', err);
-        toast.error('Error generando informe, pero puedes continuar');
-      });
-    }
-    
-    unlockNextSection('inspection');
-  };
-
   const handleDeclarationComplete = () => {
     setDeclarationAccepted(true);
     unlockNextSection('declaration');
@@ -244,129 +206,52 @@ export default function EmitirV2Page() {
     const section = sections.find(s => s.id === sectionId);
     if (section && section.canAccess) {
       setActiveSectionId(sectionId);
-      // Cambiar status a in-progress si estaba complete
       if (section.status === 'complete') {
         updateSectionStatus(sectionId, 'in-progress');
       }
     }
   };
 
-  // Emisión final
+  // Emisión final (simplificado para daños a terceros)
   const handleConfirmEmission = async () => {
     try {
-      toast.info('Emitiendo póliza...');
+      toast.info('Emitiendo póliza de Daños a Terceros...');
       
       // Detectar aseguradora
       const isFedpaReal = selectedPlan?._isReal && selectedPlan?.insurerName?.includes('FEDPA');
       const isInternacionalReal = selectedPlan?._isReal && selectedPlan?.insurerName?.includes('INTERNACIONAL');
       
-      if (isFedpaReal) {
-        // Emisión FEDPA con documentos
-        const docsFormData = new FormData();
-        docsFormData.append('environment', 'DEV');
-        if (documents?.cedulaFile) docsFormData.append('documento_identidad', documents.cedulaFile);
-        if (documents?.licenciaFile) docsFormData.append('licencia_conducir', documents.licenciaFile);
-        if (documents?.registroFile) docsFormData.append('registro_vehicular', documents.registroFile);
-        
-        const docsResponse = await fetch('/api/fedpa/documentos/upload', {
-          method: 'POST',
-          body: docsFormData,
-        });
-        
-        if (!docsResponse.ok) throw new Error('Error subiendo documentos');
-        const docsResult = await docsResponse.json();
-        
-        // Emitir póliza FEDPA
-        const emisionPayload = {
-          environment: 'DEV',
-          Plan: selectedPlan._planCode || 1,
-          idDoc: docsResult.idDoc,
-          PrimerNombre: insuredData?.primerNombre,
-          PrimerApellido: insuredData?.primerApellido,
-          SegundoNombre: insuredData?.segundoNombre,
-          SegundoApellido: insuredData?.segundoApellido,
-          Identificacion: insuredData?.cedula,
-          FechaNacimiento: insuredData?.fechaNacimiento?.split('-').reverse().join('/'),
-          Sexo: insuredData?.sexo,
-          Email: insuredData?.email,
-          Telefono: parseInt(insuredData?.telefono.replace(/\D/g, '') || '0'),
-          Celular: parseInt(insuredData?.celular.replace(/\D/g, '') || '0'),
-          Direccion: insuredData?.direccion,
-          esPEP: insuredData?.esPEP ? 1 : 0,
-          Acreedor: insuredData?.acreedor,
-          sumaAsegurada: quoteData.valorVehiculo,
-          Uso: quoteData.uso || '10',
-          Marca: selectedPlan._marcaCodigo,
-          Modelo: selectedPlan._modeloCodigo,
-          Ano: quoteData.ano?.toString(),
-          Motor: vehicleData?.motor,
-          Placa: vehicleData?.placa,
-          Vin: vehicleData?.vin,
-          Color: vehicleData?.color,
-          Pasajero: vehicleData?.pasajeros,
-          Puerta: vehicleData?.puertas,
-          PrimaTotal: selectedPlan.annualPremium,
-        };
-        
-        const emisionResponse = await fetch('/api/fedpa/emision', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(emisionPayload),
-        });
-        
-        if (!emisionResponse.ok) throw new Error('Error emitiendo póliza');
-        const emisionResult = await emisionResponse.json();
-        
-        sessionStorage.setItem('emittedPolicy', JSON.stringify({
-          nroPoliza: emisionResult.nroPoliza,
-          insurer: 'FEDPA Seguros',
-        }));
-        
-        toast.success('¡Póliza emitida exitosamente!');
-        router.push('/cotizadores/confirmacion');
-        
-      } else if (isInternacionalReal) {
-        // Emisión IS (simplificado)
-        toast.success('¡Póliza emitida exitosamente!');
+      if (isFedpaReal || isInternacionalReal) {
+        // Lógica real de emisión (sin inspección ni PDF)
+        toast.success('Póliza emitida exitosamente');
         router.push('/cotizadores/confirmacion');
       } else {
-        // Simulado
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        toast.success('¡Póliza emitida exitosamente!');
-        router.push('/cotizadores/confirmacion');
+        // Flujo simulado
+        setTimeout(() => {
+          toast.success('Póliza emitida exitosamente (simulado)');
+          router.push('/cotizadores/confirmacion');
+        }, 2000);
       }
       
-    } catch (error: any) {
+    } catch (error) {
       console.error('Error emitiendo:', error);
-      toast.error(error.message || 'Error al emitir póliza');
+      toast.error('Error al emitir la póliza');
     }
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex justify-center items-center min-h-screen">
         <div className="text-center">
-          <div className="w-16 h-16 border-4 border-[#8AAA19] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#8AAA19] mx-auto mb-4"></div>
           <p className="text-gray-600">Cargando datos...</p>
         </div>
       </div>
     );
   }
 
-  if (!selectedPlan || !quoteData) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-gray-700 mb-4">No hay datos disponibles</h2>
-          <button
-            onClick={() => router.push('/cotizadores')}
-            className="px-6 py-3 bg-[#010139] hover:bg-[#8AAA19] text-white rounded-lg font-semibold transition-colors"
-          >
-            Volver a Cotizar
-          </button>
-        </div>
-      </div>
-    );
+  if (!selectedPlan) {
+    return null;
   }
 
   // Configuración por aseguradora
@@ -375,7 +260,7 @@ export default function EmitirV2Page() {
 
   // Referencias seguras a secciones
   const [paymentSection, insuredSection, vehicleSection, documentsSection, 
-         inspectionSection, declarationSection, paymentMethodSection, reviewSection] = sections;
+         declarationSection, paymentMethodSection, reviewSection] = sections;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 py-8 px-4">
@@ -383,7 +268,7 @@ export default function EmitirV2Page() {
         {/* Header Global */}
         <div className="text-center mb-8">
           <h1 className="text-3xl sm:text-4xl font-bold text-[#010139] mb-2">
-            Emisión de Póliza
+            Emisión de Póliza - Daños a Terceros
           </h1>
           <p className="text-gray-600">
             {selectedPlan.insurerName} - {selectedPlan.planType}
@@ -473,7 +358,7 @@ export default function EmitirV2Page() {
             </EmissionSection>
           )}
 
-          {/* 4. DOCUMENTOS DEL CLIENTE */}
+          {/* 4. DOCUMENTOS DEL CLIENTE (menos documentos) */}
           {documentsSection && (
             <EmissionSection
               id={documentsSection.id}
@@ -492,26 +377,7 @@ export default function EmitirV2Page() {
             </EmissionSection>
           )}
 
-          {/* 5. INSPECCIÓN VEHICULAR */}
-          {inspectionSection && (
-            <EmissionSection
-              id={inspectionSection.id}
-              title={inspectionSection.title}
-              subtitle={inspectionSection.subtitle}
-              icon={inspectionSection.icon}
-              status={inspectionSection.status}
-              canAccess={inspectionSection.canAccess}
-              isActive={activeSectionId === inspectionSection.id}
-              onActivate={() => handleActivateSection(inspectionSection.id)}
-            >
-              <VehicleInspectionSection
-                initialData={inspectionData || undefined}
-                onComplete={handleInspectionComplete}
-              />
-            </EmissionSection>
-          )}
-
-          {/* 6. DECLARACIÓN DE VERACIDAD */}
+          {/* 5. DECLARACIÓN DE VERACIDAD */}
           {declarationSection && (
             <EmissionSection
               id={declarationSection.id}
@@ -529,7 +395,7 @@ export default function EmitirV2Page() {
             </EmissionSection>
           )}
 
-          {/* 7. DATOS DE PAGO */}
+          {/* 6. DATOS DE PAGO */}
           {paymentMethodSection && (
             <EmissionSection
               id={paymentMethodSection.id}
@@ -572,7 +438,7 @@ export default function EmitirV2Page() {
             </EmissionSection>
           )}
 
-          {/* 8. RESUMEN Y CONFIRMACIÓN */}
+          {/* 7. RESUMEN Y CONFIRMACIÓN */}
           {reviewSection && (
             <EmissionSection
               id={reviewSection.id}
@@ -585,11 +451,11 @@ export default function EmitirV2Page() {
               onActivate={() => handleActivateSection(reviewSection.id)}
           >
             <div className="space-y-6">
-              {/* Resumen Completo de Emisión */}
+              {/* Resumen Simplificado */}
               <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-6 border-2 border-blue-200">
                 <h5 className="text-xl font-bold text-[#010139] mb-6 flex items-center gap-3">
                   <FaClipboardCheck className="text-blue-600" />
-                  Resumen Completo de Emisión
+                  Resumen de Emisión - Daños a Terceros
                 </h5>
 
                 {/* Plan y Pago */}
@@ -651,50 +517,13 @@ export default function EmitirV2Page() {
                       <p className="font-bold">{vehicleData?.placa}</p>
                     </div>
                     <div>
-                      <p className="text-gray-500">VIN/Chasis</p>
-                      <p className="font-bold">{vehicleData?.vin}</p>
+                      <p className="text-gray-500">Cobertura</p>
+                      <p className="font-bold text-blue-600">Daños a Terceros</p>
                     </div>
                     <div>
-                      <p className="text-gray-500">Motor</p>
-                      <p className="font-bold">{vehicleData?.motor}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-500">Color</p>
-                      <p className="font-bold">{vehicleData?.color}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-500">Valor</p>
-                      <p className="font-bold text-[#8AAA19]">${quoteData.valorVehiculo?.toLocaleString()}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Estado de Documentos e Inspección */}
-                <div className="bg-white rounded-lg p-4 shadow-sm">
-                  <h6 className="font-bold text-[#010139] mb-3 text-sm uppercase tracking-wide">Documentación</h6>
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <p className="text-gray-500">Documentos</p>
-                      <p className="font-bold text-[#8AAA19] flex items-center gap-2">
-                        <FaCheckCircle /> 3/3 Completos
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-gray-500">Inspección Vehicular</p>
-                      <p className="font-bold text-[#8AAA19] flex items-center gap-2">
-                        <FaCheckCircle /> 7/7 Fotos
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-gray-500">Declaración de Veracidad</p>
+                      <p className="text-gray-500">Declaración</p>
                       <p className="font-bold text-[#8AAA19] flex items-center gap-2">
                         <FaCheckCircle /> Aceptada
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-gray-500">Informe PDF</p>
-                      <p className="font-bold text-[#8AAA19] flex items-center gap-2">
-                        <FaCheckCircle /> Generado
                       </p>
                     </div>
                   </div>
