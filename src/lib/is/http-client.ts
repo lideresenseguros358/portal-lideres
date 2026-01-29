@@ -3,10 +3,42 @@
  * Incluye: retry con backoff, token refresh, logging, timeout
  */
 
-import { ISEnvironment, RETRY_CONFIG, getISBaseUrl } from './config';
+import { ISEnvironment, RETRY_CONFIG, getISBaseUrl, getISPrimaryToken } from './config';
 import { getDailyTokenWithRetry } from './token-manager';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import crypto from 'crypto';
+
+// ============================================
+// IS P1: HELPER CONSTRUCCIÓN SEGURA DE URLs
+// ============================================
+
+/**
+ * Une base URL y path SIN duplicar /api
+ * Garantiza 1 solo slash entre segmentos
+ * 
+ * @example
+ * joinUrl('https://...com/api', '/tokens') -> 'https://...com/api/tokens'
+ * joinUrl('https://...com/api/', '/tokens') -> 'https://...com/api/tokens'
+ * joinUrl('https://...com/api', 'tokens') -> 'https://...com/api/tokens'
+ */
+function joinUrl(base: string, path: string): string {
+  // Eliminar trailing slashes de base
+  const normalizedBase = base.replace(/\/+$/, '');
+  
+  // Asegurar leading slash en path
+  const normalizedPath = path.startsWith('/') ? path : '/' + path;
+  
+  // VALIDACIÓN CRÍTICA: detectar /api/api
+  const joined = normalizedBase + normalizedPath;
+  if (joined.includes('/api/api')) {
+    console.error('[IS] ⚠️ URL INCORRECTA detectada:', joined);
+    console.error('[IS] Base:', base);
+    console.error('[IS] Path:', path);
+    throw new Error('URL construction error: /api/api detected');
+  }
+  
+  return joined;
+}
 
 export interface ISRequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'DELETE';
@@ -97,23 +129,16 @@ export async function isRequest<T = any>(
     useEnvironmentToken = false,
   } = options;
   
-  // B2: NORMALIZAR BASE URL sin trailing slash
-  let baseUrl = getISBaseUrl(env);
-  baseUrl = baseUrl.replace(/\/+$/, ''); // Eliminar trailing slashes
+  // IS P1: CONSTRUIR URL usando helper seguro (previene /api/api)
+  const baseUrl = getISBaseUrl(env);
   
-  // B2: CONSTRUIR URL ABSOLUTA correctamente
   let url: string;
   if (endpoint.startsWith('http')) {
     // Ya es URL absoluta
     url = endpoint;
   } else {
-    // Normalizar path con leading slash
-    let path = endpoint;
-    if (!path.startsWith('/')) {
-      path = '/' + path;
-    }
-    // Concatenar: baseUrl nunca termina en /, path siempre empieza con /
-    url = baseUrl + path;
+    // Usar helper que previene /api/api
+    url = joinUrl(baseUrl, endpoint);
   }
   
   // Validación: URL debe ser absoluta con https

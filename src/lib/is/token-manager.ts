@@ -105,12 +105,23 @@ async function fetchDailyToken(env: ISEnvironment): Promise<string> {
       throw new Error('Respuesta no es JSON válido');
     }
     
-    // B2: DETECTAR BLOQUEO/WAF - Si solo viene _event_transid es bloqueo
+    // IS P1: DETECTAR BLOQUEO/WAF - _event_transid = ABORTAR FLUJO COMPLETO
+    // Cuando IS responde solo con _event_transid:
+    // - El endpoint está bloqueado por WAF
+    // - Mal configurado
+    // - Usando ambiente incorrecto
+    // NO ES ERROR DE PARSING - NO ES TOKEN VÁLIDO - NO SE DEBE REINTENTAR
     if (data._event_transid && !data.token && !data.Token && !data.access_token) {
-      console.error('[IS Token Manager] BLOQUEO DETECTADO: respuesta solo contiene _event_transid');
-      console.error('[IS Token Manager] Esto indica WAF/bloqueo o endpoint incorrecto');
-      console.error('[IS Token Manager] Response completo:', JSON.stringify(data).substring(0, 300));
-      throw new Error('IS Token endpoint bloqueado o incorrecto - solo devuelve _event_transid');
+      const errorMsg = 'IS Token endpoint bloqueado o incorrecto. Respuesta solo contiene _event_transid.';
+      console.error('[IS Token Manager] ❌ BLOQUEO DETECTADO');
+      console.error('[IS Token Manager] Respuesta:', JSON.stringify(data).substring(0, 300));
+      console.error('[IS Token Manager] Endpoint:', endpoint);
+      console.error('[IS Token Manager] ACCIÓN: ABORTAR flujo completo - NO continuar a cotización');
+      
+      // Crear error específico para que UI muestre mensaje apropiado
+      const error = new Error(errorMsg);
+      error.name = 'ISIntegrationError';
+      throw error;
     }
     
     // B3: Buscar token en múltiples ubicaciones posibles
