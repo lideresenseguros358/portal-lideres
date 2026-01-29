@@ -932,27 +932,30 @@ export default function FormAutoCoberturaCompleta() {
         @media (min-width: 640px) {
           .slider-thumb {
             height: 4px;
+            background: transparent;
           }
           
           .slider-thumb::-webkit-slider-thumb {
-            width: 18px;
-            height: 18px;
+            width: 16px;
+            height: 16px;
             border: 2px solid white;
-            margin-top: -7px;
+            margin-top: -6px;
           }
           
           .slider-thumb::-moz-range-thumb {
-            width: 18px;
-            height: 18px;
+            width: 16px;
+            height: 16px;
             border: 2px solid white;
           }
           
           .slider-thumb::-webkit-slider-runnable-track {
             height: 4px;
+            border-radius: 4px;
           }
           
           .slider-thumb::-moz-range-track {
             height: 4px;
+            border-radius: 4px;
           }
         }
       `}</style>
