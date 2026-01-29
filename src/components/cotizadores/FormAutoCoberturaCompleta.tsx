@@ -537,6 +537,19 @@ export default function FormAutoCoberturaCompleta() {
                       })())}%, #e5e7eb 100%)`
                     }}
                   />
+                  {/* Marcadores de referencia */}
+                  <div className="hidden sm:flex justify-between absolute top-1/2 -translate-y-1/2 left-0 right-0 pointer-events-none px-2">
+                    {[0, 20, 40, 60, 80, 100].map((percent) => {
+                      const index = Math.floor((vehiculoOptions.length - 1) * (percent / 100));
+                      const value = vehiculoOptions[index] ?? 0;
+                      const isActive = formData.valorVehiculo >= value;
+                      return (
+                        <div key={percent} className={`w-1.5 h-1.5 rounded-full border transition-all ${
+                          isActive ? 'bg-[#8AAA19] border-[#8AAA19]' : 'bg-white border-gray-400'
+                        }`}></div>
+                      );
+                    })}
+                  </div>
                 </div>
                 
                 {/* Instrucciones y rango */}
@@ -601,6 +614,18 @@ export default function FormAutoCoberturaCompleta() {
                       background: `linear-gradient(to right, #8AAA19 0%, #8AAA19 ${(lesionCorporalOptions.findIndex(opt => opt.persona === formData.lesionCorporalPersona) / (lesionCorporalOptions.length - 1)) * 100}%, #e5e7eb ${(lesionCorporalOptions.findIndex(opt => opt.persona === formData.lesionCorporalPersona) / (lesionCorporalOptions.length - 1)) * 100}%, #e5e7eb 100%)`
                     }}
                   />
+                  {/* Marcadores de referencia */}
+                  <div className="hidden sm:flex justify-between absolute top-1/2 -translate-y-1/2 left-0 right-0 pointer-events-none px-2">
+                    {lesionCorporalOptions.map((opt, idx) => {
+                      const currentIndex = lesionCorporalOptions.findIndex(o => o.persona === formData.lesionCorporalPersona);
+                      const isActive = idx <= currentIndex;
+                      return (
+                        <div key={idx} className={`w-1.5 h-1.5 rounded-full border transition-all ${
+                          isActive ? 'bg-[#8AAA19] border-[#8AAA19]' : 'bg-white border-gray-400'
+                        }`}></div>
+                      );
+                    })}
+                  </div>
                 </div>
                 <div className="flex justify-between text-xs sm:text-sm text-gray-600 mt-3 font-medium">
                   <span className="text-left">{formatCurrency(lesionCorporalOptions[0]?.persona || 5000)}/{formatCurrency(lesionCorporalOptions[0]?.accidente || 10000)}</span>
@@ -641,6 +666,18 @@ export default function FormAutoCoberturaCompleta() {
                       background: `linear-gradient(to right, #8AAA19 0%, #8AAA19 ${(danoPropiedadOptions.indexOf(formData.danoPropiedad) / (danoPropiedadOptions.length - 1)) * 100}%, #e5e7eb ${(danoPropiedadOptions.indexOf(formData.danoPropiedad) / (danoPropiedadOptions.length - 1)) * 100}%, #e5e7eb 100%)`
                     }}
                   />
+                  {/* Marcadores de referencia */}
+                  <div className="hidden sm:flex justify-between absolute top-1/2 -translate-y-1/2 left-0 right-0 pointer-events-none px-2">
+                    {danoPropiedadOptions.map((val, idx) => {
+                      const currentIndex = danoPropiedadOptions.indexOf(formData.danoPropiedad);
+                      const isActive = idx <= currentIndex;
+                      return (
+                        <div key={idx} className={`w-1.5 h-1.5 rounded-full border transition-all ${
+                          isActive ? 'bg-[#8AAA19] border-[#8AAA19]' : 'bg-white border-gray-400'
+                        }`}></div>
+                      );
+                    })}
+                  </div>
                 </div>
                 <div className="flex justify-between text-xs sm:text-sm text-gray-600 mt-3 font-medium">
                   <span>{formatCurrency(danoPropiedadOptions[0] || 5000)}</span>
@@ -689,6 +726,18 @@ export default function FormAutoCoberturaCompleta() {
                       background: `linear-gradient(to right, #8AAA19 0%, #8AAA19 ${(gastosMedicosOptions.findIndex(opt => opt.persona === formData.gastosMedicosPersona) / (gastosMedicosOptions.length - 1)) * 100}%, #e5e7eb ${(gastosMedicosOptions.findIndex(opt => opt.persona === formData.gastosMedicosPersona) / (gastosMedicosOptions.length - 1)) * 100}%, #e5e7eb 100%)`
                     }}
                   />
+                  {/* Marcadores de referencia */}
+                  <div className="hidden sm:flex justify-between absolute top-1/2 -translate-y-1/2 left-0 right-0 pointer-events-none px-2">
+                    {gastosMedicosOptions.map((opt, idx) => {
+                      const currentIndex = gastosMedicosOptions.findIndex(o => o.persona === formData.gastosMedicosPersona);
+                      const isActive = idx <= currentIndex;
+                      return (
+                        <div key={idx} className={`w-1.5 h-1.5 rounded-full border transition-all ${
+                          isActive ? 'bg-[#8AAA19] border-[#8AAA19]' : 'bg-white border-gray-400'
+                        }`}></div>
+                      );
+                    })}
+                  </div>
                 </div>
                 <div className="flex justify-between text-xs sm:text-sm text-gray-600 mt-3 font-medium">
                   <span className="text-left">{formatCurrency(gastosMedicosOptions[0]?.persona || 500)}/{formatCurrency(gastosMedicosOptions[0]?.accidente || 2500)}</span>
@@ -837,22 +886,45 @@ export default function FormAutoCoberturaCompleta() {
           }
         }
 
-        /* Sliders nativos - sin estilos custom */
+        /* Sliders - thumb verde corporativo */
         input[type="range"] {
-          -webkit-appearance: auto;
-          appearance: auto;
-          height: 8px;
-          background: #e5e7eb;
+          -webkit-appearance: none;
+          appearance: none;
+          height: 6px;
+          background: transparent;
           border-radius: 4px;
           outline: none;
         }
         
         input[type="range"]::-webkit-slider-thumb {
-          -webkit-appearance: auto;
+          -webkit-appearance: none;
+          width: 20px;
+          height: 20px;
+          background: #8AAA19;
+          border: 3px solid white;
+          border-radius: 50%;
+          cursor: pointer;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.2);
         }
         
         input[type="range"]::-moz-range-thumb {
-          appearance: auto;
+          width: 20px;
+          height: 20px;
+          background: #8AAA19;
+          border: 3px solid white;
+          border-radius: 50%;
+          cursor: pointer;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+        }
+        
+        input[type="range"]::-webkit-slider-runnable-track {
+          height: 6px;
+          border-radius: 4px;
+        }
+        
+        input[type="range"]::-moz-range-track {
+          height: 6px;
+          border-radius: 4px;
         }
       `}</style>
     </div>
