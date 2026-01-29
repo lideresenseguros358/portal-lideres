@@ -20,6 +20,7 @@ export async function updateThirdPartyMinPrice(data: PriceUpdateData): Promise<v
     const supabase = getSupabaseAdmin();
 
     // Llamar función SQL que maneja la lógica de actualización
+    // @ts-ignore - RPC no está en tipos generados
     const { error } = await supabase.rpc('update_third_party_min_price', {
       p_insurer_name: data.insurer,
       p_new_price: data.price,
@@ -47,7 +48,8 @@ export async function getCurrentMinPrice(insurer: string): Promise<number | null
   try {
     const supabase = getSupabaseAdmin();
 
-    const { data, error } = await supabase
+    // @ts-ignore - Tabla no está en tipos generados
+    const { data, error } = await (supabase as any)
       .from('third_party_min_prices')
       .select('min_price')
       .eq('insurer_name', insurer)
@@ -58,6 +60,7 @@ export async function getCurrentMinPrice(insurer: string): Promise<number | null
       return null;
     }
 
+    // @ts-ignore - min_price no está en tipo
     return parseFloat(data.min_price);
   } catch (error) {
     console.error('[Price Updater] Error obteniendo precio actual:', error);

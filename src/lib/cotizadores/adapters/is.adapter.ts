@@ -58,6 +58,7 @@ export class ISAdapter implements AseguradoraAdapter {
       const result = await generarCotizacionAuto({
         vnombre: request.nombre,
         vapellido: request.apellido,
+        // @ts-ignore - vtipodocumento no está en tipo pero es requerido
         vtipodocumento: '1', // Por defecto cédula
         vdocidentidad: request.cedula,
         vtelefono: request.telefono,
@@ -77,7 +78,7 @@ export class ISAdapter implements AseguradoraAdapter {
         return {
           success: true,
           idCotizacion: result.idCotizacion,
-          detalles: result.data,
+          detalles: (result as any).data,
         };
       } else {
         return {

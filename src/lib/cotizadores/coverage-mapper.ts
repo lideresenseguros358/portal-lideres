@@ -176,7 +176,7 @@ export function validateCoverageValues(values: CoverageValues): { valid: boolean
   }
   
   // Validar daño a propiedad
-  if (!STANDARD_COVERAGE_OPTIONS.danoPropiedad.includes(values.danoPropiedad)) {
+  if (!STANDARD_COVERAGE_OPTIONS.danoPropiedad.includes(values.danoPropiedad as any)) {
     errors.push('Valor de daño a propiedad no válido');
   }
   
