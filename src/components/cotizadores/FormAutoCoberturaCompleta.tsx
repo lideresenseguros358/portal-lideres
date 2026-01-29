@@ -463,7 +463,7 @@ export default function FormAutoCoberturaCompleta() {
                       }
                       setValorInputTemp('');
                     }}
-                    className="text-6xl sm:text-7xl md:text-8xl font-black text-[#8AAA19] w-full text-center focus:outline-none focus:ring-0 bg-transparent transition-all cursor-pointer"
+                    className="text-5xl sm:text-5xl md:text-5xl font-black text-[#8AAA19] w-full text-center focus:outline-none focus:ring-0 bg-transparent transition-all cursor-pointer"
                     placeholder="$15,000"
                   />
                   <p className="text-sm sm:text-base text-gray-600 font-medium mt-2 text-center">
@@ -502,7 +502,7 @@ export default function FormAutoCoberturaCompleta() {
                       const index = parseInt(e.target.value);
                       setFormData({ ...formData, valorVehiculo: vehiculoOptions[index] || 15000 });
                     }}
-                    className="w-full bg-gray-300 rounded-lg appearance-none cursor-pointer slider-thumb slider-with-stops transition-all duration-200 ease-out"
+                    className="w-full h-2 md:h-1.5 bg-gray-300 rounded-lg appearance-none cursor-pointer slider-thumb slider-with-stops transition-all duration-200 ease-out"
                     style={{
                       background: `linear-gradient(to right, #8AAA19 0%, #8AAA19 ${((() => {
                         const exactIndex = vehiculoOptions.indexOf(formData.valorVehiculo);
@@ -609,7 +609,7 @@ export default function FormAutoCoberturaCompleta() {
                         });
                       }
                     }}
-                    className="w-full bg-gray-300 rounded-lg appearance-none cursor-pointer slider-thumb transition-all duration-200 ease-out"
+                    className="w-full h-2 md:h-1.5 bg-gray-300 rounded-lg appearance-none cursor-pointer slider-thumb transition-all duration-200 ease-out"
                     style={{
                       background: `linear-gradient(to right, #8AAA19 0%, #8AAA19 ${(lesionCorporalOptions.findIndex(opt => opt.persona === formData.lesionCorporalPersona) / (lesionCorporalOptions.length - 1)) * 100}%, #e5e7eb ${(lesionCorporalOptions.findIndex(opt => opt.persona === formData.lesionCorporalPersona) / (lesionCorporalOptions.length - 1)) * 100}%, #e5e7eb 100%)`
                     }}
@@ -661,7 +661,7 @@ export default function FormAutoCoberturaCompleta() {
                         setFormData({ ...formData, danoPropiedad: selected });
                       }
                     }}
-                    className="w-full bg-gray-300 rounded-lg appearance-none cursor-pointer slider-thumb transition-all duration-200 ease-out"
+                    className="w-full h-2 md:h-1.5 bg-gray-300 rounded-lg appearance-none cursor-pointer slider-thumb transition-all duration-200 ease-out"
                     style={{
                       background: `linear-gradient(to right, #8AAA19 0%, #8AAA19 ${(danoPropiedadOptions.indexOf(formData.danoPropiedad) / (danoPropiedadOptions.length - 1)) * 100}%, #e5e7eb ${(danoPropiedadOptions.indexOf(formData.danoPropiedad) / (danoPropiedadOptions.length - 1)) * 100}%, #e5e7eb 100%)`
                     }}
@@ -721,7 +721,7 @@ export default function FormAutoCoberturaCompleta() {
                         });
                       }
                     }}
-                    className="w-full bg-gray-300 rounded-lg appearance-none cursor-pointer slider-thumb transition-all duration-200 ease-out"
+                    className="w-full h-2 md:h-1.5 bg-gray-300 rounded-lg appearance-none cursor-pointer slider-thumb transition-all duration-200 ease-out"
                     style={{
                       background: `linear-gradient(to right, #8AAA19 0%, #8AAA19 ${(gastosMedicosOptions.findIndex(opt => opt.persona === formData.gastosMedicosPersona) / (gastosMedicosOptions.length - 1)) * 100}%, #e5e7eb ${(gastosMedicosOptions.findIndex(opt => opt.persona === formData.gastosMedicosPersona) / (gastosMedicosOptions.length - 1)) * 100}%, #e5e7eb 100%)`
                     }}
@@ -886,72 +886,57 @@ export default function FormAutoCoberturaCompleta() {
           }
         }
 
-        /* Mobile sliders - sincronización mejorada */
+        /* Sliders - estilos para thumb y track */
         .slider-thumb {
           -webkit-appearance: none;
           appearance: none;
-          height: 8px;
           background: transparent;
         }
         
         .slider-thumb::-webkit-slider-thumb {
           -webkit-appearance: none;
           appearance: none;
-          width: 32px;
-          height: 32px;
+          width: 28px;
+          height: 28px;
           border-radius: 50%;
           background: #8AAA19;
           cursor: pointer;
-          border: 4px solid white;
+          border: 3px solid white;
           box-shadow: 0 3px 10px rgba(0,0,0,0.25);
-          margin-top: 0;
-          position: relative;
+          margin-top: -11px;
         }
         
         .slider-thumb::-moz-range-thumb {
-          width: 32px;
-          height: 32px;
+          width: 28px;
+          height: 28px;
           border-radius: 50%;
           background: #8AAA19;
           cursor: pointer;
-          border: 4px solid white;
+          border: 3px solid white;
           box-shadow: 0 3px 10px rgba(0,0,0,0.25);
         }
         
         .slider-thumb::-webkit-slider-runnable-track {
-          height: 8px;
           border-radius: 4px;
         }
         
         .slider-thumb::-moz-range-track {
-          height: 8px;
           border-radius: 4px;
         }
         
         /* Desktop - thumb más pequeño */
         @media (min-width: 768px) {
-          .slider-thumb {
-            height: 6px !important;
-          }
-          
           .slider-thumb::-webkit-slider-thumb {
-            width: 20px !important;
-            height: 20px !important;
-            border: 3px solid white;
+            width: 18px;
+            height: 18px;
+            border: 2px solid white;
+            margin-top: -6px;
           }
           
           .slider-thumb::-moz-range-thumb {
-            width: 20px !important;
-            height: 20px !important;
-            border: 3px solid white;
-          }
-          
-          .slider-thumb::-webkit-slider-runnable-track {
-            height: 6px !important;
-          }
-          
-          .slider-thumb::-moz-range-track {
-            height: 6px !important;
+            width: 18px;
+            height: 18px;
+            border: 2px solid white;
           }
         }
       `}</style>
