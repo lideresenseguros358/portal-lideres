@@ -98,7 +98,21 @@ export async function isRequest<T = any>(
   } = options;
   
   const baseUrl = getISBaseUrl(env);
-  const url = `${baseUrl}${endpoint}`;
+  
+  // IS-K: VALIDAR que endpoint sea absoluto o construir URL absoluta
+  const url = endpoint.startsWith('http') 
+    ? endpoint // Ya es URL absoluta
+    : `${baseUrl}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`; // Construir URL absoluta
+  
+  // Validación: URL debe ser absoluta con https
+  if (!url.startsWith('http')) {
+    console.error('[IS HTTP Client] URL no es absoluta:', url);
+    return {
+      success: false,
+      error: 'URL debe ser absoluta (https://...)',
+      statusCode: 0,
+    };
+  }
   
   // Obtener token diario (recomendado) o usar token principal como fallback
   let authToken: string;

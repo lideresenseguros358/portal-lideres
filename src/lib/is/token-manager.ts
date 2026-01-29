@@ -15,6 +15,12 @@ const tokenCache: Record<ISEnvironment, TokenCache | null> = {
   production: null,
 };
 
+// IS-J: Single-flight promises para evitar llamadas duplicadas
+const tokenFetchPromises: Record<ISEnvironment, Promise<string> | null> = {
+  development: null,
+  production: null,
+};
+
 const TOKEN_TTL_HOURS = 23; // 23 horas según instructivo IS
 
 /**
@@ -38,12 +44,15 @@ function getPrimaryToken(env: ISEnvironment): string {
 
 /**
  * Obtener token diario desde IS (renovación)
+ * ENDPOINT CORRECTO: /api/tokens/diario (según doc IS)
  * Parser FLEXIBLE: text/plain, JSON con múltiples estructuras, Table
  */
 async function fetchDailyToken(env: ISEnvironment): Promise<string> {
   const primaryToken = getPrimaryToken(env);
   const baseUrl = getISBaseUrl(env);
-  const endpoint = `${baseUrl}/tokens`;
+  // CRÍTICO: Usar /tokens/diario según documentación IS
+  // /tokens solo devuelve {"_event_transid":...}
+  const endpoint = `${baseUrl}/api/tokens/diario`;
 
   try {
     const response = await fetch(endpoint, {
@@ -106,8 +115,14 @@ async function fetchDailyToken(env: ISEnvironment): Promise<string> {
       console.error('[IS Token Manager] Primeros 120 chars:', JSON.stringify(data).substring(0, 120));
       throw new Error('Token diario no encontrado en respuesta');
     }
+    
+    // VALIDACIÓN: Token debe parecer JWT (empieza con "eyJ" y tiene puntos)
+    if (typeof dailyToken !== 'string' || !dailyToken.startsWith('eyJ') || !dailyToken.includes('.')) {
+      console.error('[IS Token Manager] Token no parece JWT:', dailyToken.substring(0, 20));
+      throw new Error('Token diario inválido - no es formato JWT');
+    }
 
-    console.log('[IS Token Manager] Token diario obtenido (JSON)');
+    console.log('[IS Token Manager] Token diario obtenido y validado (JSON)');
     return dailyToken;
     
   } catch (error: any) {
@@ -117,7 +132,8 @@ async function fetchDailyToken(env: ISEnvironment): Promise<string> {
 }
 
 /**
- * Obtener token diario válido (con cache)
+ * Obtener token diario válido (con cache + single-flight)
+ * IS-J: Evita llamadas duplicadas usando promise cache
  */
 export async function getDailyToken(env: ISEnvironment): Promise<string> {
   const now = Date.now();
@@ -125,19 +141,37 @@ export async function getDailyToken(env: ISEnvironment): Promise<string> {
 
   // Si hay token en cache y no ha expirado, usarlo
   if (cached && cached.expiresAt > now) {
+    console.log('[IS Token Manager] Usando token desde cache');
     return cached.token;
   }
 
-  // Obtener nuevo token diario
-  const dailyToken = await fetchDailyToken(env);
-  
-  // Guardar en cache con TTL
-  tokenCache[env] = {
-    token: dailyToken,
-    expiresAt: now + (TOKEN_TTL_HOURS * 60 * 60 * 1000),
-  };
+  // SINGLE-FLIGHT: Si ya hay una llamada en progreso, esperar esa
+  if (tokenFetchPromises[env]) {
+    console.log('[IS Token Manager] Llamada a /tokens/diario ya en progreso, esperando...');
+    return tokenFetchPromises[env]!;
+  }
 
-  return dailyToken;
+  // Iniciar nueva llamada y cachear la promise
+  console.log('[IS Token Manager] Iniciando nueva llamada a /tokens/diario');
+  const fetchPromise = (async () => {
+    try {
+      const dailyToken = await fetchDailyToken(env);
+      
+      // Guardar en cache con TTL
+      tokenCache[env] = {
+        token: dailyToken,
+        expiresAt: now + (TOKEN_TTL_HOURS * 60 * 60 * 1000),
+      };
+
+      return dailyToken;
+    } finally {
+      // Limpiar promise cache al terminar (éxito o error)
+      tokenFetchPromises[env] = null;
+    }
+  })();
+
+  tokenFetchPromises[env] = fetchPromise;
+  return fetchPromise;
 }
 
 /**
