@@ -587,16 +587,65 @@ export default function ComparePage() {
               console.warn('[FEDPA] ⚠️ Básico no disponible');
             }
             
-            // VALIDACIÓN: Verificar que las tarifas sean diferentes
+            // QA: VALIDACIONES AUTOMÁTICAS
             if (fedpaPremium && fedpaBasico) {
+              console.log('[FEDPA QA] Ejecutando validaciones automáticas...');
+              
+              // 1. Validar tarifas diferentes
               if (fedpaPremium.annualPremium === fedpaBasico.annualPremium) {
-                console.error('[FEDPA] ⚠️ BUG DETECTADO: Ambas tarifas son iguales!');
-                console.error('[FEDPA] Premium:', fedpaPremium.annualPremium, 'Básico:', fedpaBasico.annualPremium);
-                console.error('[FEDPA] Esto NO debería pasar. Revisar planes usados.');
+                console.error('[FEDPA QA] ❌ FALLO: Tarifas iguales!');
+                console.error('[FEDPA QA] Premium:', fedpaPremium.annualPremium, 'Básico:', fedpaBasico.annualPremium);
+                console.error('[FEDPA QA] Plan Premium usado:', fedpaPremium._idCotizacion);
+                console.error('[FEDPA QA] Plan Básico usado:', fedpaBasico._idCotizacion);
+                toast.error('⚠️ Error: Ambas cotizaciones tienen el mismo precio. Revisar configuración.');
               } else {
-                console.log('[FEDPA] ✅ Tarifas diferentes confirmadas');
-                console.log('[FEDPA] Diferencia: $', Math.abs(fedpaPremium.annualPremium - fedpaBasico.annualPremium).toFixed(2));
+                console.log('[FEDPA QA] ✅ PASS: Tarifas diferentes');
+                console.log('[FEDPA QA] Diferencia: $', Math.abs(fedpaPremium.annualPremium - fedpaBasico.annualPremium).toFixed(2));
               }
+              
+              // 2. Validar endosos diferentes
+              const endosoPremium = fedpaPremium._endosoIncluido || 'no-especificado';
+              const endosoBasico = fedpaBasico._endosoIncluido || 'no-especificado';
+              
+              if (endosoPremium === endosoBasico && endosoPremium !== 'no-especificado') {
+                console.error('[FEDPA QA] ❌ FALLO: Endosos iguales!');
+                console.error('[FEDPA QA] Premium endoso:', endosoPremium, 'Básico endoso:', endosoBasico);
+                toast.warning('⚠️ Advertencia: Ambos planes tienen el mismo endoso.');
+              } else {
+                console.log('[FEDPA QA] ✅ PASS: Endosos diferentes o no especificados');
+                console.log('[FEDPA QA] Premium:', endosoPremium, 'Básico:', endosoBasico);
+              }
+              
+              // 3. Validar deducible tiene monto o tooltip
+              [fedpaPremium, fedpaBasico].forEach((quote, idx) => {
+                const label = idx === 0 ? 'Premium' : 'Básico';
+                const deducibleInfo = quote._deducibleInfo;
+                
+                if (!deducibleInfo) {
+                  console.warn(`[FEDPA QA] ⚠️ ${label}: No tiene _deducibleInfo`);
+                } else if (deducibleInfo.valor === 0 && !deducibleInfo.tooltip) {
+                  console.warn(`[FEDPA QA] ⚠️ ${label}: Deducible sin monto y sin tooltip`);
+                  console.warn(`[FEDPA QA] Debería tener tooltip explicativo`);
+                } else {
+                  console.log(`[FEDPA QA] ✅ PASS: ${label} deducible OK (monto: ${deducibleInfo.valor}, tooltip: ${!!deducibleInfo.tooltip})`);
+                }
+              });
+              
+              // 4. Validar price breakdown existe
+              [fedpaPremium, fedpaBasico].forEach((quote, idx) => {
+                const label = idx === 0 ? 'Premium' : 'Básico';
+                const breakdown = quote._priceBreakdown;
+                
+                if (!breakdown) {
+                  console.warn(`[FEDPA QA] ⚠️ ${label}: No tiene _priceBreakdown`);
+                } else if (!breakdown.descuentoBuenConductor && breakdown.descuentoBuenConductor !== 0) {
+                  console.warn(`[FEDPA QA] ⚠️ ${label}: Breakdown sin descuentoBuenConductor`);
+                } else {
+                  console.log(`[FEDPA QA] ✅ PASS: ${label} breakdown OK (descuento: $${breakdown.descuentoBuenConductor?.toFixed(2)})`);
+                }
+              });
+              
+              console.log('[FEDPA QA] Validaciones completadas.');
             }
           } catch (error) {
             console.error('[FEDPA] Error obteniendo cotizaciones:', error);
