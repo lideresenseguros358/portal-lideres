@@ -13,6 +13,8 @@ import VehicleInspection from '@/components/cotizadores/VehicleInspection';
 import CreditCardInput from '@/components/is/CreditCardInput';
 import FinalQuoteSummary from '@/components/cotizadores/FinalQuoteSummary';
 import LoadingSkeleton from '@/components/cotizadores/LoadingSkeleton';
+import EmissionProgressBar from '@/components/cotizadores/EmissionProgressBar';
+import EmissionBreadcrumb, { type EmissionStep } from '@/components/cotizadores/EmissionBreadcrumb';
 
 export default function EmitirPage() {
   const searchParams = useSearchParams();
@@ -28,6 +30,7 @@ export default function EmitirPage() {
   const [inspectionPhotos, setInspectionPhotos] = useState<any[]>([]);
   const [paymentToken, setPaymentToken] = useState<string>('');
   const [cardData, setCardData] = useState<{ last4: string; brand: string } | null>(null);
+  const [completedSteps, setCompletedSteps] = useState<EmissionStep[]>([]);
 
   useEffect(() => {
     const loadData = () => {
@@ -60,12 +63,18 @@ export default function EmitirPage() {
     setInstallments(numInstallments);
     setMonthlyPayment(monthlyPaymentAmount);
     
+    // Marcar paso completado
+    setCompletedSteps(prev => [...prev, 'payment']);
+    
     // Ir a datos de emisión
     router.push('/cotizadores/emitir?step=emission-data');
   };
 
   const handleEmissionDataComplete = (data: EmissionData) => {
     setEmissionData(data);
+    
+    // Marcar paso completado
+    setCompletedSteps(prev => [...prev, 'emission-data']);
     
     // Ir a inspección vehicular
     router.push('/cotizadores/emitir?step=inspection');
@@ -75,6 +84,9 @@ export default function EmitirPage() {
   const handleInspectionComplete = (photos: any[]) => {
     setInspectionPhotos(photos);
     
+    // Marcar paso completado
+    setCompletedSteps(prev => [...prev, 'inspection']);
+    
     // Ir a información de pago
     router.push('/cotizadores/emitir?step=payment-info');
     toast.success('Inspección completada');
@@ -83,6 +95,9 @@ export default function EmitirPage() {
   const handlePaymentTokenReceived = (token: string, last4: string, brand: string) => {
     setPaymentToken(token);
     setCardData({ last4, brand });
+    
+    // Marcar paso completado
+    setCompletedSteps(prev => [...prev, 'payment-info']);
     
     // Ir al resumen final
     router.push('/cotizadores/emitir?step=review');
@@ -315,15 +330,42 @@ export default function EmitirPage() {
   const initialStep = isAutoCompleta ? 'payment' : 'payment-info';
   const currentStep = step || initialStep;
 
+  // Mapeo de steps: determinar número de paso actual
+  const getStepNumber = (currentStep: EmissionStep): number => {
+    const stepMap: Record<EmissionStep, number> = {
+      'payment': 1,
+      'emission-data': 2,
+      'vehicle': 3,
+      'inspection': 4,
+      'payment-info': 5,
+      'review': 6,
+    };
+    return stepMap[currentStep] || 1;
+  };
+
   // Step 1: Selección de plan de pago (solo para auto completa)
   if (currentStep === 'payment' && isAutoCompleta) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 py-8 px-4">
-        <PaymentPlanSelector
-          annualPremium={selectedPlan.annualPremium}
-          priceBreakdown={selectedPlan._priceBreakdown}
-          onContinue={handlePaymentPlanSelected}
+      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
+        {/* Progress Bar */}
+        <div className="pt-6">
+          <EmissionProgressBar currentStep={getStepNumber('payment')} totalSteps={6} />
+        </div>
+        
+        {/* Breadcrumb */}
+        <EmissionBreadcrumb 
+          currentStep="payment" 
+          completedSteps={completedSteps}
         />
+        
+        {/* Contenido */}
+        <div className="py-8 px-4">
+          <PaymentPlanSelector
+            annualPremium={selectedPlan.annualPremium}
+            priceBreakdown={selectedPlan._priceBreakdown}
+            onContinue={handlePaymentPlanSelected}
+          />
+        </div>
       </div>
     );
   }
@@ -331,32 +373,73 @@ export default function EmitirPage() {
   // Step 2: Datos de emisión (solo para auto completa)
   if (currentStep === 'emission-data' && isAutoCompleta) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 py-8 px-4">
-        <EmissionDataForm
-          quoteData={quoteData}
-          onContinue={handleEmissionDataComplete}
+      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
+        {/* Progress Bar */}
+        <div className="pt-6">
+          <EmissionProgressBar currentStep={getStepNumber('emission-data')} totalSteps={6} />
+        </div>
+        
+        {/* Breadcrumb */}
+        <EmissionBreadcrumb 
+          currentStep="emission-data" 
+          completedSteps={completedSteps}
         />
+        
+        {/* Contenido */}
+        <div className="py-8 px-4">
+          <EmissionDataForm
+            quoteData={quoteData}
+            onContinue={handleEmissionDataComplete}
+          />
+        </div>
       </div>
     );
   }
 
-  // Step 3: Inspección vehicular (solo para auto completa)
+  // Step 4: Inspección vehicular (solo para auto completa)
   if (currentStep === 'inspection' && isAutoCompleta) {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 py-8 px-4">
-        <VehicleInspection
-          onContinue={handleInspectionComplete}
+      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
+        {/* Progress Bar */}
+        <div className="pt-6">
+          <EmissionProgressBar currentStep={getStepNumber('inspection')} totalSteps={6} />
+        </div>
+        
+        {/* Breadcrumb */}
+        <EmissionBreadcrumb 
+          currentStep="inspection" 
+          completedSteps={completedSteps}
         />
+        
+        {/* Contenido */}
+        <div className="py-8 px-4">
+          <VehicleInspection
+            onContinue={handleInspectionComplete}
+          />
+        </div>
       </div>
     );
   }
 
-  // Step 4: Información de pago con tarjeta 3D (todos los tipos)
+  // Step 5: Información de pago con tarjeta 3D (todos los tipos)
   if (currentStep === 'payment-info') {
     const amount = installments === 1 ? selectedPlan.annualPremium : monthlyPayment;
     
     return (
-      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 py-8 px-4">
+      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
+        {/* Progress Bar */}
+        <div className="pt-6">
+          <EmissionProgressBar currentStep={getStepNumber('payment-info')} totalSteps={6} />
+        </div>
+        
+        {/* Breadcrumb */}
+        <EmissionBreadcrumb 
+          currentStep="payment-info" 
+          completedSteps={completedSteps}
+        />
+        
+        {/* Contenido */}
+        <div className="py-8 px-4">
         <div className="max-w-2xl mx-auto">
           {/* Header */}
           <div className="text-center mb-6">
@@ -392,23 +475,38 @@ export default function EmitirPage() {
             environment="development"
           />
         </div>
+        </div>
       </div>
     );
   }
 
-  // Step 5: Resumen final y confirmación (todos los tipos)
+  // Step 6: Resumen final y confirmación (todos los tipos)
   if (currentStep === 'review') {
     return (
-      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 py-8 px-4">
-        <FinalQuoteSummary
-          quoteData={quoteData}
-          selectedPlan={selectedPlan}
-          installments={installments}
-          monthlyPayment={monthlyPayment}
-          emissionData={emissionData}
-          inspectionPhotos={inspectionPhotos}
-          onConfirm={handleConfirmEmission}
+      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
+        {/* Progress Bar */}
+        <div className="pt-6">
+          <EmissionProgressBar currentStep={getStepNumber('review')} totalSteps={6} />
+        </div>
+        
+        {/* Breadcrumb */}
+        <EmissionBreadcrumb 
+          currentStep="review" 
+          completedSteps={completedSteps}
         />
+        
+        {/* Contenido */}
+        <div className="py-8 px-4">
+          <FinalQuoteSummary
+            quoteData={quoteData}
+            selectedPlan={selectedPlan}
+            installments={installments}
+            monthlyPayment={monthlyPayment}
+            emissionData={emissionData}
+            inspectionPhotos={inspectionPhotos}
+            onConfirm={handleConfirmEmission}
+          />
+        </div>
       </div>
     );
   }

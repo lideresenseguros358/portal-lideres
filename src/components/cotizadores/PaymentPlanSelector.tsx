@@ -96,6 +96,19 @@ export default function PaymentPlanSelector({ annualPremium, priceBreakdown, onC
 
   return (
     <div className="max-w-4xl mx-auto">
+      {/* Botón Volver a Comparativa */}
+      <div className="mb-6">
+        <button
+          onClick={() => router.push('/cotizadores/comparar')}
+          className="inline-flex items-center gap-2 px-4 py-2 text-gray-600 hover:text-[#8AAA19] transition-colors"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+          Volver a comparativa
+        </button>
+      </div>
+      
       {/* Header */}
       <div className="text-center mb-8">
         <h2 className="text-2xl sm:text-3xl font-bold text-[#010139] mb-2">
