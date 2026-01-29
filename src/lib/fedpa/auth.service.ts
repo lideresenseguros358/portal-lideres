@@ -101,7 +101,41 @@ export async function generarToken(
   }
   
   if (!token) {
-    // A1: Logging detallado del error
+    // FEDPA P2: MANEJO ROBUSTO - "Ya existe token registrado" es VÁLIDO
+    // Cuando FEDPA responde success:true pero sin token:
+    // - Puede significar que ya hay token vigente en backend FEDPA
+    // - O que debemos reutilizar token de cache
+    
+    const msgLower = response.data?.msg?.toLowerCase() || '';
+    const isTokenExistsMessage = msgLower.includes('ya existe') || msgLower.includes('token registrado');
+    
+    if (response.data?.success && isTokenExistsMessage) {
+      console.log('[FEDPA Auth] ✓ API indica token ya existe - verificando cache...');
+      
+      // Intentar usar token de cache si existe
+      const cacheKey = `fedpa_token_${env}`;
+      const cached = tokenCache.get(cacheKey);
+      
+      if (cached && cached.exp > Date.now()) {
+        console.log('[FEDPA Auth] ✓ Usando token de cache (válido por', Math.round((cached.exp - Date.now()) / 1000 / 60), 'min)');
+        return {
+          success: true,
+          token: cached.token,
+        };
+      }
+      
+      // Si no hay cache válido, pero API dice que existe token
+      // Continuar de todas formas y dejar que las siguientes llamadas usen su lógica
+      console.warn('[FEDPA Auth] ⚠️ API dice token existe pero no hay cache - continuar sin token');
+      console.warn('[FEDPA Auth] Las siguientes llamadas intentarán obtener token automáticamente');
+      
+      return {
+        success: true, // NO es error
+        token: undefined,
+      };
+    }
+    
+    // Solo ahora es realmente un error
     const errorMsg = 'Token no encontrado en respuesta FEDPA';
     console.error('[FEDPA Auth] ERROR:', errorMsg);
     console.error('[FEDPA Auth] Response keys:', response.data ? Object.keys(response.data) : 'no data');
@@ -109,7 +143,6 @@ export async function generarToken(
       response.data ? JSON.stringify(response.data).substring(0, 200) : 'null'
     );
     
-    // Si la respuesta tiene 'msg', mostrarlo
     if (response.data && 'msg' in response.data) {
       console.error('[FEDPA Auth] Mensaje de API:', response.data.msg);
     }

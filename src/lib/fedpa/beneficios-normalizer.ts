@@ -42,12 +42,21 @@ export interface DescuentoBuenConductor {
 // ============================================
 
 /**
- * Extrae servicios de asistencia con cantidades y montos
+ * FEDPA P2: Extrae servicios de asistencia con cantidades y montos REALES
+ * Ejemplos de formato esperado:
+ * - "Grúa: 2 eventos / USD 150 c/u"
+ * - "Paso de corriente: 2 eventos"
+ * - "Cerrajero: 1 evento / USD 75"
+ * - "Gasolina: 1 evento / USD 50"
  */
 export function normalizeAssistanceBenefits(
   beneficios: any[]
 ): AsistenciaBeneficio[] {
   const asistencias: AsistenciaBeneficio[] = [];
+  
+  if (!beneficios || !Array.isArray(beneficios)) {
+    return asistencias;
+  }
   
   if (!beneficios || !Array.isArray(beneficios)) {
     return asistencias;
@@ -179,6 +188,111 @@ export function normalizeAssistanceBenefits(
       }
       
       asistencias.push(item);
+    }
+  }
+  
+  // Procesar cada beneficio
+  for (const beneficio of beneficios) {
+    const descripcion = beneficio.descripcion || beneficio.nombre || beneficio.cobertura || '';
+    const limite = beneficio.limite || beneficio.limites || '';
+    const raw = `${descripcion} ${limite}`.trim();
+    
+    if (!raw) continue;
+    
+    const rawLower = raw.toLowerCase();
+    
+    // Detectar tipo de asistencia
+    let label = '';
+    let qty: number | undefined;
+    let maxAmount: number | undefined;
+    let maxKm: number | undefined;
+    let unit = '';
+    
+    // GRÚA
+    if (rawLower.includes('grúa') || rawLower.includes('grua') || rawLower.includes('remolque')) {
+      label = 'Servicio de Grúa';
+      
+      // Extraer cantidad: "2 eventos", "3 servicios"
+      const qtyMatch = raw.match(/(\d+)\s*(evento|servicio|vez)/i);
+      if (qtyMatch && qtyMatch[1]) {
+        qty = parseInt(qtyMatch[1]);
+        unit = qtyMatch[2] || 'eventos';
+      }
+      
+      // Extraer monto: "USD 150", "B/. 150", "$150"
+      const amountMatch = raw.match(/(USD|B\/\.?|\$)\s*(\d+)/i);
+      if (amountMatch && amountMatch[2]) {
+        maxAmount = parseFloat(amountMatch[2]);
+      }
+      
+      // Extraer kilómetros: "hasta 50 km"
+      const kmMatch = raw.match(/(\d+)\s*km/i);
+      if (kmMatch && kmMatch[1]) {
+        maxKm = parseInt(kmMatch[1]);
+      }
+    }
+    // PASO DE CORRIENTE
+    else if (rawLower.includes('paso') && rawLower.includes('corriente')) {
+      label = 'Paso de Corriente';
+      const qtyMatch = raw.match(/(\d+)\s*(evento|servicio|vez)/i);
+      if (qtyMatch && qtyMatch[1]) {
+        qty = parseInt(qtyMatch[1]);
+        unit = qtyMatch[2] || 'eventos';
+      }
+    }
+    // GASOLINA
+    else if (rawLower.includes('gasolina') || rawLower.includes('combustible')) {
+      label = 'Suministro de Gasolina';
+      const qtyMatch = raw.match(/(\d+)\s*(evento|servicio|vez|gal)/i);
+      if (qtyMatch && qtyMatch[1]) {
+        qty = parseInt(qtyMatch[1]);
+        unit = qtyMatch[2] || 'galones';
+      }
+      const amountMatch = raw.match(/(USD|B\/\.?|\$)\s*(\d+)/i);
+      if (amountMatch && amountMatch[2]) {
+        maxAmount = parseFloat(amountMatch[2]);
+      }
+    }
+    // CERRAJERO
+    else if (rawLower.includes('cerrajero') || rawLower.includes('cerradura')) {
+      label = 'Servicio de Cerrajero';
+      const qtyMatch = raw.match(/(\d+)\s*(evento|servicio|vez)/i);
+      if (qtyMatch && qtyMatch[1]) {
+        qty = parseInt(qtyMatch[1]);
+        unit = qtyMatch[2] || 'eventos';
+      }
+      const amountMatch = raw.match(/(USD|B\/\.?|\$)\s*(\d+)/i);
+      if (amountMatch && amountMatch[2]) {
+        maxAmount = parseFloat(amountMatch[2]);
+      }
+    }
+    // CAMBIO DE LLANTA
+    else if (rawLower.includes('llanta') || rawLower.includes('neumático')) {
+      label = 'Cambio de Llanta';
+      const qtyMatch = raw.match(/(\d+)\s*(evento|servicio|vez)/i);
+      if (qtyMatch && qtyMatch[1]) {
+        qty = parseInt(qtyMatch[1]);
+        unit = qtyMatch[2] || 'eventos';
+      }
+    }
+    // ASISTENCIA MÉDICA
+    else if (rawLower.includes('médica') || rawLower.includes('medica')) {
+      label = 'Asistencia Médica Telefónica';
+      if (rawLower.includes('24') || rawLower.includes('ilimitado')) {
+        unit = '24/7';
+      }
+    }
+    
+    // Solo agregar si identificamos el servicio
+    if (label) {
+      asistencias.push({
+        label,
+        qty,
+        maxAmount,
+        maxKm,
+        unit,
+        rawText: raw,
+      });
     }
   }
   
