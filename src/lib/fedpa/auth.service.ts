@@ -26,6 +26,19 @@ export async function generarToken(
 ): Promise<{ success: boolean; token?: string; error?: string }> {
   const config = FEDPA_CONFIG[env];
   
+  // VALIDACIÓN CRÍTICA: ENV VARS
+  if (!config.usuario || !config.clave) {
+    const missing = [];
+    if (!config.usuario) missing.push('USUARIO_FEDPA');
+    if (!config.clave) missing.push('CLAVE_FEDPA');
+    const errorMsg = `Variables de entorno faltantes: ${missing.join(', ')}`;
+    console.error('[FEDPA Auth] ERROR:', errorMsg);
+    return {
+      success: false,
+      error: errorMsg,
+    };
+  }
+  
   const client = createFedpaClient('emisorPlan', env);
   
   const request: TokenRequest = {
@@ -41,8 +54,16 @@ export async function generarToken(
     request
   );
   
-  if (!response.success || !response.data?.token) {
-    console.error('[FEDPA Auth] Error:', response.error);
+  // Log solo status y keys (NO token)
+  console.log('[FEDPA Auth] Respuesta:', {
+    success: response.success,
+    hasData: !!response.data,
+    dataKeys: response.data ? Object.keys(response.data) : [],
+    error: response.error,
+  });
+  
+  if (!response.success) {
+    console.error('[FEDPA Auth] Error generando token:', response.error);
     const errorMsg = typeof response.error === 'string' 
       ? response.error 
       : response.error?.message || 'No se pudo generar el token';
@@ -52,7 +73,30 @@ export async function generarToken(
     };
   }
   
-  const token = response.data.token;
+  // PARSEO ROBUSTO: múltiples formatos posibles
+  let token: string | null = null;
+  
+  if (response.data) {
+    // Intentar diferentes formatos
+    token = response.data.token || response.data.access_token || null;
+    
+    // Si la respuesta es string directo
+    if (!token && typeof response.data === 'string') {
+      token = response.data;
+    }
+  }
+  
+  if (!token) {
+    const errorMsg = 'Token no encontrado en respuesta';
+    console.error('[FEDPA Auth] ERROR:', errorMsg, {
+      dataKeys: response.data ? Object.keys(response.data) : [],
+    });
+    return {
+      success: false,
+      error: errorMsg,
+    };
+  }
+  
   const exp = Date.now() + TOKEN_TTL_MS;
   
   // Guardar en cache memoria
@@ -94,15 +138,21 @@ export async function obtenerToken(
   env: FedpaEnvironment = 'PROD'
 ): Promise<{ success: boolean; token?: string; error?: string }> {
   const cacheKey = `fedpa_token_${env}`;
+  const now = Date.now();
   
   // 1. Verificar cache memoria
   const cached = tokenCache.get(cacheKey);
-  if (cached && cached.exp > Date.now() + 5 * 60 * 1000) { // Renovar 5 min antes
-    console.log('[FEDPA Auth] Usando token desde cache');
+  if (cached && cached.exp > now + 5 * 60 * 1000) { // Renovar 5 min antes
+    console.log('[FEDPA Auth] Usando token desde cache (válido por', Math.round((cached.exp - now) / 1000 / 60), 'min)');
     return {
       success: true,
       token: cached.token,
     };
+  }
+  
+  // Cache expiró o no existe
+  if (cached) {
+    console.log('[FEDPA Auth] Token en cache expirado, regenerando...');
   }
   
   // 2. TODO: Verificar BD cuando se cree tabla fedpa_tokens
@@ -130,7 +180,18 @@ export async function obtenerToken(
   
   // 3. Generar nuevo token
   console.log('[FEDPA Auth] Generando nuevo token...');
-  return generarToken(env);
+  const result = await generarToken(env);
+  
+  // Si falla y teníamos token anterior válido (expiró hace poco), usarlo temporalmente
+  if (!result.success && cached && cached.exp > now - 5 * 60 * 1000) {
+    console.warn('[FEDPA Auth] Generación falló pero token anterior aún utilizable (expiró hace', Math.round((now - cached.exp) / 1000 / 60), 'min)');
+    return {
+      success: true,
+      token: cached.token,
+    };
+  }
+  
+  return result;
 }
 
 // ============================================

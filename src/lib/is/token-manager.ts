@@ -43,16 +43,20 @@ function getPrimaryToken(env: ISEnvironment): string {
 }
 
 /**
- * Obtener token diario desde IS (renovación)
- * ENDPOINT CORRECTO: /api/tokens/diario (según doc IS)
- * Parser FLEXIBLE: text/plain, JSON con múltiples estructuras, Table
+ * Obtener token diario desde IS
+ * B3: ENDPOINT CORRECTO según manual IS original: /tokens (NO /diario)
+ * El manual indica GET /tokens con Bearer del token principal
+ * Parser FLEXIBLE: text/plain, JSON con múltiples estructuras
  */
 async function fetchDailyToken(env: ISEnvironment): Promise<string> {
   const primaryToken = getPrimaryToken(env);
-  const baseUrl = getISBaseUrl(env);
-  // CRÍTICO: Usar /tokens/diario según documentación IS
-  // /tokens solo devuelve {"_event_transid":...}
-  const endpoint = `${baseUrl}/api/tokens/diario`;
+  let baseUrl = getISBaseUrl(env);
+  // B3: Normalizar baseUrl sin trailing slash
+  baseUrl = baseUrl.replace(/\/+$/, '');
+  
+  // B3: ENDPOINT CORRECTO: /tokens (según manual IS)
+  // La base URL ya incluye /api, entonces /tokens es suficiente
+  const endpoint = `${baseUrl}/tokens`;
 
   try {
     const response = await fetch(endpoint, {
@@ -98,8 +102,8 @@ async function fetchDailyToken(env: ISEnvironment): Promise<string> {
       throw new Error('Respuesta no es JSON válido');
     }
     
-    // Buscar token en múltiples ubicaciones posibles
-    const dailyToken = 
+    // B3: Buscar token en múltiples ubicaciones posibles
+    let dailyToken = 
       data.tokenDiario ||
       data.token ||
       data.Token ||
@@ -109,21 +113,45 @@ async function fetchDailyToken(env: ISEnvironment): Promise<string> {
       data.Table?.[0]?.token ||
       data.Table?.[0]?.Token;
     
+    // Si la respuesta completa es string, intentar usarla
+    if (!dailyToken && typeof data === 'string') {
+      dailyToken = data;
+    }
+    
     if (!dailyToken) {
       const keys = Object.keys(data);
       console.error('[IS Token Manager] Token no encontrado. Estructura:', keys);
-      console.error('[IS Token Manager] Primeros 120 chars:', JSON.stringify(data).substring(0, 120));
+      console.error('[IS Token Manager] Data sample:', JSON.stringify(data).substring(0, 200));
       throw new Error('Token diario no encontrado en respuesta');
     }
     
-    // VALIDACIÓN: Token debe parecer JWT (empieza con "eyJ" y tiene puntos)
-    if (typeof dailyToken !== 'string' || !dailyToken.startsWith('eyJ') || !dailyToken.includes('.')) {
-      console.error('[IS Token Manager] Token no parece JWT:', dailyToken.substring(0, 20));
-      throw new Error('Token diario inválido - no es formato JWT');
+    // B3: VALIDACIÓN JWT ROBUSTA
+    // JWT debe: empezar con "eyJ", tener 2 puntos (3 partes), longitud razonable
+    if (typeof dailyToken !== 'string') {
+      console.error('[IS Token Manager] Token no es string:', typeof dailyToken);
+      throw new Error('Token diario no es string');
+    }
+    
+    const tokenStr = dailyToken.trim();
+    const parts = tokenStr.split('.');
+    
+    if (!tokenStr.startsWith('eyJ')) {
+      console.error('[IS Token Manager] Token no empieza con eyJ:', tokenStr.substring(0, 20));
+      throw new Error('Token diario no parece JWT - no empieza con eyJ');
+    }
+    
+    if (parts.length !== 3) {
+      console.error('[IS Token Manager] Token no tiene 3 partes:', parts.length, '- Sample:', tokenStr.substring(0, 50));
+      throw new Error(`Token diario inválido - tiene ${parts.length} partes en lugar de 3`);
+    }
+    
+    if (tokenStr.length < 50) {
+      console.error('[IS Token Manager] Token muy corto:', tokenStr.length, 'chars');
+      throw new Error('Token diario muy corto para ser JWT válido');
     }
 
-    console.log('[IS Token Manager] Token diario obtenido y validado (JSON)');
-    return dailyToken;
+    console.log('[IS Token Manager] Token diario obtenido y validado (JSON - formato JWT correcto)');
+    return tokenStr;
     
   } catch (error: any) {
     console.error(`[IS Token Manager] Error obteniendo token diario (${env}):`, error.message);

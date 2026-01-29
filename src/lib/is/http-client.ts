@@ -97,22 +97,38 @@ export async function isRequest<T = any>(
     useEnvironmentToken = false,
   } = options;
   
-  const baseUrl = getISBaseUrl(env);
+  // B2: NORMALIZAR BASE URL sin trailing slash
+  let baseUrl = getISBaseUrl(env);
+  baseUrl = baseUrl.replace(/\/+$/, ''); // Eliminar trailing slashes
   
-  // IS-K: VALIDAR que endpoint sea absoluto o construir URL absoluta
-  const url = endpoint.startsWith('http') 
-    ? endpoint // Ya es URL absoluta
-    : `${baseUrl}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`; // Construir URL absoluta
+  // B2: CONSTRUIR URL ABSOLUTA correctamente
+  let url: string;
+  if (endpoint.startsWith('http')) {
+    // Ya es URL absoluta
+    url = endpoint;
+  } else {
+    // Normalizar path con leading slash
+    let path = endpoint;
+    if (!path.startsWith('/')) {
+      path = '/' + path;
+    }
+    // Concatenar: baseUrl nunca termina en /, path siempre empieza con /
+    url = baseUrl + path;
+  }
   
   // Validación: URL debe ser absoluta con https
   if (!url.startsWith('http')) {
-    console.error('[IS HTTP Client] URL no es absoluta:', url);
+    console.error('[IS HTTP Client] ERROR: URL no es absoluta:', url);
+    console.error('[IS HTTP Client] baseUrl:', baseUrl, 'endpoint:', endpoint);
     return {
       success: false,
       error: 'URL debe ser absoluta (https://...)',
       statusCode: 0,
     };
   }
+  
+  // B5: LOG URL COMPLETA para detectar paths relativos
+  console.log(`[IS] URL completa: ${url}`);
   
   // Obtener token diario (recomendado) o usar token principal como fallback
   let authToken: string;
@@ -152,7 +168,17 @@ export async function isRequest<T = any>(
         fetchOptions.body = JSON.stringify(body);
       }
       
-      // Log request con URL completa (sin query params sensibles)
+      // B4: NO COTIZAR SIN TOKEN VÁLIDO
+      if (!authToken || authToken.length < 10) {
+        console.error('[IS] ERROR: Token inválido o vacío, abortando request');
+        return {
+          success: false,
+          error: 'Token de autenticación inválido',
+          statusCode: 0,
+        };
+      }
+      
+      // Log request con URL completa
       console.log(`[IS] ${method} ${url} (attempt ${attempt + 1}/${RETRY_CONFIG.maxRetries + 1})`);
       
       // Hacer request
@@ -162,8 +188,15 @@ export async function isRequest<T = any>(
       
       const duration = Date.now() - startTime;
       
-      // Log response
-      console.log(`[IS] ${method} ${endpoint} - ${response.status} (${duration}ms) - ${contentType}`);
+      // Log response (con endpoint original y URL completa)
+      console.log(`[IS] ${method} ${endpoint} → ${url} - ${response.status} (${duration}ms) - ${contentType}`);
+      
+      // B5: DETECTAR 404 por path relativo
+      if (response.status === 404 && !endpoint.startsWith('http')) {
+        console.error('[IS] ERROR 404: Posible path relativo o endpoint incorrecto');
+        console.error('[IS] URL construida:', url);
+        console.error('[IS] Verificar que endpoint no incluya /api duplicado');
+      }
       
       // WAF/BLOCK: Si es HTML en lugar de JSON
       if (contentType.includes('text/html') && !response.ok) {

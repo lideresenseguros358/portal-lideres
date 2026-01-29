@@ -18,6 +18,7 @@ export interface TokenRequest {
 export interface TokenResponse {
   success: boolean;
   token?: string;
+  access_token?: string; // Formato alternativo posible
   message?: string;
   error?: string;
 }
