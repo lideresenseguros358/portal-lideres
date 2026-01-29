@@ -7,7 +7,12 @@
 import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { obtenerPlanPorTipo } from '@/lib/cotizadores/fedpa-plan-resolver';
-import { normalizeFedpaBenefits, extractDeductibleInfo, calculateFedpaPriceBreakdown } from '@/lib/cotizadores/fedpa-benefits-normalizer';
+import { 
+  normalizeAssistanceBenefits, 
+  normalizeDeductibles, 
+  calcularDescuentoBuenConductor,
+  formatAsistencia 
+} from '@/lib/fedpa/beneficios-normalizer';
 import { toast } from 'sonner';
 import { FaCar, FaCompressArrowsAlt } from 'react-icons/fa';
 import LoadingSkeleton from '@/components/cotizadores/LoadingSkeleton';
@@ -333,29 +338,25 @@ const generateFedpaRealQuote = async (quoteData: any) => {
     const totalConTarjeta = primaTotal;
     const totalAlContado = calcularPrecioContado(totalConTarjeta);
     
-    // NUEVO: Calcular desglose con descuento buen conductor
-    const priceBreakdown = calculateFedpaPriceBreakdown(
-      primaTotal,
-      primaBase,
-      impuesto1,
-      impuesto2,
-      totalAlContado
+    // FEDPA P2: Calcular descuento buen conductor manualmente
+    const impuestoTotal = impuesto1 + impuesto2;
+    const descuentoInfo = calcularDescuentoBuenConductor(
+      primaBase,        // Prima sin impuesto
+      totalConTarjeta,  // Total anual con impuesto
+      impuesto1,        // Impuesto 5%
+      impuesto2         // Impuesto 1%
     );
     
     console.log(`[FEDPA] Opción ${opcionSeleccionada}: ${apiCoberturas.length} coberturas, Prima: $${primaTotal}, Contado: $${totalAlContado.toFixed(2)}`);
+    console.log(`[FEDPA] Descuento buen conductor: B/.${descuentoInfo.descuento} (${descuentoInfo.porcentaje}%)`);
     
-    // NUEVO: Extraer deducible con monto real usando normalizador
-    const deducibleExtracted = extractDeductibleInfo(
-      apiCoberturas,
-      quoteData.deducible || 'medio'
-    );
-    
-    const deducibleInfo = {
-      valor: deducibleExtracted.montoColision || 0,
-      tipo: deducibleExtracted.nivel,
-      descripcion: deducibleExtracted.descripcion,
-      tooltip: deducibleExtracted.tooltip,
+    // Mapeo de deducible para info básica (se complementa con deduciblesReales)
+    const deducibleMap = {
+      bajo: { valor: 500, tipo: 'bajo', descripcion: 'Deducible estándar', tooltip: '' },
+      medio: { valor: 250, tipo: 'medio', descripcion: 'Deducible reducido', tooltip: '' },
+      alto: { valor: 100, tipo: 'alto', descripcion: 'Deducible mínimo', tooltip: '' }
     };
+    const deducibleInfo = deducibleMap[quoteData.deducible as 'bajo' | 'medio' | 'alto'] || deducibleMap.medio;
     
     // Mapear coberturas (solo de la opción seleccionada)
     const coberturasDetalladas = apiCoberturas.map((c: any) => ({
@@ -411,37 +412,42 @@ const generateFedpaRealQuote = async (quoteData: any) => {
       });
     }
     
-    // NUEVO: Obtener beneficios REALES desde el plan usando normalizador
+    // FEDPA P2: Obtener beneficios REALES usando normalizador
     const esPremium = quoteData.planType === 'premium';
     
-    // Obtener features premium si es plan premium
-    const premiumFeatures = esPremium ? getFedpaPremiumFeatures() : undefined;
-    
-    // Obtener beneficios del plan (consultar API si es necesario)
-    let beneficiosNormalizados: any[] = [];
+    let asistenciasNormalizadas: any[] = [];
+    let deduciblesReales: any = { comprensivo: null, colisionVuelco: null };
     
     try {
-      // Intentar obtener beneficios del plan
+      // Obtener beneficios del plan desde API
       const beneficiosResponse = await fetch(`/api/fedpa/planes/beneficios?plan=${planInfo.planId}&environment=${environment}`);
       if (beneficiosResponse.ok) {
         const beneficiosData = await beneficiosResponse.json();
-        beneficiosNormalizados = normalizeFedpaBenefits(
-          beneficiosData.data || [],
-          quoteData.planType || 'basico'
+        const beneficiosRaw = beneficiosData.data || [];
+        
+        // Normalizar asistencias (grúa, cerrajero, etc) con cantidades/montos
+        asistenciasNormalizadas = normalizeAssistanceBenefits(beneficiosRaw);
+        console.log(`[FEDPA] Asistencias normalizadas (${quoteData.planType}):`, asistenciasNormalizadas.length);
+        
+        // Normalizar deducibles reales (NUNCA $0)
+        deduciblesReales = normalizeDeductibles(
+          beneficiosRaw,
+          apiCoberturas,
+          quoteData.deducible as 'bajo' | 'medio' | 'alto'
         );
-        console.log(`[FEDPA] Beneficios normalizados (${quoteData.planType}):`, beneficiosNormalizados.length);
+        console.log(`[FEDPA] Deducibles normalizados:`, deduciblesReales);
       }
     } catch (error) {
       console.error('[FEDPA] Error obteniendo beneficios del plan:', error);
     }
     
-    // Si no se obtuvieron beneficios, usar fallback mínimo
-    const beneficios = beneficiosNormalizados.length > 0 
-      ? beneficiosNormalizados.map((b: any) => ({
-          nombre: b.label,
-          descripcion: b.qty && b.unit ? `${b.qty} ${b.unit}` : b.limit || 'Incluido',
-          incluido: b.included,
-          tooltip: b.tooltip,
+    // Formatear asistencias para UI
+    const beneficios = asistenciasNormalizadas.length > 0
+      ? asistenciasNormalizadas.map(a => ({
+          nombre: formatAsistencia(a), // "Grúa: 2 servicios/año • Máximo B/.150"
+          descripcion: a.rawText,
+          incluido: true,
+          tooltip: a.rawText,
         }))
       : [
           { nombre: 'Asistencia vial', descripcion: 'Incluido', incluido: true },
@@ -476,23 +482,23 @@ const generateFedpaRealQuote = async (quoteData: any) => {
         name: c.nombre,
         included: true,
       })),
-      // PRICE BREAKDOWN CON DESCUENTO BUEN CONDUCTOR CALCULADO
+      // FEDPA P2: PRICE BREAKDOWN CON DESCUENTO CALCULADO
       _priceBreakdown: {
-        primaBaseSinImpuesto: priceBreakdown.primaBaseSinImpuesto,
-        descuentoBuenConductor: priceBreakdown.descuentoBuenConductor,
-        impuesto: priceBreakdown.impuesto,
-        totalConTarjeta: priceBreakdown.totalAnualTarjeta,
-        totalAlContado: priceBreakdown.totalAlContado,
-        ahorroContado: priceBreakdown.ahorroContado,
+        primaBase: descuentoInfo.primaBase,
+        descuentoBuenConductor: descuentoInfo.descuento,
+        descuentoPorcentaje: descuentoInfo.porcentaje,
+        impuesto: descuentoInfo.impuesto,
+        totalConTarjeta: descuentoInfo.totalTarjeta,
+        totalAlContado: totalAlContado,
+        ahorroContado: totalConTarjeta - totalAlContado,
       },
-      // FEATURES PREMIUM (solo si es premium)
-      _premiumFeatures: premiumFeatures,
       // DATOS COMPLETOS PARA VISUALIZACIÓN
       _coberturasDetalladas: coberturasDetalladas,
       _limites: limites,
       _beneficios: beneficios,
       _endosos: endosos,
-      _deducibleInfo: deducibleInfo,
+      _deducibleInfo: deducibleInfo, // Info del mapa (bajo/medio/alto)
+      _deduciblesReales: deduciblesReales, // Deducibles reales normalizados (comprensivo/colisión)
       _sumaAsegurada: quoteData.valorVehiculo || 0,
       _primaBase: primaBase,
       _impuesto1: impuesto1,
