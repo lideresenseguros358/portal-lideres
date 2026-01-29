@@ -214,8 +214,13 @@ export default function QuoteComparison({ policyType, quotes, quoteData }: Quote
 
   const handleEdit = () => {
     // Los datos ya están en sessionStorage como 'quoteInput'
-    // Solo necesitamos navegar de regreso al formulario
-    router.push('/cotizadores/auto-cobertura-completa');
+    // Agregar flag para indicar que es edición
+    const currentData = sessionStorage.getItem('quoteInput');
+    if (currentData) {
+      sessionStorage.setItem('editMode', 'true');
+    }
+    // Navegar a la ruta correcta (auto/completa)
+    router.push('/cotizadores/auto/completa');
   };
 
   return (

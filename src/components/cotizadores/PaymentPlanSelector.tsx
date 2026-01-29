@@ -24,24 +24,31 @@ export default function PaymentPlanSelector({ annualPremium, priceBreakdown, onC
   
   // Calcular pago mensual usando breakdown si existe
   const calculateMonthlyPayment = (numInstallments: number) => {
+    let amount = 0;
+    
     // Si tiene breakdown de contado/tarjeta, usarlo
     if (priceBreakdown) {
       if (numInstallments === 1) {
         // 1 cuota = al contado (con descuento)
-        return priceBreakdown.totalAlContado;
+        amount = priceBreakdown.totalAlContado;
       } else {
         // 2-10 cuotas = con tarjeta (sin descuento)
-        return priceBreakdown.totalConTarjeta / numInstallments;
+        amount = priceBreakdown.totalConTarjeta / numInstallments;
+      }
+    } else {
+      // Fallback: cálculo tradicional si no hay breakdown
+      if (numInstallments === 1) {
+        amount = annualPremium;
+      } else {
+        // Recargo del 2% por financiamiento
+        const interestRate = 0.02;
+        const totalWithInterest = annualPremium * (1 + (interestRate * (numInstallments - 1) / 10));
+        amount = totalWithInterest / numInstallments;
       }
     }
     
-    // Fallback: cálculo tradicional si no hay breakdown
-    if (numInstallments === 1) return annualPremium;
-    
-    // Recargo del 2% por financiamiento
-    const interestRate = 0.02;
-    const totalWithInterest = annualPremium * (1 + (interestRate * (numInstallments - 1) / 10));
-    return totalWithInterest / numInstallments;
+    // Redondear a 2 decimales de forma segura
+    return Math.round(amount * 100) / 100;
   };
 
   const monthlyPayment = calculateMonthlyPayment(installments);
@@ -118,34 +125,6 @@ export default function PaymentPlanSelector({ annualPremium, priceBreakdown, onC
             🎯 Selecciona el número de cuotas
           </label>
           
-          {/* Visual Slider */}
-          <div className="relative py-4">
-            <input
-              type="range"
-              min="1"
-              max="10"
-              value={installments}
-              onChange={(e) => setInstallments(parseInt(e.target.value))}
-              className="w-full h-3 bg-gray-200 rounded-lg appearance-none cursor-pointer slider-payment"
-              style={{
-                background: `linear-gradient(to right, #8AAA19 0%, #8AAA19 ${((installments - 1) / 9) * 100}%, #e5e7eb ${((installments - 1) / 9) * 100}%, #e5e7eb 100%)`
-              }}
-            />
-            
-            {/* Slider Labels */}
-            <div className="flex justify-between text-xs text-gray-500 mt-2 px-1">
-              <span>1</span>
-              <span>2</span>
-              <span>3</span>
-              <span>4</span>
-              <span>5</span>
-              <span>6</span>
-              <span>7</span>
-              <span>8</span>
-              <span>9</span>
-              <span>10</span>
-            </div>
-          </div>
 
           {/* Selected Option Display - Emoji Central Dinámico CON ANIMACIÓN */}
           <div className="text-center mt-8">
