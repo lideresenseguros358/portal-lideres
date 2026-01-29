@@ -53,6 +53,25 @@ export interface FireContentsQuoteInput extends QuoteInputBase {
   sumaContenido?: number;
 }
 
+// ========== PRICE BREAKDOWN ==========
+export interface PriceBreakdown {
+  primaBase: number;           // Prima sin impuestos
+  descuentoProntoPago?: number; // Descuento si paga al contado
+  impuesto1: number;           // Impuesto 5% (FEDPA/IS)
+  impuesto2?: number;          // Recargo legal 1% (FEDPA/IS)
+  totalConTarjeta: number;     // Total para pago con tarjeta (2-10 cuotas)
+  totalAlContado: number;      // Total para pago al contado (1 cuota)
+}
+
+// ========== PREMIUM FEATURES (FEDPA) ==========
+export interface PremiumFeature {
+  nombre: string;
+  descripcion: string;
+  valorBasico: string;
+  valorPremium: string;
+  mejora: string; // Ej: "+200%", "+5 días", etc.
+}
+
 // ========== QUOTE OPTION (Resultado de cada aseguradora) ==========
 export interface QuoteOption {
   insurerId: string;
@@ -60,9 +79,11 @@ export interface QuoteOption {
   insurerLogoUrl?: string;
   planName: string;
   prima: number;
+  priceBreakdown?: PriceBreakdown; // Breakdown detallado
   deducible?: string;
   coberturasClave: string[];
   exclusionesClave?: string[];
+  premiumFeatures?: PremiumFeature[]; // Solo para planes premium
   observaciones?: string;
   raw?: any; // Datos crudos de la API
 }

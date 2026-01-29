@@ -232,6 +232,8 @@ const generateInternacionalRealQuote = async (quoteData: any) => {
  * Genera cotización REAL con FEDPA usando las APIs
  */
 const generateFedpaRealQuote = async (quoteData: any) => {
+  // Import helpers de features premium
+  const { getFedpaPremiumFeatures, calcularPrecioContado } = await import('@/lib/cotizadores/fedpa-premium-features');
   try {
     // MAPEO DE DEDUCIBLE A OPCION FEDPA:
     // bajo = OPCION A (deducible bajo $300, prima alta $563) - cliente paga menos deducible
@@ -305,8 +307,16 @@ const generateFedpaRealQuote = async (quoteData: any) => {
     }
     
     const primaTotal = apiCoberturas[0]?.TOTAL_PRIMA_IMPUESTO || 0;
+    const primaBase = cotizacionResult.primaBase || 0;
+    const impuesto1 = cotizacionResult.impuesto1 || 0;
+    const impuesto2 = cotizacionResult.impuesto2 || 0;
     
-    console.log(`[FEDPA] Opción ${opcionSeleccionada}: ${apiCoberturas.length} coberturas, Prima: $${primaTotal}`);
+    // Calcular precio al contado (con descuento pronto pago)
+    const totalConTarjeta = primaTotal;
+    const totalAlContado = calcularPrecioContado(totalConTarjeta);
+    const descuentoProntoPago = totalConTarjeta - totalAlContado;
+    
+    console.log(`[FEDPA] Opción ${opcionSeleccionada}: ${apiCoberturas.length} coberturas, Prima: $${primaTotal}, Contado: $${totalAlContado.toFixed(2)}`);
     
     // OBTENER deducibles REALES: COMPRENSIVO (fijo) y COLISION (variable)
     const coberturaComprensivo = apiCoberturas.find((c: any) => c.COBERTURA === 'D');
@@ -382,8 +392,11 @@ const generateFedpaRealQuote = async (quoteData: any) => {
     }
     
     // Beneficios según plan type
-    // IMPORTANTE: Básico y Premium tienen MISMA TARIFA pero diferentes beneficios
+    // IMPORTANTE: Básico y Premium deben tener DIFERENTES TARIFAS según endoso
     const esPremium = quoteData.planType === 'premium';
+    
+    // Obtener features premium si es plan premium
+    const premiumFeatures = esPremium ? getFedpaPremiumFeatures() : undefined;
     const beneficios = [];
     
     // BENEFICIOS COMUNES (están en AMBOS planes)
@@ -438,6 +451,17 @@ const generateFedpaRealQuote = async (quoteData: any) => {
         name: c.nombre,
         included: true,
       })),
+      // PRICE BREAKDOWN (contado vs tarjeta)
+      _priceBreakdown: {
+        primaBase,
+        descuentoProntoPago,
+        impuesto1,
+        impuesto2,
+        totalConTarjeta,
+        totalAlContado,
+      },
+      // FEATURES PREMIUM (solo si es premium)
+      _premiumFeatures: premiumFeatures,
       // DATOS COMPLETOS PARA VISUALIZACIÓN
       _coberturasDetalladas: coberturasDetalladas,
       _limites: limites,
@@ -445,9 +469,9 @@ const generateFedpaRealQuote = async (quoteData: any) => {
       _endosos: endosos,
       _deducibleInfo: deducibleInfo,
       _sumaAsegurada: quoteData.valorVehiculo || 0,
-      _primaBase: cotizacionResult.primaBase || 0,
-      _impuesto1: cotizacionResult.impuesto1 || 0,
-      _impuesto2: cotizacionResult.impuesto2 || 0,
+      _primaBase: primaBase,
+      _impuesto1: impuesto1,
+      _impuesto2: impuesto2,
       // Datos adicionales para emisión
       _isReal: true,
       _idCotizacion: cotizacionResult.idCotizacion,
