@@ -6,7 +6,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generarCotizacionAuto } from '@/lib/is/quotes.service';
 import { ISEnvironment } from '@/lib/is/config';
-import { normalizeQuoteData, logQuoteMapping } from '@/lib/cotizadores/catalog-normalizer';
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,49 +18,43 @@ export async function POST(request: NextRequest) {
       valor: formData.vsumaaseg
     });
     
-    // Normalizar datos del formulario
-    const normalized = normalizeQuoteData(formData);
-    
-    // Log del mapeo para debugging
-    logQuoteMapping(normalized);
-    
-    // Validaciones
-    if (!normalized.cliente.numeroDocumento || !normalized.cliente.nombre || !normalized.cliente.apellido || !normalized.cliente.correo) {
+    // Validaciones básicas - usar datos directos sin normalización
+    if (!formData.vnrodoc || !formData.vnombre || !formData.vapellido || !formData.vcorreo) {
       return NextResponse.json(
         { success: false, error: 'Faltan datos del cliente' },
         { status: 400 }
       );
     }
     
-    if (!normalized.vehiculo.marca || !normalized.vehiculo.modelo || !normalized.vehiculo.anio) {
+    if (!formData.vcodmarca || !formData.vcodmodelo || !formData.vanioauto) {
       return NextResponse.json(
         { success: false, error: 'Faltan datos del vehículo' },
         { status: 400 }
       );
     }
     
-    if (!normalized.cobertura.planCobertura || !normalized.cobertura.grupoTarifa) {
+    if (!formData.vcodplancobertura || !formData.vcodgrupotarifa) {
       return NextResponse.json(
         { success: false, error: 'Faltan datos de cobertura' },
         { status: 400 }
       );
     }
     
-    // Generar cotización usando datos normalizados
+    // Generar cotización usando datos directos de IS (sin normalización a FEDPA)
     const result = await generarCotizacionAuto(
       {
-        vcodtipodoc: normalized.cliente.tipoDocumento,
-        vnrodoc: normalized.cliente.numeroDocumento,
-        vnombre: normalized.cliente.nombre,
-        vapellido: normalized.cliente.apellido,
-        vtelefono: normalized.cliente.telefono,
-        vcorreo: normalized.cliente.correo,
-        vcodmarca: normalized.vehiculo.marca,
-        vcodmodelo: normalized.vehiculo.modelo,
-        vanioauto: normalized.vehiculo.anio,
-        vsumaaseg: normalized.cobertura.sumaAsegurada,
-        vcodplancobertura: normalized.cobertura.planCobertura,
-        vcodgrupotarifa: normalized.cobertura.grupoTarifa,
+        vcodtipodoc: formData.vcodtipodoc || 1, // 1=CC por defecto
+        vnrodoc: formData.vnrodoc,
+        vnombre: formData.vnombre,
+        vapellido: formData.vapellido,
+        vtelefono: formData.vtelefono,
+        vcorreo: formData.vcorreo,
+        vcodmarca: formData.vcodmarca,
+        vcodmodelo: formData.vcodmodelo,
+        vanioauto: formData.vanioauto,
+        vsumaaseg: formData.vsumaaseg || 0,
+        vcodplancobertura: formData.vcodplancobertura,
+        vcodgrupotarifa: formData.vcodgrupotarifa,
       },
       environment as ISEnvironment
     );

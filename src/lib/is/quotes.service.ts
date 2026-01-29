@@ -83,30 +83,20 @@ export async function generarCotizacionAuto(
   const cleanModelo = Math.floor(Number(request.vcodmodelo));
   const cleanGrupo = Math.floor(Number(request.vcodgrupotarifa));
   
-  // Preparar body según documentación IS
-  const body = {
-    vcodtipodoc: request.vcodtipodoc,
-    vnrodoc: request.vnrodoc,
-    vnombre: request.vnombre,
-    vapellido: request.vapellido,
-    vtelefono: request.vtelefono,
-    vcorreo: request.vcorreo,
-    vcodmarca: cleanMarca,
-    vcodmodelo: cleanModelo,
-    vsumaaseg: request.vsumaaseg,
-    vanioauto: request.vanioauto,
-    vcodplancobertura: request.vcodplancobertura,
-    vcodgrupotarifa: cleanGrupo
-  };
+  // Según documentación IS - GET con path parameters (NO POST)
+  // Orden: vcodtipodoc/vnrodoc/vnombre/vapellido/vtelefono/vcorreo/vcodmarca/vcodmodelo/vsumaaseg/vanioauto/vcodplancobertura/vcodgrupotarifa
+  const endpoint = `${IS_ENDPOINTS.GENERAR_COTIZACION}/${request.vcodtipodoc}/${request.vnrodoc}/${request.vnombre}/${request.vapellido}/${request.vtelefono}/${request.vcorreo}/${cleanMarca}/${cleanModelo}/${request.vsumaaseg}/${request.vanioauto}/${request.vcodplancobertura}/${cleanGrupo}`;
   
-  console.log('[IS] Cotizando con POST:', body);
+  console.log('[IS] Cotizando con GET:', endpoint);
   
-  // Según documentación IS - POST con body JSON (NO GET con path params)
-  const response = await isPost<CotizacionAutoResponse>(
-    IS_ENDPOINTS.GENERAR_COTIZACION,
-    body,
-    env
-  );
+  const response = await isGet<{ Table: Array<{
+    RESOP: number;
+    MSG: string;
+    MSG_FIELDS: string | null;
+    IDCOT: number;
+    NROCOT: number;
+    PTOTAL: number | null;
+  }> }>(endpoint, env);
   
   if (!response.success) {
     console.error('[IS Quotes] Error generando cotización:', response.error);
@@ -116,17 +106,36 @@ export async function generarCotizacionAuto(
     };
   }
   
-  const idCotizacion = response.data?.vIdPv || response.data?.IDCOT;
+  const tableData = response.data?.Table?.[0];
+  
+  if (!tableData) {
+    console.error('[IS Quotes] Respuesta sin datos:', response.data);
+    return {
+      success: false,
+      error: 'No se recibió respuesta válida',
+    };
+  }
+  
+  // RESOP: 1=éxito, -1=error
+  if (tableData.RESOP !== 1) {
+    console.error('[IS Quotes] Error en cotización:', tableData.MSG);
+    return {
+      success: false,
+      error: tableData.MSG || 'Error al generar cotización',
+    };
+  }
+  
+  const idCotizacion = tableData.IDCOT?.toString();
   
   if (!idCotizacion) {
-    console.error('[IS Quotes] Respuesta sin ID de cotización:', response.data);
+    console.error('[IS Quotes] Respuesta sin IDCOT:', tableData);
     return {
       success: false,
       error: 'No se recibió ID de cotización',
     };
   }
   
-  console.log('[IS Quotes] Cotización generada:', idCotizacion);
+  console.log('[IS Quotes] Cotización generada:', idCotizacion, 'Prima:', tableData.PTOTAL);
   
   return {
     success: true,
