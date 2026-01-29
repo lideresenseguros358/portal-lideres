@@ -202,20 +202,28 @@ export default function EmitirPage() {
         router.push('/cotizadores/confirmacion');
         
       } else if (isInternacionalReal) {
-        console.log('[EMISION INTERNACIONAL] Usando API real...');
+        console.log('[EMISIÓN INTERNACIONAL] Iniciando emisión con API real...');
+        
+        if (!emissionData || !inspectionPhotos.length) {
+          throw new Error('Faltan datos de emisión o fotos de inspección');
+        }
+        
+        // Preparar nombre completo
+        const nombreCompleto = `${emissionData.primerNombre} ${emissionData.segundoNombre || ''} ${emissionData.primerApellido} ${emissionData.segundoApellido || ''}`.trim();
         
         // Emitir con API real de INTERNACIONAL
+        toast.info('Emitiendo póliza...');
         const emisionResponse = await fetch('/api/is/auto/emitir', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             vIdPv: selectedPlan._idCotizacion,
-            vcodtipodoc: 1, // 1=CC (Cédula), 2=RUC, 3=PAS - DEBE SER NÚMERO
-            vnrodoc: emissionData?.cedula || quoteData.cedula || '8-999-9999',
-            vnombre: quoteData.nombreCompleto?.split(' ')[0] || 'Cliente',
-            vapellido: quoteData.nombreCompleto?.split(' ').slice(1).join(' ') || 'Potencial',
-            vtelefono: quoteData.telefono || '6000-0000',
-            vcorreo: quoteData.email || 'cliente@example.com',
+            vcodtipodoc: 1, // 1=CC (Cédula), 2=RUC, 3=PAS
+            vnrodoc: emissionData.cedula,
+            vnombre: emissionData.primerNombre,
+            vapellido: `${emissionData.primerApellido} ${emissionData.segundoApellido || ''}`.trim(),
+            vtelefono: emissionData.telefono,
+            vcorreo: emissionData.email,
             vcodmarca: selectedPlan._vcodmarca,
             vcodmodelo: selectedPlan._vcodmodelo,
             vanioauto: quoteData.anio || new Date().getFullYear(),
