@@ -239,6 +239,59 @@ export default function QuoteComparison({ policyType, quotes, quoteData }: Quote
           scrollbar-width: thin;
           scrollbar-color: #8AAA19 #f1f1f1;
         }
+        
+        /* Badge Premium Mágico */
+        @keyframes shimmer {
+          0% { background-position: -200% center; }
+          100% { background-position: 200% center; }
+        }
+        
+        @keyframes subtle-glow {
+          0%, 100% { box-shadow: 0 0 15px rgba(138, 170, 25, 0.5); }
+          50% { box-shadow: 0 0 25px rgba(138, 170, 25, 0.8); }
+        }
+        
+        @keyframes float {
+          0%, 100% { transform: translate(-50%, 0); }
+          50% { transform: translate(-50%, -4px); }
+        }
+        
+        .premium-badge {
+          animation: float 3s ease-in-out infinite, subtle-glow 2s ease-in-out infinite;
+        }
+        
+        .premium-badge-shimmer {
+          background: linear-gradient(
+            90deg,
+            rgba(255, 255, 255, 0) 0%,
+            rgba(255, 255, 255, 0.4) 50%,
+            rgba(255, 255, 255, 0) 100%
+          );
+          background-size: 200% 100%;
+          animation: shimmer 3s linear infinite;
+        }
+        
+        /* Animaciones para beneficios */
+        @keyframes fadeInSlideRight {
+          from {
+            opacity: 0;
+            transform: translateX(-10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateX(0);
+          }
+        }
+        
+        .benefit-item {
+          animation: fadeInSlideRight 0.3s ease-out forwards;
+        }
+        
+        .benefit-item:nth-child(1) { animation-delay: 0.05s; }
+        .benefit-item:nth-child(2) { animation-delay: 0.1s; }
+        .benefit-item:nth-child(3) { animation-delay: 0.15s; }
+        .benefit-item:nth-child(4) { animation-delay: 0.2s; }
+        .benefit-item:nth-child(5) { animation-delay: 0.25s; }
       `}</style>
       <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 py-6 px-4">
       <div className="max-w-7xl mx-auto">
@@ -272,14 +325,14 @@ export default function QuoteComparison({ policyType, quotes, quoteData }: Quote
             <div key={quote.id} className="relative">
               {/* Recommended Badge - Flotante ARRIBA del card */}
               {quote.isRecommended && (
-                <div className="absolute -top-5 left-1/2 -translate-x-1/2 z-20 animate-bounce">
+                <div className="absolute -top-5 left-1/2 z-20 premium-badge">
                   <div className="relative">
-                    <span className="inline-flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white text-xs font-bold rounded-full shadow-lg border-2 border-white">
+                    <span className="inline-flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white text-xs font-bold rounded-full border-2 border-white overflow-hidden">
                       <FaStar className="text-yellow-300 animate-pulse" />
                       RECOMENDADA
+                      {/* Shimmer effect */}
+                      <span className="absolute inset-0 premium-badge-shimmer pointer-events-none"></span>
                     </span>
-                    {/* Efecto de brillo */}
-                    <div className="absolute inset-0 rounded-full bg-white opacity-20 blur-sm"></div>
                   </div>
                 </div>
               )}
@@ -397,9 +450,10 @@ export default function QuoteComparison({ policyType, quotes, quoteData }: Quote
                     {quote.coverages.slice(0, 5).map((coverage, idx) => (
                       <div 
                         key={idx} 
-                        className={`flex items-start gap-2 text-sm leading-snug ${
+                        className={`benefit-item flex items-start gap-2 text-sm leading-snug ${
                           coverage.included ? 'text-gray-700' : 'text-gray-400 line-through'
                         }`}
+                        style={{ animationDelay: `${idx * 0.05}s`, opacity: 0 }}
                       >
                         <FaCheckCircle 
                           className={`flex-shrink-0 mt-0.5 text-sm ${
