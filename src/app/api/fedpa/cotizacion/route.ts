@@ -8,43 +8,53 @@ import { generarCotizacion } from '@/lib/fedpa/cotizacion.service';
 import type { CotizacionRequest } from '@/lib/fedpa/types';
 import type { FedpaEnvironment } from '@/lib/fedpa/config';
 import { updateThirdPartyMinPrice } from '@/lib/services/third-party-price-updater';
+import { normalizeQuoteData, logQuoteMapping } from '@/lib/cotizadores/catalog-normalizer';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { environment = 'PROD', ...cotizacionData } = body;
+    const { environment = 'DEV', ...formData } = body;
     
-    // Validar campos requeridos
-    const required = ['Ano', 'Uso', 'CodPlan', 'CodMarca', 'CodModelo', 'Nombre', 'Apellido', 'Cedula'];
-    const missing = required.filter(field => !cotizacionData[field]);
+    console.log('[FEDPA Cotización] Generando cotización...', {
+      plan: formData.CodPlan || 'auto',
+      marca: formData.vcodmarca,
+      modelo: formData.vcodmodelo
+    });
     
-    if (missing.length > 0) {
-      return NextResponse.json(
-        { success: false, error: `Campos requeridos faltantes: ${missing.join(', ')}` },
-        { status: 400 }
-      );
-    }
+    // Normalizar datos del formulario (mapea IS a FEDPA automáticamente)
+    const normalized = normalizeQuoteData(formData);
+    
+    // Log del mapeo para debugging
+    logQuoteMapping(normalized);
     
     const env = environment as FedpaEnvironment;
+    
+    // Construir request para FEDPA usando datos normalizados
+    const plan = normalized.fedpa?.plan || '411';
+    const esCoberturabCompleta = plan === '411'; // Plan 411 = Cobertura Completa
+    
     const cotizacionRequest: CotizacionRequest = {
-      Ano: cotizacionData.Ano,
-      Uso: cotizacionData.Uso,
-      CantidadPasajeros: cotizacionData.CantidadPasajeros || 5,
-      SumaAsegurada: cotizacionData.SumaAsegurada || '0',
-      CodLimiteLesiones: cotizacionData.CodLimiteLesiones || '1',
-      CodLimitePropiedad: cotizacionData.CodLimitePropiedad || '1',
-      CodLimiteGastosMedico: cotizacionData.CodLimiteGastosMedico || '1',
-      EndosoIncluido: cotizacionData.EndosoIncluido || 'N',
-      CodPlan: cotizacionData.CodPlan,
-      CodMarca: cotizacionData.CodMarca,
-      CodModelo: cotizacionData.CodModelo,
-      Nombre: cotizacionData.Nombre,
-      Apellido: cotizacionData.Apellido,
-      Cedula: cotizacionData.Cedula,
-      Telefono: cotizacionData.Telefono || '',
-      Email: cotizacionData.Email || '',
-      Usuario: '', // Se llena en el servicio
-      Clave: '', // Se llena en el servicio
+      Ano: normalized.vehiculo.anio, // Int32
+      Uso: normalized.fedpa?.uso || '10', // String
+      CantidadPasajeros: 5, // Int32
+      SumaAsegurada: normalized.vehiculo.valor.toString(), // STRING según error API
+      // Límites de coberturas mapeados automáticamente
+      CodLimiteLesiones: normalized.fedpa?.codLimiteLesiones || '1',
+      CodLimitePropiedad: normalized.fedpa?.codLimitePropiedad || '1',
+      CodLimiteGastosMedico: normalized.fedpa?.codLimiteGastosMedico || '1',
+      // Endoso de muerte accidental incluido por defecto
+      EndosoIncluido: normalized.fedpa?.endosoIncluido || 'S',
+      CodPlan: plan,
+      // Para CC: usar códigos mapeados, para DT: vacíos
+      CodMarca: esCoberturabCompleta ? (normalized.fedpa?.codMarca || 'TOY') : '',
+      CodModelo: esCoberturabCompleta ? (normalized.fedpa?.codModelo || 'AUTO') : '',
+      Nombre: normalized.cliente.nombre,
+      Apellido: normalized.cliente.apellido,
+      Cedula: normalized.cliente.numeroDocumento,
+      Telefono: normalized.cliente.telefono,
+      Email: normalized.cliente.correo,
+      Usuario: '',
+      Clave: '',
     };
     
     const result = await generarCotizacion(cotizacionRequest, env);

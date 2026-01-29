@@ -7,7 +7,7 @@
 export const FEDPA_CONFIG = {
   DEV: {
     // Credenciales
-    usuario: 'lider836',
+    usuario: 'SLIDERES',
     clave: 'lider836',
     ambiente: 'DEV',
     corredor: '836',
@@ -18,7 +18,7 @@ export const FEDPA_CONFIG = {
   },
   PROD: {
     // Credenciales
-    usuario: 'lider836',
+    usuario: 'SLIDERES',
     clave: 'lider836',
     ambiente: 'PROD',
     corredor: '836',

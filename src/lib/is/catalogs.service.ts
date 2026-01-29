@@ -7,6 +7,7 @@ import { ISEnvironment, IS_ENDPOINTS, CACHE_TTL } from './config';
 import { isGet } from './http-client';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import type { Database } from '@/lib/database.types';
+import type { ISMarca, ISModelo, ISTipoPlan, ISGrupoTarifa, ISPlan, ISTipoDocumento, ISCatalogs } from './catalogs.types';
 
 type Json = Database['public']['Tables']['is_catalogs']['Row']['catalog_data'];
 
@@ -317,4 +318,101 @@ export async function preloadCatalogs(env: ISEnvironment = 'development'): Promi
   ]);
   
   console.log('[IS Catalogs] Pre-carga completada');
+}
+
+/**
+ * Obtener TODOS los catálogos IS de una vez
+ * Retorna estructura compatible con tipos oficiales de IS
+ */
+export async function obtenerTodosCatalogos(
+  env: ISEnvironment = 'development'
+): Promise<{ success: boolean; data?: ISCatalogs; error?: string }> {
+  console.log('[IS Catálogos] Obteniendo todos los catálogos...');
+  
+  try {
+    // Fetch paralelo de todos los catálogos
+    const [marcasRes, modelosRes, tipoPlanesRes, tipoDocsRes] = await Promise.allSettled([
+      isGet<{ Table: ISMarca[] }>(IS_ENDPOINTS.MARCAS, env),
+      isGet<{ Table: ISModelo[] }>(IS_ENDPOINTS.MODELOS + '?pagenumber=1&rowsperpage=10000', env),
+      isGet<{ Table: ISTipoPlan[] }>(IS_ENDPOINTS.TIPO_PLANES, env),
+      isGet<{ Table: ISTipoDocumento[] }>(IS_ENDPOINTS.TIPO_DOCUMENTOS, env),
+    ]);
+    
+    // Extraer datos de las respuestas
+    const marcas = marcasRes.status === 'fulfilled' && marcasRes.value.success && marcasRes.value.data?.Table ? marcasRes.value.data.Table : [];
+    const modelos = modelosRes.status === 'fulfilled' && modelosRes.value.success && modelosRes.value.data?.Table ? modelosRes.value.data.Table : [];
+    const tipoPlanes = tipoPlanesRes.status === 'fulfilled' && tipoPlanesRes.value.success && tipoPlanesRes.value.data?.Table ? tipoPlanesRes.value.data.Table : [];
+    const tipoDocumentos = tipoDocsRes.status === 'fulfilled' && tipoDocsRes.value.success && tipoDocsRes.value.data?.Table ? tipoDocsRes.value.data.Table : [];
+    
+    // Obtener planes para cada tipo de plan
+    const planesPromises = tipoPlanes.map(tp => 
+      isGet<{ Table: ISPlan[] }>(`${IS_ENDPOINTS.PLANES}?vCodTipoPlan=${tp.DATO}`, env)
+    );
+    const planesResults = await Promise.allSettled(planesPromises);
+    const planes: ISPlan[] = [];
+    planesResults.forEach(result => {
+      if (result.status === 'fulfilled' && result.value.success && result.value.data?.Table) {
+        planes.push(...result.value.data.Table);
+      }
+    });
+    
+    // Obtener grupos de tarifa para cada tipo de plan
+    const gruposTarifaPromises = tipoPlanes.map(tp =>
+      isGet<{ Table: ISGrupoTarifa[] }>(`${IS_ENDPOINTS.GRUPO_TARIFA}/${tp.DATO}`, env)
+    );
+    const gruposTarifaResults = await Promise.allSettled(gruposTarifaPromises);
+    const gruposTarifa: ISGrupoTarifa[] = [];
+    gruposTarifaResults.forEach(result => {
+      if (result.status === 'fulfilled' && result.value.success && result.value.data?.Table) {
+        gruposTarifa.push(...result.value.data.Table);
+      }
+    });
+    
+    const catalogs: ISCatalogs = {
+      marcas,
+      modelos,
+      tipoPlanes,
+      gruposTarifa,
+      planes,
+      tipoDocumentos,
+      lastUpdated: new Date().toISOString()
+    };
+    
+    console.log('[IS Catálogos] Catálogos obtenidos exitosamente:');
+    console.log('  - Marcas:', catalogs.marcas.length);
+    console.log('  - Modelos:', catalogs.modelos.length);
+    console.log('  - Tipo Planes:', catalogs.tipoPlanes.length);
+    console.log('  - Grupos Tarifa:', catalogs.gruposTarifa.length);
+    console.log('  - Planes:', catalogs.planes.length);
+    console.log('  - Tipo Documentos:', catalogs.tipoDocumentos.length);
+    
+    return { success: true, data: catalogs };
+  } catch (error) {
+    console.error('[IS Catálogos] Error obteniendo catálogos:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error obteniendo catálogos'
+    };
+  }
+}
+
+/**
+ * Buscar marca por código
+ */
+export function buscarMarca(marcas: ISMarca[], codigo: number): ISMarca | null {
+  return marcas.find(m => m.COD_MARCA === codigo) || null;
+}
+
+/**
+ * Buscar modelo por código
+ */
+export function buscarModelo(modelos: ISModelo[], codigo: number): ISModelo | null {
+  return modelos.find(m => m.COD_MODELO === codigo) || null;
+}
+
+/**
+ * Filtrar modelos por marca
+ */
+export function filtrarModelosPorMarca(modelos: ISModelo[], codigoMarca: number): ISModelo[] {
+  return modelos.filter(m => m.COD_MARCA === codigoMarca);
 }

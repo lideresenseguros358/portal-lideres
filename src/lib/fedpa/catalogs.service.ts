@@ -6,6 +6,7 @@
 import { createFedpaClient } from './http-client';
 import { EMISOR_EXTERNO_ENDPOINTS, FEDPA_CONFIG, FedpaEnvironment } from './config';
 import type { LimitesResponse, UsosResponse, PlanesAsignadosResponse } from './types';
+import type { FedpaLimite, FedpaPlan, FedpaBeneficio, FedpaUso, FedpaCatalogs } from './catalogs.types';
 
 // ============================================
 // OBTENER LÍMITES
@@ -192,4 +193,85 @@ export function filtrarLimitesPorCobertura(
  */
 export function buscarUso(usos: any[], codigoUso: string): any | null {
   return usos.find(u => u.USO === codigoUso) || null;
+}
+
+// ============================================
+// OBTENER TODOS LOS CATÁLOGOS
+// ============================================
+
+/**
+ * Obtener todos los catálogos de FEDPA de una sola vez
+ * Útil para cachear en el cliente
+ */
+export async function obtenerTodosCatalogos(
+  env: FedpaEnvironment = 'PROD'
+): Promise<{ success: boolean; data?: FedpaCatalogs; error?: string }> {
+  console.log('[FEDPA Catálogos] Obteniendo todos los catálogos...');
+  
+  try {
+    const [limitesRes, planesRes, beneficiosRes, usosRes] = await Promise.all([
+      obtenerLimites(env),
+      obtenerPlanesCC(env),
+      obtenerBeneficiosExternos(env),
+      obtenerUsos(env)
+    ]);
+    
+    if (!limitesRes.success) {
+      return { success: false, error: limitesRes.error };
+    }
+    if (!planesRes.success) {
+      return { success: false, error: planesRes.error };
+    }
+    if (!beneficiosRes.success) {
+      return { success: false, error: beneficiosRes.error };
+    }
+    if (!usosRes.success) {
+      return { success: false, error: usosRes.error };
+    }
+    
+    const catalogs: FedpaCatalogs = {
+      limites: (limitesRes.data || []) as FedpaLimite[],
+      planes: (planesRes.data || []) as FedpaPlan[],
+      beneficios: (beneficiosRes.data || []) as FedpaBeneficio[],
+      usos: (usosRes.data || []) as FedpaUso[],
+      lastUpdated: new Date().toISOString()
+    };
+    
+    console.log('[FEDPA Catálogos] Todos los catálogos obtenidos exitosamente');
+    console.log('  - Límites:', catalogs.limites.length);
+    console.log('  - Planes:', catalogs.planes.length);
+    console.log('  - Beneficios:', catalogs.beneficios.length);
+    console.log('  - Usos:', catalogs.usos.length);
+    
+    return { success: true, data: catalogs };
+  } catch (error) {
+    console.error('[FEDPA Catálogos] Error obteniendo catálogos:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Error obteniendo catálogos'
+    };
+  }
+}
+
+/**
+ * Buscar plan por ID
+ */
+export function buscarPlan(planes: FedpaPlan[], planId: number): FedpaPlan | null {
+  return planes.find(p => p.PLAN === planId) || null;
+}
+
+/**
+ * Obtener beneficios de un plan específico
+ */
+export function obtenerBeneficiosPlan(beneficios: FedpaBeneficio[], planId: number): string[] {
+  return beneficios
+    .filter(b => b.PLAN === planId)
+    .map(b => b.BENEFICIOS);
+}
+
+/**
+ * Filtrar planes por uso
+ */
+export function filtrarPlanesPorUso(planes: FedpaPlan[], codigoUso: string): FedpaPlan[] {
+  return planes.filter(p => p.USO === codigoUso);
 }

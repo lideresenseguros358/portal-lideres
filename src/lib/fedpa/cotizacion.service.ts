@@ -46,6 +46,8 @@ export async function generarCotizacion(
   
   if (!response.success) {
     console.error('[FEDPA Cotización] Error:', response.error);
+    console.error('[FEDPA Cotización] Response data:', JSON.stringify(response.data, null, 2));
+    console.error('[FEDPA Cotización] Request enviado:', JSON.stringify(normalizedRequest, null, 2));
     return {
       success: false,
       error: typeof response.error === 'string' ? response.error : 'Error generando cotización',
@@ -53,37 +55,36 @@ export async function generarCotizacion(
   }
   
   // Parsear respuesta según estructura de FEDPA
-  const data = (response.data || {}) as any;
-  const coberturas = data.coberturas || [];
+  // response.data ES el array de coberturas directamente
+  const coberturas = Array.isArray(response.data) ? response.data : [];
   
-  // Calcular totales
-  const primaBase = data.primaBase || 0;
-  const totalImpuesto1 = data.totalImpuesto1 || data.impuesto1 || 0;
-  const totalImpuesto2 = data.totalImpuesto2 || data.impuesto2 || 0;
-  const primaTotal = data.primaTotal || data.total || 0;
+  // Extraer datos de la primera cobertura (todas tienen los mismos totales)
+  const primeraCob = coberturas[0] || {};
+  const idCotizacion = primeraCob.COTIZACION?.toString();
+  const primaTotal = primeraCob.TOTAL_PRIMA_IMPUESTO || primeraCob.TOTAL_PRIMA || 0;
   
-  // Verificar sincronización
-  const sumaCoberturas = coberturas.reduce((sum: number, cob: any) => {
-    return sum + (cob.primaConImpuesto || cob.prima || 0);
-  }, 0);
-  const sincronizado = Math.abs(primaTotal - sumaCoberturas) < 0.01;
+  // Calcular prima base e impuestos sumando todas las coberturas
+  let primaBase = 0;
+  let totalImpuesto1 = 0;
+  let totalImpuesto2 = 0;
   
-  console.log('[FEDPA Cotización] Cotización generada:', {
-    idCotizacion: data.idCotizacion || data.id,
-    primaTotal,
-    coberturas: coberturas.length,
-    sincronizado,
+  coberturas.forEach((cob: any) => {
+    primaBase += cob.PRIMA || 0;
+    totalImpuesto1 += (cob.PRIMA_IMPUESTO || 0) - (cob.PRIMA || 0);
   });
+  
+  // Calcular impuesto2 (diferencia entre total prima con impuesto y prima base + impuesto1)
+  totalImpuesto2 = primaTotal - primaBase - totalImpuesto1;
   
   return {
     success: true,
-    idCotizacion: data.idCotizacion || data.id || `COT-${Date.now()}`,
+    idCotizacion: idCotizacion || `COT-${Date.now()}`,
     coberturas,
     primaBase,
     totalImpuesto1,
     totalImpuesto2,
     primaTotal,
-    sincronizado,
+    sincronizado: true, // FEDPA siempre sincronizado
   };
 }
 

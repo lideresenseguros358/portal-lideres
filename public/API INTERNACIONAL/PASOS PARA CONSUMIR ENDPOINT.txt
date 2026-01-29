@@ -1,0 +1,109 @@
+PASOS PARA CONSUMIR ENDPOINT (GETGENERARCOTIZACION) 
+ 
+Paso 1: Consumir EndPoint (APIRestIsTester/api/tokens) 
+ 
+
+Nota: Por favor, ingrese el token principal por usuario en la pestaña de Authorization seleccionando el tipo Bearer Token. Asegúrese de introducir el token exactamente como se muestra a continuación. 
+ 
+
+Paso Opcional (solo si desea volver a consultar): Consumir EndPoint (APIRestIsTester/api/tokens/diario) 
+ 
+
+Nota: Por favor, ingrese el token principal por usuario en la pestaña de Authorization seleccionando el tipo Bearer Token. Asegúrese de introducir el token exactamente como se muestra a continuación. 
+ 
+
+ 
+Paso 2: Ingresar token diario generado en cualquier EndPoint a consumir. 
+Nota: Por favor, ingrese el token en la pestaña de Authorization seleccionando el tipo Bearer Token. Asegúrese de introducir el código exactamente como se muestra a continuación. 
+ 
+
+******************************************************************** 
+ 
+Paso 3: Consumir EndPoint (APIRestIsTester/api/cotizaemisorauto/getmarcas)  
+ 
+
+Nota: Por favor, anote vcodmarca (COD_MARCA) sin decimales. 
+  
+
+ 
+Paso 4: consumir EndPoint (APIRestIsTester/api/cotizaemisorauto/getmodelos) 
+ 
+
+Parámetros: 1 (pagenumber), 10 default (rowsperpage) 
+Nota: Por favor, anote vcodmodelo (COD_MODELO) sin decimales. 
+ 
+
+ 
+Paso 5: Consumir EndPoint (APIRestIsTester/api/cotizaemisorauto/gettipoplanes) 
+ 
+
+Nota: Por favor, anote vCodTipoPlan (DATO). 
+ 
+
+ 
+Paso 6: Consumir EndPoint (APIRestIsTester/api/cotizaemisorauto/getgrupotarifa/{ vCodTipoPlan}) 
+ 
+
+Parámetros: (vCodTipoPlan) . puede enviar cualquiera de los que le aparecen.  
+Nota: Por favor anotar vcodgrupotarifa (DATO) sin decimales. 
+ 
+
+ 
+Paso 7: Consumir EndPoint (APIRestIsTester/api/cotizaemisorauto/getplanes) 
+ 
+
+Parámetros: 3 (vCodTipoPlan) . el parámetro puede variar, dependiendo del tipo de plan que quiere consultar, así deberá enviar vCodTipoPlan que necesite. 
+Nota: Por favor anotar vcodplancobertura (DATO) 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+Paso 8: Consumir EndPoint (APIRestIsTester/api/catalogos/tipodocumentos) 
+ 
+
+Nota: Por favor, anote vcodtipodoc (codigoTipoDocumento) 
+ 
+
+ 
+Paso 9: Consumir EndPoint (getgenerarcotizacion) 
+  
+
+Nota: enviar vcodtipodoc, vnrodoc (# de cédula, RUC, # de identificación del cliente), vnombre, vapellido, vtelefono, vcorreo, vcodmarca, vcodmodelo, vsumaaseg (suma asegurada, dependiendo de plan de cobertura), vanioauto (año del vehículo), vcodplancobertura, vcodgrupotarifa. 
+ 
+ 
+
+ 
+Paso 10: Consumir EndPoint (getcoberturascotizacion) 
+ 
+
+Parámetros: 1030168 (vIdPv) #de Cotización (IDCOT), 1 (vIdOpt) . esta puede ser 1, 2 o 3 
+Nota: Por favor, anote vcodplancobertura (COD_AMPARO) sin decimales. 
+ 
+
+Con la información aquí suministrada puede armar un reporte para armar o mostrar la cotización con los datos.  
+  
+Adicionalmente:  
+1. Si aparece el siguiente mensaje quiere decir que debe enviar 0 como suma asegurada (vsumaaseg) porque el plan de cobertura no lo necesita. 
+
+
+ 
+
+ 
+
+2. Si aparece el siguiente mensaje quiere decir que debe enviar este rango como suma asegurada (vsumaaseg) ya que es el que plan de cobertura necesita. 
+
+
+ 
+
+ 
+
+

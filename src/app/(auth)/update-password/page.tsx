@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { supabaseClient as getSupabaseClient } from "@/lib/supabase/client";
 import AuthShell from "../_AuthShell";
-import { FaEye, FaEyeSlash } from "react-icons/fa";
+import { FaEye, FaEyeSlash, FaExclamationTriangle } from "react-icons/fa";
 
 const UpdatePasswordPage = () => {
   const router = useRouter();
@@ -18,6 +18,7 @@ const UpdatePasswordPage = () => {
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [sessionChecked, setSessionChecked] = useState(false);
+  const [sessionExpired, setSessionExpired] = useState(false);
 
   // Verificar que el usuario tenga una sesión válida de recovery
   useEffect(() => {
@@ -42,9 +43,11 @@ const UpdatePasswordPage = () => {
       
       if (!session) {
         console.error('[4] ❌ No hay sesión activa');
-        setError("Sesión inválida o expirada. Por favor solicita un nuevo enlace de recuperación.");
+        setError("El enlace de recuperación ha expirado o es inválido.");
+        setSessionExpired(true);
       } else {
         console.log('[4] ✅ Sesión válida para:', session.user.email);
+        setSessionExpired(false);
       }
       
       console.log('==========================================');
@@ -71,12 +74,29 @@ const UpdatePasswordPage = () => {
     setError(null);
     setMessage(null);
 
+    // REVALIDAR SESIÓN antes de intentar actualizar
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    
+    if (!session || sessionError) {
+      console.error('❌ Sesión expiró durante el proceso de actualización');
+      setError("Tu sesión ha expirado. Por favor solicita un nuevo enlace de recuperación.");
+      setSessionExpired(true);
+      setLoading(false);
+      return;
+    }
+
     const { error: updateError } = await supabase.auth.updateUser({ password });
 
     setLoading(false);
 
     if (updateError) {
-      setError(updateError.message);
+      // Detectar errores específicos de sesión expirada
+      if (updateError.message.includes('session') || updateError.message.includes('expired') || updateError.message.includes('invalid')) {
+        setError("Tu sesión ha expirado. Por favor solicita un nuevo enlace de recuperación.");
+        setSessionExpired(true);
+      } else {
+        setError(updateError.message);
+      }
       return;
     }
 
@@ -86,8 +106,36 @@ const UpdatePasswordPage = () => {
     }, 1200);
   };
 
+  const handleRequestNewLink = () => {
+    router.push('/forgot');
+  };
+
   return (
     <AuthShell description="Crea una nueva contraseña segura para tu cuenta">
+      {/* Mensaje de sesión expirada */}
+      {sessionExpired && (
+        <div className="mb-6 p-4 bg-amber-50 border-l-4 border-amber-500 rounded-r-lg">
+          <div className="flex items-start gap-3">
+            <FaExclamationTriangle className="text-amber-600 text-xl mt-0.5 flex-shrink-0" />
+            <div className="flex-1">
+              <h3 className="text-sm font-semibold text-amber-900 mb-1">
+                Enlace Expirado
+              </h3>
+              <p className="text-sm text-amber-800 mb-3">
+                El enlace de recuperación ha expirado por seguridad. Solicita un nuevo enlace para continuar.
+              </p>
+              <button
+                type="button"
+                onClick={handleRequestNewLink}
+                className="text-sm font-medium px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-md transition-colors"
+              >
+                Solicitar Nuevo Enlace
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <form className="auth-form" onSubmit={handleSubmit}>
         <div className="auth-field">
           <label className="auth-label" htmlFor="password">
@@ -103,6 +151,7 @@ const UpdatePasswordPage = () => {
               onChange={(event) => setPassword(event.target.value)}
               autoComplete="new-password"
               data-no-uppercase
+              disabled={sessionExpired}
             />
             <button
               type="button"
@@ -113,6 +162,7 @@ const UpdatePasswordPage = () => {
                 opacity: showPassword ? 1 : 0.6,
               }}
               tabIndex={-1}
+              disabled={sessionExpired}
             >
               {showPassword ? <FaEye size={18} /> : <FaEyeSlash size={18} />}
             </button>
@@ -133,6 +183,7 @@ const UpdatePasswordPage = () => {
               onChange={(event) => setConfirmPassword(event.target.value)}
               autoComplete="new-password"
               data-no-uppercase
+              disabled={sessionExpired}
             />
             <button
               type="button"
@@ -143,18 +194,23 @@ const UpdatePasswordPage = () => {
                 opacity: showConfirmPassword ? 1 : 0.6,
               }}
               tabIndex={-1}
+              disabled={sessionExpired}
             >
               {showConfirmPassword ? <FaEye size={18} /> : <FaEyeSlash size={18} />}
             </button>
           </div>
         </div>
 
-        <button type="submit" className="auth-primary-button" disabled={loading}>
+        <button 
+          type="submit" 
+          className="auth-primary-button" 
+          disabled={loading || sessionExpired}
+        >
           {loading ? "Guardando..." : "Guardar contraseña"}
         </button>
 
         {message ? <div className="auth-message success">{message}</div> : null}
-        {error ? <div className="auth-message error">{error}</div> : null}
+        {error && !sessionExpired ? <div className="auth-message error">{error}</div> : null}
       </form>
     </AuthShell>
   );

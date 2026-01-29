@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseServer } from '@/lib/supabase/server';
+import { getSupabaseAdmin } from '@/lib/supabase/admin';
 
 /**
  * POST /api/clients/reassign-broker
@@ -12,6 +13,7 @@ import { getSupabaseServer } from '@/lib/supabase/server';
 export async function POST(request: NextRequest) {
   try {
     const supabase = await getSupabaseServer();
+    const supabaseAdmin = getSupabaseAdmin();
     
     // Verificar autenticación
     const { data: { user } } = await supabase.auth.getUser();
@@ -46,8 +48,8 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
 
-    // 1. Actualizar broker_id en el cliente
-    const { error: clientUpdateError } = await supabase
+    // 1. Actualizar broker_id en el cliente (usa admin para bypassear RLS)
+    const { error: clientUpdateError } = await supabaseAdmin
       .from('clients')
       .update({ 
         broker_id: newBrokerId,
@@ -61,8 +63,8 @@ export async function POST(request: NextRequest) {
       throw new Error('Error al actualizar cliente');
     }
 
-    // 2. Actualizar broker_id en todas las pólizas del cliente
-    const { error: policiesUpdateError } = await supabase
+    // 2. Actualizar broker_id en todas las pólizas del cliente (usa admin para bypassear RLS)
+    const { error: policiesUpdateError } = await supabaseAdmin
       .from('policies')
       .update({ 
         broker_id: newBrokerId 

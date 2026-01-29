@@ -1,0 +1,770 @@
+ 
+ 
+ 
+ 
+LOGO SEGUROS FEDPA S.A-02.jpg
+ 
+  
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+                Indicaciones para emisión de póliza por plan 
+ 
+ 
+Versión: 1.2.0 
+Fecha de documento: 08/11/2024 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+  
+Flujo de proceso - API para emisión de póliza 
+El flujo consta de los siguientes pasos secuenciales: 
+1.
+ El usuario inicia el proceso 
+
+2.
+ Se genera un token de acceso para autenticación 
+
+3.
+ El usuario puede obtener información sobre los planes disponibles 
+
+4.
+ De manera opcional, puede:  o
+ Consultar los beneficios asociados a los planes 
+
+
+
+
+5.
+ Subir documentos requeridos del cliente 
+
+6.
+ Finalmente, se procede a la emisión de la póliza 
+
+
+Este diagrama representa la arquitectura de los endpoints necesarios para la implementación. 
+Diagrama
+
+Descripción generada automáticamente
+ 
+ 
+POST /Generar token  
+Este endpoint permite generar token de autentificación para el ambiente de desarrollo o producción. 
+ 
+https://wscanales.segfedpa.com/EmisorPlan/api/generartoken 
+ 
+ 
+ 
+ 
+ 
+
+ 
+Request Body   application/json 
+o
+ El usuario y clave es proporcionado por el departamento de mercadeo. 
+
+
+Campo
+ Descripcion
+ Tipo
+ Requerido
+ 
+
+Usuario 
+ Usuario de corredor 
+ String 
+ SI 
+ 
+Clave 
+ Clave de corredor 
+ String 
+ SI 
+ 
+Amb 
+ Ambiente de la solicitud. 
+DEV = Desarrollo 
+PROD = Produccion 
+ String 
+ SI 
+ 
+
+
+ 
+ 
+Response application/json 
+Valida 
+Campo
+ Descripcion
+ 
+
+success 
+ Estado de respuesta 
+ 
+token 
+ Token de acceso 
+ 
+
+
+ 
+ 
+ 
+ 
+ 
+Fallida 
+Campo
+ Descripcion
+ 
+
+success 
+ Estado de respuesta 
+ 
+msg 
+ Mensaje de respuesta de error 
+ 
+
+
+ 
+Example Request 
+curl --location 'https://wscanales.segfedpa.com/EmisorPlan/api/generartoken' \ 
+--header 'Content-Type: application/json' \ 
+--data '{ 
+    "usuario": "corredor", 
+    "clave" : " corredor ", 
+    "Amb": "DEV"    
+}' 
+ 
+Example Response 
+{ 
+    "success": true, 
+    "registrado": true, 
+    "token": "eyJhbGiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJVc3VhcmlvIjoiRVBSRVpUTyIsIkNvcnJlZG9yIjoiMjM3NiI6IkRFViIsImV4cCI6MzMyMzg4ODgzNjJ9.hAZuRfscx483L_sS5E8yI_i8Qwltqeql-uzzeMqbmwr" 
+} 
+ 
+ 
+ 
+ 
+ 
+ 
+GET /Obtener planes 
+Este endpoint permite recuperar información sobre los planes disponibles, se obtiene una respuesta que incluye detalles sobre la prima total, coberturas y usos. 
+ 
+https://wscanales.segfedpa.com/EmisorPlan/api/planes 
+ 
+
+ 
+Request Headers 
+Authorization
+ Bearer 
+ 
+
+
+ 
+Response application/json 
+Valida 
+Campo
+ Descripcion
+ 
+
+success 
+ Estado de respuesta 
+ 
+data 
+ Array de información de los planes 
+ 
+
+
+ 
+Data                                                                                                                                                      Array de información de los planes 
+Campo 
+ Descripcion 
+ 
+
+plan 
+ Código del plan 
+ 
+tipoplan 
+ Tipo de plan  
+ 
+descripcion 
+ Descripcion del plan 
+ 
+ramo 
+ Ramo de la poliza 
+ 
+subramo 
+ Subramo de la poliza  
+ 
+prima 
+ Prima sin impuestos  
+ 
+
+
+impuesto1 
+ Impuesto de 5% del valor de prima 
+ 
+impuesto2 
+ Impuesto de 1% del valor de prima 
+ 
+primaconimpuesto 
+ Prima total con impuesto 
+ 
+sincronizado 
+ Informa si la prima con impuesto coincide con la suma total de las primas de las coberturas. Cabe indicar que las primas de las coberturas ya contienen impuesto. 
+True= coincide                                                                   False = no coincide 
+ 
+coberturas 
+ Array de las coberturas del plan 
+ 
+usos 
+ Array de los usos del vehículo para el plan 
+ 
+
+
+ 
+Fallida 
+Campo
+ Descripcion
+ 
+
+success 
+ Estado de respuesta 
+ 
+msg 
+ Mensaje de respuesta de error 
+ 
+
+
+ 
+Example Request 
+curl --location 'https://wscanales.segfedpa.com/EmisorPlan/api/planes' \ 
+--header 'Authorization: Bearer ey1NiIsInR5cCI6IkpXVCJ9.eyJVc3VhcmlvIjoiU09NT1NTIiwiQ29ycmVkb3IiOiIxNzA4IiwiQW1iIjoiUFJPRCIsImV49.YEU1SsAnU4PPQ0SzaoOxdXXUYYXDvy_Q9oE5fnY' \ 
+ 
+Example Response 
+{ 
+      "success": true, 
+    "data": [ 
+        { 
+            "plan": 3, 
+            "tipoplan": "DANOS A TERCEROS", 
+            "descripcion": "RESPONSABILIDAD CIVIL BASICO", 
+            "ramo": "04", 
+            "subramo": "07", 
+            "prima": 108, 
+            "impuesto1": 5.4, 
+            "impuesto2": 1.08, 
+            "primaconimpuesto": 115, 
+            "sincronizado": true, 
+            "coberturas": [ 
+                { 
+                    "cobertura": "A", 
+                    "descripcion": "LESIONES CORPORALES", 
+                    "limite": "5,000.00/10,000.00", 
+                    "prima": 30 
+                }, 
+                { 
+                    "cobertura": "B", 
+                    "descripcion": "DAÑOS A LA PROPIEDAD AJENA", 
+                    "limite": "5,000.00", 
+                    "prima": 52.44 
+                }, 
+                { 
+                    "cobertura": "FAB", 
+                    "descripcion": "FEDPA ASIST BASICO", 
+                    "limite": "INCLUIDO", 
+                    "prima": 27.56 
+                }, 
+                { 
+                    "cobertura": "H-1", 
+                    "descripcion": "MUERTE ACCIDENTAL CODUCTOR", 
+                    "limite": "5000.00", 
+                    "prima": 5 
+                }, 
+                { 
+                    "cobertura": "K6", 
+                    "descripcion": "GASTOS FUNERARIOS CONDUCTOR SOLAMENTE", 
+                    "limite": "1,500.00", 
+                    "prima": 0 
+                } 
+ 
+            ], 
+            "usos": [ 
+                { 
+                    "uso": "10", 
+                    "descripcion": "AUTO PARTICULAR" 
+                } 
+            ] 
+        } 
+    ] 
+} 
+ 
+ 
+GET /Obtener beneficios 
+Este endpoint permite recuperar información sobre los beneficios disponibles del plan. 
+ 
+https://wscanales.segfedpa.com/EmisorPlan/api/planes/beneficios 
+ 
+
+ 
+ 
+Request Headers 
+Authorization
+ Bearer 
+ 
+
+
+ 
+ Query Params 
+Campo
+ Descripcion
+ 
+
+plan 
+ Código del plan 
+ 
+
+
+ 
+ 
+Response application/json 
+Valida 
+Campo
+ Descripcion
+ 
+
+success 
+ Estado de respuesta 
+ 
+Plan 
+ Codigo del plan 
+ 
+data 
+ Array de los beneficios del plan 
+ 
+
+
+ 
+ 
+ 
+Fallida 
+Campo
+ Descripcion
+ 
+
+success 
+ Estado de respuesta 
+ 
+msg 
+ Mensaje de respuesta de error 
+ 
+
+
+ 
+Example Request 
+curl --location https://wscanales.segfedpa.com/EmisorPlan/api/planes/beneficios?plan=3' 
+--header 'Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6I.eyJVc3VhcmlvIjoiRFVDUlVFVCIsIkNvcnJlZG9yIjoiNTg3IiwiZXhwIjozMzIzMzky12BMn0.-TrQt6cYIno_3hfHW132xrMVTS2F52RvM' 
+ 
+Example Response 
+{ 
+    "success": true, 
+    "plan": 3, 
+    "data": [ 
+        { 
+            "beneficio": "AMBULANCIA POR ACCIDENTE (SIN LIMITES DE EVENTO MAXIMO ANUAL 200.00)" 
+        }, 
+        { 
+            "beneficio": "ASISTENCIA LEGAL" 
+        }, 
+        { 
+            "beneficio": "ASISTENCIA MÉDICA TELEFÓNICA 24 HORAS CONTACTÁNDONOS AL   303-2466 ò AL CHAT 6320-8722" 
+        }, 
+        { 
+            "beneficio": "LESIONES CORPORALES" 
+        } 
+    ] 
+} 
+ 
+ 
+ 
+POST /Subir Documentos 
+Este endpoint permite cargar varios documentos a nuestro sistema. devolviendo un identificador único para posterior uso en la emisión. 
+ 
+https://wscanales.segfedpa.com/EmisorPlan/api/subirdocumentos 
+ 
+ 
+
+ 
+ 
+Notas adicionales 
+•
+ Utilice los siguientes nombres para los archivos requeridos: licencia_conducir,documento_identidad y registro_vehicular. 
+
+•
+ Asegúrese de que el archivo esté en un formato compatible como:  application/pdf, image/jpeg, image/jpg, image/png, image/gif, image/bmp, image/webp, image/tiff  y image/svg+xml) 
+
+
+ 
+Request Headers 
+Authorization
+ Bearer 
+ 
+
+
+ 
+Body form-data 
+Key
+ Valor
+ 
+
+file 
+ los archivos que se van a cargar. 
+ 
+
+
+ 
+ 
+Response application/json 
+Valida 
+Campo
+ Descripcion
+ 
+
+success 
+ Estado de respuesta 
+ 
+
+
+IdDoc 
+ Identificador único del documento procesado 
+ 
+msg 
+ Mensaje de texto 
+ 
+files 
+ Lista de archivos procesados 
+ 
+
+
+ 
+Fallida 
+Campo
+ Descripcion
+ 
+
+success 
+ Estado de respuesta 
+ 
+msg 
+ Mensaje de respuesta de error 
+ 
+
+
+ 
+Example Request 
+curl --location 'https://wscanales.segfedpa.com/EmisorPlan/api/subirdocumentos' \ 
+--header 'Authorization: ••••••' \ 
+--form 'file=@"/C:/Users/Downloads/documento_identidad.webp"' \ 
+--form 'file=@"/C:/Users/Downloads/licencia_conducir.png"' 
+ 
+Example Response 
+{ 
+    "success": true, 
+    "idDoc": "Doc-asEHNVIAam", 
+    "msg": "Archivos cargados exitosamente", 
+    "files": [ 
+        "documento_identidad", 
+        "licencia_conducir" 
+    ] 
+} 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+POST /Emitir póliza 
+Este endpoint se utiliza para emitir una nueva póliza. Al realizar la solicitud al método, se debe enviar los datos requeridos. 
+ 
+https://wscanales.segfedpa.com/EmisorPlan/api/emitirpoliza 
+ 
+ 
+ 
+ 
+
+ 
+Request Headers 
+Authorization
+ Bearer 
+ 
+
+
+ 
+Request Body   application/json 
+ 
+Campo
+ Descripcion
+ Tipo
+ Requerido
+ 
+
+Plan 
+ Código del plan 
+ Number 
+ SI 
+ 
+idDoc 
+ Id Documento 
+ String 
+ SI 
+ 
+PrimaTotal 
+ Prima total del plan 
+ Number 
+ SI 
+ 
+ 
+INFORMACION DE CLIENTE 
+ 
+PrimerNombre 
+ Primer Nombre del cliente 
+ String 
+ Si 
+ 
+PrimerApellido 
+ Segundo Apellido del cliente 
+ String 
+ Si 
+ 
+SegundoNombre 
+ Segundo Nombre del cliente 
+ String 
+ No 
+ 
+SegundoApellido 
+ Segundo Apellido de cliente 
+ String 
+ No 
+ 
+Identificacion 
+ Cedula, Ruc o Pasaporte del cliente 
+ String 
+ Si 
+ 
+
+
+FechaNacimiento 
+ Fecha de nacimiento del cliente 
+dd/mm/yyyy 
+ String 
+ Si 
+ 
+Sexo 
+ Sexo del cliente 
+M= Masculino 
+F=Femenino 
+ String 
+ Si 
+ 
+Ocupacion 
+ Codigo de ocupación 
+ Number 
+ No 
+ 
+Direccion 
+ Direccion del cliente 
+       String 
+ No 
+ 
+Telefono 
+ Telefono del cliente o contacto 
+ Number 
+ No 
+ 
+Celular 
+ Celular del cliente o contacto 
+ Number 
+ No 
+ 
+Email 
+ Correo electrónico del cliente o contacto 
+ String 
+ No 
+ 
+esPEP 
+ ¿Es una persona políticamente expuesta? 
+0= No 
+1= Si 
+ Number 
+ No 
+ 
+Acreedor 
+ Código de acreedor 
+ String 
+ `No 
+ 
+ 
+INFORMACION DEL VEHICULO 
+ 
+sumaAsegurada 
+ Suma de asegurado de vehiculo 
+Default = 0 
+ Number 
+ No 
+ 
+Uso 
+ Código de uso de vehículo 
+ String 
+ Si 
+ 
+
+
+Marca 
+ Código de Marca de vehículo 
+ String 
+ Si 
+ 
+Modelo 
+ Código de Modelo de vehículo 
+ String 
+ Si 
+ 
+Ano 
+ Año de vehículo 
+ String 
+ Si 
+ 
+Motor 
+ Numero de moto de vehículo 
+ String 
+ Si 
+ 
+Placa 
+ Numero de placa de vehículo 
+ String 
+ Si 
+ 
+MesVencimientoPlaca 
+ Mes de vencimiento de placa 
+ String 
+ No 
+ 
+Vin 
+ Número de Identificación de vehículo 
+ String 
+ Si 
+ 
+Color 
+ Color de vehículo 
+ String 
+ Si 
+ 
+Pasajero 
+ Capacidad de pasajero que puede tener el vehículo 
+ Number 
+ Si 
+ 
+Puerta 
+ Numero de puerta de vehículo 
+ Number 
+ Si 
+ 
+
+
+ 
+Response application/json 
+Valida 
+Campo
+ Descripcion
+ 
+
+success 
+ Estado de Respuesta 
+ 
+Amb 
+ Ambiente 
+DEV= Desarrollo 
+PROD = Produccion 
+ 
+
+
+cotizacion 
+ Número de cotización 
+ 
+poliza 
+ Número de poliza 
+ 
+desde 
+ Inicio de vigencia 
+ 
+hasta 
+ Final de vigencia 
+ 
+
+
+ 
+Fallida 
+Campo
+ Descripcion
+ 
+
+success 
+ Estado de respuesta 
+ 
+seguimiento 
+ Id de seguimiento de emisión 
+ 
+msg 
+ Mensaje de respuesta de error 
+ 
+
+
+ 
+Example Request 
+curl --location 'https://wscanales.segfedpa.com/EmisorPlan/api/emitirpoliza' \ 
+--header 'Authorization: Bearer eyJhbGciOiJIUzI1NiIVCJ9.eyJVc3VhcmlvIjoiU09NT1NTIiwiIxNzA4IiwiQW1iIjoiUFJPRCIsImV4cCI6M1Mjl9.ULYEU1SsAnU4PPQ0SzaoOxdXXUYYXDvy_Q9oE56H' \ 
+--header 'Content-Type: application/json' \ 
+--data-raw '{ 
+    "Plan": 1004, 
+    "idDoc":"Doc-TLteMfoaer", 
+    "PrimerNombre": "Prueba", 
+    "PrimerApellido": "Prueba", 
+    "Identificacion": "E-8-909-21", 
+    "FechaNacimiento": "10/02/2023", 
+    "Sexo": "M", 
+    "Direccion": "Prueba", 
+    "Telefono": 2552468, 
+    "Celular": 62684341, 
+    "Email": "test@test.com", 
+    "Acreedor":"", 
+    "Marca": "4", 
+    "Modelo": "10", 
+    "Ano": "2022", 
+    "Motor": "QWR12121", 
+    "Placa": "VH12221", 
+    "Vin": "VH1221", 
+    "Color": "Rojo", 
+    "Pasajero": 5, 
+    "Puerta": 4 
+}' 
+ 
+Example Response 
+{ 
+    "success": true, 
+    "amb": "DEV", 
+    "cotizacion": "216", 
+    "poliza": "04-07-72-0", 
+    "desde": "26/02/2024", 
+    "hasta": "26/02/2025" 
+} 
+ 
+

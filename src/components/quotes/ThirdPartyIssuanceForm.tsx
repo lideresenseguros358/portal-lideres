@@ -297,7 +297,7 @@ export default function ThirdPartyIssuanceForm({
           />
         </div>
 
-        <div>
+        <div className="w-full max-w-full overflow-hidden">
           <label className="block text-sm font-semibold text-gray-700 mb-2">
             Fecha de Nacimiento <span className="text-red-500">*</span>
           </label>
@@ -305,7 +305,7 @@ export default function ThirdPartyIssuanceForm({
             type="date"
             value={formData.birthDate}
             onChange={(e) => handleChange('birthDate', e.target.value)}
-            className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition"
+            className="w-full max-w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition"
             max={new Date().toISOString().split('T')[0]}
           />
         </div>
@@ -614,7 +614,7 @@ export default function ThirdPartyIssuanceForm({
             />
           </div>
 
-          <div>
+          <div className="w-full max-w-full overflow-hidden">
             <label className="block text-sm font-semibold text-gray-700 mb-2">
               Fecha de Nacimiento <span className="text-red-500">*</span>
             </label>
@@ -622,7 +622,7 @@ export default function ThirdPartyIssuanceForm({
               type="date"
               value={formData.driverBirthDate}
               onChange={(e) => handleChange('driverBirthDate', e.target.value)}
-              className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition"
+              className="w-full max-w-full px-3 sm:px-4 py-2.5 sm:py-3 text-sm sm:text-base border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition"
               max={new Date().toISOString().split('T')[0]}
             />
           </div>
