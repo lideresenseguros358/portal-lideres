@@ -472,7 +472,7 @@ export default function FormAutoCoberturaCompleta() {
                 </div>
                 
                 {/* Slider con mejor responsive */}
-                <div className="relative mt-4 px-1">
+                <div className="relative mt-4 px-1 pt-3">
                   <input
                     type="range"
                     min="0"
