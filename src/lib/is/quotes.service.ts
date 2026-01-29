@@ -83,11 +83,18 @@ export async function generarCotizacionAuto(
   const cleanModelo = Math.floor(Number(request.vcodmodelo));
   const cleanGrupo = Math.floor(Number(request.vcodgrupotarifa));
   
+  // URL ENCODING para texto (nombres, correos, etc.)
+  const encodedNrodoc = encodeURIComponent(request.vnrodoc);
+  const encodedNombre = encodeURIComponent(request.vnombre);
+  const encodedApellido = encodeURIComponent(request.vapellido);
+  const encodedTelefono = encodeURIComponent(request.vtelefono);
+  const encodedCorreo = encodeURIComponent(request.vcorreo);
+  
   // Según documentación IS - GET con path parameters (NO POST)
   // Orden: vcodtipodoc/vnrodoc/vnombre/vapellido/vtelefono/vcorreo/vcodmarca/vcodmodelo/vsumaaseg/vanioauto/vcodplancobertura/vcodgrupotarifa
-  const endpoint = `${IS_ENDPOINTS.GENERAR_COTIZACION}/${request.vcodtipodoc}/${request.vnrodoc}/${request.vnombre}/${request.vapellido}/${request.vtelefono}/${request.vcorreo}/${cleanMarca}/${cleanModelo}/${request.vsumaaseg}/${request.vanioauto}/${request.vcodplancobertura}/${cleanGrupo}`;
+  const endpoint = `${IS_ENDPOINTS.GENERAR_COTIZACION}/${request.vcodtipodoc}/${encodedNrodoc}/${encodedNombre}/${encodedApellido}/${encodedTelefono}/${encodedCorreo}/${cleanMarca}/${cleanModelo}/${request.vsumaaseg}/${request.vanioauto}/${request.vcodplancobertura}/${cleanGrupo}`;
   
-  console.log('[IS] Cotizando con GET:', endpoint);
+  console.log('[IS Quotes] Generando cotización...', { marca: cleanMarca, modelo: cleanModelo, valor: request.vsumaaseg });
   
   const response = await isGet<{ Table: Array<{
     RESOP: number;

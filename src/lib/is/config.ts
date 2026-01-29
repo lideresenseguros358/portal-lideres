@@ -6,12 +6,23 @@
 export type ISEnvironment = 'development' | 'production';
 
 /**
- * Obtener base URL según ambiente
+ * Obtener base URL según ambiente desde ENV vars
+ * ⚠️ Debe ser URL ABSOLUTA (https://...)
  */
 export function getISBaseUrl(env: ISEnvironment): string {
-  return env === 'production'
-    ? 'https://www.iseguros.com/APIRestIs/api'
-    : 'https://www.iseguros.com/APIRestIsTester/api';
+  const baseUrl = env === 'production'
+    ? process.env.IS_BASE_URL_PROD
+    : process.env.IS_BASE_URL_DEV;
+
+  if (!baseUrl) {
+    throw new Error(
+      `Variable de entorno no configurada: ${
+        env === 'production' ? 'IS_BASE_URL_PROD' : 'IS_BASE_URL_DEV'
+      }`
+    );
+  }
+
+  return baseUrl;
 }
 
 /**
@@ -38,27 +49,28 @@ export const INSURER_SLUG = 'INTERNACIONAL';
 export const CORREDOR_FIJO = 'oficina';
 
 // Endpoints
+// ⚠️ IMPORTANTE: Los paths NO incluyen /api porque ya está en la base URL
 export const IS_ENDPOINTS = {
   // Autenticación
-  TOKEN: '/api/tokens',
+  TOKEN: '/tokens',
   
   // Catálogos Auto
-  MARCAS: '/api/cotizaemisorauto/getmarcas',
-  MODELOS: '/api/cotizaemisorauto/getmodelos',
-  TIPO_PLANES: '/api/cotizaemisorauto/gettipoplanes',
-  GRUPO_TARIFA: '/api/cotizaemisorauto/getgrupotarifa',
-  PLANES: '/api/cotizaemisorauto/getplanes',
-  TIPO_DOCUMENTOS: '/api/catalogos/tipodocumentos',
+  MARCAS: '/cotizaemisorauto/getmarcas',
+  MODELOS: '/cotizaemisorauto/getmodelos',
+  TIPO_PLANES: '/cotizaemisorauto/gettipoplanes',
+  GRUPO_TARIFA: '/cotizaemisorauto/getgrupotarifa',
+  PLANES: '/cotizaemisorauto/getplanes',
+  TIPO_DOCUMENTOS: '/catalogos/tipodocumentos',
   
   // Cotización Auto
-  GENERAR_COTIZACION: '/api/cotizaemisorauto/getgenerarcotizacion',
-  COBERTURAS_COTIZACION: '/api/cotizaemisorauto/getcoberturascotizacion',
+  GENERAR_COTIZACION: '/cotizaemisorauto/getgenerarcotizacion',
+  COBERTURAS_COTIZACION: '/cotizaemisorauto/getcoberturascotizacion',
   
   // Emisión Auto
-  EMISION: '/api/cotizaemisorauto/getemision',
+  EMISION: '/cotizaemisorauto/getemision',
   
   // Pago (a confirmar con IS)
-  PAYMENT: '/api/payment/process', // Placeholder - confirmar con IS
+  PAYMENT: '/payment/process', // Placeholder - confirmar con IS
 } as const;
 
 // Retry config

@@ -38,11 +38,11 @@ function getPrimaryToken(env: ISEnvironment): string {
 
 /**
  * Obtener token diario desde IS (renovación)
+ * Parser FLEXIBLE: text/plain, JSON con múltiples estructuras, Table
  */
 async function fetchDailyToken(env: ISEnvironment): Promise<string> {
   const primaryToken = getPrimaryToken(env);
   const baseUrl = getISBaseUrl(env);
-  // baseUrl ya incluye /api, entonces solo agregamos /tokens
   const endpoint = `${baseUrl}/tokens`;
 
   try {
@@ -54,32 +54,62 @@ async function fetchDailyToken(env: ISEnvironment): Promise<string> {
       },
     });
 
+    const status = response.status;
+    const contentType = response.headers.get('content-type') || '';
+    
+    console.log(`[IS Token Manager] GET ${endpoint} - ${status} - ${contentType}`);
+
     if (!response.ok) {
-      throw new Error(`Error ${response.status} al obtener token diario`);
+      const preview = await response.text();
+      console.error(`[IS Token Manager] Error ${status}:`, preview.substring(0, 120));
+      throw new Error(`Error ${status} al obtener token diario`);
+    }
+    
+    // BLOQUEO WAF: Si devuelve HTML
+    if (contentType.includes('text/html')) {
+      console.error('[IS Token Manager] Bloqueo WAF - respuesta HTML');
+      throw new Error('Bloqueo WAF detectado');
     }
 
-    const contentType = response.headers.get('content-type');
+    const bodyText = await response.text();
     
-    // Si devuelve HTML, es bloqueo WAF
-    if (contentType?.includes('text/html')) {
-      throw new Error('Bloqueo WAF detectado - respuesta HTML en lugar de JSON');
+    // CASO 1: text/plain - El token viene directo como string
+    if (contentType.includes('text/plain') || bodyText.startsWith('eyJ')) {
+      const token = bodyText.trim();
+      console.log('[IS Token Manager] Token diario obtenido (text/plain)');
+      return token;
     }
-
-    const data = await response.json();
     
-    // Log completo de la respuesta para debugging
-    console.log('[IS Token Manager] Respuesta completa de /tokens:', JSON.stringify(data));
+    // CASO 2: JSON - Parsear y buscar en múltiples rutas
+    let data: any;
+    try {
+      data = JSON.parse(bodyText);
+    } catch {
+      console.error('[IS Token Manager] Body no es JSON:', bodyText.substring(0, 120));
+      throw new Error('Respuesta no es JSON válido');
+    }
     
-    // La respuesta puede variar, ajustar según estructura real
-    const dailyToken = data.token || data.Token || data.access_token || data.data?.token;
+    // Buscar token en múltiples ubicaciones posibles
+    const dailyToken = 
+      data.tokenDiario ||
+      data.token ||
+      data.Token ||
+      data.access_token ||
+      data.data?.token ||
+      data.Table?.[0]?.TOKEN ||
+      data.Table?.[0]?.token ||
+      data.Table?.[0]?.Token;
     
     if (!dailyToken) {
-      console.error('[IS Token Manager] Estructura de respuesta:', Object.keys(data));
+      const keys = Object.keys(data);
+      console.error('[IS Token Manager] Token no encontrado. Estructura:', keys);
+      console.error('[IS Token Manager] Primeros 120 chars:', JSON.stringify(data).substring(0, 120));
       throw new Error('Token diario no encontrado en respuesta');
     }
 
-    console.log('[IS Token Manager] Token diario obtenido exitosamente');
+    console.log('[IS Token Manager] Token diario obtenido (JSON)');
     return dailyToken;
+    
   } catch (error: any) {
     console.error(`[IS Token Manager] Error obteniendo token diario (${env}):`, error.message);
     throw error;

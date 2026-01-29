@@ -138,24 +138,36 @@ export async function isRequest<T = any>(
         fetchOptions.body = JSON.stringify(body);
       }
       
-      // Log request
-      console.log(`[IS] ${method} ${endpoint} (attempt ${attempt + 1}/${RETRY_CONFIG.maxRetries + 1})`);
+      // Log request con URL completa (sin query params sensibles)
+      console.log(`[IS] ${method} ${url} (attempt ${attempt + 1}/${RETRY_CONFIG.maxRetries + 1})`);
       
       // Hacer request
       const response = await fetch(url, fetchOptions);
+      const contentType = response.headers.get('content-type') || '';
       const responseText = await response.text();
+      
+      const duration = Date.now() - startTime;
+      
+      // Log response
+      console.log(`[IS] ${method} ${endpoint} - ${response.status} (${duration}ms) - ${contentType}`);
+      
+      // WAF/BLOCK: Si es HTML en lugar de JSON
+      if (contentType.includes('text/html') && !response.ok) {
+        console.error('[IS] WAF/BLOCK detectado - respuesta HTML');
+        return {
+          success: false,
+          error: 'Bloqueado por WAF',
+          statusCode: response.status,
+        };
+      }
       
       let responseData: any;
       try {
         responseData = JSON.parse(responseText);
       } catch {
+        // Si no es JSON, guardar como string
         responseData = responseText;
       }
-      
-      const duration = Date.now() - startTime;
-      
-      // Log response
-      console.log(`[IS] ${method} ${endpoint} - ${response.status} (${duration}ms)`);
       
       // Guardar en auditoría (async, no bloquear)
       saveAudit(endpoint, method, body, responseData, response.status, env).catch(err => {
