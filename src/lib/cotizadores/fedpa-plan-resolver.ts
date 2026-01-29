@@ -42,16 +42,44 @@ export async function obtenerPlanesFedpa(environment: 'DEV' | 'PROD' = 'DEV'): P
     // Obtener lista de planes de Cobertura Completa
     const planesResponse = await fetch(`/api/fedpa/planes?environment=${environment}&tipo=COBERTURA%20COMPLETA`);
     if (!planesResponse.ok) {
-      console.error('[FEDPA Plans] Error obteniendo planes');
-      return { basico: null, premium: null };
+      const errorText = await planesResponse.text();
+      console.error('[FEDPA Plans] Error HTTP', planesResponse.status, ':', errorText);
+      console.warn('[FEDPA Plans] Usando planes hardcodeados como fallback');
+      return {
+        basico: {
+          planId: '411',
+          nombre: 'Cobertura Completa Básica',
+          tipo: 'basico',
+          endoso: 'Full Extras',
+        },
+        premium: {
+          planId: '412',
+          nombre: 'Cobertura Completa Premium',
+          tipo: 'premium',
+          endoso: 'Porcelana',
+        },
+      };
     }
     
     const planesData = await planesResponse.json();
     const planes = planesData.data || [];
     
     if (planes.length === 0) {
-      console.error('[FEDPA Plans] No hay planes disponibles');
-      return { basico: null, premium: null };
+      console.warn('[FEDPA Plans] No hay planes en catálogo, usando hardcodeados');
+      return {
+        basico: {
+          planId: '411',
+          nombre: 'Cobertura Completa Básica',
+          tipo: 'basico',
+          endoso: 'Full Extras',
+        },
+        premium: {
+          planId: '412',
+          nombre: 'Cobertura Completa Premium',
+          tipo: 'premium',
+          endoso: 'Porcelana',
+        },
+      };
     }
     
     console.log('[FEDPA Plans] Planes disponibles:', planes.length);
