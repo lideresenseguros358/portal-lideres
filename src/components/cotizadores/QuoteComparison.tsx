@@ -7,16 +7,35 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FaStar, FaShieldAlt, FaCheckCircle, FaCog, FaArrowUp, FaEdit, FaInfoCircle } from 'react-icons/fa';
+import { FaStar, FaShieldAlt, FaCheckCircle, FaCog, FaArrowUp, FaEdit, FaInfoCircle, FaQuestionCircle } from 'react-icons/fa';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import InsurerLogo from '@/components/shared/InsurerLogo';
 import PremiumUpgradeModal from './PremiumUpgradeModal';
 import QuoteDetailsCard from './QuoteDetailsCard';
+import AutoCloseTooltip from '@/components/ui/AutoCloseTooltip';
+import { preciosTooltips, getDeducibleTooltip, getEndosoTooltip } from '@/lib/cotizadores/fedpa-premium-features';
 
 interface Coverage {
   name: string;
   included: boolean;
+}
+
+interface PriceBreakdown {
+  primaBase: number;
+  descuentoProntoPago?: number;
+  impuesto1: number;
+  impuesto2?: number;
+  totalConTarjeta: number;
+  totalAlContado: number;
+}
+
+interface PremiumFeature {
+  nombre: string;
+  descripcion: string;
+  valorBasico: string;
+  valorPremium: string;
+  mejora: string;
 }
 
 interface QuotePlan {
@@ -34,6 +53,8 @@ interface QuotePlan {
   _vIdOpt?: number;
   _endosoIncluido?: string;
   _deducibleOriginal?: string;
+  _priceBreakdown?: PriceBreakdown;
+  _premiumFeatures?: PremiumFeature[];
   [key: string]: any; // Para otras propiedades dinámicas
 }
 
@@ -119,12 +140,11 @@ export default function QuoteComparison({ policyType, quotes, quoteData }: Quote
     const selectedPlan = quotes.find(q => q.id === quoteId);
     if (!selectedPlan) return;
     
-    // Si seleccionó un plan básico Y no escogió manualmente el endoso premium
+    // REGLA: Solo mostrar modal si seleccionó plan BÁSICO
     const isPlanBasico = selectedPlan.planType === 'basico';
     const isRealQuote = selectedPlan._isReal;
-    const manuallySelectedPremium = selectedPlan._deducibleOriginal === 'alto';
     
-    if (isPlanBasico && isRealQuote && !manuallySelectedPremium) {
+    if (isPlanBasico && isRealQuote) {
       // Buscar el plan premium correspondiente de la misma aseguradora
       const premiumPlan = quotes.find(q => 
         q.insurerName === selectedPlan.insurerName && 
@@ -132,15 +152,15 @@ export default function QuoteComparison({ policyType, quotes, quoteData }: Quote
       );
       
       if (premiumPlan) {
-        // Mostrar modal de upgrade
+        // Mostrar modal de upgrade a premium
         setSelectedBasicPlan(selectedPlan);
         setCorrespondingPremiumPlan(premiumPlan);
         setShowUpgradeModal(true);
-        return; // No proceder a emitir todavía
+        return; // No proceder a emitir todavía - esperar decisión del usuario
       }
     }
     
-    // Si no hay upgrade disponible o seleccionó premium, proceder directamente
+    // Si seleccionó premium o no hay upgrade disponible, proceder directamente
     proceedToEmission(selectedPlan);
   };
   
@@ -303,14 +323,67 @@ export default function QuoteComparison({ policyType, quotes, quoteData }: Quote
               {/* Card Content */}
               <div className="p-5 md:p-6 flex flex-col flex-1">
 
-                {/* Price */}
-                <div className="text-center mb-5 py-4 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl flex-shrink-0">
-                  <div className="text-xs text-gray-600 mb-1 font-medium">Prima Anual</div>
-                  <div className="text-3xl md:text-4xl font-bold text-[#010139] mb-2">
-                    ${quote.annualPremium.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    Deducible desde ${quote.deductible.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                {/* Price Section con Breakdown Contado/Tarjeta */}
+                <div className="mb-5 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4 flex-shrink-0">
+                  {/* Si tiene breakdown, mostrar contado vs tarjeta */}
+                  {quote._priceBreakdown ? (
+                    <>
+                      {/* Precio con Tarjeta (principal) */}
+                      <div className="text-center mb-3">
+                        <div className="flex items-center justify-center gap-2 mb-1">
+                          <span className="text-xs text-gray-600 font-medium">Pago con Tarjeta (2-10 cuotas)</span>
+                          <span title={preciosTooltips.tarjeta} className="inline-block">
+                            <FaQuestionCircle className="text-gray-400 text-xs cursor-help" />
+                          </span>
+                        </div>
+                        <div className="text-3xl md:text-4xl font-bold text-[#010139]">
+                          ${quote._priceBreakdown.totalConTarjeta.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                        </div>
+                      </div>
+                      
+                      {/* Separador */}
+                      <div className="flex items-center gap-2 my-2">
+                        <div className="flex-1 border-t border-gray-300"></div>
+                        <span className="text-xs text-gray-500 font-medium">o</span>
+                        <div className="flex-1 border-t border-gray-300"></div>
+                      </div>
+                      
+                      {/* Precio al Contado (con descuento) */}
+                      <div className="text-center bg-green-50 border border-green-200 rounded-lg p-2">
+                        <div className="flex items-center justify-center gap-2 mb-1">
+                          <span className="text-xs text-green-700 font-semibold">Al Contado (1 cuota)</span>
+                          <span title={preciosTooltips.contado} className="inline-block">
+                            <FaQuestionCircle className="text-green-600 text-xs cursor-help" />
+                          </span>
+                        </div>
+                        <div className="text-2xl font-bold text-green-700">
+                          ${quote._priceBreakdown.totalAlContado.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                        </div>
+                        {quote._priceBreakdown.descuentoProntoPago && quote._priceBreakdown.descuentoProntoPago > 0 && (
+                          <div className="text-xs text-green-600 mt-1">
+                            Ahorro: ${quote._priceBreakdown.descuentoProntoPago.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    /* Precio simple sin breakdown */
+                    <div className="text-center">
+                      <div className="text-xs text-gray-600 mb-1 font-medium">Prima Anual</div>
+                      <div className="text-3xl md:text-4xl font-bold text-[#010139] mb-2">
+                        ${quote.annualPremium.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Deducible con Tooltip */}
+                  <div className="flex items-center justify-center gap-2 mt-3 text-xs text-gray-600">
+                    <span>Deducible desde ${quote.deductible.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                    {quote._deducibleOriginal && (
+                      <span title={getDeducibleTooltip(quote._deducibleOriginal as 'bajo' | 'medio' | 'alto')} className="inline-block">
+                        <FaQuestionCircle className="text-gray-400 cursor-help" />
+                      </span>
+                    )}
                   </div>
                 </div>
 
