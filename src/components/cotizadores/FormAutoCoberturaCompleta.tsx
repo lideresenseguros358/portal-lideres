@@ -502,7 +502,7 @@ export default function FormAutoCoberturaCompleta() {
                       const index = parseInt(e.target.value);
                       setFormData({ ...formData, valorVehiculo: vehiculoOptions[index] || 15000 });
                     }}
-                    className="w-full h-8 sm:h-3 bg-gray-300 rounded-lg appearance-none cursor-pointer slider-thumb slider-with-stops transition-all duration-200 ease-out"
+                    className="w-full bg-gray-300 rounded-lg appearance-none cursor-pointer slider-thumb slider-with-stops transition-all duration-200 ease-out"
                     style={{
                       background: `linear-gradient(to right, #8AAA19 0%, #8AAA19 ${((() => {
                         const exactIndex = vehiculoOptions.indexOf(formData.valorVehiculo);
@@ -609,7 +609,7 @@ export default function FormAutoCoberturaCompleta() {
                         });
                       }
                     }}
-                    className="w-full h-8 sm:h-3 bg-gray-300 rounded-lg appearance-none cursor-pointer slider-thumb transition-all duration-200 ease-out"
+                    className="w-full bg-gray-300 rounded-lg appearance-none cursor-pointer slider-thumb transition-all duration-200 ease-out"
                     style={{
                       background: `linear-gradient(to right, #8AAA19 0%, #8AAA19 ${(lesionCorporalOptions.findIndex(opt => opt.persona === formData.lesionCorporalPersona) / (lesionCorporalOptions.length - 1)) * 100}%, #e5e7eb ${(lesionCorporalOptions.findIndex(opt => opt.persona === formData.lesionCorporalPersona) / (lesionCorporalOptions.length - 1)) * 100}%, #e5e7eb 100%)`
                     }}
@@ -661,7 +661,7 @@ export default function FormAutoCoberturaCompleta() {
                         setFormData({ ...formData, danoPropiedad: selected });
                       }
                     }}
-                    className="w-full h-8 sm:h-3 bg-gray-300 rounded-lg appearance-none cursor-pointer slider-thumb transition-all duration-200 ease-out"
+                    className="w-full bg-gray-300 rounded-lg appearance-none cursor-pointer slider-thumb transition-all duration-200 ease-out"
                     style={{
                       background: `linear-gradient(to right, #8AAA19 0%, #8AAA19 ${(danoPropiedadOptions.indexOf(formData.danoPropiedad) / (danoPropiedadOptions.length - 1)) * 100}%, #e5e7eb ${(danoPropiedadOptions.indexOf(formData.danoPropiedad) / (danoPropiedadOptions.length - 1)) * 100}%, #e5e7eb 100%)`
                     }}
@@ -721,7 +721,7 @@ export default function FormAutoCoberturaCompleta() {
                         });
                       }
                     }}
-                    className="w-full h-8 sm:h-3 bg-gray-300 rounded-lg appearance-none cursor-pointer slider-thumb transition-all duration-200 ease-out"
+                    className="w-full bg-gray-300 rounded-lg appearance-none cursor-pointer slider-thumb transition-all duration-200 ease-out"
                     style={{
                       background: `linear-gradient(to right, #8AAA19 0%, #8AAA19 ${(gastosMedicosOptions.findIndex(opt => opt.persona === formData.gastosMedicosPersona) / (gastosMedicosOptions.length - 1)) * 100}%, #e5e7eb ${(gastosMedicosOptions.findIndex(opt => opt.persona === formData.gastosMedicosPersona) / (gastosMedicosOptions.length - 1)) * 100}%, #e5e7eb 100%)`
                     }}
