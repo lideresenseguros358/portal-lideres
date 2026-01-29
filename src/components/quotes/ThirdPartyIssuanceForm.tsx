@@ -2,10 +2,12 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { FaUser, FaCar, FaIdCard, FaCheck, FaCreditCard } from 'react-icons/fa';
+import Image from 'next/image';
 import { toast } from 'sonner';
 import CreditCardInput from '@/components/is/CreditCardInput';
 import { useISCatalogs } from '@/hooks/useISCatalogs';
 import Autocomplete, { AutocompleteOption } from '@/components/ui/Autocomplete';
+import AutoCloseTooltip from '@/components/ui/AutoCloseTooltip';
 
 interface FormData {
   // Datos Personales
@@ -65,6 +67,16 @@ const MONTHS = [
   { value: 12, label: 'Diciembre' },
 ];
 
+// Marcas comunes con logos
+const COMMON_BRANDS = [
+  { name: 'TOYOTA', logo: '/logos auto/TOYOTA.png', width: 80 },
+  { name: 'KIA', logo: '/logos auto/KIA.png', width: 150 },
+  { name: 'HYUNDAI', logo: '/logos auto/HYUNDAI.png', width: 80 },
+  { name: 'SUZUKI', logo: '/logos auto/SUZUKI.png', width: 150 },
+  { name: 'NISSAN', logo: '/logos auto/NISSAN.png', width: 80 },
+  { name: 'GEELY', logo: '/logos auto/GEELY.png', width: 150 },
+];
+
 export default function ThirdPartyIssuanceForm({
   insurerId,
   insurerName,
@@ -75,6 +87,7 @@ export default function ThirdPartyIssuanceForm({
   const { marcas, modelos, selectedMarca, setSelectedMarca, loading: catalogsLoading } = useISCatalogs();
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [showSearch, setShowSearch] = useState(false); // Toggle para mostrar búsqueda
   
   // Credit card data
   const [cardData, setCardData] = useState({
@@ -120,7 +133,7 @@ export default function ThirdPartyIssuanceForm({
     motorNumber: '',
     color: '',
     transmission: '',
-    occupants: '',
+    occupants: 5,
     plateRenewalMonth: '',
     sameAsContractor: true,
     driverFirstName: '',
@@ -146,6 +159,26 @@ export default function ThirdPartyIssuanceForm({
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
+  // Generar años (desde 1960 hasta un año futuro)
+  const currentYear = new Date().getFullYear();
+  const yearOptions = [];
+  for (let year = currentYear + 1; year >= 1960; year--) {
+    yearOptions.push(year);
+  }
+
+  // Función para seleccionar marca común
+  const handleCommonBrandSelect = (brandName: string) => {
+    const marca = marcas.find(m => m.TXT_MARCA.toUpperCase() === brandName.toUpperCase());
+    if (marca) {
+      setSelectedMarca(marca.COD_MARCA);
+      setFormData({
+        ...formData,
+        brand: marca.TXT_MARCA,
+        model: '', // Reset modelo cuando cambia marca
+      });
+    }
+  };
+
   const validateStep = (step: number): boolean => {
     switch (step) {
       case 1: // Datos Personales
@@ -162,14 +195,15 @@ export default function ThirdPartyIssuanceForm({
         return true;
 
       case 2: // Datos del Vehículo
-        if (!formData.plateNumber || !formData.brand || !formData.model ||
-            !formData.year || !formData.color || !formData.transmission ||
-            !formData.occupants || !formData.plateRenewalMonth) {
+        if (!formData.brand || !formData.model || !formData.year ||
+            !formData.plateNumber || !formData.occupants || !formData.vin ||
+            !formData.motorNumber || !formData.color || !formData.transmission ||
+            !formData.plateRenewalMonth) {
           toast.error('Por favor completa todos los campos obligatorios del vehículo');
           return false;
         }
         const currentYear = new Date().getFullYear();
-        if (formData.year && (formData.year < 1900 || formData.year > currentYear + 1)) {
+        if (formData.year && (formData.year < 1960 || formData.year > currentYear + 1)) {
           toast.error('Por favor ingresa un año válido');
           return false;
         }
@@ -381,25 +415,69 @@ export default function ThirdPartyIssuanceForm({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-2">
-            Número de Placa <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="text"
-            value={formData.plateNumber}
-            onChange={(e) => handleChange('plateNumber', e.target.value.toUpperCase())}
-            className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition uppercase font-mono"
-            placeholder="ABC-1234"
-          />
-        </div>
+      <div className="flex items-center text-sm text-gray-600 mb-4">
+        Primero seleccione la marca y luego el modelo del vehículo
+        <AutoCloseTooltip 
+          content="Si no encuentra su marca dentro de las 6 opciones, presione el botón 'Otras Marcas' para buscarla en el listado completo de marcas disponibles."
+        />
+      </div>
 
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-2">
-            Marca <span className="text-red-500">*</span>
-            {catalogsLoading && <span className="text-xs text-gray-500 ml-2">(Cargando...)</span>}
-          </label>
+      {/* Selección rápida de marcas comunes */}
+      {!showSearch && (
+        <div className="mb-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            {COMMON_BRANDS.map((brand) => (
+              <button
+                key={brand.name}
+                type="button"
+                onClick={() => handleCommonBrandSelect(brand.name)}
+                disabled={catalogsLoading}
+                className={`p-4 rounded-xl border-2 transition-all hover:scale-105 cursor-pointer ${
+                  formData.brand.toUpperCase() === brand.name
+                    ? 'border-[#8AAA19] bg-[#8AAA19] shadow-lg'
+                    : 'border-[#010139] bg-[#010139] hover:opacity-90 shadow-md'
+                }`}
+              >
+                <div className="flex items-center justify-center h-12">
+                  <Image
+                    src={brand.logo}
+                    alt={brand.name}
+                    width={brand.width || 80}
+                    height={40}
+                    className="object-contain max-h-full"
+                  />
+                </div>
+              </button>
+            ))}
+          </div>
+          
+          {/* Botón Otras Marcas */}
+          <button
+            type="button"
+            onClick={() => setShowSearch(true)}
+            className="w-full mt-4 px-6 py-3 bg-[#8AAA19] text-white rounded-lg font-semibold hover:bg-[#6d8814] transition-colors shadow-md cursor-pointer"
+          >
+            Otras Marcas
+          </button>
+        </div>
+      )}
+
+      {/* Búsqueda de marca */}
+      {showSearch && (
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-2">
+            <label className="block text-sm font-semibold text-gray-700">
+              Marca <span className="text-red-500">*</span>
+              {catalogsLoading && <span className="text-xs text-gray-500 ml-2">(Cargando...)</span>}
+            </label>
+            <button
+              type="button"
+              onClick={() => setShowSearch(false)}
+              className="text-sm text-[#8AAA19] hover:text-[#6d8814] font-semibold"
+            >
+              ← Ver marcas comunes
+            </button>
+          </div>
           <Autocomplete
             options={marcasOptions}
             value={selectedMarca || ''}
@@ -420,44 +498,115 @@ export default function ThirdPartyIssuanceForm({
             emptyMessage="No hay marcas disponibles"
           />
         </div>
+      )}
 
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-2">
-            Modelo <span className="text-red-500">*</span>
-            {catalogsLoading && selectedMarca && <span className="text-xs text-gray-500 ml-2">(Cargando...)</span>}
-          </label>
-          <Autocomplete
-            options={modelosOptions}
-            value={formData.model}
-            onChange={(value, option) => {
-              if (option) {
-                handleChange('model', option.label);
-              } else {
-                handleChange('model', '');
-              }
-            }}
-            placeholder={!selectedMarca ? 'Primero selecciona una marca' : 'Buscar modelo...'}
-            disabled={!selectedMarca || catalogsLoading}
-            loading={catalogsLoading && !!selectedMarca}
-            emptyMessage={!selectedMarca ? 'Selecciona una marca primero' : 'No hay modelos disponibles'}
+      {/* Modelo */}
+      <div className="mb-6">
+        <label className="block text-sm font-semibold text-gray-700 mb-2">
+          Modelo <span className="text-red-500">*</span>
+          {catalogsLoading && selectedMarca && <span className="text-xs text-gray-500 ml-2">(Cargando...)</span>}
+        </label>
+        <Autocomplete
+          options={modelosOptions}
+          value={formData.model}
+          onChange={(value, option) => {
+            if (option) {
+              handleChange('model', option.label);
+            } else {
+              handleChange('model', '');
+            }
+          }}
+          placeholder={!selectedMarca ? 'Primero selecciona una marca' : 'Buscar modelo...'}
+          disabled={!selectedMarca || catalogsLoading}
+          loading={catalogsLoading && !!selectedMarca}
+          emptyMessage={!selectedMarca ? 'Selecciona una marca primero' : 'No hay modelos disponibles'}
+        />
+      </div>
+
+      {/* Año */}
+      <div className="mb-6">
+        <label className="block text-sm font-semibold text-gray-700 mb-2">
+          Año <span className="text-red-500">*</span>
+        </label>
+        <select
+          value={formData.year}
+          onChange={(e) => handleChange('year', parseInt(e.target.value) || '')}
+          className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition bg-white"
+        >
+          <option value="">Seleccionar año...</option>
+          {yearOptions.map((year) => (
+            <option key={year} value={year}>{year}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* Placa */}
+      <div className="mb-6">
+        <label className="block text-sm font-semibold text-gray-700 mb-2">
+          Número de Placa <span className="text-red-500">*</span>
+        </label>
+        <input
+          type="text"
+          value={formData.plateNumber}
+          onChange={(e) => handleChange('plateNumber', e.target.value.toUpperCase())}
+          className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition uppercase font-mono"
+          placeholder="ABC-1234"
+        />
+      </div>
+
+      {/* Ocupantes */}
+      <div className="mb-6">
+        <label className="block text-sm font-semibold text-gray-700 mb-2">
+          Cantidad de Ocupantes <span className="text-red-500">*</span>
+        </label>
+        <select
+          value={formData.occupants}
+          onChange={(e) => handleChange('occupants', parseInt(e.target.value))}
+          className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition bg-white"
+        >
+          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+            <option key={num} value={num}>{num} {num === 1 ? 'ocupante' : 'ocupantes'}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* VIN */}
+      <div className="mb-6">
+        <label className="flex items-center text-sm font-semibold text-gray-700 mb-2">
+          Número VIN (Chasis) <span className="text-red-500 ml-1">*</span>
+          <AutoCloseTooltip 
+            content="El número VIN o número de chasis se encuentra en el registro vehicular. Por favor, complete exactamente como aparece en el documento."
           />
-        </div>
+        </label>
+        <input
+          type="text"
+          value={formData.vin}
+          onChange={(e) => handleChange('vin', e.target.value.toUpperCase())}
+          className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition uppercase font-mono"
+          placeholder="Número VIN o Chasis"
+          maxLength={17}
+        />
+      </div>
 
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-2">
-            Año <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="number"
-            value={formData.year}
-            onChange={(e) => handleChange('year', parseInt(e.target.value) || '')}
-            className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition"
-            placeholder="2020"
-            min="1900"
-            max={new Date().getFullYear() + 1}
+      {/* Motor */}
+      <div className="mb-6">
+        <label className="flex items-center text-sm font-semibold text-gray-700 mb-2">
+          Número de Motor <span className="text-red-500 ml-1">*</span>
+          <AutoCloseTooltip 
+            content="El número de motor se encuentra en el registro vehicular. Por favor, complete exactamente como aparece en el documento."
           />
-        </div>
+        </label>
+        <input
+          type="text"
+          value={formData.motorNumber}
+          onChange={(e) => handleChange('motorNumber', e.target.value.toUpperCase())}
+          className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition uppercase font-mono"
+          placeholder="Número de motor"
+        />
+      </div>
 
+      {/* Resto de campos en grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label className="block text-sm font-semibold text-gray-700 mb-2">
             Color <span className="text-red-500">*</span>
@@ -478,7 +627,7 @@ export default function ThirdPartyIssuanceForm({
           <select
             value={formData.transmission}
             onChange={(e) => handleChange('transmission', e.target.value)}
-            className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition"
+            className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition bg-white"
           >
             <option value="">Seleccionar...</option>
             {TRANSMISSION_TYPES.map((type) => (
@@ -487,62 +636,20 @@ export default function ThirdPartyIssuanceForm({
           </select>
         </div>
 
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-2">
-            Cantidad de Ocupantes <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="number"
-            value={formData.occupants}
-            onChange={(e) => handleChange('occupants', parseInt(e.target.value) || '')}
-            className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition"
-            placeholder="5"
-            min="1"
-            max="99"
-          />
-        </div>
-
-        <div>
+        <div className="md:col-span-2">
           <label className="block text-sm font-semibold text-gray-700 mb-2">
             Mes de Renovación de Placa <span className="text-red-500">*</span>
           </label>
           <select
             value={formData.plateRenewalMonth}
             onChange={(e) => handleChange('plateRenewalMonth', parseInt(e.target.value) || '')}
-            className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition"
+            className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition bg-white"
           >
             <option value="">Seleccionar...</option>
             {MONTHS.map((month) => (
               <option key={month.value} value={month.value}>{month.label}</option>
             ))}
           </select>
-        </div>
-
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-2">
-            Número VIN
-          </label>
-          <input
-            type="text"
-            value={formData.vin}
-            onChange={(e) => handleChange('vin', e.target.value.toUpperCase())}
-            className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition uppercase font-mono"
-            placeholder="17 caracteres"
-            maxLength={17}
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-semibold text-gray-700 mb-2">
-            Número de Motor
-          </label>
-          <input
-            type="text"
-            value={formData.motorNumber}
-            onChange={(e) => handleChange('motorNumber', e.target.value.toUpperCase())}
-            className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition uppercase font-mono"
-            placeholder="Número de motor"
-          />
         </div>
       </div>
     </div>
