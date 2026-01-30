@@ -89,8 +89,37 @@ export default function PremiumUpgradeModal({
         isVisible ? 'opacity-100' : 'opacity-0'
       }`}
     >
+      <style jsx global>{`
+        .premium-modal-scroll::-webkit-scrollbar {
+          width: 8px;
+        }
+        .premium-modal-scroll::-webkit-scrollbar-track {
+          background: #f1f5f9;
+          border-radius: 10px;
+        }
+        .premium-modal-scroll::-webkit-scrollbar-thumb {
+          background: #8AAA19;
+          border-radius: 10px;
+        }
+        .premium-modal-scroll::-webkit-scrollbar-thumb:hover {
+          background: #6d8814;
+        }
+        .premium-modal-scroll {
+          scrollbar-width: thin;
+          scrollbar-color: #8AAA19 #f1f5f9;
+        }
+        
+        @keyframes premiumFloat {
+          0%, 100% { transform: translateY(0); }
+          50% { transform: translateY(-8px); }
+        }
+        
+        .premium-float {
+          animation: premiumFloat 3s ease-in-out infinite;
+        }
+      `}</style>
       <div
-        className={`bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border-2 border-[#8AAA19] transition-transform duration-300 ${
+        className={`premium-modal-scroll bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto border-2 border-[#8AAA19] transition-transform duration-300 ${
           isVisible ? 'scale-100' : 'scale-95'
         }`}
       >
@@ -111,56 +140,14 @@ export default function PremiumUpgradeModal({
 
         {/* Content */}
         <div className="p-6 space-y-6">
-          {/* Comparison Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Basic Plan */}
-            <div className="border-2 border-gray-200 rounded-xl p-4 bg-gray-50">
-              <div className="text-center mb-3">
-                <span className="inline-block px-3 py-1 bg-gray-300 text-gray-700 text-xs font-bold rounded-full">
-                  PLAN BÁSICO
-                </span>
-              </div>
-              <div className="text-center mb-4">
-                {hasBreakdown ? (
-                  <>
-                    <p className="text-xs text-gray-500 mb-1">Con Tarjeta (2-10 cuotas)</p>
-                    <p className="text-2xl font-bold text-gray-700">
-                      ${precioBasicoTarjeta.toFixed(2)}
-                    </p>
-                    <div className="text-xs text-gray-400 my-1">o</div>
-                    <p className="text-xs text-gray-500 mb-1">Al Contado (1 cuota)</p>
-                    <p className="text-xl font-semibold text-gray-600">
-                      ${precioBasicoContado.toFixed(2)}
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-3xl font-bold text-gray-700">
-                      ${basicPlan.premium.toFixed(2)}
-                    </p>
-                    <p className="text-sm text-gray-500">por año</p>
-                  </>
-                )}
-              </div>
-              <div className="space-y-2">
-                <p className="text-sm font-semibold text-gray-600">
-                  Deducible: ${basicPlan.deductible.toLocaleString()}
-                </p>
-                <p className="text-xs text-gray-500">
-                  {basicPlan.coverages.length} coberturas
-                </p>
-                <p className="text-xs text-gray-500">
-                  {beneficiosBasico.length} beneficio(s)
-                </p>
-              </div>
-            </div>
-
-            {/* Premium Plan */}
-            <div className="border-2 border-[#8AAA19] rounded-xl p-4 bg-gradient-to-br from-green-50 to-white relative overflow-hidden">
+          {/* Comparación de Planes - PREMIUM A LA IZQUIERDA */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+            {/* Premium Plan - AHORA A LA IZQUIERDA CON FLOTANTE */}
+            <div className="premium-float border-2 border-[#8AAA19] rounded-xl p-4 bg-gradient-to-br from-green-50 to-white relative overflow-hidden shadow-lg">
               <div className="absolute top-0 right-0 w-20 h-20 bg-[#8AAA19]/10 rounded-bl-full"></div>
               <div className="text-center mb-3">
                 <span className="inline-block px-3 py-1 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white text-xs font-bold rounded-full shadow-md">
-                  PLAN PREMIUM ⭐
+                  ⭐ PLAN PREMIUM RECOMENDADO
                 </span>
               </div>
               <div className="text-center mb-4">
@@ -206,6 +193,49 @@ export default function PremiumUpgradeModal({
                 </p>
               </div>
             </div>
+
+            {/* Basic Plan - AHORA A LA DERECHA */}
+            <div className="border-2 border-gray-300 rounded-xl p-4 bg-white">
+              <div className="text-center mb-3">
+                <span className="inline-block px-3 py-1 bg-gray-200 text-gray-700 text-xs font-bold rounded-full">
+                  PLAN BÁSICO
+                </span>
+              </div>
+              <div className="text-center mb-4">
+                {hasBreakdown ? (
+                  <>
+                    <p className="text-xs text-gray-500 mb-1">Con Tarjeta (2-10 cuotas)</p>
+                    <p className="text-2xl font-bold text-gray-700">
+                      ${precioBasicoTarjeta.toFixed(2)}
+                    </p>
+                    <div className="text-xs text-gray-400 my-1">o</div>
+                    <p className="text-xs text-gray-500 mb-1">Al Contado (1 cuota)</p>
+                    <p className="text-xl font-semibold text-gray-600">
+                      ${precioBasicoContado.toFixed(2)}
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-3xl font-bold text-gray-700">
+                      ${basicPlan.premium.toFixed(2)}
+                    </p>
+                    <p className="text-sm text-gray-500">por año</p>
+                  </>
+                )}
+              </div>
+              <div className="space-y-2">
+                <p className="text-sm font-semibold text-gray-600">
+                  Deducible: ${basicPlan.deductible.toLocaleString()}
+                </p>
+                <p className="text-xs text-gray-500">
+                  {basicPlan.coverages.length} coberturas
+                </p>
+                <p className="text-xs text-gray-500">
+                  {beneficiosBasico.length} beneficio(s)
+                </p>
+              </div>
+            </div>
+
           </div>
 
           {/* Endosos Premium */}
