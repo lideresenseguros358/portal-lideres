@@ -729,6 +729,60 @@ export default function ImportPage() {
             </div>
           )}
 
+          {/* Clientes Duplicados en Base de Datos */}
+          {importResult.clientDuplicates && importResult.clientDuplicates.length > 0 && (
+            <div className="bg-orange-50 border-2 border-orange-300 rounded-xl overflow-hidden">
+              <button
+                onClick={() => setShowDuplicates(!showDuplicates)}
+                className="w-full flex items-center justify-between p-4 hover:bg-orange-100 transition"
+              >
+                <div className="flex items-center gap-3">
+                  <FaExclamationTriangle className="text-orange-600 text-xl" />
+                  <h4 className="text-lg font-bold text-orange-800">
+                    Clientes Duplicados ({importResult.clientDuplicates.length})
+                  </h4>
+                </div>
+                {showDuplicates ? <FaChevronUp className="text-orange-600" /> : <FaChevronDown className="text-orange-600" />}
+              </button>
+              
+              {showDuplicates && (
+                <div className="p-4 pt-0 space-y-3 max-h-60 overflow-y-auto">
+                  {importResult.clientDuplicates.map((duplicate: any, idx: number) => (
+                    <div key={idx} className="bg-white rounded-lg p-4 border-l-4 border-orange-500 shadow-sm">
+                      <div className="flex items-start gap-3">
+                        <span className="text-2xl flex-shrink-0">
+                          {duplicate.duplicateReason === 'other_broker' ? '👥' : '📋'}
+                        </span>
+                        <div className="flex-1">
+                          <p className="font-semibold text-orange-900 text-sm mb-1">
+                            Fila {duplicate.row} - {duplicate.clientName || 'Cliente'}
+                          </p>
+                          <p className="text-orange-700 text-sm">{duplicate.message}</p>
+                          
+                          {/* Tooltip de ayuda según el motivo */}
+                          <div className="mt-2 flex items-start gap-2 bg-blue-50 border border-blue-200 rounded p-2">
+                            <FaInfoCircle className="text-blue-600 mt-0.5 flex-shrink-0" />
+                            <p className="text-xs text-blue-800">
+                              {duplicate.duplicateReason === 'other_broker' ? (
+                                <>
+                                  <strong>🚫 Motivo:</strong> Este cliente ya está registrado en la base de datos con <strong>otro corredor</strong>. No puedes importarlo.
+                                </>
+                              ) : (
+                                <>
+                                  <strong>✓ Motivo:</strong> Este cliente y sus pólizas ya existen en <strong>tu propia base de datos</strong>. No es necesario reimportarlo.
+                                </>
+                              )}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Duplicados dentro del CSV */}
           {importResult.csvDuplicates && importResult.csvDuplicates.length > 0 && (
             <div className="bg-gray-50 border-2 border-gray-300 rounded-xl overflow-hidden">

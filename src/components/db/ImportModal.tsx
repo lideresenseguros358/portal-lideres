@@ -190,7 +190,7 @@ export default function ImportModal({ onClose }: ImportModalProps) {
                         <li>✓ Tipo (AUTO, VIDA...)</li>
                         <li>✓ Fechas inicio/renovación</li>
                         <li>✓ Estado (ACTIVA...)</li>
-                        <li>✓ Email del corredor</li>
+                        {userRole === 'master' && <li>✓ Email del corredor</li>}
                       </ul>
                     </div>
                   </div>
@@ -198,6 +198,12 @@ export default function ImportModal({ onClose }: ImportModalProps) {
                   <div className="bg-amber-50 border border-amber-300 rounded p-2">
                     <p className="text-xs text-amber-900">
                       <strong>⚠️ Importante:</strong> Solo "notas" es opcional. Si falta cédula, email, teléfono o fecha de nacimiento, el cliente queda como PRELIMINAR.
+                      {userRole === 'broker' && (
+                        <>
+                          <br />
+                          <strong>👉 Nota:</strong> La columna "broker_email" se asignará automáticamente a ti. No es necesario llenarla.
+                        </>
+                      )}
                     </p>
                   </div>
                 </div>
