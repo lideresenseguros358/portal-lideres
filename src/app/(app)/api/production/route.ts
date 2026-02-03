@@ -36,8 +36,7 @@ export async function GET(request: NextRequest) {
           id,
           name,
           assa_code,
-          meta_personal,
-          canceladas_ytd
+          meta_personal
         )
       `)
       .eq('year', year);
@@ -73,7 +72,7 @@ export async function GET(request: NextRequest) {
       console.log('👑 Master user - Fetching all brokers');
       const { data: allBrokers, error: brokersError } = await supabase
         .from('brokers')
-        .select('id, name, assa_code, meta_personal, canceladas_ytd')
+        .select('id, name, assa_code, meta_personal')
         .order('name');
 
       console.log('📋 All brokers fetched:', allBrokers?.length, 'brokers');
@@ -100,7 +99,7 @@ export async function GET(request: NextRequest) {
             nov: { bruto: 0, num_polizas: 0, persistencia: null },
             dec: { bruto: 0, num_polizas: 0, persistencia: null },
           },
-          canceladas_ytd: broker.canceladas_ytd || 0,
+          canceladas_ytd: 0, // Se llenará desde production.canceladas_ytd
           previous_year: { bruto_ytd: 0, neto_ytd: 0, num_polizas_ytd: 0 }
         });
       });
@@ -114,11 +113,10 @@ export async function GET(request: NextRequest) {
       const brokerIds = [...new Set(productionData.map((r: any) => r.broker_id))].filter((id): id is string => typeof id === 'string');
       const { data: brokersWithMeta } = await supabase
         .from('brokers')
-        .select('id, meta_personal, canceladas_ytd')
+        .select('id, meta_personal')
         .in('id', brokerIds);
       
       const metaMap = new Map(brokersWithMeta?.map(b => [b.id, parseFloat(b.meta_personal as any) || 0]) || []);
-      const canceladasMap = new Map(brokersWithMeta?.map(b => [b.id, b.canceladas_ytd || 0]) || []);
       
       // Inicializar brokers con sus metas personales
       brokerIds.forEach(bId => {
@@ -143,7 +141,7 @@ export async function GET(request: NextRequest) {
               nov: { bruto: 0, num_polizas: 0 },
               dec: { bruto: 0, num_polizas: 0 },
             },
-            canceladas_ytd: canceladasMap.get(bId as string) || 0,
+            canceladas_ytd: 0, // Se llenará desde production.canceladas_ytd
             previous_year: { bruto_ytd: 0, neto_ytd: 0, num_polizas_ytd: 0 }
           });
         }
@@ -173,7 +171,7 @@ export async function GET(request: NextRequest) {
             nov: { bruto: 0, num_polizas: 0 },
             dec: { bruto: 0, num_polizas: 0 },
           },
-          canceladas_ytd: record.brokers?.canceladas_ytd || 0,
+          canceladas_ytd: 0, // Se llenará desde production.canceladas_ytd
           previous_year: { bruto_ytd: 0, neto_ytd: 0, num_polizas_ytd: 0 }
         });
       }
@@ -188,7 +186,12 @@ export async function GET(request: NextRequest) {
           num_polizas: parseInt(record.num_polizas) || 0,
           persistencia: record.persistencia !== null && record.persistencia !== undefined ? parseFloat(record.persistencia) : null,
         };
-        // canceladas_ytd ya viene de brokers, no se acumula
+        
+        // Actualizar canceladas_ytd del broker desde production (por año)
+        // Tomar el valor del primer mes que tenga canceladas_ytd
+        if (record.canceladas_ytd !== null && record.canceladas_ytd !== undefined) {
+          broker.canceladas_ytd = parseFloat(record.canceladas_ytd) || 0;
+        }
       }
     });
 
@@ -296,22 +299,55 @@ export async function PUT(request: NextRequest) {
     const { field, value } = body;
     
     if (field === 'canceladas_ytd') {
-      if (!broker_id) {
-        return NextResponse.json({ error: 'broker_id es requerido' }, { status: 400 });
+      if (!broker_id || !year) {
+        return NextResponse.json({ error: 'broker_id y year son requeridos' }, { status: 400 });
       }
 
       // Redondear a 2 decimales EXACTOS para evitar errores de punto flotante
       const exactValue = Math.round(value * 100) / 100;
 
-      // Guardar DIRECTAMENTE en la tabla brokers (campo anual, NO mensual)
-      const { error: updateError } = await supabase
-        .from('brokers')
+      // Actualizar canceladas_ytd en TODOS los meses del año actual en production
+      // para que el valor esté disponible independientemente del mes que se consulte
+      const { error: updateError } = await (supabase as any)
+        .from('production')
         .update({ canceladas_ytd: exactValue })
-        .eq('id', broker_id);
+        .eq('broker_id', broker_id)
+        .eq('year', year);
 
       if (updateError) {
         console.error('Error updating canceladas_ytd:', updateError);
         return NextResponse.json({ error: 'Error al actualizar canceladas' }, { status: 500 });
+      }
+
+      // Si no hay ningún mes registrado aún, crear enero con las canceladas
+      const { data: existingRecords } = await (supabase as any)
+        .from('production')
+        .select('id')
+        .eq('broker_id', broker_id)
+        .eq('year', year)
+        .limit(1);
+
+      if (!existingRecords || existingRecords.length === 0) {
+        // Crear registro de enero con las canceladas
+        const { error: insertError } = await (supabase as any)
+          .from('production')
+          .insert({
+            broker_id,
+            year,
+            month: 1,
+            bruto: 0,
+            num_polizas: 0,
+            canceladas: 0,
+            persistencia: null,
+            canceladas_ytd: exactValue,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          });
+
+        if (insertError) {
+          console.error('Error inserting canceladas_ytd:', insertError);
+          return NextResponse.json({ error: 'Error al crear registro de canceladas' }, { status: 500 });
+        }
       }
 
       return NextResponse.json({ 
