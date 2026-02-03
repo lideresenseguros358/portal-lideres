@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { FaTimes, FaChevronDown, FaChevronUp } from 'react-icons/fa';
+import { FaTimes, FaChevronDown, FaChevronUp, FaChevronLeft, FaChevronRight } from 'react-icons/fa';
+import { useSwipeable } from 'react-swipeable';
 
 interface MonthData {
   bruto: number;
@@ -70,6 +71,7 @@ export default function ProductionTableModal({
 }: ProductionTableModalProps) {
   const [semester, setSemester] = useState<1 | 2>(1);
   const [showAll, setShowAll] = useState(false);
+  const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
 
   const sortedProduction = useMemo(() => {
     return [...production]
@@ -83,6 +85,18 @@ export default function ProductionTableModal({
 
   const displayedProduction = showAll ? sortedProduction : sortedProduction.slice(0, 10);
   const currentMonths = semester === 1 ? MONTHS_S1 : MONTHS_S2;
+
+  // Swipe handlers para cambiar semestre en mobile
+  const swipeHandlers = useSwipeable({
+    onSwipedLeft: () => setSemester(2),
+    onSwipedRight: () => setSemester(1),
+    trackMouse: false,
+    trackTouch: true,
+  });
+
+  const toggleTooltip = (key: string) => {
+    setActiveTooltip(prev => prev === key ? null : key);
+  };
 
   const formatCurrency = (value: number) => {
     const absValue = Math.abs(value);
@@ -134,8 +148,16 @@ export default function ProductionTableModal({
           </button>
         </div>
 
-        {/* Semester Toggle - Sutil */}
-        <div className="bg-gray-50 px-3 sm:px-6 py-2 border-b border-gray-200 flex items-center justify-center gap-1 flex-shrink-0">
+        {/* Semester Toggle con flechas para mobile */}
+        <div className="bg-gray-50 px-3 sm:px-6 py-2 border-b border-gray-200 flex items-center justify-center gap-2 flex-shrink-0">
+          <button
+            onClick={() => setSemester(1)}
+            className="sm:hidden p-2 rounded bg-white text-[#010139] hover:bg-gray-100 border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={semester === 1}
+            type="button"
+          >
+            <FaChevronLeft size={12} />
+          </button>
           <button
             onClick={() => setSemester(1)}
             className={`px-2 sm:px-3 py-1 rounded text-[10px] sm:text-xs font-medium transition-all ${
@@ -143,6 +165,7 @@ export default function ProductionTableModal({
                 ? 'bg-[#010139] text-white'
                 : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-300'
             }`}
+            type="button"
           >
             Ene-Jun
           </button>
@@ -153,13 +176,22 @@ export default function ProductionTableModal({
                 ? 'bg-[#010139] text-white'
                 : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-300'
             }`}
+            type="button"
           >
             Jul-Dic
           </button>
+          <button
+            onClick={() => setSemester(2)}
+            className="sm:hidden p-2 rounded bg-white text-[#010139] hover:bg-gray-100 border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={semester === 2}
+            type="button"
+          >
+            <FaChevronRight size={12} />
+          </button>
         </div>
 
-        {/* Table Container */}
-        <div className={`flex-1 ${showAll ? 'overflow-y-auto' : 'overflow-hidden'}`}>
+        {/* Table Container con swipe support */}
+        <div className={`flex-1 ${showAll ? 'overflow-y-auto' : 'overflow-hidden'}`} {...swipeHandlers}>
           <div className="min-w-full">
             <table className="w-full text-[9px] sm:text-xs">
               <thead className="bg-gray-100 sticky top-0 z-10">
@@ -204,17 +236,21 @@ export default function ProductionTableModal({
                         const monthKey = m.key as keyof typeof broker.months;
                         const monthData = broker.months[monthKey];
                         const value = monthData?.bruto || 0;
+                        const tooltipKey = `${broker.broker_id}-${m.key}`;
+                        const showTooltip = activeTooltip === tooltipKey;
                         return (
                           <td 
                             key={m.key} 
                             className={`px-0.5 sm:px-1 py-1 sm:py-2 text-center font-mono relative group ${
-                              value > 0 ? 'text-gray-700 cursor-help' : 'text-gray-300'
+                              value > 0 ? 'text-gray-700 cursor-pointer' : 'text-gray-300'
                             }`}
-                            title={value > 0 ? formatCurrencyFull(value) : undefined}
+                            onClick={() => value > 0 && toggleTooltip(tooltipKey)}
                           >
                             {value > 0 ? formatCurrency(value) : '-'}
                             {value > 0 && (
-                              <span className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-gray-900 text-white text-[10px] rounded whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-20 hidden sm:block">
+                              <span className={`absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-gray-900 text-white text-[10px] rounded whitespace-nowrap transition-opacity z-20 ${
+                                showTooltip ? 'opacity-100 sm:opacity-0 sm:group-hover:opacity-100' : 'opacity-0 group-hover:opacity-100'
+                              }`}>
                                 {formatCurrencyFull(value)}
                               </span>
                             )}
@@ -222,29 +258,35 @@ export default function ProductionTableModal({
                         );
                       })}
                       <td 
-                        className="px-1 sm:px-2 py-1 sm:py-2 text-right font-mono font-bold text-[#010139] relative group cursor-help"
-                        title={formatCurrencyFull(broker.brutoYTD)}
+                        className="px-1 sm:px-2 py-1 sm:py-2 text-right font-mono font-bold text-[#010139] relative group cursor-pointer"
+                        onClick={() => toggleTooltip(`${broker.broker_id}-bruto`)}
                       >
                         {formatCurrency(broker.brutoYTD)}
-                        <span className="absolute bottom-full right-0 mb-1 px-2 py-1 bg-gray-900 text-white text-[10px] rounded whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-20 hidden sm:block">
+                        <span className={`absolute bottom-full right-0 mb-1 px-2 py-1 bg-gray-900 text-white text-[10px] rounded whitespace-nowrap transition-opacity z-20 ${
+                          activeTooltip === `${broker.broker_id}-bruto` ? 'opacity-100 sm:opacity-0 sm:group-hover:opacity-100' : 'opacity-0 group-hover:opacity-100'
+                        }`}>
                           {formatCurrencyFull(broker.brutoYTD)}
                         </span>
                       </td>
                       <td 
-                        className="px-1 sm:px-2 py-1 sm:py-2 text-right font-mono text-red-600 hidden sm:table-cell relative group cursor-help"
-                        title={formatCurrencyFull(broker.canceladas_ytd)}
+                        className="px-1 sm:px-2 py-1 sm:py-2 text-right font-mono text-red-600 hidden sm:table-cell relative group cursor-pointer"
+                        onClick={() => toggleTooltip(`${broker.broker_id}-canc`)}
                       >
                         {formatCurrency(broker.canceladas_ytd)}
-                        <span className="absolute bottom-full right-0 mb-1 px-2 py-1 bg-gray-900 text-white text-[10px] rounded whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-20">
+                        <span className={`absolute bottom-full right-0 mb-1 px-2 py-1 bg-gray-900 text-white text-[10px] rounded whitespace-nowrap transition-opacity z-20 ${
+                          activeTooltip === `${broker.broker_id}-canc` ? 'opacity-100 sm:opacity-0 sm:group-hover:opacity-100' : 'opacity-0 group-hover:opacity-100'
+                        }`}>
                           {formatCurrencyFull(broker.canceladas_ytd)}
                         </span>
                       </td>
                       <td 
-                        className="px-1 sm:px-2 py-1 sm:py-2 text-right font-mono font-bold text-[#8AAA19] relative group cursor-help"
-                        title={formatCurrencyFull(broker.netoYTD)}
+                        className="px-1 sm:px-2 py-1 sm:py-2 text-right font-mono font-bold text-[#8AAA19] relative group cursor-pointer"
+                        onClick={() => toggleTooltip(`${broker.broker_id}-neto`)}
                       >
                         {formatCurrency(broker.netoYTD)}
-                        <span className="absolute bottom-full right-0 mb-1 px-2 py-1 bg-gray-900 text-white text-[10px] rounded whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-20 hidden sm:block">
+                        <span className={`absolute bottom-full right-0 mb-1 px-2 py-1 bg-gray-900 text-white text-[10px] rounded whitespace-nowrap transition-opacity z-20 ${
+                          activeTooltip === `${broker.broker_id}-neto` ? 'opacity-100 sm:opacity-0 sm:group-hover:opacity-100' : 'opacity-0 group-hover:opacity-100'
+                        }`}>
                           {formatCurrencyFull(broker.netoYTD)}
                         </span>
                       </td>

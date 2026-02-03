@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
-import { FaEdit, FaSave, FaCheck, FaSpinner } from 'react-icons/fa';
+import { FaEdit, FaSave, FaCheck, FaSpinner, FaChevronLeft, FaChevronRight } from 'react-icons/fa';
 import Link from 'next/link';
+import { useSwipeable } from 'react-swipeable';
 
 interface ProductionMatrixProps {
   year: number;
@@ -56,6 +57,9 @@ const MONTHS = [
   { key: 'dec', label: 'Dic' },
 ];
 
+const MONTHS_S1 = MONTHS.slice(0, 6); // Ene-Jun
+const MONTHS_S2 = MONTHS.slice(6, 12); // Jul-Dic
+
 type SortOption = 'name' | 'month' | 'ytd';
 
 export default function ProductionMatrix({ year, role, brokerId, brokers }: ProductionMatrixProps) {
@@ -65,8 +69,23 @@ export default function ProductionMatrix({ year, role, brokerId, brokers }: Prod
   const [savingCell, setSavingCell] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<SortOption>('name');
   const [sortMonth, setSortMonth] = useState<string>('jan');
+  const [semester, setSemester] = useState<1 | 2>(1);
+  const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
 
   const isMaster = role === 'master';
+  const currentMonths = semester === 1 ? MONTHS_S1 : MONTHS_S2;
+
+  // Swipe handlers para cambiar semestre en mobile
+  const swipeHandlers = useSwipeable({
+    onSwipedLeft: () => setSemester(2),
+    onSwipedRight: () => setSemester(1),
+    trackMouse: false,
+    trackTouch: true,
+  });
+
+  const toggleTooltip = (key: string) => {
+    setActiveTooltip(prev => prev === key ? null : key);
+  };
 
   useEffect(() => {
     loadProduction();
@@ -237,6 +256,48 @@ export default function ProductionMatrix({ year, role, brokerId, brokers }: Prod
           <p className="text-sm text-gray-600 mt-1">Comparativo PMA - Año {year} VS Año {year - 1}</p>
         </div>
 
+        {/* Semester Toggle - Solo mobile */}
+        <div className="sm:hidden flex items-center justify-center gap-2 mb-4">
+          <button
+            onClick={() => setSemester(1)}
+            className="p-2 rounded bg-white text-[#010139] hover:bg-gray-100 border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={semester === 1}
+            type="button"
+          >
+            <FaChevronLeft size={14} />
+          </button>
+          <button
+            onClick={() => setSemester(1)}
+            className={`px-4 py-2 rounded text-sm font-medium transition-all ${
+              semester === 1
+                ? 'bg-[#010139] text-white'
+                : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-300'
+            }`}
+            type="button"
+          >
+            Ene-Jun
+          </button>
+          <button
+            onClick={() => setSemester(2)}
+            className={`px-4 py-2 rounded text-sm font-medium transition-all ${
+              semester === 2
+                ? 'bg-[#010139] text-white'
+                : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-300'
+            }`}
+            type="button"
+          >
+            Jul-Dic
+          </button>
+          <button
+            onClick={() => setSemester(2)}
+            className="p-2 rounded bg-white text-[#010139] hover:bg-gray-100 border border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={semester === 2}
+            type="button"
+          >
+            <FaChevronRight size={14} />
+          </button>
+        </div>
+
         {/* Controles de Ordenamiento */}
         <div className="flex flex-wrap items-center justify-center gap-3">
           <button
@@ -287,8 +348,8 @@ export default function ProductionMatrix({ year, role, brokerId, brokers }: Prod
         </div>
       </div>
 
-      {/* Tabla con scroll horizontal */}
-      <div className="overflow-x-auto -mx-4 sm:mx-0">
+      {/* Tabla con scroll horizontal y swipe support */}
+      <div className="overflow-x-auto -mx-4 sm:mx-0" {...swipeHandlers}>
         <div className="inline-block min-w-full align-middle">
           <table className="min-w-full border-collapse">
             {/* Header */}
@@ -300,8 +361,17 @@ export default function ProductionMatrix({ year, role, brokerId, brokers }: Prod
                 <th className="px-3 py-3 text-center text-xs font-semibold text-[#010139] border-b-2 border-gray-200 min-w-[100px]">
                   Código ASSA
                 </th>
+                {/* Desktop: todos los meses, Mobile: solo semestre actual */}
+                <th className="sm:hidden px-3 py-3 text-center text-xs font-semibold text-gray-500 border-b-2 border-gray-200 min-w-[100px]">
+                  {semester === 1 ? 'Ene-Jun' : 'Jul-Dic'}
+                </th>
+                {currentMonths.map(month => (
+                  <th key={month.key} className="hidden sm:table-cell px-3 py-3 text-center text-xs font-semibold text-[#010139] border-b-2 border-gray-200 min-w-[100px]">
+                    {month.label}
+                  </th>
+                ))}
                 {MONTHS.map(month => (
-                  <th key={month.key} className="px-3 py-3 text-center text-xs font-semibold text-[#010139] border-b-2 border-gray-200 min-w-[100px]">
+                  <th key={`${month.key}-desktop`} className="sm:hidden px-3 py-3 text-center text-xs font-semibold text-[#010139] border-b-2 border-gray-200 min-w-[100px]">
                     {month.label}
                   </th>
                 ))}
@@ -361,13 +431,14 @@ export default function ProductionMatrix({ year, role, brokerId, brokers }: Prod
                       <span className="font-mono text-gray-600">{broker.assa_code || '-'}</span>
                     </td>
 
-                    {/* Meses (solo Bruto) */}
+                    {/* Desktop: todos los meses */}
                     {MONTHS.map(month => {
                       const monthKey = month.key as keyof typeof broker.months;
                       const monthData = broker.months[monthKey];
+                      const tooltipKey = `${broker.broker_id}-${month.key}`;
 
                       return (
-                        <td key={month.key} className="px-2 py-2 text-center text-sm border-b border-gray-200">
+                        <td key={month.key} className="hidden sm:table-cell px-2 py-2 text-center text-sm border-b border-gray-200 relative group">
                           {isMaster ? (
                             <input
                               type="number"
@@ -377,15 +448,64 @@ export default function ProductionMatrix({ year, role, brokerId, brokers }: Prod
                               placeholder="0"
                             />
                           ) : (
-                            <span className="font-mono">{formatCurrency(monthData.bruto)}</span>
+                            <>
+                              <span className="font-mono cursor-pointer" onClick={() => toggleTooltip(tooltipKey)}>
+                                {formatCurrency(monthData.bruto)}
+                              </span>
+                              {monthData.bruto > 0 && (
+                                <span className={`absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap transition-opacity z-20 ${
+                                  activeTooltip === tooltipKey ? 'opacity-100 group-hover:opacity-100' : 'opacity-0 group-hover:opacity-100'
+                                }`}>
+                                  {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(monthData.bruto)}
+                                </span>
+                              )}
+                            </>
+                          )}
+                        </td>
+                      );
+                    })}
+                    {/* Mobile: solo meses del semestre actual */}
+                    {currentMonths.map(month => {
+                      const monthKey = month.key as keyof typeof broker.months;
+                      const monthData = broker.months[monthKey];
+                      const tooltipKey = `${broker.broker_id}-${month.key}-mobile`;
+
+                      return (
+                        <td key={`${month.key}-mobile`} className="sm:hidden px-2 py-2 text-center text-sm border-b border-gray-200 relative group">
+                          {isMaster ? (
+                            <input
+                              type="number"
+                              value={monthData.bruto === 0 ? '' : monthData.bruto}
+                              onChange={(e) => handleMonthEdit(broker.broker_id, month.key, e.target.value === '' ? 0 : parseFloat(e.target.value))}
+                              className="w-full px-2 py-1 text-center border border-gray-300 rounded focus:border-[#8AAA19] focus:outline-none font-mono text-xs"
+                              placeholder="0"
+                            />
+                          ) : (
+                            <>
+                              <span className="font-mono cursor-pointer text-xs" onClick={() => toggleTooltip(tooltipKey)}>
+                                {formatCurrency(monthData.bruto)}
+                              </span>
+                              {monthData.bruto > 0 && (
+                                <span className={`absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap transition-opacity z-20 ${
+                                  activeTooltip === tooltipKey ? 'opacity-100' : 'opacity-0'
+                                }`}>
+                                  {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(monthData.bruto)}
+                                </span>
+                              )}
+                            </>
                           )}
                         </td>
                       );
                     })}
 
                     {/* Bruto YTD */}
-                    <td className="px-3 py-3 text-center text-sm font-semibold border-b border-gray-200 bg-gray-50">
+                    <td className="px-3 py-3 text-center text-sm font-semibold border-b border-gray-200 bg-gray-50 relative group cursor-pointer" onClick={() => toggleTooltip(`${broker.broker_id}-bruto`)}>
                       <span className="font-mono">{formatCurrency(brutoYTD)}</span>
+                      <span className={`absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap transition-opacity z-20 ${
+                        activeTooltip === `${broker.broker_id}-bruto` ? 'opacity-100 sm:opacity-0 sm:group-hover:opacity-100' : 'opacity-0 group-hover:opacity-100'
+                      }`}>
+                        {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(brutoYTD)}
+                      </span>
                     </td>
 
                     {/* Canceladas Anual */}
@@ -419,8 +539,13 @@ export default function ProductionMatrix({ year, role, brokerId, brokers }: Prod
                     </td>
 
                     {/* Neto YTD */}
-                    <td className="px-3 py-3 text-center text-sm font-bold border-b border-gray-200 bg-green-50">
+                    <td className="px-3 py-3 text-center text-sm font-bold border-b border-gray-200 bg-green-50 relative group cursor-pointer" onClick={() => toggleTooltip(`${broker.broker_id}-neto`)}>
                       <span className="font-mono text-[#8AAA19]">{formatCurrency(netoYTD)}</span>
+                      <span className={`absolute bottom-full left-1/2 -translate-x-1/2 mb-1 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap transition-opacity z-20 ${
+                        activeTooltip === `${broker.broker_id}-neto` ? 'opacity-100 sm:opacity-0 sm:group-hover:opacity-100' : 'opacity-0 group-hover:opacity-100'
+                      }`}>
+                        {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(netoYTD)}
+                      </span>
                     </td>
 
                     {/* Variación % */}
