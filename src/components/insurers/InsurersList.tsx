@@ -285,7 +285,7 @@ export default function InsurersList({ initialInsurers }: InsurersListProps) {
                   }}
                 >
                   <div className="flex justify-between items-start mb-3 flex-shrink-0">
-                    <h4 className="text-xs sm:text-sm font-bold text-[#010139]">Contacto Principal</h4>
+                    <h4 className="text-xs sm:text-sm font-bold text-[#010139]">Contactos Favoritos</h4>
                     <button 
                       onClick={(e) => { e.stopPropagation(); handleFlip(insurer.id); }} 
                       className="w-7 h-7 flex items-center justify-center rounded-lg bg-white text-gray-600 hover:bg-[#010139] hover:text-white transition-all shadow-md" 
@@ -295,17 +295,21 @@ export default function InsurersList({ initialInsurers }: InsurersListProps) {
                     </button>
                   </div>
                   {(() => {
-                    const primaryContact = insurer.contacts.find(c => c.is_primary);
-                    return primaryContact ? (
-                      <div className="text-gray-700 text-[10px] sm:text-xs space-y-1.5 flex-1 overflow-y-auto mb-3">
-                        <p className="font-bold text-[#010139] text-xs sm:text-sm mb-2 truncate">{primaryContact.name}</p>
-                        {primaryContact.position && <p className="text-gray-600 truncate">📋 {primaryContact.position}</p>}
-                        {primaryContact.phone && <p className="text-gray-600 truncate">📞 {primaryContact.phone}</p>}
-                        {primaryContact.email && <p className="text-gray-600 truncate break-all">✉️ {primaryContact.email}</p>}
+                    const favoriteContacts = insurer.contacts.filter(c => c.is_primary);
+                    return favoriteContacts.length > 0 ? (
+                      <div className="flex-1 overflow-y-auto mb-3 max-h-[180px] sm:max-h-[200px] pr-1 space-y-3">
+                        {favoriteContacts.map((contact, idx) => (
+                          <div key={contact.id} className={`text-gray-700 text-[10px] sm:text-xs space-y-1.5 ${idx > 0 ? 'pt-3 border-t border-gray-200' : ''}`}>
+                            <p className="font-bold text-[#010139] text-xs sm:text-sm truncate">{contact.name}</p>
+                            {contact.position && <p className="text-gray-600 truncate">📋 {contact.position}</p>}
+                            {contact.phone && <p className="text-gray-600 truncate">📞 {contact.phone}</p>}
+                            {contact.email && <p className="text-gray-600 truncate break-all">✉️ {contact.email}</p>}
+                          </div>
+                        ))}
                       </div>
                     ) : (
                       <div className="text-gray-500 text-xs flex-1 flex items-center justify-center mb-3">
-                        <p className="text-center">Sin contacto principal</p>
+                        <p className="text-center">Sin contactos favoritos</p>
                       </div>
                     );
                   })()}
