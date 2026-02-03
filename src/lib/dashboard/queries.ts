@@ -701,7 +701,6 @@ export async function getBrokerOfTheMonth(): Promise<{ brokerName: string; month
     .select(`
       broker_id,
       bruto,
-      canceladas,
       brokers!production_broker_id_fkey (
         id,
         name
@@ -720,7 +719,6 @@ export async function getBrokerOfTheMonth(): Promise<{ brokerName: string; month
       .select(`
         broker_id,
         bruto,
-        canceladas,
         month,
         brokers!production_broker_id_fkey (
           id,
@@ -748,19 +746,20 @@ export async function getBrokerOfTheMonth(): Promise<{ brokerName: string; month
     return null;
   }
   
-  // Calcular PMA Neto del mes por broker
+  // Calcular PMA BRUTO del mes por broker (SIN restar canceladas)
+  // Las canceladas son anuales y no se sabe a qué mes exacto corresponden
   const brokers = data.map((item: any) => ({
     broker_id: item.broker_id,
     broker_name: item.brokers?.name || 'Sin nombre',
-    pma_neto: (parseFloat(item.bruto) || 0) - (parseFloat(item.canceladas) || 0)
+    pma_bruto: parseFloat(item.bruto) || 0
   }));
   
   console.log('[BROKER OF THE MONTH] Brokers encontrados:', brokers.length);
   
-  // Ordenar: descendente por PMA Neto, en empate alfabético
+  // Ordenar: descendente por PMA Bruto, en empate alfabético
   brokers.sort((a: any, b: any) => {
-    if (b.pma_neto !== a.pma_neto) {
-      return b.pma_neto - a.pma_neto;
+    if (b.pma_bruto !== a.pma_bruto) {
+      return b.pma_bruto - a.pma_bruto;
     }
     return a.broker_name.localeCompare(b.broker_name);
   });
@@ -773,7 +772,7 @@ export async function getBrokerOfTheMonth(): Promise<{ brokerName: string; month
   
   console.log('[BROKER OF THE MONTH] Ganador:', { 
     name: winner.broker_name, 
-    amount: winner.pma_neto,
+    amount: winner.pma_bruto,
     month: monthNames[targetMonth - 1]
   });
   
