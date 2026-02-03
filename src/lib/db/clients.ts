@@ -169,7 +169,34 @@ export async function createClientWithPolicy(clientData: unknown, policyData: un
   const clientParsed = ClientInsertSchema.parse(clientData);
   const policyParsed = PolicyInsertSchema.parse(policyData);
 
-  const brokerId = clientParsed.broker_id ?? user?.id;
+  // Obtener brokerId correcto
+  let brokerId = clientParsed.broker_id;
+  
+  if (!brokerId && user) {
+    // Verificar si el usuario es un broker
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+    
+    if (profile?.role === 'broker') {
+      // Para brokers, obtener el broker.id desde la tabla brokers usando p_id
+      const { data: broker } = await supabase
+        .from('brokers')
+        .select('id')
+        .eq('p_id', user.id)
+        .single();
+      
+      if (!broker) throw new Error('No se encontró broker asociado para el usuario');
+      brokerId = broker.id;
+    } else {
+      // Para master, user.id puede usarse directamente en casos legacy
+      // pero debería especificarse broker_id explícitamente
+      throw new Error('Master debe especificar broker_id al crear cliente');
+    }
+  }
+  
   if (!brokerId) throw new Error('No se encontró broker asociado para el cliente');
 
   const clientPayload = toInsertPayload(brokerId, clientParsed);
