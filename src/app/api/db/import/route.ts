@@ -313,63 +313,86 @@ async function processClientGroup(
     return { success: false, error: 'client_name es obligatorio' };
   }
 
-  // 1. Determinar broker_email según rol
+  // 1. Determinar broker_id y brokerEmail según rol
   console.log('[IMPORT API] userRole:', userRole);
   console.log('[IMPORT API] broker_email del CSV:', firstRow.broker_email);
+  console.log('[IMPORT API] userBrokerId:', userBrokerId);
+  
+  let brokerId: string;
   let brokerEmail: string;
+  
   if (userRole === 'broker' && userBrokerId) {
-    // Si es broker, usar su propio ID sin importar lo que venga en CSV
+    // Si es broker, usar directamente su propio ID
+    // userBrokerId ya es el broker.id del usuario
+    brokerId = userBrokerId;
+    
+    // Obtener el email del profile del broker (solo para logs, no es crítico)
     const { data: brokerData } = await supabase
       .from('brokers')
-      .select('id, profiles!inner(email)')
+      .select('p_id')
       .eq('id', userBrokerId)
       .single();
     
     if (!brokerData) {
+      console.error('[IMPORT API] Broker no encontrado con id:', userBrokerId);
       return { success: false, error: 'Broker del usuario no encontrado' };
     }
-    brokerEmail = brokerData.profiles.email;
+    
+    // Obtener email del profile
+    const { data: profileData } = await supabase
+      .from('profiles')
+      .select('email')
+      .eq('id', brokerData.p_id)
+      .single();
+    
+    if (!profileData) {
+      console.error('[IMPORT API] Profile no encontrado para broker p_id:', brokerData.p_id);
+      return { success: false, error: 'Profile del broker no encontrado' };
+    }
+    
+    brokerEmail = profileData.email;
+    console.log('[IMPORT API] Broker encontrado (usuario):', brokerId, 'email:', brokerEmail);
   } else {
-    // Si es master, usar broker_email del CSV
+    // Si es master, usar broker_email del CSV y buscar el broker
     if (!firstRow.broker_email) {
       return { success: false, error: 'broker_email es obligatorio para usuarios master' };
     }
     brokerEmail = firstRow.broker_email.toString().trim().toLowerCase();
+
+    // 2. Buscar broker por email (en dos pasos para mayor confiabilidad)
+    console.log('[IMPORT API] Buscando profile con email:', brokerEmail);
+    console.log('[IMPORT API] Email length:', brokerEmail.length, 'chars:', JSON.stringify(brokerEmail));
+    
+    // Paso 1: Buscar profile por email (case-insensitive)
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('id, email')
+      .ilike('email', brokerEmail)
+      .single();
+
+    if (profileError || !profile) {
+      console.log('[IMPORT API] Profile no encontrado:', profileError);
+      return { success: false, error: `Broker no encontrado (profile): ${brokerEmail}` };
+    }
+
+    console.log('[IMPORT API] Profile encontrado:', profile.id);
+
+    // Paso 2: Buscar broker por user_id (p_id)
+    const { data: broker, error: brokerError } = await supabase
+      .from('brokers')
+      .select('id, p_id')
+      .eq('p_id', profile.id)
+      .single();
+
+    if (brokerError || !broker) {
+      console.log('[IMPORT API] Broker no encontrado para profile:', brokerError);
+      // Retornar null para skipear este grupo (broker no encontrado)
+      return { success: false, error: `Broker no encontrado: ${brokerEmail}`, skipGroup: true };
+    }
+
+    console.log('[IMPORT API] Broker encontrado (master):', broker.id);
+    brokerId = broker.id;
   }
-
-  // 2. Buscar broker por email (en dos pasos para mayor confiabilidad)
-  console.log('[IMPORT API] Buscando profile con email:', brokerEmail);
-  console.log('[IMPORT API] Email length:', brokerEmail.length, 'chars:', JSON.stringify(brokerEmail));
-  
-  // Paso 1: Buscar profile por email (case-insensitive)
-  const { data: profile, error: profileError } = await supabase
-    .from('profiles')
-    .select('id, email')
-    .ilike('email', brokerEmail)
-    .single();
-
-  if (profileError || !profile) {
-    console.log('[IMPORT API] Profile no encontrado:', profileError);
-    return { success: false, error: `Broker no encontrado (profile): ${brokerEmail}` };
-  }
-
-  console.log('[IMPORT API] Profile encontrado:', profile.id);
-
-  // Paso 2: Buscar broker por user_id (p_id)
-  const { data: broker, error: brokerError } = await supabase
-    .from('brokers')
-    .select('id, p_id')
-    .eq('p_id', profile.id)
-    .single();
-
-  if (brokerError || !broker) {
-    console.log('[IMPORT API] Broker no encontrado para profile:', brokerError);
-    // Retornar null para skipear este grupo (broker no encontrado)
-    return { success: false, error: `Broker no encontrado: ${brokerEmail}`, skipGroup: true };
-  }
-
-  console.log('[IMPORT API] Broker encontrado:', broker.id);
-  const brokerId = broker.id;
 
   // 3. Buscar cliente existente por cédula o nombre
   let existingClient = null;
