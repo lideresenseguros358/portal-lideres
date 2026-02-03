@@ -7,21 +7,23 @@ ALTER TABLE production
 ADD COLUMN IF NOT EXISTS canceladas_ytd NUMERIC(12,2) DEFAULT 0 NOT NULL;
 
 -- 2. Migrar datos existentes de brokers a production del año actual (2025)
--- Solo para brokers que tienen canceladas_ytd > 0
+-- IMPORTANTE: canceladas_ytd se replica en TODOS los meses (1-12)
+-- Esto permite que el cálculo YTD sea: SUM(bruto) - canceladas_ytd (una sola vez)
 UPDATE production p
 SET canceladas_ytd = b.canceladas_ytd
 FROM brokers b
 WHERE p.broker_id = b.id 
   AND p.year = 2025 
-  AND b.canceladas_ytd > 0
-  AND p.month = 1; -- Solo actualizar registro de enero como representante del año
+  AND b.canceladas_ytd > 0;
+  -- Se actualiza en TODOS los meses, no solo enero
 
--- 3. Para años que no tienen registro de enero, insertar uno con las canceladas
+-- 3. Para meses que no tienen registro, insertar con canceladas_ytd
+-- Genera registros para todos los meses (1-12) del año 2025
 INSERT INTO production (broker_id, year, month, bruto, num_polizas, canceladas, persistencia, canceladas_ytd, created_at, updated_at)
 SELECT 
   b.id as broker_id,
   2025 as year,
-  1 as month,
+  m.month,
   0 as bruto,
   0 as num_polizas,
   0 as canceladas,
@@ -30,12 +32,13 @@ SELECT
   NOW() as created_at,
   NOW() as updated_at
 FROM brokers b
+CROSS JOIN (SELECT generate_series(1, 12) as month) m
 WHERE b.canceladas_ytd > 0
   AND NOT EXISTS (
     SELECT 1 FROM production p 
     WHERE p.broker_id = b.id 
       AND p.year = 2025 
-      AND p.month = 1
+      AND p.month = m.month
   )
 ON CONFLICT (broker_id, year, month) DO NOTHING;
 

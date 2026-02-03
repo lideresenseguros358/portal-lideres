@@ -328,25 +328,28 @@ export async function PUT(request: NextRequest) {
         .limit(1);
 
       if (!existingRecords || existingRecords.length === 0) {
-        // Crear registro de enero con las canceladas
+        // Crear registros para TODOS los meses (1-12) con las canceladas
+        // Esto asegura que canceladas_ytd esté disponible en cualquier mes
+        const monthsToInsert = Array.from({ length: 12 }, (_, i) => ({
+          broker_id,
+          year,
+          month: i + 1,
+          bruto: 0,
+          num_polizas: 0,
+          canceladas: 0,
+          persistencia: null,
+          canceladas_ytd: exactValue,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }));
+
         const { error: insertError } = await (supabase as any)
           .from('production')
-          .insert({
-            broker_id,
-            year,
-            month: 1,
-            bruto: 0,
-            num_polizas: 0,
-            canceladas: 0,
-            persistencia: null,
-            canceladas_ytd: exactValue,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          });
+          .insert(monthsToInsert);
 
         if (insertError) {
           console.error('Error inserting canceladas_ytd:', insertError);
-          return NextResponse.json({ error: 'Error al crear registro de canceladas' }, { status: 500 });
+          return NextResponse.json({ error: 'Error al crear registros de canceladas' }, { status: 500 });
         }
       }
 
