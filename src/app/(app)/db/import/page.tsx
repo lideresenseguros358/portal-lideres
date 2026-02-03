@@ -9,6 +9,7 @@ import Papa from "papaparse";
 import { toast } from "sonner";
 import { normalizeText } from '@/lib/utils/normalize-text';
 import { supabaseClient } from '@/lib/supabase/client';
+import { POLICY_TYPES } from '@/lib/constants/policy-types';
 
 interface ParsedRow {
   client_name: string;
@@ -50,6 +51,7 @@ export default function ImportPage() {
   const [importResult, setImportResult] = useState<any>(null);
   const [insurers, setInsurers] = useState<string[]>([]);
   const [showInsurers, setShowInsurers] = useState(false);
+  const [showPolicyTypes, setShowPolicyTypes] = useState(false);
   const [userRole, setUserRole] = useState<'master' | 'broker' | null>(null);
   const [userBrokerId, setUserBrokerId] = useState<string | null>(null);
 
@@ -420,6 +422,49 @@ export default function ImportPage() {
                     ) : (
                       <p className="text-xs text-gray-500 italic">Cargando aseguradoras...</p>
                     )}
+                  </div>
+                )}
+              </li>
+              <li className="flex flex-col gap-2">
+                <div className="flex items-start gap-2">
+                  <span className="text-green-600">✓</span>
+                  <div className="flex-1">
+                    <span><strong>Tipo de póliza:</strong> Usa EXACTAMENTE uno de los tipos admitidos</span>
+                  </div>
+                  <button
+                    onClick={() => setShowPolicyTypes(!showPolicyTypes)}
+                    className="flex items-center gap-1 text-xs px-3 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                    type="button"
+                  >
+                    {showPolicyTypes ? (
+                      <>
+                        <FaEyeSlash className="text-xs" />
+                        Ocultar
+                      </>
+                    ) : (
+                      <>
+                        <FaEye className="text-xs" />
+                        Ver Lista
+                      </>
+                    )}
+                  </button>
+                </div>
+                {showPolicyTypes && (
+                  <div className="ml-6 bg-gray-50 border border-gray-200 rounded-lg p-3">
+                    <p className="text-xs font-semibold text-gray-700 mb-2">Tipos de Póliza Admitidos:</p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs max-h-40 overflow-y-auto">
+                      {POLICY_TYPES.map((type) => (
+                        <div key={type.value} className="flex items-center gap-1 text-gray-800">
+                          <span className="text-blue-600">▪</span>
+                          <span className="font-medium">{type.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-2 bg-amber-50 border border-amber-300 rounded p-2">
+                      <p className="text-xs text-amber-900">
+                        <strong>💡 Nota:</strong> Si el tipo que necesitas no está en el listado, usa <strong>OTROS</strong>
+                      </p>
+                    </div>
                   </div>
                 )}
               </li>
