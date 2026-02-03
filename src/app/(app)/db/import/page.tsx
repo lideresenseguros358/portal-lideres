@@ -8,6 +8,7 @@ import Papa from "papaparse";
 // import { actionImportClientsCSV } from "../actions"; // DEPRECADO - Usar ImportModal.tsx
 import { toast } from "sonner";
 import { normalizeText } from '@/lib/utils/normalize-text';
+import { supabaseClient } from '@/lib/supabase/client';
 
 interface ParsedRow {
   client_name: string;
@@ -49,11 +50,14 @@ export default function ImportPage() {
   const [importResult, setImportResult] = useState<any>(null);
   const [insurers, setInsurers] = useState<string[]>([]);
   const [showInsurers, setShowInsurers] = useState(false);
+  const [userRole, setUserRole] = useState<'master' | 'broker' | null>(null);
+  const [userBrokerId, setUserBrokerId] = useState<string | null>(null);
 
-  // Cargar aseguradoras al montar el componente
+  // Cargar aseguradoras y detectar rol del usuario al montar
   useEffect(() => {
-    async function loadInsurers() {
+    async function loadData() {
       try {
+        // Cargar aseguradoras
         const response = await fetch('/api/insurers');
         const data = await response.json();
         if (data.success && data.insurers) {
@@ -63,15 +67,50 @@ export default function ImportPage() {
             .sort();
           setInsurers(names);
         }
+
+        // Detectar rol del usuario
+        const { data: { user } } = await supabaseClient().auth.getUser();
+        if (user) {
+          const { data: profile } = await supabaseClient()
+            .from('profiles')
+            .select('role')
+            .eq('id', user.id)
+            .single();
+          
+          if (profile) {
+            setUserRole(profile.role as 'master' | 'broker');
+            
+            // Si es broker, obtener su broker_id
+            if (profile.role === 'broker') {
+              const { data: broker } = await supabaseClient()
+                .from('brokers')
+                .select('id')
+                .eq('p_id', user.id)
+                .single();
+              
+              if (broker) {
+                setUserBrokerId(broker.id);
+                console.log('[IMPORT] Usuario broker detectado:', broker.id);
+              }
+            } else {
+              console.log('[IMPORT] Usuario master detectado');
+            }
+          }
+        }
       } catch (error) {
-        console.error('Error cargando aseguradoras:', error);
+        console.error('Error cargando datos:', error);
       }
     }
-    loadInsurers();
+    loadData();
   }, []);
 
   const downloadTemplate = () => {
-    window.open('/plantilla_clientes.csv', '_blank');
+    // Descargar plantilla según el rol del usuario
+    if (userRole === 'broker') {
+      window.open('/plantilla_clientes_broker.csv', '_blank');
+    } else {
+      window.open('/plantilla_clientes.csv', '_blank');
+    }
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -88,7 +127,14 @@ export default function ImportPage() {
       header: true,
       skipEmptyLines: true,
       complete: (results) => {
-        validateRows(results.data as any[]);
+        // Si el usuario es broker y el CSV no tiene broker_email, agregarlo como vacío
+        const processedData = results.data.map((row: any) => {
+          if (userRole === 'broker' && !('broker_email' in row)) {
+            return { ...row, broker_email: '' };
+          }
+          return row;
+        });
+        validateRows(processedData as any[]);
         setLoading(false);
         setShowPreview(true);
       },
@@ -115,7 +161,8 @@ export default function ImportPage() {
       if (!row.insurer_name || row.insurer_name.trim() === '') {
         rowErrors.push('Nombre de aseguradora obligatorio');
       }
-      if (!row.broker_email || row.broker_email.trim() === '') {
+      // Solo validar broker_email si el usuario es master
+      if (userRole === 'master' && (!row.broker_email || row.broker_email.trim() === '')) {
         rowErrors.push('Email de broker obligatorio');
       }
 
@@ -139,7 +186,7 @@ export default function ImportPage() {
           start_date: row.start_date?.trim() || undefined,
           renewal_date: row.renewal_date?.trim() || undefined,
           status: row.status?.trim() || 'ACTIVA', // Enum: ACTIVA | VENCIDA | CANCELADA
-          broker_email: row.broker_email?.trim(),
+          broker_email: userRole === 'broker' ? '' : (row.broker_email?.trim() || ''),
           percent_override: row.percent_override?.trim() || undefined,
         });
       }
@@ -164,6 +211,21 @@ export default function ImportPage() {
     
     const formData = new FormData();
     formData.append("file", file);
+    
+    // Enviar rol y broker_id al backend
+    if (userRole) {
+      formData.append("userRole", userRole);
+    }
+    if (userBrokerId) {
+      formData.append("userBrokerId", userBrokerId);
+    }
+    
+    console.log('[IMPORT] Enviando datos:', {
+      userRole,
+      userBrokerId,
+      fileName: file.name,
+      validRows: validRows.length
+    });
     
     // Polling para obtener progreso real del servidor
     const startTime = Date.now();
@@ -295,13 +357,18 @@ export default function ImportPage() {
                   <li>• Fecha de inicio</li>
                   <li>• Fecha de renovación</li>
                   <li>• Estado (ACTIVA, etc.)</li>
-                  <li>• Email del corredor</li>
+                  {userRole === 'master' && <li>• Email del corredor</li>}
                 </ul>
               </div>
             </div>
             <div className="bg-amber-50 border border-amber-200 rounded p-2 mt-2">
               <p className="text-xs text-amber-800">
                 <span className="font-bold">⚠️ IMPORTANTE:</span> Solo la columna "notas" es opcional. Si falta algún dato del cliente (cédula, email, teléfono o fecha de nacimiento), el cliente quedará como PRELIMINAR.
+                {userRole === 'broker' && (
+                  <>
+                    {' '}Los clientes y pólizas se asignarán automáticamente a ti como corredor.
+                  </>
+                )}
               </p>
             </div>
           </div>

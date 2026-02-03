@@ -20,6 +20,8 @@ import {
   FaClock,
   FaInfoCircle,
   FaDollarSign,
+  FaSearch,
+  FaTimes,
 } from 'react-icons/fa';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -344,6 +346,7 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
   const [pendingGroups, setPendingGroups] = useState<PendingGroup[]>([]);
   const [showOldItemsWarning, setShowOldItemsWarning] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState('');
   
   // Modo selección múltiple
   const [selectionMode, setSelectionMode] = useState(false);
@@ -565,10 +568,27 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
     );
   }
   
-  const oldItems = pendingGroups.filter(group => {
+  // Filtrar grupos por búsqueda
+  const filteredGroups = pendingGroups.filter(group => {
+    if (!searchQuery.trim()) return true;
+    
+    const query = searchQuery.toLowerCase();
+    const policyMatch = group.policy_number?.toLowerCase().includes(query);
+    const clientMatch = group.client_name?.toLowerCase().includes(query);
+    const insurerMatch = group.insurer_names.some(name => name?.toLowerCase().includes(query));
+    
+    return policyMatch || clientMatch || insurerMatch;
+  });
+
+  const oldItems = filteredGroups.filter(group => {
     const daysDiff = Math.floor((Date.now() - new Date(group.oldest_date).getTime()) / (1000 * 60 * 60 * 24));
     return daysDiff >= 90 && group.status === 'open';
   });
+
+  // Limpiar búsqueda
+  const handleClearSearch = () => {
+    setSearchQuery('');
+  };
 
   // Calcular total seleccionado
   const selectedTotal = Array.from(selectedItems).reduce((sum, itemId) => {
@@ -588,6 +608,44 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
 
   return (
     <div className="space-y-4">
+      {/* Barra de búsqueda - Formato iOS-friendly */}
+      <div className="flex items-center gap-2 border-2 border-gray-200 rounded-xl focus-within:border-[#8AAA19] transition-all bg-white px-3 sm:px-4 py-2.5 sm:py-3">
+        <div className="flex-shrink-0 text-gray-400">
+          <FaSearch className="text-base sm:text-lg" />
+        </div>
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="flex-1 min-w-0 border-0 focus:outline-none focus:ring-0 text-gray-700 placeholder-gray-400 text-[16px] bg-transparent p-0"
+          placeholder="Buscar por póliza, cliente o aseguradora..."
+          style={{ 
+            WebkitTextSizeAdjust: '100%',
+            WebkitAppearance: 'none'
+          }}
+        />
+        {searchQuery && (
+          <button
+            type="button"
+            onClick={handleClearSearch}
+            className="p-1.5 sm:p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-all flex-shrink-0"
+            title="Limpiar búsqueda"
+          >
+            <FaTimes className="text-sm sm:text-base" />
+          </button>
+        )}
+      </div>
+
+      {/* Contador de resultados */}
+      {searchQuery && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 text-sm text-blue-800">
+          <span className="font-semibold">{filteredGroups.length}</span> resultado(s) encontrado(s)
+          {filteredGroups.length !== pendingGroups.length && (
+            <span className="text-blue-600"> de {pendingGroups.length} total(es)</span>
+          )}
+        </div>
+      )}
+
       {/* Barra sticky - Visible en modo selección */}
       {selectionMode && selectedItems.size > 0 && (
         <div className="sticky top-[60px] sm:top-[72px] z-[100] bg-gradient-to-r from-green-50 to-white border-2 border-[#8AAA19] rounded-lg p-3 sm:p-4 shadow-lg">
@@ -691,16 +749,20 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
 
       {/* Lista de Ajustes - Organizado por Aseguradora */}
       <div className="space-y-6">
-        {pendingGroups.length === 0 ? (
+        {filteredGroups.length === 0 ? (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
             <FaCheckCircle className="text-5xl text-gray-300 mx-auto mb-4" />
-            <p className="text-gray-600 font-medium">No hay comisiones pendientes</p>
-            <p className="text-sm text-gray-500 mt-1">Todas las comisiones están asignadas</p>
+            <p className="text-gray-600 font-medium">
+              {searchQuery ? 'No se encontraron resultados' : 'No hay comisiones pendientes'}
+            </p>
+            <p className="text-sm text-gray-500 mt-1">
+              {searchQuery ? 'Intenta con otro término de búsqueda' : 'Todas las comisiones están asignadas'}
+            </p>
           </div>
         ) : (() => {
           // Agrupar por aseguradora
           const byInsurer = new Map<string, PendingGroup[]>();
-          pendingGroups.forEach(group => {
+          filteredGroups.forEach(group => {
             // Usar la primera aseguradora del array como clave principal
             const insurerName = group.insurer_names[0] || 'Sin Aseguradora';
             if (!byInsurer.has(insurerName)) {

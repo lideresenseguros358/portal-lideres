@@ -51,7 +51,14 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
   const [specialOverride, setSpecialOverride] = useState<{ hasSpecialOverride: boolean; overrideValue: number | null; condition?: string }>({ hasSpecialOverride: false, overrideValue: null });
   const [validationErrors, setValidationErrors] = useState<Record<string, boolean>>({});
   const [documentType, setDocumentType] = useState<'cedula' | 'pasaporte' | 'ruc'>('cedula');
-  const [duplicatePolicyError, setDuplicatePolicyError] = useState<{policyNumber: string; brokerName: string; isSameBroker: boolean} | null>(null);
+  const [duplicatePolicyError, setDuplicatePolicyError] = useState<{
+    policyNumber: string;
+    brokerName: string;
+    isSameBroker: boolean;
+    isPreliminary?: boolean;
+    isUnidentified?: boolean;
+    clientName?: string;
+  } | null>(null);
   const [existingClientData, setExistingClientData] = useState<any>(null);
   const [existingClientWarning, setExistingClientWarning] = useState<{clientName: string; brokerName: string; isOtherBroker: boolean} | null>(null);
   const [searchingClient, setSearchingClient] = useState(false);
@@ -371,29 +378,68 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
     }
 
     setCheckingPolicy(true);
-    const { data } = await supabaseClient()
-      .from('policies')
-      .select('id, policy_number, broker_id, brokers(name, p_id, profiles(email))')
-      .eq('policy_number', policyNumber)
-      .single();
+    
+    try {
+      // 1. Buscar en policies (pólizas identificadas)
+      const { data: policyData } = await supabaseClient()
+        .from('policies')
+        .select('id, policy_number, broker_id, client_id, clients(name, active), brokers(name, p_id, profiles(email))')
+        .eq('policy_number', policyNumber)
+        .single();
 
-    setCheckingPolicy(false);
-    
-    if (data) {
-      const brokerName = (data as any).brokers?.name || 'Desconocido';
-      const brokerEmail = (data as any).brokers?.profiles?.email || '';
-      const isSameBroker = role === 'broker' ? brokerEmail === userEmail : false;
-      
-      setDuplicatePolicyError({
-        policyNumber,
-        brokerName,
-        isSameBroker
-      });
-      return false; // Ya existe
+      if (policyData) {
+        const brokerName = (policyData as any).brokers?.name || 'Desconocido';
+        const brokerEmail = (policyData as any).brokers?.profiles?.email || '';
+        const clientName = (policyData as any).clients?.name || 'Cliente';
+        const isClientActive = (policyData as any).clients?.active ?? true;
+        const isSameBroker = role === 'broker' ? brokerEmail === userEmail : false;
+        
+        setDuplicatePolicyError({
+          policyNumber,
+          brokerName,
+          isSameBroker,
+          isPreliminary: !isClientActive,
+          clientName,
+        });
+        setCheckingPolicy(false);
+        return false; // Ya existe en policies
+      }
+
+      // 2. Buscar en comm_items (sin identificar)
+      const { data: commItemData } = await supabaseClient()
+        .from('comm_items')
+        .select('id, policy_number, insured_name, broker_id, brokers(name, p_id, profiles(email))')
+        .eq('policy_number', policyNumber)
+        .limit(1)
+        .single();
+
+      if (commItemData) {
+        const brokerName = (commItemData as any).brokers?.name || 'Desconocido';
+        const brokerEmail = (commItemData as any).brokers?.profiles?.email || '';
+        const insuredName = commItemData.insured_name || 'Asegurado';
+        const isSameBroker = role === 'broker' ? brokerEmail === userEmail : false;
+        
+        setDuplicatePolicyError({
+          policyNumber,
+          brokerName,
+          isSameBroker,
+          isUnidentified: true,
+          clientName: insuredName,
+        });
+        setCheckingPolicy(false);
+        return false; // Ya existe en comisiones sin identificar
+      }
+
+      // 3. No existe en ninguna parte
+      setDuplicatePolicyError(null);
+      setCheckingPolicy(false);
+      return true;
+    } catch (error) {
+      console.error('[validatePolicyNumber] Error:', error);
+      setDuplicatePolicyError(null);
+      setCheckingPolicy(false);
+      return true; // En caso de error, permitir continuar
     }
-    
-    setDuplicatePolicyError(null);
-    return true; // No existe, está disponible
   };
 
   const validateStep = async () => {
@@ -824,18 +870,21 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                       </svg>
                     </div>
                     <div className="flex-1">
-                      <h4 className="text-sm font-bold text-yellow-800 mb-1">⚠️ Cliente Existente Asignado a Otro Corredor</h4>
+                      <h4 className="text-sm font-bold text-yellow-800 mb-1">⚠️ Cliente Existente</h4>
                       <p className="text-sm text-yellow-700 mb-2">
-                        El cliente <strong>{existingClientWarning.clientName}</strong> ya existe en la base de datos y está asignado al corredor:
+                        El cliente <strong>{existingClientWarning.clientName}</strong> con esta cédula ya existe en la base de datos.
                       </p>
                       <div className="bg-yellow-100 border border-yellow-300 rounded px-3 py-2 mb-2">
+                        <p className="text-xs text-yellow-800 mb-1">📋 <strong>Cliente asignado a:</strong></p>
                         <p className="text-sm font-semibold text-yellow-900">👤 {existingClientWarning.brokerName}</p>
                       </div>
-                      <p className="text-xs text-yellow-700 leading-relaxed">
-                        ℹ️ <strong>Puedes continuar</strong> agregando una nueva póliza para este cliente. La póliza que ingreses se registrará en tu cartera, pero el cliente seguirá asignado a {existingClientWarning.brokerName}.
-                      </p>
-                      <p className="text-xs text-yellow-700 mt-2">
-                        📞 Si tienes dudas o necesitas transferir el cliente a tu cartera, <strong>consulta con un administrativo</strong>.
+                      <div className="bg-green-50 border border-green-300 rounded px-3 py-2 mb-2">
+                        <p className="text-xs text-green-800">
+                          ✅ <strong>Puedes continuar:</strong> La póliza que registres se agregará a este cliente y quedará en tu cartera personal.
+                        </p>
+                      </div>
+                      <p className="text-xs text-yellow-700">
+                        � <strong>Nota:</strong> El cliente seguirá asignado a <strong>{existingClientWarning.brokerName}</strong>. Si necesitas que se transfiera a tu cartera, contacta con un administrativo.
                       </p>
                     </div>
                   </div>
@@ -929,39 +978,124 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                 <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg shadow-sm animate-fadeIn">
                   <div className="flex items-start gap-3">
                     <div className="flex-shrink-0">
-                      <svg className="h-6 w-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                      <svg className="w-6 h-6 text-red-600" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
                       </svg>
                     </div>
                     <div className="flex-1">
-                      <h4 className="text-sm font-bold text-red-800 mb-2">⚠️ Esta Póliza Ya Existe en el Sistema</h4>
-                      <p className="text-sm text-red-700 mb-2">
-                        El número de póliza <strong className="font-mono bg-red-100 px-2 py-0.5 rounded">{duplicatePolicyError.policyNumber}</strong> ya está registrado.
+                      <h4 className="text-sm font-bold text-red-800 mb-2">🚫 Póliza Duplicada - No se puede registrar</h4>
+                      <p className="text-sm text-red-700 mb-3">
+                        El número de póliza <strong className="font-mono bg-red-100 px-2 py-0.5 rounded">{duplicatePolicyError.policyNumber}</strong> ya existe en el sistema.
                       </p>
-                      {!duplicatePolicyError.isSameBroker && (
-                        <div className="bg-red-100 border border-red-300 rounded-lg p-3 mt-2">
-                          <p className="text-sm font-semibold text-red-900 mb-1">👤 Esta póliza está asignada a otro corredor:</p>
-                          <p className="text-sm text-red-800 mb-2">
-                            <strong>{duplicatePolicyError.brokerName}</strong>
+
+                      {/* Caso 1: Póliza sin identificar en comisiones */}
+                      {duplicatePolicyError.isUnidentified && (
+                        <div className="bg-orange-100 border border-orange-300 rounded-lg p-3 mb-3">
+                          <p className="text-xs text-orange-800 font-semibold mb-2">📋 Estado: <span className="text-orange-900">SIN IDENTIFICAR</span></p>
+                          <p className="text-xs text-orange-700 mb-2">
+                            Esta póliza existe en el sistema de comisiones pero aún no ha sido identificada con un cliente.
                           </p>
-                          <p className="text-xs text-red-700 leading-relaxed">
-                            🚫 <strong>NO puedes registrar esta póliza</strong> porque ya existe en el sistema asignada a otro corredor.
-                          </p>
-                          <p className="text-xs text-red-700 mt-2">
-                            📞 <strong>Contacta al equipo administrativo</strong> si necesitas:
-                          </p>
-                          <ul className="text-xs text-red-700 mt-1 ml-4 list-disc space-y-1">
-                            <li>Solicitar la transferencia de esta póliza a tu cartera</li>
-                            <li>Verificar si hay algún error en el número de póliza</li>
-                            <li>Aclarar cualquier duda sobre la asignación</li>
-                          </ul>
+                          <div className="bg-orange-50 rounded p-2 mb-2">
+                            <p className="text-xs text-orange-800">👤 <strong>Asegurado:</strong> {duplicatePolicyError.clientName}</p>
+                            <p className="text-xs text-orange-800">👨‍💼 <strong>Corredor:</strong> {duplicatePolicyError.brokerName}</p>
+                          </div>
+                          {duplicatePolicyError.isSameBroker ? (
+                            <div className="bg-blue-50 border border-blue-300 rounded p-2 mt-2">
+                              <p className="text-xs text-blue-800">
+                                � <strong>Esta póliza está en tu cartera.</strong> Para registrarla en la base de datos:
+                              </p>
+                              <ul className="text-xs text-blue-700 mt-2 ml-4 space-y-1">
+                                <li>• Ve a <strong>Comisiones → Ajustes → Sin Identificar</strong></li>
+                                <li>• Busca esta póliza y haz clic en "Identificar"</li>
+                                <li>• El sistema la vinculará automáticamente al cliente</li>
+                              </ul>
+                            </div>
+                          ) : (
+                            <div className="bg-red-100 border border-red-300 rounded p-2 mt-2">
+                              <p className="text-xs text-red-800">
+                                ⚠️ <strong>Esta póliza pertenece a otro corredor.</strong> No puedes registrarla.
+                              </p>
+                              <p className="text-xs text-red-700 mt-2">
+                                📞 Si crees que esto es un error o el cliente cambió de corredor, <strong>contacta con un administrativo</strong>.
+                              </p>
+                            </div>
+                          )}
                         </div>
                       )}
-                      {duplicatePolicyError.isSameBroker && (
-                        <div className="bg-red-100 border border-red-300 rounded-lg p-3 mt-2">
-                          <p className="text-sm text-red-700">
-                            🚫 Esta póliza <strong>ya está en tu cartera de clientes</strong>. Por favor verifica tu base de datos o ingresa un número de póliza diferente.
+
+                      {/* Caso 2: Póliza preliminar (cliente inactivo) */}
+                      {!duplicatePolicyError.isUnidentified && duplicatePolicyError.isPreliminary && (
+                        <div className="bg-amber-100 border border-amber-300 rounded-lg p-3 mb-3">
+                          <p className="text-xs text-amber-800 font-semibold mb-2">📋 Estado: <span className="text-amber-900">PRELIMINAR</span></p>
+                          <p className="text-xs text-amber-700 mb-2">
+                            Esta póliza ya está registrada pero el cliente está marcado como preliminar (faltan datos completos).
                           </p>
+                          <div className="bg-amber-50 rounded p-2 mb-2">
+                            <p className="text-xs text-amber-800">👤 <strong>Cliente:</strong> {duplicatePolicyError.clientName}</p>
+                            <p className="text-xs text-amber-800">👨‍💼 <strong>Corredor:</strong> {duplicatePolicyError.brokerName}</p>
+                          </div>
+                          {duplicatePolicyError.isSameBroker ? (
+                            <div className="bg-blue-50 border border-blue-300 rounded p-2 mt-2">
+                              <p className="text-xs text-blue-800">
+                                💡 <strong>Esta póliza está en tu cartera.</strong> Para completar el registro:
+                              </p>
+                              <ul className="text-xs text-blue-700 mt-2 ml-4 space-y-1">
+                                <li>• Ve a <strong>Base de Datos → Preliminares</strong></li>
+                                <li>• Busca al cliente <strong>{duplicatePolicyError.clientName}</strong></li>
+                                <li>• Completa los datos faltantes (cédula, email, teléfono, fecha de nacimiento)</li>
+                                <li>• El cliente pasará automáticamente a la base de datos principal</li>
+                              </ul>
+                            </div>
+                          ) : (
+                            <div className="bg-red-100 border border-red-300 rounded p-2 mt-2">
+                              <p className="text-xs text-red-800">
+                                ⚠️ <strong>Esta póliza pertenece a otro corredor.</strong> No puedes registrarla.
+                              </p>
+                              <p className="text-xs text-red-700 mt-2">
+                                📞 Si crees que esto es un error o el cliente cambió de corredor, <strong>contacta con un administrativo</strong>.
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Caso 3: Póliza identificada normalmente */}
+                      {!duplicatePolicyError.isUnidentified && !duplicatePolicyError.isPreliminary && (
+                        <div className="bg-red-100 border border-red-300 rounded-lg p-3 mb-3">
+                          <p className="text-xs text-red-800 font-semibold mb-2">📋 Estado: <span className="text-red-900">REGISTRADA</span></p>
+                          <p className="text-xs text-red-700 mb-2">
+                            Esta póliza ya está completamente registrada en la base de datos.
+                          </p>
+                          <div className="bg-red-50 rounded p-2 mb-2">
+                            <p className="text-xs text-red-800">👤 <strong>Cliente:</strong> {duplicatePolicyError.clientName}</p>
+                            <p className="text-xs text-red-800">👨‍💼 <strong>Corredor:</strong> {duplicatePolicyError.brokerName}</p>
+                          </div>
+                          {duplicatePolicyError.isSameBroker ? (
+                            <div className="bg-red-50 border border-red-300 rounded p-2 mt-2">
+                              <p className="text-xs text-red-800">
+                                🚫 <strong>Esta póliza ya está en tu cartera.</strong>
+                              </p>
+                              <p className="text-xs text-red-700 mt-2">
+                                ✓ Verifica en tu <strong>Base de Datos</strong> si necesitas actualizar información.
+                              </p>
+                              <p className="text-xs text-red-700 mt-1">
+                                ✓ Si es una renovación, usa el mismo número de póliza para actualizar las fechas en la póliza existente.
+                              </p>
+                            </div>
+                          ) : (
+                            <div className="bg-red-100 border border-red-300 rounded p-2 mt-2">
+                              <p className="text-xs text-red-800">
+                                ⚠️ <strong>Esta póliza está asignada a otro corredor.</strong> No puedes registrarla.
+                              </p>
+                              <p className="text-xs text-red-700 mt-2">
+                                ¿Qué hacer?
+                              </p>
+                              <ul className="text-xs text-red-700 mt-1 ml-4 space-y-1">
+                                <li>• Verifica que el número de póliza sea correcto</li>
+                                <li>• Si el cliente cambió de corredor, <strong>contacta con un administrativo</strong> para realizar el traspaso</li>
+                              </ul>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>

@@ -76,11 +76,22 @@ export default function BrokerPendingTab({ brokerId }: Props) {
         setPendingItems(pendingResult.data || []);
       }
 
-      // Cargar mis reportes de ajustes pendientes
+      // Cargar mis reportes de ajustes en revisión (pending) y aprobados (approved)
       const pendingReportsResult = await actionGetAdjustmentReports('pending');
-      if (pendingReportsResult.ok) {
-        setMyRequests(pendingReportsResult.data || []);
-      }
+      const approvedReportsResult = await actionGetAdjustmentReports('approved');
+      
+      // Combinar ambos resultados
+      const allMyRequests = [
+        ...(pendingReportsResult.ok ? pendingReportsResult.data || [] : []),
+        ...(approvedReportsResult.ok ? approvedReportsResult.data || [] : [])
+      ];
+      
+      // Ordenar por fecha de creación (más recientes primero)
+      allMyRequests.sort((a, b) => 
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+      
+      setMyRequests(allMyRequests);
 
       // Cargar ajustes pagados
       const paidResult = await actionGetAdjustmentReports('paid');

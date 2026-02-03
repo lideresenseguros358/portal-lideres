@@ -1,0 +1,5 @@
+client_name,national_id,email,phone,birth_date,policy_number,insurer_name,ramo,start_date,renewal_date,status,notas
+Juan Pérez,8-123-4567,juan.perez@email.com,6000-0000,1985-05-20,POL-2024-001,ASSA,AUTO,2024-01-15,2025-01-15,ACTIVA,Cliente frecuente
+Juan Pérez,8-123-4567,juan.perez@email.com,6000-0000,1985-05-20,POL-2024-002,AIG,VIDA,2024-02-01,2025-02-01,ACTIVA,
+María García,E-8-12345,maria.garcia@email.com,6100-0000,1990-08-15,POL-2024-003,MAPFRE,INCENDIO,2024-03-10,2025-03-10,ACTIVA,
+Empresa XYZ S.A.,1234567-1-123456,contacto@xyz.com,300-0000,2000-01-01,POL-2024-004,ASSA,RESPONSABILIDAD CIVIL,2024-04-01,2025-04-01,ACTIVA,Renovación automática
