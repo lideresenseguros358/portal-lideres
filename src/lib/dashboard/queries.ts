@@ -485,7 +485,7 @@ export async function getBrokerRanking() {
     .select(`
       broker_id,
       bruto,
-      canceladas,
+      canceladas_ytd,
       month,
       brokers!production_broker_id_fkey (
         id,
@@ -505,7 +505,7 @@ export async function getBrokerRanking() {
       .select(`
         broker_id,
         bruto,
-        canceladas,
+        canceladas_ytd,
         month,
         brokers!production_broker_id_fkey (
           id,
@@ -527,34 +527,37 @@ export async function getBrokerRanking() {
   if (!data || data.length === 0) return [];
   
   // YTD hasta el mes cerrado actual (enero-octubre)
-  const ytdCurrentClosedMap = new Map<string, { name: string; total: number }>();
+  const ytdCurrentClosedMap = new Map<string, { name: string; bruto: number; canceladas_ytd: number }>();
   // YTD hasta el mes cerrado anterior (enero-septiembre)
-  const ytdPreviousClosedMap = new Map<string, { name: string; total: number }>();
+  const ytdPreviousClosedMap = new Map<string, { name: string; bruto: number; canceladas_ytd: number }>();
   
   data.forEach((item: any) => {
     const brokerId = item.broker_id;
     const brokerName = item.brokers?.name || 'Sin nombre';
     const bruto = parseFloat(item.bruto) || 0;
-    const canceladas = parseFloat(item.canceladas) || 0;
-    const neto = bruto - canceladas;
+    const canceladas_ytd = parseFloat(item.canceladas_ytd) || 0;
     const month = item.month;
     
     // YTD acumulado hasta mes cerrado actual (enero-octubre)
     if (month <= closedMonth) {
       if (!ytdCurrentClosedMap.has(brokerId)) {
-        ytdCurrentClosedMap.set(brokerId, { name: brokerName, total: 0 });
+        ytdCurrentClosedMap.set(brokerId, { name: brokerName, bruto: 0, canceladas_ytd: 0 });
       }
       const broker = ytdCurrentClosedMap.get(brokerId)!;
-      broker.total += neto;
+      broker.bruto += bruto;
+      // canceladas_ytd es anual, tomar el valor (debería ser el mismo en todos los meses)
+      broker.canceladas_ytd = canceladas_ytd;
     }
     
     // YTD acumulado hasta mes cerrado anterior (enero-septiembre)
     if (month <= previousClosedMonth) {
       if (!ytdPreviousClosedMap.has(brokerId)) {
-        ytdPreviousClosedMap.set(brokerId, { name: brokerName, total: 0 });
+        ytdPreviousClosedMap.set(brokerId, { name: brokerName, bruto: 0, canceladas_ytd: 0 });
       }
       const prevBroker = ytdPreviousClosedMap.get(brokerId)!;
-      prevBroker.total += neto;
+      prevBroker.bruto += bruto;
+      // canceladas_ytd es anual, tomar el valor
+      prevBroker.canceladas_ytd = canceladas_ytd;
     }
   });
   
@@ -562,7 +565,7 @@ export async function getBrokerRanking() {
   const ytdCurrentClosedRows = Array.from(ytdCurrentClosedMap.entries()).map(([id, data]) => ({
     brokerId: id,
     brokerName: data.name,
-    total: data.total,
+    total: data.bruto - data.canceladas_ytd, // Neto = bruto acumulado - canceladas anuales
   }));
   
   ytdCurrentClosedRows.sort((a, b) => {
@@ -576,7 +579,7 @@ export async function getBrokerRanking() {
   const ytdPreviousClosedRows = Array.from(ytdPreviousClosedMap.entries()).map(([id, data]) => ({
     brokerId: id,
     brokerName: data.name,
-    total: data.total,
+    total: data.bruto - data.canceladas_ytd, // Neto = bruto acumulado - canceladas anuales
   }));
   
   ytdPreviousClosedRows.sort((a, b) => {
@@ -1074,11 +1077,11 @@ export async function getRankingTop5(userId: string): Promise<RankingResult> {
 
   const { data, error } = await supabase
     .from("production")
-    .select("broker_id, bruto, canceladas, month")
+    .select("broker_id, bruto, canceladas_ytd, month")
     .eq("year", CURRENT_YEAR)
     .lte("month", closedMonth)
     .limit(FETCH_LIMIT)
-    .returns<{ broker_id: string | null; bruto: number | string | null; canceladas: number | string | null; month: number }[]>();
+    .returns<{ broker_id: string | null; bruto: number | string | null; canceladas_ytd: number | string | null; month: number }[]>();
   
   console.log('[RANKING DEBUG]', { dataLength: data?.length, error });
 
@@ -1096,29 +1099,41 @@ export async function getRankingTop5(userId: string): Promise<RankingResult> {
   }
 
   // YTD hasta mes cerrado actual
-  const ytdCurrentClosedMap = new Map<string, number>();
+  const ytdCurrentClosedMap = new Map<string, { bruto: number; canceladas_ytd: number }>();
   // YTD hasta mes cerrado anterior
-  const ytdPreviousClosedMap = new Map<string, number>();
+  const ytdPreviousClosedMap = new Map<string, { bruto: number; canceladas_ytd: number }>();
   
-  data.forEach((item: { broker_id: string | null; bruto: number | string | null; canceladas: number | string | null; month: number }) => {
+  data.forEach((item: { broker_id: string | null; bruto: number | string | null; canceladas_ytd: number | string | null; month: number }) => {
     if (!item.broker_id) return;
     const bruto = toNumber(item.bruto);
-    const canceladas = toNumber(item.canceladas);
-    const neto = bruto - canceladas;
+    const canceladas_ytd = toNumber(item.canceladas_ytd);
     const month = item.month;
     
     // YTD acumulado hasta mes cerrado actual
     if (month <= closedMonth) {
-      ytdCurrentClosedMap.set(item.broker_id, (ytdCurrentClosedMap.get(item.broker_id) ?? 0) + neto);
+      if (!ytdCurrentClosedMap.has(item.broker_id)) {
+        ytdCurrentClosedMap.set(item.broker_id, { bruto: 0, canceladas_ytd: 0 });
+      }
+      const broker = ytdCurrentClosedMap.get(item.broker_id)!;
+      broker.bruto += bruto;
+      broker.canceladas_ytd = canceladas_ytd; // Anual, tomar el valor
     }
     
     // YTD acumulado hasta mes cerrado anterior
     if (month <= previousClosedMonth) {
-      ytdPreviousClosedMap.set(item.broker_id, (ytdPreviousClosedMap.get(item.broker_id) ?? 0) + neto);
+      if (!ytdPreviousClosedMap.has(item.broker_id)) {
+        ytdPreviousClosedMap.set(item.broker_id, { bruto: 0, canceladas_ytd: 0 });
+      }
+      const prevBroker = ytdPreviousClosedMap.get(item.broker_id)!;
+      prevBroker.bruto += bruto;
+      prevBroker.canceladas_ytd = canceladas_ytd; // Anual, tomar el valor
     }
   });
 
-  const rows = Array.from(ytdCurrentClosedMap.entries()).map(([id, total]) => ({ broker_id: id, total }));
+  const rows = Array.from(ytdCurrentClosedMap.entries()).map(([id, data]) => ({ 
+    broker_id: id, 
+    total: data.bruto - data.canceladas_ytd // Neto = bruto acumulado - canceladas anuales
+  }));
   const brokerIds = rows.map((item) => item.broker_id);
 
   const { data: brokerInfo } = await supabase
