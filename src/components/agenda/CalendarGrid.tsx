@@ -48,6 +48,31 @@ export default function CalendarGrid({
     });
   };
 
+  // Check if a day is within a multi-day event range
+  const isDateInEventRange = (date: Date, event: AgendaEvent) => {
+    const eventStart = new Date(event.start_at);
+    const eventEnd = new Date(event.end_at);
+    
+    // Normalizar fechas a medianoche para comparación
+    const normalizedDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const normalizedStart = new Date(eventStart.getFullYear(), eventStart.getMonth(), eventStart.getDate());
+    const normalizedEnd = new Date(eventEnd.getFullYear(), eventEnd.getMonth(), eventEnd.getDate());
+    
+    return normalizedDate >= normalizedStart && normalizedDate <= normalizedEnd;
+  };
+
+  // Get all events that span across a specific day (including multi-day events)
+  const getEventsSpanningDay = (date: Date) => {
+    return events.filter(event => isDateInEventRange(date, event));
+  };
+
+  // Check if there's an "oficina_cerrada" event on this day
+  const isOficinaCerrada = (date: Date) => {
+    return events.some(event => 
+      event.event_type === 'oficina_cerrada' && isDateInEventRange(date, event)
+    );
+  };
+
   const calendarDays = useMemo(() => {
     const firstDayOfMonth = new Date(year, month - 1, 1);
     const lastDayOfMonth = new Date(year, month, 0);
@@ -81,12 +106,8 @@ export default function CalendarGrid({
     // Current month days
     for (let day = 1; day <= daysInMonth; day++) {
       const date = new Date(year, month - 1, day);
-      const hasEvents = events.some(event => {
-        const eventDate = new Date(event.start_at);
-        return eventDate.getDate() === day &&
-               eventDate.getMonth() === month - 1 &&
-               eventDate.getFullYear() === year;
-      });
+      // Verificar si tiene eventos (incluyendo multi-día)
+      const hasEvents = getEventsSpanningDay(date).length > 0;
       
       days.push({ 
         day, 
@@ -151,8 +172,13 @@ export default function CalendarGrid({
           const isSelected = item.isCurrentMonth && item.day === selectedDay;
           const isTodayDate = isToday(item.date);
 
-          const dayEvents = item.isCurrentMonth ? getEventsForDay(item.day) : [];
-          const tooltipContent = dayEvents.length > 0 
+          // Obtener eventos del día (incluyendo multi-día)
+          const dayEvents = item.isCurrentMonth ? getEventsSpanningDay(item.date) : [];
+          const isCerrada = item.isCurrentMonth && isOficinaCerrada(item.date);
+          
+          const tooltipContent = isCerrada
+            ? 'OFICINA CERRADA'
+            : dayEvents.length > 0 
             ? dayEvents.map(e => e.title).join('\n')
             : 'No hay eventos programados';
 
@@ -161,21 +187,23 @@ export default function CalendarGrid({
               <Tooltip.Root>
                 <Tooltip.Trigger asChild>
                   <button
-                    onClick={() => item.isCurrentMonth && onDayClick(item.day)}
-                    disabled={!item.isCurrentMonth}
+                    onClick={() => item.isCurrentMonth && !isCerrada && onDayClick(item.day)}
+                    disabled={!item.isCurrentMonth || isCerrada}
                     className={`
                       relative aspect-square flex flex-col items-center justify-center
                       rounded-xl transition-all duration-300 transform
                       ${!item.isCurrentMonth 
                         ? 'bg-transparent text-gray-300 cursor-default' 
+                        : isCerrada
+                        ? 'bg-gray-400 text-white font-bold shadow-md cursor-not-allowed opacity-70'
                         : isTodayDate
                         ? 'bg-gradient-to-br from-[#010139] via-[#020270] to-[#010139] text-white font-bold shadow-lg hover:shadow-xl hover:scale-110 cursor-pointer animate-pulse'
                         : item.hasEvents
                         ? 'bg-gradient-to-br from-[#8AAA19] via-[#7a9916] to-[#6d8814] text-white font-semibold shadow-md hover:shadow-lg hover:scale-105 cursor-pointer'
                         : 'bg-gray-50 hover:bg-gradient-to-br hover:from-gray-100 hover:to-gray-200 hover:shadow-md hover:scale-105 cursor-pointer text-gray-900'
                       }
-                      ${isSelected && !isTodayDate && !item.hasEvents ? 'ring-4 ring-[#8AAA19] ring-opacity-50 bg-[#8AAA19] bg-opacity-20 scale-105' : ''}
-                      ${isSelected && item.hasEvents ? 'ring-4 ring-yellow-400 ring-opacity-70 scale-110 shadow-xl' : ''}
+                      ${isSelected && !isTodayDate && !item.hasEvents && !isCerrada ? 'ring-4 ring-[#8AAA19] ring-opacity-50 bg-[#8AAA19] bg-opacity-20 scale-105' : ''}
+                      ${isSelected && item.hasEvents && !isCerrada ? 'ring-4 ring-yellow-400 ring-opacity-70 scale-110 shadow-xl' : ''}
                       ${isSelected && isTodayDate ? 'ring-4 ring-yellow-400 ring-opacity-70 scale-110' : ''}
                     `}
                   >

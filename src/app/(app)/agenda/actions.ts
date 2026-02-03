@@ -10,6 +10,7 @@ export interface AgendaEvent {
   start_at: string;
   end_at: string;
   is_all_day: boolean;
+  event_type: 'normal' | 'oficina_cerrada';
   modality: 'virtual' | 'presencial' | 'hibrida';
   zoom_url: string | null;
   zoom_code: string | null;
@@ -64,8 +65,11 @@ export async function actionGetEvents(params: {
       return { ok: false, error: error.message };
     }
 
-    // Filter events based on audience
-    let filteredEvents = events || [];
+    // Asegurar que todos los eventos tengan event_type (valor por defecto 'normal')
+    let filteredEvents = (events || []).map(event => ({
+      ...event,
+      event_type: (event as any).event_type || 'normal',
+    }));
     
     if (params.role === 'broker' && brokerId) {
       // Get events where broker is in audience
@@ -93,6 +97,7 @@ export async function actionGetEvents(params: {
 
       filteredEvents = filteredEvents.map(event => ({
         ...event,
+        event_type: (event as any).event_type || 'normal',
         user_rsvp_status: rsvpMap.get(event.id) || null,
       }));
     }
@@ -113,7 +118,14 @@ export async function actionGetEvents(params: {
 
       filteredEvents = filteredEvents.map(event => ({
         ...event,
+        event_type: (event as any).event_type || 'normal',
         attendee_count: countMap.get(event.id) || 0,
+      }));
+    } else {
+      // Si no hay eventos, asegurar que tengan event_type
+      filteredEvents = filteredEvents.map(event => ({
+        ...event,
+        event_type: (event as any).event_type || 'normal',
       }));
     }
 
@@ -130,6 +142,7 @@ export async function actionCreateEvent(payload: {
   start_at: string;
   end_at: string;
   is_all_day: boolean;
+  event_type: 'normal' | 'oficina_cerrada';
   modality: 'virtual' | 'presencial' | 'hibrida';
   zoom_url?: string;
   zoom_code?: string;
@@ -161,6 +174,7 @@ export async function actionCreateEvent(payload: {
         start_at: payload.start_at,
         end_at: payload.end_at,
         is_all_day: payload.is_all_day,
+        event_type: payload.event_type,
         modality: payload.modality,
         zoom_url: payload.zoom_url || null,
         zoom_code: payload.zoom_code || null,
@@ -316,6 +330,7 @@ export async function actionUpdateEvent(params: {
     start_at: string;
     end_at: string;
     is_all_day: boolean;
+    event_type: 'normal' | 'oficina_cerrada';
     modality: 'virtual' | 'presencial' | 'hibrida';
     zoom_url: string | null;
     zoom_code: string | null;

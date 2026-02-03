@@ -21,6 +21,8 @@ interface MiniCalendarAgendaProps {
   events: {
     date: string;
     title: string;
+    event_type: string;
+    end_at: string;
   }[];
 }
 
@@ -43,12 +45,30 @@ export default function MiniCalendarAgenda({ events }: MiniCalendarAgendaProps) 
     return futureEvents[0] || null;
   }, [events]);
 
+  // Crear mapa de eventos considerando rangos multi-día
   const eventMap = useMemo(() => {
-    const map = new Map<string, string>();
+    const map = new Map<string, { title: string; isCerrada: boolean }[]>();
+    
     events.forEach((item) => {
-      const key = normalize(item.date);
-      map.set(key, item.title);
+      const startDate = new Date(item.date);
+      const endDate = new Date(item.end_at);
+      const isCerrada = item.event_type === 'oficina_cerrada';
+      
+      // Iterar sobre todos los días del rango del evento
+      let currentDate = new Date(startDate);
+      currentDate.setHours(0, 0, 0, 0);
+      const normalizedEnd = new Date(endDate);
+      normalizedEnd.setHours(0, 0, 0, 0);
+      
+      while (currentDate <= normalizedEnd) {
+        const key = format(currentDate, 'yyyy-MM-dd');
+        const existing = map.get(key) || [];
+        existing.push({ title: item.title, isCerrada });
+        map.set(key, existing);
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
     });
+    
     return map;
   }, [events]);
 
@@ -161,26 +181,35 @@ export default function MiniCalendarAgenda({ events }: MiniCalendarAgendaProps) 
         ))}
         {days.map((day) => {
           const key = normalize(day.toISOString());
-          const hasEvent = eventMap.has(key);
-          const eventTitle = eventMap.get(key);
+          const dayEventsData = eventMap.get(key) || [];
+          const hasEvent = dayEventsData.length > 0;
+          const isCerrada = dayEventsData.some(e => e.isCerrada);
           const isCurrentMonth = isSameMonth(day, referenceDate);
           const isTodayDate = isToday(day);
+          
+          const tooltipText = isCerrada 
+            ? 'OFICINA CERRADA' 
+            : hasEvent 
+            ? dayEventsData.map(e => e.title).join(', ')
+            : (isCurrentMonth ? 'No hay eventos programados' : undefined);
 
           return (
             <button
               key={key}
               type="button"
-              onClick={(e) => isCurrentMonth && handleDayClick(day, e)}
-              disabled={!isCurrentMonth}
+              onClick={(e) => isCurrentMonth && !isCerrada && handleDayClick(day, e)}
+              disabled={!isCurrentMonth || isCerrada}
               className={clsx(
                 'flex h-8 sm:h-9 flex-col items-center justify-center gap-0.5 rounded-lg border border-transparent text-xs sm:text-sm transition-all duration-200 touch-manipulation group relative',
                 isCurrentMonth 
-                  ? 'bg-[#f6f6ff] text-[#010139] hover:bg-[#8aaa19] hover:text-white cursor-pointer active:scale-95' 
+                  ? isCerrada
+                    ? 'bg-gray-400 text-white cursor-not-allowed opacity-70'
+                    : 'bg-[#f6f6ff] text-[#010139] hover:bg-[#8aaa19] hover:text-white cursor-pointer active:scale-95'
                   : 'bg-gray-50 text-gray-400 cursor-default',
-                hasEvent && isCurrentMonth ? 'border-[#8aaa19] bg-white shadow-sm' : '',
-                isTodayDate ? 'ring-2 ring-[#010139] ring-offset-1' : ''
+                hasEvent && isCurrentMonth && !isCerrada ? 'border-[#8aaa19] bg-white shadow-sm' : '',
+                isTodayDate && !isCerrada ? 'ring-2 ring-[#010139] ring-offset-1' : ''
               )}
-              title={hasEvent && eventTitle ? eventTitle : (isCurrentMonth ? 'No hay eventos programados' : undefined)}
+              title={tooltipText}
             >
               <span className={clsx('font-medium leading-none', isCurrentMonth ? '' : 'opacity-50')}>
                 {format(day, 'd')}

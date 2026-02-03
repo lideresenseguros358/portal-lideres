@@ -24,6 +24,7 @@ export default function EventFormModal({
   preselectedDate
 }: EventFormModalProps) {
   // Form state
+  const [eventType, setEventType] = useState<'normal' | 'oficina_cerrada'>('normal');
   const [title, setTitle] = useState('');
   const [details, setDetails] = useState('');
   const [startDate, setStartDate] = useState('');
@@ -92,6 +93,7 @@ export default function EventFormModal({
   const loadEventData = () => {
     if (!eventToEdit) return;
     
+    setEventType(eventToEdit.event_type || 'normal');
     setTitle(eventToEdit.title || '');
     setDetails(eventToEdit.details || '');
     
@@ -153,16 +155,19 @@ export default function EventFormModal({
     const start_at = fromZonedTime(startLocal, userTimezone).toISOString();
     const end_at = fromZonedTime(endLocal, userTimezone).toISOString();
 
-    // Validate Zoom URL for virtual/hibrida
-    if ((modality === 'virtual' || modality === 'hibrida') && !zoomUrl.trim()) {
-      toast.error('El link de Zoom es requerido para eventos virtuales o híbridos');
-      return;
-    }
+    // Validate based on event type
+    if (eventType === 'normal') {
+      // Validate Zoom URL for virtual/hibrida
+      if ((modality === 'virtual' || modality === 'hibrida') && !zoomUrl.trim()) {
+        toast.error('El link de Zoom es requerido para eventos virtuales o híbridos');
+        return;
+      }
 
-    // Validate selected brokers if SELECTED audience
-    if (audience === 'SELECTED' && selectedBrokers.length === 0) {
-      toast.error('Debes seleccionar al menos un corredor para audiencia específica');
-      return;
+      // Validate selected brokers if SELECTED audience
+      if (audience === 'SELECTED' && selectedBrokers.length === 0) {
+        toast.error('Debes seleccionar al menos un corredor para audiencia específica');
+        return;
+      }
     }
 
     setSubmitting(true);
@@ -180,14 +185,15 @@ export default function EventFormModal({
             start_at,
             end_at,
             is_all_day: isAllDay,
+            event_type: eventType,
             modality,
-            zoom_url: (modality === 'virtual' || modality === 'hibrida') ? zoomUrl.trim() : null,
-            zoom_code: zoomCode.trim() || null,
-            location_name: (modality === 'presencial' || modality === 'hibrida') ? locationName.trim() : null,
-            maps_url: mapsUrl.trim() || null,
-            allow_rsvp: allowRsvp,
-            audience,
-            selected_brokers: audience === 'SELECTED' ? selectedBrokers : undefined,
+            zoom_url: (eventType === 'normal' && (modality === 'virtual' || modality === 'hibrida')) ? zoomUrl.trim() : null,
+            zoom_code: (eventType === 'normal' && zoomCode.trim()) || null,
+            location_name: (eventType === 'normal' && (modality === 'presencial' || modality === 'hibrida')) ? locationName.trim() : null,
+            maps_url: (eventType === 'normal' && mapsUrl.trim()) || null,
+            allow_rsvp: eventType === 'normal' ? allowRsvp : false,
+            audience: eventType === 'normal' ? audience : 'ALL',
+            selected_brokers: (eventType === 'normal' && audience === 'SELECTED') ? selectedBrokers : undefined,
           },
           userId,
         });
@@ -205,14 +211,15 @@ export default function EventFormModal({
             start_at: isAllDay ? `${date}T00:00:00` : `${date}T${startTime}:00`,
             end_at: isAllDay ? `${date}T23:59:59` : `${date}T${endTime}:00`,
             is_all_day: isAllDay,
+            event_type: eventType,
             modality,
-            zoom_url: (modality === 'virtual' || modality === 'hibrida') ? zoomUrl.trim() : undefined,
-            zoom_code: zoomCode.trim() || undefined,
-            location_name: (modality === 'presencial' || modality === 'hibrida') ? locationName.trim() : undefined,
-            maps_url: mapsUrl.trim() || undefined,
-            allow_rsvp: allowRsvp,
-            audience,
-            selected_brokers: audience === 'SELECTED' ? selectedBrokers : undefined,
+            zoom_url: (eventType === 'normal' && (modality === 'virtual' || modality === 'hibrida')) ? zoomUrl.trim() : undefined,
+            zoom_code: (eventType === 'normal' && zoomCode.trim()) || undefined,
+            location_name: (eventType === 'normal' && (modality === 'presencial' || modality === 'hibrida')) ? locationName.trim() : undefined,
+            maps_url: (eventType === 'normal' && mapsUrl.trim()) || undefined,
+            allow_rsvp: eventType === 'normal' ? allowRsvp : false,
+            audience: eventType === 'normal' ? audience : 'ALL',
+            selected_brokers: (eventType === 'normal' && audience === 'SELECTED') ? selectedBrokers : undefined,
             userId,
           });
           results.push(eventResult);
@@ -231,14 +238,15 @@ export default function EventFormModal({
           start_at,
           end_at,
           is_all_day: isAllDay,
+          event_type: eventType,
           modality,
-          zoom_url: (modality === 'virtual' || modality === 'hibrida') ? zoomUrl.trim() : undefined,
-          zoom_code: zoomCode.trim() || undefined,
-          location_name: (modality === 'presencial' || modality === 'hibrida') ? locationName.trim() : undefined,
-          maps_url: mapsUrl.trim() || undefined,
-          allow_rsvp: allowRsvp,
-          audience,
-          selected_brokers: audience === 'SELECTED' ? selectedBrokers : undefined,
+          zoom_url: (eventType === 'normal' && (modality === 'virtual' || modality === 'hibrida')) ? zoomUrl.trim() : undefined,
+          zoom_code: (eventType === 'normal' && zoomCode.trim()) || undefined,
+          location_name: (eventType === 'normal' && (modality === 'presencial' || modality === 'hibrida')) ? locationName.trim() : undefined,
+          maps_url: (eventType === 'normal' && mapsUrl.trim()) || undefined,
+          allow_rsvp: eventType === 'normal' ? allowRsvp : false,
+          audience: eventType === 'normal' ? audience : 'ALL',
+          selected_brokers: (eventType === 'normal' && audience === 'SELECTED') ? selectedBrokers : undefined,
           userId,
         });
       }
@@ -326,6 +334,42 @@ export default function EventFormModal({
         {/* Content */}
         <div className="p-6 overflow-y-auto flex-1">
           <form id="event-form" onSubmit={handleSubmit} className="space-y-6">
+          
+          {/* Event Type Selection */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-3">
+              Tipo de Evento <span className="text-red-500">*</span>
+            </label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => setEventType('normal')}
+                className={`px-4 py-3 rounded-lg font-medium transition-all ${
+                  eventType === 'normal'
+                    ? 'bg-[#8AAA19] text-white shadow-lg'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                📅 Evento Normal
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setEventType('oficina_cerrada');
+                  setTitle('OFICINA CERRADA');
+                  setIsAllDay(true);
+                }}
+                className={`px-4 py-3 rounded-lg font-medium transition-all ${
+                  eventType === 'oficina_cerrada'
+                    ? 'bg-gray-600 text-white shadow-lg'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                }`}
+              >
+                🚫 Oficina Cerrada
+              </button>
+            </div>
+          </div>
+
           {/* Title */}
           <div>
             <label className="block text-xs sm:text-sm font-semibold text-gray-600 mb-2 uppercase">
@@ -336,8 +380,9 @@ export default function EventFormModal({
               value={title}
               onChange={createUppercaseHandler((e) => setTitle(e.target.value))}
               className={`w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition-colors ${uppercaseInputClass}`}
-              placeholder="JUNTA DE AGENCIA MENSUAL"
+              placeholder={eventType === 'oficina_cerrada' ? 'OFICINA CERRADA' : 'JUNTA DE AGENCIA MENSUAL'}
               required
+              readOnly={eventType === 'oficina_cerrada'}
             />
           </div>
 
@@ -516,10 +561,13 @@ export default function EventFormModal({
               onChange={createUppercaseHandler((e) => setDetails(e.target.value))}
               rows={4}
               className={`w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition-colors resize-none ${uppercaseInputClass}`}
-              placeholder="DETALLES ADICIONALES DEL EVENTO..."
+              placeholder={eventType === 'oficina_cerrada' ? 'MOTIVO DEL CIERRE (OPCIONAL)' : 'DETALLES ADICIONALES DEL EVENTO...'}
             />
           </div>
 
+          {/* SOLO MOSTRAR ESTOS CAMPOS SI ES EVENTO NORMAL */}
+          {eventType === 'normal' && (
+            <>
           {/* Modality */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-3">
@@ -727,6 +775,8 @@ export default function EventFormModal({
                 </div>
               )}
             </div>
+          )}
+          </>
           )}
 
           </form>

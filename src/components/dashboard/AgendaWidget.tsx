@@ -10,7 +10,7 @@ interface AgendaWidgetProps {
 }
 
 export default function AgendaWidget({ userId, brokerId }: AgendaWidgetProps) {
-  const [events, setEvents] = useState<{ date: string; title: string }[]>([]);
+  const [events, setEvents] = useState<{ date: string; title: string; event_type: string; end_at: string }[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -29,7 +29,7 @@ export default function AgendaWidget({ userId, brokerId }: AgendaWidgetProps) {
 
       let query = client
         .from('events')
-        .select('id, title, start_at, audience')
+        .select('id, title, start_at, end_at, event_type, audience')
         .is('canceled_at', null)
         .gte('start_at', startDate.toISOString())
         .lte('start_at', endDate.toISOString())
@@ -55,10 +55,12 @@ export default function AgendaWidget({ userId, brokerId }: AgendaWidgetProps) {
           );
         }
 
-        // Map to simple format for MiniCalendar
+        // Map to format for MiniCalendar with event_type and end_at
         const mappedEvents = filteredEvents.map(event => ({
           date: event.start_at,
           title: event.title,
+          event_type: (event as any).event_type || 'normal',
+          end_at: (event as any).end_at || event.start_at,
         }));
 
         setEvents(mappedEvents);
