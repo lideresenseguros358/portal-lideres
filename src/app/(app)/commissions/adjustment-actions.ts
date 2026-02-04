@@ -916,6 +916,10 @@ export async function actionUpdateItemsOverridePercent(
   updates: Array<{ id: string; override_percent: number; broker_commission: number }>
 ) {
   try {
+    console.log('[actionUpdateItemsOverridePercent] Iniciando actualización...');
+    console.log('[actionUpdateItemsOverridePercent] Report ID:', reportId);
+    console.log('[actionUpdateItemsOverridePercent] Updates recibidos:', JSON.stringify(updates, null, 2));
+
     const { role } = await getAuthContext();
     if (role !== 'master') {
       return { ok: false, error: 'Solo Master puede editar override percent' };
@@ -925,18 +929,25 @@ export async function actionUpdateItemsOverridePercent(
 
     // Actualizar cada item
     for (const update of updates) {
-      const { error: updateError } = await supabase
+      console.log(`[actionUpdateItemsOverridePercent] Actualizando item ${update.id}...`);
+      console.log(`  - override_percent: ${update.override_percent}`);
+      console.log(`  - broker_commission: ${update.broker_commission}`);
+
+      const { data: updateData, error: updateError } = await supabase
         .from('adjustment_report_items')
         .update({
           override_percent: update.override_percent,
           broker_commission: update.broker_commission,
         })
-        .eq('id', update.id);
+        .eq('id', update.id)
+        .select();
 
       if (updateError) {
         console.error('Error updating item:', updateError);
-        throw new Error(`Error al actualizar item ${update.id}`);
+        throw new Error(`Error al actualizar item ${update.id}: ${updateError.message}`);
       }
+
+      console.log(`[actionUpdateItemsOverridePercent] ✓ Item actualizado:`, updateData);
     }
 
     // Recalcular total del reporte
