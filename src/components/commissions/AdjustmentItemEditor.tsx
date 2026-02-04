@@ -113,8 +113,8 @@ export default function AdjustmentItemEditor({ items, defaultPercent, onSave, on
     }
 
     // Guardar solo los items editados
+    // El parent (MasterAdjustmentReportReview) maneja el resultado y cierra el modal
     onSave(updates);
-    toast.success(`${updates.length} item(s) actualizado(s). Los demás mantienen su comisión original.`);
   };
 
   const formatCurrency = (amount: number) => {
