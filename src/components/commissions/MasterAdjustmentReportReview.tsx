@@ -28,6 +28,7 @@ interface AdjustmentReport {
   id: string;
   broker_id: string;
   broker_name: string;
+  broker_percent: number;
   status: 'pending' | 'approved' | 'rejected' | 'paid';
   total_amount: number;
   notes: string | null;
@@ -678,7 +679,7 @@ export default function MasterAdjustmentReportReview({
       {editingItemsReport && (
         <AdjustmentItemEditor
           items={editingItemsReport.items}
-          defaultPercent={1.0}
+          defaultPercent={editingItemsReport.broker_percent}
           onSave={handleSaveItemEdits}
           onClose={() => setEditingItemsReport(null)}
         />

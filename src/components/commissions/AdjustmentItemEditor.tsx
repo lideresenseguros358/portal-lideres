@@ -36,13 +36,13 @@ export default function AdjustmentItemEditor({ items, defaultPercent, onSave, on
   const [editedItems, setEditedItems] = useState<Map<string, { percent: number | null; commission: number | null; calculated: boolean }>>(new Map());
 
   useEffect(() => {
-    // Inicializar VACÍO - usuario debe ingresar y calcular manualmente
+    // Inicializar con comisiones ORIGINALES visibles pero NOT CALCULATED (no se guardan a menos que se editen)
     const initial = new Map<string, { percent: number | null; commission: number | null; calculated: boolean }>();
     items.forEach(item => {
       initial.set(item.id, {
         percent: null,
-        commission: null,
-        calculated: false
+        commission: item.broker_commission, // Mostrar comisión original
+        calculated: false // No calculado = no se guarda a menos que se edite
       });
     });
     setEditedItems(initial);
@@ -94,7 +94,7 @@ export default function AdjustmentItemEditor({ items, defaultPercent, onSave, on
   };
 
   const handleSave = () => {
-    // Validar que todos los items calculados sean válidos
+    // Solo guardar items que fueron CALCULADOS (editados por el usuario)
     const updates: Array<{ id: string; override_percent: number; broker_commission: number }> = [];
     
     for (const [id, data] of editedItems.entries()) {
@@ -108,11 +108,13 @@ export default function AdjustmentItemEditor({ items, defaultPercent, onSave, on
     }
 
     if (updates.length === 0) {
-      toast.error('Debes calcular al menos un item antes de guardar');
+      toast.error('No has editado ningún item. Si no necesitas cambios, simplemente cierra el modal.');
       return;
     }
 
+    // Guardar solo los items editados
     onSave(updates);
+    toast.success(`${updates.length} item(s) actualizado(s). Los demás mantienen su comisión original.`);
   };
 
   const formatCurrency = (amount: number) => {
@@ -123,12 +125,14 @@ export default function AdjustmentItemEditor({ items, defaultPercent, onSave, on
     }).format(amount);
   };
 
+  // Total incluye TODAS las comisiones: originales + editadas
   const totalCommission = Array.from(editedItems.values())
-    .filter(item => item.calculated && item.commission !== null)
+    .filter(item => item.commission !== null)
     .reduce((sum, item) => sum + (item.commission || 0), 0);
   
   const hasChanges = Array.from(editedItems.values()).some(item => item.calculated);
   const calculatedCount = Array.from(editedItems.values()).filter(item => item.calculated).length;
+  const totalItems = items.length;
 
   return (
     <Dialog open={true} onOpenChange={onClose}>
@@ -139,22 +143,25 @@ export default function AdjustmentItemEditor({ items, defaultPercent, onSave, on
             Ajustar Override Percent por Item
           </DialogTitle>
           <p className="text-sm text-gray-600 mt-2">
-            Ingresa el porcentaje y presiona <strong>Calcular</strong> para recalcular la comisión. 
-            Útil para pólizas de vida (1.0) u otros casos especiales.
+            Las comisiones actuales se muestran calculadas con el % del broker.
+            Solo edita los items que requieran un porcentaje diferente (ej: vida 1.0).
           </p>
         </DialogHeader>
 
         <div className="space-y-4 mt-4">
           {/* Info General */}
           <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-r-lg">
-            <p className="text-sm text-blue-900">
-              <strong>Instrucciones:</strong>
+            <p className="text-sm text-blue-900 mb-2">
+              <strong>Porcentaje por defecto del broker:</strong> {(defaultPercent * 100).toFixed(1)}%
+            </p>
+            <p className="text-xs text-blue-700">
+              💡 <strong>Los items que NO edites mantendrán su comisión actual.</strong> Solo modifica los que necesiten un % diferente:
             </p>
             <ol className="text-xs text-blue-700 mt-2 ml-4 list-decimal space-y-1">
-              <li>Ingresa el porcentaje deseado (ej: 1.0 para vida)</li>
-              <li>Presiona el botón <FaCalculator className="inline" size={10} /> para calcular</li>
-              <li>Repite para cada item que necesites ajustar</li>
-              <li>Guarda los cambios cuando termines</li>
+              <li>Ingresa el % nuevo en el item (ej: 1.0 para pólizas de vida)</li>
+              <li>Presiona <FaCalculator className="inline" size={10} /> para recalcular</li>
+              <li>Repite solo para los items que necesites ajustar</li>
+              <li>Guarda - los demás mantienen su comisión original</li>
             </ol>
           </div>
 
@@ -335,7 +342,10 @@ export default function AdjustmentItemEditor({ items, defaultPercent, onSave, on
                 </span>
               </div>
               <p className="text-xs text-gray-600 text-center">
-                {calculatedCount} de {items.length} items calculados
+                {calculatedCount > 0 
+                  ? `${calculatedCount} editado(s) de ${totalItems} items`
+                  : `${totalItems} items con comisión original`
+                }
               </p>
             </div>
           </div>
