@@ -71,6 +71,7 @@ function parseBankHistoryXLSX(file: File): Promise<BankTransferRow[]> {
           
           if (hasFecha && hasReferencia && hasCredito) {
             headerIndex = i;
+            console.log(`[BankParser] Header encontrado en fila ${i}:`, row);
             break;
           }
         }
@@ -81,20 +82,46 @@ function parseBankHistoryXLSX(file: File): Promise<BankTransferRow[]> {
         
         // Obtener encabezados
         const headers = jsonData[headerIndex].map((h: any) => String(h || '').toLowerCase().trim());
+        console.log('[BankParser] Headers detectados:', headers);
 
         const headerMap: HeaderMap = {
           dateIdx: headers.findIndex((h: string) => h.includes('fecha')),
           refIdx: headers.findIndex((h: string) => {
+            // Buscar cualquier variación de "referencia"
             const normalized = h.replace(/\s+/g, ' ').trim();
-            return normalized === 'referencia 1' || normalized.endsWith('referencia 1') || normalized.startsWith('referencia 1');
+            return (
+              normalized.includes('referencia 1') ||
+              normalized === 'referencia' ||
+              normalized.startsWith('ref.') ||
+              normalized.startsWith('referencia') ||
+              (normalized.includes('referencia') && !normalized.includes('transferencia'))
+            );
           }),
-          transIdx: headers.findIndex((h: string) => h.includes('transac') || h.includes('transacci')),
+          transIdx: headers.findIndex((h: string) => 
+            (h.includes('transac') || h.includes('transacci') || h.includes('código')) && !h.includes('transferencia')
+          ),
           descIdx: headers.findIndex((h: string) => h.includes('descri')),
           creditIdx: headers.findIndex((h: string) => h.includes('crédito') || h.includes('credito')),
         };
+        
+        console.log('[BankParser] HeaderMap:', headerMap);
+
+        // Si no encontramos Referencia en el primer intento, buscar la primera columna que contenga "referencia"
+        if (headerMap.refIdx === -1) {
+          console.log('[BankParser] Referencia no encontrada, buscando alternativas...');
+          for (let i = 0; i < headers.length; i++) {
+            if (headers[i].includes('ref') && !headers[i].includes('transferencia')) {
+              headerMap.refIdx = i;
+              console.log(`[BankParser] Referencia encontrada en índice ${i}: ${headers[i]}`);
+              break;
+            }
+          }
+        }
 
         if (headerMap.dateIdx === -1 || headerMap.refIdx === -1 || headerMap.creditIdx === -1) {
-          throw new Error('Columnas requeridas no encontradas: Fecha, Referencia, Crédito');
+          console.error('[BankParser] Error: Columnas no encontradas. Headers:', headers);
+          console.error('[BankParser] HeaderMap resultante:', headerMap);
+          throw new Error(`Columnas requeridas no encontradas. Fecha: ${headerMap.dateIdx}, Referencia: ${headerMap.refIdx}, Crédito: ${headerMap.creditIdx}`);
         }
         
         // Procesar filas de datos
@@ -117,6 +144,7 @@ function parseBankHistoryXLSX(file: File): Promise<BankTransferRow[]> {
           }
         }
         
+        console.log(`[BankParser] Total transferencias procesadas: ${transfers.length}`);
         resolve(transfers);
       } catch (error) {
         reject(error);
@@ -145,11 +173,19 @@ function parseBankHistoryCSV(file: File): Promise<BankTransferRow[]> {
               dateIdx: keys.findIndex((k) => k.includes('fecha')),
               refIdx: keys.findIndex((k) => {
                 const normalized = k.replace(/\s+/g, ' ').trim();
-                return normalized === 'referencia 1' || normalized.endsWith('referencia 1') || normalized.startsWith('referencia 1');
+                return (
+                  normalized.includes('referencia 1') ||
+                  normalized === 'referencia' ||
+                  normalized.startsWith('ref.') ||
+                  normalized.startsWith('referencia') ||
+                  (normalized.includes('referencia') && !normalized.includes('transferencia'))
+                );
               }),
-              transIdx: keys.findIndex((k) => k.includes('transac') || k.includes('transacci')),
+              transIdx: keys.findIndex((k) => 
+                (k.includes('transac') || k.includes('transacci') || k.includes('código')) && !k.includes('transferencia')
+              ),
               descIdx: keys.findIndex((k) => k.includes('descri')),
-              creditIdx: keys.findIndex((k) => k.includes('crédito') || k.includes('credito') || k.includes('monto')), // fallback
+              creditIdx: keys.findIndex((k) => k.includes('crédito') || k.includes('credito') || k.includes('monto')),
             };
 
             if (headerMap.dateIdx === -1 || headerMap.refIdx === -1 || headerMap.creditIdx === -1) {
