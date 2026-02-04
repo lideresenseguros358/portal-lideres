@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSupabaseServer } from '@/lib/supabase/server';
+import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { calculateEffectiveSLADate } from '@/lib/ticketing/sla-calculator';
 
 /**
@@ -19,7 +19,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const supabase = await getSupabaseServer();
+    const supabase = getSupabaseAdmin();
     
     // Buscar casos con SLA próximo a vencer (2 días o menos)
     // No incluir casos cerrados o aplazados

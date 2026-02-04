@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSupabaseServer } from '@/lib/supabase/server';
+import { getSupabaseAdmin } from '@/lib/supabase/admin';
 
 /**
  * CRON JOB: Notificar casos aplazados que requieren reapertura
@@ -18,7 +18,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const supabase = await getSupabaseServer();
+    const supabase = getSupabaseAdmin();
     
     // Buscar casos aplazados que necesitan notificación
     const { data: aplazadoCases, error } = await supabase

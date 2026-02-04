@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSupabaseServer } from '@/lib/supabase/server';
+import { getSupabaseAdmin } from '@/lib/supabase/admin';
 
 /**
  * CRON JOB: Procesar emails sin clasificar después de ventana de 24h
@@ -18,7 +18,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const supabase = await getSupabaseServer();
+    const supabase = getSupabaseAdmin();
     
     // Buscar emails cuya ventana de agrupación ha expirado
     const { data: expiredEmails, error } = await supabase
