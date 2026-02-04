@@ -13,11 +13,17 @@ export default function TypesList({ scope }: TypesListProps) {
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {types.map((type) => (
-        <Link
-          key={type.key}
-          href={`/downloads/${scope}/${type.key}`}
-          className={`
+      {types.map((type) => {
+        // VIDA ASSA va directo a carpetas (sin selección de aseguradora)
+        const href = type.key === 'vida_assa' 
+          ? `/downloads/${scope}/${type.key}`
+          : `/downloads/${scope}/${type.key}`;
+        
+        return (
+          <Link
+            key={type.key}
+            href={href}
+            className={`
             group
             bg-white rounded-xl shadow-lg
             border-2 ${'featured' in type && type.featured ? 'border-[#8AAA19]' : 'border-gray-200'}
@@ -42,7 +48,8 @@ export default function TypesList({ scope }: TypesListProps) {
             Click para ver aseguradoras
           </p>
         </Link>
-      ))}
+        );
+      })}
     </div>
   );
 }
