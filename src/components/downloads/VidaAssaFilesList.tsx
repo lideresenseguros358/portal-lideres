@@ -28,8 +28,8 @@ interface VidaAssaFilesListProps {
 export default function VidaAssaFilesList({ folderId, files, isMaster, editMode, onUpdate }: VidaAssaFilesListProps) {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadMarkNew, setUploadMarkNew] = useState(false);
   const [selectedFile, setSelectedFile] = useState<VidaAssaFile | null>(null);
   const [newFileName, setNewFileName] = useState('');
 
@@ -40,18 +40,13 @@ export default function VidaAssaFilesList({ folderId, files, isMaster, editMode,
     }
 
     setUploading(true);
-    setUploadProgress(0);
-
     try {
-      // 1. Subir archivo a storage usando el mismo endpoint que downloads
+      // 1. Subir archivo a storage
       const formData = new FormData();
       formData.append('file', uploadFile);
       formData.append('section_id', folderId);
-      formData.append('folder', 'vida_assa');
 
-      setUploadProgress(25);
-
-      const uploadRes = await fetch('/api/downloads/upload', {
+      const uploadRes = await fetch('/api/guides/upload', {
         method: 'POST',
         body: formData
       });
@@ -61,10 +56,8 @@ export default function VidaAssaFilesList({ folderId, files, isMaster, editMode,
         throw new Error(uploadData.error || 'Error al subir archivo');
       }
 
-      setUploadProgress(60);
-
       // 2. Crear registro en BD
-      const res = await fetch('/api/vida-assa/files', {
+      const createRes = await fetch('/api/vida-assa/files', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -73,25 +66,26 @@ export default function VidaAssaFilesList({ folderId, files, isMaster, editMode,
           file_url: uploadData.file_url,
           file_size: uploadFile.size,
           file_type: uploadFile.type,
-          is_new: true,
-          marked_new_until: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+          is_new: uploadMarkNew,
+          marked_new_until: uploadMarkNew ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() : null
         })
       });
 
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error);
-
-      setUploadProgress(100);
-      toast.success('Archivo subido exitosamente');
-      setShowUploadModal(false);
-      setUploadFile(null);
-      onUpdate();
+      const createData = await createRes.json();
+      if (createData.success) {
+        toast.success('Documento cargado');
+        setShowUploadModal(false);
+        setUploadFile(null);
+        setUploadMarkNew(false);
+        onUpdate();
+      } else {
+        throw new Error(createData.error || 'Error al crear documento');
+      }
     } catch (error: any) {
-      console.error('Error uploading file:', error);
-      toast.error(error.message || 'Error al subir archivo');
+      console.error('Error uploading document:', error);
+      toast.error(error.message || 'Error al cargar documento');
     } finally {
       setUploading(false);
-      setUploadProgress(0);
     }
   };
 
@@ -297,53 +291,56 @@ export default function VidaAssaFilesList({ folderId, files, isMaster, editMode,
               </button>
             </div>
 
-            <div className="mb-6">
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Selecciona un archivo
-              </label>
-              <input
-                type="file"
-                onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
-                disabled={uploading}
-                accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
-                className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none"
-              />
-              <p className="text-xs text-gray-500 mt-2">
-                Formatos soportados: PDF, Word, Excel, Imágenes
-              </p>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Archivo *
+                </label>
+                <input
+                  type="file"
+                  onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+                  accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
+                  disabled={uploading}
+                />
+                {uploadFile && (
+                  <p className="mt-2 text-sm text-gray-600">
+                    Seleccionado: {uploadFile.name}
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={uploadMarkNew}
+                    onChange={(e) => setUploadMarkNew(e.target.checked)}
+                    className="w-4 h-4 text-[#8AAA19] rounded focus:ring-[#8AAA19]"
+                  />
+                  <span className="text-sm text-gray-700">Marcar como nuevo (7 días)</span>
+                </label>
+              </div>
             </div>
 
-            {uploading && (
-              <div className="mb-4">
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div 
-                    className="bg-[#8AAA19] h-2 rounded-full transition-all duration-300"
-                    style={{ width: `${uploadProgress}%` }}
-                  ></div>
-                </div>
-                <p className="text-sm text-gray-600 mt-2 text-center">
-                  Subiendo... {uploadProgress}%
-                </p>
-              </div>
-            )}
-
-            <div className="flex gap-3">
+            <div className="flex gap-3 pt-4">
               <button
                 onClick={() => {
                   setShowUploadModal(false);
                   setUploadFile(null);
+                  setUploadMarkNew(false);
                 }}
-                className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
+                className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-all font-medium"
                 disabled={uploading}
               >
                 Cancelar
               </button>
               <button
                 onClick={handleUpload}
-                disabled={uploading || !uploadFile}
-                className="flex-1 px-4 py-2 bg-[#8AAA19] text-white rounded-lg font-semibold hover:bg-[#6d8814] transition-colors disabled:opacity-50"
+                disabled={!uploadFile || uploading}
+                className="flex-1 px-4 py-2 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg hover:shadow-lg transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {uploading ? 'Subiendo...' : 'Subir Documento'}
+                {uploading ? 'Cargando...' : 'Cargar'}
               </button>
             </div>
           </div>
