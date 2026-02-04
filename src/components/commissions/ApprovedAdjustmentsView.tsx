@@ -48,8 +48,6 @@ export default function ApprovedAdjustmentsView() {
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentMode, setPaymentMode] = useState<'immediate' | 'next_fortnight'>('next_fortnight');
   const [processing, setProcessing] = useState(false);
-  const [processedReportIds, setProcessedReportIds] = useState<string[]>([]);
-  const [showDownloadButton, setShowDownloadButton] = useState(false);
 
   useEffect(() => {
     loadReports();
@@ -113,19 +111,6 @@ export default function ApprovedAdjustmentsView() {
 
       if (result.ok) {
         toast.success(result.message);
-        
-        // Si es pago inmediato, descargar TXT automáticamente
-        if (result.mode === 'immediate' && result.reportIds) {
-          setProcessedReportIds(result.reportIds);
-          setShowDownloadButton(true);
-          
-          // Descargar automáticamente el TXT después de un breve delay
-          toast.info('Generando archivo TXT bancario...');
-          setTimeout(async () => {
-            await handleDownloadTXT(result.reportIds);
-          }, 500);
-        }
-        
         setSelectedReports(new Set());
         setShowPaymentModal(false);
         await loadReports();
@@ -140,10 +125,14 @@ export default function ApprovedAdjustmentsView() {
     }
   };
 
-  const handleDownloadTXT = async (reportIds?: string[]) => {
+  const handleDownloadTXT = async () => {
+    if (selectedReports.size === 0) {
+      toast.error('Selecciona al menos un reporte');
+      return;
+    }
+
     try {
-      const idsToUse = reportIds || processedReportIds;
-      const result = await actionGenerateBankTXT(idsToUse);
+      const result = await actionGenerateBankTXT(Array.from(selectedReports));
       
       if (result.ok && result.data) {
         // Crear blob y descargar archivo
@@ -158,8 +147,6 @@ export default function ApprovedAdjustmentsView() {
         document.body.removeChild(a);
         
         toast.success(`TXT descargado: ${result.data.count} línea(s)`);
-        setShowDownloadButton(false);
-        setProcessedReportIds([]);
       } else {
         toast.error('Error al generar TXT', { description: result.error });
       }
@@ -201,48 +188,6 @@ export default function ApprovedAdjustmentsView() {
 
   return (
     <div className="space-y-3 sm:space-y-4">
-      {/* Botón para descargar TXT - Aparece después de procesar con pagar ya */}
-      {showDownloadButton && (
-        <div className="sticky top-[60px] sm:top-[72px] z-[100] bg-gradient-to-r from-blue-50 to-white border-2 border-blue-500 rounded-lg p-3 sm:p-4 shadow-lg animate-pulse">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-            <div className="flex items-start gap-3">
-              <div className="flex-shrink-0 p-2 bg-blue-100 rounded-lg">
-                <FaMoneyBillWave className="text-blue-600" size={20} />
-              </div>
-              <div>
-                <h3 className="font-bold text-[#010139] text-sm sm:text-base">
-                  Ajustes Procesados - Descarga TXT
-                </h3>
-                <p className="text-xs sm:text-sm text-gray-600 mt-1">
-                  Los ajustes están marcados como pagados. Descarga el archivo TXT para Banco General.
-                </p>
-              </div>
-            </div>
-            <div className="flex gap-2 w-full sm:w-auto">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  setShowDownloadButton(false);
-                  setProcessedReportIds([]);
-                }}
-                className="flex-1 sm:flex-none text-xs sm:text-sm"
-              >
-                Cancelar
-              </Button>
-              <Button
-                size="sm"
-                onClick={() => handleDownloadTXT()}
-                className="flex-1 sm:flex-none text-xs sm:text-sm bg-gradient-to-r from-blue-600 to-blue-700 text-white font-semibold"
-              >
-                <FaMoneyBillWave className="mr-1 sm:mr-2" size={12} />
-                Descargar TXT
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Sticky bar - Selección múltiple - Ocultar cuando modal abierto */}
       {selectedReports.size > 0 && !showPaymentModal && (
         <div className="sticky top-[60px] sm:top-[72px] z-[100] bg-gradient-to-r from-green-50 to-white border-2 border-[#8AAA19] rounded-lg p-3 shadow-lg">
@@ -268,11 +213,20 @@ export default function ApprovedAdjustmentsView() {
               </Button>
               <Button
                 size="sm"
+                onClick={handleDownloadTXT}
+                disabled={processing}
+                className="flex-1 sm:flex-none text-xs sm:text-sm bg-gradient-to-r from-blue-600 to-blue-700 text-white font-semibold"
+              >
+                <FaMoneyBillWave className="text-white mr-1 sm:mr-2" size={12} />
+                Descargar TXT
+              </Button>
+              <Button
+                size="sm"
                 onClick={() => setShowPaymentModal(true)}
                 disabled={processing}
                 className="flex-1 sm:flex-none text-xs sm:text-sm bg-gradient-to-r from-[#8AAA19] to-[#7a9617] text-white font-semibold"
               >
-                <FaMoneyBillWave className="mr-1 sm:mr-2" size={12} />
+                <FaMoneyBillWave className="text-white mr-1 sm:mr-2" size={12} />
                 Procesar
               </Button>
             </div>
