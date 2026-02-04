@@ -16,9 +16,13 @@ import {
   FaClock, 
   FaCalendarAlt,
   FaDollarSign,
-  FaInfoCircle
+  FaInfoCircle,
+  FaObjectGroup,
+  FaPercent
 } from 'react-icons/fa';
 import { toast } from 'sonner';
+import AdjustmentItemEditor from './AdjustmentItemEditor';
+import { actionUnifyAdjustmentReports, actionUpdateItemsOverridePercent } from '@/app/(app)/commissions/adjustment-actions';
 
 interface AdjustmentReport {
   id: string;
@@ -69,6 +73,8 @@ export default function MasterAdjustmentReportReview({
   const [rejectReason, setRejectReason] = useState('');
   const [processing, setProcessing] = useState(false);
   const [editingReport, setEditingReport] = useState<AdjustmentReport | null>(null);
+  const [editingItemsReport, setEditingItemsReport] = useState<AdjustmentReport | null>(null);
+  const [unifying, setUnifying] = useState(false);
 
   const toggleReport = (reportId: string) => {
     setExpandedReports(prev => {
@@ -212,6 +218,59 @@ export default function MasterAdjustmentReportReview({
     }
   };
 
+  const handleUnifyReports = async () => {
+    if (selectedReports.size < 2) {
+      toast.error('Debes seleccionar al menos 2 reportes para unificar');
+      return;
+    }
+
+    // Verificar que todos sean del mismo broker
+    const selectedReportsList = reports.filter(r => selectedReports.has(r.id));
+    const brokerIds = [...new Set(selectedReportsList.map(r => r.broker_id))];
+    
+    if (brokerIds.length > 1) {
+      toast.error('Todos los reportes deben ser del mismo broker');
+      return;
+    }
+
+    setUnifying(true);
+    try {
+      const result = await actionUnifyAdjustmentReports(Array.from(selectedReports));
+      
+      if (result.ok) {
+        toast.success(result.message);
+        setSelectedReports(new Set());
+        onReload();
+      } else {
+        toast.error(result.error);
+      }
+    } catch (error) {
+      console.error('Error unifying reports:', error);
+      toast.error('Error al unificar reportes');
+    } finally {
+      setUnifying(false);
+    }
+  };
+
+  const handleSaveItemEdits = async (updates: Array<{ id: string; override_percent: number; broker_commission: number }>) => {
+    if (!editingItemsReport) return;
+
+    try {
+      const result = await actionUpdateItemsOverridePercent(editingItemsReport.id, updates);
+      
+      if (result.ok) {
+        toast.success(result.message);
+        setEditingItemsReport(null);
+        onReload();
+      } else {
+        toast.error(result.error);
+      }
+    } catch (error) {
+      console.error('Error updating items:', error);
+      toast.error('Error al actualizar items');
+    }
+  };
+
   if (reports.length === 0) {
     return (
       <Card className="shadow-lg">
@@ -231,7 +290,7 @@ export default function MasterAdjustmentReportReview({
   return (
     <div className="space-y-4">
       {/* Batch Actions Bar - Ocultar cuando hay modales abiertos */}
-      {selectedReports.size > 0 && !reviewingReport && !rejectingReport && !editingReport && (
+      {selectedReports.size > 0 && !reviewingReport && !rejectingReport && !editingReport && !editingItemsReport && (
         <Card className="bg-gradient-to-r from-blue-50 to-white border-2 border-blue-500">
           <CardContent className="p-3 sm:p-4">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
@@ -252,6 +311,17 @@ export default function MasterAdjustmentReportReview({
                 >
                   Limpiar
                 </Button>
+                {selectedReports.size >= 2 && (
+                  <Button
+                    size="sm"
+                    onClick={handleUnifyReports}
+                    disabled={unifying}
+                    className="bg-[#010139] hover:bg-[#020270] text-white text-xs sm:text-sm flex-1 sm:flex-none"
+                  >
+                    <FaObjectGroup className="mr-1 sm:mr-2" />
+                    {unifying ? 'Unificando...' : 'Unificar'}
+                  </Button>
+                )}
                 <Button
                   size="sm"
                   onClick={handleBatchApprove}
@@ -322,7 +392,19 @@ export default function MasterAdjustmentReportReview({
               </div>
               
               {report.status === 'pending' && (
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditingItemsReport(report);
+                    }}
+                    className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 h-auto"
+                    title="Ajustar override percent por item"
+                  >
+                    <FaPercent className="mr-1.5" size={12} />
+                    <span className="text-xs font-semibold">Override %</span>
+                  </Button>
                   <Button
                     size="sm"
                     onClick={(e) => {
@@ -591,6 +673,16 @@ export default function MasterAdjustmentReportReview({
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Modal de Edición de Override Percent */}
+      {editingItemsReport && (
+        <AdjustmentItemEditor
+          items={editingItemsReport.items}
+          defaultPercent={1.0}
+          onSave={handleSaveItemEdits}
+          onClose={() => setEditingItemsReport(null)}
+        />
+      )}
     </div>
   );
 }

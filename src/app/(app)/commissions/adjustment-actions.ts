@@ -907,3 +907,167 @@ export async function actionGetPaidAdjustments() {
     };
   }
 }
+
+/**
+ * Actualizar override percent de items individuales y recalcular comisiones
+ */
+export async function actionUpdateItemsOverridePercent(
+  reportId: string,
+  updates: Array<{ id: string; override_percent: number; broker_commission: number }>
+) {
+  try {
+    const { role } = await getAuthContext();
+    if (role !== 'master') {
+      return { ok: false, error: 'Solo Master puede editar override percent' };
+    }
+
+    const supabase = getSupabaseAdmin();
+
+    // Actualizar cada item
+    for (const update of updates) {
+      const { error: updateError } = await supabase
+        .from('adjustment_report_items')
+        .update({
+          override_percent: update.override_percent,
+          broker_commission: update.broker_commission,
+        })
+        .eq('id', update.id);
+
+      if (updateError) {
+        console.error('Error updating item:', updateError);
+        throw new Error(`Error al actualizar item ${update.id}`);
+      }
+    }
+
+    // Recalcular total del reporte
+    const { data: items } = await supabase
+      .from('adjustment_report_items')
+      .select('broker_commission')
+      .eq('report_id', reportId);
+
+    const newTotal = (items || []).reduce((sum, item) => sum + item.broker_commission, 0);
+
+    const { error: updateTotalError } = await supabase
+      .from('adjustment_reports')
+      .update({ total_amount: newTotal })
+      .eq('id', reportId);
+
+    if (updateTotalError) {
+      throw new Error('Error al actualizar total del reporte');
+    }
+
+    revalidatePath('/commissions');
+
+    return { ok: true, message: 'Override percent actualizado correctamente' };
+  } catch (error) {
+    console.error('[actionUpdateItemsOverridePercent] Error:', error);
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : 'Error desconocido'
+    };
+  }
+}
+
+/**
+ * Unificar múltiples reportes del mismo broker en uno solo
+ */
+export async function actionUnifyAdjustmentReports(reportIds: string[]) {
+  try {
+    const { role } = await getAuthContext();
+    if (role !== 'master') {
+      return { ok: false, error: 'Solo Master puede unificar reportes' };
+    }
+
+    if (reportIds.length < 2) {
+      return { ok: false, error: 'Debes seleccionar al menos 2 reportes para unificar' };
+    }
+
+    const supabase = getSupabaseAdmin();
+
+    // Obtener todos los reportes seleccionados
+    const { data: reports, error: reportsError } = await supabase
+      .from('adjustment_reports')
+      .select('*, adjustment_report_items(*)')
+      .in('id', reportIds)
+      .eq('status', 'pending');
+
+    if (reportsError || !reports || reports.length === 0) {
+      return { ok: false, error: 'No se encontraron reportes pendientes' };
+    }
+
+    // Verificar que todos sean del mismo broker
+    const brokerIds = [...new Set(reports.map(r => r.broker_id))];
+    if (brokerIds.length > 1) {
+      return { ok: false, error: 'Todos los reportes deben ser del mismo broker' };
+    }
+
+    const brokerId = brokerIds[0];
+    if (!brokerId) {
+      return { ok: false, error: 'No se pudo identificar el broker' };
+    }
+
+    // Obtener todos los items de todos los reportes
+    const allItems = reports.flatMap(r => r.adjustment_report_items || []);
+    
+    // Calcular total combinado
+    const totalAmount = allItems.reduce((sum, item) => sum + item.broker_commission, 0);
+
+    // Combinar notas
+    const combinedNotes = reports
+      .filter(r => r.broker_notes)
+      .map((r, i) => `[Reporte ${i + 1}] ${r.broker_notes}`)
+      .join('\n\n');
+
+    // Crear nuevo reporte unificado
+    const { data: newReport, error: createError } = await supabase
+      .from('adjustment_reports')
+      .insert([{
+        broker_id: brokerId,
+        total_amount: totalAmount,
+        status: 'pending',
+        broker_notes: combinedNotes || 'Reportes unificados',
+      }])
+      .select()
+      .single();
+
+    if (createError || !newReport) {
+      throw new Error('Error al crear reporte unificado');
+    }
+
+    // Mover todos los items al nuevo reporte
+    const { error: moveError } = await supabase
+      .from('adjustment_report_items')
+      .update({ report_id: newReport.id })
+      .in('report_id', reportIds);
+
+    if (moveError) {
+      // Rollback: eliminar reporte creado
+      await supabase.from('adjustment_reports').delete().eq('id', newReport.id);
+      throw new Error('Error al mover items al reporte unificado');
+    }
+
+    // Eliminar reportes antiguos
+    const { error: deleteError } = await supabase
+      .from('adjustment_reports')
+      .delete()
+      .in('id', reportIds);
+
+    if (deleteError) {
+      console.error('Error eliminando reportes antiguos (no crítico):', deleteError);
+    }
+
+    revalidatePath('/commissions');
+
+    return {
+      ok: true,
+      message: `${reportIds.length} reportes unificados exitosamente en un solo reporte`,
+      newReportId: newReport.id
+    };
+  } catch (error) {
+    console.error('[actionUnifyAdjustmentReports] Error:', error);
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : 'Error desconocido'
+    };
+  }
+}
