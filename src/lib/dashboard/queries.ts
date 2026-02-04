@@ -1005,18 +1005,15 @@ export async function getYtdComparison(userId: string, role: DashboardRole): Pro
   const supabase = await getSupabaseServer();
   const brokerId = role === "broker" ? await resolveBrokerId(userId) : null;
 
-  const now = new Date();
-  const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth() + 1; // 1-12
-  const previousYear = currentYear - 1;
+  const currentYear = CURRENT_YEAR;
+  const previousYear = CURRENT_YEAR - 1;
 
-  // YTD: Solo obtener meses hasta el mes actual transcurrido para ambos años
+  // GRÁFICAS: Mostrar todos los 12 meses del año (no filtrar por mes actual)
   const buildQuery = (year: number) => {
     let query = supabase
       .from("production")
       .select("month, bruto, canceladas")
       .eq("year", year)
-      .lte("month", currentMonth) // Solo hasta el mes actual
       .order("month", { ascending: true })
       .limit(FETCH_LIMIT);
 
