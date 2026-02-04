@@ -1009,12 +1009,34 @@ export default function AdjustmentsTab({ role, brokerId, brokers, onActionSucces
   const loadReports = useCallback(async () => {
     if (activeTab !== 'requests') return;
     setLoadingReports(true);
-    const result = await actionGetAdjustmentReports('pending');
-    if (result.ok) {
-      setReports(result.data || []);
+    
+    // Para broker: cargar pending Y approved (hasta que se paguen)
+    // Para master: solo pending (los aprobados van a tab Aprobados)
+    if (role === 'broker') {
+      const pendingResult = await actionGetAdjustmentReports('pending');
+      const approvedResult = await actionGetAdjustmentReports('approved');
+      
+      const allReports = [
+        ...(pendingResult.ok ? pendingResult.data || [] : []),
+        ...(approvedResult.ok ? approvedResult.data || [] : [])
+      ];
+      
+      // Ordenar por fecha de creación (más recientes primero)
+      allReports.sort((a, b) => 
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+      
+      setReports(allReports);
+    } else {
+      // Master solo ve pending aquí (los aprobados están en tab Aprobados)
+      const result = await actionGetAdjustmentReports('pending');
+      if (result.ok) {
+        setReports(result.data || []);
+      }
     }
+    
     setLoadingReports(false);
-  }, [activeTab]);
+  }, [activeTab, role]);
 
   const loadPaidReports = useCallback(async () => {
     if (activeTab !== 'paid' || role !== 'broker') return;
