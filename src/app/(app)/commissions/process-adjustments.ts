@@ -55,7 +55,9 @@ export async function actionProcessApprovedReports(
         total_amount,
         status,
         adjustment_report_items(
+          id,
           pending_item_id,
+          override_percent,
           pending_items(
             policy_number,
             insured_name,
@@ -90,10 +92,13 @@ export async function actionProcessApprovedReports(
         return { ok: false, error: 'Error al marcar reportes como pagados' };
       }
 
-      // 2. Crear registros en preliminar (temp_client_import)
+      // 2. Actualizar percent_override en policies para items con override configurado
+      await updatePoliciesOverridePercent(supabase, reports);
+
+      // 3. Crear registros en preliminar (temp_client_import)
       await createPreliminarRecords(supabase, reports, userId);
 
-      // 3. Crear notificaciones para brokers
+      // 4. Crear notificaciones para brokers
       for (const report of reports) {
         try {
           const { data: brokerData } = await supabase
@@ -214,6 +219,68 @@ export async function actionProcessApprovedReports(
       ok: false,
       error: error instanceof Error ? error.message : 'Error desconocido'
     };
+  }
+}
+
+/**
+ * Actualizar percent_override en policies para items con override configurado
+ * Cuando se paga un reporte, guardar el override percent en la póliza correspondiente
+ */
+async function updatePoliciesOverridePercent(
+  supabase: any,
+  reports: any[]
+) {
+  try {
+    console.log('[updatePoliciesOverridePercent] Actualizando override percent en pólizas...');
+    
+    let updatedCount = 0;
+
+    for (const report of reports) {
+      for (const item of (report.adjustment_report_items || [])) {
+        // Solo procesar items que tienen override_percent configurado
+        if (item.override_percent !== null && item.override_percent !== undefined) {
+          const pendingItem = item.pending_items;
+          
+          if (pendingItem?.policy_number) {
+            // Buscar la póliza por número
+            const { data: policy, error: findError } = await supabase
+              .from('policies')
+              .select('id, policy_number, percent_override')
+              .eq('policy_number', pendingItem.policy_number)
+              .single();
+
+            if (findError || !policy) {
+              console.warn(`[updatePoliciesOverridePercent] No se encontró póliza ${pendingItem.policy_number}`);
+              continue;
+            }
+
+            // Actualizar percent_override en la póliza
+            const { error: updateError } = await supabase
+              .from('policies')
+              .update({ 
+                percent_override: item.override_percent 
+              })
+              .eq('id', policy.id);
+
+            if (updateError) {
+              console.error(`[updatePoliciesOverridePercent] Error actualizando póliza ${policy.policy_number}:`, updateError);
+            } else {
+              console.log(`[updatePoliciesOverridePercent] ✓ Póliza ${policy.policy_number} actualizada con override ${(item.override_percent * 100).toFixed(1)}%`);
+              updatedCount++;
+            }
+          }
+        }
+      }
+    }
+
+    if (updatedCount > 0) {
+      console.log(`[updatePoliciesOverridePercent] ${updatedCount} póliza(s) actualizada(s) con override percent`);
+    } else {
+      console.log('[updatePoliciesOverridePercent] No había items con override percent configurado');
+    }
+  } catch (error) {
+    console.error('[updatePoliciesOverridePercent] Error:', error);
+    // No fallar el proceso principal si esto falla
   }
 }
 

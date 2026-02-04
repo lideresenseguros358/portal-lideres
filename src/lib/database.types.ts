@@ -89,6 +89,7 @@ export type Database = {
           commission_raw: number
           created_at: string
           id: string
+          override_percent: number | null
           pending_item_id: string
           report_id: string
         }
@@ -97,6 +98,7 @@ export type Database = {
           commission_raw: number
           created_at?: string
           id?: string
+          override_percent?: number | null
           pending_item_id: string
           report_id: string
         }
@@ -105,6 +107,7 @@ export type Database = {
           commission_raw?: number
           created_at?: string
           id?: string
+          override_percent?: number | null
           pending_item_id?: string
           report_id?: string
         }
