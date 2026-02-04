@@ -281,12 +281,24 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
   };
 
   const loadBrokers = async () => {
-    // OPTIMIZACIÓN: 1 query con join en lugar de 2 queries secuenciales
-    const { data: brokersData } = await supabaseClient()
+    console.log('[loadBrokers] Cargando brokers...');
+    const { data: brokersData, error } = await supabaseClient()
       .from('brokers')
-      .select('*, profile:profiles!p_id(id, full_name, email)')
+      .select(`
+        id,
+        name,
+        p_id,
+        percent_default,
+        profiles!brokers_p_id_fkey(id, full_name, email)
+      `)
       .eq('active', true)
       .order('name');
+
+    if (error) {
+      console.error('[loadBrokers] Error:', error);
+    } else {
+      console.log('[loadBrokers] Brokers cargados:', brokersData?.length || 0, brokersData);
+    }
 
     setBrokers(brokersData || []);
   };
@@ -704,7 +716,7 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
         let broker_id: string | undefined;
         
         if (role === 'master') {
-          const broker = brokers.find((b: any) => b.profile?.email === formData.broker_email);
+          const broker = brokers.find((b: any) => b.profiles?.email === formData.broker_email);
           broker_id = broker?.p_id;
           if (!broker_id) {
             throw new Error('No se encontró el corredor seleccionado');
@@ -759,7 +771,7 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
         let broker_id: string | undefined;
         
         if (role === 'master') {
-          const broker = brokers.find((b: any) => b.profile?.email === formData.broker_email);
+          const broker = brokers.find((b: any) => b.profiles?.email === formData.broker_email);
           broker_id = broker?.p_id;
           if (!broker_id) {
             throw new Error('No se encontró el corredor seleccionado');
@@ -1480,7 +1492,7 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                     <Select 
                       value={formData.broker_email} 
                       onValueChange={(value) => {
-                        const selected = brokers.find((b: any) => b.profile?.email === value);
+                        const selected = brokers.find((b: any) => b.profiles?.email === value);
                         // Aplicar condición especial ASSA + VIDA si aplica, sino usar default del broker
                         const percentToUse = specialOverride.hasSpecialOverride && specialOverride.overrideValue !== null
                           ? String(specialOverride.overrideValue)
@@ -1504,8 +1516,8 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
                       </SelectTrigger>
                       <SelectContent className="max-h-[200px] overflow-auto">
                         {brokers.map((broker: any) => (
-                          <SelectItem key={broker.id} value={broker.profile?.email}>
-                            {broker.name || broker.profile?.full_name}
+                          <SelectItem key={broker.id} value={broker.profiles?.email || ''}>
+                            {broker.name || broker.profiles?.full_name || 'Sin nombre'}
                           </SelectItem>
                         ))}
                       </SelectContent>
