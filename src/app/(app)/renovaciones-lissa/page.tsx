@@ -43,15 +43,19 @@ async function getRenovacionesLissa() {
     .single();
 
   // Obtener brokers con notificaciones habilitadas
-  const { data: brokersWithNotifications } = await supabase
+  const { data: allBrokers } = await supabase
     .from('brokers')
-    .select('id, name, email')
-    .eq('renewal_notifications', true)
+    .select('id, name, email, p_id, profiles!p_id(notify_broker_renewals)')
     .eq('active', true);
+
+  // Filtrar solo brokers con notify_broker_renewals = true
+  const brokersWithNotifications = (allBrokers || []).filter((b: any) => 
+    b.profiles?.notify_broker_renewals === true
+  );
 
   const brokerIds = [
     lissaBroker?.id,
-    ...(brokersWithNotifications?.map((b: any) => b.id) || [])
+    ...brokersWithNotifications.map((b: any) => b.id)
   ].filter((id): id is string => id !== undefined && id !== null);
 
   // Obtener pólizas próximas a renovar (30 días)
