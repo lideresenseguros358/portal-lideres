@@ -42,7 +42,7 @@ export async function actionGenerateBankTXT(reportIds: string[]) {
 
     const supabase = getSupabaseAdmin();
 
-    // Obtener reportes pagados
+    // Obtener reportes aprobados (para descarga antes de procesar)
     const { data: reports, error: reportsError } = await supabase
       .from('adjustment_reports')
       .select(`
@@ -58,11 +58,10 @@ export async function actionGenerateBankTXT(reportIds: string[]) {
         )
       `)
       .in('id', reportIds)
-      .eq('payment_mode', 'immediate')
-      .eq('status', 'paid');
+      .eq('status', 'approved');
 
     if (reportsError || !reports || reports.length === 0) {
-      return { ok: false, error: 'No se encontraron reportes pagados para generar TXT' };
+      return { ok: false, error: 'No se encontraron reportes aprobados para generar TXT' };
     }
 
     // Generar contenido TXT
