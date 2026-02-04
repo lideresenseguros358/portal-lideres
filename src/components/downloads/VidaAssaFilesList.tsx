@@ -5,7 +5,7 @@ import { FaFilePdf, FaUpload, FaTrash, FaEdit, FaTimes, FaStar } from 'react-ico
 import { toast } from 'sonner';
 import BadgeNuevo from '@/components/shared/BadgeNuevo';
 
-interface File {
+interface VidaAssaFile {
   id: string;
   name: string;
   file_url: string;
@@ -19,7 +19,7 @@ interface File {
 
 interface VidaAssaFilesListProps {
   folderId: string;
-  files: File[];
+  files: VidaAssaFile[];
   isMaster: boolean;
   editMode: boolean;
   onUpdate: () => void;
@@ -29,12 +29,15 @@ export default function VidaAssaFilesList({ folderId, files, isMaster, editMode,
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [selectedFile, setSelectedFile] = useState<VidaAssaFile | null>(null);
   const [newFileName, setNewFileName] = useState('');
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  const handleUpload = async () => {
+    if (!uploadFile) {
+      toast.error('Selecciona un archivo');
+      return;
+    }
 
     setUploading(true);
     setUploadProgress(0);
@@ -42,7 +45,7 @@ export default function VidaAssaFilesList({ folderId, files, isMaster, editMode,
     try {
       // 1. Subir archivo a storage usando el mismo endpoint que downloads
       const formData = new FormData();
-      formData.append('file', file);
+      formData.append('file', uploadFile);
       formData.append('section_id', folderId);
       formData.append('folder', 'vida_assa');
 
@@ -66,10 +69,10 @@ export default function VidaAssaFilesList({ folderId, files, isMaster, editMode,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           folder_id: folderId,
-          name: file.name,
+          name: uploadFile.name,
           file_url: uploadData.file_url,
-          file_size: file.size,
-          file_type: file.type,
+          file_size: uploadFile.size,
+          file_type: uploadFile.type,
           is_new: true,
           marked_new_until: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
         })
@@ -81,6 +84,7 @@ export default function VidaAssaFilesList({ folderId, files, isMaster, editMode,
       setUploadProgress(100);
       toast.success('Archivo subido exitosamente');
       setShowUploadModal(false);
+      setUploadFile(null);
       onUpdate();
     } catch (error: any) {
       console.error('Error uploading file:', error);
@@ -112,7 +116,7 @@ export default function VidaAssaFilesList({ folderId, files, isMaster, editMode,
     }
   };
 
-  const handleEditFile = (file: File) => {
+  const handleEditFile = (file: VidaAssaFile) => {
     setSelectedFile(file);
     setNewFileName(file.name);
   };
@@ -299,7 +303,7 @@ export default function VidaAssaFilesList({ folderId, files, isMaster, editMode,
               </label>
               <input
                 type="file"
-                onChange={handleFileUpload}
+                onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
                 disabled={uploading}
                 accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
                 className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none"
@@ -322,6 +326,26 @@ export default function VidaAssaFilesList({ folderId, files, isMaster, editMode,
                 </p>
               </div>
             )}
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowUploadModal(false);
+                  setUploadFile(null);
+                }}
+                className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
+                disabled={uploading}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleUpload}
+                disabled={uploading || !uploadFile}
+                className="flex-1 px-4 py-2 bg-[#8AAA19] text-white rounded-lg font-semibold hover:bg-[#6d8814] transition-colors disabled:opacity-50"
+              >
+                {uploading ? 'Subiendo...' : 'Subir Documento'}
+              </button>
+            </div>
           </div>
         </div>
       )}
