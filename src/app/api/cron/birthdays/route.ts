@@ -18,11 +18,19 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    console.log('[CRON BIRTHDAYS] Starting birthday check...');
+    
     // Ejecutar ambas funciones en paralelo
     const [clientResult, brokerResult] = await Promise.all([
       sendClientBirthdayNotifications(),
       sendBrokerBirthdayGreetings(),
     ]);
+
+    console.log('[CRON BIRTHDAYS] Results:', {
+      clientBirthdays: clientResult.clientBirthdays,
+      brokerBirthdays: brokerResult.brokerBirthdays,
+      emailsSent: clientResult.emailsSent + brokerResult.emailsSent,
+    });
 
     return NextResponse.json({
       success: true,

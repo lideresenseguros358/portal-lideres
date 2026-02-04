@@ -1,0 +1,157 @@
+<h1>📨 Respuesta de Cliente - Renovación</h1>
+
+<p style="font-size: 18px; font-weight: 600; margin-bottom: 20px;">
+  Nuevo registro de respuesta automática de renovación
+</p>
+
+<div style="background: linear-gradient(135deg, {{#if responseType}}{{#eq responseType 'AFIRMATIVA'}}#e8f5e9{{else}}#ffebee{{/eq}}{{else}}#f0f0f0{{/if}} 0%, {{#if responseType}}{{#eq responseType 'AFIRMATIVA'}}#f1f8e9{{else}}#ffcdd2{{/eq}}{{else}}#f5f5f5{{/if}} 100%); padding: 20px; border-radius: 10px; margin: 24px 0; border-left: 6px solid {{#if responseType}}{{#eq responseType 'AFIRMATIVA'}}#8AAA19{{else}}#d32f2f{{/eq}}{{else}}#6D6D6D{{/if}};">
+  <p style="margin: 0 0 10px 0; font-size: 18px; font-weight: 700; color: #010139;">
+    {{#if responseType}}{{#eq responseType 'AFIRMATIVA'}}✅ CLIENTE DESEA RENOVAR{{else}}❌ CLIENTE NO DESEA RENOVAR{{/eq}}{{/if}}
+  </p>
+  <p style="margin: 0; font-size: 16px; color: #23262F; line-height: 1.6;">
+    {{clientResponse}}
+  </p>
+</div>
+
+<div style="background: linear-gradient(135deg, #e3f2fd 0%, #e1f5fe 100%); padding: 20px; border-radius: 10px; margin: 24px 0; border-left: 6px solid #010139;">
+  <h2 style="margin: 0 0 16px 0; font-size: 16px; color: #010139;">
+    👤 Información del Cliente
+  </h2>
+  
+  <table style="width: 100%; border-collapse: collapse;">
+    <tr style="border-bottom: 1px solid rgba(1, 1, 57, 0.1);">
+      <td style="padding: 10px 0; color: #6D6D6D; font-size: 14px;">
+        <strong>Nombre</strong>
+      </td>
+      <td style="padding: 10px 0; text-align: right; font-weight: 600; font-size: 14px; color: #010139;">
+        {{clientName}}
+      </td>
+    </tr>
+    <tr style="border-bottom: 1px solid rgba(1, 1, 57, 0.1);">
+      <td style="padding: 10px 0; color: #6D6D6D; font-size: 14px;">
+        <strong>Cédula/RUC</strong>
+      </td>
+      <td style="padding: 10px 0; text-align: right; font-weight: 600; font-size: 14px; color: #010139;">
+        {{clientId}}
+      </td>
+    </tr>
+    <tr style="border-bottom: 1px solid rgba(1, 1, 57, 0.1);">
+      <td style="padding: 10px 0; color: #6D6D6D; font-size: 14px;">
+        <strong>Email</strong>
+      </td>
+      <td style="padding: 10px 0; text-align: right; font-weight: 600; font-size: 14px; color: #010139;">
+        {{clientEmail}}
+      </td>
+    </tr>
+    <tr>
+      <td style="padding: 10px 0; color: #6D6D6D; font-size: 14px;">
+        <strong>Teléfono</strong>
+      </td>
+      <td style="padding: 10px 0; text-align: right; font-weight: 600; font-size: 14px; color: #010139;">
+        {{clientPhone}}
+      </td>
+    </tr>
+  </table>
+</div>
+
+<div style="background: linear-gradient(135deg, #f0f7ff 0%, #e6f4ff 100%); padding: 20px; border-radius: 10px; margin: 24px 0; border-left: 6px solid #010139;">
+  <h2 style="margin: 0 0 16px 0; font-size: 16px; color: #010139;">
+    📋 Detalles de la Póliza
+  </h2>
+  
+  <table style="width: 100%; border-collapse: collapse;">
+    <tr style="border-bottom: 1px solid rgba(1, 1, 57, 0.1);">
+      <td style="padding: 10px 0; color: #6D6D6D; font-size: 14px;">
+        <strong>Número de Póliza</strong>
+      </td>
+      <td style="padding: 10px 0; text-align: right; font-weight: 600; font-size: 14px; color: #010139;">
+        {{policyNumber}}
+      </td>
+    </tr>
+    <tr style="border-bottom: 1px solid rgba(1, 1, 57, 0.1);">
+      <td style="padding: 10px 0; color: #6D6D6D; font-size: 14px;">
+        <strong>Aseguradora</strong>
+      </td>
+      <td style="padding: 10px 0; text-align: right; font-weight: 600; font-size: 14px; color: #010139;">
+        {{insurerName}}
+      </td>
+    </tr>
+    <tr style="border-bottom: 1px solid rgba(1, 1, 57, 0.1);">
+      <td style="padding: 10px 0; color: #6D6D6D; font-size: 14px;">
+        <strong>Ramo</strong>
+      </td>
+      <td style="padding: 10px 0; text-align: right; font-weight: 600; font-size: 14px; color: #010139;">
+        {{ramo}}
+      </td>
+    </tr>
+    <tr style="border-bottom: 1px solid rgba(1, 1, 57, 0.1);">
+      <td style="padding: 10px 0; color: #6D6D6D; font-size: 14px;">
+        <strong>Vigencia Actual</strong>
+      </td>
+      <td style="padding: 10px 0; text-align: right; font-weight: 600; font-size: 14px; color: #010139;">
+        Desde {{startDate}}
+      </td>
+    </tr>
+    <tr>
+      <td style="padding: 10px 0; color: #6D6D6D; font-size: 14px;">
+        <strong>Fecha de Renovación</strong>
+      </td>
+      <td style="padding: 10px 0; text-align: right; font-weight: 700; font-size: 16px; color: #FF6B00;">
+        {{renewalDate}}
+      </td>
+    </tr>
+  </table>
+</div>
+
+<div style="background: #f7f7f7; padding: 20px; border-radius: 10px; margin: 25px 0;">
+  <h2 style="margin: 0 0 15px 0; font-size: 15px; font-weight: 600; color: #010139;">
+    👨‍💼 Corredor Asignado
+  </h2>
+  <p style="margin: 8px 0; color: #23262F; font-size: 14px;">
+    <strong style="color: #010139;">Nombre:</strong> {{brokerName}}
+  </p>
+  <p style="margin: 8px 0; color: #23262F; font-size: 14px;">
+    <strong style="color: #010139;">Email:</strong> {{brokerEmail}}
+  </p>
+  <p style="margin: 8px 0; color: #23262F; font-size: 14px;">
+    <strong style="color: #010139;">Teléfono:</strong> {{brokerPhone}}
+  </p>
+</div>
+
+<div style="background: linear-gradient(135deg, #fff3e0 0%, #fff9e6 100%); padding: 18px; border-radius: 10px; margin: 20px 0; border-left: 6px solid #FFC107;">
+  <p style="margin: 0 0 8px 0; font-weight: 600; color: #856404; font-size: 14px;">
+    🎫 Caso Creado Automáticamente
+  </p>
+  <p style="margin: 0; font-size: 14px; color: #856404; line-height: 1.6;">
+    Se ha creado automáticamente un caso en el sistema de pendientes con el ticket: <strong>{{caseTicket}}</strong>
+  </p>
+</div>
+
+<div style="background: linear-gradient(135deg, #e8f5e9 0%, #f1f8e9 100%); padding: 20px; border-radius: 10px; margin: 24px 0; border: 2px solid #8AAA19;">
+  <p style="margin: 0 0 12px 0; font-size: 15px; font-weight: 600; color: #010139;">
+    ✅ Próximas Acciones
+  </p>
+  <ul style="margin: 0; padding-left: 20px; color: #23262F; font-size: 14px; line-height: 1.8;">
+    {{#if responseType}}{{#eq responseType 'AFIRMATIVA'}}
+    <li>Contactar al cliente para confirmar detalles de la renovación</li>
+    <li>Verificar si hay cambios en coberturas o información</li>
+    <li>Procesar la renovación antes de la fecha de vencimiento</li>
+    <li>Actualizar el caso en el sistema cuando se complete</li>
+    {{else}}
+    <li>Contactar al cliente para entender el motivo del rechazo</li>
+    <li>Ofrecer alternativas o ajustes en la cobertura</li>
+    <li>Si persiste el rechazo, proceder con cancelación según protocolo</li>
+    <li>Actualizar el caso en el sistema según decisión final</li>
+    {{/eq}}{{/if}}
+  </ul>
+</div>
+
+<div style="text-align: center; margin: 30px 0;">
+  <a href="{{portalUrl}}/pendientes" class="button">
+    Ver Caso en Portal
+  </a>
+</div>
+
+<p style="font-size: 13px; color: #6D6D6D; text-align: center; margin-top: 24px; line-height: 1.6;">
+  Esta notificación fue generada automáticamente por el sistema de renovaciones del Portal Líderes. 🤖
+</p>

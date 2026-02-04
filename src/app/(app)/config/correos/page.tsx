@@ -23,10 +23,24 @@ const EMAIL_TESTS: EmailTest[] = [
   // RENOVACIONES
   {
     template: 'renewalReminder',
-    name: 'Recordatorio de Renovación',
+    name: 'Recordatorio de Renovación (Broker)',
     description: 'Correo automático que se envía a brokers sobre pólizas próximas a vencer',
     category: 'Renovaciones',
     fromType: 'PORTAL',
+  },
+  {
+    template: 'clientRenewalRequest',
+    name: 'Solicitud de Renovación (Cliente)',
+    description: 'Correo al CLIENTE con botones SI/NO para confirmar renovación',
+    category: 'Renovaciones',
+    fromType: 'PORTAL',
+  },
+  {
+    template: 'renewalResponseNotification',
+    name: 'Notificación Respuesta Cliente',
+    description: 'Correo a trámites cuando cliente responde SI/NO a renovación',
+    category: 'Renovaciones',
+    fromType: 'TRAMITES',
   },
   {
     template: 'renewalConfirm',
