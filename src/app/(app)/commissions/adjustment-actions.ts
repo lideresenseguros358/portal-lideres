@@ -355,8 +355,20 @@ export async function actionGetAdjustmentReports(status?: 'pending' | 'approved'
       // Calcular items con valores correctos
       const items = (report.adjustment_report_items || []).map((item: any) => {
         const commissionRaw = Number(item.commission_raw) || 0;
-        // RECALCULAR correctamente: raw * percent (NO dividir por 100)
-        const brokerCommission = commissionRaw * brokerPercent;
+        const overridePercent = item.override_percent; // Puede ser null si no se editó
+        
+        // Si hay override_percent guardado, usar ese. Si no, usar broker_commission guardado o recalcular
+        let brokerCommission: number;
+        if (overridePercent !== null && overridePercent !== undefined) {
+          // Recalcular con override_percent guardado
+          brokerCommission = commissionRaw * overridePercent;
+        } else if (item.broker_commission !== null && item.broker_commission !== undefined) {
+          // Usar el broker_commission guardado (ya fue calculado)
+          brokerCommission = Number(item.broker_commission) || 0;
+        } else {
+          // Recalcular con percent_default del broker
+          brokerCommission = commissionRaw * brokerPercent;
+        }
         
         return {
           id: item.id,
@@ -364,7 +376,8 @@ export async function actionGetAdjustmentReports(status?: 'pending' | 'approved'
           insured_name: item.pending_items?.insured_name || 'N/A',
           commission_raw: commissionRaw,
           broker_commission: brokerCommission,
-          insurer_name: item.pending_items?.insurers?.name || 'N/A'
+          insurer_name: item.pending_items?.insurers?.name || 'N/A',
+          override_percent: overridePercent // Incluir para que el frontend lo tenga
         };
       });
       

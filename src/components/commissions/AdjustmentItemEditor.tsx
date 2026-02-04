@@ -22,7 +22,7 @@ interface AdjustmentItem {
   commission_raw: number;
   broker_commission: number;
   insurer_name: string | null;
-  override_percent?: number;
+  override_percent?: number | null;
 }
 
 interface Props {
@@ -30,9 +30,10 @@ interface Props {
   defaultPercent: number;
   onSave: (updatedItems: Array<{ id: string; override_percent: number; broker_commission: number }>) => void;
   onClose: () => void;
+  isSaving?: boolean;
 }
 
-export default function AdjustmentItemEditor({ items, defaultPercent, onSave, onClose }: Props) {
+export default function AdjustmentItemEditor({ items, defaultPercent, onSave, onClose, isSaving = false }: Props) {
   const [editedItems, setEditedItems] = useState<Map<string, { percent: number | null; commission: number | null; calculated: boolean }>>(new Map());
 
   useEffect(() => {
@@ -362,11 +363,20 @@ export default function AdjustmentItemEditor({ items, defaultPercent, onSave, on
             </Button>
             <Button
               onClick={handleSave}
-              disabled={!hasChanges}
+              disabled={!hasChanges || isSaving}
               className="bg-[#8AAA19] hover:bg-[#7a9617] text-white"
             >
-              <FaSave className="mr-2" />
-              Guardar Cambios
+              {isSaving ? (
+                <>
+                  <div className="animate-spin mr-2 h-4 w-4 border-2 border-white border-t-transparent rounded-full" />
+                  Guardando...
+                </>
+              ) : (
+                <>
+                  <FaSave className="mr-2" />
+                  Guardar Cambios
+                </>
+              )}
             </Button>
           </div>
         </div>

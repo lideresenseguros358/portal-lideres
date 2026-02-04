@@ -46,6 +46,7 @@ interface AdjustmentItem {
   commission_raw: number;
   broker_commission: number;
   insurer_name: string | null;
+  override_percent?: number | null;
 }
 
 interface Props {
@@ -253,9 +254,12 @@ export default function MasterAdjustmentReportReview({
     }
   };
 
+  const [savingItems, setSavingItems] = useState(false);
+
   const handleSaveItemEdits = async (updates: Array<{ id: string; override_percent: number; broker_commission: number }>) => {
     if (!editingItemsReport) return;
 
+    setSavingItems(true);
     try {
       const result = await actionUpdateItemsOverridePercent(editingItemsReport.id, updates);
       
@@ -269,6 +273,8 @@ export default function MasterAdjustmentReportReview({
     } catch (error) {
       console.error('Error updating items:', error);
       toast.error('Error al actualizar items');
+    } finally {
+      setSavingItems(false);
     }
   };
 
@@ -681,6 +687,7 @@ export default function MasterAdjustmentReportReview({
           defaultPercent={editingItemsReport.broker_percent}
           onSave={handleSaveItemEdits}
           onClose={() => setEditingItemsReport(null)}
+          isSaving={savingItems}
         />
       )}
     </div>
