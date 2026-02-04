@@ -27,12 +27,24 @@ import { Search, Filter, X, RefreshCw } from 'lucide-react';
 import CaseBoard from '@/components/pendientes/CaseBoard';
 import CaseDetailModal from '@/components/pendientes/CaseDetailModal';
 import type { CasoPendiente, EstadoSimple, RamoBucket, CaseEmail, CaseHistoryEvent } from '@/types/pendientes';
+import dynamic from 'next/dynamic';
+
+// Import dinámico del componente de renovaciones LISSA
+const RenovacionesLissaClient = dynamic(() => import('../renovaciones-lissa/RenovacionesLissaClient'), {
+  ssr: false,
+});
 
 interface PendientesClientProps {
   casos: CasoPendiente[];
   isMaster: boolean;
   userId: string;
   userRole: string;
+  renovacionesData?: {
+    policies: any[];
+    cases: any[];
+    lissaBroker: any;
+    brokersWithNotifications: any[];
+  } | null;
 }
 
 const ESTADOS: EstadoSimple[] = [
@@ -52,6 +64,7 @@ export default function PendientesClient({
   isMaster,
   userId,
   userRole,
+  renovacionesData,
 }: PendientesClientProps) {
   const [selectedCaso, setSelectedCaso] = useState<CasoPendiente | null>(null);
   const [caseEmails, setCaseEmails] = useState<CaseEmail[]>([]);
@@ -253,6 +266,17 @@ export default function PendientesClient({
                 </span>
               </TabsTrigger>
             )}
+            {isMaster && renovacionesData && (
+              <TabsTrigger 
+                value="renovaciones_lissa" 
+                className="px-6 data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-yellow-500 data-[state=active]:text-white"
+              >
+                🔄 Renovaciones LISSA
+                <span className="ml-2 bg-orange-100 text-orange-700 data-[state=active]:bg-white data-[state=active]:text-orange-600 px-2 py-0.5 rounded-full text-xs font-bold">
+                  {renovacionesData.policies.length}
+                </span>
+              </TabsTrigger>
+            )}
           </TabsList>
 
           {/* Contenido de tabs */}
@@ -273,6 +297,18 @@ export default function PendientesClient({
               />
             )}
           </TabsContent>
+
+          {/* Contenido de Renovaciones LISSA */}
+          {isMaster && renovacionesData && (
+            <TabsContent value="renovaciones_lissa" className="mt-0">
+              <RenovacionesLissaClient
+                policies={renovacionesData.policies}
+                cases={renovacionesData.cases}
+                lissaBroker={renovacionesData.lissaBroker}
+                brokersWithNotifications={renovacionesData.brokersWithNotifications}
+              />
+            </TabsContent>
+          )}
         </Tabs>
       </div>
 

@@ -35,6 +35,74 @@ async function PendientesContent() {
   const isMaster = profile.role === 'master';
   const brokerId = profile.broker_id;
 
+  // ============ RENOVACIONES LISSA (solo Master) ============
+  let renovacionesData = null;
+  if (isMaster) {
+    // Obtener broker LISSA
+    const { data: lissaBroker } = await supabase
+      .from('brokers')
+      .select('id')
+      .eq('email', 'contacto@lideresenseguros.com')
+      .single();
+
+    // Obtener brokers con notificaciones habilitadas
+    const { data: allBrokers } = await supabase
+      .from('brokers')
+      .select('id, name, email, p_id, profiles!p_id(notify_broker_renewals)')
+      .eq('active', true);
+
+    const brokersWithNotifications = (allBrokers || []).filter((b: any) => 
+      b.profiles?.notify_broker_renewals === true
+    );
+
+    const brokerIds = [
+      lissaBroker?.id,
+      ...brokersWithNotifications.map((b: any) => b.id)
+    ].filter((id): id is string => id !== undefined && id !== null);
+
+    // Obtener pólizas próximas a renovar (30 días)
+    const today = new Date();
+    const thirtyDaysFromNow = new Date(today);
+    thirtyDaysFromNow.setDate(today.getDate() + 30);
+
+    const { data: policiesToRenew } = await supabase
+      .from('policies')
+      .select(`
+        id,
+        policy_number,
+        renewal_date,
+        start_date,
+        ramo,
+        broker_id,
+        client_id,
+        insurer_id,
+        clients!client_id(id, name, email, phone, national_id),
+        insurers!insurer_id(name),
+        brokers!broker_id(id, name, email)
+      `)
+      .in('broker_id', brokerIds)
+      .gte('renewal_date', today.toISOString().split('T')[0])
+      .lte('renewal_date', thirtyDaysFromNow.toISOString().split('T')[0])
+      .eq('status', 'ACTIVA')
+      .order('renewal_date', { ascending: true });
+
+    // Obtener casos de renovación existentes
+    const { data: renewalCases } = await supabase
+      .from('cases')
+      .select('*, policies(*), clients(*), brokers(*)')
+      .in('broker_id', brokerIds.length > 0 ? brokerIds : ['none'])
+      .ilike('notes', '%renovar%')
+      .neq('status', 'CERRADO')
+      .order('created_at', { ascending: false });
+
+    renovacionesData = {
+      policies: policiesToRenew || [],
+      cases: renewalCases || [],
+      lissaBroker,
+      brokersWithNotifications: brokersWithNotifications || [],
+    };
+  }
+
   // Query base para casos
   let casosQuery = supabase
     .from('cases')
@@ -76,6 +144,7 @@ async function PendientesContent() {
       isMaster={isMaster}
       userId={user.id}
       userRole={profile.role || 'broker'}
+      renovacionesData={renovacionesData}
     />
   );
 }
