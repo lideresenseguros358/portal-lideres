@@ -160,7 +160,8 @@ export async function GET(request: NextRequest) {
       console.log(`📋 Encontrados ${brokersExpired.length} carnets VENCIDOS`);
       for (const broker of brokersExpired) {
         const expiryDate = new Date(broker.carnet_expiry_date);
-        const diffTime = today.getTime() - expiryDate.getTime();
+        const todayDate = new Date(todayStr);
+        const diffTime = todayDate.getTime() - expiryDate.getTime();
         const daysExpired = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
         
         await processCarnetNotification(

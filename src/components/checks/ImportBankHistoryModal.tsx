@@ -119,7 +119,7 @@ export default function ImportBankHistoryModalNew({ onClose, onSuccess }: Import
       .map(([ref]) => ref);
     
     // Total de filas afectadas por duplicados en archivo (contar todas las ocurrencias de refs duplicadas)
-    const totalDuplicateRowsInFile = duplicatedRefsInFile.reduce((total, ref) => total + counts[ref], 0);
+    const totalDuplicateRowsInFile = duplicatedRefsInFile.reduce((total, ref) => total + (counts[ref] || 0), 0);
 
     let existingRefs = new Set<string>();
     try {

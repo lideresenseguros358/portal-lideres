@@ -37,81 +37,128 @@ export function BaseEmailTemplate({
       margin: 0;
       padding: 0;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-      background-color: ${colors.backgroundAlt};
+      background-color: #f0f2f5;
       color: ${colors.text};
       line-height: 1.6;
     }
     .email-wrapper {
       width: 100%;
-      background-color: ${colors.backgroundAlt};
-      padding: 20px 0;
+      background-color: #f0f2f5;
+      padding: 30px 0;
     }
     .email-container {
-      max-width: 600px;
+      max-width: 650px;
       margin: 0 auto;
       background-color: ${colors.background};
-      border-radius: 12px;
+      border-radius: 16px;
       overflow: hidden;
-      box-shadow: 0 4px 20px rgba(1, 1, 57, 0.1);
+      box-shadow: 0 8px 32px rgba(1, 1, 57, 0.12);
     }
     .email-header {
-      background: linear-gradient(135deg, ${colors.primary} 0%, #020252 100%);
-      padding: 30px 20px;
+      background: linear-gradient(135deg, ${colors.primary} 0%, #001a4d 100%);
+      padding: 40px 30px;
       text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .email-header::before {
+      content: '';
+      position: absolute;
+      top: -50%;
+      right: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
+      animation: shimmer 8s infinite;
+    }
+    @keyframes shimmer {
+      0%, 100% { transform: translate(-50%, -50%) rotate(0deg); }
+      50% { transform: translate(-30%, -30%) rotate(180deg); }
     }
     .email-logo {
-      max-width: 180px;
+      max-width: 200px;
       height: auto;
+      position: relative;
+      z-index: 1;
+      filter: brightness(0) invert(1);
     }
     .email-body {
-      padding: 40px 30px;
+      padding: 45px 35px;
+      background-color: #ffffff;
     }
     .email-title {
-      font-size: 24px;
+      font-size: 28px;
       font-weight: 700;
       color: ${colors.primary};
-      margin: 0 0 20px 0;
+      margin: 0 0 24px 0;
       text-align: center;
+      line-height: 1.3;
+      letter-spacing: -0.5px;
+    }
+    .email-brand-accent {
+      display: block;
+      width: 60px;
+      height: 4px;
+      background: linear-gradient(90deg, ${colors.secondary} 0%, ${colors.primary} 100%);
+      margin: 0 auto 24px auto;
+      border-radius: 2px;
     }
     .email-content {
       font-size: 16px;
       color: ${colors.text};
-      margin: 20px 0;
+      margin: 24px 0;
+      line-height: 1.7;
     }
     .email-content p {
-      margin: 15px 0;
+      margin: 16px 0;
+    }
+    .email-content strong {
+      color: ${colors.primary};
+      font-weight: 600;
     }
     .email-cta {
       text-align: center;
-      margin: 30px 0;
+      margin: 36px 0;
     }
     .email-cta-button {
       display: inline-block;
-      background-color: ${colors.secondary};
-      color: ${colors.background} !important;
+      background: linear-gradient(135deg, ${colors.secondary} 0%, #6f8815 100%);
+      color: #ffffff !important;
       text-decoration: none;
-      padding: 14px 32px;
-      border-radius: 8px;
+      padding: 16px 40px;
+      border-radius: 10px;
       font-size: 16px;
       font-weight: 600;
-      transition: background-color 0.3s ease;
+      box-shadow: 0 4px 12px rgba(138, 170, 25, 0.3);
+      transition: all 0.3s ease;
     }
     .email-cta-button:hover {
-      background-color: #6f8815;
+      transform: translateY(-2px);
+      box-shadow: 0 6px 16px rgba(138, 170, 25, 0.4);
     }
     .email-footer {
-      background-color: ${colors.backgroundAlt};
-      padding: 25px 30px;
+      background: linear-gradient(135deg, #f7f7f7 0%, #e8e8e8 100%);
+      padding: 30px 35px;
       text-align: center;
       font-size: 13px;
       color: ${colors.textLight};
+      border-top: 3px solid ${colors.secondary};
     }
     .email-footer p {
-      margin: 8px 0;
+      margin: 10px 0;
     }
     .email-footer a {
       color: ${colors.secondary};
       text-decoration: none;
+      font-weight: 600;
+    }
+    .email-footer a:hover {
+      color: ${colors.primary};
+    }
+    .email-footer-brand {
+      font-weight: 700;
+      color: ${colors.primary};
+      font-size: 14px;
     }
     .preheader {
       display: none;
@@ -124,18 +171,27 @@ export function BaseEmailTemplate({
       opacity: 0;
     }
     @media only screen and (max-width: 600px) {
+      .email-wrapper {
+        padding: 15px 0;
+      }
+      .email-header {
+        padding: 30px 20px;
+      }
       .email-body {
-        padding: 25px 20px;
+        padding: 30px 20px;
       }
       .email-title {
-        font-size: 20px;
+        font-size: 22px;
       }
       .email-content {
         font-size: 15px;
       }
       .email-cta-button {
-        padding: 12px 24px;
+        padding: 14px 28px;
         font-size: 15px;
+      }
+      .email-logo {
+        max-width: 160px;
       }
     }
   </style>
@@ -152,6 +208,7 @@ export function BaseEmailTemplate({
       
       <!-- Body -->
       <div class="email-body">
+        <span class="email-brand-accent"></span>
         <h1 class="email-title">${title}</h1>
         <div class="email-content">
           ${typeof content === 'string' ? content : ''}
@@ -166,13 +223,15 @@ export function BaseEmailTemplate({
       
       <!-- Footer -->
       <div class="email-footer">
+        <p class="email-footer-brand">Líderes en Seguros</p>
         <p>${footerText}</p>
-        <p>
-          <a href="${baseUrl}">Portal Líderes</a> | 
-          <a href="${baseUrl}/soporte">Soporte</a>
+        <p style="margin-top: 12px;">
+          <a href="${baseUrl}">Portal Web</a> | 
+          <a href="${baseUrl}/soporte">Soporte Técnico</a>
         </p>
-        <p style="margin-top: 15px; font-size: 12px;">
-          Este es un correo automático. Por favor no responder a este mensaje.
+        <p style="margin-top: 16px; font-size: 12px; color: #999;">
+          Este es un correo automático generado por el Portal Líderes.<br>
+          Por favor no responder directamente a este mensaje.
         </p>
       </div>
     </div>
