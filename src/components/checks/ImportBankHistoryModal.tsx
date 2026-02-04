@@ -42,9 +42,16 @@ export default function ImportBankHistoryModalNew({ onClose, onSuccess }: Import
   const [loading, setLoading] = useState(false);
   const [preview, setPreview] = useState<PreviewRow[]>([]);
   const [hasBlockingIssues, setHasBlockingIssues] = useState(false);
-  const [summary, setSummary] = useState<{ duplicatesInFile: number; duplicatesInDb: number }>({
-    duplicatesInFile: 0,
-    duplicatesInDb: 0,
+  const [summary, setSummary] = useState<{ 
+    duplicateRefsInFile: number; // Referencias únicas duplicadas en archivo
+    duplicateRowsInFile: number; // Total de filas afectadas por duplicados en archivo
+    duplicateRefsInDb: number;   // Referencias únicas que ya existen en BD
+    duplicateRowsInDb: number;   // Total de filas que serán omitidas por existir en BD
+  }>({
+    duplicateRefsInFile: 0,
+    duplicateRowsInFile: 0,
+    duplicateRefsInDb: 0,
+    duplicateRowsInDb: 0,
   });
   const [showPreview, setShowPreview] = useState(false);
   const [result, setResult] = useState<any>(null);
@@ -75,7 +82,7 @@ export default function ImportBankHistoryModalNew({ onClose, onSuccess }: Import
         setPreview([]);
         setShowPreview(false);
         setHasBlockingIssues(false);
-        setSummary({ duplicatesInFile: 0, duplicatesInDb: 0 });
+        setSummary({ duplicateRefsInFile: 0, duplicateRowsInFile: 0, duplicateRefsInDb: 0, duplicateRowsInDb: 0 });
         setLoading(false);
         return;
       }
@@ -91,7 +98,7 @@ export default function ImportBankHistoryModalNew({ onClose, onSuccess }: Import
       setPreview([]);
       setShowPreview(false);
       setHasBlockingIssues(false);
-      setSummary({ duplicatesInFile: 0, duplicatesInDb: 0 });
+      setSummary({ duplicateRefsInFile: 0, duplicateRowsInFile: 0, duplicateRefsInDb: 0, duplicateRowsInDb: 0 });
       setFile(null);
     } finally {
       setLoading(false);
@@ -106,9 +113,13 @@ export default function ImportBankHistoryModalNew({ onClose, onSuccess }: Import
       return acc;
     }, {});
 
-    const duplicatesInFile = Object.entries(counts)
+    // Referencias duplicadas en el archivo
+    const duplicatedRefsInFile = Object.entries(counts)
       .filter(([ref, count]) => ref && count > 1)
       .map(([ref]) => ref);
+    
+    // Total de filas afectadas por duplicados en archivo (contar todas las ocurrencias de refs duplicadas)
+    const totalDuplicateRowsInFile = duplicatedRefsInFile.reduce((total, ref) => total + counts[ref], 0);
 
     let existingRefs = new Set<string>();
     try {
@@ -138,7 +149,7 @@ export default function ImportBankHistoryModalNew({ onClose, onSuccess }: Import
       if (!reference) errors.push('Referencia vacía');
       if (!transfer.date || Number.isNaN(parsedDate.getTime())) errors.push('Fecha inválida');
       if (!Number.isFinite(amount) || amount <= 0) errors.push('Monto inválido');
-      if (duplicatesInFile.includes(reference)) errors.push('Referencia duplicada en archivo');
+      if (duplicatedRefsInFile.includes(reference)) errors.push('Referencia duplicada en archivo');
       if (existingRefs.has(reference)) errors.push('Referencia ya existe en histórico');
 
       return {
@@ -151,7 +162,15 @@ export default function ImportBankHistoryModalNew({ onClose, onSuccess }: Import
       };
     });
 
-    setSummary({ duplicatesInFile: duplicatesInFile.length, duplicatesInDb: existingRefs.size });
+    // Contar filas que serán omitidas por existir en BD
+    const rowsExistingInDb = rows.filter(row => existingRefs.has(row.reference_number)).length;
+    
+    setSummary({ 
+      duplicateRefsInFile: duplicatedRefsInFile.length,
+      duplicateRowsInFile: totalDuplicateRowsInFile,
+      duplicateRefsInDb: existingRefs.size,
+      duplicateRowsInDb: rowsExistingInDb
+    });
     setHasBlockingIssues(rows.some((row) => row.errors.length > 0));
 
     return rows;
@@ -258,16 +277,59 @@ export default function ImportBankHistoryModalNew({ onClose, onSuccess }: Import
             <>
               {/* Preview */}
               <div className="mb-6">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                <div className="flex flex-col gap-3 mb-4">
                   <h3 className="text-lg font-bold text-[#010139]">Vista Previa - Primeras 10 transferencias</h3>
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 text-sm text-gray-600">
-                    <span>Duplicados en archivo: <strong>{summary.duplicatesInFile}</strong></span>
-                    <span>Duplicados en histórico: <strong>{summary.duplicatesInDb}</strong></span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+                      <div className="font-semibold text-yellow-800 mb-1">⚠️ Duplicados en archivo</div>
+                      <div className="text-yellow-700">
+                        {summary.duplicateRefsInFile > 0 ? (
+                          <>
+                            <strong>{summary.duplicateRowsInFile}</strong> fila{summary.duplicateRowsInFile !== 1 ? 's' : ''} con 
+                            <strong> {summary.duplicateRefsInFile}</strong> referencia{summary.duplicateRefsInFile !== 1 ? 's' : ''} repetida{summary.duplicateRefsInFile !== 1 ? 's' : ''}
+                          </>
+                        ) : (
+                          'Sin duplicados en archivo'
+                        )}
+                      </div>
+                    </div>
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                      <div className="font-semibold text-blue-800 mb-1">ℹ️ Ya existen en histórico</div>
+                      <div className="text-blue-700">
+                        {summary.duplicateRefsInDb > 0 ? (
+                          <>
+                            <strong>{summary.duplicateRowsInDb}</strong> fila{summary.duplicateRowsInDb !== 1 ? 's' : ''} con 
+                            <strong> {summary.duplicateRefsInDb}</strong> referencia{summary.duplicateRefsInDb !== 1 ? 's' : ''} existente{summary.duplicateRefsInDb !== 1 ? 's' : ''}
+                          </>
+                        ) : (
+                          'Todas son transferencias nuevas'
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
                 {hasBlockingIssues && (
-                  <div className="mb-4 p-3 rounded-lg border border-red-200 bg-red-50 text-sm text-red-700">
-                    Se encontraron errores. Corrige el archivo o elimina filas inválidas antes de confirmar la importación.
+                  <div className="mb-4 p-4 rounded-lg border-l-4 border-red-500 bg-red-50 text-sm">
+                    <div className="font-bold text-red-800 mb-2">❌ No se puede importar</div>
+                    <div className="text-red-700">
+                      {summary.duplicateRefsInFile > 0 && (
+                        <div className="mb-2">
+                          • <strong>{summary.duplicateRowsInFile}</strong> fila{summary.duplicateRowsInFile !== 1 ? 's tienen' : ' tiene'} referencias duplicadas en el archivo. 
+                          Solo debe haber una fila por cada número de referencia.
+                        </div>
+                      )}
+                      {summary.duplicateRefsInDb > 0 && (
+                        <div>
+                          • <strong>{summary.duplicateRowsInDb}</strong> fila{summary.duplicateRowsInDb !== 1 ? 's' : ''} ya existe{summary.duplicateRowsInDb !== 1 ? 'n' : ''} en el histórico. 
+                          Estas transferencias ya fueron importadas previamente.
+                        </div>
+                      )}
+                      {preview.some(r => r.errors.some(e => !e.includes('duplicad') && !e.includes('existe'))) && (
+                        <div className="mt-2">
+                          • Hay filas con datos inválidos (fechas, montos o referencias vacías).
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
                 <div className="overflow-x-auto">

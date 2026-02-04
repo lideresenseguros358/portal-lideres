@@ -37,6 +37,13 @@ export default function ImportBankCutoffModal({ onClose, onSuccess, lastCutoffIn
   const [preview, setPreview] = useState<PreviewRow[]>([]);
   const [showPreview, setShowPreview] = useState(false);
   const [result, setResult] = useState<any>(null);
+  const [summary, setSummary] = useState<{
+    duplicateRefsInFile: number;
+    duplicateRowsInFile: number;
+  }>({
+    duplicateRefsInFile: 0,
+    duplicateRowsInFile: 0,
+  });
   
   // Fechas del corte
   const [startDate, setStartDate] = useState(lastCutoffInfo?.suggestedStart || '');
@@ -88,6 +95,20 @@ export default function ImportBankCutoffModal({ onClose, onSuccess, lastCutoffIn
         return;
       }
 
+      // Detectar duplicados en archivo
+      const counts = transfers.reduce<Record<string, number>>((acc, item) => {
+        const key = item.reference_number.trim();
+        if (!acc[key]) acc[key] = 0;
+        acc[key] += 1;
+        return acc;
+      }, {});
+      
+      const duplicatedRefsInFile = Object.entries(counts)
+        .filter(([ref, count]) => ref && count > 1)
+        .map(([ref]) => ref);
+      
+      const totalDuplicateRowsInFile = duplicatedRefsInFile.reduce((total, ref) => total + (counts[ref] || 0), 0);
+
       // Analizar transferencias
       const analyzed: PreviewRow[] = transfers.map(transfer => {
         const normalizedDescription = normalizeDescription(transfer.description);
@@ -96,12 +117,20 @@ export default function ImportBankCutoffModal({ onClose, onSuccess, lastCutoffIn
         if (!transfer.reference_number) errors.push('Sin referencia');
         if (!transfer.date) errors.push('Sin fecha');
         if (transfer.credit <= 0) errors.push('Monto inválido');
+        if (duplicatedRefsInFile.includes(transfer.reference_number.trim())) {
+          errors.push('Referencia duplicada en archivo');
+        }
 
         return {
           ...transfer,
           normalizedDescription,
           errors,
         };
+      });
+      
+      setSummary({
+        duplicateRefsInFile: duplicatedRefsInFile.length,
+        duplicateRowsInFile: totalDuplicateRowsInFile,
       });
 
       setPreview(analyzed);
@@ -332,9 +361,38 @@ export default function ImportBankCutoffModal({ onClose, onSuccess, lastCutoffIn
             <>
               {/* Preview */}
               <div className="mb-6">
-                <h3 className="text-lg font-bold text-[#010139] mb-4">
-                  Vista Previa - Primeras 10 transferencias
-                </h3>
+                <div className="flex flex-col gap-3 mb-4">
+                  <h3 className="text-lg font-bold text-[#010139]">Vista Previa - Primeras 10 transferencias</h3>
+                  
+                  {summary.duplicateRefsInFile > 0 && (
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-xs">
+                      <div className="font-semibold text-yellow-800 mb-1">⚠️ Duplicados en archivo</div>
+                      <div className="text-yellow-700">
+                        <strong>{summary.duplicateRowsInFile}</strong> fila{summary.duplicateRowsInFile !== 1 ? 's' : ''} con 
+                        <strong> {summary.duplicateRefsInFile}</strong> referencia{summary.duplicateRefsInFile !== 1 ? 's' : ''} repetida{summary.duplicateRefsInFile !== 1 ? 's' : ''}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {preview.some(p => p.errors.length > 0) && (
+                    <div className="p-4 rounded-lg border-l-4 border-red-500 bg-red-50 text-sm">
+                      <div className="font-bold text-red-800 mb-2">❌ No se puede importar</div>
+                      <div className="text-red-700">
+                        {summary.duplicateRefsInFile > 0 && (
+                          <div className="mb-2">
+                            • <strong>{summary.duplicateRowsInFile}</strong> fila{summary.duplicateRowsInFile !== 1 ? 's tienen' : ' tiene'} referencias duplicadas en el archivo. 
+                            Solo debe haber una fila por cada número de referencia.
+                          </div>
+                        )}
+                        {preview.some(p => p.errors.some(e => !e.includes('duplicad'))) && (
+                          <div>
+                            • Hay filas con datos inválidos (fechas, referencias vacías o montos inválidos).
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
                 
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
