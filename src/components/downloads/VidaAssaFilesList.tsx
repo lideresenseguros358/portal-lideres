@@ -29,66 +29,68 @@ export default function VidaAssaFilesList({ folderId, files, isMaster, editMode,
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadFiles, setUploadFiles] = useState<Array<{ file: File; customName: string }>>([]);
   const [selectedFile, setSelectedFile] = useState<VidaAssaFile | null>(null);
   const [newFileName, setNewFileName] = useState('');
 
   const handleUpload = async () => {
-    if (!uploadFile) {
-      toast.error('Selecciona un archivo');
+    if (uploadFiles.length === 0) {
+      toast.error('Selecciona al menos un archivo');
       return;
     }
 
     setUploading(true);
     setUploadProgress(0);
+    const totalFiles = uploadFiles.length;
+    let uploadedCount = 0;
 
     try {
-      // 1. Subir archivo a storage usando el mismo endpoint que downloads
-      const formData = new FormData();
-      formData.append('file', uploadFile);
-      formData.append('section_id', folderId);
-      formData.append('folder', 'vida_assa');
+      for (const fileObj of uploadFiles) {
+        // 1. Subir archivo a storage usando el mismo endpoint que downloads
+        const formData = new FormData();
+        formData.append('file', fileObj.file);
+        formData.append('section_id', folderId);
+        formData.append('folder', 'vida_assa');
 
-      setUploadProgress(25);
+        const uploadRes = await fetch('/api/downloads/upload', {
+          method: 'POST',
+          body: formData
+        });
 
-      const uploadRes = await fetch('/api/downloads/upload', {
-        method: 'POST',
-        body: formData
-      });
+        const uploadData = await uploadRes.json();
+        if (!uploadData.success) {
+          throw new Error(uploadData.error || 'Error al subir archivo');
+        }
 
-      const uploadData = await uploadRes.json();
-      if (!uploadData.success) {
-        throw new Error(uploadData.error || 'Error al subir archivo');
+        // 2. Crear registro en BD con nombre personalizado
+        const res = await fetch('/api/vida-assa/files', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            folder_id: folderId,
+            name: fileObj.customName,
+            file_url: uploadData.file_url,
+            file_size: fileObj.file.size,
+            file_type: fileObj.file.type,
+            is_new: true,
+            marked_new_until: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+          })
+        });
+
+        const data = await res.json();
+        if (!data.success) throw new Error(data.error);
+
+        uploadedCount++;
+        setUploadProgress(Math.round((uploadedCount / totalFiles) * 100));
       }
 
-      setUploadProgress(60);
-
-      // 2. Crear registro en BD
-      const res = await fetch('/api/vida-assa/files', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          folder_id: folderId,
-          name: uploadFile.name,
-          file_url: uploadData.file_url,
-          file_size: uploadFile.size,
-          file_type: uploadFile.type,
-          is_new: true,
-          marked_new_until: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
-        })
-      });
-
-      const data = await res.json();
-      if (!data.success) throw new Error(data.error);
-
-      setUploadProgress(100);
-      toast.success('Archivo subido exitosamente');
+      toast.success(`${uploadedCount} archivo(s) subido(s) exitosamente`);
       setShowUploadModal(false);
-      setUploadFile(null);
+      setUploadFiles([]);
       onUpdate();
     } catch (error: any) {
       console.error('Error uploading file:', error);
-      toast.error(error.message || 'Error al subir archivo');
+      toast.error(error.message || 'Error al subir archivos');
     } finally {
       setUploading(false);
       setUploadProgress(0);
@@ -297,13 +299,20 @@ export default function VidaAssaFilesList({ folderId, files, isMaster, editMode,
               </button>
             </div>
 
-            <div className="mb-6">
+            {/* Selección de archivos múltiples */}
+            <div className="mb-4">
               <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Selecciona un archivo
+                Archivos * (puedes seleccionar múltiples)
               </label>
               <input
                 type="file"
-                onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                multiple
+                onChange={(e) => {
+                  const files = Array.from(e.target.files || []);
+                  const newFiles = files.map(file => ({ file, customName: file.name }));
+                  setUploadFiles(prev => [...prev, ...newFiles]);
+                  e.target.value = '';
+                }}
                 disabled={uploading}
                 accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
                 className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none"
@@ -313,7 +322,46 @@ export default function VidaAssaFilesList({ folderId, files, isMaster, editMode,
               </p>
             </div>
 
-            {uploading && (
+            {/* Lista de archivos seleccionados */}
+            {uploadFiles.length > 0 && (
+              <div className="border-2 border-gray-200 rounded-lg p-3 max-h-60 overflow-y-auto mb-4">
+                <p className="text-sm font-semibold text-gray-700 mb-2">
+                  Archivos seleccionados ({uploadFiles.length})
+                </p>
+                <div className="space-y-2">
+                  {uploadFiles.map((fileObj, index) => (
+                    <div key={index} className="flex items-center gap-2 bg-gray-50 p-2 rounded">
+                      <FaFilePdf className="text-red-500 flex-shrink-0" />
+                      <input
+                        type="text"
+                        value={fileObj.customName}
+                        onChange={(e) => {
+                          const updated = [...uploadFiles];
+                          updated[index] = { file: fileObj.file, customName: e.target.value };
+                          setUploadFiles(updated);
+                        }}
+                        className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded focus:border-[#8AAA19] focus:outline-none"
+                        placeholder="Nombre del archivo"
+                        disabled={uploading}
+                      />
+                      <button
+                        onClick={() => {
+                          setUploadFiles(uploadFiles.filter((_, i) => i !== index));
+                        }}
+                        className="p-1 text-red-500 hover:bg-red-50 rounded"
+                        disabled={uploading}
+                        title="Eliminar"
+                      >
+                        <FaTimes />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Barra de progreso */}
+            {uploading && uploadProgress > 0 && (
               <div className="mb-4">
                 <div className="w-full bg-gray-200 rounded-full h-2">
                   <div 
@@ -331,7 +379,7 @@ export default function VidaAssaFilesList({ folderId, files, isMaster, editMode,
               <button
                 onClick={() => {
                   setShowUploadModal(false);
-                  setUploadFile(null);
+                  setUploadFiles([]);
                 }}
                 className="flex-1 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
                 disabled={uploading}
@@ -340,10 +388,10 @@ export default function VidaAssaFilesList({ folderId, files, isMaster, editMode,
               </button>
               <button
                 onClick={handleUpload}
-                disabled={uploading || !uploadFile}
+                disabled={uploading || uploadFiles.length === 0}
                 className="flex-1 px-4 py-2 bg-[#8AAA19] text-white rounded-lg font-semibold hover:bg-[#6d8814] transition-colors disabled:opacity-50"
               >
-                {uploading ? 'Subiendo...' : 'Subir Documento'}
+                {uploading ? `Subiendo ${uploadProgress}%` : `Subir ${uploadFiles.length} archivo(s)`}
               </button>
             </div>
           </div>

@@ -36,10 +36,11 @@ export default function DocumentsList({ scope, policyType, insurerId, isMaster, 
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingDoc, setEditingDoc] = useState<Document | null>(null);
   const [sections, setSections] = useState<any[]>([]);
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const [uploadFiles, setUploadFiles] = useState<Array<{ file: File; customName: string }>>([]);
   const [uploadSectionId, setUploadSectionId] = useState('');
   const [uploadMarkNew, setUploadMarkNew] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterFavorites, setFilterFavorites] = useState(false);
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
@@ -116,58 +117,68 @@ export default function DocumentsList({ scope, policyType, insurerId, isMaster, 
   };
 
   const handleUpload = async () => {
-    if (!uploadFile || !uploadSectionId) {
-      toast.error('Selecciona un archivo y una sección');
+    if (uploadFiles.length === 0 || !uploadSectionId) {
+      toast.error('Selecciona al menos un archivo y una sección');
       return;
     }
 
     setUploading(true);
+    setUploadProgress(0);
+    const totalFiles = uploadFiles.length;
+    let uploadedCount = 0;
+
     try {
-      // 1. Subir archivo a storage
-      const formData = new FormData();
-      formData.append('file', uploadFile);
-      formData.append('section_id', uploadSectionId);
-      formData.append('folder', 'downloads');
+      for (const fileObj of uploadFiles) {
+        // 1. Subir archivo a storage
+        const formData = new FormData();
+        formData.append('file', fileObj.file);
+        formData.append('section_id', uploadSectionId);
+        formData.append('folder', 'downloads');
 
-      const uploadRes = await fetch('/api/downloads/upload', {
-        method: 'POST',
-        body: formData
-      });
+        const uploadRes = await fetch('/api/downloads/upload', {
+          method: 'POST',
+          body: formData
+        });
 
-      const uploadData = await uploadRes.json();
-      if (!uploadData.success) {
-        throw new Error(uploadData.error || 'Error al subir archivo');
+        const uploadData = await uploadRes.json();
+        if (!uploadData.success) {
+          throw new Error(uploadData.error || 'Error al subir archivo');
+        }
+
+        // 2. Crear registro en BD con nombre personalizado
+        const createRes = await fetch('/api/downloads/files', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            section_id: uploadSectionId,
+            name: fileObj.customName,
+            file_url: uploadData.file_url,
+            mark_as_new: uploadMarkNew
+          })
+        });
+
+        const createData = await createRes.json();
+        if (!createData.success) {
+          throw new Error(createData.error || 'Error al crear documento');
+        }
+
+        uploadedCount++;
+        setUploadProgress(Math.round((uploadedCount / totalFiles) * 100));
       }
 
-      // 2. Crear registro en BD
-      const createRes = await fetch('/api/downloads/files', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          section_id: uploadSectionId,
-          name: uploadFile.name,
-          file_url: uploadData.file_url,
-          mark_as_new: uploadMarkNew
-        })
-      });
-
-      const createData = await createRes.json();
-      if (createData.success) {
-        toast.success('Documento cargado correctamente');
-        setShowUploadModal(false);
-        setUploadFile(null);
-        setUploadSectionId('');
-        setUploadMarkNew(false);
-        loadDocuments();
-        onUpdate?.();
-      } else {
-        throw new Error(createData.error || 'Error al crear documento');
-      }
+      toast.success(`${uploadedCount} documento(s) cargado(s) correctamente`);
+      setShowUploadModal(false);
+      setUploadFiles([]);
+      setUploadSectionId('');
+      setUploadMarkNew(false);
+      loadDocuments();
+      onUpdate?.();
     } catch (error: any) {
-      console.error('Error uploading document:', error);
-      toast.error(error.message || 'Error al cargar documento');
+      console.error('Error uploading:', error);
+      toast.error(error.message || 'Error al subir documentos');
     } finally {
       setUploading(false);
+      setUploadProgress(0);
     }
   };
 
@@ -639,11 +650,12 @@ export default function DocumentsList({ scope, policyType, insurerId, isMaster, 
               <button
                 onClick={() => {
                   setShowUploadModal(false);
-                  setUploadFile(null);
+                  setUploadFiles([]);
                   setUploadSectionId('');
                   setUploadMarkNew(false);
                 }}
                 className="text-gray-400 hover:text-gray-600"
+                disabled={uploading}
               >
                 <FaTimes size={20} />
               </button>
@@ -670,23 +682,78 @@ export default function DocumentsList({ scope, policyType, insurerId, isMaster, 
               </div>
             ) : (
             <div className="space-y-4">
-              {/* Selección de archivo */}
+              {/* Selección de archivos múltiples */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Archivo *
+                  Archivos * (puedes seleccionar múltiples)
                 </label>
                 <input
                   type="file"
-                  onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                  multiple
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files || []);
+                    const newFiles = files.map(file => ({ file, customName: file.name }));
+                    setUploadFiles(prev => [...prev, ...newFiles]);
+                    e.target.value = ''; // Reset input
+                  }}
                   className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none"
                   accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
+                  disabled={uploading}
                 />
-                {uploadFile && (
-                  <p className="mt-2 text-sm text-gray-600">
-                    Seleccionado: {uploadFile.name}
-                  </p>
-                )}
               </div>
+
+              {/* Lista de archivos seleccionados */}
+              {uploadFiles.length > 0 && (
+                <div className="border-2 border-gray-200 rounded-lg p-3 max-h-60 overflow-y-auto">
+                  <p className="text-sm font-semibold text-gray-700 mb-2">
+                    Archivos seleccionados ({uploadFiles.length})
+                  </p>
+                  <div className="space-y-2">
+                    {uploadFiles.map((fileObj, index) => (
+                      <div key={index} className="flex items-center gap-2 bg-gray-50 p-2 rounded">
+                        <FaFilePdf className="text-red-500 flex-shrink-0" />
+                        <input
+                          type="text"
+                          value={fileObj.customName}
+                          onChange={(e) => {
+                            const updated = [...uploadFiles];
+                            updated[index] = { file: fileObj.file, customName: e.target.value };
+                            setUploadFiles(updated);
+                          }}
+                          className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded focus:border-[#8AAA19] focus:outline-none"
+                          placeholder="Nombre del archivo"
+                          disabled={uploading}
+                        />
+                        <button
+                          onClick={() => {
+                            setUploadFiles(uploadFiles.filter((_, i) => i !== index));
+                          }}
+                          className="p-1 text-red-500 hover:bg-red-50 rounded"
+                          disabled={uploading}
+                          title="Eliminar"
+                        >
+                          <FaTimes />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Barra de progreso */}
+              {uploading && uploadProgress > 0 && (
+                <div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-[#8AAA19] h-2 rounded-full transition-all"
+                      style={{ width: `${uploadProgress}%` }}
+                    ></div>
+                  </div>
+                  <p className="text-sm text-gray-600 mt-1 text-center">
+                    Subiendo... {uploadProgress}%
+                  </p>
+                </div>
+              )}
 
               {/* Selección de sección */}
               <div>
@@ -725,7 +792,7 @@ export default function DocumentsList({ scope, policyType, insurerId, isMaster, 
                 <button
                   onClick={() => {
                     setShowUploadModal(false);
-                    setUploadFile(null);
+                    setUploadFiles([]);
                     setUploadSectionId('');
                     setUploadMarkNew(false);
                   }}
@@ -736,10 +803,10 @@ export default function DocumentsList({ scope, policyType, insurerId, isMaster, 
                 </button>
                 <button
                   onClick={handleUpload}
-                  disabled={!uploadFile || !uploadSectionId || uploading}
+                  disabled={uploadFiles.length === 0 || !uploadSectionId || uploading}
                   className="flex-1 px-4 py-2 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg hover:shadow-lg transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {uploading ? 'Cargando...' : 'Cargar'}
+                  {uploading ? `Subiendo ${uploadProgress}%` : `Subir ${uploadFiles.length} archivo(s)`}
                 </button>
               </div>
             </div>
