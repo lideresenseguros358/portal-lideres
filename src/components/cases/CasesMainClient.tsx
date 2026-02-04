@@ -13,6 +13,11 @@ import QuickEditModal from '@/components/cases/QuickEditModal';
 import EmitidoConfirmModal from '@/components/cases/EmitidoConfirmModal';
 import { CASE_SECTION_LABELS } from '@/lib/constants/cases';
 import { exportCasesByBrokerPDF } from '@/lib/utils/exportCasesPDF';
+import dynamic from 'next/dynamic';
+
+const RenovacionesLissaClient = dynamic(() => import('../../app/(app)/renovaciones-lissa/RenovacionesLissaClient'), {
+  ssr: false,
+});
 
 type UserProfile = {
   id: string;
@@ -50,9 +55,15 @@ interface CasesMainClientProps {
   userProfile: UserProfile;
   brokers: Broker[];
   insurers: Insurer[];
+  renovacionesData?: {
+    policies: any[];
+    cases: any[];
+    lissaBroker: any;
+    brokersWithNotifications: any[];
+  } | null;
 }
 
-export default function CasesMainClient({ userProfile, brokers, insurers }: CasesMainClientProps) {
+export default function CasesMainClient({ userProfile, brokers, insurers, renovacionesData }: CasesMainClientProps) {
   const [loading, setLoading] = useState(true);
   const [cases, setCases] = useState<any[]>([]);
   const [stats, setStats] = useState<any>(null);
@@ -294,6 +305,13 @@ export default function CasesMainClient({ userProfile, brokers, insurers }: Case
 
   if (userProfile.role === 'master') {
     tabs.push({ key: 'SIN_CLASIFICAR', label: 'Sin clasificar', badge: stats?.by_section?.SIN_CLASIFICAR || 0, priority: false });
+    // Pestaña Renovaciones LISSA - ÚLTIMA posición
+    tabs.push({ 
+      key: 'RENOVACIONES_LISSA', 
+      label: '🔄 Renovaciones LISSA', 
+      badge: renovacionesData?.policies?.length || 0, 
+      priority: false
+    });
   }
 
   return (
@@ -415,7 +433,11 @@ export default function CasesMainClient({ userProfile, brokers, insurers }: Case
                 onClick={() => handleTabChange(tab.key)}
                 className={`
                   px-4 py-2.5 rounded-lg font-semibold whitespace-nowrap transition-all duration-200 flex items-center gap-2 min-w-fit
-                  ${activeTab === tab.key 
+                  ${tab.key === 'RENOVACIONES_LISSA' && activeTab === tab.key
+                    ? 'bg-gradient-to-r from-orange-500 to-yellow-500 text-white shadow-md'
+                    : tab.key === 'RENOVACIONES_LISSA'
+                    ? 'bg-gradient-to-r from-orange-400 to-yellow-400 text-white hover:from-orange-500 hover:to-yellow-500 shadow-sm'
+                    : activeTab === tab.key 
                     ? 'bg-[#010139] text-white shadow-md' 
                     : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200 hover:border-gray-300'
                   }
@@ -424,7 +446,10 @@ export default function CasesMainClient({ userProfile, brokers, insurers }: Case
                 {tab.label}
                 {tab.badge > 0 && (
                   <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-bold
-                    ${activeTab === tab.key ? 'bg-[#8AAA19] text-white' : 'bg-gray-300 text-gray-700'}
+                    ${tab.key === 'RENOVACIONES_LISSA' 
+                      ? (activeTab === tab.key ? 'bg-white text-orange-600' : 'bg-white text-orange-500')
+                      : (activeTab === tab.key ? 'bg-[#8AAA19] text-white' : 'bg-gray-300 text-gray-700')
+                    }
                   `}>
                     {tab.badge}
                   </span>
@@ -496,8 +521,21 @@ export default function CasesMainClient({ userProfile, brokers, insurers }: Case
         )}
       </div>
 
-      {/* Cases List or Kanban */}
-      {viewMode === 'list' ? (
+      {/* Cases List, Kanban or Renovaciones LISSA */}
+      {activeTab === 'RENOVACIONES_LISSA' ? (
+        renovacionesData ? (
+          <RenovacionesLissaClient
+            policies={renovacionesData.policies}
+            cases={renovacionesData.cases}
+            lissaBroker={renovacionesData.lissaBroker}
+            brokersWithNotifications={renovacionesData.brokersWithNotifications}
+          />
+        ) : (
+          <div className="bg-white rounded-xl shadow-lg border-2 border-gray-100 p-12 text-center">
+            <p className="text-gray-400 text-lg">Cargando datos de renovaciones...</p>
+          </div>
+        )
+      ) : viewMode === 'list' ? (
         <CasesListMonday
           cases={cases}
           loading={loading}
