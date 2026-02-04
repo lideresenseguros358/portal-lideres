@@ -400,11 +400,10 @@ export default function MasterAdjustmentReportReview({
                       e.stopPropagation();
                       setEditingItemsReport(report);
                     }}
-                    className="bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 h-auto"
+                    className="bg-orange-500 hover:bg-orange-600 text-white px-2 py-1.5 h-auto"
                     title="Ajustar override percent por item"
                   >
-                    <FaPercent className="mr-1.5" size={12} />
-                    <span className="text-xs font-semibold">Override %</span>
+                    <FaPercent size={14} />
                   </Button>
                   <Button
                     size="sm"
