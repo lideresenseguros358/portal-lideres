@@ -112,9 +112,9 @@ export async function actionCreateAdjustmentReport(
     const reportItems: any[] = [];
     const itemsToCreateInPending: any[] = [];
 
-    // Procesar pending_items
+    // Procesar pending_items (RESPETAR SIGNOS: positivos y negativos)
     (pendingItems || []).forEach((item: any) => {
-      const commissionRaw = Math.abs(Number(item.commission_raw) || 0);
+      const commissionRaw = Number(item.commission_raw) || 0;
       const brokerCommission = commissionRaw * brokerPercent;
       totalBrokerCommission += brokerCommission;
 
@@ -125,9 +125,9 @@ export async function actionCreateAdjustmentReport(
       });
     });
 
-    // Procesar comm_items - crear pending_items para ellos
+    // Procesar comm_items - crear pending_items para ellos (RESPETAR SIGNOS)
     (commItems || []).forEach((item: any) => {
-      const grossAmount = Math.abs(Number(item.gross_amount) || 0);
+      const grossAmount = Number(item.gross_amount) || 0;
       const brokerCommission = grossAmount * brokerPercent;
       totalBrokerCommission += brokerCommission;
 
@@ -804,7 +804,7 @@ export async function actionEditAdjustmentReport(
 
       if (pendingItems) {
         const itemsToInsert = pendingItems.map((item: any) => {
-          const commissionRaw = Math.abs(Number(item.commission_raw) || 0);
+          const commissionRaw = Number(item.commission_raw) || 0; // RESPETAR SIGNOS
           const brokerCommission = commissionRaw * brokerPercent;
 
           return {
