@@ -1,28 +1,65 @@
 <h1>🎂 Cumpleaños de Cliente</h1>
 
-<p>Hola <strong>{{brokerName}}</strong>,</p>
+<p style="font-size: 18px; font-weight: 600; margin-bottom: 20px;">
+  Hola <strong>{{brokerName}}</strong>,
+</p>
 
-<p>Tu cliente <strong>{{clientName}}</strong> está de cumpleaños {{#if isToday}}hoy{{else}}el {{birthdayDate}}{{/if}}! 🎉</p>
+<p style="font-size: 16px; line-height: 1.7; margin-bottom: 24px;">
+  Tu cliente <strong>{{clientName}}</strong> está de cumpleaños {{#if isToday}}hoy{{else}}el {{birthdayDate}}{{/if}}! 🎉
+</p>
 
 <div class="alert alert-success">
-  <p style="margin: 0;">Es un buen momento para fortalecer la relación con tu cliente.</p>
+  <p style="margin: 0 0 10px 0; font-size: 16px; font-weight: 600;">
+    💡 Oportunidad de Contacto
+  </p>
+  <p style="margin: 0; font-size: 14px; line-height: 1.6;">
+    El cumpleaños es el momento perfecto para fortalecer la relación con tu cliente y revisar sus necesidades de cobertura.
+  </p>
 </div>
 
-<p>Considera:</p>
-<ul style="margin: 16px 0; padding-left: 20px;">
-  <li>Enviarle un mensaje de felicitación personalizado</li>
-  <li>Recordarle las coberturas de sus pólizas activas</li>
-  <li>Ofrecerle una revisión de sus seguros</li>
-</ul>
+<div style="background: linear-gradient(135deg, #f0f7ff 0%, #e6f4ff 100%); padding: 20px; border-radius: 10px; margin: 24px 0; border-left: 6px solid #010139;">
+  <h2 style="margin: 0 0 12px 0; font-size: 16px; color: #010139;">
+    📋 Información del Cliente
+  </h2>
+  
+  {{#if clientEmail}}
+  <p style="margin: 8px 0; font-size: 14px;">
+    <strong style="color: #010139;">Email:</strong> {{clientEmail}}
+  </p>
+  {{/if}}
+  
+  {{#if clientPhone}}
+  <p style="margin: 8px 0; font-size: 14px;">
+    <strong style="color: #010139;">Teléfono:</strong> {{clientPhone}}
+  </p>
+  {{/if}}
+  
+  {{#if activePolicies}}
+  <p style="margin: 8px 0; font-size: 14px;">
+    <strong style="color: #010139;">Pólizas Activas:</strong> {{activePolicies}}
+  </p>
+  {{/if}}
+</div>
 
-<a href="{{portalUrl}}/db?search={{clientId}}" class="button">
-  Ver Ficha del Cliente
-</a>
+<div style="background: linear-gradient(135deg, #e8f5e9 0%, #f1f8e9 100%); padding: 20px; border-radius: 10px; margin: 24px 0; border: 2px solid #8AAA19;">
+  <p style="margin: 0 0 12px 0; font-size: 15px; font-weight: 600; color: #010139;">
+    ✅ Acciones Recomendadas
+  </p>
+  <ul style="margin: 0; padding-left: 20px; color: #23262F; font-size: 14px; line-height: 1.8;">
+    <li>Enviarle un mensaje de felicitación personalizado</li>
+    <li>Recordarle las coberturas de sus pólizas activas</li>
+    <li>Ofrecerle una revisión gratuita de sus seguros</li>
+    <li>Preguntarle si ha tenido cambios en su vida que requieran ajustar coberturas</li>
+    <li>Considerar ofrecerle productos adicionales que puedan beneficiarlo</li>
+  </ul>
+</div>
 
-<hr class="divider">
+<div style="text-align: center; margin: 30px 0;">
+  <a href="{{portalUrl}}/db?search={{clientId}}" class="button">
+    Ver Ficha Completa del Cliente
+  </a>
+</div>
 
-<p style="font-size: 14px; color: #666;">
-  <strong>Email:</strong> {{clientEmail}}<br>
-  <strong>Teléfono:</strong> {{clientPhone}}<br>
-  <strong>Pólizas activas:</strong> {{activePolicies}}
+<p style="font-size: 13px; color: #6D6D6D; text-align: center; margin-top: 24px; line-height: 1.6;">
+  Aprovecha este día especial para contactar a tu cliente y fortalecer tu relación profesional. Un gesto simple puede marcar una gran diferencia. 🎊
 </p>

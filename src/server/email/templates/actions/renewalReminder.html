@@ -1,29 +1,102 @@
 <h1>🔔 Recordatorio de Renovación</h1>
 
-<p>Hola <strong>{{brokerName}}</strong>,</p>
+<p style="font-size: 18px; font-weight: 600; margin-bottom: 20px;">
+  Hola <strong>{{brokerName}}</strong>,
+</p>
 
-<p>Te recordamos que la póliza de tu cliente <strong>{{clientName}}</strong> está próxima a vencer:</p>
+<p style="font-size: 16px; line-height: 1.7; margin-bottom: 24px;">
+  La póliza de tu cliente <strong>{{clientName}}</strong> está próxima a vencer. Te recomendamos contactarlo lo antes posible para gestionar la renovación.
+</p>
 
+{{#if isUrgent}}
 <div class="alert alert-warning">
-  <p style="margin: 0;"><strong>Póliza:</strong> {{policyNumber}}</p>
-  <p style="margin: 8px 0 0 0;"><strong>Fecha de vencimiento:</strong> {{renewalDate}}</p>
-  <p style="margin: 8px 0 0 0;"><strong>Días restantes:</strong> {{daysRemaining}}</p>
+  <p style="margin: 0 0 10px 0; font-size: 16px; font-weight: 600;">
+    ⚠️ Renovación URGENTE
+  </p>
+  <p style="margin: 0; font-size: 14px; line-height: 1.6;">
+    Esta póliza vence en <strong>{{daysRemaining}} días</strong>. Por favor toma acción inmediata para evitar que tu cliente quede sin cobertura.
+  </p>
+</div>
+{{/if}}
+
+<div style="background: linear-gradient(135deg, #e3f2fd 0%, #e1f5fe 100%); padding: 20px; border-radius: 10px; margin: 24px 0; border-left: 6px solid #010139;">
+  <h2 style="margin: 0 0 16px 0; font-size: 16px; color: #010139;">
+    📋 Detalles de la Póliza
+  </h2>
+  
+  <table style="width: 100%; border-collapse: collapse;">
+    <tr style="border-bottom: 1px solid rgba(1, 1, 57, 0.1);">
+      <td style="padding: 10px 0; color: #6D6D6D; font-size: 14px;">
+        <strong>Cliente</strong>
+      </td>
+      <td style="padding: 10px 0; text-align: right; font-weight: 600; font-size: 14px; color: #010139;">
+        {{clientName}}
+      </td>
+    </tr>
+    <tr style="border-bottom: 1px solid rgba(1, 1, 57, 0.1);">
+      <td style="padding: 10px 0; color: #6D6D6D; font-size: 14px;">
+        <strong>Número de Póliza</strong>
+      </td>
+      <td style="padding: 10px 0; text-align: right; font-weight: 600; font-size: 14px; color: #010139;">
+        {{policyNumber}}
+      </td>
+    </tr>
+    <tr style="border-bottom: 1px solid rgba(1, 1, 57, 0.1);">
+      <td style="padding: 10px 0; color: #6D6D6D; font-size: 14px;">
+        <strong>Aseguradora</strong>
+      </td>
+      <td style="padding: 10px 0; text-align: right; font-weight: 600; font-size: 14px; color: #010139;">
+        {{insurerName}}
+      </td>
+    </tr>
+    <tr style="border-bottom: 1px solid rgba(1, 1, 57, 0.1);">
+      <td style="padding: 10px 0; color: #6D6D6D; font-size: 14px;">
+        <strong>Ramo</strong>
+      </td>
+      <td style="padding: 10px 0; text-align: right; font-weight: 600; font-size: 14px; color: #010139;">
+        {{ramo}}
+      </td>
+    </tr>
+    {{#if premium}}
+    <tr style="border-bottom: 1px solid rgba(1, 1, 57, 0.1);">
+      <td style="padding: 10px 0; color: #6D6D6D; font-size: 14px;">
+        <strong>Prima Actual</strong>
+      </td>
+      <td style="padding: 10px 0; text-align: right; font-weight: 600; font-size: 14px; color: #010139;">
+        ${{premium}}
+      </td>
+    </tr>
+    {{/if}}
+    <tr>
+      <td style="padding: 10px 0; color: #6D6D6D; font-size: 14px;">
+        <strong>Fecha de Vencimiento</strong>
+      </td>
+      <td style="padding: 10px 0; text-align: right; font-weight: 700; font-size: 16px; color: {{#if isUrgent}}#d32f2f{{else}}#8AAA19{{/if}};">
+        {{renewalDate}}
+      </td>
+    </tr>
+  </table>
 </div>
 
-<p>{{#if isUrgent}}
-  <strong style="color: #d32f2f;">⚠️ Esta renovación es URGENTE. Por favor toma acción inmediata.</strong>
-{{/if}}</p>
+<div style="background: linear-gradient(135deg, #e8f5e9 0%, #f1f8e9 100%); padding: 20px; border-radius: 10px; margin: 24px 0; border: 2px solid #8AAA19;">
+  <p style="margin: 0 0 12px 0; font-size: 15px; font-weight: 600; color: #010139;">
+    ✅ Próximos Pasos
+  </p>
+  <ul style="margin: 0; padding-left: 20px; color: #23262F; font-size: 14px; line-height: 1.8;">
+    <li>Contacta a tu cliente para confirmar la renovación</li>
+    <li>Verifica si hay cambios en la información o coberturas</li>
+    <li>Solicita los documentos actualizados si son necesarios</li>
+    <li>Procesa la renovación antes de la fecha de vencimiento</li>
+    <li>Actualiza la póliza en el portal con la nueva vigencia</li>
+  </ul>
+</div>
 
-<p>Ingresa al portal para gestionar esta renovación:</p>
+<div style="text-align: center; margin: 30px 0;">
+  <a href="{{portalUrl}}/db?search={{policyNumber}}" class="button">
+    Ver Póliza en Portal
+  </a>
+</div>
 
-<a href="{{portalUrl}}/db?search={{policyNumber}}" class="button">
-  Ver Póliza en Portal
-</a>
-
-<hr class="divider">
-
-<p style="font-size: 14px; color: #666;">
-  <strong>Aseguradora:</strong> {{insurerName}}<br>
-  <strong>Ramo:</strong> {{ramo}}<br>
-  <strong>Prima:</strong> ${{premium}}
+<p style="font-size: 13px; color: #6D6D6D; text-align: center; margin-top: 24px; line-height: 1.6;">
+  Mantén a tu cliente protegido renovando a tiempo. Recuerda que una póliza vencida deja al cliente sin cobertura. 🛡️
 </p>
