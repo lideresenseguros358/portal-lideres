@@ -57,11 +57,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Archivo y section_id son requeridos' }, { status: 400 });
     }
 
-    if (file.type !== 'application/pdf') {
-      console.error('[ERROR] Invalid file type:', file.type);
-      return NextResponse.json({ error: 'Solo se permiten archivos PDF' }, { status: 400 });
-    }
-
     // Sanitizar nombre de archivo (eliminar tildes y caracteres especiales)
     const sanitizedName = sanitizeFileName(file.name);
     
