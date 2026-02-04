@@ -18,6 +18,7 @@ import { sendNotificationEmail } from '@/lib/notifications/send-email';
 import { getDeepLink } from '@/lib/notifications/utils';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { getTodayLocalDate, addDaysToLocalDate } from '@/lib/utils/dates';
 
 export async function GET(request: NextRequest) {
   // Verificar autorización (Vercel Cron Secret)
@@ -27,8 +28,10 @@ export async function GET(request: NextRequest) {
   }
 
   const supabase = getSupabaseAdmin();
-  const today = new Date();
-  const todayStr = today.toISOString().split('T')[0]!;
+  
+  // CRÍTICO: Usar fecha LOCAL de Panamá (UTC-5) para coincidir con fechas en BD
+  // Las fechas en carnet_expiry_date son date-only (YYYY-MM-DD) sin timezone
+  const todayStr = getTodayLocalDate();
 
   const results = {
     total: 0,
@@ -44,14 +47,9 @@ export async function GET(request: NextRequest) {
   };
 
   try {
-    // Calcular fechas de referencia
-    const sixtyDaysAhead = new Date(today);
-    sixtyDaysAhead.setDate(sixtyDaysAhead.getDate() + 60);
-    const sixtyDaysAheadStr = sixtyDaysAhead.toISOString().split('T')[0]!;
-
-    const thirtyDaysAhead = new Date(today);
-    thirtyDaysAhead.setDate(thirtyDaysAhead.getDate() + 30);
-    const thirtyDaysAheadStr = thirtyDaysAhead.toISOString().split('T')[0]!;
+    // Calcular fechas de referencia usando zona horaria local
+    const sixtyDaysAheadStr = addDaysToLocalDate(todayStr, 60);
+    const thirtyDaysAheadStr = addDaysToLocalDate(todayStr, 30);
 
     console.log('🔍 [Carnet Renewals] Buscando carnets por vencer...');
     console.log(`📅 Hoy: ${todayStr}`);
