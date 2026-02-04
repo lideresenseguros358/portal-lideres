@@ -266,14 +266,14 @@ export default function PendientesClient({
                 </span>
               </TabsTrigger>
             )}
-            {isMaster && renovacionesData && (
+            {isMaster && (
               <TabsTrigger 
                 value="renovaciones_lissa" 
                 className="px-6 data-[state=active]:bg-gradient-to-r data-[state=active]:from-orange-500 data-[state=active]:to-yellow-500 data-[state=active]:text-white"
               >
                 🔄 Renovaciones LISSA
                 <span className="ml-2 bg-orange-100 text-orange-700 data-[state=active]:bg-white data-[state=active]:text-orange-600 px-2 py-0.5 rounded-full text-xs font-bold">
-                  {renovacionesData.policies.length}
+                  {renovacionesData?.policies?.length || 0}
                 </span>
               </TabsTrigger>
             )}
@@ -299,14 +299,22 @@ export default function PendientesClient({
           </TabsContent>
 
           {/* Contenido de Renovaciones LISSA */}
-          {isMaster && renovacionesData && (
+          {isMaster && (
             <TabsContent value="renovaciones_lissa" className="mt-0">
-              <RenovacionesLissaClient
-                policies={renovacionesData.policies}
-                cases={renovacionesData.cases}
-                lissaBroker={renovacionesData.lissaBroker}
-                brokersWithNotifications={renovacionesData.brokersWithNotifications}
-              />
+              {renovacionesData ? (
+                <RenovacionesLissaClient
+                  policies={renovacionesData.policies}
+                  cases={renovacionesData.cases}
+                  lissaBroker={renovacionesData.lissaBroker}
+                  brokersWithNotifications={renovacionesData.brokersWithNotifications}
+                />
+              ) : (
+                <Card className="p-12 text-center">
+                  <p className="text-gray-400 text-lg">
+                    Cargando datos de renovaciones...
+                  </p>
+                </Card>
+              )}
             </TabsContent>
           )}
         </Tabs>
