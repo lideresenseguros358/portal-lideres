@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { FaPercent, FaDollarSign, FaSave, FaTimes, FaUndo } from 'react-icons/fa';
+import { FaPercent, FaDollarSign, FaSave, FaTimes, FaUndo, FaCalculator } from 'react-icons/fa';
 import { toast } from 'sonner';
 
 interface AdjustmentItem {
@@ -33,51 +33,85 @@ interface Props {
 }
 
 export default function AdjustmentItemEditor({ items, defaultPercent, onSave, onClose }: Props) {
-  const [editedItems, setEditedItems] = useState<Map<string, { percent: number; commission: number }>>(new Map());
+  const [editedItems, setEditedItems] = useState<Map<string, { percent: number | null; commission: number | null; calculated: boolean }>>(new Map());
 
   useEffect(() => {
-    // Inicializar con valores actuales
-    const initial = new Map<string, { percent: number; commission: number }>();
+    // Inicializar VACÍO - usuario debe ingresar y calcular manualmente
+    const initial = new Map<string, { percent: number | null; commission: number | null; calculated: boolean }>();
     items.forEach(item => {
-      const currentPercent = item.override_percent ?? defaultPercent;
       initial.set(item.id, {
-        percent: currentPercent,
-        commission: item.broker_commission
+        percent: null,
+        commission: null,
+        calculated: false
       });
     });
     setEditedItems(initial);
-  }, [items, defaultPercent]);
+  }, [items]);
 
-  const handlePercentChange = (itemId: string, newPercent: number, rawAmount: number) => {
-    if (newPercent < 0 || newPercent > 1) {
+  const handlePercentChange = (itemId: string, newPercent: string) => {
+    setEditedItems(prev => {
+      const next = new Map(prev);
+      const current = next.get(itemId) || { percent: null, commission: null, calculated: false };
+      next.set(itemId, { 
+        ...current, 
+        percent: newPercent ? parseFloat(newPercent) : null,
+        calculated: false // Marcar como no calculado cuando cambia
+      });
+      return next;
+    });
+  };
+
+  const handleCalculateItem = (itemId: string, rawAmount: number) => {
+    const edited = editedItems.get(itemId);
+    const percent = edited?.percent;
+    
+    if (percent === null || percent === undefined) {
+      toast.error('Ingresa un porcentaje primero');
+      return;
+    }
+
+    if (percent < 0 || percent > 1) {
       toast.error('El porcentaje debe estar entre 0 y 1');
       return;
     }
 
-    const newCommission = Math.abs(rawAmount) * newPercent;
+    const newCommission = Math.abs(rawAmount) * percent;
     setEditedItems(prev => {
       const next = new Map(prev);
-      next.set(itemId, { percent: newPercent, commission: newCommission });
+      next.set(itemId, { percent, commission: newCommission, calculated: true });
       return next;
     });
+    toast.success('Comisión calculada');
   };
 
-  const handleResetItem = (itemId: string, rawAmount: number) => {
-    const newCommission = Math.abs(rawAmount) * defaultPercent;
+  const handleResetItem = (itemId: string) => {
     setEditedItems(prev => {
       const next = new Map(prev);
-      next.set(itemId, { percent: defaultPercent, commission: newCommission });
+      next.set(itemId, { percent: null, commission: null, calculated: false });
       return next;
     });
-    toast.info('Restaurado al porcentaje por defecto del broker');
+    toast.info('Campo limpiado');
   };
 
   const handleSave = () => {
-    const updates = Array.from(editedItems.entries()).map(([id, data]) => ({
-      id,
-      override_percent: data.percent,
-      broker_commission: data.commission
-    }));
+    // Validar que todos los items calculados sean válidos
+    const updates: Array<{ id: string; override_percent: number; broker_commission: number }> = [];
+    
+    for (const [id, data] of editedItems.entries()) {
+      if (data.calculated && data.percent !== null && data.commission !== null) {
+        updates.push({
+          id,
+          override_percent: data.percent,
+          broker_commission: data.commission
+        });
+      }
+    }
+
+    if (updates.length === 0) {
+      toast.error('Debes calcular al menos un item antes de guardar');
+      return;
+    }
+
     onSave(updates);
   };
 
@@ -89,11 +123,12 @@ export default function AdjustmentItemEditor({ items, defaultPercent, onSave, on
     }).format(amount);
   };
 
-  const totalCommission = Array.from(editedItems.values()).reduce((sum, item) => sum + item.commission, 0);
-  const hasChanges = Array.from(editedItems.entries()).some(([id, data]) => {
-    const item = items.find(i => i.id === id);
-    return item && (data.percent !== (item.override_percent ?? defaultPercent) || data.commission !== item.broker_commission);
-  });
+  const totalCommission = Array.from(editedItems.values())
+    .filter(item => item.calculated && item.commission !== null)
+    .reduce((sum, item) => sum + (item.commission || 0), 0);
+  
+  const hasChanges = Array.from(editedItems.values()).some(item => item.calculated);
+  const calculatedCount = Array.from(editedItems.values()).filter(item => item.calculated).length;
 
   return (
     <Dialog open={true} onOpenChange={onClose}>
@@ -104,7 +139,7 @@ export default function AdjustmentItemEditor({ items, defaultPercent, onSave, on
             Ajustar Override Percent por Item
           </DialogTitle>
           <p className="text-sm text-gray-600 mt-2">
-            Modifica el porcentaje de comisión por cada item. 
+            Ingresa el porcentaje y presiona <strong>Calcular</strong> para recalcular la comisión. 
             Útil para pólizas de vida (1.0) u otros casos especiales.
           </p>
         </DialogHeader>
@@ -113,11 +148,14 @@ export default function AdjustmentItemEditor({ items, defaultPercent, onSave, on
           {/* Info General */}
           <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-r-lg">
             <p className="text-sm text-blue-900">
-              <strong>Porcentaje por defecto del broker:</strong> {(defaultPercent * 100).toFixed(1)}%
+              <strong>Instrucciones:</strong>
             </p>
-            <p className="text-xs text-blue-700 mt-1">
-              Los cambios se aplicarán solo a este reporte. El porcentaje por defecto del broker no se modificará.
-            </p>
+            <ol className="text-xs text-blue-700 mt-2 ml-4 list-decimal space-y-1">
+              <li>Ingresa el porcentaje deseado (ej: 1.0 para vida)</li>
+              <li>Presiona el botón <FaCalculator className="inline" size={10} /> para calcular</li>
+              <li>Repite para cada item que necesites ajustar</li>
+              <li>Guarda los cambios cuando termines</li>
+            </ol>
           </div>
 
           {/* Tabla Desktop */}
@@ -137,12 +175,13 @@ export default function AdjustmentItemEditor({ items, defaultPercent, onSave, on
               <TableBody>
                 {items.map((item) => {
                   const edited = editedItems.get(item.id);
-                  const currentPercent = edited?.percent ?? defaultPercent;
-                  const currentCommission = edited?.commission ?? item.broker_commission;
-                  const hasItemChange = currentPercent !== (item.override_percent ?? defaultPercent);
+                  const currentPercent = edited?.percent ?? '';
+                  const currentCommission = edited?.commission;
+                  const isCalculated = edited?.calculated || false;
+                  const hasValue = edited?.percent !== null && edited?.percent !== undefined;
 
                   return (
-                    <TableRow key={item.id} className={hasItemChange ? 'bg-yellow-50' : ''}>
+                    <TableRow key={item.id} className={isCalculated ? 'bg-green-50' : ''}>
                       <TableCell className="font-medium">{item.policy_number}</TableCell>
                       <TableCell className="text-sm">{item.insured_name || '—'}</TableCell>
                       <TableCell className="text-sm text-gray-600">{item.insurer_name || '—'}</TableCell>
@@ -157,28 +196,44 @@ export default function AdjustmentItemEditor({ items, defaultPercent, onSave, on
                             min="0"
                             max="1"
                             value={currentPercent}
-                            onChange={(e) => handlePercentChange(item.id, parseFloat(e.target.value) || 0, item.commission_raw)}
+                            onChange={(e) => handlePercentChange(item.id, e.target.value)}
+                            placeholder="0.00"
                             className="w-20 text-center font-mono text-sm"
                           />
                           <FaPercent className="text-gray-400 text-xs" />
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
-                        <span className={`font-mono font-semibold text-sm ${hasItemChange ? 'text-[#8AAA19]' : 'text-gray-700'}`}>
-                          {formatCurrency(currentCommission)}
-                        </span>
+                        {isCalculated && currentCommission !== null && currentCommission !== undefined ? (
+                          <span className="font-mono font-semibold text-sm text-[#8AAA19]">
+                            {formatCurrency(currentCommission)}
+                          </span>
+                        ) : (
+                          <span className="text-gray-400 text-sm">—</span>
+                        )}
                       </TableCell>
                       <TableCell className="text-center">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleResetItem(item.id, item.commission_raw)}
-                          disabled={!hasItemChange}
-                          title="Restaurar al % por defecto"
-                          className="h-8 w-8 p-0"
-                        >
-                          <FaUndo className="text-gray-600" size={12} />
-                        </Button>
+                        <div className="flex gap-1 justify-center">
+                          <Button
+                            size="sm"
+                            onClick={() => handleCalculateItem(item.id, item.commission_raw)}
+                            disabled={!hasValue || isCalculated}
+                            title="Calcular comisión"
+                            className="h-8 w-8 p-0 bg-[#8AAA19] hover:bg-[#7a9617] text-white"
+                          >
+                            <FaCalculator size={12} />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleResetItem(item.id)}
+                            disabled={!hasValue}
+                            title="Limpiar"
+                            className="h-8 w-8 p-0"
+                          >
+                            <FaTimes className="text-gray-600" size={12} />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   );
@@ -200,12 +255,13 @@ export default function AdjustmentItemEditor({ items, defaultPercent, onSave, on
           <div className="md:hidden space-y-3">
             {items.map((item) => {
               const edited = editedItems.get(item.id);
-              const currentPercent = edited?.percent ?? defaultPercent;
-              const currentCommission = edited?.commission ?? item.broker_commission;
-              const hasItemChange = currentPercent !== (item.override_percent ?? defaultPercent);
+              const currentPercent = edited?.percent ?? '';
+              const currentCommission = edited?.commission;
+              const isCalculated = edited?.calculated || false;
+              const hasValue = edited?.percent !== null && edited?.percent !== undefined;
 
               return (
-                <div key={item.id} className={`border rounded-lg p-4 space-y-3 ${hasItemChange ? 'bg-yellow-50 border-yellow-300' : 'bg-white'}`}>
+                <div key={item.id} className={`border rounded-lg p-4 space-y-3 ${isCalculated ? 'bg-green-50 border-green-300' : 'bg-white'}`}>
                   <div>
                     <p className="text-xs text-gray-500 mb-1">Póliza</p>
                     <p className="font-semibold text-sm text-[#010139]">{item.policy_number}</p>
@@ -234,37 +290,53 @@ export default function AdjustmentItemEditor({ items, defaultPercent, onSave, on
                         min="0"
                         max="1"
                         value={currentPercent}
-                        onChange={(e) => handlePercentChange(item.id, parseFloat(e.target.value) || 0, item.commission_raw)}
+                        onChange={(e) => handlePercentChange(item.id, e.target.value)}
+                        placeholder="0.00"
                         className="flex-1 text-center font-mono"
                       />
                       <Button
                         size="sm"
-                        variant="ghost"
-                        onClick={() => handleResetItem(item.id, item.commission_raw)}
-                        disabled={!hasItemChange}
+                        onClick={() => handleCalculateItem(item.id, item.commission_raw)}
+                        disabled={!hasValue || isCalculated}
+                        className="bg-[#8AAA19] hover:bg-[#7a9617] text-white"
                       >
-                        <FaUndo size={12} />
+                        <FaCalculator size={12} />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => handleResetItem(item.id)}
+                        disabled={!hasValue}
+                      >
+                        <FaTimes size={12} />
                       </Button>
                     </div>
                   </div>
 
                   <div className="pt-2 border-t">
                     <p className="text-xs text-gray-500">Comisión Calculada</p>
-                    <p className={`text-lg font-mono font-semibold ${hasItemChange ? 'text-[#8AAA19]' : 'text-gray-700'}`}>
-                      {formatCurrency(currentCommission)}
-                    </p>
+                    {isCalculated && currentCommission !== null && currentCommission !== undefined ? (
+                      <p className="text-lg font-mono font-semibold text-[#8AAA19]">
+                        {formatCurrency(currentCommission)}
+                      </p>
+                    ) : (
+                      <p className="text-lg text-gray-400">—</p>
+                    )}
                   </div>
                 </div>
               );
             })}
 
             <div className="bg-gray-100 rounded-lg p-4">
-              <div className="flex justify-between items-center">
+              <div className="flex justify-between items-center mb-2">
                 <span className="font-bold text-gray-700">TOTAL COMISIÓN:</span>
                 <span className="font-mono font-bold text-[#8AAA19] text-xl">
                   {formatCurrency(totalCommission)}
                 </span>
               </div>
+              <p className="text-xs text-gray-600 text-center">
+                {calculatedCount} de {items.length} items calculados
+              </p>
             </div>
           </div>
 
