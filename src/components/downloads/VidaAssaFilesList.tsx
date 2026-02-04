@@ -40,42 +40,38 @@ export default function VidaAssaFilesList({ folderId, files, isMaster, editMode,
     setUploadProgress(0);
 
     try {
-      // Subir a Supabase Storage
-      const { supabaseClient } = await import('@/lib/supabase/client');
-      const supabase = supabaseClient();
-      const fileName = `${Date.now()}_${file.name}`;
-      const filePath = `${folderId}/${fileName}`;
+      // 1. Subir archivo a storage usando el mismo endpoint que downloads
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('section_id', folderId);
+      formData.append('folder', 'vida_assa');
 
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('vida-assa')
-        .upload(filePath, file, {
-          cacheControl: '3600',
-          upsert: false
-        });
+      setUploadProgress(25);
 
-      if (uploadError) throw uploadError;
+      const uploadRes = await fetch('/api/downloads/upload', {
+        method: 'POST',
+        body: formData
+      });
 
-      setUploadProgress(50);
+      const uploadData = await uploadRes.json();
+      if (!uploadData.success) {
+        throw new Error(uploadData.error || 'Error al subir archivo');
+      }
 
-      // Obtener URL pública
-      const { data: { publicUrl } } = supabase.storage
-        .from('vida-assa')
-        .getPublicUrl(filePath);
+      setUploadProgress(60);
 
-      setUploadProgress(75);
-
-      // Guardar en BD
+      // 2. Crear registro en BD
       const res = await fetch('/api/vida-assa/files', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           folder_id: folderId,
           name: file.name,
-          file_url: publicUrl,
+          file_url: uploadData.file_url,
           file_size: file.size,
           file_type: file.type,
           is_new: true,
-          marked_new_until: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 días
+          marked_new_until: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
         })
       });
 
