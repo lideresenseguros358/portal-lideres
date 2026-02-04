@@ -115,6 +115,7 @@ function parseBankCommXLSX(file: File): Promise<BankTransferCommRow[]> {
           
           if (hasFecha && hasReferencia && hasDescripcion && hasCredito) {
             headerIndex = i;
+            console.log(`[BancoParser] Header encontrado en fila ${i}:`, row);
             break;
           }
         }
@@ -124,19 +125,43 @@ function parseBankCommXLSX(file: File): Promise<BankTransferCommRow[]> {
         }
         
         const headers = jsonData[headerIndex].map((h: any) => String(h || '').toLowerCase().trim());
+        console.log('[BancoParser] Headers detectados:', headers);
 
         const headerMap: HeaderMap = {
           dateIdx: headers.findIndex((h: string) => h.includes('fecha')),
           ref1Idx: headers.findIndex((h: string) => {
+            // Buscar cualquier variación de "referencia"
             const normalized = h.replace(/\s+/g, ' ').trim();
-            return normalized === 'referencia 1' || normalized.includes('referencia 1');
+            return (
+              normalized.includes('referencia 1') ||
+              normalized === 'referencia' ||
+              normalized.startsWith('ref.') ||
+              normalized.startsWith('referencia') ||
+              (normalized.includes('referencia') && !normalized.includes('transferencia'))
+            );
           }),
           descIdx: headers.findIndex((h: string) => h.includes('descri')),
           creditIdx: headers.findIndex((h: string) => h.includes('crédito') || h.includes('credito')),
         };
         
+        console.log('[BancoParser] HeaderMap:', headerMap);
+        
+        // Si no encontramos Referencia en el primer intento, buscar la primera columna que contenga "referencia"
+        if (headerMap.ref1Idx === -1) {
+          console.log('[BancoParser] Referencia no encontrada, buscando alternativas...');
+          for (let i = 0; i < headers.length; i++) {
+            if (headers[i].includes('ref') && !headers[i].includes('transferencia')) {
+              headerMap.ref1Idx = i;
+              console.log(`[BancoParser] Referencia encontrada en índice ${i}: ${headers[i]}`);
+              break;
+            }
+          }
+        }
+
         if (headerMap.dateIdx === -1 || headerMap.ref1Idx === -1 || headerMap.creditIdx === -1 || headerMap.descIdx === -1) {
-          throw new Error('Columnas requeridas no encontradas: Fecha, Referencia 1, Descripción, Crédito');
+          console.error('[BancoParser] Error: Columnas no encontradas. Headers:', headers);
+          console.error('[BancoParser] HeaderMap resultante:', headerMap);
+          throw new Error(`Columnas requeridas no encontradas. Fecha: ${headerMap.dateIdx}, Referencia: ${headerMap.ref1Idx}, Descripción: ${headerMap.descIdx}, Crédito: ${headerMap.creditIdx}`);
         }
         
         const transfers: BankTransferCommRow[] = [];
@@ -157,6 +182,7 @@ function parseBankCommXLSX(file: File): Promise<BankTransferCommRow[]> {
           }
         }
         
+        console.log(`[BancoParser] Total transferencias procesadas: ${transfers.length}`);
         resolve(transfers);
       } catch (error) {
         reject(error);
@@ -188,7 +214,13 @@ function parseBankCommCSV(file: File): Promise<BankTransferCommRow[]> {
               dateIdx: keys.findIndex((k) => k.includes('fecha')),
               ref1Idx: keys.findIndex((k) => {
                 const normalized = k.replace(/\s+/g, ' ').trim();
-                return normalized === 'referencia 1' || normalized.includes('referencia 1');
+                return (
+                  normalized.includes('referencia 1') ||
+                  normalized === 'referencia' ||
+                  normalized.startsWith('ref.') ||
+                  normalized.startsWith('referencia') ||
+                  (normalized.includes('referencia') && !normalized.includes('transferencia'))
+                );
               }),
               descIdx: keys.findIndex((k) => k.includes('descri')),
               creditIdx: keys.findIndex((k) => k.includes('crédito') || k.includes('credito')),
