@@ -31,10 +31,12 @@ import {
   Calendar,
   User,
   Building,
-  Clock
+  Clock,
+  RefreshCw
 } from 'lucide-react';
 import type { CasoPendiente, CaseEmail, CaseHistoryEvent } from '@/types/pendientes';
 import { formatDatePanama } from '@/lib/timezone/time';
+import RenewalActionsPanel from './RenewalActionsPanel';
 
 interface CaseDetailModalProps {
   caso: CasoPendiente | null;
@@ -98,6 +100,12 @@ export default function CaseDetailModal({
               <History className="w-4 h-4" />
               Historial ({history.length})
             </TabsTrigger>
+            {caso.notes?.toLowerCase().includes('renovar') && isMaster && (
+              <TabsTrigger value="renewal" className="flex items-center gap-2 text-[#8AAA19]">
+                <RefreshCw className="w-4 h-4" />
+                Renovación
+              </TabsTrigger>
+            )}
             {isMaster && (
               <TabsTrigger value="audit" className="flex items-center gap-2">
                 <Shield className="w-4 h-4" />
@@ -259,6 +267,16 @@ export default function CaseDetailModal({
                 ))
               )}
             </TabsContent>
+
+            {/* Tab: Renovación (solo master y casos de renovación) */}
+            {caso.notes?.toLowerCase().includes('renovar') && isMaster && (
+              <TabsContent value="renewal" className="mt-0">
+                <RenewalActionsPanel 
+                  caso={caso} 
+                  onUpdate={() => window.location.reload()} 
+                />
+              </TabsContent>
+            )}
 
             {/* Tab: Auditoría (solo master) */}
             {isMaster && (

@@ -40,6 +40,8 @@ export interface CasoPendiente {
   
   // Estado
   estado_simple: string | null; // Permite cualquier valor de BD
+  status: string | null; // Estado del caso (case_status_enum)
+  notes: string | null; // Notas del caso
   
   // Asignación
   broker_id: string | null;
