@@ -574,16 +574,31 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
           }
         }
         
+        // VERIFICAR SI EL CLIENTE YA EXISTE EN PRELIMINAR
+        // Buscar si existe un cliente con el nombre del asegurado y active=false
+        console.log('[validatePolicyNumber] Verificando si cliente está en preliminar...');
+        const { data: preliminaryClient } = await supabaseClient()
+          .from('clients')
+          .select('id, name, active')
+          .ilike('name', insuredName)
+          .eq('active', false)
+          .maybeSingle();
+        
+        console.log('[validatePolicyNumber] Cliente preliminar:', preliminaryClient);
+        
+        const isPreliminary = preliminaryClient !== null;
+        const isUnidentified = !isPreliminary;
+        
         setDuplicatePolicyError({
           policyNumber,
           brokerName,
           isSameBroker,
-          isUnidentified: true,
+          isUnidentified,
           clientName: insuredName,
-          isPreliminary: false,
+          isPreliminary,
         });
         setCheckingPolicy(false);
-        return false; // Ya existe en comisiones sin identificar
+        return false; // Ya existe en comisiones sin identificar o en preliminar
       }
 
       // 3. No existe en ninguna parte - OK para registrar
