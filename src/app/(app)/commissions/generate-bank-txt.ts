@@ -155,14 +155,14 @@ export async function actionGenerateBankTXT(reportIds: string[]) {
       return { ok: false, error: 'No hay datos bancarios válidos para generar TXT' };
     }
 
-    console.log(`[actionGenerateBankTXT] TXT generado con ${reports.length} línea(s)`);
+    console.log(`[actionGenerateBankTXT] TXT generado con ${lines.length} línea(s) de ${reports.length} reportes`);
 
     return {
       ok: true,
       data: {
         content: txtContent,
         filename: `AJUSTES_BG_${Date.now()}.txt`,
-        count: reports.length
+        count: lines.length
       }
     };
   } catch (error) {
