@@ -66,13 +66,21 @@ export async function getImportantDates(): Promise<ImportantDatesData | null> {
 export async function updateImportantDates(dates: ImportantDatesData, userId: string): Promise<{ success: boolean; error?: string }> {
   const supabase = await getSupabaseServer();
   
+  // Normalizar campos: convertir 0 a null, string vacío a null
+  const normalizeDay = (day: number): number | null => (day > 0 ? day : null);
+  const normalizeText = (text: string): number | null => {
+    if (!text || text.trim() === '') return null;
+    const parsed = parseInt(text.trim());
+    return !isNaN(parsed) ? parsed : null;
+  };
+  
   const updateData: ImportantDatesUpdate = {
-    vida_con_cancelacion_day: dates.vidaConCancelacionDay,
-    via_regular_day: dates.viaRegularDay,
-    apadea_date1: dates.apadeaText as any, // Store text in numeric field temporarily
+    vida_con_cancelacion_day: normalizeDay(dates.vidaConCancelacionDay),
+    via_regular_day: normalizeDay(dates.viaRegularDay),
+    apadea_date1: normalizeText(dates.apadeaText),
     apadea_date2: null,
-    cierre_mes_day: dates.cierreMesDay,
-    news_text: dates.newsText,
+    cierre_mes_day: normalizeDay(dates.cierreMesDay),
+    news_text: dates.newsText || null,
     news_active: dates.newsActive,
     updated_by: userId,
   };
