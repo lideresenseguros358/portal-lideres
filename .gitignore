@@ -51,7 +51,14 @@ keys/
 *.jks
 *.bak
 *.backup
+
+# Ignorar archivos JSON sensibles pero NO los de configuración
 *.json
+!vercel.json
+!package.json
+!package-lock.json
+!tsconfig.json
+!jsconfig.json
 
 # =======================================
 # IDE / OS specific

@@ -10,7 +10,7 @@ export interface AgendaEvent {
   start_at: string;
   end_at: string;
   is_all_day: boolean;
-  event_type: 'normal' | 'oficina_cerrada';
+  event_type: 'normal' | 'oficina_cerrada' | 'oficina_virtual';
   modality: 'virtual' | 'presencial' | 'hibrida';
   zoom_url: string | null;
   zoom_code: string | null;
@@ -142,7 +142,7 @@ export async function actionCreateEvent(payload: {
   start_at: string;
   end_at: string;
   is_all_day: boolean;
-  event_type: 'normal' | 'oficina_cerrada';
+  event_type: 'normal' | 'oficina_cerrada' | 'oficina_virtual';
   modality: 'virtual' | 'presencial' | 'hibrida';
   zoom_url?: string;
   zoom_code?: string;
@@ -161,7 +161,8 @@ export async function actionCreateEvent(payload: {
       return { ok: false, error: 'Fecha de fin debe ser posterior a fecha de inicio' };
     }
 
-    if ((payload.modality === 'virtual' || payload.modality === 'hibrida') && !payload.zoom_url) {
+    // Solo validar Zoom URL para eventos normales con modality virtual/hibrida
+    if (payload.event_type === 'normal' && (payload.modality === 'virtual' || payload.modality === 'hibrida') && !payload.zoom_url) {
       return { ok: false, error: 'Zoom URL es requerido para eventos virtuales o híbridos' };
     }
 
@@ -330,7 +331,7 @@ export async function actionUpdateEvent(params: {
     start_at: string;
     end_at: string;
     is_all_day: boolean;
-    event_type: 'normal' | 'oficina_cerrada';
+    event_type: 'normal' | 'oficina_cerrada' | 'oficina_virtual';
     modality: 'virtual' | 'presencial' | 'hibrida';
     zoom_url: string | null;
     zoom_code: string | null;

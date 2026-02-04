@@ -73,6 +73,13 @@ export default function CalendarGrid({
     );
   };
 
+  // Check if there's an "oficina_virtual" event on this day
+  const isOficinaVirtual = (date: Date) => {
+    return events.some(event => 
+      event.event_type === 'oficina_virtual' && isDateInEventRange(date, event)
+    );
+  };
+
   const calendarDays = useMemo(() => {
     const firstDayOfMonth = new Date(year, month - 1, 1);
     const lastDayOfMonth = new Date(year, month, 0);
@@ -175,9 +182,12 @@ export default function CalendarGrid({
           // Obtener eventos del día (incluyendo multi-día)
           const dayEvents = item.isCurrentMonth ? getEventsSpanningDay(item.date) : [];
           const isCerrada = item.isCurrentMonth && isOficinaCerrada(item.date);
+          const isVirtual = item.isCurrentMonth && isOficinaVirtual(item.date);
           
           const tooltipContent = isCerrada
             ? 'OFICINA CERRADA'
+            : isVirtual
+            ? 'OFICINA VIRTUAL'
             : dayEvents.length > 0 
             ? dayEvents.map(e => e.title).join('\n')
             : 'No hay eventos programados';
@@ -187,7 +197,7 @@ export default function CalendarGrid({
               <Tooltip.Root>
                 <Tooltip.Trigger asChild>
                   <button
-                    onClick={() => item.isCurrentMonth && !isCerrada && onDayClick(item.day)}
+                    onClick={() => item.isCurrentMonth && !isCerrada && !isVirtual && onDayClick(item.day)}
                     disabled={!item.isCurrentMonth || isCerrada}
                     className={`
                       relative aspect-square flex flex-col items-center justify-center
@@ -196,15 +206,18 @@ export default function CalendarGrid({
                         ? 'bg-transparent text-gray-300 cursor-default' 
                         : isCerrada
                         ? 'bg-gray-400 text-white font-bold shadow-md cursor-not-allowed opacity-70'
+                        : isVirtual
+                        ? 'bg-gradient-to-br from-yellow-400 via-yellow-500 to-yellow-600 text-white font-bold shadow-md cursor-pointer hover:shadow-lg hover:scale-105'
                         : isTodayDate
                         ? 'bg-gradient-to-br from-[#010139] via-[#020270] to-[#010139] text-white font-bold shadow-lg hover:shadow-xl hover:scale-110 cursor-pointer animate-pulse'
                         : item.hasEvents
                         ? 'bg-gradient-to-br from-[#8AAA19] via-[#7a9916] to-[#6d8814] text-white font-semibold shadow-md hover:shadow-lg hover:scale-105 cursor-pointer'
                         : 'bg-gray-50 hover:bg-gradient-to-br hover:from-gray-100 hover:to-gray-200 hover:shadow-md hover:scale-105 cursor-pointer text-gray-900'
                       }
-                      ${isSelected && !isTodayDate && !item.hasEvents && !isCerrada ? 'ring-4 ring-[#8AAA19] ring-opacity-50 bg-[#8AAA19] bg-opacity-20 scale-105' : ''}
-                      ${isSelected && item.hasEvents && !isCerrada ? 'ring-4 ring-yellow-400 ring-opacity-70 scale-110 shadow-xl' : ''}
+                      ${isSelected && !isTodayDate && !item.hasEvents && !isCerrada && !isVirtual ? 'ring-4 ring-[#8AAA19] ring-opacity-50 bg-[#8AAA19] bg-opacity-20 scale-105' : ''}
+                      ${isSelected && item.hasEvents && !isCerrada && !isVirtual ? 'ring-4 ring-yellow-400 ring-opacity-70 scale-110 shadow-xl' : ''}
                       ${isSelected && isTodayDate ? 'ring-4 ring-yellow-400 ring-opacity-70 scale-110' : ''}
+                      ${isSelected && isVirtual ? 'ring-4 ring-orange-400 ring-opacity-70 scale-110 shadow-xl' : ''}
                     `}
                   >
                     {/* Día del mes */}

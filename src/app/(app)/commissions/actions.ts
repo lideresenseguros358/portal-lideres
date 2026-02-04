@@ -6666,6 +6666,7 @@ export async function actionGetDraftUnidentified(fortnightId: string): Promise<A
       .from('draft_unidentified_items')
       .select(`
         id,
+        fortnight_id,
         policy_number,
         insured_name,
         commission_raw,

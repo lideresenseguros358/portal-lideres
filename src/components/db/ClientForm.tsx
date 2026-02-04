@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo, useCallback, memo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { FaTimes, FaPlus, FaEdit, FaTrash, FaFolderPlus, FaExclamationTriangle } from "react-icons/fa";
-import { actionCreateClientWithPolicy, actionFindDuplicateByNationalId, actionMergeClients } from '@/app/(app)/db/actions';
+import { actionCreateClientWithPolicy, actionFindDuplicateByNationalId, actionMergeClients, actionReassignClientAndPolicies } from '@/app/(app)/db/actions';
 import type { Tables } from "@/lib/supabase/client";
 import { supabaseClient } from '@/lib/supabase/client';
 import { toUppercasePayload, createUppercaseHandler, uppercaseInputClass } from '@/lib/utils/uppercase';
@@ -328,34 +328,22 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
           active: formData.active,
         };
         
-        // Solo incluir broker_id si el usuario es Master (API rechaza broker_id de no-masters)
-        if (userRole === 'master') {
-          payload.broker_id = formData.broker_id || null;
-        }
-
-        // Si hay cambio de broker con ajustes, usar endpoint especial
-        if (makeAdjustments && formData.broker_id !== client.broker_id && commissionData) {
-          const response = await fetch('/api/clients/reassign-broker', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              clientId: client.id,
-              oldBrokerId: client.broker_id,
-              newBrokerId: formData.broker_id,
-              makeAdjustments: true,
-              commissionsData: commissionData.commissionsByFortnight,
-              clientData: payload
-            })
-          });
+        // Si hay cambio de broker, usar action que reasigna cliente + TODAS las pólizas
+        if (userRole === 'master' && formData.broker_id && formData.broker_id !== client.broker_id) {
+          const result = await actionReassignClientAndPolicies(client.id, formData.broker_id);
           
-          if (!response.ok) {
-            const errorJson = await response.json().catch(() => null);
-            throw new Error(errorJson?.error || "Error en reasignación con ajustes");
+          if (!result.ok) {
+            throw new Error(result.error || 'Error reasignando cliente y pólizas');
           }
           
-          toast.success('Cliente reasignado con ajustes retroactivos creados');
+          toast.success('Cliente y todas sus pólizas reasignadas correctamente');
         } else {
-          // Guardado normal
+          // Solo incluir broker_id si el usuario es Master (API rechaza broker_id de no-masters)
+          if (userRole === 'master') {
+            payload.broker_id = formData.broker_id || null;
+          }
+
+          // Guardado normal sin cambio de broker
           const response = await fetch(`/api/db/clients/${client.id}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
@@ -1212,7 +1200,7 @@ function PolicyForm({ clientId, policy, onClose, onSave, readOnly = false }: Pol
               >
                 <option value="ACTIVA">☑️ ACTIVA</option>
                 <option value="VENCIDA">🔴 VENCIDA</option>
-                <option value="CANCELADA">❌ CANCELADA</option>
+                <option value="CANCELADA">🚫 CANCELADA</option>
               </select>
             </div>
 

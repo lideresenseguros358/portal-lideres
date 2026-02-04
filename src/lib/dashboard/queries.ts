@@ -1177,7 +1177,10 @@ export async function getRankingTop5(userId: string): Promise<RankingResult> {
   }
 
   // Ranking YTD hasta mes cerrado anterior
-  const ytdPreviousClosedRows = Array.from(ytdPreviousClosedMap.entries()).map(([id, total]) => ({ broker_id: id, total }));
+  const ytdPreviousClosedRows = Array.from(ytdPreviousClosedMap.entries()).map(([id, data]) => ({ 
+    broker_id: id, 
+    total: data.bruto - data.canceladas_ytd 
+  }));
   ytdPreviousClosedRows.sort((a, b) => b.total - a.total);
   
   // Crear mapas de posiciones YTD

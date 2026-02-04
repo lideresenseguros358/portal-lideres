@@ -47,12 +47,13 @@ export default function MiniCalendarAgenda({ events }: MiniCalendarAgendaProps) 
 
   // Crear mapa de eventos considerando rangos multi-día
   const eventMap = useMemo(() => {
-    const map = new Map<string, { title: string; isCerrada: boolean }[]>();
+    const map = new Map<string, { title: string; isCerrada: boolean; isVirtual: boolean }[]>();
     
     events.forEach((item) => {
       const startDate = new Date(item.date);
       const endDate = new Date(item.end_at);
       const isCerrada = item.event_type === 'oficina_cerrada';
+      const isVirtual = item.event_type === 'oficina_virtual';
       
       // Iterar sobre todos los días del rango del evento
       let currentDate = new Date(startDate);
@@ -63,7 +64,7 @@ export default function MiniCalendarAgenda({ events }: MiniCalendarAgendaProps) 
       while (currentDate <= normalizedEnd) {
         const key = format(currentDate, 'yyyy-MM-dd');
         const existing = map.get(key) || [];
-        existing.push({ title: item.title, isCerrada });
+        existing.push({ title: item.title, isCerrada, isVirtual });
         map.set(key, existing);
         currentDate.setDate(currentDate.getDate() + 1);
       }
@@ -184,11 +185,14 @@ export default function MiniCalendarAgenda({ events }: MiniCalendarAgendaProps) 
           const dayEventsData = eventMap.get(key) || [];
           const hasEvent = dayEventsData.length > 0;
           const isCerrada = dayEventsData.some(e => e.isCerrada);
+          const isVirtual = dayEventsData.some(e => e.isVirtual);
           const isCurrentMonth = isSameMonth(day, referenceDate);
           const isTodayDate = isToday(day);
           
           const tooltipText = isCerrada 
             ? 'OFICINA CERRADA' 
+            : isVirtual
+            ? 'OFICINA VIRTUAL'
             : hasEvent 
             ? dayEventsData.map(e => e.title).join(', ')
             : (isCurrentMonth ? 'No hay eventos programados' : undefined);
@@ -204,10 +208,12 @@ export default function MiniCalendarAgenda({ events }: MiniCalendarAgendaProps) 
                 isCurrentMonth 
                   ? isCerrada
                     ? 'bg-gray-400 text-white cursor-not-allowed opacity-70'
+                    : isVirtual
+                    ? 'bg-gradient-to-br from-yellow-400 to-yellow-500 text-white cursor-pointer hover:from-yellow-500 hover:to-yellow-600 active:scale-95 shadow-sm'
                     : 'bg-[#f6f6ff] text-[#010139] hover:bg-[#8aaa19] hover:text-white cursor-pointer active:scale-95'
                   : 'bg-gray-50 text-gray-400 cursor-default',
-                hasEvent && isCurrentMonth && !isCerrada ? 'border-[#8aaa19] bg-white shadow-sm' : '',
-                isTodayDate && !isCerrada ? 'ring-2 ring-[#010139] ring-offset-1' : ''
+                hasEvent && isCurrentMonth && !isCerrada && !isVirtual ? 'border-[#8aaa19] bg-white shadow-sm' : '',
+                isTodayDate && !isCerrada && !isVirtual ? 'ring-2 ring-[#010139] ring-offset-1' : ''
               )}
               title={tooltipText}
             >

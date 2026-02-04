@@ -41,7 +41,6 @@ export default function DraftUnidentifiedTable({ fortnightId, brokers, onUpdate,
   const [vidaCheckboxGroup, setVidaCheckboxGroup] = useState<Record<string, boolean>>({});
 
   const loadItems = async () => {
-    // Solo mostrar loading en la primera carga
     if (isInitialLoad) {
       setLoading(true);
     }
@@ -60,7 +59,6 @@ export default function DraftUnidentifiedTable({ fortnightId, brokers, onUpdate,
     }
   };
 
-  // Auto-refresh cuando cambia recalculationKey
   useEffect(() => {
     loadItems();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -399,7 +397,7 @@ export default function DraftUnidentifiedTable({ fortnightId, brokers, onUpdate,
           <div className="flex items-start gap-3">
             <FaExclamationTriangle className="text-amber-600 mt-1 text-xl flex-shrink-0" />
             <div className="flex-1">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
+              <div className="flex flex-col gap-3 mb-2">
                 <div>
                   <h3 className="font-bold text-[#010139] text-lg">
                     Clientes Sin Identificar - Zona de Trabajo
@@ -408,6 +406,9 @@ export default function DraftUnidentifiedTable({ fortnightId, brokers, onUpdate,
                     Identifica clientes antes de confirmar PAGADO. Los identificados irán a preliminar.
                   </p>
                 </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                 <div className="flex gap-2 flex-wrap">
                   <Badge className="bg-red-500 text-white text-sm px-3 py-1">
                     ❌ Sin identificar: {unidentifiedItems.length}

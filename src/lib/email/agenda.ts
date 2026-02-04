@@ -20,19 +20,19 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
  * Notificar creación de evento
  */
 export async function notifyEventCreated(eventId: string): Promise<void> {
-  // Asumiendo estructura de tabla agenda_events
+  // Tabla correcta: events
   const { data: event, error } = await supabase
-    .from('agenda_events')
+    .from('events')
     .select(`
       id,
       title,
-      description,
-      event_date,
-      event_time,
-      location,
+      details,
+      start_at,
+      end_at,
+      location_name,
       created_by,
-      attendees,
-      needs_rsvp
+      audience,
+      allow_rsvp
     `)
     .eq('id', eventId)
     .single();
@@ -49,20 +49,63 @@ export async function notifyEventCreated(eventId: string): Promise<void> {
     .eq('id', event.created_by)
     .single();
 
-  // Obtener emails de asistentes
-  const attendeeIds = event.attendees || [];
-  if (attendeeIds.length === 0) return;
+  // Obtener emails de asistentes según audiencia
+  let attendees: any[] = [];
+  
+  if (event.audience === 'ALL') {
+    // Todos los brokers
+    const { data: brokers } = await supabase
+      .from('brokers')
+      .select('id, name, p_id')
+      .eq('active', true);
+    
+    if (brokers && brokers.length > 0) {
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, full_name, email')
+        .in('id', brokers.map(b => b.p_id));
+      attendees = profiles || [];
+    }
+  } else {
+    // Audiencia específica
+    const { data: selectedBrokers } = await supabase
+      .from('event_audience')
+      .select('broker_id')
+      .eq('event_id', eventId);
+    
+    if (selectedBrokers && selectedBrokers.length > 0) {
+      const { data: brokers } = await supabase
+        .from('brokers')
+        .select('id, name, p_id')
+        .in('id', selectedBrokers.map(sb => sb.broker_id));
+      
+      if (brokers && brokers.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, full_name, email')
+          .in('id', brokers.map(b => b.p_id));
+        attendees = profiles || [];
+      }
+    }
+  }
 
-  const { data: attendees } = await supabase
-    .from('profiles')
-    .select('id, full_name, email')
-    .in('id', attendeeIds);
-
-  if (!attendees) return;
+  if (!attendees || attendees.length === 0) return;
 
   // URLs para RSVP si es necesario
-  const rsvpYesUrl = event.needs_rsvp ? `${appUrl}/api/agenda/rsvp?eventId=${eventId}&response=yes` : undefined;
-  const rsvpNoUrl = event.needs_rsvp ? `${appUrl}/api/agenda/rsvp?eventId=${eventId}&response=no` : undefined;
+  const rsvpYesUrl = event.allow_rsvp ? `${appUrl}/api/agenda/rsvp?eventId=${eventId}&response=yes` : undefined;
+  const rsvpNoUrl = event.allow_rsvp ? `${appUrl}/api/agenda/rsvp?eventId=${eventId}&response=no` : undefined;
+
+  // Formatear fecha y hora
+  const eventDate = new Date(event.start_at).toLocaleDateString('es-PA', { 
+    weekday: 'long', 
+    year: 'numeric', 
+    month: 'long', 
+    day: 'numeric' 
+  });
+  const eventTime = new Date(event.start_at).toLocaleTimeString('es-PA', { 
+    hour: '2-digit', 
+    minute: '2-digit' 
+  });
 
   // Enviar a cada asistente
   const emails = attendees.map(attendee => ({
@@ -71,12 +114,12 @@ export async function notifyEventCreated(eventId: string): Promise<void> {
     html: renderEmailTemplate('agendaCreated', {
       userName: attendee.full_name,
       eventTitle: event.title,
-      description: event.description,
-      eventDate: event.event_date,
-      eventTime: event.event_time,
-      location: event.location,
+      description: event.details,
+      eventDate,
+      eventTime,
+      location: event.location_name,
       createdBy: creator?.full_name || 'Sistema',
-      needsRsvp: event.needs_rsvp,
+      needsRsvp: event.allow_rsvp,
       rsvpYesUrl,
       rsvpNoUrl,
       portalUrl: appUrl,
@@ -95,16 +138,17 @@ export async function notifyEventCreated(eventId: string): Promise<void> {
  */
 export async function notifyEventUpdated(eventId: string, changes: any[]): Promise<void> {
   const { data: event, error } = await supabase
-    .from('agenda_events')
+    .from('events')
     .select(`
       id,
       title,
-      description,
-      event_date,
-      event_time,
-      location,
-      updated_by,
-      attendees
+      details,
+      start_at,
+      end_at,
+      location_name,
+      created_by,
+      audience,
+      allow_rsvp
     `)
     .eq('id', eventId)
     .single();
@@ -114,18 +158,59 @@ export async function notifyEventUpdated(eventId: string, changes: any[]): Promi
   const { data: updater } = await supabase
     .from('profiles')
     .select('full_name')
-    .eq('id', event.updated_by)
+    .eq('id', event.created_by)
     .single();
 
-  const attendeeIds = event.attendees || [];
-  if (attendeeIds.length === 0) return;
+  // Obtener asistentes (mismo código que notifyEventCreated)
+  let attendees: any[] = [];
+  
+  if (event.audience === 'ALL') {
+    const { data: brokers } = await supabase
+      .from('brokers')
+      .select('id, name, p_id')
+      .eq('active', true);
+    
+    if (brokers && brokers.length > 0) {
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, full_name, email')
+        .in('id', brokers.map(b => b.p_id));
+      attendees = profiles || [];
+    }
+  } else {
+    const { data: selectedBrokers } = await supabase
+      .from('event_audience')
+      .select('broker_id')
+      .eq('event_id', eventId);
+    
+    if (selectedBrokers && selectedBrokers.length > 0) {
+      const { data: brokers } = await supabase
+        .from('brokers')
+        .select('id, name, p_id')
+        .in('id', selectedBrokers.map(sb => sb.broker_id));
+      
+      if (brokers && brokers.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, full_name, email')
+          .in('id', brokers.map(b => b.p_id));
+        attendees = profiles || [];
+      }
+    }
+  }
 
-  const { data: attendees } = await supabase
-    .from('profiles')
-    .select('id, full_name, email')
-    .in('id', attendeeIds);
+  if (!attendees || attendees.length === 0) return;
 
-  if (!attendees) return;
+  const eventDate = new Date(event.start_at).toLocaleDateString('es-PA', { 
+    weekday: 'long', 
+    year: 'numeric', 
+    month: 'long', 
+    day: 'numeric' 
+  });
+  const eventTime = new Date(event.start_at).toLocaleTimeString('es-PA', { 
+    hour: '2-digit', 
+    minute: '2-digit' 
+  });
 
   const emails = attendees.map(attendee => ({
     to: attendee.email,
@@ -133,17 +218,17 @@ export async function notifyEventUpdated(eventId: string, changes: any[]): Promi
     html: renderEmailTemplate('agendaUpdated', {
       userName: attendee.full_name,
       eventTitle: event.title,
-      description: event.description,
-      eventDate: event.event_date,
-      eventTime: event.event_time,
-      location: event.location,
+      description: event.details,
+      eventDate,
+      eventTime,
+      location: event.location_name,
       updatedBy: updater?.full_name || 'Sistema',
       changes,
       portalUrl: appUrl,
     }),
     fromType: 'PORTAL' as const,
     template: 'agendaUpdated' as const,
-    dedupeKey: generateDedupeKey(attendee.email, 'agendaUpdated', `${eventId}-${event.event_date}`),
+    dedupeKey: generateDedupeKey(attendee.email, 'agendaUpdated', `${eventId}-${eventDate}`),
     metadata: { eventId, attendeeId: attendee.id, changes },
   }));
 
@@ -191,20 +276,23 @@ export async function sendEventReminders(): Promise<{ sent: number; failed: numb
   // Obtener eventos de mañana
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);
-  const tomorrowStr = tomorrow.toISOString().split('T')[0];
+  tomorrow.setHours(0, 0, 0, 0);
+  const tomorrowEnd = new Date(tomorrow);
+  tomorrowEnd.setHours(23, 59, 59, 999);
 
   const { data: events, error } = await supabase
-    .from('agenda_events')
+    .from('events')
     .select(`
       id,
       title,
-      description,
-      event_date,
-      event_time,
-      location,
-      attendees
+      details,
+      start_at,
+      location_name,
+      audience
     `)
-    .eq('event_date', tomorrowStr);
+    .gte('start_at', tomorrow.toISOString())
+    .lte('start_at', tomorrowEnd.toISOString())
+    .is('canceled_at', null);
 
   if (error || !events || events.length === 0) {
     return { sent: 0, failed: 0 };
@@ -214,15 +302,56 @@ export async function sendEventReminders(): Promise<{ sent: number; failed: numb
   let failed = 0;
 
   for (const event of events) {
-    const attendeeIds = event.attendees || [];
-    if (attendeeIds.length === 0) continue;
+    // Obtener asistentes según audiencia
+    let attendees: any[] = [];
+    
+    if (event.audience === 'ALL') {
+      const { data: brokers } = await supabase
+        .from('brokers')
+        .select('id, name, p_id')
+        .eq('active', true);
+      
+      if (brokers && brokers.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, full_name, email')
+          .in('id', brokers.map(b => b.p_id));
+        attendees = profiles || [];
+      }
+    } else {
+      const { data: selectedBrokers } = await supabase
+        .from('event_audience')
+        .select('broker_id')
+        .eq('event_id', event.id);
+      
+      if (selectedBrokers && selectedBrokers.length > 0) {
+        const { data: brokers } = await supabase
+          .from('brokers')
+          .select('id, name, p_id')
+          .in('id', selectedBrokers.map(sb => sb.broker_id));
+        
+        if (brokers && brokers.length > 0) {
+          const { data: profiles } = await supabase
+            .from('profiles')
+            .select('id, full_name, email')
+            .in('id', brokers.map(b => b.p_id));
+          attendees = profiles || [];
+        }
+      }
+    }
 
-    const { data: attendees } = await supabase
-      .from('profiles')
-      .select('id, full_name, email')
-      .in('id', attendeeIds);
+    if (!attendees || attendees.length === 0) continue;
 
-    if (!attendees) continue;
+    const eventDate = new Date(event.start_at).toLocaleDateString('es-PA', { 
+      weekday: 'long', 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
+    const eventTime = new Date(event.start_at).toLocaleTimeString('es-PA', { 
+      hour: '2-digit', 
+      minute: '2-digit' 
+    });
 
     const emails = attendees.map(attendee => ({
       to: attendee.email,
@@ -230,15 +359,15 @@ export async function sendEventReminders(): Promise<{ sent: number; failed: numb
       html: renderEmailTemplate('agendaReminder', {
         userName: attendee.full_name,
         eventTitle: event.title,
-        description: event.description,
-        eventDate: event.event_date,
-        eventTime: event.event_time,
-        location: event.location,
+        description: event.details,
+        eventDate,
+        eventTime,
+        location: event.location_name,
         portalUrl: appUrl,
       }),
       fromType: 'PORTAL' as const,
       template: 'agendaReminder' as const,
-      dedupeKey: generateDedupeKey(attendee.email, 'agendaReminder', `${event.id}-${event.event_date}`),
+      dedupeKey: generateDedupeKey(attendee.email, 'agendaReminder', `${event.id}-${eventDate}`),
       metadata: { eventId: event.id, attendeeId: attendee.id },
     }));
 

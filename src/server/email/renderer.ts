@@ -47,7 +47,13 @@ export function renderTemplate(html: string, data: TemplateData): string {
  * Cargar template desde archivo
  */
 export function loadTemplate(templateName: string): string {
-  const templatePath = path.join(process.cwd(), 'src/server/email/templates', `${templateName}.html`);
+  // Primero intentar en el subdirectorio actions/
+  let templatePath = path.join(process.cwd(), 'src/server/email/templates/actions', `${templateName}.html`);
+  
+  // Si no existe, intentar en la raíz de templates/
+  if (!fs.existsSync(templatePath)) {
+    templatePath = path.join(process.cwd(), 'src/server/email/templates', `${templateName}.html`);
+  }
   
   if (!fs.existsSync(templatePath)) {
     console.error(`[RENDERER] Template no encontrado: ${templateName}`);

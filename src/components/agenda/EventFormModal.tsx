@@ -24,7 +24,8 @@ export default function EventFormModal({
   preselectedDate
 }: EventFormModalProps) {
   // Form state
-  const [eventType, setEventType] = useState<'normal' | 'oficina_cerrada'>('normal');
+  const [eventType, setEventType] = useState<'normal' | 'oficina_cerrada' | 'oficina_virtual'>('normal');
+  const [isOficinaVirtual, setIsOficinaVirtual] = useState(false);
   const [title, setTitle] = useState('');
   const [details, setDetails] = useState('');
   const [startDate, setStartDate] = useState('');
@@ -93,7 +94,9 @@ export default function EventFormModal({
   const loadEventData = () => {
     if (!eventToEdit) return;
     
-    setEventType(eventToEdit.event_type || 'normal');
+    const evtType = eventToEdit.event_type || 'normal';
+    setEventType(evtType);
+    setIsOficinaVirtual(evtType === 'oficina_virtual');
     setTitle(eventToEdit.title || '');
     setDetails(eventToEdit.details || '');
     
@@ -358,6 +361,7 @@ export default function EventFormModal({
                   setEventType('oficina_cerrada');
                   setTitle('OFICINA CERRADA');
                   setIsAllDay(true);
+                  setIsOficinaVirtual(false);
                 }}
                 className={`px-4 py-3 rounded-lg font-medium transition-all ${
                   eventType === 'oficina_cerrada'
@@ -370,6 +374,41 @@ export default function EventFormModal({
             </div>
           </div>
 
+          {/* Checkbox Oficina Virtual (solo visible si es oficina_cerrada) */}
+          {eventType === 'oficina_cerrada' && (
+            <div className="bg-yellow-50 border-2 border-yellow-400 p-4 rounded-lg">
+              <div className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  id="oficinaVirtual"
+                  checked={isOficinaVirtual}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setIsOficinaVirtual(checked);
+                    if (checked) {
+                      setEventType('oficina_virtual');
+                      setTitle('OFICINA VIRTUAL');
+                      setDetails('OFICINA CERRADA PERO OPERACION VIRTUAL, PUEDE ENVIAR TODOS SUS TRAMITES A LOS CORREOS CORRESPONDIENTES');
+                    } else {
+                      setEventType('oficina_cerrada');
+                      setTitle('OFICINA CERRADA');
+                      setDetails('');
+                    }
+                  }}
+                  className="w-5 h-5 text-yellow-600 border-gray-300 rounded focus:ring-yellow-600"
+                />
+                <label htmlFor="oficinaVirtual" className="text-sm font-semibold text-yellow-900">
+                  💼 Oficina Virtual (operación remota activa)
+                </label>
+              </div>
+              {isOficinaVirtual && (
+                <p className="text-xs text-yellow-700 mt-2">
+                  ℹ️ El día se mostrará en amarillo indicando operación virtual
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Title */}
           <div>
             <label className="block text-xs sm:text-sm font-semibold text-gray-600 mb-2 uppercase">
@@ -380,9 +419,9 @@ export default function EventFormModal({
               value={title}
               onChange={createUppercaseHandler((e) => setTitle(e.target.value))}
               className={`w-full px-4 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition-colors ${uppercaseInputClass}`}
-              placeholder={eventType === 'oficina_cerrada' ? 'OFICINA CERRADA' : 'JUNTA DE AGENCIA MENSUAL'}
+              placeholder={eventType === 'oficina_cerrada' ? 'OFICINA CERRADA' : eventType === 'oficina_virtual' ? 'OFICINA VIRTUAL' : 'JUNTA DE AGENCIA MENSUAL'}
               required
-              readOnly={eventType === 'oficina_cerrada'}
+              readOnly={eventType === 'oficina_cerrada' || eventType === 'oficina_virtual'}
             />
           </div>
 
@@ -561,7 +600,8 @@ export default function EventFormModal({
               onChange={createUppercaseHandler((e) => setDetails(e.target.value))}
               rows={4}
               className={`w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none transition-colors resize-none ${uppercaseInputClass}`}
-              placeholder={eventType === 'oficina_cerrada' ? 'MOTIVO DEL CIERRE (OPCIONAL)' : 'DETALLES ADICIONALES DEL EVENTO...'}
+              placeholder={eventType === 'oficina_cerrada' ? 'MOTIVO DEL CIERRE (OPCIONAL)' : eventType === 'oficina_virtual' ? 'DESCRIPCIÓN DE OPERACIÓN VIRTUAL' : 'DETALLES ADICIONALES DEL EVENTO...'}
+              readOnly={eventType === 'oficina_virtual'}
             />
           </div>
 

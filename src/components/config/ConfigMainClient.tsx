@@ -11,7 +11,8 @@ import {
   FaBook, 
   FaCalendarAlt,
   FaUndo,
-  FaClipboardList
+  FaClipboardList,
+  FaEnvelope
 } from 'react-icons/fa';
 import { toast } from 'sonner';
 import GeneralTab from './tabs/GeneralTab';
@@ -28,7 +29,7 @@ interface ConfigMainClientProps {
   userId: string;
 }
 
-type TabKey = 'general' | 'insurers' | 'commissions' | 'delinquency' | 'cases' | 'requirements' | 'downloads' | 'guides' | 'agenda';
+type TabKey = 'general' | 'insurers' | 'commissions' | 'delinquency' | 'cases' | 'requirements' | 'downloads' | 'guides' | 'agenda' | 'correos';
 
 const TABS = [
   { key: 'general' as TabKey, label: 'Generales', icon: FaCog },
@@ -40,6 +41,7 @@ const TABS = [
   { key: 'downloads' as TabKey, label: 'Descargas', icon: FaDownload },
   { key: 'guides' as TabKey, label: 'Guías', icon: FaBook },
   { key: 'agenda' as TabKey, label: 'Agenda', icon: FaCalendarAlt },
+  { key: 'correos' as TabKey, label: 'Correos', icon: FaEnvelope },
 ];
 
 export default function ConfigMainClient({ userId }: ConfigMainClientProps) {
@@ -139,6 +141,27 @@ export default function ConfigMainClient({ userId }: ConfigMainClientProps) {
         {activeTab === 'downloads' && <DownloadsTab userId={userId} />}
         {activeTab === 'guides' && <GuidesTab userId={userId} />}
         {activeTab === 'agenda' && <AgendaTab userId={userId} />}
+        {activeTab === 'correos' && (
+          <div className="bg-white rounded-2xl shadow-lg p-8 text-center">
+            <div className="max-w-2xl mx-auto">
+              <FaEnvelope className="text-[#8AAA19] text-6xl mx-auto mb-6" />
+              <h2 className="text-3xl font-bold text-[#010139] mb-4">
+                Pruebas de Correos SMTP
+              </h2>
+              <p className="text-gray-600 mb-8">
+                Esta sección tiene su propia página dedicada para pruebas y debugging de correos.
+                Haz click en el botón para acceder al sistema completo de pruebas.
+              </p>
+              <a
+                href="/config/correos"
+                className="inline-flex items-center gap-3 px-8 py-4 bg-[#8AAA19] text-white font-semibold rounded-xl hover:bg-[#7a9916] transition-all shadow-lg hover:shadow-xl transform hover:scale-105"
+              >
+                <FaEnvelope className="text-white text-xl" />
+                <span>Ir a Pruebas de Correos</span>
+              </a>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

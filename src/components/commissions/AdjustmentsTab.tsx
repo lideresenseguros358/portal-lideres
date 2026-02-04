@@ -1,27 +1,31 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   actionGetPendingItems,
   actionAutoAssignOldPendingItems,
 } from '@/app/(app)/commissions/actions';
 import { actionCreateAdjustmentReport } from '@/app/(app)/commissions/adjustment-actions';
 import { toast } from 'sonner';
-import {
-  FaChevronDown,
-  FaChevronRight,
-  FaCalendarAlt,
-  FaExclamationTriangle,
-  FaHistory,
-  FaHandHoldingUsd,
-  FaUserCheck,
-  FaCheckCircle,
-  FaPaperPlane,
+import { 
+  FaSearch, 
+  FaTimes, 
+  FaChevronDown, 
+  FaChevronRight, 
+  FaCheckCircle, 
+  FaExclamationTriangle, 
+  FaUser, 
+  FaTrash, 
+  FaCalendarAlt, 
+  FaHandHoldingUsd, 
+  FaHistory, 
+  FaPaperPlane, 
+  FaCheck, 
+  FaFilter, 
   FaClock,
   FaInfoCircle,
   FaDollarSign,
-  FaSearch,
-  FaTimes,
+  FaUserCheck,
 } from 'react-icons/fa';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -338,15 +342,23 @@ type PendingGroup = {
   oldest_date: string;
   status: string;
   items: PendingItemDetail[];
+  fortnight_id?: string | null;
 };
 
 const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingCountChange, isShortcut }: Props) => {
   const [loading, setLoading] = useState(true);
   const [silentRefreshing, setSilentRefreshing] = useState(false);
   const [pendingGroups, setPendingGroups] = useState<PendingGroup[]>([]);
+  const [allPendingGroups, setAllPendingGroups] = useState<PendingGroup[]>([]);
   const [showOldItemsWarning, setShowOldItemsWarning] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // Filtro por quincena
+  const [fortnights, setFortnights] = useState<Array<{ id: string; label: string }>>([]);
+  const [selectedFortnightFilter, setSelectedFortnightFilter] = useState<string>('ALL');
+  const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   
   // Modo selección múltiple
   const [selectionMode, setSelectionMode] = useState(false);
@@ -401,6 +413,7 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
             oldest_date: item.created_at,
             status: item.status,
             items: [],
+            fortnight_id: item.fortnight_id || null,
           });
         }
         
@@ -436,7 +449,29 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
         });
       });
       
-      setPendingGroups(grouped);
+      setAllPendingGroups(grouped);
+      applyFilters(grouped, selectedFortnightFilter, searchQuery);
+      
+      // Extraer quincenas únicas de los items
+      const fortnightIds = new Set<string>();
+      console.log('[AdjustmentsTab] Total pending items:', result.data?.length);
+      (result.data || []).forEach((item: any) => {
+        console.log('[AdjustmentsTab] Item fortnight_id:', item.fortnight_id, 'Policy:', item.policy_number);
+        if (item.fortnight_id) {
+          fortnightIds.add(item.fortnight_id);
+        }
+      });
+      
+      console.log('[AdjustmentsTab] Unique fortnight_ids found:', Array.from(fortnightIds));
+      
+      // Cargar info de esas quincenas
+      if (fortnightIds.size > 0) {
+        loadFortnightsFromItems(Array.from(fortnightIds));
+      } else {
+        console.log('[AdjustmentsTab] NO fortnights found - clearing list');
+        setFortnights([]);
+      }
+      
       setShowOldItemsWarning(grouped.some(g => {
         const daysDiff = Math.floor((Date.now() - new Date(g.oldest_date).getTime()) / (1000 * 60 * 60 * 24));
         return daysDiff >= 90;
@@ -445,6 +480,9 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
       if (!silentRefresh) {
         toast.error('Error al cargar pendientes', { description: result.error });
       }
+      setAllPendingGroups([]);
+      setPendingGroups([]);
+      setFortnights([]);
     }
 
     if (silentRefresh) {
@@ -452,7 +490,73 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
     } else {
       setLoading(false);
     }
-  }, [role, brokerId]);
+  }, [role, brokerId, selectedFortnightFilter, searchQuery]);
+
+  // Cargar info de quincenas específicas desde BD
+  const loadFortnightsFromItems = async (fortnightIds: string[]) => {
+    try {
+      console.log('[loadFortnightsFromItems] IDs encontrados:', fortnightIds);
+      
+      // Importar y llamar a la server action
+      const { actionGetFortnightsByIds } = await import('@/app/(app)/commissions/fortnight-actions');
+      const result = await actionGetFortnightsByIds(fortnightIds);
+      
+      if (result.ok && result.data) {
+        console.log('[loadFortnightsFromItems] Quincenas cargadas desde BD:', result.data);
+        setFortnights(result.data);
+      } else {
+        console.error('[loadFortnightsFromItems] Error:', result.error);
+        setFortnights([]);
+      }
+    } catch (error) {
+      console.error('[loadFortnightsFromItems] Exception:', error);
+      setFortnights([]);
+    }
+  };
+
+  // Función para aplicar filtros
+  const applyFilters = useCallback((groups: PendingGroup[], fortnightFilter: string, search: string) => {
+    let filtered = [...groups];
+
+    // Filtro por quincena
+    if (fortnightFilter !== 'ALL') {
+      filtered = filtered.filter(group => group.fortnight_id === fortnightFilter);
+    }
+
+    // Filtro por búsqueda
+    if (search.trim()) {
+      const searchLower = search.toLowerCase();
+      filtered = filtered.filter(group => 
+        group.client_name?.toLowerCase().includes(searchLower) ||
+        group.policy_number?.toLowerCase().includes(searchLower) ||
+        group.insurer_names.some(name => name.toLowerCase().includes(searchLower))
+      );
+    }
+
+    setPendingGroups(filtered);
+  }, []);
+
+  // Aplicar filtros cuando cambian
+  useEffect(() => {
+    applyFilters(allPendingGroups, selectedFortnightFilter, searchQuery);
+  }, [selectedFortnightFilter, searchQuery, allPendingGroups, applyFilters]);
+
+  // Cerrar dropdown al hacer click fuera
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowFilterDropdown(false);
+      }
+    };
+
+    if (showFilterDropdown) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showFilterDropdown]);
 
   useEffect(() => {
     loadPendingItems(false); // Carga inicial con spinner
@@ -608,32 +712,86 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
 
   return (
     <div className="space-y-4">
-      {/* Barra de búsqueda - Formato iOS-friendly */}
-      <div className="flex items-center gap-2 border-2 border-gray-200 rounded-xl focus-within:border-[#8AAA19] transition-all bg-white px-3 sm:px-4 py-2.5 sm:py-3">
-        <div className="flex-shrink-0 text-gray-400">
-          <FaSearch className="text-base sm:text-lg" />
+      {/* Barra de búsqueda y filtro */}
+      <div className="flex flex-col sm:flex-row gap-2">
+        {/* Barra de búsqueda - Formato iOS-friendly */}
+        <div className="flex-1 flex items-center gap-2 border-2 border-gray-200 rounded-xl focus-within:border-[#8AAA19] transition-all bg-white px-3 sm:px-4 py-2.5 sm:py-3">
+          <div className="flex-shrink-0 text-gray-400">
+            <FaSearch className="text-base sm:text-lg" />
+          </div>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="flex-1 min-w-0 border-0 focus:outline-none focus:ring-0 text-gray-700 placeholder-gray-400 text-[16px] bg-transparent p-0"
+            placeholder="Buscar por póliza, cliente o aseguradora..."
+            style={{ 
+              WebkitTextSizeAdjust: '100%',
+              WebkitAppearance: 'none'
+            }}
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={handleClearSearch}
+              className="p-1.5 sm:p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-all flex-shrink-0"
+              title="Limpiar búsqueda"
+            >
+              <FaTimes className="text-sm sm:text-base" />
+            </button>
+          )}
         </div>
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="flex-1 min-w-0 border-0 focus:outline-none focus:ring-0 text-gray-700 placeholder-gray-400 text-[16px] bg-transparent p-0"
-          placeholder="Buscar por póliza, cliente o aseguradora..."
-          style={{ 
-            WebkitTextSizeAdjust: '100%',
-            WebkitAppearance: 'none'
-          }}
-        />
-        {searchQuery && (
+        
+        {/* Botón de filtro por quincena - Mobile First */}
+        <div className="relative" ref={dropdownRef}>
           <button
-            type="button"
-            onClick={handleClearSearch}
-            className="p-1.5 sm:p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-all flex-shrink-0"
-            title="Limpiar búsqueda"
+            onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+            className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2.5 sm:py-3 bg-white border-2 border-gray-200 rounded-xl hover:border-[#8AAA19] transition-colors text-sm font-medium"
           >
-            <FaTimes className="text-sm sm:text-base" />
+            <FaFilter className={selectedFortnightFilter !== 'ALL' ? 'text-[#8AAA19]' : 'text-gray-500'} />
+            <span>{selectedFortnightFilter === 'ALL' ? 'Todas las quincenas' : 'Quincena filtrada'}</span>
           </button>
-        )}
+          
+          {/* Dropdown de quincenas */}
+          {showFilterDropdown && (
+            <div className="absolute right-0 mt-2 w-72 bg-white border-2 border-gray-300 rounded-lg shadow-lg z-50 max-h-80 overflow-y-auto">
+              <div className="p-2">
+                <button
+                  onClick={() => {
+                    setSelectedFortnightFilter('ALL');
+                    setShowFilterDropdown(false);
+                  }}
+                  className={`w-full text-left px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    selectedFortnightFilter === 'ALL'
+                      ? 'bg-[#8AAA19] text-white'
+                      : 'hover:bg-gray-100 text-gray-700'
+                  }`}
+                >
+                  📋 Todas las quincenas
+                </button>
+                
+                {fortnights.length > 0 && <div className="border-t border-gray-200 my-2" />}
+                
+                {fortnights.map(fortnight => (
+                  <button
+                    key={fortnight.id}
+                    onClick={() => {
+                      setSelectedFortnightFilter(fortnight.id);
+                      setShowFilterDropdown(false);
+                    }}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-colors ${
+                      selectedFortnightFilter === fortnight.id
+                        ? 'bg-[#8AAA19] text-white font-semibold'
+                        : 'hover:bg-gray-100 text-gray-700'
+                    }`}
+                  >
+                    📅 {fortnight.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Contador de resultados */}
@@ -706,7 +864,7 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
       )}
 
       {/* Header - Mobile First */}
-      <div className="bg-white rounded-lg p-4 border-l-4 border-[#010139] shadow-sm">
+      <div className="bg-white rounded-xl p-4 border-l-4 border-[#010139] shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-2">

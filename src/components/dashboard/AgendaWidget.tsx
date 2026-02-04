@@ -39,7 +39,7 @@ export default function AgendaWidget({ userId, brokerId }: AgendaWidgetProps) {
 
       if (eventsData) {
         // Filter by audience if broker
-        let filteredEvents = eventsData;
+        let filteredEvents = eventsData as any[];
         
         if (brokerId) {
           // Get event_audience for this broker
@@ -50,17 +50,17 @@ export default function AgendaWidget({ userId, brokerId }: AgendaWidgetProps) {
 
           const audienceEventIds = new Set((audienceEvents || []).map(a => a.event_id));
 
-          filteredEvents = eventsData.filter(event => 
+          filteredEvents = (eventsData as any[]).filter((event: any) => 
             event.audience === 'ALL' || audienceEventIds.has(event.id)
           );
         }
 
         // Map to format for MiniCalendar with event_type and end_at
-        const mappedEvents = filteredEvents.map(event => ({
+        const mappedEvents = filteredEvents.map((event: any) => ({
           date: event.start_at,
           title: event.title,
-          event_type: (event as any).event_type || 'normal',
-          end_at: (event as any).end_at || event.start_at,
+          event_type: event.event_type || 'normal',
+          end_at: event.end_at || event.start_at,
         }));
 
         setEvents(mappedEvents);

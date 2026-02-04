@@ -103,6 +103,42 @@ export async function actionMergeClients(sourceClientId: string, targetClientId:
   }
 }
 
+// LÓGICA CORRECTA: CLIENTS manda, POLICIES sigue
+// Cuando se cambia broker de un cliente, TODAS sus pólizas se actualizan automáticamente
+export async function actionReassignClientAndPolicies(clientId: string, newBrokerId: string) {
+  try {
+    const supabase = await getSupabaseServer();
+    
+    // 1. Actualizar broker del cliente
+    const { error: clientError } = await supabase
+      .from('clients')
+      .update({ broker_id: newBrokerId })
+      .eq('id', clientId);
+    
+    if (clientError) {
+      return { ok: false as const, error: `Error actualizando cliente: ${clientError.message}` };
+    }
+    
+    // 2. Actualizar broker de TODAS las pólizas del cliente para mantener consistencia
+    const { error: policiesError } = await supabase
+      .from('policies')
+      .update({ broker_id: newBrokerId })
+      .eq('client_id', clientId);
+    
+    if (policiesError) {
+      return { ok: false as const, error: `Error actualizando pólizas: ${policiesError.message}` };
+    }
+    
+    revalidatePath('/(app)/db');
+    return { ok: true as const };
+  } catch (error) {
+    return {
+      ok: false as const,
+      error: error instanceof Error ? error.message : 'Error desconocido'
+    };
+  }
+}
+
 export async function actionLoadMoreClients(offset: number, limit: number = 100, searchQuery?: string) {
   try {
     const supabase = await getSupabaseServer();

@@ -264,11 +264,11 @@ export default function PolicyNumberInput({
             
             if (isAssa) {
               if (index === 0) {
-                // Primer input ASSA: 2 dígitos (pequeño)
-                containerClass = 'flex-none w-16 sm:w-20';
-              } else if (index === 1) {
-                // Segundo input ASSA: dropdown letras (medio)
+                // Primer input ASSA: 2 dígitos (más espacio visual)
                 containerClass = 'flex-none w-20 sm:w-24';
+              } else if (index === 1) {
+                // Segundo input ASSA: dropdown letras (más espacio visual)
+                containerClass = 'flex-none w-24 sm:w-28';
               } else if (index === 2) {
                 // Tercer input ASSA: hasta 10 dígitos (flex para ocupar espacio restante)
                 containerClass = 'flex-1 min-w-0';
@@ -283,10 +283,10 @@ export default function PolicyNumberInput({
                     value={inputs[index] || ''} 
                     onValueChange={(val) => handleInputChange(index, val)}
                   >
-                    <SelectTrigger className={`w-full border-2 h-11 ${
+                    <SelectTrigger className={`w-full border-2 h-11 text-xs sm:text-sm ${
                       hasError ? 'border-red-500 focus:border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
                     }`}>
-                      <SelectValue placeholder="Selecciona" />
+                      <SelectValue placeholder="--" className="text-xs sm:text-sm" />
                     </SelectTrigger>
                     <SelectContent>
                       {config.dropdownOptions?.map(opt => (
