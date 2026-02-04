@@ -392,14 +392,21 @@ export async function getAnnualNet(userId: string, role: DashboardRole): Promise
 // Get production data for Master dashboard
 export async function getProductionData() {
   const supabase = await getSupabaseServer();
-  const currentYear = CURRENT_YEAR;
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1; // 1-12
   
-  // Get total PMA for current year
+  // YTD: Comparar solo los meses transcurridos del año actual vs los mismos meses del año anterior
+  // Ejemplo: Si estamos en enero 2026, comparar enero 2026 vs enero 2025
+  // Si estamos en febrero 2026, comparar enero-febrero 2026 vs enero-febrero 2025
+  
+  // Get YTD PMA for current year (meses transcurridos)
   const { data: currentYearData } = await supabase
     .from("production")
-    .select("bruto, canceladas")
+    .select("bruto, canceladas, month")
     .eq("year", currentYear)
-    .returns<{ bruto: number | string | null; canceladas: number | string | null }[]>();
+    .lte("month", currentMonth) // Solo meses hasta el mes actual
+    .returns<{ bruto: number | string | null; canceladas: number | string | null; month: number }[]>();
     
   const totalPMA = (currentYearData ?? []).reduce((acc, item) => {
     const bruto = toNumber(item.bruto);
@@ -407,12 +414,13 @@ export async function getProductionData() {
     return acc + (bruto - canceladas);
   }, 0);
   
-  // Get previous year total for comparison
+  // Get YTD total for previous year (mismos meses del año anterior)
   const { data: previousYearData } = await supabase
     .from("production")
-    .select("bruto, canceladas")
+    .select("bruto, canceladas, month")
     .eq("year", currentYear - 1)
-    .returns<{ bruto: number | string | null; canceladas: number | string | null }[]>();
+    .lte("month", currentMonth) // Mismos meses que el año actual
+    .returns<{ bruto: number | string | null; canceladas: number | string | null; month: number }[]>();
     
   const previousTotal = (previousYearData ?? []).reduce((acc, item) => {
     const bruto = toNumber(item.bruto);
@@ -425,14 +433,15 @@ export async function getProductionData() {
   const displayYear = hasCurrentYearData ? currentYear : currentYear - 1;
   const displayTotal = hasCurrentYearData ? totalPMA : previousTotal;
   
-  // Para comparación: si estamos mostrando año anterior, comparar con 2 años atrás
+  // Para comparación: si estamos mostrando año anterior, comparar con 2 años atrás (YTD)
   let comparisonTotal = previousTotal;
   if (!hasCurrentYearData) {
     const { data: twoYearsAgoData } = await supabase
       .from("production")
-      .select("bruto, canceladas")
+      .select("bruto, canceladas, month")
       .eq("year", currentYear - 2)
-      .returns<{ bruto: number | string | null; canceladas: number | string | null }[]>();
+      .lte("month", currentMonth) // Mismos meses YTD
+      .returns<{ bruto: number | string | null; canceladas: number | string | null; month: number }[]>();
     
     comparisonTotal = (twoYearsAgoData ?? []).reduce((acc, item) => {
       const bruto = toNumber(item.bruto);
@@ -443,12 +452,18 @@ export async function getProductionData() {
   
   const deltaPercent = comparisonTotal > 0 ? ((displayTotal - comparisonTotal) / comparisonTotal) * 100 : 0;
   
-  console.log('[getProductionData] FALLBACK LOGIC:', { 
-    currentYear, 
+  const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
+  const monthRange = currentMonth === 1 ? monthNames[0] : `${monthNames[0]}-${monthNames[currentMonth - 1]}`;
+  
+  console.log('[getProductionData] YTD COMPARISON:', { 
+    currentYear,
+    currentMonth,
+    monthRange,
     hasCurrentYearData, 
     displayYear, 
     displayTotal, 
-    comparisonTotal 
+    comparisonTotal,
+    deltaPercent: deltaPercent.toFixed(1) + '%'
   });
   
   return {
@@ -990,14 +1005,18 @@ export async function getYtdComparison(userId: string, role: DashboardRole): Pro
   const supabase = await getSupabaseServer();
   const brokerId = role === "broker" ? await resolveBrokerId(userId) : null;
 
-  const currentYear = CURRENT_YEAR;
-  const previousYear = CURRENT_YEAR - 1;
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1; // 1-12
+  const previousYear = currentYear - 1;
 
+  // YTD: Solo obtener meses hasta el mes actual transcurrido para ambos años
   const buildQuery = (year: number) => {
     let query = supabase
       .from("production")
       .select("month, bruto, canceladas")
       .eq("year", year)
+      .lte("month", currentMonth) // Solo hasta el mes actual
       .order("month", { ascending: true })
       .limit(FETCH_LIMIT);
 
