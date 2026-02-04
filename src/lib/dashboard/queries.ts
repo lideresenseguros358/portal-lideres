@@ -396,16 +396,62 @@ export async function getProductionData() {
   const currentYear = now.getFullYear();
   const currentMonth = now.getMonth() + 1; // 1-12
   
-  // YTD: Comparar solo los meses transcurridos del año actual vs los mismos meses del año anterior
-  // Ejemplo: Si estamos en enero 2026, comparar enero 2026 vs enero 2025
-  // Si estamos en febrero 2026, comparar enero-febrero 2026 vs enero-febrero 2025
+  // YTD: Comparar solo meses CERRADOS (mes actual en curso no se cuenta)
+  // Ejemplo: Si estamos en febrero 2026, comparar enero 2026 vs enero 2025 (febrero aún no cierra)
+  // Si estamos en marzo 2026, comparar enero-febrero 2026 vs enero-febrero 2025
+  const closedMonth = currentMonth - 1; // Mes anterior (ya cerrado)
   
-  // Get YTD PMA for current year (meses transcurridos)
+  // Si estamos en enero (closedMonth = 0), usar año anterior completo
+  if (closedMonth === 0) {
+    const { data: previousYearData } = await supabase
+      .from("production")
+      .select("bruto, canceladas, month")
+      .eq("year", currentYear - 1)
+      .returns<{ bruto: number | string | null; canceladas: number | string | null; month: number }[]>();
+    
+    const totalPreviousYear = (previousYearData ?? []).reduce((acc, item) => {
+      const bruto = toNumber(item.bruto);
+      const canceladas = toNumber(item.canceladas);
+      return acc + (bruto - canceladas);
+    }, 0);
+    
+    const { data: twoYearsAgoData } = await supabase
+      .from("production")
+      .select("bruto, canceladas, month")
+      .eq("year", currentYear - 2)
+      .returns<{ bruto: number | string | null; canceladas: number | string | null; month: number }[]>();
+    
+    const totalTwoYearsAgo = (twoYearsAgoData ?? []).reduce((acc, item) => {
+      const bruto = toNumber(item.bruto);
+      const canceladas = toNumber(item.canceladas);
+      return acc + (bruto - canceladas);
+    }, 0);
+    
+    const deltaPercent = totalTwoYearsAgo > 0 ? ((totalPreviousYear - totalTwoYearsAgo) / totalTwoYearsAgo) * 100 : 0;
+    
+    console.log('[getProductionData] ENERO - Usando año completo anterior:', { 
+      currentYear,
+      closedMonth: 0,
+      displayYear: currentYear - 1,
+      totalPreviousYear,
+      totalTwoYearsAgo,
+      deltaPercent: deltaPercent.toFixed(1) + '%'
+    });
+    
+    return {
+      totalPMA: totalPreviousYear,
+      previousTotal: totalTwoYearsAgo,
+      deltaPercent,
+      year: currentYear - 1
+    };
+  }
+  
+  // Get YTD PMA for current year (solo meses cerrados)
   const { data: currentYearData } = await supabase
     .from("production")
     .select("bruto, canceladas, month")
     .eq("year", currentYear)
-    .lte("month", currentMonth) // Solo meses hasta el mes actual
+    .lte("month", closedMonth) // Solo meses cerrados
     .returns<{ bruto: number | string | null; canceladas: number | string | null; month: number }[]>();
     
   const totalPMA = (currentYearData ?? []).reduce((acc, item) => {
@@ -414,12 +460,12 @@ export async function getProductionData() {
     return acc + (bruto - canceladas);
   }, 0);
   
-  // Get YTD total for previous year (mismos meses del año anterior)
+  // Get YTD total for previous year (mismos meses cerrados del año anterior)
   const { data: previousYearData } = await supabase
     .from("production")
     .select("bruto, canceladas, month")
     .eq("year", currentYear - 1)
-    .lte("month", currentMonth) // Mismos meses que el año actual
+    .lte("month", closedMonth) // Mismos meses cerrados
     .returns<{ bruto: number | string | null; canceladas: number | string | null; month: number }[]>();
     
   const previousTotal = (previousYearData ?? []).reduce((acc, item) => {
@@ -440,7 +486,7 @@ export async function getProductionData() {
       .from("production")
       .select("bruto, canceladas, month")
       .eq("year", currentYear - 2)
-      .lte("month", currentMonth) // Mismos meses YTD
+      .lte("month", closedMonth) // Mismos meses cerrados
       .returns<{ bruto: number | string | null; canceladas: number | string | null; month: number }[]>();
     
     comparisonTotal = (twoYearsAgoData ?? []).reduce((acc, item) => {
@@ -453,11 +499,12 @@ export async function getProductionData() {
   const deltaPercent = comparisonTotal > 0 ? ((displayTotal - comparisonTotal) / comparisonTotal) * 100 : 0;
   
   const monthNames = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-  const monthRange = currentMonth === 1 ? monthNames[0] : `${monthNames[0]}-${monthNames[currentMonth - 1]}`;
+  const monthRange = closedMonth === 1 ? monthNames[0] : `${monthNames[0]}-${monthNames[closedMonth - 1]}`;
   
-  console.log('[getProductionData] YTD COMPARISON:', { 
+  console.log('[getProductionData] YTD COMPARISON (CLOSED MONTHS):', { 
     currentYear,
     currentMonth,
+    closedMonth,
     monthRange,
     hasCurrentYearData, 
     displayYear, 
