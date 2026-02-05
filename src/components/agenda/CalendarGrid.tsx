@@ -197,15 +197,15 @@ export default function CalendarGrid({
               <Tooltip.Root>
                 <Tooltip.Trigger asChild>
                   <button
-                    onClick={() => item.isCurrentMonth && !isCerrada && !isVirtual && onDayClick(item.day)}
-                    disabled={!item.isCurrentMonth || isCerrada}
+                    onClick={() => item.isCurrentMonth && onDayClick(item.day)}
+                    disabled={!item.isCurrentMonth}
                     className={`
                       relative aspect-square flex flex-col items-center justify-center
                       rounded-xl transition-all duration-300 transform
                       ${!item.isCurrentMonth 
                         ? 'bg-transparent text-gray-300 cursor-default' 
                         : isCerrada
-                        ? 'bg-gray-400 text-white font-bold shadow-md cursor-not-allowed opacity-70'
+                        ? 'bg-gray-400 text-white font-bold shadow-md cursor-pointer hover:shadow-lg hover:scale-105'
                         : isVirtual
                         ? 'bg-gradient-to-br from-yellow-400 via-yellow-500 to-yellow-600 text-white font-bold shadow-md cursor-pointer hover:shadow-lg hover:scale-105'
                         : isTodayDate
@@ -218,6 +218,7 @@ export default function CalendarGrid({
                       ${isSelected && item.hasEvents && !isCerrada && !isVirtual ? 'ring-4 ring-yellow-400 ring-opacity-70 scale-110 shadow-xl' : ''}
                       ${isSelected && isTodayDate ? 'ring-4 ring-yellow-400 ring-opacity-70 scale-110' : ''}
                       ${isSelected && isVirtual ? 'ring-4 ring-orange-400 ring-opacity-70 scale-110 shadow-xl' : ''}
+                      ${isSelected && isCerrada ? 'ring-4 ring-red-400 ring-opacity-70 scale-110 shadow-xl' : ''}
                     `}
                   >
                     {/* Día del mes */}
