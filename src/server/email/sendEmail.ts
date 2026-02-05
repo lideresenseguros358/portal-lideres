@@ -156,7 +156,13 @@ async function logEmail(record: Omit<EmailLogRecord, 'id' | 'created_at'>): Prom
 }
 
 /**
- * Enviar correo masivo (batch)
+ * Enviar correos masivos usando cola con rate-limiting
+ * 
+ * DEPRECADO: Usa sendEmailQueue directamente para mayor control
+ * Esta función se mantiene por compatibilidad pero internamente
+ * usa el sistema de cola seguro con rate-limiting.
+ * 
+ * @deprecated Usar sendEmailQueue de './queue' en su lugar
  */
 export async function sendEmailBatch(emails: SendEmailParams[]): Promise<{
   total: number;
@@ -164,27 +170,19 @@ export async function sendEmailBatch(emails: SendEmailParams[]): Promise<{
   failed: number;
   skipped: number;
 }> {
-  const results = {
-    total: emails.length,
-    sent: 0,
-    failed: 0,
-    skipped: 0,
+  console.warn('[EMAIL] ⚠️ sendEmailBatch está deprecado, usa sendEmailQueue de ./queue');
+  console.log('[EMAIL] Redirigiendo a cola con rate-limiting...');
+  
+  // Importar dinámicamente para evitar ciclos
+  const { sendEmailQueue } = await import('./queue');
+  
+  const result = await sendEmailQueue(emails);
+  
+  // Retornar en formato compatible
+  return {
+    total: result.total,
+    sent: result.sent,
+    failed: result.failed,
+    skipped: result.skipped,
   };
-
-  for (const email of emails) {
-    const result = await sendEmail(email);
-    
-    if (result.success && result.skipped) {
-      results.skipped++;
-    } else if (result.success) {
-      results.sent++;
-    } else {
-      results.failed++;
-    }
-
-    // Pequeño delay para no saturar SMTP
-    await new Promise(resolve => setTimeout(resolve, 100));
-  }
-
-  return results;
 }
