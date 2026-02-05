@@ -1,17 +1,15 @@
--- FIX CRÍTICO: Constraint UNIQUE en draft_unidentified_items está perdiendo transacciones
--- PROBLEMA: Si un cliente tiene múltiples transacciones con montos diferentes, solo se guarda UNA
--- SOLUCIÓN: Agregar commission_raw al constraint para diferenciar transacciones múltiples
+-- FIX CRÍTICO: ELIMINAR constraint UNIQUE de draft_unidentified_items
+-- PROBLEMA: Constraint UNIQUE bloquea duplicados legítimos del reporte Excel
+-- EJEMPLO: Si un cliente aparece 3 veces en el Excel con mismo monto, DEBEN guardarse las 3
+-- SOLUCIÓN: ELIMINAR constraint UNIQUE completamente - deduplicación SOLO en código por raw_row
 
--- 1. Eliminar constraint viejo
+-- 1. Eliminar constraint UNIQUE (causa del problema)
 ALTER TABLE draft_unidentified_items 
 DROP CONSTRAINT IF EXISTS unique_draft_item;
 
--- 2. Crear constraint correcto que incluye commission_raw
-ALTER TABLE draft_unidentified_items
-ADD CONSTRAINT unique_draft_item 
-UNIQUE(fortnight_id, import_id, policy_number, insured_name, commission_raw);
+-- 2. NO crear ningún constraint nuevo - permitir duplicados del reporte
 
--- Verificación
+-- Verificación (debe retornar 0 filas)
 SELECT 
   constraint_name,
   constraint_type
@@ -19,6 +17,7 @@ FROM information_schema.table_constraints
 WHERE table_name = 'draft_unidentified_items'
   AND constraint_type = 'UNIQUE';
 
-COMMENT ON CONSTRAINT unique_draft_item ON draft_unidentified_items IS 
-'Permite múltiples transacciones del mismo cliente con montos diferentes. 
-Solo duplicados EXACTOS (mismo monto) se consideran duplicados reales.';
+COMMENT ON TABLE draft_unidentified_items IS 
+'Zona de trabajo temporal para clientes sin identificar.
+IMPORTANTE: NO tiene constraint UNIQUE - permite duplicados legítimos del reporte Excel.
+Deduplicación se maneja en código usando raw_row para detectar parseos duplicados del sistema.';

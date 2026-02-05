@@ -337,13 +337,10 @@ export async function actionUploadMultipleImports(
         console.log(`[BATCH] ✅ Sin duplicados - Todas las ${draftItems.length} transacciones son únicas`);
       }
       
-      console.log(`[BATCH] Insertando ${uniqueDraftItems.length} items únicos en draft_unidentified_items con upsert...`);
+      console.log(`[BATCH] Insertando ${uniqueDraftItems.length} items únicos en draft_unidentified_items...`);
       const { error: draftError, count } = await (supabase as any)
         .from('draft_unidentified_items')
-        .upsert(uniqueDraftItems, { 
-          onConflict: 'fortnight_id,import_id,policy_number,insured_name,commission_raw',
-          ignoreDuplicates: false  // Actualizar si existe
-        });
+        .insert(uniqueDraftItems);
       
       if (draftError) {
         console.error(`[BATCH] ❌ ERROR insertando draft items:`, draftError);
