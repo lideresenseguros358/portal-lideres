@@ -174,37 +174,36 @@ export default function VidaAssaFilesList({ folderId, files, isMaster, editMode,
     document.body.removeChild(link);
   };
 
-  if (files.length === 0) {
-    return (
-      <div className="text-center py-12 bg-white rounded-xl shadow-lg border-2 border-gray-200">
-        <FaFilePdf className="text-6xl text-gray-300 mx-auto mb-4" />
-        <h3 className="text-xl font-bold text-gray-600 mb-2">
-          No hay archivos en esta carpeta
-        </h3>
-        <p className="text-gray-500 mb-6">
-          {isMaster ? 'Sube tu primer documento haciendo click en el botón de arriba' : 'Aún no se han subido archivos'}
-        </p>
-        {isMaster && (
-          <button
-            onClick={() => {
-              console.log('[VIDA ASSA] Botón Subir Documento clickeado - empty state');
-              setShowUploadModal(true);
-            }}
-            className="
-              px-6 py-3 rounded-lg font-semibold transition-all flex items-center gap-2
-              bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white
-              shadow-md hover:shadow-lg hover:scale-105 mx-auto
-            "
-          >
-            <FaUpload />
-            Subir Documento
-          </button>
-        )}
-      </div>
-    );
-  }
+  const emptyState = (
+    <div className="text-center py-12 bg-white rounded-xl shadow-lg border-2 border-gray-200">
+      <FaFilePdf className="text-6xl text-gray-300 mx-auto mb-4" />
+      <h3 className="text-xl font-bold text-gray-600 mb-2">
+        No hay archivos en esta carpeta
+      </h3>
+      <p className="text-gray-500 mb-6">
+        {isMaster ? 'Sube tu primer documento haciendo click en el botón de arriba' : 'Aún no se han subido archivos'}
+      </p>
+      {isMaster && (
+        <button
+          onClick={() => {
+            console.log('[VIDA ASSA] Botón Subir Documento clickeado - empty state');
+            setShowUploadModal(true);
+          }}
+          className="
+            px-6 py-3 rounded-lg font-semibold transition-all flex items-center gap-2
+            bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white
+            shadow-md hover:shadow-lg hover:scale-105 mx-auto
+          "
+        >
+          <FaUpload />
+          Subir Documento
+        </button>
+      )}
+    </div>
+  );
 
-  return (
+  const filesContent = (
+
     <div>
       {/* Botón Subir (solo Master) */}
       {isMaster && (
@@ -302,6 +301,12 @@ export default function VidaAssaFilesList({ folderId, files, isMaster, editMode,
           );
         })}
       </div>
+    </div>
+  );
+
+  return (
+    <>
+      {files.length === 0 ? emptyState : filesContent}
 
       {/* Modal: Subir Archivo */}
       {showUploadModal && (
@@ -439,6 +444,6 @@ export default function VidaAssaFilesList({ folderId, files, isMaster, editMode,
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
