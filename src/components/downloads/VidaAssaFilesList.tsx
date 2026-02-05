@@ -305,12 +305,21 @@ export default function VidaAssaFilesList({ folderId, files, isMaster, editMode,
 
       {/* Modal: Subir Archivo */}
       {showUploadModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div 
+          className="fixed inset-0 bg-red-500 flex items-center justify-center" 
+          style={{ zIndex: 9999 }}
+          onClick={() => {
+            console.log('[VIDA ASSA] Modal backdrop clickeado');
+          }}
+        >
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-bold text-[#010139]">Subir Documento</h3>
+              <h3 className="text-xl font-bold text-[#010139]">MODAL DE PRUEBA - SI VES ESTO FUNCIONA</h3>
               <button
-                onClick={() => setShowUploadModal(false)}
+                onClick={() => {
+                  console.log('[VIDA ASSA] Bot\u00f3n X clickeado');
+                  setShowUploadModal(false);
+                }}
                 className="text-gray-400 hover:text-gray-600 transition-colors"
                 disabled={uploading}
               >
