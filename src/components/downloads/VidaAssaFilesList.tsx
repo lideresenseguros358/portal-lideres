@@ -45,8 +45,9 @@ export default function VidaAssaFilesList({ folderId, files, isMaster, editMode,
       const formData = new FormData();
       formData.append('file', uploadFile);
       formData.append('section_id', folderId);
+      formData.append('folder', 'downloads');
 
-      const uploadRes = await fetch('/api/guides/upload', {
+      const uploadRes = await fetch('/api/downloads/upload', {
         method: 'POST',
         body: formData
       });
