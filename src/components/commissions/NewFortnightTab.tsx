@@ -856,6 +856,8 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
           <BrokerTotals 
             draftFortnightId={draftFortnight.id}
             fortnightLabel={formatFortnightPeriod(draftFortnight.period_start, draftFortnight.period_end)}
+            fortnightStart={draftFortnight.period_start}
+            fortnightEnd={draftFortnight.period_end}
             totalImported={officeTotal.totalImported}
             brokerTotals={brokerTotalsData}
             onManageAdvances={(brokerId: string) => {

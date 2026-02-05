@@ -58,6 +58,8 @@ const toTitleCaseName = (value: string) => {
 interface Props {
   draftFortnightId: string;
   fortnightLabel?: string;
+  fortnightStart?: string; // YYYY-MM-DD
+  fortnightEnd?: string; // YYYY-MM-DD
   totalImported?: number;
   onManageAdvances: (brokerId: string) => void;
   brokerTotals?: Array<{ broker_id: string; is_retained?: boolean }>;
@@ -66,7 +68,7 @@ interface Props {
   recalculationKey?: number;
 }
 
-export default function BrokerTotals({ draftFortnightId, fortnightLabel = 'Quincena', totalImported = 0, onManageAdvances, brokerTotals = [], onRetentionChange = () => {}, onTotalNetChange, recalculationKey = 0 }: Props) {
+export default function BrokerTotals({ draftFortnightId, fortnightLabel = 'Quincena', fortnightStart, fortnightEnd, totalImported = 0, onManageAdvances, brokerTotals = [], onRetentionChange = () => {}, onTotalNetChange, recalculationKey = 0 }: Props) {
   const [details, setDetails] = useState<CommItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [isInitialLoad, setIsInitialLoad] = useState(true); // Solo mostrar spinner en primera carga
@@ -82,12 +84,41 @@ export default function BrokerTotals({ draftFortnightId, fortnightLabel = 'Quinc
   const [openMenuBroker, setOpenMenuBroker] = useState<string | null>(null);
   const [isExportingAll, setIsExportingAll] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [brokerDebts, setBrokerDebts] = useState<Map<string, { has_debts: boolean; debt_count: number; has_recurring: boolean }>>(new Map());
 
   useEffect(() => {
     const loadDetails = async () => {
       // Solo mostrar loading en la primera carga, luego actualizar en background
       if (isInitialLoad) {
         setLoading(true);
+      }
+      
+      // Cargar información de deudas activas si tenemos las fechas
+      if (fortnightStart && fortnightEnd) {
+        try {
+          const debtsResponse = await fetch(
+            `/api/commissions/broker-debts?fortnight_start=${fortnightStart}&fortnight_end=${fortnightEnd}`
+          );
+          const debtsData = await debtsResponse.json();
+          
+          if (debtsData.ok) {
+            const debtsMap = new Map<string, { has_debts: boolean; debt_count: number; has_recurring: boolean }>(
+              (debtsData.data || []).map((d: any) => [
+                d.broker_id as string,
+                {
+                  has_debts: d.has_debts as boolean,
+                  debt_count: d.debt_count as number,
+                  has_recurring: d.has_recurring as boolean,
+                },
+              ])
+            );
+            setBrokerDebts(debtsMap);
+            console.log('[BrokerTotals] Loaded broker debts:', debtsMap.size, 'brokers with debts');
+          }
+        } catch (error) {
+          console.error('[BrokerTotals] Error loading broker debts:', error);
+          setBrokerDebts(new Map());
+        }
       }
       
       const result = await actionGetDraftDetails(draftFortnightId);
@@ -128,7 +159,7 @@ export default function BrokerTotals({ draftFortnightId, fortnightLabel = 'Quinc
     };
     loadDetails();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draftFortnightId, recalculationKey]);
+  }, [draftFortnightId, recalculationKey, fortnightStart, fortnightEnd]);
 
   const groupedData = useMemo(() => {
     const grouped = details.reduce<GroupedData>((acc, item) => {
@@ -361,6 +392,14 @@ export default function BrokerTotals({ draftFortnightId, fortnightLabel = 'Quinc
                       {brokerData.is_retained && (
                         <span className="text-xs bg-red-600 text-white px-2 py-0.5 rounded-full font-semibold">RET</span>
                       )}
+                      {brokerDebts.has(brokerId) && brokerDebts.get(brokerId)?.has_debts && (
+                        <span 
+                          className="text-xs bg-orange-500 text-white px-2 py-0.5 rounded-full font-semibold flex items-center gap-1"
+                          title={`${brokerDebts.get(brokerId)?.debt_count || 0} deuda(s) activa(s)${brokerDebts.get(brokerId)?.has_recurring ? ' (incluye recurrente)' : ''}`}
+                        >
+                          💰 {brokerDebts.get(brokerId)?.debt_count || 0}
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div className="relative flex-shrink-0 overflow-visible">
@@ -523,6 +562,14 @@ export default function BrokerTotals({ draftFortnightId, fortnightLabel = 'Quinc
                       <span>{toTitleCaseName(brokerData.broker_name)}</span>
                       {brokerData.is_retained && (
                         <span className="text-xs bg-red-600 text-white px-2.5 py-1 rounded-full font-semibold shadow-sm">RETENIDO</span>
+                      )}
+                      {brokerDebts.has(brokerId) && brokerDebts.get(brokerId)?.has_debts && (
+                        <span 
+                          className="text-xs bg-orange-500 text-white px-2.5 py-1 rounded-full font-semibold shadow-sm flex items-center gap-1"
+                          title={`${brokerDebts.get(brokerId)?.debt_count || 0} deuda(s) activa(s)${brokerDebts.get(brokerId)?.has_recurring ? ' (incluye recurrente)' : ''}`}
+                        >
+                          💰 {brokerDebts.get(brokerId)?.debt_count || 0}
+                        </span>
                       )}
                     </div>
                   </TableCell>
