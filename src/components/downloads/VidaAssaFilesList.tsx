@@ -305,7 +305,13 @@ export default function VidaAssaFilesList({ folderId, files, isMaster, editMode,
 
       {/* Modal: Subir Archivo */}
       {showUploadModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4"
+          style={{ zIndex: 99999 }}
+          ref={(el) => {
+            if (el) console.log('[VIDA ASSA] ✅ Modal DIV renderizado en DOM');
+          }}
+        >
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-bold text-[#010139]">Cargar Documento</h3>
