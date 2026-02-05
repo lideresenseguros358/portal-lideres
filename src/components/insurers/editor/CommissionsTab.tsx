@@ -3,10 +3,12 @@
 import { useState, useTransition, useEffect } from 'react';
 import { FaPlus, FaTrash, FaSave } from 'react-icons/fa';
 import { actionUpsertMappingRule, actionDeleteMappingRule } from '@/app/(app)/insurers/actions';
+import { toast } from 'sonner';
 
 interface CommissionsTabProps {
   rules: any[]; // Replace with actual type
   insurerId: string;
+  insurer?: any; // Add insurer data
 }
 
 const COMMISSION_FIELDS = [
@@ -15,28 +17,24 @@ const COMMISSION_FIELDS = [
   { value: 'commission', label: 'Monto de Comisión' },
 ];
 
-export default function CommissionsTab({ rules, insurerId }: CommissionsTabProps) {
+export default function CommissionsTab({ rules, insurerId, insurer }: CommissionsTabProps) {
   // Filter only commission-related rules
   const commissionRules = rules.filter(r => 
     ['policy', 'insured', 'commission'].includes(r.target_field)
   );
   const [currentRules, setCurrentRules] = useState(commissionRules);
   const [newRule, setNewRule] = useState({ target_field: '', strategy: 'alias', aliases: '' });
-  const [invertNegatives, setInvertNegatives] = useState(false);
+  const [invertNegatives, setInvertNegatives] = useState(insurer?.invert_negatives || false);
   const [hasChanges, setHasChanges] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [saving, setSaving] = useState(false);
   
-  // Load invert negatives setting
+  // Load invert negatives from insurer data
   useEffect(() => {
-    const loadSettings = async () => {
-      // TODO: Load from insurer_mappings.options
-      const stored = localStorage.getItem(`invert_negatives_${insurerId}`);
-      if (stored) {
-        setInvertNegatives(stored === 'true');
-      }
-    };
-    loadSettings();
-  }, [insurerId]);
+    if (insurer?.invert_negatives !== undefined) {
+      setInvertNegatives(insurer.invert_negatives);
+    }
+  }, [insurer]);
 
   const handleAdd = () => {
     if (!newRule.target_field || !newRule.aliases) {
@@ -129,15 +127,32 @@ export default function CommissionsTab({ rules, insurerId }: CommissionsTabProps
         
         {hasChanges && (
           <button 
-            onClick={() => {
-              localStorage.setItem(`invert_negatives_${insurerId}`, String(invertNegatives));
-              setHasChanges(false);
-              alert('Configuración guardada correctamente');
+            onClick={async () => {
+              setSaving(true);
+              try {
+                const response = await fetch(`/api/insurers/${insurerId}`, {
+                  method: 'PUT',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ invert_negatives: invertNegatives }),
+                });
+
+                if (response.ok) {
+                  setHasChanges(false);
+                  toast.success('Configuración guardada correctamente');
+                } else {
+                  toast.error('Error al guardar configuración');
+                }
+              } catch (error) {
+                console.error('Error saving invert_negatives:', error);
+                toast.error('Error al guardar configuración');
+              } finally {
+                setSaving(false);
+              }
             }}
             className="btn-save"
-            disabled={isPending}
+            disabled={saving || isPending}
           >
-            <FaSave /> Guardar Configuración
+            <FaSave /> {saving ? 'Guardando...' : 'Guardar Configuración'}
           </button>
         )}
       </div>

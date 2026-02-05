@@ -42,3 +42,57 @@ export async function GET(
     );
   }
 }
+
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const supabase = await getSupabaseServer();
+    const { id } = await params;
+    const body = await request.json();
+
+    // Campos permitidos para actualizar
+    const allowedFields = ['name', 'is_active', 'invert_negatives', 'has_delinquency_reports'];
+    const updateData: Record<string, any> = {};
+
+    for (const field of allowedFields) {
+      if (field in body) {
+        updateData[field] = body[field];
+      }
+    }
+
+    if (Object.keys(updateData).length === 0) {
+      return NextResponse.json(
+        { success: false, error: 'No hay campos para actualizar' },
+        { status: 400 }
+      );
+    }
+
+    const { data: insurer, error } = await supabase
+      .from('insurers')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error updating insurer:', error);
+      return NextResponse.json(
+        { success: false, error: 'Error al actualizar aseguradora' },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      insurer
+    });
+  } catch (error) {
+    console.error('Error in PUT /api/insurers/[id]:', error);
+    return NextResponse.json(
+      { success: false, error: 'Error del servidor' },
+      { status: 500 }
+    );
+  }
+}

@@ -50,7 +50,7 @@ export default function InsurerEditor({ initialData, insurerId, insurer }: Insur
       case 'downloads':
         return <DownloadsTab downloads={initialData.downloads} insurerId={insurerId} />;
       case 'commissions':
-        return <CommissionsTab rules={initialData.mappingRules} insurerId={insurerId} />;
+        return <CommissionsTab rules={initialData.mappingRules} insurerId={insurerId} insurer={initialData.insurer} />;
       case 'delinquency':
         return <DelinquencyTab rules={initialData.mappingRules} insurerId={insurerId} />;
       case 'assa':
