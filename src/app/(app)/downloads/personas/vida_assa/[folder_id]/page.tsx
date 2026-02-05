@@ -78,21 +78,21 @@ export default function VidaAssaFolderPage() {
           </p>
         </div>
 
-        {/* Botones de acción para Master */}
+        {/* Botón de edición para Master */}
         {isMaster && (
-          <div className="mb-6 flex flex-wrap items-center gap-3">
+          <div className="mb-6">
             <button
               onClick={() => setEditMode(!editMode)}
               className={`
-                px-4 py-2 rounded-lg font-semibold transition-all flex items-center gap-2
+                px-4 py-2 rounded-lg font-medium transition-all flex items-center gap-2
                 ${editMode 
-                  ? 'bg-[#8AAA19] text-white shadow-md' 
-                  : 'bg-white text-gray-700 border-2 border-gray-300 hover:border-[#8AAA19]'
+                  ? 'bg-[#8AAA19] text-white' 
+                  : 'bg-white text-gray-700 border border-gray-300 hover:border-[#8AAA19]'
                 }
               `}
             >
               <FaPencilAlt />
-              {editMode ? 'Desactivar Edición' : 'Activar Edición'}
+              Activar Edición
             </button>
           </div>
         )}
