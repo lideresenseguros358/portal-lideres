@@ -341,7 +341,7 @@ export async function actionUploadMultipleImports(
       const { error: draftError, count } = await (supabase as any)
         .from('draft_unidentified_items')
         .upsert(uniqueDraftItems, { 
-          onConflict: 'fortnight_id,import_id,policy_number,insured_name',
+          onConflict: 'fortnight_id,import_id,policy_number,insured_name,commission_raw',
           ignoreDuplicates: false  // Actualizar si existe
         });
       
