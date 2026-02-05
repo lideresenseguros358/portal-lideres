@@ -33,6 +33,11 @@ export default function VidaAssaFilesList({ folderId, files, isMaster, editMode,
   const [selectedFile, setSelectedFile] = useState<VidaAssaFile | null>(null);
   const [newFileName, setNewFileName] = useState('');
 
+  // Debug log para showUploadModal
+  console.log('[VIDA ASSA] Estado showUploadModal:', showUploadModal);
+  console.log('[VIDA ASSA] isMaster:', isMaster);
+  console.log('[VIDA ASSA] files.length:', files.length);
+
   const handleUpload = async () => {
     console.log('[VIDA ASSA] handleUpload iniciado');
     console.log('[VIDA ASSA] uploadFile:', uploadFile);
