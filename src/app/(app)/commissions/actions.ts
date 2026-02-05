@@ -895,26 +895,16 @@ export async function actionUploadImport(formData: FormData) {
         temp_assigned_broker_id: null,
       }));
 
-      console.log(`[SERVER][${insurerName}] Insertando en draft_unidentified_items con UPSERT ignoreDuplicates...`);
+      console.log(`[SERVER][${insurerName}] Insertando ${draftItems.length} items en draft_unidentified_items...`);
       const { error: draftError, count } = await (supabase as any)
         .from('draft_unidentified_items')
-        .upsert(draftItems, { 
-          onConflict: 'fortnight_id,import_id,policy_number,insured_name',
-          ignoreDuplicates: true
-        });
+        .insert(draftItems);
       
       if (draftError) {
         console.error(`[SERVER][${insurerName}] ❌ ERROR insertando draft unidentified:`, draftError);
-        console.error(`[SERVER][${insurerName}] Error details:`, {
-          code: draftError.code,
-          message: draftError.message,
-          details: draftError.details,
-          hint: draftError.hint
-        });
-        console.log(`[SERVER][${insurerName}] Continuando a pesar del error...`);
-      } else {
-        console.log(`[SERVER][${insurerName}] ✅ ${draftItems.length} items procesados en draft_unidentified_items (duplicados ignorados)`);
+        throw new Error(`Error insertando draft_unidentified_items: ${draftError.message}`);
       }
+      console.log(`[SERVER][${insurerName}] ✅ ${count} items insertados en draft_unidentified_items`);
     } else {
       console.log(`[SERVER][${insurerName}] ℹ️ No hay items sin identificar para insertar (todos fueron identificados con broker)`);
     }
