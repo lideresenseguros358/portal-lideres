@@ -2710,7 +2710,6 @@ export async function actionUpdateAdvance(advanceId: string, payload: { amount: 
       .update({
         amount: payload.amount,
         reason: payload.reason,
-        updated_at: new Date().toISOString(),
       })
       .eq('id', advanceId)
       .select()

@@ -78,13 +78,19 @@ export function AdvancesManagementModal({
         // Guardar todos los adelantos para el historial
         setAllAdvances((result.data || []) as Advance[]);
         
-        // Filtrar adelantos con saldo > 0 (amount en BD ya es el saldo actual)
+        // Filtrar adelantos activos: con saldo > 0 Y que no estén en status 'paid'
+        // Esto asegura que se muestren todos los adelantos pendientes y parciales con deuda
         const filteredAdvances = (result.data || []).filter(
-          (a: any) => a.amount > 0
+          (a: any) => {
+            // Mostrar si tiene saldo > 0 Y no está completamente pagado
+            const hasPendingBalance = a.amount > 0;
+            const isNotFullyPaid = a.status !== 'paid';
+            return hasPendingBalance && isNotFullyPaid;
+          }
         );
         
-        console.log('[AdvancesManagementModal] Filtered advances (with balance):', filteredAdvances.length);
-        console.log('[AdvancesManagementModal] Filtered data:', filteredAdvances.map((a: any) => ({ id: a.id.substring(0, 8), amount: a.amount, paid: a.total_paid, remaining: a.amount - (a.total_paid || 0) })));
+        console.log('[AdvancesManagementModal] Filtered advances (active with balance):', filteredAdvances.length);
+        console.log('[AdvancesManagementModal] Filtered data:', filteredAdvances.map((a: any) => ({ id: a.id.substring(0, 8), status: a.status, amount: a.amount, paid: a.total_paid })));
         
         setAdvances(filteredAdvances as Advance[]);
       } else {
