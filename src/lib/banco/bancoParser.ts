@@ -130,33 +130,15 @@ function parseBankCommXLSX(file: File): Promise<BankTransferCommRow[]> {
         const headerMap: HeaderMap = {
           dateIdx: headers.findIndex((h: string) => h.includes('fecha')),
           ref1Idx: headers.findIndex((h: string) => {
-            // Buscar cualquier variación de "referencia"
+            // SOLO buscar "REFERENCIA 1" exacta
             const normalized = h.replace(/\s+/g, ' ').trim();
-            return (
-              normalized.includes('referencia 1') ||
-              normalized === 'referencia' ||
-              normalized.startsWith('ref.') ||
-              normalized.startsWith('referencia') ||
-              (normalized.includes('referencia') && !normalized.includes('transferencia'))
-            );
+            return normalized === 'referencia 1' || normalized.includes('referencia 1');
           }),
           descIdx: headers.findIndex((h: string) => h.includes('descri')),
           creditIdx: headers.findIndex((h: string) => h.includes('crédito') || h.includes('credito')),
         };
         
         console.log('[BancoParser] HeaderMap:', headerMap);
-        
-        // Si no encontramos Referencia en el primer intento, buscar la primera columna que contenga "referencia"
-        if (headerMap.ref1Idx === -1) {
-          console.log('[BancoParser] Referencia no encontrada, buscando alternativas...');
-          for (let i = 0; i < headers.length; i++) {
-            if (headers[i].includes('ref') && !headers[i].includes('transferencia')) {
-              headerMap.ref1Idx = i;
-              console.log(`[BancoParser] Referencia encontrada en índice ${i}: ${headers[i]}`);
-              break;
-            }
-          }
-        }
 
         if (headerMap.dateIdx === -1 || headerMap.ref1Idx === -1 || headerMap.creditIdx === -1 || headerMap.descIdx === -1) {
           console.error('[BancoParser] Error: Columnas no encontradas. Headers:', headers);
@@ -214,13 +196,7 @@ function parseBankCommCSV(file: File): Promise<BankTransferCommRow[]> {
               dateIdx: keys.findIndex((k) => k.includes('fecha')),
               ref1Idx: keys.findIndex((k) => {
                 const normalized = k.replace(/\s+/g, ' ').trim();
-                return (
-                  normalized.includes('referencia 1') ||
-                  normalized === 'referencia' ||
-                  normalized.startsWith('ref.') ||
-                  normalized.startsWith('referencia') ||
-                  (normalized.includes('referencia') && !normalized.includes('transferencia'))
-                );
+                return normalized === 'referencia 1' || normalized.includes('referencia 1');
               }),
               descIdx: keys.findIndex((k) => k.includes('descri')),
               creditIdx: keys.findIndex((k) => k.includes('crédito') || k.includes('credito')),

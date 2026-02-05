@@ -87,15 +87,9 @@ function parseBankHistoryXLSX(file: File): Promise<BankTransferRow[]> {
         const headerMap: HeaderMap = {
           dateIdx: headers.findIndex((h: string) => h.includes('fecha')),
           refIdx: headers.findIndex((h: string) => {
-            // Buscar cualquier variación de "referencia"
+            // SOLO buscar "REFERENCIA 1" exacta
             const normalized = h.replace(/\s+/g, ' ').trim();
-            return (
-              normalized.includes('referencia 1') ||
-              normalized === 'referencia' ||
-              normalized.startsWith('ref.') ||
-              normalized.startsWith('referencia') ||
-              (normalized.includes('referencia') && !normalized.includes('transferencia'))
-            );
+            return normalized === 'referencia 1' || normalized.endsWith('referencia 1') || normalized.startsWith('referencia 1') || normalized.includes('referencia 1');
           }),
           transIdx: headers.findIndex((h: string) => 
             (h.includes('transac') || h.includes('transacci') || h.includes('código')) && !h.includes('transferencia')
@@ -105,18 +99,6 @@ function parseBankHistoryXLSX(file: File): Promise<BankTransferRow[]> {
         };
         
         console.log('[BankParser] HeaderMap:', headerMap);
-
-        // Si no encontramos Referencia en el primer intento, buscar la primera columna que contenga "referencia"
-        if (headerMap.refIdx === -1) {
-          console.log('[BankParser] Referencia no encontrada, buscando alternativas...');
-          for (let i = 0; i < headers.length; i++) {
-            if (headers[i].includes('ref') && !headers[i].includes('transferencia')) {
-              headerMap.refIdx = i;
-              console.log(`[BankParser] Referencia encontrada en índice ${i}: ${headers[i]}`);
-              break;
-            }
-          }
-        }
 
         if (headerMap.dateIdx === -1 || headerMap.refIdx === -1 || headerMap.creditIdx === -1) {
           console.error('[BankParser] Error: Columnas no encontradas. Headers:', headers);
@@ -173,13 +155,7 @@ function parseBankHistoryCSV(file: File): Promise<BankTransferRow[]> {
               dateIdx: keys.findIndex((k) => k.includes('fecha')),
               refIdx: keys.findIndex((k) => {
                 const normalized = k.replace(/\s+/g, ' ').trim();
-                return (
-                  normalized.includes('referencia 1') ||
-                  normalized === 'referencia' ||
-                  normalized.startsWith('ref.') ||
-                  normalized.startsWith('referencia') ||
-                  (normalized.includes('referencia') && !normalized.includes('transferencia'))
-                );
+                return normalized === 'referencia 1' || normalized.endsWith('referencia 1') || normalized.startsWith('referencia 1') || normalized.includes('referencia 1');
               }),
               transIdx: keys.findIndex((k) => 
                 (k.includes('transac') || k.includes('transacci') || k.includes('código')) && !k.includes('transferencia')
