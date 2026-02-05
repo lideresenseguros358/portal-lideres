@@ -351,10 +351,10 @@ export async function actionUploadMultipleImports(
           details: draftError.details,
           hint: draftError.hint
         });
-        console.log(`[BATCH] Continuando a pesar del error...`);
-      } else {
-        console.log(`[BATCH] ✅ ${draftItems.length} items procesados en draft_unidentified_items (upsert completado)`);
+        throw new Error(`Error insertando sin identificar: ${draftError.message}`);
       }
+      
+      console.log(`[BATCH] ✅ ${uniqueDraftItems.length} items insertados en draft_unidentified_items`);
     }
     
     // 6. VINCULAR transferencia/grupo bancario (solo una vez al final)
