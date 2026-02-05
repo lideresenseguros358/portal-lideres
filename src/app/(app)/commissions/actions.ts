@@ -338,26 +338,17 @@ export async function actionUploadMultipleImports(
         console.log(`[BATCH] ✅ Sin duplicados - Todas las ${draftItems.length} transacciones son únicas`);
       }
       
-      console.log(`[BATCH] Insertando ${uniqueDraftItems.length} items en draft_unidentified_items con UPSERT...`);
+      console.log(`[BATCH] Insertando ${uniqueDraftItems.length} items en draft_unidentified_items...`);
       const { error: draftError, count } = await (supabase as any)
         .from('draft_unidentified_items')
-        .upsert(uniqueDraftItems, { 
-          onConflict: 'fortnight_id,import_id,policy_number,insured_name',
-          ignoreDuplicates: true
-        });
+        .insert(uniqueDraftItems);
       
       if (draftError) {
         console.error(`[BATCH] ❌ ERROR insertando draft items:`, draftError);
-        console.error(`[BATCH] Error details:`, {
-          code: draftError.code,
-          message: draftError.message,
-          details: draftError.details,
-          hint: draftError.hint
-        });
-        throw new Error(`Error insertando sin identificar: ${draftError.message}`);
+        throw new Error(`Error insertando draft_unidentified_items: ${draftError.message}`);
       }
       
-      console.log(`[BATCH] ✅ ${uniqueDraftItems.length} items insertados en draft_unidentified_items`);
+      console.log(`[BATCH] ✅ ${count} items insertados en draft_unidentified_items`);
     }
     
     // 6. VINCULAR transferencia/grupo bancario (solo una vez al final)
