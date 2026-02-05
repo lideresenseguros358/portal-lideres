@@ -34,11 +34,17 @@ export default function VidaAssaFilesList({ folderId, files, isMaster, editMode,
   const [newFileName, setNewFileName] = useState('');
 
   const handleUpload = async () => {
+    console.log('[VIDA ASSA] handleUpload iniciado');
+    console.log('[VIDA ASSA] uploadFile:', uploadFile);
+    console.log('[VIDA ASSA] folderId:', folderId);
+    
     if (!uploadFile) {
+      console.log('[VIDA ASSA] ERROR: No hay archivo seleccionado');
       toast.error('Selecciona un archivo');
       return;
     }
 
+    console.log('[VIDA ASSA] Iniciando upload...');
     setUploading(true);
     try {
       // 1. Subir archivo a storage
@@ -47,12 +53,15 @@ export default function VidaAssaFilesList({ folderId, files, isMaster, editMode,
       formData.append('section_id', folderId);
       formData.append('folder', 'downloads');
 
+      console.log('[VIDA ASSA] Enviando a /api/downloads/upload');
       const uploadRes = await fetch('/api/downloads/upload', {
         method: 'POST',
         body: formData
       });
 
+      console.log('[VIDA ASSA] Respuesta del servidor:', uploadRes.status);
       const uploadData = await uploadRes.json();
+      console.log('[VIDA ASSA] Upload data:', uploadData);
       if (!uploadData.success) {
         throw new Error(uploadData.error || 'Error al subir archivo');
       }
@@ -73,19 +82,25 @@ export default function VidaAssaFilesList({ folderId, files, isMaster, editMode,
       });
 
       const createData = await createRes.json();
+      console.log('[VIDA ASSA] Create data:', createData);
+      
       if (createData.success) {
+        console.log('[VIDA ASSA] ✅ Documento cargado exitosamente');
         toast.success('Documento cargado');
         setShowUploadModal(false);
         setUploadFile(null);
         setUploadMarkNew(false);
         onUpdate();
       } else {
+        console.log('[VIDA ASSA] ❌ Error al crear documento:', createData.error);
         throw new Error(createData.error || 'Error al crear documento');
       }
     } catch (error: any) {
-      console.error('Error uploading document:', error);
+      console.error('[VIDA ASSA] ❌ ERROR CRÍTICO:', error);
+      console.error('[VIDA ASSA] Error stack:', error.stack);
       toast.error(error.message || 'Error al cargar documento');
     } finally {
+      console.log('[VIDA ASSA] Upload finalizado');
       setUploading(false);
     }
   };
@@ -166,7 +181,10 @@ export default function VidaAssaFilesList({ folderId, files, isMaster, editMode,
         </p>
         {isMaster && (
           <button
-            onClick={() => setShowUploadModal(true)}
+            onClick={() => {
+              console.log('[VIDA ASSA] Botón Subir Documento clickeado - empty state');
+              setShowUploadModal(true);
+            }}
             className="
               px-6 py-3 rounded-lg font-semibold transition-all flex items-center gap-2
               bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white
@@ -187,7 +205,10 @@ export default function VidaAssaFilesList({ folderId, files, isMaster, editMode,
       {isMaster && (
         <div className="mb-6">
           <button
-            onClick={() => setShowUploadModal(true)}
+            onClick={() => {
+              console.log('[VIDA ASSA] Botón Subir Documento clickeado - with files');
+              setShowUploadModal(true);
+            }}
             className="
               px-6 py-3 rounded-lg font-semibold transition-all flex items-center gap-2
               bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white
