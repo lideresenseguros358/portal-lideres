@@ -235,6 +235,7 @@ export async function actionUploadMultipleImports(
           import_id: importRecord.id,
           status: 'open',
           assigned_broker_id: null,
+          raw_row: row.raw_row, // CRÍTICO: Incluir raw_row para deduplicación correcta
         });
       }
     }
