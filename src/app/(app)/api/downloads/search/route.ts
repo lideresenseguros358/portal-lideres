@@ -18,8 +18,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ success: true, results: [] });
     }
 
-    // Búsqueda con joins a section e insurer
-    const { data: files, error } = await supabase
+    // Búsqueda en download_files (descargas regulares)
+    const { data: files, error: filesError } = await supabase
       .from('download_files')
       .select(`
         *,
@@ -37,10 +37,27 @@ export async function GET(request: NextRequest) {
       .ilike('name', `%${query}%`)
       .order('name');
 
-    if (error) throw error;
+    if (filesError) throw filesError;
+
+    // Búsqueda en vida_assa_files (VIDA ASSA)
+    const { data: vidaAssaFiles, error: vidaAssaError } = await (supabase as any)
+      .from('vida_assa_files')
+      .select(`
+        *,
+        folder:vida_assa_folders!vida_assa_files_folder_id_fkey (
+          id,
+          name
+        )
+      `)
+      .ilike('name', `%${query}%`)
+      .order('name');
+
+    if (vidaAssaError) throw vidaAssaError;
 
     const now = new Date();
-    const results = files?.map(file => ({
+    
+    // Mapear resultados de download_files
+    const downloadResults = files?.map(file => ({
       id: file.id,
       name: file.name,
       file_url: file.file_url,
@@ -51,8 +68,30 @@ export async function GET(request: NextRequest) {
       insurer_id: file.section?.insurer?.id,
       insurer_name: file.section?.insurer?.name || 'General',
       is_new: file.is_new && file.marked_new_until && new Date(file.marked_new_until) > now,
-      created_at: file.created_at
+      created_at: file.created_at,
+      source: 'descargas'
     })) || [];
+
+    // Mapear resultados de vida_assa_files
+    const vidaAssaResults = vidaAssaFiles?.map((file: any) => ({
+      id: file.id,
+      name: file.name,
+      file_url: file.file_url,
+      section_id: file.folder?.id,
+      section_name: file.folder?.name || 'VIDA ASSA',
+      scope: 'personas',
+      policy_type: 'vida',
+      insurer_id: null,
+      insurer_name: 'ASSA',
+      is_new: file.is_new && file.marked_new_until && new Date(file.marked_new_until) > now,
+      created_at: file.created_at,
+      source: 'vida_assa'
+    })) || [];
+
+    // Combinar y ordenar resultados
+    const results = [...downloadResults, ...vidaAssaResults].sort((a, b) => 
+      a.name.localeCompare(b.name)
+    );
 
     return NextResponse.json({ success: true, results });
   } catch (error) {
