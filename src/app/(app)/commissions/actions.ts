@@ -893,15 +893,15 @@ export async function actionUploadImport(formData: FormData) {
         commission_raw: item.commission_raw,
         raw_row: item.raw_row || null,
         temp_assigned_broker_id: null,
-        // Cada item tiene un ID único para evitar deduplicación
-        unique_import_id: crypto.randomUUID()
       }));
 
-      console.log(`[SERVER][${insurerName}] Insertando en draft_unidentified_items SIN deduplicación...`);
-      // Usar insert en lugar de upsert para garantizar que todos los registros se inserten
+      console.log(`[SERVER][${insurerName}] Insertando en draft_unidentified_items con UPSERT ignoreDuplicates...`);
       const { error: draftError, count } = await (supabase as any)
         .from('draft_unidentified_items')
-        .insert(draftItems);
+        .upsert(draftItems, { 
+          onConflict: 'fortnight_id,import_id,policy_number,insured_name',
+          ignoreDuplicates: true
+        });
       
       if (draftError) {
         console.error(`[SERVER][${insurerName}] ❌ ERROR insertando draft unidentified:`, draftError);
