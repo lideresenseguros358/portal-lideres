@@ -305,29 +305,24 @@ export default function VidaAssaFilesList({ folderId, files, isMaster, editMode,
 
       {/* Modal: Subir Archivo */}
       {showUploadModal && (
-        <div 
-          className="fixed inset-0 bg-red-500 flex items-center justify-center" 
-          style={{ zIndex: 9999 }}
-          onClick={() => {
-            console.log('[VIDA ASSA] Modal backdrop clickeado');
-          }}
-        >
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-bold text-[#010139]">MODAL DE PRUEBA - SI VES ESTO FUNCIONA</h3>
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-bold text-[#010139]">Cargar Documento</h3>
               <button
                 onClick={() => {
-                  console.log('[VIDA ASSA] Bot\u00f3n X clickeado');
                   setShowUploadModal(false);
+                  setUploadFile(null);
+                  setUploadMarkNew(false);
                 }}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
-                disabled={uploading}
+                className="text-gray-400 hover:text-gray-600"
               >
                 <FaTimes size={20} />
               </button>
             </div>
-
+            
             <div className="space-y-4">
+              {/* Selección de archivo */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Archivo *
@@ -337,7 +332,6 @@ export default function VidaAssaFilesList({ folderId, files, isMaster, editMode,
                   onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
                   className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none"
                   accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
-                  disabled={uploading}
                 />
                 {uploadFile && (
                   <p className="mt-2 text-sm text-gray-600">
@@ -346,6 +340,7 @@ export default function VidaAssaFilesList({ folderId, files, isMaster, editMode,
                 )}
               </div>
 
+              {/* Marcar como nuevo */}
               <div>
                 <label className="flex items-center gap-2">
                   <input
@@ -354,30 +349,31 @@ export default function VidaAssaFilesList({ folderId, files, isMaster, editMode,
                     onChange={(e) => setUploadMarkNew(e.target.checked)}
                     className="w-4 h-4 text-[#8AAA19] rounded focus:ring-[#8AAA19]"
                   />
-                  <span className="text-sm text-gray-700">Marcar como nuevo (7 días)</span>
+                  <span className="text-sm text-gray-700">Marcar como nuevo (48 horas)</span>
                 </label>
               </div>
-            </div>
 
-            <div className="flex gap-3 pt-4">
-              <button
-                onClick={() => {
-                  setShowUploadModal(false);
-                  setUploadFile(null);
-                  setUploadMarkNew(false);
-                }}
-                className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-all font-medium"
-                disabled={uploading}
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleUpload}
-                disabled={!uploadFile || uploading}
-                className="flex-1 px-4 py-2 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg hover:shadow-lg transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {uploading ? 'Cargando...' : 'Cargar'}
-              </button>
+              {/* Botones */}
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={() => {
+                    setShowUploadModal(false);
+                    setUploadFile(null);
+                    setUploadMarkNew(false);
+                  }}
+                  className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-all font-medium"
+                  disabled={uploading}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleUpload}
+                  disabled={!uploadFile || uploading}
+                  className="flex-1 px-4 py-2 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg hover:shadow-lg transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {uploading ? 'Cargando...' : 'Cargar'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
