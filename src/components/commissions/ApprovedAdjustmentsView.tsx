@@ -10,7 +10,10 @@ import {
   FaCalendarPlus, 
   FaChevronDown, 
   FaChevronRight,
-  FaInfoCircle
+  FaInfoCircle,
+  FaTimes,
+  FaDownload,
+  FaDollarSign
 } from 'react-icons/fa';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -209,7 +212,8 @@ export default function ApprovedAdjustmentsView() {
                 onClick={() => setSelectedReports(new Set())}
                 className="flex-1 sm:flex-none text-xs sm:text-sm border-red-500 text-red-600 hover:bg-red-50"
               >
-                Cancelar
+                <FaTimes className="sm:mr-1.5" size={14} />
+                <span className="hidden sm:inline">Cancelar</span>
               </Button>
               <Button
                 size="sm"
@@ -217,8 +221,8 @@ export default function ApprovedAdjustmentsView() {
                 disabled={processing}
                 className="flex-1 sm:flex-none text-xs sm:text-sm bg-gradient-to-r from-blue-600 to-blue-700 text-white font-semibold"
               >
-                <FaMoneyBillWave className="text-white mr-1 sm:mr-2" size={12} />
-                Descargar TXT
+                <FaDownload className="text-white sm:mr-1.5" size={14} />
+                <span className="hidden sm:inline">Descargar</span>
               </Button>
               <Button
                 size="sm"
@@ -226,8 +230,8 @@ export default function ApprovedAdjustmentsView() {
                 disabled={processing}
                 className="flex-1 sm:flex-none text-xs sm:text-sm bg-gradient-to-r from-[#8AAA19] to-[#7a9617] text-white font-semibold"
               >
-                <FaMoneyBillWave className="text-white mr-1 sm:mr-2" size={12} />
-                Procesar
+                <FaDollarSign className="text-white sm:mr-1.5" size={14} />
+                <span className="hidden sm:inline">Procesar</span>
               </Button>
             </div>
           </div>
