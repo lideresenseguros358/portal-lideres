@@ -13,7 +13,7 @@ type BrokerRow = Tables<"brokers">;
 type InsurerRow = Tables<"insurers">;
 type ClientRow = Tables<"clients">;
 
-async function getClientsWithPolicies(searchQuery?: string): Promise<ClientWithPolicies[]> {
+async function getClientsWithPolicies(searchQuery?: string, limit?: number, offset: number = 0): Promise<ClientWithPolicies[]> {
   const supabase = await getSupabaseServer();
   const { role, brokerId } = await getAuthContext();
   
@@ -86,6 +86,11 @@ async function getClientsWithPolicies(searchQuery?: string): Promise<ClientWithP
       query = query.or(`name.ilike.%${searchQuery}%,national_id.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%`);
     }
   }
+  
+  // Aplicar paginación si se proporciona limit
+  if (limit !== undefined) {
+    query = query.range(offset, offset + limit - 1);
+  }
 
   const { data, error } = await query;
   
@@ -112,6 +117,42 @@ async function getClientsWithPolicies(searchQuery?: string): Promise<ClientWithP
     policies: client.policies ? [client.policies].flat() : [],
     brokers: client.brokers || null
   })) as ClientWithPolicies[];
+}
+
+async function getTotalClientsCount(searchQuery?: string): Promise<number> {
+  const supabase = await getSupabaseServer();
+  const { role, brokerId } = await getAuthContext();
+  
+  // Obtener broker de LISSA (Oficina)
+  const { data: lissaBroker } = await supabase
+    .from('brokers')
+    .select('id')
+    .eq('email', 'contacto@lideresenseguros.com')
+    .single();
+  
+  const lissaBrokerId = lissaBroker?.id;
+  
+  let query = supabase
+    .from("clients")
+    .select("id", { count: 'exact', head: true });
+  
+  // Aplicar los mismos filtros que getClientsWithPolicies
+  if (role === 'broker' && brokerId && brokerId !== lissaBrokerId) {
+    query = query.eq('broker_id', brokerId);
+  }
+  
+  if (searchQuery && searchQuery.trim()) {
+    query = query.or(`name.ilike.%${searchQuery}%,national_id.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%`);
+  }
+  
+  const { count, error } = await query;
+  
+  if (error) {
+    console.error("Error counting clients:", error);
+    return 0;
+  }
+  
+  return count || 0;
 }
 
 async function getInsurersWithPolicies(): Promise<InsurerWithCount[]> {
@@ -162,9 +203,13 @@ export default async function DatabasePage({
     .eq('active', true)
     .order('name');
 
-  const [clients, insurers] = await Promise.all([
-    getClientsWithPolicies(searchQuery),
-    getInsurersWithPolicies()
+  // Cargar solo los primeros 50 clientes inicialmente
+  const INITIAL_LIMIT = 50;
+  
+  const [clients, insurers, totalCount] = await Promise.all([
+    getClientsWithPolicies(searchQuery, INITIAL_LIMIT, 0),
+    getInsurersWithPolicies(),
+    getTotalClientsCount(searchQuery)
   ]);
 
   const totalPolicies = clients.reduce((acc, c) => {
@@ -218,6 +263,8 @@ export default async function DatabasePage({
           searchQuery={searchQuery}
           role={role}
           userEmail={user?.email || ''}
+          initialLimit={INITIAL_LIMIT}
+          totalCount={totalCount}
         />
       </div>
     </div>

@@ -27,6 +27,8 @@ interface DatabaseTabsProps {
   searchQuery?: string;
   role: string;
   userEmail: string;
+  initialLimit: number;
+  totalCount: number;
 }
 
 interface PolicyModalData {
@@ -499,9 +501,12 @@ interface ClientsListViewProps {
   onViewPolicy: (policyId: string) => void;
   onEditPolicy: (policyId: string) => void;
   onDeletePolicy: (policyId: string, policyNumber: string) => void;
+  hasMore?: boolean;
+  isLoadingMore?: boolean;
+  onLoadMore?: () => void;
 }
 
-const ClientsListView = ({ clients, onView, onEdit, onDelete, role, selectedClients, onToggleClient, onSelectAll, selectionMode, onViewPolicy, onEditPolicy, onDeletePolicy }: ClientsListViewProps) => {
+const ClientsListView = ({ clients, onView, onEdit, onDelete, role, selectedClients, onToggleClient, onSelectAll, selectionMode, onViewPolicy, onEditPolicy, onDeletePolicy, hasMore, isLoadingMore, onLoadMore }: ClientsListViewProps) => {
   const [expandedClients, setExpandedClients] = useState<Set<string>>(new Set());
   const [openMenuClient, setOpenMenuClient] = useState<string | null>(null);
   const [openMenuPolicy, setOpenMenuPolicy] = useState<string | null>(null);
@@ -856,6 +861,29 @@ const ClientsListView = ({ clients, onView, onEdit, onDelete, role, selectedClie
         </tbody>
       </table>
 
+      {/* Botón Ver Más - Desktop */}
+      {hasMore && (
+        <div className="hidden md:block mt-4">
+          <button
+            onClick={onLoadMore}
+            disabled={isLoadingMore}
+            className="w-full p-4 bg-gradient-to-r from-gray-50 to-gray-100 hover:from-gray-100 hover:to-gray-200 rounded-lg border-2 border-gray-200 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isLoadingMore ? (
+              <div className="flex items-center justify-center gap-2">
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-[#8AAA19]"></div>
+                <span className="text-sm font-medium text-gray-600">Cargando más clientes...</span>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center gap-2">
+                <ChevronDown size={20} className="text-[#8AAA19]" />
+                <span className="text-sm font-semibold text-[#010139]">Ver más clientes (50)</span>
+              </div>
+            )}
+          </button>
+        </div>
+      )}
+
       {/* Vista Mobile: Cards */}
       <div className="md:hidden space-y-3">
         {selectionMode && (
@@ -1169,6 +1197,29 @@ const ClientsListView = ({ clients, onView, onEdit, onDelete, role, selectedClie
           );
         })}
       </div>
+
+      {/* Botón Ver Más - Mobile */}
+      {hasMore && (
+        <div className="md:hidden mt-4">
+          <button
+            onClick={onLoadMore}
+            disabled={isLoadingMore}
+            className="w-full p-4 bg-gradient-to-r from-gray-50 to-gray-100 hover:from-gray-100 hover:to-gray-200 rounded-lg border-2 border-gray-200 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isLoadingMore ? (
+              <div className="flex items-center justify-center gap-2">
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-[#8AAA19]"></div>
+                <span className="text-sm font-medium text-gray-600">Cargando...</span>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center gap-2">
+                <ChevronDown size={20} className="text-[#8AAA19]" />
+                <span className="text-sm font-semibold text-[#010139]">Ver más (50)</span>
+              </div>
+            )}
+          </button>
+        </div>
+      )}
     </div>
   );
 };
@@ -1181,7 +1232,14 @@ export default function DatabaseTabs({
   searchQuery,
   role,
   userEmail,
+  initialLimit,
+  totalCount,
 }: DatabaseTabsProps) {
+  // Estado para paginación
+  const [clients, setClients] = useState<ClientWithPolicies[]>(initialClients);
+  const [displayedCount, setDisplayedCount] = useState(initialLimit);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const hasMore = displayedCount < totalCount;
   const searchParams = useSearchParams();
   const router = useRouter();
   const modal = searchParams.get('modal');
@@ -1200,14 +1258,45 @@ export default function DatabaseTabs({
   const [preliminaryCount, setPreliminaryCount] = useState(0);
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState<FilterOptions>({});
-  const [clients, setClients] = useState<ClientWithPolicies[]>(initialClients);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [hasMore, setHasMore] = useState(false); // Deshabilitado - ahora carga todos desde el inicio
 
   // Sincronizar estado local cuando cambian los clientes desde el servidor (por búsqueda)
   useEffect(() => {
     setClients(initialClients);
+    setDisplayedCount(initialClients.length);
   }, [initialClients, searchQuery]);
+  
+  // Función para cargar más clientes
+  const handleLoadMore = async () => {
+    setIsLoadingMore(true);
+    try {
+      const response = await fetch('/api/db/load-more', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          offset: displayedCount,
+          limit: 50,
+          searchQuery: searchQuery || ''
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Error al cargar más clientes');
+      }
+      
+      const data = await response.json();
+      
+      if (data.ok && data.clients) {
+        setClients(prev => [...prev, ...data.clients]);
+        setDisplayedCount(prev => prev + data.clients.length);
+        toast.success(`${data.clients.length} clientes más cargados`);
+      }
+    } catch (error) {
+      console.error('Error loading more clients:', error);
+      toast.error('Error al cargar más clientes');
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
 
   // Load preliminary count
   useEffect(() => {
@@ -1397,19 +1486,103 @@ export default function DatabaseTabs({
   };
 
   // Exportar RESPETANDO LOS FILTROS Y LA SELECCIÓN
+  // IMPORTANTE: Las exportaciones cargan TODOS los clientes sin límite de paginación
   const handleExportFormat = async (format: 'pdf' | 'excel') => {
-    const clientsToExport = selectedClients.size > 0 
-      ? filteredClients.filter(c => selectedClients.has(c.id))
-      : filteredClients;
+    const loadingToast = toast.loading('Preparando datos para exportar...');
     
-    if (format === 'pdf') {
-      await exportToPDF(clientsToExport, role);
-    } else {
-      await exportToExcel(clientsToExport, role);
+    try {
+      // Si hay clientes seleccionados, exportar solo esos (ya están en memoria)
+      if (selectedClients.size > 0) {
+        const clientsToExport = filteredClients.filter(c => selectedClients.has(c.id));
+        
+        toast.dismiss(loadingToast);
+        if (format === 'pdf') {
+          await exportToPDF(clientsToExport, role);
+        } else {
+          await exportToExcel(clientsToExport, role);
+        }
+      } else {
+        // Si NO hay selección, cargar TODOS los clientes filtrados (sin límite)
+        // Esto garantiza que la exportación incluya todos los datos, no solo los paginados
+        const response = await fetch('/api/db/export-all', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            searchQuery: searchQuery || '',
+            filters: filters
+          })
+        });
+        
+        if (!response.ok) {
+          throw new Error('Error al cargar datos para exportar');
+        }
+        
+        const data = await response.json();
+        
+        if (!data.ok || !data.clients) {
+          throw new Error('No se pudieron cargar los clientes');
+        }
+        
+        // Aplicar filtros del lado del cliente (igual que filteredClients)
+        let allClients = data.clients;
+        
+        // Aplicar filtros de aseguradora, ramo, mes, broker
+        allClients = allClients.map((client: any) => {
+          let filteredPolicies = [...(client.policies || [])];
+
+          if (filters.insurer) {
+            filteredPolicies = filteredPolicies.filter(p => p.insurer_id === filters.insurer);
+          }
+
+          if (filters.ramo) {
+            filteredPolicies = filteredPolicies.filter(p => p.ramo?.toLowerCase() === filters.ramo?.toLowerCase());
+          }
+
+          if (filters.month !== undefined) {
+            filteredPolicies = filteredPolicies.filter(p => {
+              if (!p.renewal_date) return false;
+              const parts = p.renewal_date.split('-');
+              if (parts.length < 2 || !parts[1]) return false;
+              const month = parseInt(parts[1]) - 1;
+              return month === filters.month;
+            });
+          }
+
+          return {
+            ...client,
+            policies: filteredPolicies
+          };
+        });
+
+        allClients = allClients.filter((client: any) => {
+          if (filters.broker && role === 'master') {
+            if (client.brokers?.id !== filters.broker) {
+              return false;
+            }
+          }
+
+          if (filters.insurer || filters.ramo || filters.month !== undefined) {
+            return client.policies && client.policies.length > 0;
+          }
+
+          return true;
+        });
+        
+        toast.dismiss(loadingToast);
+        if (format === 'pdf') {
+          await exportToPDF(allClients, role);
+        } else {
+          await exportToExcel(allClients, role);
+        }
+      }
+      
+      setShowExportModal(false);
+      setSelectedClients(new Set());
+    } catch (error) {
+      toast.dismiss(loadingToast);
+      console.error('Error al exportar:', error);
+      toast.error('Error al preparar la exportación');
     }
-    
-    setShowExportModal(false);
-    setSelectedClients(new Set());
   };
 
   // Obtener opciones únicas para filtros
@@ -1463,6 +1636,9 @@ export default function DatabaseTabs({
         onViewPolicy={handleViewPolicy}
         onEditPolicy={handleEditPolicy}
         onDeletePolicy={handleDeletePolicy}
+        hasMore={hasMore}
+        isLoadingMore={isLoadingMore}
+        onLoadMore={handleLoadMore}
       />
     );
   };
@@ -1775,46 +1951,6 @@ export default function DatabaseTabs({
 
       <div className="tab-content">
         {renderTabContent()}
-        
-        {/* Botón Ver Más */}
-        {view === 'clients' && hasMore && (
-          <div className="mt-6 flex justify-center">
-            <button
-              onClick={async () => {
-                setIsLoadingMore(true);
-                try {
-                  const result = await actionLoadMoreClients(clients.length, 100, searchQuery);
-                  if (result.ok && result.data) {
-                    if (result.data.length < 100) {
-                      setHasMore(false);
-                    }
-                    setClients([...clients, ...result.data]);
-                  } else {
-                    toast.error(result.error || 'Error al cargar más clientes');
-                  }
-                } catch (error) {
-                  toast.error('Error al cargar más clientes');
-                } finally {
-                  setIsLoadingMore(false);
-                }
-              }}
-              disabled={isLoadingMore}
-              className="px-6 py-3 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 flex items-center gap-2"
-            >
-              {isLoadingMore ? (
-                <>
-                  <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full"></div>
-                  <span>Cargando...</span>
-                </>
-              ) : (
-                <>
-                  <ChevronDown size={20} />
-                  <span>Ver más clientes</span>
-                </>
-              )}
-            </button>
-          </div>
-        )}
       </div>
 
       {/* Export Format Modal */}
