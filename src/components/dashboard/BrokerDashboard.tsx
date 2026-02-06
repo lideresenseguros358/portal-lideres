@@ -86,18 +86,18 @@ const BrokerDashboard = async ({ userId }: BrokerDashboardProps) => {
     return `${quarter} ${month} ${year}`;
   };
   
-  if (fortnightStatus.paid?.fortnight) {
-    // Hay una quincena pagada en el período reciente
-    paidRange = formatFortnightLabel(
-      fortnightStatus.paid.fortnight.period_start,
-      fortnightStatus.paid.fortnight.period_end
-    );
-  } else if (netCommissions.lastPaidFortnight) {
-    // Usar los datos de quincena que ya vienen de getNetCommissions (con admin access)
-    // Esto evita el problema de RLS en la query adicional
+  if (netCommissions.lastPaidFortnight) {
+    // PRIORIDAD 1: Usar los datos de quincena de getNetCommissions (admin access)
+    // Esta es la fuente más confiable ya que viene del mismo query que calcula las comisiones
     paidRange = formatFortnightLabel(
       netCommissions.lastPaidFortnight.period_start,
       netCommissions.lastPaidFortnight.period_end
+    );
+  } else if (fortnightStatus.paid?.fortnight) {
+    // FALLBACK: Si no hay datos en netCommissions, usar fortnightStatus
+    paidRange = formatFortnightLabel(
+      fortnightStatus.paid.fortnight.period_start,
+      fortnightStatus.paid.fortnight.period_end
     );
   }
 
