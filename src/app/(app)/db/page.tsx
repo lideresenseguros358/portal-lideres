@@ -156,6 +156,60 @@ async function getTotalClientsCount(searchQuery?: string): Promise<number> {
   return count || 0;
 }
 
+async function getTotalPoliciesCount(searchQuery?: string): Promise<number> {
+  const supabase = await getSupabaseServer();
+  const { role, brokerId } = await getAuthContext();
+  
+  // Obtener broker de LISSA
+  const { data: lissaBroker } = await supabase
+    .from('brokers')
+    .select('id')
+    .eq('email', 'contacto@lideresenseguros.com')
+    .single();
+  
+  const lissaBrokerId = lissaBroker?.id;
+  
+  let query = supabase
+    .from("policies")
+    .select("id", { count: 'exact', head: true });
+  
+  // Aplicar los mismos filtros que getClientsWithPolicies
+  if (role === 'broker' && brokerId && brokerId !== lissaBrokerId) {
+    query = query.eq('broker_id', brokerId);
+  }
+  
+  // Si hay búsqueda, filtrar pólizas de clientes que coincidan
+  if (searchQuery && searchQuery.trim()) {
+    // Obtener IDs de clientes que coinciden con la búsqueda
+    let clientQuery = supabase
+      .from("clients")
+      .select("id")
+      .or(`name.ilike.%${searchQuery}%,national_id.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%`);
+    
+    if (role === 'broker' && brokerId && brokerId !== lissaBrokerId) {
+      clientQuery = clientQuery.eq('broker_id', brokerId);
+    }
+    
+    const { data: matchingClients } = await clientQuery;
+    
+    if (matchingClients && matchingClients.length > 0) {
+      const clientIds = matchingClients.map(c => c.id);
+      query = query.in('client_id', clientIds);
+    } else {
+      return 0;
+    }
+  }
+  
+  const { count, error } = await query;
+  
+  if (error) {
+    console.error("Error counting policies:", error);
+    return 0;
+  }
+  
+  return count || 0;
+}
+
 async function getInsurersWithPolicies(): Promise<InsurerWithCount[]> {
   const supabase = await getSupabaseServer();
   
@@ -207,15 +261,18 @@ export default async function DatabasePage({
   // Cargar solo los primeros 50 clientes inicialmente
   const INITIAL_LIMIT = 50;
   
-  const [clients, insurers, totalCount] = await Promise.all([
+  const [clients, insurers, totalCount, totalPoliciesCount] = await Promise.all([
     getClientsWithPolicies(searchQuery, INITIAL_LIMIT, 0),
     getInsurersWithPolicies(),
-    getTotalClientsCount(searchQuery)
+    getTotalClientsCount(searchQuery),
+    getTotalPoliciesCount(searchQuery)
   ]);
 
-  const totalPolicies = clients.reduce((acc, c) => {
-    return acc + (c.policies ? c.policies.length : 0);
-  }, 0);
+  // Si hay búsqueda, usar conteo de lo cargado. Si no, usar totales reales
+  const displayClientCount = searchQuery ? clients.length : totalCount;
+  const displayPoliciesCount = searchQuery 
+    ? clients.reduce((acc, c) => acc + (c.policies ? c.policies.length : 0), 0)
+    : totalPoliciesCount;
 
   return (
     <div className="overflow-x-hidden max-w-full">
@@ -233,11 +290,11 @@ export default async function DatabasePage({
             {/* Stats - Compact */}
             <div className="flex gap-3 sm:gap-4">
               <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 sm:p-4 min-w-[100px] sm:min-w-[120px] border border-white/20">
-                <div className="text-2xl sm:text-3xl font-black text-white mb-0.5">{clients.length}</div>
+                <div className="text-2xl sm:text-3xl font-black text-white mb-0.5">{displayClientCount}</div>
                 <div className="text-xs text-white/80 font-semibold uppercase">Clientes</div>
               </div>
               <div className="bg-white/10 backdrop-blur-sm rounded-xl p-3 sm:p-4 min-w-[100px] sm:min-w-[120px] border border-white/20">
-                <div className="text-2xl sm:text-3xl font-black text-white mb-0.5">{totalPolicies}</div>
+                <div className="text-2xl sm:text-3xl font-black text-white mb-0.5">{displayPoliciesCount}</div>
                 <div className="text-xs text-white/80 font-semibold uppercase">Pólizas</div>
               </div>
             </div>
