@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
     // Sincronizar modelos
     if (type === 'modelos' || type === 'all') {
       console.log('[Sync] Cargando TODOS los modelos desde IS API...');
-      const modelosResponse = await isGet<any>('/api/cotizaemisorauto/getmodelos/1/20000', 'development');
+      const modelosResponse = await isGet<any>('/cotizaemisorauto/getmodelos/1/20000', 'development');
       
       if (modelosResponse.success && modelosResponse.data) {
         let rawModelos = Array.isArray(modelosResponse.data)
