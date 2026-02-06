@@ -691,26 +691,16 @@ export default function BrokerPreviewTab({ brokerId }: Props) {
                               <TableHeader>
                                 <TableRow className="bg-yellow-100/50">
                                   <TableHead>Código</TableHead>
-                                  <TableHead>Cliente</TableHead>
-                                  <TableHead className="text-right">Prima</TableHead>
-                                  <TableHead className="text-center">%</TableHead>
                                   <TableHead className="text-right">Comisión</TableHead>
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
                                 {details.assa_codes.map((item) => (
                                   <TableRow key={item.id}>
-                                    <TableCell className="font-mono text-sm font-semibold text-yellow-900">
+                                    <TableCell className="font-mono text-base font-semibold text-yellow-900">
                                       {item.assa_code || item.policy_number}
                                     </TableCell>
-                                    <TableCell>{item.client_name}</TableCell>
-                                    <TableCell className="text-right font-mono">
-                                      {formatCurrency(item.commission_calculated)}
-                                    </TableCell>
-                                    <TableCell className="text-center font-mono">
-                                      {(item.percent_applied * 100).toFixed(0)}%
-                                    </TableCell>
-                                    <TableCell className="text-right font-mono font-semibold text-yellow-900">
+                                    <TableCell className="text-right font-mono text-base font-bold text-yellow-900">
                                       {formatCurrency(item.commission_calculated)}
                                     </TableCell>
                                   </TableRow>
