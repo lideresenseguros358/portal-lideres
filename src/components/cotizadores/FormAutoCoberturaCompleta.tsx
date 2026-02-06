@@ -451,8 +451,8 @@ export default function FormAutoCoberturaCompleta() {
                 />
               </label>
               <div className="bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl p-4 md:p-6 border-2 border-[#8AAA19]">
-                {/* Input editable - SIN fondo blanco, SIN marco verde card */}
-                <div className="mb-4 w-full max-w-full overflow-hidden">
+                {/* Input editable - estructura igualada a daños propiedad */}
+                <div className="text-center mb-4">
                   <input
                     type="text"
                     inputMode="numeric"
@@ -472,11 +472,10 @@ export default function FormAutoCoberturaCompleta() {
                       }
                       setValorInputTemp('');
                     }}
-                    className="text-2xl sm:text-3xl md:text-4xl font-black text-[#8AAA19] w-full max-w-full text-center focus:outline-none focus:ring-0 bg-transparent transition-all cursor-pointer"
+                    className="text-2xl sm:text-3xl md:text-4xl font-bold text-[#8AAA19] w-full text-center focus:outline-none focus:ring-0 bg-transparent transition-all cursor-pointer"
                     placeholder="$15,000"
-                    style={{ minWidth: 0 }}
                   />
-                  <p className="text-xs sm:text-sm text-gray-600 font-medium mt-2 text-center">
+                  <p className="text-xs sm:text-sm text-gray-600 font-medium mt-2">
                     👆 Toque para editar
                   </p>
                 </div>
