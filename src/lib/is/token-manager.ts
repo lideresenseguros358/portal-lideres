@@ -44,8 +44,8 @@ function getPrimaryToken(env: ISEnvironment): string {
 
 /**
  * Obtener token diario desde IS
- * B3: ENDPOINT CORRECTO según manual IS original: /tokens (NO /diario)
- * El manual indica GET /tokens con Bearer del token principal
+ * ENDPOINT: /tokens/diario (Paso Opcional según docs IS)
+ * Requiere: Authorization Bearer con token principal
  * Parser FLEXIBLE: text/plain, JSON con múltiples estructuras
  */
 async function fetchDailyToken(env: ISEnvironment): Promise<string> {
@@ -54,9 +54,10 @@ async function fetchDailyToken(env: ISEnvironment): Promise<string> {
   // B3: Normalizar baseUrl sin trailing slash
   baseUrl = baseUrl.replace(/\/+$/, '');
   
-  // B3: ENDPOINT CORRECTO: /tokens (según manual IS)
-  // La base URL ya incluye /api, entonces /tokens es suficiente
-  const endpoint = `${baseUrl}/tokens`;
+  // CRÍTICO: Usar /tokens/diario según documentación IS
+  // Paso Opcional de la doc: "APIRestIsTester/api/tokens/diario"
+  // La base URL ya incluye /api, entonces /tokens/diario es correcto
+  const endpoint = `${baseUrl}/tokens/diario`;
 
   try {
     const response = await fetch(endpoint, {
