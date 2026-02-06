@@ -4829,6 +4829,11 @@ export async function actionRecalculateFortnight(fortnight_id: string) {
         discounts_json: {
           adelantos: advances,
           total: totalDiscounts,
+          // CRÍTICO: Agregar campo details para exportables PDF/Excel
+          details: advances.map(adv => ({
+            reason: adv.description,
+            amount: adv.amount
+          }))
         },
       };
       
@@ -5324,13 +5329,26 @@ export async function actionPayFortnight(fortnight_id: string) {
         const brokerTotal = brokerTotals.find((bt: any) => bt.broker_id === brokerId);
         const discountsJson = brokerTotal?.discounts_json as any;
         const discounts = discountsJson?.total || 0;
-        const netAmount = grossAmount - discounts;
+        const netAmount = (grossAmount as number) - discounts;
+        
+        // CRÍTICO: Si discounts_json no tiene campo details, agregarlo desde adelantos
+        let updatedDiscountsJson = discountsJson;
+        if (discountsJson && !discountsJson.details && discountsJson.adelantos) {
+          updatedDiscountsJson = {
+            ...discountsJson,
+            details: discountsJson.adelantos.map((adv: any) => ({
+              reason: adv.description,
+              amount: adv.amount
+            }))
+          };
+        }
         
         await supabase
           .from('fortnight_broker_totals')
           .update({
             gross_amount: grossAmount,
-            net_amount: netAmount
+            net_amount: netAmount,
+            discounts_json: updatedDiscountsJson || discountsJson
           })
           .eq('fortnight_id', fortnight_id)
           .eq('broker_id', brokerId);
