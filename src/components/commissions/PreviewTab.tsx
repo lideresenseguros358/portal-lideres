@@ -227,25 +227,25 @@ export function PreviewTab({ role, brokerId }: Props) {
   // Constante para identificar a LISSA
   const LISSA_EMAIL = 'contacto@lideresenseguros.com';
 
-  const summary = useMemo(() => {
-    return fortnights.reduce((acc, f) => {
-      acc.totalImported += f.total_imported;
-      
-      // Para el total pagado a corredores, filtrar a LISSA y corredores inactivos
-      // Los valores de f.total_paid_net ya vienen filtrados del API desde la última modificación
-      acc.totalPaidNet += f.total_paid_net;
-      
-      acc.totalOfficeProfit += f.total_office_profit;
-      return acc;
-    }, { totalImported: 0, totalPaidNet: 0, totalOfficeProfit: 0 });
-  }, [fortnights]);
-
   const dataToDisplay = useMemo(() => {
     if (role === 'broker') {
       return fortnights.filter((f) => f && f.brokers && f.brokers.length > 0);
     }
     return fortnights;
   }, [fortnights, role]);
+
+  const summary = useMemo(() => {
+    // CRÍTICO: Calcular summary solo de las quincenas que se están mostrando
+    return dataToDisplay.reduce((acc, f) => {
+      acc.totalImported += f.total_imported;
+      
+      // Para el total pagado a corredores, usar total_paid_net que ya viene con descuentos aplicados
+      acc.totalPaidNet += f.total_paid_net;
+      
+      acc.totalOfficeProfit += f.total_office_profit;
+      return acc;
+    }, { totalImported: 0, totalPaidNet: 0, totalOfficeProfit: 0 });
+  }, [dataToDisplay]);
 
   return (
     <div className="space-y-6">
