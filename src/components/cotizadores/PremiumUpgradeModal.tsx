@@ -92,7 +92,7 @@ export default function PremiumUpgradeModal({
     >
       <style jsx global>{`
         .premium-modal-scroll::-webkit-scrollbar {
-          width: 10px;
+          width: 6px;
         }
         .premium-modal-scroll::-webkit-scrollbar-track {
           background: transparent;
@@ -100,18 +100,16 @@ export default function PremiumUpgradeModal({
           margin-bottom: 16px;
         }
         .premium-modal-scroll::-webkit-scrollbar-thumb {
-          background: linear-gradient(180deg, #8AAA19 0%, #6d8814 100%);
+          background: rgba(138, 170, 25, 0.3);
           border-radius: 10px;
-          border: 2px solid rgba(255, 255, 255, 0.3);
-          background-clip: padding-box;
+          transition: background 0.2s ease;
         }
         .premium-modal-scroll::-webkit-scrollbar-thumb:hover {
-          background: linear-gradient(180deg, #6d8814 0%, #5a7010 100%);
-          border-color: rgba(255, 255, 255, 0.5);
+          background: rgba(138, 170, 25, 0.6);
         }
         .premium-modal-scroll {
           scrollbar-width: thin;
-          scrollbar-color: #8AAA19 transparent;
+          scrollbar-color: rgba(138, 170, 25, 0.3) transparent;
         }
         
         @keyframes premiumFloat {
