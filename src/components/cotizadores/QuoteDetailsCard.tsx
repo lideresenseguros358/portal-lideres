@@ -36,12 +36,14 @@ interface Endoso {
   nombre: string;
   descripcion?: string;
   incluido: boolean;
+  subBeneficios?: string[];
 }
 
 interface DeducibleInfo {
   valor: number;
   tipo: string;
   descripcion: string;
+  tooltip?: string;
 }
 
 interface QuoteDetailsCardProps {
@@ -113,10 +115,20 @@ export default function QuoteDetailsCard({
               <p className="text-base font-bold text-[#010139]">{formatCurrency(sumaAsegurada)}</p>
             </div>
           )}
-          {deducibleInfo && deducibleInfo.descripcion && (
+          {deducibleInfo && (
             <div>
-              <p className="text-xs text-gray-500 mb-1">Deducible</p>
-              <p className="text-base font-bold text-[#8AAA19]">{deducibleInfo.descripcion}</p>
+              <p className="text-xs text-gray-500 mb-1">Deducibles</p>
+              {deducibleInfo.tooltip ? (
+                <div className="space-y-1">
+                  {deducibleInfo.tooltip.split('\n').map((line: string, i: number) => (
+                    <p key={i} className="text-sm font-bold text-[#8AAA19]">{line}</p>
+                  ))}
+                </div>
+              ) : deducibleInfo.descripcion ? (
+                <p className="text-base font-bold text-[#8AAA19]">{deducibleInfo.descripcion}</p>
+              ) : deducibleInfo.valor > 0 ? (
+                <p className="text-base font-bold text-[#8AAA19]">B/.{deducibleInfo.valor.toFixed(2)}</p>
+              ) : null}
             </div>
           )}
         </div>
@@ -201,20 +213,42 @@ export default function QuoteDetailsCard({
           >
             <span className="text-sm md:text-base font-semibold text-[#010139] flex items-center gap-2 md:gap-3">
               <FaFileAlt className="text-[#8AAA19] text-lg" />
-              Documentos Incluidos ({endosos.length})
+              Endosos Incluidos ({endosos.length})
             </span>
             {expandedSection === 'endosos' ? <FaChevronUp className="text-gray-400" /> : <FaChevronDown className="text-gray-400" />}
           </button>
           {expandedSection === 'endosos' && (
-            <div className="mt-3 md:mt-4 space-y-2.5 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
-              {endosos.map((endoso, index) => (
-                <div key={index} className="flex items-start gap-3 p-3 md:p-4 bg-blue-50 rounded-lg border border-blue-100">
-                  <FaFileAlt className="text-blue-600 flex-shrink-0 mt-0.5 text-base" />
-                  <span className="text-sm md:text-base text-gray-700 leading-snug">
-                    {typeof endoso === 'string' ? endoso : endoso.nombre}
-                  </span>
-                </div>
-              ))}
+            <div className="mt-3 md:mt-4 space-y-2.5 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+              {endosos.map((endoso: any, index: number) => {
+                const subBeneficios = endoso.subBeneficios || [];
+                return (
+                  <div key={index} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+                    <div className="flex items-start gap-3 p-3 md:p-4">
+                      <FaFileAlt className="text-[#8AAA19] flex-shrink-0 mt-0.5 text-base" />
+                      <div className="flex flex-col flex-1">
+                        <span className="text-sm md:text-base font-semibold text-gray-800 leading-snug">
+                          {typeof endoso === 'string' ? endoso : endoso.nombre}
+                        </span>
+                        {typeof endoso !== 'string' && endoso.descripcion && (
+                          <span className="text-xs text-gray-500 mt-0.5">{endoso.descripcion}</span>
+                        )}
+                      </div>
+                    </div>
+                    {subBeneficios.length > 0 && (
+                      <div className="px-4 pb-3 pt-0 border-t border-gray-50">
+                        <div className="grid grid-cols-1 gap-1 mt-2">
+                          {subBeneficios.map((sub: string, sIdx: number) => (
+                            <div key={sIdx} className="flex items-start gap-1.5 text-xs text-gray-600">
+                              <span className="text-[#8AAA19] mt-0.5 flex-shrink-0">✓</span>
+                              <span>{sub}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

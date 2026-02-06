@@ -390,30 +390,28 @@ export function normalizeDeductibles(
     }
   }
   
-  // Fuente 2: Coberturas
+  // Fuente 2: Coberturas (API FEDPA devuelve campos en MAYÚSCULAS)
   if (coberturas && Array.isArray(coberturas)) {
     for (const cob of coberturas) {
-      const deducible = cob.deducible || '';
-      const cobertura = (cob.cobertura || cob.descripcion || '').toLowerCase();
+      // Soportar MAYÚSCULAS (API FEDPA) y minúsculas
+      const deducible = cob.DEDUCIBLE ?? cob.deducible ?? '';
+      const cobertura = (cob.DESCCOBERTURA || cob.COBERTURA || cob.cobertura || cob.descripcion || '').toLowerCase();
+      const deducibleNum = typeof deducible === 'number' ? deducible : parseFloat(String(deducible));
       
-      if (deducible && cobertura.includes('comprensiv')) {
-        const deducibleStr = String(deducible);
-        const match = deducibleStr.match(/(\d+(?:\.\d{2})?)/);
-        if (match && match[1] && !result.comprensivo) {
+      if (deducibleNum > 0 && cobertura.includes('comprensiv')) {
+        if (!result.comprensivo) {
           result.comprensivo = {
-            amount: parseFloat(match[1]),
+            amount: deducibleNum,
             currency: 'B/.',
             source: 'coberturas',
           };
         }
       }
       
-      if (deducible && (cobertura.includes('colisión') || cobertura.includes('vuelco'))) {
-        const deducibleStr = String(deducible);
-        const match = deducibleStr.match(/(\d+(?:\.\d{2})?)/);
-        if (match && match[1] && !result.colisionVuelco) {
+      if (deducibleNum > 0 && (cobertura.includes('colisi') || cobertura.includes('vuelco'))) {
+        if (!result.colisionVuelco) {
           result.colisionVuelco = {
-            amount: parseFloat(match[1]),
+            amount: deducibleNum,
             currency: 'B/.',
             source: 'coberturas',
           };

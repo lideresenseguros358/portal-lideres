@@ -377,13 +377,20 @@ export default function QuoteComparison({ policyType, quotes, quoteData }: Quote
                   </div>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className={`inline-block px-2 py-1 rounded-full text-[10px] font-semibold ${
-                    quote.planType === 'premium' 
-                      ? 'bg-[#8AAA19] text-white'
-                      : 'bg-white/20 text-white'
-                  }`}>
-                    {quote.planType === 'premium' ? 'Premium' : 'Básico'}
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className={`inline-block px-2 py-1 rounded-full text-[10px] font-semibold ${
+                      quote.planType === 'premium' 
+                        ? 'bg-[#8AAA19] text-white'
+                        : 'bg-white/20 text-white'
+                    }`}>
+                      {quote.planType === 'premium' ? 'Premium' : 'Básico'}
+                    </span>
+                    {quote._endosoIncluido && (
+                      <span className="text-[9px] text-white/80 font-medium truncate max-w-[120px]">
+                        {quote._endosoIncluido}
+                      </span>
+                    )}
+                  </div>
                   {quote.isRecommended && (
                     <FaStar className="text-[#8AAA19] text-lg" />
                   )}
@@ -471,16 +478,73 @@ export default function QuoteComparison({ policyType, quotes, quoteData }: Quote
                     </div>
                   )}
                   
-                  {/* Deducible con Tooltip */}
-                  <div className="flex items-center justify-center gap-2 mt-3 text-xs text-gray-600">
-                    <span>Deducible desde ${quote.deductible.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
-                    {quote._deducibleOriginal && (
-                      <AutoCloseTooltip 
-                        content={getDeducibleTooltip(quote._deducibleOriginal as 'bajo' | 'medio' | 'alto')}
-                      />
+                  {/* Deducibles: mostrar Comprensivo + Colisión/Vuelco si disponibles */}
+                  {quote._deduciblesReales?.comprensivo || quote._deduciblesReales?.colisionVuelco ? (
+                    <div className="mt-3 space-y-1">
+                      {quote._deduciblesReales.comprensivo && (
+                        <div className="flex items-center justify-center gap-1 text-xs text-gray-600">
+                          <span className="font-medium">Comprensivo:</span>
+                          <span className="font-semibold text-[#010139]">
+                            B/.{quote._deduciblesReales.comprensivo.amount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                          </span>
+                        </div>
+                      )}
+                      {quote._deduciblesReales.colisionVuelco && (
+                        <div className="flex items-center justify-center gap-1 text-xs text-gray-600">
+                          <span className="font-medium">Colisión/Vuelco:</span>
+                          <span className="font-semibold text-[#010139]">
+                            B/.{quote._deduciblesReales.colisionVuelco.amount.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-center gap-2 mt-3 text-xs text-gray-600">
+                      <span>Deducible desde ${quote.deductible.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                      {quote._deducibleOriginal && (
+                        <AutoCloseTooltip 
+                          content={getDeducibleTooltip(quote._deducibleOriginal as 'bajo' | 'medio' | 'alto')}
+                        />
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Endoso Highlight - Visual differentiator */}
+                {quote._endosoIncluido && (
+                  <div className={`mb-4 p-3 rounded-xl border-2 ${
+                    quote.planType === 'premium' 
+                      ? 'bg-gradient-to-r from-green-50 to-emerald-50 border-[#8AAA19]/40' 
+                      : 'bg-gray-50 border-gray-200'
+                  }`}>
+                    <div className="flex items-center gap-2 mb-2">
+                      <FaShieldAlt className={`text-sm ${quote.planType === 'premium' ? 'text-[#8AAA19]' : 'text-gray-400'}`} />
+                      <span className="text-xs font-bold text-[#010139]">Endosos del Plan</span>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {(quote._endosos || []).map((endoso: any, eIdx: number) => {
+                        const isExclusive = endoso.codigo === 'PORCELANA' || endoso.codigo === 'VA';
+                        return (
+                          <span 
+                            key={eIdx}
+                            className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-semibold ${
+                              isExclusive && quote.planType === 'premium'
+                                ? 'bg-[#8AAA19] text-white shadow-sm'
+                                : 'bg-white text-gray-600 border border-gray-200'
+                            }`}
+                          >
+                            {isExclusive && quote.planType === 'premium' ? '⭐' : '✓'} {endoso.nombre}
+                          </span>
+                        );
+                      })}
+                    </div>
+                    {quote.planType === 'premium' && (
+                      <p className="text-[10px] text-[#8AAA19] font-medium mt-2">
+                        Incluye cobertura de vidrios, faros, espejos, luces, molduras y pintura
+                      </p>
                     )}
                   </div>
-                </div>
+                )}
 
                 {/* Coverages Summary */}
                 <div className="mb-5 flex-1 overflow-hidden">

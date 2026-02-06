@@ -1,7 +1,14 @@
 /**
  * FEDPA Plan Resolver
- * Identifica planes Básico (Full Extras) vs Premium (Porcelana)
- * basándose en beneficios del catálogo
+ * 
+ * IMPORTANTE: En FEDPA, Básico vs Premium NO son planes diferentes.
+ * Ambos usan el MISMO plan ID (ej: 411 para C.C. PARTICULAR).
+ * La diferencia es el parámetro EndosoIncluido en la cotización:
+ *   - EndosoIncluido = 'N' → Básico (Full Extras)
+ *   - EndosoIncluido = 'S' → Premium (Endoso Porcelana)
+ * 
+ * Este resolver simplemente encuentra el plan CC PARTICULAR del catálogo
+ * y lo devuelve para ambos tipos, con el endoso correcto.
  */
 
 export interface FedpaPlanInfo {
@@ -19,9 +26,13 @@ let planesCache: {
 
 const CACHE_DURATION = 1000 * 60 * 30; // 30 minutos
 
+// Plan CC PARTICULAR por defecto (de la documentación FEDPA)
+const DEFAULT_CC_PLAN_ID = '411';
+const DEFAULT_CC_PLAN_NAME = 'C.C. PARTICULAR - SOLO PARA WEB SERVICES';
+
 /**
  * Obtiene planes Básico y Premium de FEDPA
- * Cachea resultados para evitar múltiples llamadas
+ * Ambos usan el mismo plan ID - la diferencia es EndosoIncluido (S/N)
  */
 export async function obtenerPlanesFedpa(environment: 'DEV' | 'PROD' = 'DEV'): Promise<{
   basico: FedpaPlanInfo | null;
@@ -36,143 +47,59 @@ export async function obtenerPlanesFedpa(environment: 'DEV' | 'PROD' = 'DEV'): P
     };
   }
 
+  // Buscar el plan CC PARTICULAR en el catálogo
+  let ccPlanId = DEFAULT_CC_PLAN_ID;
+  let ccPlanName = DEFAULT_CC_PLAN_NAME;
+
   try {
-    console.log('[FEDPA Plans] Obteniendo planes del catálogo...');
-    
-    // Obtener lista de planes de Cobertura Completa
     const planesResponse = await fetch(`/api/fedpa/planes?environment=${environment}&tipo=COBERTURA%20COMPLETA`);
-    if (!planesResponse.ok) {
-      const errorText = await planesResponse.text();
-      console.error('[FEDPA Plans] Error HTTP', planesResponse.status, ':', errorText);
-      console.warn('[FEDPA Plans] Usando planes hardcodeados como fallback');
-      return {
-        basico: {
-          planId: '411',
-          nombre: 'Cobertura Completa Básica',
-          tipo: 'basico',
-          endoso: 'Full Extras',
-        },
-        premium: {
-          planId: '412',
-          nombre: 'Cobertura Completa Premium',
-          tipo: 'premium',
-          endoso: 'Porcelana',
-        },
-      };
-    }
-    
-    const planesData = await planesResponse.json();
-    const planes = planesData.data || [];
-    
-    if (planes.length === 0) {
-      console.warn('[FEDPA Plans] No hay planes en catálogo, usando hardcodeados');
-      return {
-        basico: {
-          planId: '411',
-          nombre: 'Cobertura Completa Básica',
-          tipo: 'basico',
-          endoso: 'Full Extras',
-        },
-        premium: {
-          planId: '412',
-          nombre: 'Cobertura Completa Premium',
-          tipo: 'premium',
-          endoso: 'Porcelana',
-        },
-      };
-    }
-    
-    console.log('[FEDPA Plans] Planes disponibles:', planes.length);
-    
-    // Buscar planes por beneficios/endosos
-    let basicoPlan: FedpaPlanInfo | null = null;
-    let premiumPlan: FedpaPlanInfo | null = null;
-    
-    for (const plan of planes) {
-      const planId = plan.plan?.toString();
-      const nombre = plan.nombreplan || '';
+    if (planesResponse.ok) {
+      const planesData = await planesResponse.json();
+      const planes = planesData.data || [];
       
-      // Obtener beneficios del plan
-      try {
-        const beneficiosResponse = await fetch(`/api/fedpa/planes/beneficios?plan=${planId}&environment=${environment}`);
-        if (beneficiosResponse.ok) {
-          const beneficiosData = await beneficiosResponse.json();
-          const beneficios = beneficiosData.data || [];
-          
-          // Buscar en texto de beneficios
-          const textoCompleto = beneficios.map((b: any) => 
-            `${b.beneficio || ''} ${b.descripcion || ''}`.toLowerCase()
-          ).join(' ');
-          
-          // Detectar tipo por keywords
-          if (textoCompleto.includes('porcelana') || textoCompleto.includes('premium')) {
-            premiumPlan = {
-              planId,
-              nombre,
-              tipo: 'premium',
-              endoso: 'Porcelana',
-            };
-            console.log('[FEDPA Plans] ✅ Premium encontrado:', planId, nombre);
-          } else if (textoCompleto.includes('full extras') || textoCompleto.includes('extras')) {
-            basicoPlan = {
-              planId,
-              nombre,
-              tipo: 'basico',
-              endoso: 'Full Extras',
-            };
-            console.log('[FEDPA Plans] ✅ Básico encontrado:', planId, nombre);
-          }
-        }
-      } catch (error) {
-        console.error(`[FEDPA Plans] Error obteniendo beneficios del plan ${planId}:`, error);
-      }
-    }
-    
-    // Fallback: si no encontramos por beneficios, usar los primeros 2 planes disponibles
-    if (!basicoPlan || !premiumPlan) {
-      console.warn('[FEDPA Plans] No se detectaron planes por beneficios, usando fallback...');
-      
-      // Ordenar planes y asignar
-      const planesOrdenados = planes.sort((a: any, b: any) => 
-        (a.plan || 0) - (b.plan || 0)
+      // Buscar CC PARTICULAR (plan principal para web services)
+      const ccParticular = planes.find((p: any) => 
+        p.descripcion?.toUpperCase().includes('PARTICULAR') ||
+        p.nombreplan?.toUpperCase().includes('PARTICULAR')
       );
       
-      if (!basicoPlan && planesOrdenados[0]) {
-        basicoPlan = {
-          planId: planesOrdenados[0].plan?.toString() || '411',
-          nombre: planesOrdenados[0].nombreplan || 'Plan Básico',
-          tipo: 'basico',
-          endoso: 'Full Extras',
-        };
+      if (ccParticular) {
+        ccPlanId = ccParticular.plan?.toString() || DEFAULT_CC_PLAN_ID;
+        ccPlanName = ccParticular.descripcion || ccParticular.nombreplan || DEFAULT_CC_PLAN_NAME;
       }
       
-      if (!premiumPlan && planesOrdenados[1]) {
-        premiumPlan = {
-          planId: planesOrdenados[1].plan?.toString() || '412',
-          nombre: planesOrdenados[1].nombreplan || 'Plan Premium',
-          tipo: 'premium',
-          endoso: 'Porcelana',
-        };
-      }
+      console.log(`[FEDPA Plans] CC PARTICULAR encontrado: plan ${ccPlanId} (${ccPlanName})`);
     }
-    
-    // Guardar en cache
-    planesCache = {
-      basico: basicoPlan,
-      premium: premiumPlan,
-      timestamp: Date.now(),
-    };
-    
-    console.log('[FEDPA Plans] Planes identificados:', {
-      basico: basicoPlan?.planId,
-      premium: premiumPlan?.planId,
-    });
-    
-    return { basico: basicoPlan, premium: premiumPlan };
   } catch (error) {
-    console.error('[FEDPA Plans] Error fatal:', error);
-    return { basico: null, premium: null };
+    console.warn('[FEDPA Plans] Error obteniendo catálogo, usando default plan 411');
   }
+
+  // Mismo plan para ambos - la diferencia es EndosoIncluido en la cotización
+  const result = {
+    basico: {
+      planId: ccPlanId,
+      nombre: ccPlanName,
+      tipo: 'basico' as const,
+      endoso: 'Full Extras',  // EndosoIncluido = 'N'
+    },
+    premium: {
+      planId: ccPlanId,
+      nombre: ccPlanName,
+      tipo: 'premium' as const,
+      endoso: 'Endoso Porcelana',  // EndosoIncluido = 'S'
+    },
+  };
+
+  // Guardar en cache
+  planesCache = { ...result, timestamp: Date.now() };
+
+  console.log('[FEDPA Plans] ✅ Plan resuelto:', {
+    planId: ccPlanId,
+    basico: 'EndosoIncluido=N (Full Extras)',
+    premium: 'EndosoIncluido=S (Endoso Porcelana)',
+  });
+
+  return result;
 }
 
 /**

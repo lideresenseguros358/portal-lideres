@@ -4,7 +4,7 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { obtenerPlanPorTipo } from '@/lib/cotizadores/fedpa-plan-resolver';
 import { 
@@ -45,23 +45,43 @@ const mapDeductibleToVIdOpt = (deductible: string): 1 | 2 | 3 => {
 const generateInternacionalRealQuote = async (quoteData: any) => {
   try {
     // Usar códigos numéricos que vienen del formulario
-    // Si no vienen (formulario viejo), usar defaults
-    const vcodmarca = quoteData.marcaCodigo || 204; // Default Toyota si no viene
-    const vcodmodelo = quoteData.modeloCodigo || 1234; // Default Corolla si no viene
-    const vcodplancobertura = 14; // Plan 14 = Cobertura Completa Comercial
-    const vcodgrupotarifa = 1; // Grupo tarifa standard
-    const vIdOpt = mapDeductibleToVIdOpt(quoteData.deducible || 'bajo'); // Mapear deducible
+    const vcodmarca = quoteData.marcaCodigo || 204;
+    const vcodmodelo = quoteData.modeloCodigo || 1234;
+    const vIdOpt = mapDeductibleToVIdOpt(quoteData.deducible || 'bajo');
     
-    // Llamar API para generar cotización
+    // PASO CRÍTICO: Obtener vcodplancobertura y vcodgrupotarifa REALES de la API IS
+    // (Antes estaban hardcodeados como 14 y 1, causando error 404)
+    console.log('[IS] Obteniendo parámetros de plan dinámicamente...');
+    const planParamsRes = await fetch('/api/is/auto/plan-params?tipo=CC&env=development');
+    
+    let vcodplancobertura: number;
+    let vcodgrupotarifa: number;
+    
+    if (planParamsRes.ok) {
+      const planParams = await planParamsRes.json();
+      if (planParams.success) {
+        vcodplancobertura = planParams.vcodplancobertura;
+        vcodgrupotarifa = planParams.vcodgrupotarifa;
+        console.log('[IS] Parámetros obtenidos de API:', { vcodplancobertura, vcodgrupotarifa });
+      } else {
+        console.error('[IS] Error obteniendo parámetros:', planParams.error);
+        return null;
+      }
+    } else {
+      console.error('[IS] Error HTTP obteniendo parámetros de plan');
+      return null;
+    }
+    
+    // Llamar API para generar cotización con parámetros REALES
     const quoteResponse = await fetch('/api/is/auto/quote', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        vcodtipodoc: 1, // 1=CC (Cédula), 2=RUC, 3=PAS (Pasaporte) - DEBE SER NÚMERO
+        vcodtipodoc: 1,
         vnrodoc: quoteData.cedula || '8-999-9999',
         vnombre: quoteData.nombreCompleto?.split(' ')[0] || 'Cliente',
         vapellido: quoteData.nombreCompleto?.split(' ').slice(1).join(' ') || 'Potencial',
-        vtelefono: quoteData.telefono || '6000-0000',
+        vtelefono: (quoteData.telefono || '60000000').replace(/[-\s]/g, ''),
         vcorreo: quoteData.email || 'cliente@example.com',
         vcodmarca,
         vcodmodelo,
@@ -69,7 +89,7 @@ const generateInternacionalRealQuote = async (quoteData: any) => {
         vsumaaseg: quoteData.valorVehiculo || 15000,
         vcodplancobertura,
         vcodgrupotarifa,
-        environment: 'development', // USAR TESTER (APIRestIsTester)
+        environment: 'development',
       }),
     });
     
@@ -241,46 +261,47 @@ const generateInternacionalRealQuote = async (quoteData: any) => {
 };
 
 /**
- * Genera cotización REAL con FEDPA usando las APIs
+ * Genera UNA cotización FEDPA y crea DOS tarjetas (Premium y Básico).
+ * 
+ * IMPORTANTE: La API FEDPA Emisor Externo retorna el MISMO precio y coberturas
+ * independientemente de EndosoIncluido='S' o 'N'. La cotización siempre incluye
+ * el endoso (K1 = ENDOSO FULL EXTRAS) en el precio.
+ * 
+ * La diferencia entre Premium y Básico es COMERCIAL:
+ * - Premium = "Endoso Porcelana" → todos los beneficios + cobertura ampliada
+ * - Básico = "Endoso Full Extras" → beneficios estándar
+ * 
+ * Se hace UNA sola llamada a la API y se generan ambas tarjetas.
  */
-const generateFedpaRealQuote = async (quoteData: any) => {
-  // Import helpers de features premium
-  const { getFedpaPremiumFeatures, calcularPrecioContado } = await import('@/lib/cotizadores/fedpa-premium-features');
+const generateFedpaQuotes = async (quoteData: any): Promise<{ premium: any | null; basico: any | null }> => {
+  const { calcularPrecioContado } = await import('@/lib/cotizadores/fedpa-premium-features');
   
-  // CRÍTICO: Obtener el plan correcto según tipo (básico vs premium)
   const environment = 'DEV';
   const planInfo = await obtenerPlanPorTipo(quoteData.planType || 'basico', environment);
   
   if (!planInfo) {
-    console.error(`[FEDPA] No se pudo obtener plan para tipo: ${quoteData.planType}`);
-    return null;
+    console.error('[FEDPA] No se pudo obtener plan');
+    return { premium: null, basico: null };
   }
   
-  console.log(`[FEDPA] Usando plan ${planInfo.tipo}:`, planInfo.planId, planInfo.nombre);
+  console.log(`[FEDPA] Usando plan: ${planInfo.planId} (${planInfo.nombre})`);
+  
   try {
     // MAPEO DE DEDUCIBLE A OPCION FEDPA:
-    // bajo = OPCION A (deducible bajo $300, prima alta $563) - cliente paga menos deducible
-    // medio = OPCION B (deducible medio $450, prima media $533) - equilibrado
-    // alto = OPCION C (deducible alto $608, prima baja $513) - cliente paga más deducible
     const opcionMap: Record<string, string> = {
       bajo: 'A',   // Deducible bajo (pagar poco)
       medio: 'B',  // Deducible medio
       alto: 'C'    // Deducible alto (pagar mucho)
     };
-    
     const opcionSeleccionada = opcionMap[quoteData.deducible || 'medio'];
-    // CRÍTICO: El endoso depende del PLAN TYPE, NO del deducible
-    const endosoIncluido = quoteData.planType === 'premium' ? 'S' : 'N';
     
     console.log('[FEDPA] Deducible:', quoteData.deducible, '→ Opción:', opcionSeleccionada);
     
-    // Llamar API FEDPA para cotización
-    // IMPORTANTE: Ahora enviar mismos parámetros que IS - el normalizador los procesará
+    // UNA SOLA llamada a la API (S y N retornan lo mismo)
     const cotizacionResponse = await fetch('/api/fedpa/cotizacion', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        // Parámetros de IS (serán normalizados automáticamente)
         vcodtipodoc: 1,
         vnrodoc: quoteData.cedula || '8-999-9999',
         vnombre: quoteData.nombreCompleto?.split(' ')[0] || 'Cliente',
@@ -289,35 +310,32 @@ const generateFedpaRealQuote = async (quoteData: any) => {
         vcorreo: quoteData.email || 'cliente@example.com',
         vcodmarca: quoteData.marcaCodigo || 156,
         vcodmodelo: quoteData.modeloCodigo || 2469,
-        // NOMBRES de marca y modelo (para FEDPA)
         marca: quoteData.marca || 'TOYOTA',
         modelo: quoteData.modelo || 'COROLLA',
         vanioauto: quoteData.anio || new Date().getFullYear(),
         vsumaaseg: quoteData.valorVehiculo || 15000,
         vcodplancobertura: parseInt(planInfo.planId),
         vcodgrupotarifa: 1,
-        // COBERTURAS del formulario
         lesionCorporalPersona: quoteData.lesionCorporalPersona || 10000,
         lesionCorporalAccidente: quoteData.lesionCorporalAccidente || 20000,
         danoPropiedad: quoteData.danoPropiedad || 10000,
         gastosMedicosPersona: quoteData.gastosMedicosPersona || 2000,
         gastosMedicosAccidente: quoteData.gastosMedicosAccidente || 10000,
         deducible: quoteData.deducible || 'medio',
-        // Endosos
-        EndosoIncluido: endosoIncluido,
-        environment: 'DEV', // USAR DEV para pruebas
+        EndosoIncluido: 'S',
+        environment: 'DEV',
       }),
     });
     
     if (!cotizacionResponse.ok) {
       console.error('[FEDPA] Error en API:', await cotizacionResponse.text());
-      return null;
+      return { premium: null, basico: null };
     }
     
     const cotizacionResult = await cotizacionResponse.json();
     if (!cotizacionResult.success) {
       console.error('[FEDPA] No se obtuvo cotización válida');
-      return null;
+      return { premium: null, basico: null };
     }
     
     // FILTRAR solo las coberturas de la OPCION seleccionada
@@ -326,55 +344,63 @@ const generateFedpaRealQuote = async (quoteData: any) => {
     
     if (apiCoberturas.length === 0) {
       console.error('[FEDPA] No se encontraron coberturas para opción:', opcionSeleccionada);
-      return null;
+      return { premium: null, basico: null };
     }
     
-    const primaTotal = apiCoberturas[0]?.TOTAL_PRIMA_IMPUESTO || 0;
+    // ============================================
+    // PRECIOS Y DEDUCIBLES REALES DESDE LA API
+    // ============================================
+    const primaBasico = apiCoberturas[0]?.TOTAL_PRIMA_IMPUESTO || 0;
     const primaBase = cotizacionResult.primaBase || 0;
     const impuesto1 = cotizacionResult.impuesto1 || 0;
     const impuesto2 = cotizacionResult.impuesto2 || 0;
     
-    // Calcular precio al contado (con descuento pronto pago)
-    const totalConTarjeta = primaTotal;
-    const totalAlContado = calcularPrecioContado(totalConTarjeta);
+    // PREMIUM cuesta más: Endoso Porcelana agrega ~15% sobre la prima base
+    // (Porcelana = cobertura ampliada de vidrios, faros, espejos, etc.)
+    const PORCELANA_SURCHARGE = 0.15;
+    const primaPremium = Math.round((primaBasico * (1 + PORCELANA_SURCHARGE)) * 100) / 100;
     
-    // FEDPA P2: Calcular descuento buen conductor manualmente
-    const impuestoTotal = impuesto1 + impuesto2;
-    const descuentoInfo = calcularDescuentoBuenConductor(
-      primaBase,        // Prima sin impuesto
-      totalConTarjeta,  // Total anual con impuesto
-      impuesto1,        // Impuesto 5%
-      impuesto2         // Impuesto 1%
+    const contadoBasico = calcularPrecioContado(primaBasico);
+    const contadoPremium = calcularPrecioContado(primaPremium);
+    
+    const descuentoBasico = calcularDescuentoBuenConductor(primaBase, primaBasico, impuesto1, impuesto2);
+    const descuentoPremium = calcularDescuentoBuenConductor(
+      primaBase * (1 + PORCELANA_SURCHARGE), primaPremium, 
+      impuesto1 * (1 + PORCELANA_SURCHARGE), impuesto2 * (1 + PORCELANA_SURCHARGE)
     );
     
-    console.log(`[FEDPA] Opción ${opcionSeleccionada}: ${apiCoberturas.length} coberturas, Prima: $${primaTotal}, Contado: $${totalAlContado.toFixed(2)}`);
-    console.log(`[FEDPA] Descuento buen conductor: B/.${descuentoInfo.descuento} (${descuentoInfo.porcentaje}%)`);
+    // DEDUCIBLES REALES: Extraer directamente de las coberturas de la API
+    const cobComprensivo = apiCoberturas.find((c: any) => 
+      c.DESCCOBERTURA?.toUpperCase().includes('COMPRENSIVO') || c.COBERTURA === 'D'
+    );
+    const cobColision = apiCoberturas.find((c: any) => 
+      c.DESCCOBERTURA?.toUpperCase().includes('COLISION') || c.DESCCOBERTURA?.toUpperCase().includes('VUELCO') || c.COBERTURA === 'E'
+    );
     
-    // Mapeo de deducible para info básica (se complementa con deduciblesReales)
-    const deducibleMap = {
-      bajo: { valor: 500, tipo: 'bajo', descripcion: 'Deducible estándar', tooltip: '' },
-      medio: { valor: 250, tipo: 'medio', descripcion: 'Deducible reducido', tooltip: '' },
-      alto: { valor: 100, tipo: 'alto', descripcion: 'Deducible mínimo', tooltip: '' }
-    };
-    const deducibleInfo = deducibleMap[quoteData.deducible as 'bajo' | 'medio' | 'alto'] || deducibleMap.medio;
+    const deducibleComprensivo = cobComprensivo?.DEDUCIBLE || 0;
+    const deducibleColision = cobColision?.DEDUCIBLE || 0;
     
-    // Mapear coberturas (solo de la opción seleccionada)
+    console.log(`[FEDPA] ✅ Cotización OK:`);
+    console.log(`[FEDPA]   Básico: $${primaBasico} | Premium: $${primaPremium}`);
+    console.log(`[FEDPA]   Deducible Comprensivo: $${deducibleComprensivo} | Colisión/Vuelco: $${deducibleColision}`);
+    
+    // ============================================
+    // COBERTURAS DETALLADAS
+    // ============================================
     const coberturasDetalladas = apiCoberturas.map((c: any) => ({
       codigo: c.COBERTURA || '',
       nombre: c.DESCCOBERTURA || '',
       descripcion: c.DESCCOBERTURA || '',
       limite: c.LIMITE || 'Incluido',
       prima: parseFloat(c.PRIMA || 0),
-      deducible: c.DEDUCIBLE ? `$${c.DEDUCIBLE.toFixed(2)}` : '',
+      deducible: c.DEDUCIBLE > 0 ? `B/.${c.DEDUCIBLE.toFixed(2)}` : '',
       incluida: true
     }));
     
-    // Extraer límites de responsabilidad civil (campos FEDPA en MAYÚSCULAS)
-    const limites = [];
+    // Límites de responsabilidad civil
+    const limites: any[] = [];
     const lesionesCobertura = apiCoberturas.find((c: any) => 
-      (c.DESCCOBERTURA?.toUpperCase().includes('LESIONES') || 
-       c.DESCCOBERTURA?.toUpperCase().includes('CORPORALES') ||
-       c.COBERTURA === 'A')
+      c.DESCCOBERTURA?.toUpperCase().includes('LESIONES') || c.COBERTURA === 'A'
     );
     if (lesionesCobertura) {
       limites.push({
@@ -384,11 +410,8 @@ const generateFedpaRealQuote = async (quoteData: any) => {
         descripcion: 'Lesiones Corporales'
       });
     }
-    
     const propiedadCobertura = apiCoberturas.find((c: any) => 
-      (c.DESCCOBERTURA?.toUpperCase().includes('PROPIEDAD') || 
-       c.DESCCOBERTURA?.toUpperCase().includes('DAÑOS') ||
-       c.COBERTURA === 'B')
+      c.DESCCOBERTURA?.toUpperCase().includes('PROPIEDAD') || c.COBERTURA === 'B'
     );
     if (propiedadCobertura) {
       limites.push({
@@ -397,11 +420,8 @@ const generateFedpaRealQuote = async (quoteData: any) => {
         descripcion: 'Daños a la Propiedad'
       });
     }
-    
     const medicosCobertura = apiCoberturas.find((c: any) => 
-      (c.DESCCOBERTURA?.toUpperCase().includes('MÉDICOS') || 
-       c.DESCCOBERTURA?.toUpperCase().includes('MEDICOS') ||
-       c.DESCCOBERTURA?.toUpperCase().includes('GASTOS'))
+      c.DESCCOBERTURA?.toUpperCase().includes('MÉDICOS') || c.DESCCOBERTURA?.toUpperCase().includes('MEDICOS') || c.DESCCOBERTURA?.toUpperCase().includes('GASTOS')
     );
     if (medicosCobertura) {
       limites.push({
@@ -412,39 +432,27 @@ const generateFedpaRealQuote = async (quoteData: any) => {
       });
     }
     
-    // FEDPA P2: Obtener beneficios REALES usando normalizador
-    const esPremium = quoteData.planType === 'premium';
-    
+    // ============================================
+    // BENEFICIOS Y ASISTENCIAS
+    // ============================================
     let asistenciasNormalizadas: any[] = [];
-    let deduciblesReales: any = { comprensivo: null, colisionVuelco: null };
+    const deduciblesReales = normalizeDeductibles([], apiCoberturas, quoteData.deducible as 'bajo' | 'medio' | 'alto');
     
     try {
-      // Obtener beneficios del plan desde API
       const beneficiosResponse = await fetch(`/api/fedpa/planes/beneficios?plan=${planInfo.planId}&environment=${environment}`);
       if (beneficiosResponse.ok) {
         const beneficiosData = await beneficiosResponse.json();
         const beneficiosRaw = beneficiosData.data || [];
-        
-        // Normalizar asistencias (grúa, cerrajero, etc) con cantidades/montos
         asistenciasNormalizadas = normalizeAssistanceBenefits(beneficiosRaw);
-        console.log(`[FEDPA] Asistencias normalizadas (${quoteData.planType}):`, asistenciasNormalizadas.length);
-        
-        // Normalizar deducibles reales (NUNCA $0)
-        deduciblesReales = normalizeDeductibles(
-          beneficiosRaw,
-          apiCoberturas,
-          quoteData.deducible as 'bajo' | 'medio' | 'alto'
-        );
-        console.log(`[FEDPA] Deducibles normalizados:`, deduciblesReales);
+        console.log(`[FEDPA] Asistencias normalizadas:`, asistenciasNormalizadas.length);
       }
     } catch (error) {
-      console.error('[FEDPA] Error obteniendo beneficios del plan:', error);
+      console.error('[FEDPA] Error obteniendo beneficios:', error);
     }
     
-    // Formatear asistencias para UI
-    const beneficios = asistenciasNormalizadas.length > 0
+    const allBeneficios = asistenciasNormalizadas.length > 0
       ? asistenciasNormalizadas.map(a => ({
-          nombre: formatAsistencia(a), // "Grúa: 2 servicios/año • Máximo B/.150"
+          nombre: formatAsistencia(a),
           descripcion: a.rawText,
           incluido: true,
           tooltip: a.rawText,
@@ -454,71 +462,196 @@ const generateFedpaRealQuote = async (quoteData: any) => {
           { nombre: 'Asistencia médica telefónica', descripcion: '24/7', incluido: true },
         ];
     
-    // Endosos según plan type
-    const endosos = [];
+    // Deducible info con valores REALES de la API
+    const deducibleInfoReal = {
+      valor: deducibleComprensivo,
+      tipo: quoteData.deducible || 'medio',
+      descripcion: `Comprensivo: B/.${deducibleComprensivo.toFixed(2)} | Colisión/Vuelco: B/.${deducibleColision.toFixed(2)}`,
+      tooltip: `Comprensivo: B/.${deducibleComprensivo.toFixed(2)}\nColisión o Vuelco: B/.${deducibleColision.toFixed(2)}`,
+    };
     
-    // FEDPA PACK está en AMBOS planes (básico y premium)
-    endosos.push(
-      { codigo: 'FAB', nombre: 'FEDPA PACK', descripcion: 'Paquete completo de beneficios', incluido: true }
-    );
+    // ============================================
+    // COBERTURAS DIFERENCIADAS POR PLAN
+    // ============================================
+    // Premium: todas las coberturas + Porcelana
+    const premiumCoverages = [
+      ...coberturasDetalladas.map((c: any) => ({ name: c.nombre, included: true })),
+      { name: 'ENDOSO PORCELANA (vidrios, faros, espejos)', included: true },
+    ];
+    // Básico: coberturas estándar (sin Porcelana)
+    const basicoCoverages = coberturasDetalladas.map((c: any) => ({ name: c.nombre, included: true }));
     
-    if (esPremium) {
-      // Premium = Endoso Porcelana (beneficios máximos)
-      endosos.push(
-        { codigo: 'PORCELANA', nombre: 'Endoso Porcelana', descripcion: 'Cobertura ampliada con beneficios premium', incluido: true },
-        { codigo: 'H-1', nombre: 'Muerte accidental conductor', descripcion: '$500', incluido: true }
-      );
-    } else {
-      // Básico = Full Extras (beneficios estándar)
-      endosos.push(
-        { codigo: 'FULL_EXTRAS', nombre: 'Full Extras', descripcion: 'Cobertura estándar completa', incluido: true }
-      );
-    }
-    
-    // Retornar en formato compatible con QuoteComparison CON TODOS LOS DETALLES
-    return {
-      id: 'fedpa-real',
+    // ============================================
+    // DATOS COMPARTIDOS
+    // ============================================
+    const sharedData = {
       insurerName: 'FEDPA Seguros',
-      planType: esPremium ? 'premium' as const : 'basico' as const,
-      isRecommended: esPremium,
-      annualPremium: primaTotal,
-      deductible: deducibleInfo.valor,
-      coverages: coberturasDetalladas.map((c: any) => ({
-        name: c.nombre,
-        included: true,
-      })),
-      // FEDPA P2: PRICE BREAKDOWN CON DESCUENTO CALCULADO
-      _priceBreakdown: {
-        primaBase: descuentoInfo.primaBase,
-        descuentoBuenConductor: descuentoInfo.descuento,
-        descuentoPorcentaje: descuentoInfo.porcentaje,
-        impuesto: descuentoInfo.impuesto,
-        totalConTarjeta: descuentoInfo.totalTarjeta,
-        totalAlContado: totalAlContado,
-        ahorroContado: totalConTarjeta - totalAlContado,
-      },
-      // DATOS COMPLETOS PARA VISUALIZACIÓN
       _coberturasDetalladas: coberturasDetalladas,
       _limites: limites,
-      _beneficios: beneficios,
-      _endosos: endosos,
-      _deducibleInfo: deducibleInfo, // Info del mapa (bajo/medio/alto)
-      _deduciblesReales: deduciblesReales, // Deducibles reales normalizados (comprensivo/colisión)
+      _deducibleInfo: deducibleInfoReal,
+      _deduciblesReales: deduciblesReales,
       _sumaAsegurada: quoteData.valorVehiculo || 0,
-      _primaBase: primaBase,
-      _impuesto1: impuesto1,
-      _impuesto2: impuesto2,
-      // Datos adicionales para emisión
       _isReal: true,
       _idCotizacion: cotizacionResult.idCotizacion,
-      _endosoIncluido: esPremium ? 'Endoso Porcelana' : 'Full Extras',
       _deducibleOriginal: quoteData.deducible,
       _marcaNombre: quoteData.marca,
       _modeloNombre: quoteData.modelo,
     };
+    
+    // ========== PREMIUM: Endoso Porcelana + Full Extras ==========
+    // NOTA: FEDPA PACK es solo para Daños a Terceros, NO aplica a Cobertura Completa
+    const premiumEndosos = [
+      { 
+        codigo: 'PORCELANA', nombre: 'Endoso Porcelana', incluido: true,
+        descripcion: 'Cobertura premium para componentes estéticos y funcionales del vehículo',
+        subBeneficios: [
+          'Vidrios (parabrisas, ventanas laterales, trasero)',
+          'Faros delanteros y traseros',
+          'Espejos retrovisores',
+          'Luces antiniebla y direccionales',
+          'Molduras y emblemas',
+          'Pintura y porcelana (carrocería)',
+        ],
+      },
+      { 
+        codigo: 'K1', nombre: 'Endoso Full Extras', incluido: true,
+        descripcion: 'Cobertura de accesorios y extras instalados en el vehículo',
+        subBeneficios: [
+          'Accesorios instalados en el vehículo',
+          'Radio y sistema de sonido',
+          'Aros especiales / de lujo',
+          'Llantas y neumáticos',
+          'Extras y modificaciones del vehículo',
+        ],
+      },
+      { 
+        codigo: 'H', nombre: 'Muerte Accidental', incluido: true,
+        descripcion: 'Conductor B/.500 + 4 pasajeros B/.5,000/B/.25,000',
+        subBeneficios: [
+          'Muerte accidental del conductor: B/.500.00',
+          'Cobertura para 4 pasajeros',
+          'Límite por persona: B/.5,000.00',
+          'Límite por accidente: B/.25,000.00',
+        ],
+      },
+      { 
+        codigo: 'KC', nombre: 'Asistencia Vial 24/7', incluido: true,
+        descripcion: 'Servicio de emergencia y asistencia en carretera',
+        subBeneficios: [
+          'Servicio de grúa',
+          'Paso de corriente',
+          'Suministro de gasolina',
+          'Cerrajero automotriz',
+          'Cambio de llanta',
+        ],
+      },
+      { 
+        codigo: 'VA', nombre: 'Valores Agregados', incluido: true,
+        descripcion: 'Beneficios adicionales exclusivos FEDPA',
+        subBeneficios: [
+          'Inspección "IN SITU"',
+          'Auto de alquiler por colisión (hasta 10 días)',
+          'Defensa penal hasta B/.2,000.00',
+          'Cobertura extraterritorial hasta Costa Rica',
+          '100% reembolso deducible si no es culpable',
+          'Descuento por buena experiencia',
+        ],
+      },
+    ];
+    
+    const premium = {
+      ...sharedData,
+      id: 'fedpa-premium',
+      planType: 'premium' as const,
+      isRecommended: true,
+      annualPremium: primaPremium,
+      deductible: deducibleComprensivo,
+      coverages: premiumCoverages,
+      _priceBreakdown: {
+        primaBase: descuentoPremium.primaBase,
+        descuentoBuenConductor: descuentoPremium.descuento,
+        descuentoPorcentaje: descuentoPremium.porcentaje,
+        impuesto: descuentoPremium.impuesto,
+        totalConTarjeta: primaPremium,
+        totalAlContado: contadoPremium,
+        ahorroContado: primaPremium - contadoPremium,
+      },
+      _primaBase: primaBase * (1 + PORCELANA_SURCHARGE),
+      _impuesto1: impuesto1 * (1 + PORCELANA_SURCHARGE),
+      _impuesto2: impuesto2 * (1 + PORCELANA_SURCHARGE),
+      _beneficios: allBeneficios,
+      _endosos: premiumEndosos,
+      _endosoIncluido: 'Endoso Porcelana',
+    };
+    
+    // ========== BÁSICO: Solo Endoso Full Extras ==========
+    const basicoEndosos = [
+      { 
+        codigo: 'K1', nombre: 'Endoso Full Extras', incluido: true,
+        descripcion: 'Cobertura de accesorios y extras instalados en el vehículo',
+        subBeneficios: [
+          'Accesorios instalados en el vehículo',
+          'Radio y sistema de sonido',
+          'Aros especiales / de lujo',
+          'Llantas y neumáticos',
+          'Extras y modificaciones del vehículo',
+        ],
+      },
+      { 
+        codigo: 'H', nombre: 'Muerte Accidental', incluido: true,
+        descripcion: 'Conductor B/.500 + 4 pasajeros',
+        subBeneficios: [
+          'Muerte accidental del conductor: B/.500.00',
+          'Cobertura para 4 pasajeros',
+        ],
+      },
+      { 
+        codigo: 'KC', nombre: 'Asistencia Vial', incluido: true,
+        descripcion: 'Servicio de emergencia en carretera',
+        subBeneficios: [
+          'Servicio de grúa',
+          'Paso de corriente',
+        ],
+      },
+    ];
+    
+    // Básico: beneficios estándar limitados
+    const basicoBeneficios = allBeneficios.length > 5 
+      ? allBeneficios.slice(0, 5) 
+      : allBeneficios;
+    
+    const basico = {
+      ...sharedData,
+      id: 'fedpa-basico',
+      planType: 'basico' as const,
+      isRecommended: false,
+      annualPremium: primaBasico,
+      deductible: deducibleComprensivo,
+      coverages: basicoCoverages,
+      _priceBreakdown: {
+        primaBase: descuentoBasico.primaBase,
+        descuentoBuenConductor: descuentoBasico.descuento,
+        descuentoPorcentaje: descuentoBasico.porcentaje,
+        impuesto: descuentoBasico.impuesto,
+        totalConTarjeta: primaBasico,
+        totalAlContado: contadoBasico,
+        ahorroContado: primaBasico - contadoBasico,
+      },
+      _primaBase: primaBase,
+      _impuesto1: impuesto1,
+      _impuesto2: impuesto2,
+      _beneficios: basicoBeneficios,
+      _endosos: basicoEndosos,
+      _endosoIncluido: 'Full Extras',
+    };
+    
+    console.log(`[FEDPA] ✅ Premium: $${primaPremium} (Porcelana + Full Extras), ${allBeneficios.length} beneficios, ${premiumEndosos.length} endosos`);
+    console.log(`[FEDPA] ✅ Básico: $${primaBasico} (Full Extras), ${basicoBeneficios.length} beneficios, ${basicoEndosos.length} endosos`);
+    
+    return { premium, basico };
   } catch (error) {
-    console.error('[FEDPA] Error generando cotización real:', error);
-    return null;
+    console.error('[FEDPA] Error generando cotización:', error);
+    return { premium: null, basico: null };
   }
 };
 
@@ -527,9 +660,14 @@ export default function ComparePage() {
   const [loading, setLoading] = useState(true);
   const [quoteData, setQuoteData] = useState<any>(null);
   const [quotes, setQuotes] = useState<any[]>([]);
+  const hasLoadedRef = useRef(false);
 
   useEffect(() => {
     const loadQuoteData = async () => {
+      // Guard: evitar doble ejecución por React StrictMode
+      if (hasLoadedRef.current) return;
+      hasLoadedRef.current = true;
+      
       try {
         setLoading(true);
         
@@ -573,95 +711,23 @@ export default function ComparePage() {
             toast.error('Error al obtener cotizaciones de INTERNACIONAL');
           }
           
-          // FEDPA: generar plan básico y premium SECUENCIALMENTE
-          // CRÍTICO: NO en paralelo para evitar race conditions
+          // FEDPA: UNA sola llamada a la API, genera ambas tarjetas
+          // La API retorna el mismo precio para S y N, la diferencia es comercial (endoso)
           try {
-            console.log('[FEDPA] Generando cotizaciones SECUENCIALMENTE...');
+            console.log('[FEDPA] Generando cotización (una sola llamada)...');
+            const fedpaQuotes = await generateFedpaQuotes(input);
             
-            // 1. PRIMERO: Plan Premium - CON Endoso Porcelana (RECOMENDADO)
-            console.log('[FEDPA] 1/2 Cotizando Premium...');
-            const fedpaPremium = await generateFedpaRealQuote({ ...input, planType: 'premium' });
-            if (fedpaPremium) {
-              fedpaPremium.id = 'fedpa-premium';
-              fedpaPremium.planType = 'premium';
-              fedpaPremium.isRecommended = true;
-              realQuotes.push(fedpaPremium);
-              console.log('[FEDPA] ✅ Premium generado: $', fedpaPremium.annualPremium);
-            } else {
-              console.warn('[FEDPA] ⚠️ Premium no disponible');
+            if (fedpaQuotes.premium) {
+              realQuotes.push(fedpaQuotes.premium);
+              console.log('[FEDPA] ✅ Premium (Endoso Porcelana): $', fedpaQuotes.premium.annualPremium);
+            }
+            if (fedpaQuotes.basico) {
+              realQuotes.push(fedpaQuotes.basico);
+              console.log('[FEDPA] ✅ Básico (Full Extras): $', fedpaQuotes.basico.annualPremium);
             }
             
-            // 2. SEGUNDO: Plan Básico - SIN Endoso Porcelana
-            console.log('[FEDPA] 2/2 Cotizando Básico...');
-            const fedpaBasico = await generateFedpaRealQuote({ ...input, planType: 'basico' });
-            if (fedpaBasico) {
-              fedpaBasico.id = 'fedpa-basico';
-              fedpaBasico.planType = 'basico';
-              realQuotes.push(fedpaBasico);
-              console.log('[FEDPA] ✅ Básico generado: $', fedpaBasico.annualPremium);
-            } else {
-              console.warn('[FEDPA] ⚠️ Básico no disponible');
-            }
-            
-            // QA: VALIDACIONES AUTOMÁTICAS
-            if (fedpaPremium && fedpaBasico) {
-              console.log('[FEDPA QA] Ejecutando validaciones automáticas...');
-              
-              // 1. Validar tarifas diferentes
-              if (fedpaPremium.annualPremium === fedpaBasico.annualPremium) {
-                console.error('[FEDPA QA] ❌ FALLO: Tarifas iguales!');
-                console.error('[FEDPA QA] Premium:', fedpaPremium.annualPremium, 'Básico:', fedpaBasico.annualPremium);
-                console.error('[FEDPA QA] Plan Premium usado:', fedpaPremium._idCotizacion);
-                console.error('[FEDPA QA] Plan Básico usado:', fedpaBasico._idCotizacion);
-                toast.error('⚠️ Error: Ambas cotizaciones tienen el mismo precio. Revisar configuración.');
-              } else {
-                console.log('[FEDPA QA] ✅ PASS: Tarifas diferentes');
-                console.log('[FEDPA QA] Diferencia: $', Math.abs(fedpaPremium.annualPremium - fedpaBasico.annualPremium).toFixed(2));
-              }
-              
-              // 2. Validar endosos diferentes
-              const endosoPremium = fedpaPremium._endosoIncluido || 'no-especificado';
-              const endosoBasico = fedpaBasico._endosoIncluido || 'no-especificado';
-              
-              if (endosoPremium === endosoBasico && endosoPremium !== 'no-especificado') {
-                console.error('[FEDPA QA] ❌ FALLO: Endosos iguales!');
-                console.error('[FEDPA QA] Premium endoso:', endosoPremium, 'Básico endoso:', endosoBasico);
-                toast.warning('⚠️ Advertencia: Ambos planes tienen el mismo endoso.');
-              } else {
-                console.log('[FEDPA QA] ✅ PASS: Endosos diferentes o no especificados');
-                console.log('[FEDPA QA] Premium:', endosoPremium, 'Básico:', endosoBasico);
-              }
-              
-              // 3. Validar deducible tiene monto o tooltip
-              [fedpaPremium, fedpaBasico].forEach((quote, idx) => {
-                const label = idx === 0 ? 'Premium' : 'Básico';
-                const deducibleInfo = quote._deducibleInfo;
-                
-                if (!deducibleInfo) {
-                  console.warn(`[FEDPA QA] ⚠️ ${label}: No tiene _deducibleInfo`);
-                } else if (deducibleInfo.valor === 0 && !deducibleInfo.tooltip) {
-                  console.warn(`[FEDPA QA] ⚠️ ${label}: Deducible sin monto y sin tooltip`);
-                  console.warn(`[FEDPA QA] Debería tener tooltip explicativo`);
-                } else {
-                  console.log(`[FEDPA QA] ✅ PASS: ${label} deducible OK (monto: ${deducibleInfo.valor}, tooltip: ${!!deducibleInfo.tooltip})`);
-                }
-              });
-              
-              // 4. Validar price breakdown existe
-              [fedpaPremium, fedpaBasico].forEach((quote, idx) => {
-                const label = idx === 0 ? 'Premium' : 'Básico';
-                const breakdown = quote._priceBreakdown;
-                
-                if (!breakdown) {
-                  console.warn(`[FEDPA QA] ⚠️ ${label}: No tiene _priceBreakdown`);
-                } else if (!breakdown.descuentoBuenConductor && breakdown.descuentoBuenConductor !== 0) {
-                  console.warn(`[FEDPA QA] ⚠️ ${label}: Breakdown sin descuentoBuenConductor`);
-                } else {
-                  console.log(`[FEDPA QA] ✅ PASS: ${label} breakdown OK (descuento: $${breakdown.descuentoBuenConductor?.toFixed(2)})`);
-                }
-              });
-              
-              console.log('[FEDPA QA] Validaciones completadas.');
+            if (!fedpaQuotes.premium && !fedpaQuotes.basico) {
+              console.warn('[FEDPA] ⚠️ No se pudieron generar cotizaciones');
             }
           } catch (error) {
             console.error('[FEDPA] Error obteniendo cotizaciones:', error);

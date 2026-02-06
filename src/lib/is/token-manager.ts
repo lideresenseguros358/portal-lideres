@@ -43,146 +43,166 @@ function getPrimaryToken(env: ISEnvironment): string {
 }
 
 /**
+ * Extraer y validar un JWT token de la respuesta del endpoint de tokens IS
+ */
+function extractTokenFromResponse(bodyText: string, contentType: string, endpointLabel: string): string {
+  // Limpiar comillas envolventes si la respuesta es un JSON string
+  // IS devuelve: "eyJhbG..." (con comillas) cuando content-type es application/json
+  let cleanBody = bodyText.trim();
+  if (cleanBody.startsWith('"') && cleanBody.endsWith('"')) {
+    cleanBody = cleanBody.slice(1, -1);
+  }
+  
+  // CASO 1: El body (limpio) es directamente un JWT
+  if (cleanBody.startsWith('eyJ')) {
+    const token = cleanBody.trim();
+    const parts = token.split('.');
+    if (parts.length === 3 && token.length >= 50) {
+      console.log(`[IS Token Manager] Token extraído directamente del body (${endpointLabel})`);
+      return token;
+    }
+  }
+  
+  // CASO 2: JSON con estructura - parsear y buscar
+  let data: any;
+  try {
+    data = JSON.parse(bodyText);
+  } catch {
+    // Si no es JSON y no es JWT directo, error
+    throw new Error(`Respuesta no es JSON ni JWT válido (${endpointLabel})`);
+  }
+  
+  // Detectar bloqueo WAF
+  if (data._event_transid && !data.token && !data.Token && !data.access_token) {
+    const error = new Error('IS Token endpoint bloqueado o incorrecto');
+    error.name = 'ISIntegrationError';
+    throw error;
+  }
+  
+  // Buscar token en múltiples ubicaciones
+  let dailyToken = 
+    data.tokenDiario ||
+    data.token ||
+    data.Token ||
+    data.access_token ||
+    data.data?.token ||
+    data.Table?.[0]?.TOKEN ||
+    data.Table?.[0]?.token ||
+    data.Table?.[0]?.Token;
+  
+  // Si la respuesta parseada es string (JSON string: "eyJhbG...")
+  if (!dailyToken && typeof data === 'string') {
+    dailyToken = data;
+  }
+  
+  if (!dailyToken) {
+    const keys = typeof data === 'object' ? Object.keys(data) : [];
+    console.error(`[IS Token Manager] Token no encontrado en ${endpointLabel}. Keys:`, keys);
+    throw new Error(`Token no encontrado en respuesta de ${endpointLabel}`);
+  }
+  
+  // Validar JWT
+  if (typeof dailyToken !== 'string') {
+    throw new Error('Token no es string');
+  }
+  
+  const tokenStr = dailyToken.trim();
+  const parts = tokenStr.split('.');
+  
+  if (!tokenStr.startsWith('eyJ') || parts.length !== 3 || tokenStr.length < 50) {
+    console.error(`[IS Token Manager] Token inválido de ${endpointLabel}:`, tokenStr.substring(0, 30));
+    throw new Error(`Token de ${endpointLabel} no es JWT válido`);
+  }
+  
+  return tokenStr;
+}
+
+/**
+ * Llamar a un endpoint de tokens IS
+ */
+async function callTokenEndpoint(url: string, primaryToken: string, label: string): Promise<string> {
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'Authorization': `Bearer ${primaryToken}`,
+      'Accept': 'application/json',
+    },
+  });
+
+  const status = response.status;
+  const contentType = response.headers.get('content-type') || '';
+  
+  console.log(`[IS Token Manager] GET ${url} - ${status} - ${contentType}`);
+
+  if (!response.ok) {
+    const preview = await response.text();
+    console.error(`[IS Token Manager] Error ${status} en ${label}:`, preview.substring(0, 120));
+    throw new Error(`Error ${status} en ${label}`);
+  }
+  
+  if (contentType.includes('text/html')) {
+    throw new Error(`Bloqueo WAF en ${label}`);
+  }
+
+  const bodyText = await response.text();
+  console.log(`[IS Token Manager] ${label} body (200 chars):`, bodyText.substring(0, 200));
+  
+  return extractTokenFromResponse(bodyText, contentType, label);
+}
+
+/**
  * Obtener token diario desde IS
- * ENDPOINT: /tokens/diario (Paso Opcional según docs IS)
- * Requiere: Authorization Bearer con token principal
- * Parser FLEXIBLE: text/plain, JSON con múltiples estructuras
+ * 
+ * SEGÚN DOCUMENTACIÓN IS:
+ * - Paso 1: GET /api/tokens → GENERA el token diario (con Bearer primary token)
+ * - Paso Opcional: GET /api/tokens/diario → RECUPERA el token diario ya generado
+ * - Paso 2: Usar el token diario como Bearer en todos los endpoints
+ * 
+ * IMPORTANTE: /tokens GENERA, /tokens/diario solo RECUPERA.
+ * Si solo llamamos /tokens/diario sin haber llamado /tokens primero,
+ * puede devolver el token principal en vez del diario → 401 en endpoints.
  */
 async function fetchDailyToken(env: ISEnvironment): Promise<string> {
   const primaryToken = getPrimaryToken(env);
   let baseUrl = getISBaseUrl(env);
-  // B3: Normalizar baseUrl sin trailing slash
   baseUrl = baseUrl.replace(/\/+$/, '');
   
-  // CRÍTICO: Usar /tokens/diario según documentación IS
-  // Paso Opcional de la doc: "APIRestIsTester/api/tokens/diario"
-  // La base URL ya incluye /api, entonces /tokens/diario es correcto
-  const endpoint = `${baseUrl}/tokens/diario`;
+  // Paso 1: GENERAR token diario con /tokens
+  const generateUrl = `${baseUrl}/tokens`;
+  // Paso Opcional: RECUPERAR token diario con /tokens/diario
+  const retrieveUrl = `${baseUrl}/tokens/diario`;
 
   try {
-    const response = await fetch(endpoint, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${primaryToken}`,
-        'Accept': 'application/json',
-      },
-    });
-
-    const status = response.status;
-    const contentType = response.headers.get('content-type') || '';
-    
-    console.log(`[IS Token Manager] GET ${endpoint} - ${status} - ${contentType}`);
-
-    if (!response.ok) {
-      const preview = await response.text();
-      console.error(`[IS Token Manager] Error ${status}:`, preview.substring(0, 120));
-      throw new Error(`Error ${status} al obtener token diario`);
-    }
-    
-    // BLOQUEO WAF: Si devuelve HTML
-    if (contentType.includes('text/html')) {
-      console.error('[IS Token Manager] Bloqueo WAF - respuesta HTML');
-      throw new Error('Bloqueo WAF detectado');
-    }
-
-    const bodyText = await response.text();
-    
-    // B2: Log sample de respuesta para diagnóstico
-    console.log('[IS Token Manager] Body sample (primeros 200 chars):', bodyText.substring(0, 200));
-    
-    // CASO 1: text/plain - El token viene directo como string
-    if (contentType.includes('text/plain') || bodyText.startsWith('eyJ')) {
-      const token = bodyText.trim();
-      console.log('[IS Token Manager] Token diario obtenido (text/plain)');
-      return token;
-    }
-    
-    // CASO 2: JSON - Parsear y buscar en múltiples rutas
-    let data: any;
+    // PRIMERO: Intentar GENERAR el token diario (Paso 1 de la documentación)
+    console.log('[IS Token Manager] Paso 1: Generando token diario con /tokens...');
     try {
-      data = JSON.parse(bodyText);
-    } catch {
-      console.error('[IS Token Manager] Body no es JSON:', bodyText.substring(0, 120));
-      throw new Error('Respuesta no es JSON válido');
-    }
-    
-    // IS P1: DETECTAR BLOQUEO/WAF - _event_transid = ABORTAR FLUJO COMPLETO
-    // Cuando IS responde solo con _event_transid:
-    // - El endpoint está bloqueado por WAF
-    // - Mal configurado
-    // - Usando ambiente incorrecto
-    // NO ES ERROR DE PARSING - NO ES TOKEN VÁLIDO - NO SE DEBE REINTENTAR
-    if (data._event_transid && !data.token && !data.Token && !data.access_token) {
-      const errorMsg = 'IS Token endpoint bloqueado o incorrecto. Respuesta solo contiene _event_transid.';
-      console.error('[IS Token Manager] ❌ BLOQUEO DETECTADO');
-      console.error('[IS Token Manager] Respuesta:', JSON.stringify(data).substring(0, 300));
-      console.error('[IS Token Manager] Endpoint:', endpoint);
-      console.error('[IS Token Manager] ACCIÓN: ABORTAR flujo completo - NO continuar a cotización');
+      const token = await callTokenEndpoint(generateUrl, primaryToken, '/tokens');
       
-      // Crear error específico para que UI muestre mensaje apropiado
-      const error = new Error(errorMsg);
-      error.name = 'ISIntegrationError';
-      throw error;
-    }
-    
-    // B3: Buscar token en múltiples ubicaciones posibles
-    let dailyToken = 
-      data.tokenDiario ||
-      data.token ||
-      data.Token ||
-      data.access_token ||
-      data.data?.token ||
-      data.Table?.[0]?.TOKEN ||
-      data.Table?.[0]?.token ||
-      data.Table?.[0]?.Token;
-    
-    // Si la respuesta completa es string, intentar usarla
-    if (!dailyToken && typeof data === 'string') {
-      dailyToken = data;
-    }
-    
-    if (!dailyToken) {
-      const keys = Object.keys(data);
-      console.error('[IS Token Manager] Token no encontrado. Keys disponibles:', keys);
-      console.error('[IS Token Manager] Data completo (primeros 300 chars):', JSON.stringify(data).substring(0, 300));
-      console.error('[IS Token Manager] Content-Type:', contentType);
-      console.error('[IS Token Manager] Status:', status);
-      
-      // Si hay mensaje de error en response, mostrarlo
-      if (data.message || data.error || data.msg) {
-        console.error('[IS Token Manager] Mensaje API:', data.message || data.error || data.msg);
+      // Verificar que el token generado sea DIFERENTE al primary token
+      if (token === primaryToken) {
+        console.warn('[IS Token Manager] ⚠️ /tokens devolvió el mismo token principal, intentando /tokens/diario...');
+      } else {
+        console.log('[IS Token Manager] ✅ Token diario GENERADO exitosamente (diferente al principal)');
+        return token;
       }
-      
-      throw new Error('Token diario no encontrado en respuesta IS - verificar endpoint y credenciales');
+    } catch (genError: any) {
+      console.warn(`[IS Token Manager] /tokens falló: ${genError.message}, intentando /tokens/diario...`);
     }
     
-    // B3: VALIDACIÓN JWT ROBUSTA
-    // JWT debe: empezar con "eyJ", tener 2 puntos (3 partes), longitud razonable
-    if (typeof dailyToken !== 'string') {
-      console.error('[IS Token Manager] Token no es string:', typeof dailyToken);
-      throw new Error('Token diario no es string');
+    // SEGUNDO: Si /tokens falla o devuelve el mismo token, intentar /tokens/diario
+    console.log('[IS Token Manager] Intentando recuperar token con /tokens/diario...');
+    const dailyToken = await callTokenEndpoint(retrieveUrl, primaryToken, '/tokens/diario');
+    
+    // Verificar que sea diferente al primary
+    if (dailyToken === primaryToken) {
+      console.warn('[IS Token Manager] ⚠️ /tokens/diario también devolvió el token principal');
+      console.warn('[IS Token Manager] Esto puede significar que IS no genera tokens diarios diferentes');
+      console.warn('[IS Token Manager] Usando el token tal cual (puede causar 401 en endpoints)');
+    } else {
+      console.log('[IS Token Manager] ✅ Token diario RECUPERADO exitosamente');
     }
     
-    const tokenStr = dailyToken.trim();
-    const parts = tokenStr.split('.');
-    
-    if (!tokenStr.startsWith('eyJ')) {
-      console.error('[IS Token Manager] Token no empieza con eyJ:', tokenStr.substring(0, 20));
-      throw new Error('Token diario no parece JWT - no empieza con eyJ');
-    }
-    
-    if (parts.length !== 3) {
-      console.error('[IS Token Manager] Token no tiene 3 partes:', parts.length, '- Sample:', tokenStr.substring(0, 50));
-      throw new Error(`Token diario inválido - tiene ${parts.length} partes en lugar de 3`);
-    }
-    
-    if (tokenStr.length < 50) {
-      console.error('[IS Token Manager] Token muy corto:', tokenStr.length, 'chars');
-      throw new Error('Token diario muy corto para ser JWT válido');
-    }
-
-    console.log('[IS Token Manager] Token diario obtenido y validado (JSON - formato JWT correcto)');
-    return tokenStr;
+    return dailyToken;
     
   } catch (error: any) {
     console.error(`[IS Token Manager] Error obteniendo token diario (${env}):`, error.message);

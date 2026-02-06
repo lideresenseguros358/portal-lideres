@@ -4,7 +4,7 @@
  */
 
 import { ISEnvironment, RETRY_CONFIG, getISBaseUrl, getISPrimaryToken } from './config';
-import { getDailyTokenWithRetry } from './token-manager';
+import { getDailyTokenWithRetry, invalidateToken } from './token-manager';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import crypto from 'crypto';
 
@@ -223,12 +223,17 @@ export async function isRequest<T = any>(
         console.error('[IS] Verificar que endpoint no incluya /api duplicado');
       }
       
-      // WAF/BLOCK: Si es HTML en lugar de JSON
-      if (contentType.includes('text/html') && !response.ok) {
-        console.error('[IS] WAF/BLOCK detectado - respuesta HTML');
+      // WAF/BLOCK: Detectar bloqueo por firewall de IS
+      // Puede venir como HTML (text/html) o como 401/403 con texto de bloqueo
+      const isWafBlock = (contentType.includes('text/html') && !response.ok) ||
+        responseText.includes('unauthorized activity') ||
+        responseText.includes('detected unauthorized');
+      if (isWafBlock) {
+        console.error('[IS] ⛔ WAF/FIREWALL BLOCK detectado - IP bloqueada por IS');
+        console.error('[IS] Contactar a Internacional de Seguros para habilitar la IP del servidor');
         return {
           success: false,
-          error: 'Bloqueado por WAF',
+          error: 'API de IS bloqueada por firewall. Contactar a IS para habilitar la IP del servidor.',
           statusCode: response.status,
         };
       }
@@ -246,13 +251,29 @@ export async function isRequest<T = any>(
         console.error('[IS] Error guardando auditoría:', err);
       });
       
-      // Manejar 401 - token expirado
+      // Manejar 401 - token expirado o inválido
       if (response.status === 401 && !skipTokenRefresh && attempt === 0) {
-        console.log('[IS] Token expirado (401), renovando...');
+        console.log('[IS] 401 recibido. Token usado (primeros 30 chars):', authToken.substring(0, 30) + '...');
+        console.log('[IS] 401 response body:', responseText.substring(0, 200));
+        console.log('[IS] INVALIDANDO cache y regenerando token diario...');
+        // CRÍTICO: Invalidar cache ANTES de pedir nuevo token
+        invalidateToken(env);
         const newToken = await refreshDailyToken(env);
         if (newToken) {
+          console.log('[IS] Nuevo token (primeros 30 chars):', newToken.substring(0, 30) + '...');
+          const primaryToken = getISPrimaryToken(env);
+          if (newToken === primaryToken) {
+            console.warn('[IS] ⚠️ Token diario es IGUAL al principal - IS puede no soportar tokens diarios');
+          } else {
+            console.log('[IS] ✅ Token diario es DIFERENTE al principal');
+          }
           authToken = newToken;
-          continue; // Reintentar con nuevo token
+          console.log('[IS] Reintentando con nuevo token...');
+          continue;
+        } else {
+          console.warn('[IS] No se pudo renovar token diario, usando token principal...');
+          authToken = getISPrimaryToken(env);
+          continue;
         }
       }
       

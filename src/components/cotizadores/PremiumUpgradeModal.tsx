@@ -7,8 +7,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FaTimes, FaCheckCircle, FaStar, FaArrowUp, FaChevronDown, FaChevronUp } from 'react-icons/fa';
-import { toast } from 'sonner';
+import { FaTimes, FaCheckCircle, FaTimesCircle, FaStar, FaArrowUp, FaChevronDown, FaChevronUp, FaShieldAlt } from 'react-icons/fa';
 
 interface PremiumUpgradeModalProps {
   isOpen: boolean;
@@ -44,7 +43,7 @@ export default function PremiumUpgradeModal({
   premiumPlan,
 }: PremiumUpgradeModalProps) {
   const [isVisible, setIsVisible] = useState(false);
-  const [expandedEndoso, setExpandedEndoso] = useState<number | null>(null);
+  const [expandedEndoso, setExpandedEndoso] = useState<number | null>(0);
 
   useEffect(() => {
     if (isOpen) {
@@ -57,7 +56,6 @@ export default function PremiumUpgradeModal({
     setTimeout(onClose, 300);
   };
 
-  // Calcular diferencias de precio según método de pago
   const hasBreakdown = premiumPlan._priceBreakdown && basicPlan._priceBreakdown;
   
   const precioBasicoTarjeta = hasBreakdown ? basicPlan._priceBreakdown.totalConTarjeta : basicPlan.premium;
@@ -69,17 +67,18 @@ export default function PremiumUpgradeModal({
   const diferenciaTarjeta = precioPremiumTarjeta - precioBasicoTarjeta;
   const diferenciaContado = precioPremiumContado - precioBasicoContado;
   
-  const newCoverages = premiumPlan.coverages.filter(
-    (c) => !basicPlan.coverages.includes(c)
-  );
-  
-  // Extraer beneficios y endosos adicionales del plan premium
-  const beneficiosBasico = basicPlan.beneficios || [];
-  const beneficiosPremium = premiumPlan.beneficios || [];
   const endososPremium = premiumPlan.endosos || [];
+  const endososBasico = basicPlan.endosos || [];
+  const beneficiosPremium = premiumPlan.beneficios || [];
+  const beneficiosBasico = basicPlan.beneficios || [];
   
   const beneficiosAdicionales = beneficiosPremium.filter(
-    (b) => !beneficiosBasico.some((bb) => bb.nombre === b.nombre)
+    (b: any) => !beneficiosBasico.some((bb: any) => bb.nombre === b.nombre)
+  );
+
+  // Endosos exclusivos del Premium (no están en Básico)
+  const endososExclusivos = endososPremium.filter(
+    (ep: any) => !endososBasico.some((eb: any) => eb.codigo === ep.codigo)
   );
 
   if (!isOpen) return null;
@@ -96,13 +95,10 @@ export default function PremiumUpgradeModal({
         }
         .premium-modal-scroll::-webkit-scrollbar-track {
           background: transparent;
-          margin-top: 16px;
-          margin-bottom: 16px;
         }
         .premium-modal-scroll::-webkit-scrollbar-thumb {
           background: rgba(138, 170, 25, 0.3);
           border-radius: 10px;
-          transition: background 0.2s ease;
         }
         .premium-modal-scroll::-webkit-scrollbar-thumb:hover {
           background: rgba(138, 170, 25, 0.6);
@@ -111,14 +107,16 @@ export default function PremiumUpgradeModal({
           scrollbar-width: thin;
           scrollbar-color: rgba(138, 170, 25, 0.3) transparent;
         }
-        
         @keyframes premiumFloat {
           0%, 100% { transform: translateY(0); }
-          50% { transform: translateY(-8px); }
+          50% { transform: translateY(-6px); }
         }
-        
         .premium-float {
           animation: premiumFloat 3s ease-in-out infinite;
+        }
+        @keyframes shimmerPremium {
+          0% { background-position: -200% 0; }
+          100% { background-position: 200% 0; }
         }
       `}</style>
       <div
@@ -127,228 +125,212 @@ export default function PremiumUpgradeModal({
         }`}
       >
         {/* Header */}
-        <div className="bg-gradient-to-r from-[#8AAA19] to-[#6d8814] p-6 text-white relative">
+        <div className="bg-gradient-to-r from-[#8AAA19] to-[#6d8814] p-5 text-white relative">
           <button
             onClick={handleClose}
-            className="absolute top-4 right-4 text-white hover:bg-white/20 rounded-full p-2 transition-colors"
+            className="absolute top-3 right-3 text-white hover:bg-white/20 rounded-full p-2 transition-colors"
           >
-            <FaTimes size={20} />
+            <FaTimes size={18} />
           </button>
-          <div className="flex items-center gap-3 mb-2">
-            <FaStar className="text-yellow-300 text-3xl" />
-            <h2 className="text-2xl font-bold">¡Mejora tu Cobertura!</h2>
+          <div className="flex items-center gap-3 mb-1">
+            <FaStar className="text-yellow-300 text-2xl" />
+            <h2 className="text-xl font-bold">¡Mejora a Endoso Porcelana!</h2>
           </div>
-          <p className="text-white/90 text-sm">{insurerName}</p>
+          <p className="text-white/80 text-xs">{insurerName} — Protección superior para tu vehículo</p>
         </div>
 
         {/* Content */}
-        <div className="p-6 space-y-6">
-          {/* Comparación de Planes - PREMIUM A LA IZQUIERDA */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
-            {/* Premium Plan - AHORA A LA IZQUIERDA CON FLOTANTE */}
+        <div className="p-5 space-y-5">
+          
+          {/* Price Comparison Cards */}
+          <div className="grid grid-cols-2 gap-3">
+            {/* Premium */}
             <div className="premium-float border-2 border-[#8AAA19] rounded-xl p-4 bg-gradient-to-br from-green-50 to-white relative overflow-hidden shadow-lg">
-              <div className="absolute top-0 right-0 w-20 h-20 bg-[#8AAA19]/10 rounded-bl-full"></div>
+              <div className="absolute top-0 right-0 w-16 h-16 bg-[#8AAA19]/10 rounded-bl-full"></div>
               <div className="text-center mb-3">
-                <span className="inline-block px-3 py-1 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white text-xs font-bold rounded-full shadow-md">
-                  ⭐ PLAN PREMIUM RECOMENDADO
+                <span className="inline-block px-2.5 py-1 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white text-[10px] font-bold rounded-full shadow-md uppercase tracking-wide">
+                  ⭐ Premium — Porcelana
                 </span>
               </div>
-              <div className="text-center mb-4">
+              <div className="text-center mb-3">
                 {hasBreakdown ? (
                   <>
-                    <p className="text-xs text-gray-500 mb-1">Con Tarjeta (2-10 cuotas)</p>
-                    <p className="text-2xl font-bold text-[#8AAA19]">
+                    <p className="text-[10px] text-gray-500 mb-0.5">Con Tarjeta</p>
+                    <p className="text-xl font-bold text-[#8AAA19]">
                       ${precioPremiumTarjeta.toFixed(2)}
                     </p>
-                    <p className="text-xs text-[#8AAA19] font-semibold mt-1">
-                      +${diferenciaTarjeta.toFixed(2)} adicionales
-                    </p>
-                    <div className="text-xs text-gray-400 my-1">o</div>
-                    <p className="text-xs text-gray-500 mb-1">Al Contado (1 cuota)</p>
-                    <p className="text-xl font-semibold text-green-700">
+                    <div className="text-[10px] text-gray-400 my-0.5">o al contado</div>
+                    <p className="text-base font-semibold text-green-700">
                       ${precioPremiumContado.toFixed(2)}
-                    </p>
-                    <p className="text-xs text-green-600 font-semibold mt-1">
-                      +${diferenciaContado.toFixed(2)} adicionales
                     </p>
                   </>
                 ) : (
-                  <>
-                    <p className="text-3xl font-bold text-[#8AAA19]">
-                      ${premiumPlan.premium.toFixed(2)}
-                    </p>
-                    <p className="text-sm text-gray-500">por año</p>
-                    <p className="text-xs text-[#8AAA19] font-semibold mt-1">
-                      +${(premiumPlan.premium - basicPlan.premium).toFixed(2)} adicionales
-                    </p>
-                  </>
+                  <p className="text-2xl font-bold text-[#8AAA19]">
+                    ${premiumPlan.premium.toFixed(2)}<span className="text-xs font-normal text-gray-500">/año</span>
+                  </p>
                 )}
               </div>
-              <div className="space-y-2">
-                <p className="text-sm font-semibold text-[#8AAA19]">
-                  Mismo Deducible: ${premiumPlan.deductible.toLocaleString()}
-                </p>
-                <p className="text-xs text-gray-500">
-                  {premiumPlan.coverages.length} coberturas
-                </p>
-                <p className="text-xs font-semibold text-[#8AAA19]">
-                  {beneficiosPremium.length} beneficio(s) • {endososPremium.length} endoso(s)
-                </p>
+              <div className="text-center space-y-1">
+                <p className="text-[11px] font-bold text-[#8AAA19]">{endososPremium.length} endosos incluidos</p>
+                <p className="text-[11px] text-gray-500">{beneficiosPremium.length} beneficios</p>
               </div>
             </div>
 
-            {/* Basic Plan - AHORA A LA DERECHA */}
-            <div className="border-2 border-gray-300 rounded-xl p-4 bg-white">
+            {/* Básico */}
+            <div className="border-2 border-gray-200 rounded-xl p-4 bg-gray-50/50 opacity-75">
               <div className="text-center mb-3">
-                <span className="inline-block px-3 py-1 bg-gray-200 text-gray-700 text-xs font-bold rounded-full">
-                  PLAN BÁSICO
+                <span className="inline-block px-2.5 py-1 bg-gray-200 text-gray-600 text-[10px] font-bold rounded-full uppercase tracking-wide">
+                  Básico — Full Extras
                 </span>
               </div>
-              <div className="text-center mb-4">
+              <div className="text-center mb-3">
                 {hasBreakdown ? (
                   <>
-                    <p className="text-xs text-gray-500 mb-1">Con Tarjeta (2-10 cuotas)</p>
-                    <p className="text-2xl font-bold text-gray-700">
+                    <p className="text-[10px] text-gray-500 mb-0.5">Con Tarjeta</p>
+                    <p className="text-xl font-bold text-gray-600">
                       ${precioBasicoTarjeta.toFixed(2)}
                     </p>
-                    <div className="text-xs text-gray-400 my-1">o</div>
-                    <p className="text-xs text-gray-500 mb-1">Al Contado (1 cuota)</p>
-                    <p className="text-xl font-semibold text-gray-600">
+                    <div className="text-[10px] text-gray-400 my-0.5">o al contado</div>
+                    <p className="text-base font-semibold text-gray-500">
                       ${precioBasicoContado.toFixed(2)}
                     </p>
                   </>
                 ) : (
-                  <>
-                    <p className="text-3xl font-bold text-gray-700">
-                      ${basicPlan.premium.toFixed(2)}
-                    </p>
-                    <p className="text-sm text-gray-500">por año</p>
-                  </>
+                  <p className="text-2xl font-bold text-gray-600">
+                    ${basicPlan.premium.toFixed(2)}<span className="text-xs font-normal text-gray-500">/año</span>
+                  </p>
                 )}
               </div>
-              <div className="space-y-2">
-                <p className="text-sm font-semibold text-gray-600">
-                  Deducible: ${basicPlan.deductible.toLocaleString()}
-                </p>
-                <p className="text-xs text-gray-500">
-                  {basicPlan.coverages.length} coberturas
-                </p>
-                <p className="text-xs text-gray-500">
-                  {beneficiosBasico.length} beneficio(s)
-                </p>
+              <div className="text-center space-y-1">
+                <p className="text-[11px] text-gray-500">{endososBasico.length} endosos incluidos</p>
+                <p className="text-[11px] text-gray-400">{beneficiosBasico.length} beneficios</p>
               </div>
             </div>
-
           </div>
 
-          {/* Endosos Premium - Desplegables */}
-          {endososPremium.length > 0 && (
-            <div className="bg-green-50 border-2 border-[#8AAA19] rounded-xl p-4">
-              <h3 className="font-bold text-[#010139] mb-3 flex items-center gap-2">
-                <FaStar className="text-[#8AAA19]" />
-                Endosos Incluidos en Plan Premium:
-              </h3>
-              <div className="space-y-2">
-                {endososPremium.map((endoso, index) => {
-                  const endosoNombre = typeof endoso === 'string' ? endoso : endoso.nombre;
-                  const endosoDesc = typeof endoso === 'object' ? endoso.descripcion : null;
-                  const isExpanded = expandedEndoso === index;
-                  
-                  return (
-                    <div key={index} className="bg-white rounded-lg border border-green-200 overflow-hidden">
-                      {/* Header desplegable */}
-                      <button
-                        onClick={() => setExpandedEndoso(isExpanded ? null : index)}
-                        className="w-full flex items-center justify-between p-3 hover:bg-green-50 transition-colors"
-                      >
-                        <div className="flex items-center gap-2 flex-1">
-                          <FaCheckCircle className="text-[#8AAA19] flex-shrink-0" />
-                          <span className="font-semibold text-gray-800 text-sm text-left">{endosoNombre}</span>
-                        </div>
-                        {isExpanded ? (
-                          <FaChevronUp className="text-gray-400 flex-shrink-0" />
-                        ) : (
-                          <FaChevronDown className="text-gray-400 flex-shrink-0" />
+          {/* Diferencia de precio destacada */}
+          <div className="bg-gradient-to-r from-[#8AAA19]/10 to-green-50 border border-[#8AAA19]/30 rounded-lg p-3 text-center">
+            <p className="text-sm font-bold text-[#010139]">
+              Diferencia: solo <span className="text-[#8AAA19] text-lg">${hasBreakdown ? diferenciaTarjeta.toFixed(2) : (premiumPlan.premium - basicPlan.premium).toFixed(2)}</span> más al año
+            </p>
+            {hasBreakdown && (
+              <p className="text-[11px] text-gray-500 mt-0.5">
+                (${diferenciaContado.toFixed(2)} al contado)
+              </p>
+            )}
+          </div>
+
+          {/* Tabla comparativa de endosos */}
+          <div>
+            <h3 className="font-bold text-[#010139] text-sm mb-3 flex items-center gap-2">
+              <FaShieldAlt className="text-[#8AAA19]" />
+              Comparación de Endosos
+            </h3>
+            <div className="border rounded-xl overflow-hidden">
+              {/* Header */}
+              <div className="grid grid-cols-[1fr_80px_80px] bg-gray-100 text-[10px] font-bold uppercase tracking-wider text-gray-500 p-2.5">
+                <span>Endoso</span>
+                <span className="text-center text-[#8AAA19]">Premium</span>
+                <span className="text-center text-gray-400">Básico</span>
+              </div>
+              {/* Rows */}
+              {endososPremium.map((endoso: any, index: number) => {
+                const isInBasico = endososBasico.some((eb: any) => eb.codigo === endoso.codigo);
+                const isExclusive = !isInBasico;
+                const isExpanded = expandedEndoso === index;
+                const subBeneficios = endoso.subBeneficios || [];
+                
+                return (
+                  <div key={index} className={`border-t ${isExclusive ? 'bg-green-50/50' : 'bg-white'}`}>
+                    <button
+                      onClick={() => setExpandedEndoso(isExpanded ? null : index)}
+                      className="w-full grid grid-cols-[1fr_80px_80px] items-center p-2.5 hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="flex items-center gap-2 text-left">
+                        <span className="text-xs font-semibold text-gray-800">{endoso.nombre}</span>
+                        {isExclusive && (
+                          <span className="text-[9px] bg-[#8AAA19] text-white px-1.5 py-0.5 rounded-full font-bold">EXCLUSIVO</span>
                         )}
-                      </button>
-                      
-                      {/* Contenido expandible - beneficios */}
-                      {isExpanded && (
-                        <div className="px-3 pb-3 pt-1 bg-gray-50 border-t border-green-100">
-                          {endosoDesc && (
-                            <p className="text-xs text-gray-700 mb-2">{endosoDesc}</p>
-                          )}
-                          {/* Mostrar beneficios relacionados con este endoso */}
-                          {beneficiosPremium.length > 0 && (
-                            <div className="space-y-1.5 mt-2">
-                              <p className="text-xs font-semibold text-[#8AAA19]">Beneficios incluidos:</p>
-                              {beneficiosPremium.slice(0, 3).map((beneficio, bIdx) => (
-                                <div key={bIdx} className="flex items-start gap-1.5 text-xs text-gray-600">
-                                  <span className="text-[#8AAA19] mt-0.5">•</span>
-                                  <span>{typeof beneficio === 'string' ? beneficio : beneficio.nombre}</span>
-                                </div>
-                              ))}
+                        {subBeneficios.length > 0 && (
+                          isExpanded ? <FaChevronUp className="text-gray-400 text-[10px]" /> : <FaChevronDown className="text-gray-400 text-[10px]" />
+                        )}
+                      </div>
+                      <div className="flex justify-center">
+                        <FaCheckCircle className="text-[#8AAA19] text-sm" />
+                      </div>
+                      <div className="flex justify-center">
+                        {isInBasico ? (
+                          <FaCheckCircle className="text-gray-400 text-sm" />
+                        ) : (
+                          <FaTimesCircle className="text-red-300 text-sm" />
+                        )}
+                      </div>
+                    </button>
+                    
+                    {/* Sub-beneficios expandibles */}
+                    {isExpanded && subBeneficios.length > 0 && (
+                      <div className="px-4 pb-3 bg-gray-50/80 border-t border-gray-100">
+                        {endoso.descripcion && (
+                          <p className="text-[11px] text-gray-600 italic mb-2 mt-1">{endoso.descripcion}</p>
+                        )}
+                        <div className="grid grid-cols-1 gap-1">
+                          {subBeneficios.map((sub: string, sIdx: number) => (
+                            <div key={sIdx} className="flex items-start gap-1.5 text-[11px] text-gray-700">
+                              <span className="text-[#8AAA19] mt-0.5 flex-shrink-0">✓</span>
+                              <span>{sub}</span>
                             </div>
-                          )}
+                          ))}
                         </div>
-                      )}
-                    </div>
-                  );
-                })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Beneficios adicionales del Premium */}
+          {beneficiosAdicionales.length > 0 && (
+            <div>
+              <h3 className="font-bold text-[#010139] text-sm mb-3 flex items-center gap-2">
+                <FaArrowUp className="text-[#8AAA19]" />
+                +{beneficiosAdicionales.length} Beneficios Adicionales en Premium
+              </h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {beneficiosAdicionales.map((beneficio: any, index: number) => (
+                  <div key={index} className="flex items-start gap-2 p-2 bg-green-50 rounded-lg border border-green-100">
+                    <FaCheckCircle className="text-[#8AAA19] mt-0.5 flex-shrink-0 text-xs" />
+                    <span className="text-[11px] text-gray-700 font-medium">
+                      {typeof beneficio === 'string' ? beneficio : beneficio.nombre}
+                    </span>
+                  </div>
+                ))}
               </div>
             </div>
           )}
-          
-          {/* Beneficios Adicionales */}
-          {beneficiosAdicionales.length > 0 && (
-            <div className="bg-green-50 border-2 border-[#8AAA19] rounded-xl p-4">
-              <h3 className="font-bold text-[#8AAA19] mb-3 flex items-center gap-2">
-                <FaArrowUp />
-                Beneficios Adicionales del Plan Premium:
-              </h3>
-              <ul className="space-y-2">
-                {beneficiosAdicionales.map((beneficio, index) => (
-                  <li key={index} className="flex items-start gap-2 text-sm">
-                    <FaCheckCircle className="text-[#8AAA19] mt-1 flex-shrink-0" />
-                    <div>
-                      <p className="text-gray-700 font-medium">{typeof beneficio === 'string' ? beneficio : beneficio.nombre}</p>
-                      {typeof beneficio === 'object' && beneficio.descripcion && (
-                        <p className="text-xs text-gray-500">{beneficio.descripcion}</p>
-                      )}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
 
-          {/* Benefits Highlight */}
-          <div className="bg-blue-50 border-l-4 border-[#010139] p-4 rounded-lg">
-            <p className="text-sm text-[#010139]">
-              💡 <strong>Ventaja del Plan Premium:</strong> Incluye endosos especiales y beneficios adicionales que te brindan mayor protección y tranquilidad, <strong>con el mismo deducible que seleccionaste (${premiumPlan.deductible.toLocaleString()})</strong>.
+          {/* Highlight */}
+          <div className="bg-blue-50 border-l-4 border-[#010139] p-3 rounded-lg">
+            <p className="text-xs text-[#010139]">
+              💡 <strong>El Endoso Porcelana</strong> cubre vidrios, faros, espejos, luces, molduras y pintura — componentes que se dañan frecuentemente y son costosos de reparar. <strong>Mismo deducible</strong> que el plan básico.
             </p>
-            {hasBreakdown && (
-              <p className="text-xs text-gray-600 mt-2">
-                <strong>Diferencia de inversión:</strong> Solo ${diferenciaTarjeta.toFixed(2)} adicionales con tarjeta, o ${diferenciaContado.toFixed(2)} adicionales al contado para obtener cobertura superior.
-              </p>
-            )}
           </div>
         </div>
 
         {/* Actions */}
-        <div className="p-6 bg-gray-50 border-t-2 border-gray-200 space-y-3">
+        <div className="p-5 bg-gray-50 border-t-2 border-gray-200 space-y-2.5">
           <button
             onClick={onUpgrade}
-            className="w-full py-3 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg font-bold hover:shadow-xl transition-all cursor-pointer flex items-center justify-center gap-2"
+            className="w-full py-3 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg font-bold hover:shadow-xl transition-all cursor-pointer flex items-center justify-center gap-2 text-sm"
           >
-            <FaStar className="text-white" />
-            Mejorar a Plan Premium
+            <FaStar className="text-yellow-300" />
+            Mejorar a Premium — Endoso Porcelana
           </button>
           <button
             onClick={onContinueBasic}
-            className="w-full py-2 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300 transition-colors cursor-pointer"
+            className="w-full py-2 bg-gray-200 text-gray-600 rounded-lg font-medium hover:bg-gray-300 transition-colors cursor-pointer text-xs"
           >
-            Continuar con Plan Básico
+            Continuar con Plan Básico (Full Extras)
           </button>
         </div>
       </div>
