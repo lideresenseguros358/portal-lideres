@@ -310,8 +310,8 @@ export default function QuoteComparison({ policyType, quotes, quoteData }: Quote
         .benefit-item:nth-child(4) { animation-delay: 0.2s; }
         .benefit-item:nth-child(5) { animation-delay: 0.25s; }
       `}</style>
-      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 py-6 px-4">
-      <div className="max-w-7xl mx-auto">
+      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 py-6 px-4 overflow-visible">
+      <div className="max-w-7xl mx-auto overflow-visible">
         {/* Header */}
         <div className="text-center mb-8">
           <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-[#010139] mb-3">
@@ -337,7 +337,7 @@ export default function QuoteComparison({ policyType, quotes, quoteData }: Quote
         </div>
 
         {/* Quotes Grid - 2x2 en desktop para mejor espaciado */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6 pt-8">
           {quotes.map((quote) => (
             <div key={quote.id} className="relative overflow-visible">
               {/* Recommended Badge - Flotante ARRIBA del card SIN RECORTE */}
