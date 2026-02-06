@@ -110,7 +110,7 @@ export async function generarToken(
     const isTokenExistsMessage = msgLower.includes('ya existe') || msgLower.includes('token registrado');
     
     if (response.data?.success && isTokenExistsMessage) {
-      console.log('[FEDPA Auth] ✓ API indica token ya existe - verificando cache...');
+      console.log('[FEDPA Auth] ⚠️ API indica token ya existe pero no lo devuelve');
       
       // Intentar usar token de cache si existe
       const cacheKey = `fedpa_token_${env}`;
@@ -124,14 +124,16 @@ export async function generarToken(
         };
       }
       
-      // Si no hay cache válido, pero API dice que existe token
-      // Continuar de todas formas y dejar que las siguientes llamadas usen su lógica
-      console.warn('[FEDPA Auth] ⚠️ API dice token existe pero no hay cache - continuar sin token');
-      console.warn('[FEDPA Auth] Las siguientes llamadas intentarán obtener token automáticamente');
+      // Si no hay cache válido, esto es un ERROR
+      // La API debe devolver el token o permitir generar uno nuevo
+      const errorMsg = 'FEDPA dice que ya existe token pero no lo devuelve y no hay cache válido';
+      console.error('[FEDPA Auth] ❌ ERROR:', errorMsg);
+      console.error('[FEDPA Auth] Solución: Implementar endpoint de invalidar/renovar token en FEDPA');
+      console.error('[FEDPA Auth] Workaround: Esperar a que token expire en backend FEDPA');
       
       return {
-        success: true, // NO es error
-        token: undefined,
+        success: false,
+        error: errorMsg,
       };
     }
     
