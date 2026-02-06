@@ -225,37 +225,40 @@ export async function getNetCommissions(userId: string, role: DashboardRole): Pr
     console.log('📅 [getNetCommissions] paidFortnights (PAID/READY):', paidFortnights);
     console.log('📅 [getNetCommissions] fortnightsError:', fortnightsError);
 
-    // PASO 2: Buscar comisiones del broker en la última quincena (incluir código ASSA)
-    if (paidFortnights && paidFortnights.length > 0 && paidFortnights[0]) {
-      const lastFortnightId = paidFortnights[0].id; // La más reciente
-      
-      let commissionsQuery = supabase
-        .from('fortnight_details')
-        .select('commission_calculated')
-        .eq('fortnight_id', lastFortnightId);
-      
-      // Filtrar por broker_id O por assa_code
-      if (assaCode) {
-        commissionsQuery = commissionsQuery.or(`broker_id.eq.${brokerId},assa_code.eq.${assaCode}`);
-      } else {
-        commissionsQuery = commissionsQuery.eq('broker_id', brokerId);
-      }
-      
-      const { data: commissions, error: commissionsError } = await commissionsQuery;
-
-      console.log('💰 [getNetCommissions] commissions:', commissions);
-      console.log('💰 [getNetCommissions] commissionsError:', commissionsError);
-      console.log('💰 [getNetCommissions] count:', commissions?.length || 0);
-
-      if (commissions && commissions.length > 0) {
-        totalPaid = commissions.reduce((acc: number, item: any) => acc + toNumber(item.commission_calculated), 0);
-        console.log('✅ [getNetCommissions] totalPaid calculado:', totalPaid);
+    // PASO 2: Buscar la quincena donde el broker REALMENTE tiene comisiones
+    // Iterar sobre las quincenas hasta encontrar una con comisiones del broker
+    if (paidFortnights && paidFortnights.length > 0) {
+      for (const fortnight of paidFortnights) {
+        let commissionsQuery = supabase
+          .from('fortnight_details')
+          .select('commission_calculated')
+          .eq('fortnight_id', fortnight.id);
         
-        // Guardar datos de la quincena para retornarlos
-        lastPaidFortnight = {
-          period_start: paidFortnights[0].period_start,
-          period_end: paidFortnights[0].period_end
-        };
+        // Filtrar por broker_id O por assa_code
+        if (assaCode) {
+          commissionsQuery = commissionsQuery.or(`broker_id.eq.${brokerId},assa_code.eq.${assaCode}`);
+        } else {
+          commissionsQuery = commissionsQuery.eq('broker_id', brokerId);
+        }
+        
+        const { data: commissions, error: commissionsError } = await commissionsQuery;
+
+        console.log(`💰 [getNetCommissions] Quincena ${fortnight.period_start} - ${fortnight.period_end}:`, commissions?.length || 0, 'comisiones');
+
+        if (commissions && commissions.length > 0) {
+          // Encontramos comisiones! Usar esta quincena
+          totalPaid = commissions.reduce((acc: number, item: any) => acc + toNumber(item.commission_calculated), 0);
+          console.log('✅ [getNetCommissions] totalPaid calculado:', totalPaid);
+          
+          // Guardar datos de ESTA quincena (donde tiene comisiones)
+          lastPaidFortnight = {
+            period_start: fortnight.period_start,
+            period_end: fortnight.period_end
+          };
+          
+          // Salir del loop, ya encontramos la quincena correcta
+          break;
+        }
       }
     }
 
