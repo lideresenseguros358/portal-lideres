@@ -472,7 +472,7 @@ export default function FormAutoCoberturaCompleta() {
                       }
                       setValorInputTemp('');
                     }}
-                    className="text-2xl sm:text-3xl md:text-4xl font-bold text-[#8AAA19] w-full text-center focus:outline-none focus:ring-0 bg-transparent transition-all cursor-pointer block"
+                    className="text-2xl sm:text-3xl md:text-4xl font-bold text-[#8AAA19] w-full text-center focus:outline-none focus:ring-0 bg-transparent transition-all cursor-pointer block p-0 m-0 leading-tight"
                     placeholder="$15,000"
                   />
                   <p className="text-xs sm:text-sm text-gray-600 font-medium mt-2">
