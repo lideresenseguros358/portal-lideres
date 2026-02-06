@@ -55,19 +55,19 @@ export const IS_ENDPOINTS = {
   TOKEN: '/tokens',
   
   // Catálogos Auto
-  MARCAS: '/cotizaemisorauto/getmarcas',
-  MODELOS: '/cotizaemisorauto/getmodelos',
-  TIPO_PLANES: '/cotizaemisorauto/gettipoplanes',
-  GRUPO_TARIFA: '/cotizaemisorauto/getgrupotarifa',
-  PLANES: '/cotizaemisorauto/getplanes',
+  MARCAS: '/cotizaemisorauto/marcas',
+  MODELOS: '/cotizaemisorauto/modelos',
+  TIPO_PLANES: '/cotizaemisorauto/tipoplanes',
+  GRUPO_TARIFA: '/cotizaemisorauto/grupotarifa',
+  PLANES: '/cotizaemisorauto/planes',
   TIPO_DOCUMENTOS: '/catalogos/tipodocumentos',
   
   // Cotización Auto
-  GENERAR_COTIZACION: '/cotizaemisorauto/getgenerarcotizacion',
-  COBERTURAS_COTIZACION: '/cotizaemisorauto/getcoberturascotizacion',
+  GENERAR_COTIZACION: '/cotizaemisorauto/generarcotizacion',
+  COBERTURAS_COTIZACION: '/cotizaemisorauto/coberturascotizacion',
   
   // Emisión Auto
-  EMISION: '/cotizaemisorauto/getemision',
+  EMISION: '/cotizaemisorauto/emision',
   
   // Pago (a confirmar con IS)
   PAYMENT: '/payment/process', // Placeholder - confirmar con IS

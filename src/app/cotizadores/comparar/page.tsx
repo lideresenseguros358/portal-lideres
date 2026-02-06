@@ -463,10 +463,15 @@ const generateFedpaRealQuote = async (quoteData: any) => {
     );
     
     if (esPremium) {
-      // Premium AGREGA Endoso Porcelana (beneficios máximos)
+      // Premium = Endoso Porcelana (beneficios máximos)
       endosos.push(
-        { codigo: 'PORCELANA', nombre: 'Endoso Porcelana', descripcion: 'Cobertura ampliada y beneficios premium', incluido: true },
+        { codigo: 'PORCELANA', nombre: 'Endoso Porcelana', descripcion: 'Cobertura ampliada con beneficios premium', incluido: true },
         { codigo: 'H-1', nombre: 'Muerte accidental conductor', descripcion: '$500', incluido: true }
+      );
+    } else {
+      // Básico = Full Extras (beneficios estándar)
+      endosos.push(
+        { codigo: 'FULL_EXTRAS', nombre: 'Full Extras', descripcion: 'Cobertura estándar completa', incluido: true }
       );
     }
     
@@ -506,7 +511,7 @@ const generateFedpaRealQuote = async (quoteData: any) => {
       // Datos adicionales para emisión
       _isReal: true,
       _idCotizacion: cotizacionResult.idCotizacion,
-      _endosoIncluido: endosoIncluido,
+      _endosoIncluido: esPremium ? 'Endoso Porcelana' : 'Full Extras',
       _deducibleOriginal: quoteData.deducible,
       _marcaNombre: quoteData.marca,
       _modeloNombre: quoteData.modelo,
