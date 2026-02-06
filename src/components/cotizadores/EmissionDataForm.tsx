@@ -16,7 +16,7 @@ interface EmissionDataFormProps {
 }
 
 export interface EmissionData {
-  // Datos del cliente
+  // Datos del cliente SOLAMENTE
   primerNombre: string;
   segundoNombre?: string;
   primerApellido: string;
@@ -33,16 +33,6 @@ export interface EmissionData {
   acreedor?: string;
   cedulaFile?: File;
   licenciaFile?: File;
-  registroFile?: File;
-  
-  // Datos del vehículo
-  placa: string;
-  vin: string;
-  motor: string;
-  chasis?: string;
-  color: string;
-  pasajeros: number;
-  puertas: number;
 }
 
 export default function EmissionDataForm({ quoteData, onContinue }: EmissionDataFormProps) {
@@ -62,18 +52,10 @@ export default function EmissionDataForm({ quoteData, onContinue }: EmissionData
     direccion: '',
     esPEP: false,
     acreedor: '',
-    placa: '',
-    vin: '',
-    motor: '',
-    chasis: '',
-    color: '',
-    pasajeros: 5,
-    puertas: 4,
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [cedulaFileName, setCedulaFileName] = useState('');
   const [licenciaFileName, setLicenciaFileName] = useState('');
-  const [registroFileName, setRegistroFileName] = useState('');
 
   // Cargar datos desde FormAutoCoberturaCompleta al montar
   useEffect(() => {
@@ -129,7 +111,6 @@ export default function EmissionDataForm({ quoteData, onContinue }: EmissionData
         setFormData(prev => ({ ...prev, ...parsed }));
         if (parsed.cedulaFile) setCedulaFileName('(archivo guardado)');
         if (parsed.licenciaFile) setLicenciaFileName('(archivo guardado)');
-        if (parsed.registroFile) setRegistroFileName('(archivo guardado)');
       } catch (error) {
         console.error('Error al cargar datos de emisión guardados:', error);
       }
@@ -138,13 +119,12 @@ export default function EmissionDataForm({ quoteData, onContinue }: EmissionData
 
   // Guardar datos en sessionStorage cuando cambian (para mantener durante proceso)
   useEffect(() => {
-    if (formData.primerNombre || formData.email || formData.placa) {
+    if (formData.primerNombre || formData.email) {
       // Solo guardar si hay algún dato significativo
       const dataToSave = { ...formData };
       // No guardar archivos en sessionStorage (demasiado grande)
       delete dataToSave.cedulaFile;
       delete dataToSave.licenciaFile;
-      delete dataToSave.registroFile;
       sessionStorage.setItem('emissionFormData', JSON.stringify(dataToSave));
     }
   }, [formData]);
@@ -152,7 +132,7 @@ export default function EmissionDataForm({ quoteData, onContinue }: EmissionData
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {};
     
-    // Cliente
+    // Cliente SOLAMENTE
     if (!formData.primerNombre) newErrors.primerNombre = 'Requerido';
     if (!formData.primerApellido) newErrors.primerApellido = 'Requerido';
     if (!formData.cedula) newErrors.cedula = 'Requerido';
@@ -162,16 +142,9 @@ export default function EmissionDataForm({ quoteData, onContinue }: EmissionData
     if (!formData.celular) newErrors.celular = 'Requerido';
     if (!formData.direccion) newErrors.direccion = 'Requerido';
     
-    // Vehículo
-    if (!formData.placa) newErrors.placa = 'Requerido';
-    if (!formData.vin) newErrors.vin = 'Requerido';
-    if (!formData.motor) newErrors.motor = 'Requerido';
-    if (!formData.color) newErrors.color = 'Requerido';
-    
-    // Documentos
+    // Documentos del cliente
     if (!formData.cedulaFile) newErrors.cedulaFile = 'Adjunta cédula/pasaporte';
     if (!formData.licenciaFile) newErrors.licenciaFile = 'Adjunta licencia del conductor';
-    if (!formData.registroFile) newErrors.registroFile = 'Adjunta registro vehicular';
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -211,19 +184,6 @@ export default function EmissionDataForm({ quoteData, onContinue }: EmissionData
       setFormData({ ...formData, licenciaFile: file });
       setLicenciaFileName(file.name);
       setErrors({ ...errors, licenciaFile: '' });
-    }
-  };
-
-  const handleRegistroFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        toast.error('El archivo debe ser menor a 5MB');
-        return;
-      }
-      setFormData({ ...formData, registroFile: file });
-      setRegistroFileName(file.name);
-      setErrors({ ...errors, registroFile: '' });
     }
   };
 
@@ -580,166 +540,12 @@ export default function EmissionDataForm({ quoteData, onContinue }: EmissionData
           </div>
         </div>
 
-        {/* Datos del Vehículo */}
-        <div className="bg-white rounded-xl shadow-lg border-2 border-gray-100 p-5">
-          <h3 className="text-lg font-bold text-[#010139] mb-4 flex items-center gap-2">
-            <FaCar className="text-[#8AAA19]" />
-            Datos del Vehículo
-          </h3>
-
-          <div className="space-y-4">
-            {/* Registro Vehicular */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Adjuntar Registro Vehicular <span className="text-red-500">*</span>
-              </label>
-              <div className="relative">
-                <input
-                  type="file"
-                  accept="image/*,.pdf"
-                  onChange={handleRegistroFileChange}
-                  className="hidden"
-                  id="registro-upload"
-                />
-                <label
-                  htmlFor="registro-upload"
-                  className={`flex items-center justify-center gap-2 w-full px-4 py-3 border-2 rounded-lg cursor-pointer transition-colors ${
-                    errors.registroFile ? 'border-red-500 bg-red-50' : 'border-gray-300 hover:border-[#8AAA19] bg-gray-50'
-                  }`}
-                >
-                  <FaUpload className="text-gray-600" />
-                  <span className="text-sm font-medium text-gray-700">
-                    {registroFileName || 'Seleccionar archivo'}
-                  </span>
-                </label>
-              </div>
-              {errors.registroFile && <p className="text-xs text-red-500 mt-1">{errors.registroFile}</p>}
-              <p className="text-xs text-gray-500 mt-1">Tarjeta de circulación - Imagen o PDF, máx. 5MB</p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Placa <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={formData.placa}
-                onChange={(e) => setFormData({ ...formData, placa: e.target.value.toUpperCase() })}
-                className={`w-full px-3 py-2.5 md:px-4 md:py-3 text-base border-2 rounded-lg focus:outline-none transition-colors ${
-                  errors.placa ? 'border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
-                }`}
-                placeholder="Ej: ABC-1234"
-              />
-              {errors.placa && <p className="text-xs text-red-500 mt-1">{errors.placa}</p>}
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                VIN <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={formData.vin}
-                onChange={(e) => setFormData({ ...formData, vin: e.target.value.toUpperCase() })}
-                className={`w-full px-3 py-2.5 md:px-4 md:py-3 text-base border-2 rounded-lg focus:outline-none transition-colors ${
-                  errors.vin ? 'border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
-                }`}
-                placeholder="Número de identificación"
-              />
-              {errors.vin && <p className="text-xs text-red-500 mt-1">{errors.vin}</p>}
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Motor <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={formData.motor}
-                onChange={(e) => setFormData({ ...formData, motor: e.target.value.toUpperCase() })}
-                className={`w-full px-3 py-2.5 md:px-4 md:py-3 text-base border-2 rounded-lg focus:outline-none transition-colors ${
-                  errors.motor ? 'border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
-                }`}
-                placeholder="Número de motor"
-              />
-              {errors.motor && <p className="text-xs text-red-500 mt-1">{errors.motor}</p>}
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Chasis
-              </label>
-              <input
-                type="text"
-                value={formData.chasis}
-                onChange={(e) => setFormData({ ...formData, chasis: e.target.value.toUpperCase() })}
-                className="w-full px-3 py-2.5 md:px-4 md:py-3 text-base border-2 border-gray-300 focus:border-[#8AAA19] rounded-lg focus:outline-none"
-                placeholder="Opcional"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Color <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={formData.color}
-                onChange={(e) => setFormData({ ...formData, color: e.target.value })}
-                className={`w-full px-3 py-2.5 md:px-4 md:py-3 text-base border-2 rounded-lg focus:outline-none transition-colors ${
-                  errors.color ? 'border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
-                }`}
-                placeholder="Ej: Rojo"
-              />
-              {errors.color && <p className="text-xs text-red-500 mt-1">{errors.color}</p>}
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Capacidad de Pasajeros <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={formData.pasajeros}
-                onChange={(e) => setFormData({ ...formData, pasajeros: parseInt(e.target.value) })}
-                className="w-full px-3 py-2.5 md:px-4 md:py-3 text-base border-2 border-gray-300 focus:border-[#8AAA19] rounded-lg focus:outline-none bg-white"
-              >
-                <option value={2}>2 pasajeros</option>
-                <option value={3}>3 pasajeros</option>
-                <option value={4}>4 pasajeros</option>
-                <option value={5}>5 pasajeros</option>
-                <option value={6}>6 pasajeros</option>
-                <option value={7}>7 pasajeros</option>
-                <option value={8}>8 pasajeros</option>
-                <option value={9}>9 pasajeros</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Número de Puertas <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={formData.puertas}
-                onChange={(e) => setFormData({ ...formData, puertas: parseInt(e.target.value) })}
-                className="w-full px-3 py-2.5 md:px-4 md:py-3 text-base border-2 border-gray-300 focus:border-[#8AAA19] rounded-lg focus:outline-none bg-white"
-              >
-                <option value={2}>2 puertas</option>
-                <option value={3}>3 puertas</option>
-                <option value={4}>4 puertas</option>
-                <option value={5}>5 puertas</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
         {/* Submit Button */}
         <button
           type="submit"
           className="w-full px-8 py-4 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-xl font-bold text-lg hover:shadow-2xl transition-all transform hover:scale-105"
         >
-          Continuar a Inspección →
+          Continuar a Datos del Vehículo →
         </button>
       </form>
 

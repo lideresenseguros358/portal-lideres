@@ -4,13 +4,15 @@
  */
 
 import type { EmissionData } from '@/components/cotizadores/EmissionDataForm';
+import type { VehicleData } from '@/components/cotizadores/VehicleDataForm';
 import type { EmitirPolizaRequest } from './types';
 
 /**
- * Convierte EmissionData a formato FEDPA EmitirPolizaRequest
+ * Convierte EmissionData + VehicleData a formato FEDPA EmitirPolizaRequest
  */
 export function mapEmissionDataToFedpa(
   emissionData: EmissionData,
+  vehicleData: VehicleData,
   idDoc: string,
   planCode: number,
   quoteData: any
@@ -53,14 +55,14 @@ export function mapEmissionDataToFedpa(
     Modelo: quoteData.modelo || '',
     Ano: quoteData.ano?.toString() || new Date().getFullYear().toString(),
     
-    // Vehículo - De emissionData
-    Motor: emissionData.motor,
-    Placa: emissionData.placa,
+    // Vehículo - De vehicleData
+    Motor: vehicleData.motor,
+    Placa: vehicleData.placa,
     MesVencimientoPlaca: undefined, // Opcional
-    Vin: emissionData.vin,
-    Color: emissionData.color,
-    Pasajero: emissionData.pasajeros,
-    Puerta: emissionData.puertas,
+    Vin: vehicleData.vin,
+    Color: vehicleData.color,
+    Pasajero: vehicleData.pasajeros,
+    Puerta: vehicleData.puertas,
   };
 }
 
@@ -79,18 +81,24 @@ export function validateEmissionDataForFedpa(data: EmissionData): { valid: boole
   if (!data.celular) return { valid: false, error: 'Celular requerido' };
   if (!data.direccion) return { valid: false, error: 'Dirección requerida' };
 
-  // Vehículo obligatorios
+  // Documentos obligatorios
+  if (!data.cedulaFile) return { valid: false, error: 'Documento de identidad requerido' };
+  if (!data.licenciaFile) return { valid: false, error: 'Licencia requerida' };
+
+  return { valid: true };
+}
+
+/**
+ * Validar que VehicleData tenga todos los campos requeridos
+ */
+export function validateVehicleDataForFedpa(data: VehicleData): { valid: boolean; error?: string } {
   if (!data.placa) return { valid: false, error: 'Placa requerida' };
   if (!data.vin) return { valid: false, error: 'VIN requerido' };
   if (!data.motor) return { valid: false, error: 'Motor requerido' };
   if (!data.color) return { valid: false, error: 'Color requerido' };
   if (!data.pasajeros) return { valid: false, error: 'Pasajeros requerido' };
   if (!data.puertas) return { valid: false, error: 'Puertas requerido' };
-
-  // Documentos obligatorios
-  if (!data.cedulaFile) return { valid: false, error: 'Documento de identidad requerido' };
-  if (!data.licenciaFile) return { valid: false, error: 'Licencia requerida' };
-  if (!data.registroFile) return { valid: false, error: 'Registro vehicular requerido' };
+  if (!data.registroVehicular) return { valid: false, error: 'Registro vehicular requerido' };
 
   return { valid: true };
 }
@@ -100,6 +108,7 @@ export function validateEmissionDataForFedpa(data: EmissionData): { valid: boole
  */
 export function prepareDocumentsFormData(
   emissionData: EmissionData,
+  vehicleData: VehicleData,
   environment: 'DEV' | 'PROD' = 'DEV'
 ): FormData {
   const formData = new FormData();
@@ -114,8 +123,8 @@ export function prepareDocumentsFormData(
     formData.append('licencia_conducir', emissionData.licenciaFile, 'licencia_conducir');
   }
   
-  if (emissionData.registroFile) {
-    formData.append('registro_vehicular', emissionData.registroFile, 'registro_vehicular');
+  if (vehicleData.registroVehicular) {
+    formData.append('registro_vehicular', vehicleData.registroVehicular, 'registro_vehicular');
   }
   
   return formData;

@@ -17,6 +17,14 @@ interface VehicleDataFormProps {
 }
 
 export interface VehicleData {
+  // Campos del vehículo
+  placa: string;
+  vin: string;
+  motor: string;
+  chasis?: string;
+  color: string;
+  pasajeros: number;
+  puertas: number;
   registroVehicular: File | null;
   registroVehicularUrl?: string;
   notas?: string;
@@ -24,6 +32,16 @@ export interface VehicleData {
 
 export default function VehicleDataForm({ quoteData, onContinue }: VehicleDataFormProps) {
   const router = useRouter();
+  const [formData, setFormData] = useState({
+    placa: '',
+    vin: '',
+    motor: '',
+    chasis: '',
+    color: '',
+    pasajeros: 5,
+    puertas: 4,
+  });
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [registroVehicular, setRegistroVehicular] = useState<File | null>(null);
   const [registroPreview, setRegistroPreview] = useState<string>('');
   const [notas, setNotas] = useState('');
@@ -62,11 +80,24 @@ export default function VehicleDataForm({ quoteData, onContinue }: VehicleDataFo
     toast.success('Documento cargado correctamente');
   };
 
+  const validate = (): boolean => {
+    const newErrors: Record<string, string> = {};
+    
+    if (!formData.placa) newErrors.placa = 'Requerido';
+    if (!formData.vin) newErrors.vin = 'Requerido';
+    if (!formData.motor) newErrors.motor = 'Requerido';
+    if (!formData.color) newErrors.color = 'Requerido';
+    if (!registroVehicular) newErrors.registroVehicular = 'Requerido';
+    
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!registroVehicular) {
-      toast.error('Debe adjuntar el registro vehicular');
+    if (!validate()) {
+      toast.error('Por favor completa todos los campos obligatorios');
       return;
     }
 
@@ -78,6 +109,7 @@ export default function VehicleDataForm({ quoteData, onContinue }: VehicleDataFo
       await new Promise(resolve => setTimeout(resolve, 500));
 
       const vehicleData: VehicleData = {
+        ...formData,
         registroVehicular,
         notas,
       };
@@ -136,11 +168,132 @@ export default function VehicleDataForm({ quoteData, onContinue }: VehicleDataFo
 
       {/* Formulario */}
       <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Campos del Vehículo */}
+        <div className="bg-white rounded-xl shadow-md border-2 border-gray-200 p-6">
+          <h3 className="text-lg font-bold text-gray-800 mb-4">Datos del Vehículo</h3>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Placa <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={formData.placa}
+                onChange={(e) => setFormData({ ...formData, placa: e.target.value.toUpperCase() })}
+                className={`w-full px-3 py-2.5 md:px-4 md:py-3 text-base border-2 rounded-lg focus:outline-none transition-colors ${
+                  errors.placa ? 'border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
+                }`}
+                placeholder="EJ: ABC-1234"
+              />
+              {errors.placa && <p className="text-xs text-red-500 mt-1">{errors.placa}</p>}
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                VIN <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={formData.vin}
+                onChange={(e) => setFormData({ ...formData, vin: e.target.value.toUpperCase() })}
+                className={`w-full px-3 py-2.5 md:px-4 md:py-3 text-base border-2 rounded-lg focus:outline-none transition-colors ${
+                  errors.vin ? 'border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
+                }`}
+                placeholder="NÚMERO DE IDENTIFICACIÓN"
+              />
+              {errors.vin && <p className="text-xs text-red-500 mt-1">{errors.vin}</p>}
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Motor <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={formData.motor}
+                onChange={(e) => setFormData({ ...formData, motor: e.target.value.toUpperCase() })}
+                className={`w-full px-3 py-2.5 md:px-4 md:py-3 text-base border-2 rounded-lg focus:outline-none transition-colors ${
+                  errors.motor ? 'border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
+                }`}
+                placeholder="NÚMERO DE MOTOR"
+              />
+              {errors.motor && <p className="text-xs text-red-500 mt-1">{errors.motor}</p>}
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Chasis
+              </label>
+              <input
+                type="text"
+                value={formData.chasis}
+                onChange={(e) => setFormData({ ...formData, chasis: e.target.value.toUpperCase() })}
+                className="w-full px-3 py-2.5 md:px-4 md:py-3 text-base border-2 border-gray-300 focus:border-[#8AAA19] rounded-lg focus:outline-none"
+                placeholder="OPCIONAL"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Color <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={formData.color}
+                onChange={(e) => setFormData({ ...formData, color: e.target.value })}
+                className={`w-full px-3 py-2.5 md:px-4 md:py-3 text-base border-2 rounded-lg focus:outline-none transition-colors ${
+                  errors.color ? 'border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
+                }`}
+                placeholder="EJ: ROJO"
+              />
+              {errors.color && <p className="text-xs text-red-500 mt-1">{errors.color}</p>}
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Capacidad de Pasajeros <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={formData.pasajeros}
+                onChange={(e) => setFormData({ ...formData, pasajeros: parseInt(e.target.value) })}
+                className="w-full px-3 py-2.5 md:px-4 md:py-3 text-base border-2 border-gray-300 focus:border-[#8AAA19] rounded-lg focus:outline-none bg-white"
+              >
+                <option value={2}>2 pasajeros</option>
+                <option value={3}>3 pasajeros</option>
+                <option value={4}>4 pasajeros</option>
+                <option value={5}>5 pasajeros</option>
+                <option value={6}>6 pasajeros</option>
+                <option value={7}>7 pasajeros</option>
+                <option value={8}>8 pasajeros</option>
+                <option value={9}>9 pasajeros</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Número de Puertas <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={formData.puertas}
+                onChange={(e) => setFormData({ ...formData, puertas: parseInt(e.target.value) })}
+                className="w-full px-3 py-2.5 md:px-4 md:py-3 text-base border-2 border-gray-300 focus:border-[#8AAA19] rounded-lg focus:outline-none bg-white"
+              >
+                <option value={2}>2 puertas</option>
+                <option value={3}>3 puertas</option>
+                <option value={4}>4 puertas</option>
+                <option value={5}>5 puertas</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
         {/* Registro Vehicular */}
         <div className="bg-white rounded-xl shadow-md border-2 border-gray-200 p-6">
           <label className="block text-base font-bold text-gray-800 mb-4">
-            Registro Vehicular <span className="text-red-500">*</span>
+            Adjuntar Registro Vehicular <span className="text-red-500">*</span>
           </label>
+          {errors.registroVehicular && <p className="text-sm text-red-500 mb-2">{errors.registroVehicular}</p>}
           
           <div className="space-y-4">
             {/* Botón Upload o Cámara */}

@@ -154,7 +154,7 @@ export default function EmitirPage() {
         docsFormData.append('environment', 'DEV');
         docsFormData.append('documento_identidad', emissionData.cedulaFile!, 'documento_identidad');
         docsFormData.append('licencia_conducir', emissionData.licenciaFile!, 'licencia_conducir');
-        docsFormData.append('registro_vehicular', emissionData.registroFile!, 'registro_vehicular');
+        docsFormData.append('registro_vehicular', vehicleData!.registroVehicular!, 'registro_vehicular');
         
         const docsResponse = await fetch('/api/fedpa/documentos/upload', {
           method: 'POST',
@@ -197,12 +197,12 @@ export default function EmitirPage() {
           Marca: selectedPlan._marcaCodigo || quoteData.marca,
           Modelo: selectedPlan._modeloCodigo || quoteData.modelo,
           Ano: quoteData.ano?.toString() || new Date().getFullYear().toString(),
-          Motor: emissionData.motor,
-          Placa: emissionData.placa,
-          Vin: emissionData.vin,
-          Color: emissionData.color,
-          Pasajero: emissionData.pasajeros,
-          Puerta: emissionData.puertas,
+          Motor: vehicleData!.motor,
+          Placa: vehicleData!.placa,
+          Vin: vehicleData!.vin,
+          Color: vehicleData!.color,
+          Pasajero: vehicleData!.pasajeros,
+          Puerta: vehicleData!.puertas,
           
           PrimaTotal: selectedPlan.annualPremium,
         };
