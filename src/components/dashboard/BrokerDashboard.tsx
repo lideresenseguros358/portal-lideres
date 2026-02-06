@@ -67,16 +67,31 @@ const BrokerDashboard = async ({ userId }: BrokerDashboardProps) => {
   const brokerId = profileResult.data?.broker_id ?? null;
   const contests: ContestProgress[] = contestData;
 
-  // Obtener el rango de la última quincena pagada (puede ser de otro mes)
+  // Obtener información de la última quincena pagada
   let paidRange: string | null = null;
+  
+  // Función para formatear quincena como "Q1 enero 2026" o "Q2 enero 2026"
+  const formatFortnightLabel = (periodStart: string, periodEnd: string): string => {
+    const startDate = new Date(periodStart);
+    const endDate = new Date(periodEnd);
+    const day = startDate.getDate();
+    
+    // Determinar si es Q1 (1-15) o Q2 (16-fin de mes)
+    const quarter = day <= 15 ? 'Q1' : 'Q2';
+    
+    // Obtener mes y año en español
+    const month = new Intl.DateTimeFormat("es-PA", { month: "long" }).format(startDate);
+    const year = startDate.getFullYear();
+    
+    return `${quarter} ${month} ${year}`;
+  };
   
   if (fortnightStatus.paid?.fortnight) {
     // Hay una quincena pagada en el período reciente
-    paidRange = `${new Intl.DateTimeFormat("es-PA", { day: "2-digit", month: "short" }).format(
-      new Date(fortnightStatus.paid.fortnight.period_start),
-    )} – ${new Intl.DateTimeFormat("es-PA", { day: "2-digit", month: "short" }).format(
-      new Date(fortnightStatus.paid.fortnight.period_end),
-    )}`;
+    paidRange = formatFortnightLabel(
+      fortnightStatus.paid.fortnight.period_start,
+      fortnightStatus.paid.fortnight.period_end
+    );
   } else if (netCommissions.lastPaid > 0 && brokerId) {
     // No hay quincena pagada reciente, buscar la última en historial
     const lastFortnight = await supabase
@@ -88,11 +103,10 @@ const BrokerDashboard = async ({ userId }: BrokerDashboardProps) => {
       .maybeSingle();
     
     if (lastFortnight.data) {
-      paidRange = `${new Intl.DateTimeFormat("es-PA", { day: "2-digit", month: "short" }).format(
-        new Date(lastFortnight.data.period_start),
-      )} – ${new Intl.DateTimeFormat("es-PA", { day: "2-digit", month: "short" }).format(
-        new Date(lastFortnight.data.period_end),
-      )}`;
+      paidRange = formatFortnightLabel(
+        lastFortnight.data.period_start,
+        lastFortnight.data.period_end
+      );
     }
   }
 
