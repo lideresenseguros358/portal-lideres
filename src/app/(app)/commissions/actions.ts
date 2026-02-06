@@ -5588,6 +5588,90 @@ export async function actionPayFortnight(fortnight_id: string) {
     console.log(`[actionPayFortnight] ✅ ADELANTOS: ${totalAdvancesApplied} logs creados de ${brokersWithAdvances} brokers`);
     console.log('[actionPayFortnight] ========== FIN ADELANTOS ==========');
     
+    // 7.5. CRÍTICO: Procesar descuentos desde fortnight_discounts
+    console.log('[actionPayFortnight] ========== INICIO FORTNIGHT_DISCOUNTS ==========');
+    const { data: fortnightDiscounts, error: discountsError } = await supabase
+      .from('fortnight_discounts')
+      .select('id, advance_id, amount, broker_id')
+      .eq('fortnight_id', fortnight_id)
+      .eq('applied', false);
+    
+    if (discountsError) {
+      console.error('[actionPayFortnight] Error cargando fortnight_discounts:', discountsError);
+    } else if (fortnightDiscounts && fortnightDiscounts.length > 0) {
+      console.log(`[actionPayFortnight] 📊 Descuentos pendientes: ${fortnightDiscounts.length}`);
+      
+      let discountsProcessed = 0;
+      
+      for (const discount of fortnightDiscounts) {
+        try {
+          // 1. Crear advance_log
+          const { error: logError } = await supabase
+            .from('advance_logs')
+            .insert({
+              advance_id: discount.advance_id,
+              amount: discount.amount,
+              payment_type: 'fortnight',
+              fortnight_id,
+              applied_by: userId,
+            });
+          
+          if (logError) {
+            console.error(`[actionPayFortnight]   ❌ Error creando advance_log:`, logError);
+            continue;
+          }
+          
+          // 2. Reducir saldo del advance
+          const { data: currentAdvance, error: advError } = await supabase
+            .from('advances')
+            .select('amount, status')
+            .eq('id', discount.advance_id)
+            .single();
+          
+          if (advError || !currentAdvance) {
+            console.error(`[actionPayFortnight]   ❌ Error obteniendo advance:`, advError);
+            continue;
+          }
+          
+          const newAmount = currentAdvance.amount - discount.amount;
+          const newStatus = newAmount <= 0 ? 'paid' : (currentAdvance.status === 'pending' ? 'partial' : currentAdvance.status);
+          
+          const { error: updateAdvError } = await supabase
+            .from('advances')
+            .update({
+              amount: Math.max(0, newAmount),
+              status: newStatus,
+            })
+            .eq('id', discount.advance_id);
+          
+          if (updateAdvError) {
+            console.error(`[actionPayFortnight]   ❌ Error actualizando advance:`, updateAdvError);
+            continue;
+          }
+          
+          // 3. Marcar discount como aplicado
+          const { error: markError } = await supabase
+            .from('fortnight_discounts')
+            .update({ applied: true })
+            .eq('id', discount.id);
+          
+          if (markError) {
+            console.error(`[actionPayFortnight]   ❌ Error marcando discount:`, markError);
+          } else {
+            discountsProcessed++;
+            console.log(`[actionPayFortnight]   ✅ Descuento procesado: $${discount.amount} → advance ${discount.advance_id.substring(0, 8)}`);
+          }
+        } catch (err) {
+          console.error(`[actionPayFortnight]   ❌ Error procesando discount:`, err);
+        }
+      }
+      
+      console.log(`[actionPayFortnight] ✅ FORTNIGHT_DISCOUNTS: ${discountsProcessed}/${fortnightDiscounts.length} procesados`);
+    } else {
+      console.log('[actionPayFortnight] ⚠️ No hay descuentos pendientes en fortnight_discounts');
+    }
+    console.log('[actionPayFortnight] ========== FIN FORTNIGHT_DISCOUNTS ==========');
+    
     // 8. Notificar brokers que reciben pago (AMBAS: email + campanita)
     // Solo notificar a brokers que:
     // - NO tienen descuento del 100% (net_amount > 0)
