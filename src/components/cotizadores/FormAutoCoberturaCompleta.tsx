@@ -453,28 +453,35 @@ export default function FormAutoCoberturaCompleta() {
               <div className="bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl p-4 md:p-6 border-2 border-[#8AAA19]">
                 {/* Input editable - estructura igualada a daños propiedad */}
                 <div className="text-center mb-4">
-                  <input
-                    type="text"
+                  <span 
+                    contentEditable
+                    suppressContentEditableWarning
                     inputMode="numeric"
-                    value={valorInputTemp || `$${formData.valorVehiculo.toLocaleString('en-US')}`}
-                    onChange={(e) => {
-                      setValorInputTemp(e.target.value);
+                    onInput={(e) => {
+                      const text = e.currentTarget.textContent || '';
+                      setValorInputTemp(text);
                     }}
                     onFocus={(e) => {
-                      setValorInputTemp('');
-                      setTimeout(() => e.target.select(), 0);
+                      const range = document.createRange();
+                      const sel = window.getSelection();
+                      range.selectNodeContents(e.currentTarget);
+                      sel?.removeAllRanges();
+                      sel?.addRange(range);
                     }}
                     onBlur={(e) => {
-                      const numStr = e.target.value.replace(/[$,]/g, '');
+                      const text = e.currentTarget.textContent || '';
+                      const numStr = text.replace(/[$,]/g, '');
                       const num = parseInt(numStr);
                       if (!isNaN(num) && num >= 5000 && num <= 100000) {
                         setFormData({ ...formData, valorVehiculo: num });
                       }
+                      e.currentTarget.textContent = `$${formData.valorVehiculo.toLocaleString('en-US')}`;
                       setValorInputTemp('');
                     }}
-                    className="text-2xl sm:text-3xl md:text-4xl font-bold text-[#8AAA19] w-full text-center focus:outline-none focus:ring-0 bg-transparent transition-all cursor-pointer block p-0 m-0 leading-tight"
-                    placeholder="$15,000"
-                  />
+                    className="text-2xl sm:text-3xl md:text-4xl font-bold text-[#8AAA19] focus:outline-none cursor-pointer block"
+                  >
+                    {valorInputTemp || `$${formData.valorVehiculo.toLocaleString('en-US')}`}
+                  </span>
                   <p className="text-xs sm:text-sm text-gray-600 font-medium mt-2">
                     👆 Toque para editar
                   </p>
