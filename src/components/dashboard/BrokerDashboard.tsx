@@ -72,18 +72,22 @@ const BrokerDashboard = async ({ userId }: BrokerDashboardProps) => {
   
   // Función para formatear quincena como "Q1 enero 2026" o "Q2 enero 2026"
   const formatFortnightLabel = (periodStart: string, periodEnd: string): string => {
-    const startDate = new Date(periodStart);
-    const endDate = new Date(periodEnd);
-    const day = startDate.getDate();
+    // Parsear fecha manualmente para evitar problemas de timezone
+    // periodStart formato: "2026-01-16" (YYYY-MM-DD)
+    const parts = periodStart.split('-').map(Number);
+    const year = parts[0] ?? 2026;
+    const month = parts[1] ?? 1;
+    const day = parts[2] ?? 1;
     
     // Determinar si es Q1 (1-15) o Q2 (16-fin de mes)
     const quarter = day <= 15 ? 'Q1' : 'Q2';
     
-    // Obtener mes y año en español
-    const month = new Intl.DateTimeFormat("es-PA", { month: "long" }).format(startDate);
-    const year = startDate.getFullYear();
+    // Obtener mes en español
+    const monthNames = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 
+                        'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+    const monthName = monthNames[month - 1] ?? 'enero';
     
-    return `${quarter} ${month} ${year}`;
+    return `${quarter} ${monthName} ${year}`;
   };
   
   if (netCommissions.lastPaidFortnight) {
