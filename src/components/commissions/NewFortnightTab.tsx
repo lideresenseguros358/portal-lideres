@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { supabaseClient } from '@/lib/supabase/client';
 import { actionDeleteImport, actionRecalculateFortnight, actionDeleteDraft, actionPayFortnight, actionExportBankCsv, actionToggleNotify } from '@/app/(app)/commissions/actions';
 import ImportForm from './ImportForm';
@@ -10,6 +11,7 @@ import CreateFortnightManager from './CreateFortnightManager';
 import AdvancesModal from './AdvancesModal';
 import { QueuedAdjustmentsPreview } from './QueuedAdjustmentsPreview';
 import DraftUnidentifiedTable from './DraftUnidentifiedTable';
+import PayFortnightProgressModal from './PayFortnightProgressModal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
@@ -221,6 +223,10 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
   const [isGeneratingCSV, setIsGeneratingCSV] = useState(false);
   const [isClosingFortnight, setIsClosingFortnight] = useState(false);
   const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+  const [paymentProgress, setPaymentProgress] = useState(0);
+  const [paymentStep, setPaymentStep] = useState('');
+  const [showProgressModal, setShowProgressModal] = useState(false);
+  const router = useRouter();
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const [isDiscarding, setIsDiscarding] = useState(false);
   
@@ -591,31 +597,67 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
   };
 
   const handleCloseFortnight = async () => {
-    if (!draftFortnight) return; // Safety check
+    if (!draftFortnight) return;
     
     setIsClosingFortnight(true);
+    setShowCloseConfirm(false);
+    setShowProgressModal(true);
+    setPaymentProgress(0);
+    
+    // Simular progreso con pasos reales del proceso
+    const steps = [
+      { progress: 10, message: 'Validando quincena borrador...' },
+      { progress: 20, message: 'Procesando items identificados...' },
+      { progress: 30, message: 'Procesando items sin identificar...' },
+      { progress: 40, message: 'Guardando detalles de comisiones...' },
+      { progress: 50, message: 'Recalculando totales por corredor...' },
+      { progress: 60, message: 'Confirmando vínculos bancarios...' },
+      { progress: 70, message: 'Actualizando transferencias a PAGADO...' },
+      { progress: 80, message: 'Procesando adelantos y descuentos...' },
+      { progress: 90, message: 'Generando registros finales...' },
+      { progress: 95, message: 'Actualizando estado de quincena...' }
+    ];
+    
     try {
-      console.log('Cerrando quincena:', draftFortnight.id);
+      // Ejecutar pasos de progreso visual
+      let currentStep = 0;
+      const stepInterval = setInterval(() => {
+        const step = steps[currentStep];
+        if (currentStep < steps.length && step) {
+          setPaymentProgress(step.progress);
+          setPaymentStep(step.message);
+          currentStep++;
+        }
+      }, 800);
       
+      // Ejecutar el proceso real
       const result = await actionPayFortnight(draftFortnight.id);
       
-      console.log('Result from actionPayFortnight:', result);
+      clearInterval(stepInterval);
       
       if (result.ok) {
-        toast.success('Quincena cerrada exitosamente');
-        setDraftFortnight(null);
-        onFortnightCreated(null as any);
-        console.log('✓ Quincena cerrada');
+        setPaymentProgress(100);
+        setPaymentStep('¡Quincena cerrada exitosamente!');
+        
+        // El modal manejará la redirección después del confeti
       } else {
+        setShowProgressModal(false);
         toast.error((result as any).error || 'Error al cerrar quincena');
       }
     } catch (err) {
       console.error('Error closing fortnight:', err);
+      setShowProgressModal(false);
       toast.error('Error inesperado al cerrar quincena');
     } finally {
       setIsClosingFortnight(false);
-      setShowCloseConfirm(false);
     }
+  };
+  
+  const handleProgressComplete = () => {
+    setShowProgressModal(false);
+    setDraftFortnight(null);
+    onFortnightCreated(null as any);
+    router.push('/commissions?tab=history');
   };
 
   // Early return if no draft fortnight
@@ -927,14 +969,14 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
       
       {/* Discard Draft Confirmation Dialog */}
       <Dialog open={showDiscardConfirm} onOpenChange={setShowDiscardConfirm}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle className="text-red-600">¿Descartar Borrador?</DialogTitle>
+            <DialogTitle className="text-red-600">Descartar Quincena Borrador</DialogTitle>
             <DialogDescription>
-              Esta acción eliminará todo el progreso de esta quincena. No podrás recuperar los datos importados.
+              ¿Está seguro de que desea eliminar esta quincena borrador? Esta acción no se puede deshacer.
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter className="gap-2">
+          <DialogFooter>
             <Button
               variant="outline"
               onClick={() => setShowDiscardConfirm(false)}
@@ -943,17 +985,24 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
               Cancelar
             </Button>
             <Button
-              variant="destructive"
               onClick={handleDiscardDraft}
-              className="bg-red-500 hover:bg-red-600"
               disabled={isDiscarding}
+              className="bg-red-600 hover:bg-red-700 text-white"
             >
-              {isDiscarding ? 'Eliminando...' : 'Sí, Descartar'}
+              {isDiscarding ? 'Eliminando...' : 'Confirmar Eliminación'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      
+
+      {/* Payment Progress Modal */}
+      <PayFortnightProgressModal
+        isOpen={showProgressModal}
+        progress={paymentProgress}
+        currentStep={paymentStep}
+        onComplete={handleProgressComplete}
+      />
+
       <ConfirmDialog
         isOpen={dialogState.isOpen}
         onClose={() => closeDialog(false)}
