@@ -125,7 +125,7 @@ export default function PaymentPlanSelector({ annualPremium, priceBreakdown, onC
           <FaMoneyBillWave className="text-4xl mx-auto mb-3 text-[#8AAA19]" />
           <div className="text-sm opacity-80 mb-1">Prima Anual Total</div>
           <div className="text-4xl sm:text-5xl font-bold mb-2">
-            ${annualPremium.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+            ${annualPremium.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
           <div className="text-xs opacity-70">Incluye coberturas seleccionadas</div>
         </div>
@@ -194,16 +194,16 @@ export default function PaymentPlanSelector({ annualPremium, priceBreakdown, onC
               {installments === 1 ? 'Pagarás en un solo pago' : `Pagarás ${installments} cuotas de:`}
             </div>
             <div className="text-4xl sm:text-5xl font-bold text-[#010139] mb-2 animate-pulse">
-              ${monthlyPayment.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              ${monthlyPayment.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </div>
             {installments > 1 && (
               <div className="text-xs text-gray-500">
-                Total: ${totalToPay.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                Total: ${totalToPay.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
             )}
             {installments === 1 && priceBreakdown && priceBreakdown.totalAlContado < priceBreakdown.totalConTarjeta && (
               <div className="text-xs text-green-600 font-semibold mt-1">
-                ✓ Ahorro: ${(priceBreakdown.totalConTarjeta - priceBreakdown.totalAlContado).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                ✓ Ahorro: ${(priceBreakdown.totalConTarjeta - priceBreakdown.totalAlContado).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </div>
             )}
           </div>
