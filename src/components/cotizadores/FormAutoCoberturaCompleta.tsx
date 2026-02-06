@@ -472,7 +472,7 @@ export default function FormAutoCoberturaCompleta() {
                       }
                       setValorInputTemp('');
                     }}
-                    className="text-3xl sm:text-4xl md:text-5xl font-black text-[#8AAA19] w-full max-w-full text-center focus:outline-none focus:ring-0 bg-transparent transition-all cursor-pointer"
+                    className="text-2xl sm:text-3xl md:text-4xl font-black text-[#8AAA19] w-full max-w-full text-center focus:outline-none focus:ring-0 bg-transparent transition-all cursor-pointer"
                     placeholder="$15,000"
                     style={{ minWidth: 0 }}
                   />
