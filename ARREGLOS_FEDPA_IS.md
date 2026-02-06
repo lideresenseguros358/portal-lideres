@@ -80,23 +80,27 @@ Paso 2: POST /APIRestIsTester/api/tokens/diario
 
 **Próximos Pasos Requeridos:**
 
-1. **Verificar Credenciales con IS:**
-   - Confirmar que `KEY_DESARROLLO_IS` y `KEY_PRODUCCION_IS` sean válidos
-   - Verificar que no hayan expirado
-   - Confirmar ambiente (DEV vs PROD)
+**IMPORTANTE:** Las credenciales están BIEN (probado: catálogos se descargaron exitosamente)
 
-2. **Verificar Endpoints con IS:**
-   - Confirmar que `/api/tokens/diario` esté habilitado
-   - Verificar URL base correcta
-   - Posible cambio de endpoint
+1. **Bloqueo por Exceso de Requests:**
+   - IS puede haber bloqueado por demasiadas llamadas
+   - Solicitar desbloqueo y confirmar rate limits
+   - Implementar throttling si es necesario
 
-3. **Whitelist IP:**
-   - IS puede estar bloqueando la IP del servidor
+2. **Whitelist IP del Servidor:**
+   - IS bloqueó la IP actual del servidor
    - Solicitar agregar IP a whitelist
+   - Confirmar IPs autorizadas
 
-4. **Headers Adicionales:**
-   - IS puede requerir headers específicos
-   - User-Agent, Origin, etc.
+3. **Cambio de Endpoints (sin notificar):**
+   - IS puede haber cambiado `/api/tokens` sin avisar
+   - Solicitar documentación actualizada
+   - Confirmar endpoints vigentes
+
+4. **Ambiente Incorrecto:**
+   - Verificar si estamos usando DEV cuando debería ser PROD
+   - O viceversa
+   - Confirmar URLs base correctas
 
 **Estado:** ⚠️ **BLOQUEADO** - Requiere coordinación con IS
 
