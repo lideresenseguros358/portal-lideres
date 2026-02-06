@@ -399,14 +399,14 @@ export default function MasterAdjustmentReportReview({
               </div>
               
               {report.status === 'pending' && (
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-nowrap gap-1.5 sm:gap-2">
                   <Button
                     size="sm"
                     onClick={(e) => {
                       e.stopPropagation();
                       setEditingItemsReport(report);
                     }}
-                    className="bg-orange-500 hover:bg-orange-600 text-white px-2 py-1.5 h-auto"
+                    className="bg-orange-500 hover:bg-orange-600 text-white px-2 py-1.5 h-auto flex-shrink-0"
                     title="Ajustar override percent por item"
                   >
                     <FaPercent size={14} />
@@ -415,23 +415,12 @@ export default function MasterAdjustmentReportReview({
                     size="sm"
                     onClick={(e) => {
                       e.stopPropagation();
-                      setReviewingReport(report);
-                    }}
-                    className="bg-[#8AAA19] hover:bg-[#7a9617] text-white px-3 py-1.5 h-auto"
-                  >
-                    <FaCheckCircle className="mr-1.5" size={12} />
-                    <span className="text-xs font-semibold">Aprobar</span>
-                  </Button>
-                  <Button
-                    size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
                       setEditingReport(report);
                     }}
-                    className="bg-[#010139] hover:bg-[#020270] text-white px-3 py-1.5 h-auto"
+                    className="bg-[#010139] hover:bg-[#020270] text-white px-2 sm:px-3 py-1.5 h-auto flex-shrink-0"
                   >
-                    <FaEdit className="mr-1.5" size={12} />
-                    <span className="text-xs font-semibold">Editar</span>
+                    <FaEdit className="sm:mr-1.5" size={12} />
+                    <span className="hidden sm:inline text-xs font-semibold">Editar</span>
                   </Button>
                   <Button
                     size="sm"
@@ -439,10 +428,21 @@ export default function MasterAdjustmentReportReview({
                       e.stopPropagation();
                       setRejectingReport(report);
                     }}
-                    className="bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 h-auto"
+                    className="bg-red-600 hover:bg-red-700 text-white px-2 sm:px-3 py-1.5 h-auto flex-shrink-0"
                   >
-                    <FaTimesCircle className="mr-1.5" size={12} />
-                    <span className="text-xs font-semibold">Rechazar</span>
+                    <FaTimesCircle className="sm:mr-1.5" size={12} />
+                    <span className="hidden sm:inline text-xs font-semibold">Rechazar</span>
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setReviewingReport(report);
+                    }}
+                    className="bg-[#8AAA19] hover:bg-[#7a9617] text-white px-2 sm:px-3 py-1.5 h-auto flex-shrink-0"
+                  >
+                    <FaCheckCircle className="sm:mr-1.5" size={12} />
+                    <span className="hidden sm:inline text-xs font-semibold">Aprobar</span>
                   </Button>
                 </div>
               )}
