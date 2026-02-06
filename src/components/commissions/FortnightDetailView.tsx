@@ -272,31 +272,6 @@ export default function FortnightDetailView({ fortnightId, fortnightData }: Fort
         </div>
       </Card>
 
-      {/* Totales Generales */}
-      <Card className="bg-white shadow-lg border-2 border-gray-100 rounded-xl p-6">
-        <h3 className="text-lg font-bold text-[#010139] mb-4">📊 TOTALES GENERALES</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-gradient-to-r from-blue-50 to-blue-100 rounded-lg p-4 border-l-4 border-blue-500">
-            <p className="text-sm text-gray-600 font-medium">Total Reportes</p>
-            <p className="text-2xl font-bold text-blue-900 font-mono">
-              ${totals.total_reportes.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </p>
-          </div>
-          <div className="bg-gradient-to-r from-[#8AAA19]/10 to-[#8AAA19]/20 rounded-lg p-4 border-l-4 border-[#8AAA19]">
-            <p className="text-sm text-gray-600 font-medium">Total Corredores</p>
-            <p className="text-2xl font-bold text-[#8AAA19] font-mono">
-              ${totals.total_corredores.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </p>
-          </div>
-          <div className="bg-gradient-to-r from-gray-50 to-gray-100 rounded-lg p-4 border-l-4 border-gray-500">
-            <p className="text-sm text-gray-600 font-medium">Ganancia Oficina</p>
-            <p className="text-2xl font-bold text-gray-900 font-mono">
-              ${totals.ganancia_oficina.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-            </p>
-          </div>
-        </div>
-      </Card>
-
       {/* Totales por Tipo de Seguro */}
       <Card className="bg-white shadow-lg border-2 border-gray-100 rounded-xl p-6">
         <h3 className="text-lg font-bold text-[#010139] mb-4">🏥 TOTALES POR TIPO DE SEGURO</h3>
