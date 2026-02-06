@@ -25,9 +25,16 @@ FROM fortnight_discounts fd
 JOIN advances a ON fd.advance_id = a.id
 JOIN brokers b ON fd.broker_id = b.id
 WHERE fd.applied = false
-  -- REEMPLAZAR CON EL fortnight_id CORRECTO de la captura
-  AND fd.fortnight_id = 'e6907455-f794-41b9-94ec-05de...' 
+  AND fd.fortnight_id = 'b3836d79-d63d-474e-a9fe-fdffe43fc37e'
 ORDER BY fd.created_at;
+
+-- Resultado esperado: 5 descuentos
+-- CARLOS FOOT: $50.00
+-- CORALIA AVILA: $1.52
+-- EDIS CASTILLO: $85.22
+-- LUIS QUIROS: $200.00
+-- HERICKA GONZALEZ: $94.73
+-- TOTAL: $431.47
 
 -- ============================================================================
 -- PASO 2: PROCESAR DESCUENTOS (TRANSACCIÓN)
@@ -37,11 +44,11 @@ ORDER BY fd.created_at;
 
 BEGIN;
 
--- Variables auxiliares (reemplazar valores según tu caso)
+-- Variables auxiliares
 DO $$
 DECLARE
-    v_fortnight_id uuid := 'e6907455-f794-41b9-94ec-05de...'; -- REEMPLAZAR
-    v_user_id uuid := 'tu-user-id-aqui'; -- REEMPLAZAR con el ID del admin
+    v_fortnight_id uuid := 'b3836d79-d63d-474e-a9fe-fdffe43fc37e'; -- Quincena del 16 al 28 Feb 2026
+    v_user_id uuid := 'TU-USER-ID-AQUI'; -- ⚠️ REEMPLAZAR con tu ID de admin
     discount_record RECORD;
     v_current_advance RECORD;
     v_new_amount numeric;
@@ -140,7 +147,9 @@ SELECT
     SUM(CASE WHEN applied = false THEN 1 ELSE 0 END) as pendientes,
     SUM(amount) as total_amount
 FROM fortnight_discounts
-WHERE fortnight_id = 'e6907455-f794-41b9-94ec-05de...'; -- REEMPLAZAR
+WHERE fortnight_id = 'b3836d79-d63d-474e-a9fe-fdffe43fc37e';
+
+-- Esperado: 5 aplicados, 0 pendientes, $431.47 total
 
 -- Verificar advance_logs creados
 SELECT 
@@ -154,9 +163,11 @@ SELECT
 FROM advance_logs al
 JOIN advances a ON al.advance_id = a.id
 JOIN brokers b ON a.broker_id = b.id
-WHERE al.fortnight_id = 'e6907455-f794-41b9-94ec-05de...' -- REEMPLAZAR
+WHERE al.fortnight_id = 'b3836d79-d63d-474e-a9fe-fdffe43fc37e'
   AND al.payment_type = 'fortnight'
 ORDER BY al.created_at DESC;
+
+-- Esperado: 5 logs creados (uno por cada descuento)
 
 -- Verificar estado final de los advances afectados
 SELECT 
@@ -172,9 +183,16 @@ JOIN brokers b ON a.broker_id = b.id
 WHERE a.id IN (
     SELECT DISTINCT advance_id 
     FROM fortnight_discounts 
-    WHERE fortnight_id = 'e6907455-f794-41b9-94ec-05de...' -- REEMPLAZAR
+    WHERE fortnight_id = 'b3836d79-d63d-474e-a9fe-fdffe43fc37e'
 )
 ORDER BY b.name, a.created_at;
+
+-- Esperado:
+-- CARLOS FOOT: balance $0.00, status 'paid'
+-- CORALIA AVILA: balance $0.00, status 'paid'
+-- EDIS CASTILLO: balance $0.00, status 'paid'
+-- LUIS QUIROS: balance $0.00, status 'paid'
+-- HERICKA GONZALEZ: balance $673.10, status 'partial' (era $767.83 - $94.73)
 
 -- ============================================================================
 -- NOTAS IMPORTANTES:
