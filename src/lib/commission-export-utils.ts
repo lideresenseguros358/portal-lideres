@@ -322,89 +322,102 @@ export async function exportBrokerToPDF(
   
   yPos += 8;
   doc.setTextColor(0, 0, 0);
-  doc.setFontSize(11);
+  doc.setFontSize(12);
   doc.setFont('helvetica', 'bold');
   doc.text('RESUMEN', 14, yPos);
   
   yPos += 8;
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
-  doc.text(`Total Bruto:`, 14, yPos);
+  doc.text(`Total Comisión Bruta:`, 14, yPos);
   doc.setFont('helvetica', 'bold');
   doc.text(formatCurrency(broker.total_gross), pageWidth - 14, yPos, { align: 'right' });
-  
-  yPos += 6;
-  doc.setFont('helvetica', 'normal');
-  doc.text(`Total Neto (sin descuentos):`, 14, yPos);
-  doc.setFont('helvetica', 'bold');
-  doc.text(formatCurrency(broker.total_net), pageWidth - 14, yPos, { align: 'right' });
 
-  // ADELANTOS DESCONTADOS
-  if ((broker as any).discounts_json?.adelantos && (broker as any).discounts_json.adelantos.length > 0) {
+  // ADELANTOS DESCONTADOS (usando discounts_json.adelantos O discounts.details)
+  const hasDiscounts = (broker as any).discounts_json?.adelantos && (broker as any).discounts_json.adelantos.length > 0;
+  const hasDiscountsParam = discounts && discounts.total > 0;
+  
+  if (hasDiscounts || hasDiscountsParam) {
     yPos += 8;
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
-    doc.text('ADELANTOS DESCONTADOS:', 14, yPos);
+    doc.setLineWidth(0.3);
+    doc.setDrawColor(200, 200, 200);
+    doc.line(20, yPos, pageWidth - 14, yPos);
+    yPos += 6;
     
-    (broker as any).discounts_json.adelantos.forEach((adelanto: any) => {
-      yPos += 6;
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(10);
-      doc.text(`- ${adelanto.description}:`, 20, yPos);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(...[220, 38, 38]); // red
-      doc.text(formatCurrency(adelanto.amount), pageWidth - 14, yPos, { align: 'right' });
-      doc.setTextColor(0, 0, 0);
-    });
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(10);
+    doc.setTextColor(120, 120, 120);
+    doc.text('Descuentos Aplicados:', 14, yPos);
+    doc.setTextColor(0, 0, 0);
+    
+    // Usar adelantos si existen, sino usar details del parámetro
+    if (hasDiscounts) {
+      (broker as any).discounts_json.adelantos.forEach((adelanto: any) => {
+        yPos += 6;
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        doc.text(`• ${adelanto.description}`, 20, yPos);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(...[220, 38, 38]); // red
+        doc.text(`-${formatCurrency(adelanto.amount)}`, pageWidth - 14, yPos, { align: 'right' });
+        doc.setTextColor(0, 0, 0);
+      });
+    } else if (hasDiscountsParam) {
+      discounts.details.forEach(d => {
+        yPos += 6;
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        doc.text(`• ${d.reason}`, 20, yPos);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(...[220, 38, 38]); // red
+        doc.text(`-${formatCurrency(d.amount)}`, pageWidth - 14, yPos, { align: 'right' });
+        doc.setTextColor(0, 0, 0);
+      });
+    }
 
     yPos += 8;
     doc.setLineWidth(0.3);
-    doc.line(14, yPos, pageWidth - 14, yPos);
+    doc.setDrawColor(200, 200, 200);
+    doc.line(20, yPos, pageWidth - 14, yPos);
     yPos += 6;
     
-    const totalDescuentos = (broker as any).discounts_json.total || 0;
+    const totalDescuentos = hasDiscounts 
+      ? ((broker as any).discounts_json.total || 0)
+      : (discounts?.total || 0);
+    
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
+    doc.setFontSize(10);
     doc.text('Total Descuentos:', 14, yPos);
     doc.setTextColor(...[220, 38, 38]);
-    doc.text(formatCurrency(totalDescuentos), pageWidth - 14, yPos, { align: 'right' });
+    doc.text(`-${formatCurrency(totalDescuentos)}`, pageWidth - 14, yPos, { align: 'right' });
     doc.setTextColor(0, 0, 0);
 
     yPos += 8;
+    doc.setDrawColor(...primaryColor);
     doc.setLineWidth(0.5);
     doc.line(14, yPos, pageWidth - 14, yPos);
-    yPos += 6;
+    yPos += 7;
     
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12);
+    doc.setFontSize(13);
     doc.text('TOTAL NETO A PAGAR:', 14, yPos);
     doc.setTextColor(...secondaryColor);
-    doc.text(formatCurrency(broker.total_net - totalDescuentos), pageWidth - 14, yPos, { align: 'right' });
-  } else if (discounts && discounts.total > 0) {
+    doc.text(formatCurrency(broker.total_gross - totalDescuentos), pageWidth - 14, yPos, { align: 'right' });
+    doc.setTextColor(0, 0, 0);
+  } else {
+    // Sin descuentos
     yPos += 8;
-    doc.setFont('helvetica', 'bold');
-    doc.text('DESCUENTOS:', 14, yPos);
-    
-    discounts.details.forEach(d => {
-      yPos += 6;
-      doc.setFont('helvetica', 'normal');
-      doc.text(`- ${d.reason}:`, 20, yPos);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(...[220, 38, 38]); // red
-      doc.text(formatCurrency(d.amount), pageWidth - 14, yPos, { align: 'right' });
-      doc.setTextColor(0, 0, 0);
-    });
-
-    yPos += 8;
-    doc.setLineWidth(0.3);
+    doc.setDrawColor(...primaryColor);
+    doc.setLineWidth(0.5);
     doc.line(14, yPos, pageWidth - 14, yPos);
-    yPos += 6;
+    yPos += 7;
     
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(12);
+    doc.setFontSize(13);
     doc.text('TOTAL NETO A PAGAR:', 14, yPos);
     doc.setTextColor(...secondaryColor);
-    doc.text(formatCurrency(broker.total_net - discounts.total), pageWidth - 14, yPos, { align: 'right' });
+    doc.text(formatCurrency(broker.total_gross), pageWidth - 14, yPos, { align: 'right' });
+    doc.setTextColor(0, 0, 0);
   }
 
   // Footer
