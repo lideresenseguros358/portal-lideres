@@ -174,30 +174,35 @@ export function getPlanFromCoberturaYValor(
   tipoCoberturaIS: number,
   valorVehiculo: number
 ): string {
-  // Determinar si es Cobertura Completa o Daños a Terceros
-  // IS usa: 14 = Cobertura Completa, otros = Daños a Terceros
-  const esCoberturabCompleta = tipoCoberturaIS === 14;
-  const tipoCobertura: 'CC' | 'DT' = esCoberturabCompleta ? 'CC' : 'DT';
+  // CRÍTICO: Determinar tipo por RANGO de plan, no solo por valor exacto
+  // FEDPA Cobertura Completa: 411-463
+  // FEDPA Daños a Terceros: 426
+  // IS Cobertura Completa: 14
   
-  console.log(`[PLAN Determiner] Tipo IS: ${tipoCoberturaIS} → ${tipoCobertura} (${esCoberturabCompleta ? 'Cobertura Completa' : 'Daños a Terceros'})`);
+  let tipoCobertura: 'CC' | 'DT';
+  
+  // Detectar por rango de plan FEDPA o valor IS
+  if (
+    tipoCoberturaIS === 14 || // IS Cobertura Completa
+    (tipoCoberturaIS >= 411 && tipoCoberturaIS <= 463) || // FEDPA CC (411, 412, 461-463)
+    tipoCoberturaIS === 412 // FEDPA CC Premium específico
+  ) {
+    tipoCobertura = 'CC';
+  } else if (tipoCoberturaIS === 426) {
+    tipoCobertura = 'DT';
+  } else {
+    // Default: Si no está claro, usar Cobertura Completa (más común)
+    console.warn(`[PLAN Determiner] Tipo desconocido ${tipoCoberturaIS}, usando CC por defecto`);
+    tipoCobertura = 'CC';
+  }
+  
+  console.log(`[PLAN Determiner] Tipo IS: ${tipoCoberturaIS} → ${tipoCobertura} (${tipoCobertura === 'CC' ? 'Cobertura Completa' : 'Daños a Terceros'})`);
   console.log(`[PLAN Determiner] Valor vehículo: $${valorVehiculo.toLocaleString()}`);
   
   if (tipoCobertura === 'CC') {
-    // Para Cobertura Completa, usar plan según rango de valor
-    if (valorVehiculo >= 60001 && valorVehiculo <= 150000) {
-      console.log('[PLAN Determiner] Plan: 463 (CC 60,001 A 150,000)');
-      return '463';
-    }
-    if (valorVehiculo >= 20000 && valorVehiculo <= 60000) {
-      console.log('[PLAN Determiner] Plan: 462 (CC 20,000 A 60,000)');
-      return '462';
-    }
-    if (valorVehiculo >= 3000 && valorVehiculo < 20000) {
-      console.log('[PLAN Determiner] Plan: 461 (CC 3,000 A 19,999.99)');
-      return '461';
-    }
-    // Valor alto o fuera de rangos específicos
-    console.log('[PLAN Determiner] Plan: 411 (CC PARTICULAR - default)');
+    // Para Cobertura Completa, SIEMPRE usar 411 o 412 (según básico/premium)
+    // Los rangos 461-463 son variantes pero usamos 411/412 para simplificar
+    console.log('[PLAN Determiner] Plan: 411 (CC PARTICULAR)');
     return '411';
   } else {
     // Para Daños a Terceros, usar plan 426 (DT PARTICULARES)
