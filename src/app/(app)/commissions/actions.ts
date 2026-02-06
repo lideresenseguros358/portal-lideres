@@ -170,7 +170,7 @@ export async function actionUploadMultipleImports(
     const policyNumbers = allConsolidatedRows.map(r => r.policy_number).filter(Boolean) as string[];
     const clientNames = Array.from(new Set(allConsolidatedRows.map(r => r.client_name?.trim().toUpperCase()).filter(Boolean))) as string[];
     
-    // Buscar pólizas existentes
+    // NIVEL 1: Buscar pólizas existentes en tabla policies (prioridad máxima)
     const { data: existingPolicies } = await supabase
       .from('policies')
       .select(`
@@ -198,7 +198,43 @@ export async function actionUploadMultipleImports(
       });
     });
     
-    // NIVEL 2 ELIMINADO: Ya NO se buscan clientes por nombre
+    console.log(`[MATCHING] Nivel 1 - Pólizas en BD: ${policyMap.size}`);
+    
+    // NIVEL 2: Buscar en preliminar (temp_client_import) - NUEVO
+    // Solo para pólizas que NO están en policies
+    const unmatchedPolicyNumbers = policyNumbers.filter(pn => !policyMap.has(pn));
+    
+    if (unmatchedPolicyNumbers.length > 0) {
+      const { data: preliminarPolicies } = await supabase
+        .from('temp_client_import')
+        .select(`
+          policy_number,
+          broker_id,
+          brokers!inner(percent_default)
+        `)
+        .in('policy_number', unmatchedPolicyNumbers)
+        .not('broker_id', 'is', null);
+      
+      let preliminarMatches = 0;
+      (preliminarPolicies || []).forEach((p: any) => {
+        // Solo agregar si NO existe ya en policyMap (policies tiene prioridad)
+        if (!policyMap.has(p.policy_number) && p.broker_id) {
+          const percent = p.brokers?.percent_default ?? 1.0;
+          policyMap.set(p.policy_number, {
+            broker_id: p.broker_id,
+            client_id: '', // temp_client_import no tiene client_id fijo
+            percent: percent,
+          });
+          preliminarMatches++;
+        }
+      });
+      
+      console.log(`[MATCHING] Nivel 2 - Pólizas en preliminar: ${preliminarMatches}`);
+    }
+    
+    console.log(`[MATCHING] Total pólizas identificadas: ${policyMap.size}`);
+    
+    // NIVEL 3 ELIMINADO: Ya NO se buscan clientes por nombre
     // Solo se identifica por número de póliza exacto
     
     // Separar en identificados y no identificados
@@ -673,7 +709,44 @@ export async function actionUploadImport(formData: FormData) {
       });
     });
 
-    // NIVEL 2 ELIMINADO: Ya NO se buscan clientes por nombre para matching automático
+    console.log(`[MATCHING][${insurerName}] Nivel 1 - Pólizas en BD: ${policyMap.size}`);
+
+    // NIVEL 2: Buscar en preliminar (temp_client_import) - NUEVO
+    // Solo para pólizas que NO están en policies
+    const unmatchedPolicyNumbers = policyNumbers.filter(pn => !policyMap.has(pn));
+    
+    if (unmatchedPolicyNumbers.length > 0) {
+      const { data: preliminarPolicies } = await supabase
+        .from('temp_client_import')
+        .select(`
+          policy_number,
+          broker_id,
+          brokers!inner(percent_default)
+        `)
+        .in('policy_number', unmatchedPolicyNumbers)
+        .not('broker_id', 'is', null);
+      
+      let preliminarMatches = 0;
+      (preliminarPolicies || []).forEach((p: any) => {
+        // Solo agregar si NO existe ya en policyMap (policies tiene prioridad)
+        if (!policyMap.has(p.policy_number) && p.broker_id) {
+          const percent = p.brokers?.percent_default ?? 1.0;
+          policyMap.set(p.policy_number, {
+            broker_id: p.broker_id,
+            client_id: '', // temp_client_import no tiene client_id fijo
+            national_id: null,
+            percent: percent,
+          });
+          preliminarMatches++;
+        }
+      });
+      
+      console.log(`[MATCHING][${insurerName}] Nivel 2 - Pólizas en preliminar: ${preliminarMatches}`);
+    }
+    
+    console.log(`[MATCHING][${insurerName}] Total pólizas identificadas: ${policyMap.size}`);
+
+    // NIVEL 3 ELIMINADO: Ya NO se buscan clientes por nombre para matching automático
     // Esto previene asignaciones incorrectas cuando hay nombres similares o duplicados
     console.log(`[SERVER][${insurerName}] Clientes encontrados para matching: 0`);
 
