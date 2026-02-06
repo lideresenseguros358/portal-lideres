@@ -490,7 +490,7 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
     } else {
       setLoading(false);
     }
-  }, [role, brokerId, selectedFortnightFilter, searchQuery]);
+  }, [role, brokerId, selectedFortnightFilter]);
 
   // Cargar info de quincenas específicas desde BD
   const loadFortnightsFromItems = async (fortnightIds: string[]) => {
