@@ -1,7 +1,8 @@
 /**
  * Tooltip con hover y auto-cierre
  * - Se abre al pasar el cursor sobre el icono
- * - Se cierra automáticamente después de 3 segundos
+ * - Se cierra automáticamente después de 8 segundos
+ * - Se cierra al hacer click fuera del tooltip
  * - Diseño: celeste suave con transparencia
  */
 
@@ -23,7 +24,7 @@ export interface AutoCloseTooltipRef {
 
 const AutoCloseTooltip = forwardRef<AutoCloseTooltipRef, AutoCloseTooltipProps>(({ 
   content, 
-  autoCloseDelay = 3000,
+  autoCloseDelay = 8000,
   autoOpenOnMount = false
 }, ref) => {
   const [isOpen, setIsOpen] = useState(false);
@@ -92,6 +93,26 @@ const AutoCloseTooltip = forwardRef<AutoCloseTooltipRef, AutoCloseTooltipProps>(
     }
   }, [isOpen, isClosing, autoCloseDelay]);
 
+  // Cerrar al hacer click fuera del tooltip
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (isOpen && 
+          tooltipRef.current && 
+          triggerRef.current &&
+          !tooltipRef.current.contains(event.target as Node) &&
+          !triggerRef.current.contains(event.target as Node)) {
+        handleClose();
+      }
+    };
+
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }
+  }, [isOpen]);
+
   const handleClose = () => {
     setIsClosing(true);
     setTimeout(() => {
@@ -131,8 +152,8 @@ const AutoCloseTooltip = forwardRef<AutoCloseTooltipRef, AutoCloseTooltipProps>(
       {(isOpen || isClosing) && (
         <div 
           ref={tooltipRef}
-          className={`fixed z-[9999] bg-sky-50/95 backdrop-blur-sm rounded-2xl shadow-xl p-4 border border-sky-200/50 transition-all duration-300 ${
-            isClosing ? 'opacity-0 scale-95' : 'opacity-100 scale-100'
+          className={`fixed z-[9999] bg-sky-50/95 backdrop-blur-sm rounded-2xl shadow-xl p-4 border border-sky-200/50 transition-opacity duration-300 ${
+            isClosing ? 'opacity-0' : 'opacity-100'
           }`}
           style={{
             top: `${tooltipPosition.top}px`,
