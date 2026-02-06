@@ -264,8 +264,8 @@ export default function QuoteComparison({ policyType, quotes, quoteData }: Quote
         }
         
         @keyframes subtle-glow {
-          0%, 100% { box-shadow: 0 0 15px rgba(138, 170, 25, 0.5); }
-          50% { box-shadow: 0 0 25px rgba(138, 170, 25, 0.8); }
+          0%, 100% { box-shadow: 0 0 30px rgba(138, 170, 25, 0.6), 0 0 60px rgba(138, 170, 25, 0.3); }
+          50% { box-shadow: 0 0 40px rgba(138, 170, 25, 0.9), 0 0 80px rgba(138, 170, 25, 0.5); }
         }
         
         @keyframes float {
@@ -337,14 +337,14 @@ export default function QuoteComparison({ policyType, quotes, quoteData }: Quote
         </div>
 
         {/* Quotes Grid - 2x2 en desktop para mejor espaciado */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6 pt-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6 pt-12">
           {quotes.map((quote) => (
             <div key={quote.id} className="relative overflow-visible">
               {/* Recommended Badge - Flotante ARRIBA del card SIN RECORTE */}
               {quote.isRecommended && (
-                <div className="absolute -top-5 left-1/2 -translate-x-1/2 z-20 premium-badge">
-                  <span className="inline-flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white text-xs font-bold rounded-full border-2 border-white shadow-lg">
-                    <FaStar className="text-yellow-300 animate-pulse" />
+                <div className="absolute -top-8 left-1/2 -translate-x-1/2 z-20" style={{ transform: 'translate(-50%, 0)' }}>
+                  <span className="inline-flex items-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2 sm:py-3 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white text-xs sm:text-sm font-bold rounded-full border-2 border-white premium-badge">
+                    <FaStar className="text-yellow-300 animate-pulse text-sm sm:text-base" />
                     RECOMENDADA
                     {/* Shimmer effect */}
                     <span className="absolute inset-0 premium-badge-shimmer pointer-events-none rounded-full"></span>
