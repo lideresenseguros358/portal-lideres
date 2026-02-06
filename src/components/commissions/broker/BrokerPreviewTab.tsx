@@ -705,7 +705,7 @@ export default function BrokerPreviewTab({ brokerId }: Props) {
                                     </TableCell>
                                     <TableCell>{item.client_name}</TableCell>
                                     <TableCell className="text-right font-mono">
-                                      {formatCurrency(item.commission_raw)}
+                                      {formatCurrency(item.commission_calculated)}
                                     </TableCell>
                                     <TableCell className="text-center font-mono">
                                       {(item.percent_applied * 100).toFixed(0)}%
