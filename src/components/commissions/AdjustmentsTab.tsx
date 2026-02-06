@@ -712,6 +712,65 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
 
   return (
     <div className="space-y-4">
+      {/* Barra sticky - Visible en modo selección */}
+      {selectionMode && selectedItems.size > 0 && (
+        <div className="sticky top-[60px] sm:top-[72px] z-[100] bg-gradient-to-r from-green-50 to-white border-2 border-[#8AAA19] rounded-lg p-3 sm:p-4 shadow-lg">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+          <div className="flex-1">
+            <p className="font-bold text-[#010139]">
+              {selectedItems.size} ajuste(s) seleccionado(s)
+            </p>
+            {role === 'broker' ? (
+              <div>
+                <p className="text-sm text-gray-600">
+                  Total bruto: {selectedTotal.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                </p>
+                {brokerPercent > 0 && (
+                  <p className="text-sm font-semibold text-[#8AAA19]">
+                    Tu comisión ({(brokerPercent * 100).toFixed(0)}%): {selectedBrokerCommission.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                  </p>
+                )}
+              </div>
+            ) : (
+              <div>
+                <p className="text-sm text-gray-600">
+                  Total bruto: {selectedTotal.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                </p>
+                {selectedBroker && brokerPercent > 0 ? (
+                  <p className="text-sm font-semibold text-[#8AAA19]">
+                    Comisión {selectedBrokerName} ({(brokerPercent * 100).toFixed(0)}%): {selectedBrokerCommission.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
+                  </p>
+                ) : (
+                  <p className="text-sm font-medium text-[#010139]">
+                    {selectedBroker ? `Asignando a: ${selectedBrokerName}` : 'Seleccionar broker'}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleCancelSelection}
+              className="border-red-500 text-red-600 hover:bg-red-50"
+            >
+              Cancelar
+            </Button>
+            <Button
+              size="sm"
+              onClick={handleSubmitReport}
+              disabled={submitting || selectedItems.size === 0 || (role === 'master' && !selectedBroker)}
+              className="bg-gradient-to-r from-[#8AAA19] to-[#7a9617] text-white font-semibold"
+            >
+              <FaPaperPlane className="mr-2" size={12} />
+              {submitting ? 'Enviando...' : (role === 'broker' ? 'Enviar Reporte' : 'Crear Reporte')}
+            </Button>
+          </div>
+        </div>
+      </div>
+      )}
+
       {/* Barra de búsqueda y filtro */}
       <div className="flex flex-col sm:flex-row gap-2">
         {/* Barra de búsqueda - Formato iOS-friendly */}
@@ -802,65 +861,6 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
             <span className="text-blue-600"> de {pendingGroups.length} total(es)</span>
           )}
         </div>
-      )}
-
-      {/* Barra sticky - Visible en modo selección */}
-      {selectionMode && selectedItems.size > 0 && (
-        <div className="sticky top-[60px] sm:top-[72px] z-[100] bg-gradient-to-r from-green-50 to-white border-2 border-[#8AAA19] rounded-lg p-3 sm:p-4 shadow-lg">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-          <div className="flex-1">
-            <p className="font-bold text-[#010139]">
-              {selectedItems.size} ajuste(s) seleccionado(s)
-            </p>
-            {role === 'broker' ? (
-              <div>
-                <p className="text-sm text-gray-600">
-                  Total bruto: {selectedTotal.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
-                </p>
-                {brokerPercent > 0 && (
-                  <p className="text-sm font-semibold text-[#8AAA19]">
-                    Tu comisión ({(brokerPercent * 100).toFixed(0)}%): {selectedBrokerCommission.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
-                  </p>
-                )}
-              </div>
-            ) : (
-              <div>
-                <p className="text-sm text-gray-600">
-                  Total bruto: {selectedTotal.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
-                </p>
-                {selectedBroker && brokerPercent > 0 ? (
-                  <p className="text-sm font-semibold text-[#8AAA19]">
-                    Comisión {selectedBrokerName} ({(brokerPercent * 100).toFixed(0)}%): {selectedBrokerCommission.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}
-                  </p>
-                ) : (
-                  <p className="text-sm font-medium text-[#010139]">
-                    {selectedBroker ? `Asignando a: ${selectedBrokerName}` : 'Seleccionar broker'}
-                  </p>
-                )}
-              </div>
-            )}
-          </div>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleCancelSelection}
-              className="border-red-500 text-red-600 hover:bg-red-50"
-            >
-              Cancelar
-            </Button>
-            <Button
-              size="sm"
-              onClick={handleSubmitReport}
-              disabled={submitting || selectedItems.size === 0 || (role === 'master' && !selectedBroker)}
-              className="bg-gradient-to-r from-[#8AAA19] to-[#7a9617] text-white font-semibold"
-            >
-              <FaPaperPlane className="mr-2" size={12} />
-              {submitting ? 'Enviando...' : (role === 'broker' ? 'Enviar Reporte' : 'Crear Reporte')}
-            </Button>
-          </div>
-        </div>
-      </div>
       )}
 
       {/* Header - Mobile First */}
