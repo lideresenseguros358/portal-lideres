@@ -124,13 +124,37 @@ export async function generarToken(
         };
       }
       
-      // Si no hay cache válido, esto es un ERROR
-      // La API debe devolver el token o permitir generar uno nuevo
-      const errorMsg = 'FEDPA dice que ya existe token pero no lo devuelve y no hay cache válido';
-      console.error('[FEDPA Auth] ❌ ERROR:', errorMsg);
-      console.error('[FEDPA Auth] Solución: Implementar endpoint de invalidar/renovar token en FEDPA');
-      console.error('[FEDPA Auth] Workaround: Esperar a que token expire en backend FEDPA');
+      // Si no hay cache válido, intentar FORZAR generación de nuevo token
+      // FEDPA API puede tener token "fantasma" - intentamos esperar y reintentar
+      console.warn('[FEDPA Auth] ⚠️ No hay cache válido - intentando forzar nuevo token...');
       
+      // Esperar 1 segundo para que token "fantasma" expire
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Reintentar generación SIN verificar mensaje
+      const retryClient = createFedpaClient('emisorPlan', env);
+      const retryResponse = await retryClient.post<TokenResponse>(
+        EMISOR_PLAN_ENDPOINTS.GENERAR_TOKEN,
+        request
+      );
+      
+      if (retryResponse.success && retryResponse.data) {
+        const retryToken = retryResponse.data.token || 
+                          retryResponse.data.Token || 
+                          retryResponse.data.access_token;
+        
+        if (retryToken) {
+          console.log('[FEDPA Auth] ✅ Token obtenido en reintento');
+          const exp = Date.now() + TOKEN_TTL_MS;
+          const cacheKey = `fedpa_token_${env}`;
+          tokenCache.set(cacheKey, { token: retryToken, exp });
+          return { success: true, token: retryToken };
+        }
+      }
+      
+      // Si aún falla, es un error definitivo
+      const errorMsg = 'FEDPA dice que ya existe token pero no lo devuelve. Reintento falló.';
+      console.error('[FEDPA Auth] ❌ ERROR:', errorMsg);
       return {
         success: false,
         error: errorMsg,
