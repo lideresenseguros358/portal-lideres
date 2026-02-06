@@ -1247,7 +1247,8 @@ export async function actionGetAvailableForImport(): Promise<ActionResult<{
       .select(`
         *,
         insurers:insurer_id (id, name),
-        bank_group_imports!left (id, is_temporary)
+        bank_group_imports!left (id, is_temporary),
+        group_template
       `)
       .neq('status', 'PAGADO')
       .order('name', { ascending: true }); // Orden alfabético

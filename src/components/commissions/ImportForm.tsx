@@ -22,7 +22,7 @@ export default function ImportForm({ insurers, draftFortnightId, onImport }: Pro
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [isLifeInsurance, setIsLifeInsurance] = useState(false);
-  const [availableOptions, setAvailableOptions] = useState<Array<{type: 'transfer' | 'group', id: string, name: string, amount: number, insurerName?: string, hasInsurer: boolean, cutoffOrigin?: string, status?: string, date?: string, transferType?: string}>>([]);
+  const [availableOptions, setAvailableOptions] = useState<Array<{type: 'transfer' | 'group', id: string, name: string, amount: number, insurerName?: string, hasInsurer: boolean, cutoffOrigin?: string, status?: string, date?: string, transferType?: string, groupTemplate?: string}>>([]);
   const [selectedOption, setSelectedOption] = useState<string>('');
   const [loadingOptions, setLoadingOptions] = useState(false);
   
@@ -38,7 +38,7 @@ export default function ImportForm({ insurers, draftFortnightId, onImport }: Pro
   // Función centralizada para cargar opciones bancarias
   const loadBankOptions = useCallback(async () => {
     setLoadingOptions(true);
-    const options: Array<{type: 'transfer' | 'group', id: string, name: string, amount: number, insurerName?: string, hasInsurer: boolean, cutoffOrigin?: string, status?: string, date?: string, transferType?: string}> = [];
+    const options: Array<{type: 'transfer' | 'group', id: string, name: string, amount: number, insurerName?: string, hasInsurer: boolean, cutoffOrigin?: string, status?: string, date?: string, transferType?: string, groupTemplate?: string}> = [];
     
     try {
       const result = await actionGetAvailableForImport();
@@ -85,7 +85,8 @@ export default function ImportForm({ insurers, draftFortnightId, onImport }: Pro
             amount: g.total_amount || 0,
             insurerName: g.insurers?.name,
             hasInsurer: !!g.insurer_id,
-            status: g.status
+            status: g.status,
+            groupTemplate: g.group_template // NUEVO: Incluir tipo de grupo
           });
         });
       }
@@ -102,6 +103,19 @@ export default function ImportForm({ insurers, draftFortnightId, onImport }: Pro
   useEffect(() => {
     loadBankOptions();
   }, [loadBankOptions]);
+
+  // Auto-seleccionar aseguradora Códigos ASSA cuando se selecciona grupo ASSA
+  useEffect(() => {
+    if (!selectedOption) return;
+    
+    const option = availableOptions.find(o => o.id === selectedOption);
+    
+    // Si es un grupo con template ASSA_CODIGOS, auto-seleccionar Códigos ASSA
+    if (option && option.type === 'group' && option.groupTemplate === 'ASSA_CODIGOS') {
+      console.log('[IMPORT FORM] Grupo ASSA detectado - Auto-seleccionando Códigos ASSA');
+      setSelectedInsurer('ASSA_CODIGOS');
+    }
+  }, [selectedOption, availableOptions]);
 
   // Agregar reporte al batch (sin importar todavía)
   const handleAddReport = () => {
