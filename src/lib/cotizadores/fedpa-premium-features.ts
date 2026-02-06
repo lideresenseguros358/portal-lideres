@@ -71,7 +71,7 @@ export function getEndosoTooltip(tipo: 'basico' | 'premium'): string {
  * Tooltip para precios
  */
 export const preciosTooltips = {
-  contado: 'Precio al Contado (1 cuota): Incluye descuento de pronto pago del 10%. Aplica para pago único con tarjeta, transferencia o ACH.',
-  tarjeta: 'Precio con Tarjeta (2-10 cuotas): Precio estándar sin descuento. Puedes dividir el pago en hasta 10 cuotas mensuales.',
+  contado: 'Precio al Contado (1 cuota): Incluye descuento de pronto pago del 10%. Pago único con tarjeta de crédito o débito.',
+  tarjeta: 'Precio en Cuotas (2-10 cuotas): Precio estándar sin descuento. Puedes dividir el pago en hasta 10 cuotas mensuales con tarjeta de crédito o débito.',
   deducible: 'Deducible: Es la cantidad que pagas de tu bolsillo en caso de un reclamo. Ejemplo: si tu auto sufre $5,000 en daños y tu deducible es $300, pagas $300 y el seguro cubre $4,700.'
 };

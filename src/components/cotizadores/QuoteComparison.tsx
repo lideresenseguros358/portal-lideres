@@ -400,33 +400,39 @@ export default function QuoteComparison({ policyType, quotes, quoteData }: Quote
                     <>
                       {/* Selector de Forma de Pago */}
                       <div className="flex gap-2 mb-4">
-                        <button
-                          onClick={() => setPaymentMode(prev => ({ ...prev, [quote.id]: 'contado' }))}
-                          className={`flex-1 py-2 px-3 rounded-lg text-xs font-semibold transition-all ${
-                            paymentMode[quote.id] === 'contado'
-                              ? 'bg-[#8AAA19] text-white shadow-md'
-                              : 'bg-white text-gray-600 border border-gray-300 hover:border-[#8AAA19]'
-                          }`}
-                        >
-                          Al Contado (1 cuota)
-                        </button>
-                        <button
-                          onClick={() => setPaymentMode(prev => ({ ...prev, [quote.id]: 'tarjeta' }))}
-                          className={`flex-1 py-2 px-3 rounded-lg text-xs font-semibold transition-all ${
-                            paymentMode[quote.id] === 'tarjeta'
-                              ? 'bg-[#010139] text-white shadow-md'
-                              : 'bg-white text-gray-600 border border-gray-300 hover:border-[#010139]'
-                          }`}
-                        >
-                          Con Tarjeta (2-10 cuotas)
-                        </button>
+                        <div className="flex-1">
+                          <button
+                            onClick={() => setPaymentMode(prev => ({ ...prev, [quote.id]: 'contado' }))}
+                            className={`w-full py-2 px-3 rounded-lg text-xs font-semibold transition-all ${
+                              paymentMode[quote.id] === 'contado'
+                                ? 'bg-[#8AAA19] text-white shadow-md'
+                                : 'bg-white text-gray-600 border border-gray-300 hover:border-[#8AAA19]'
+                            }`}
+                          >
+                            Al Contado
+                          </button>
+                          <p className="text-[10px] text-gray-500 text-center mt-1">(1 cuota)</p>
+                        </div>
+                        <div className="flex-1">
+                          <button
+                            onClick={() => setPaymentMode(prev => ({ ...prev, [quote.id]: 'tarjeta' }))}
+                            className={`w-full py-2 px-3 rounded-lg text-xs font-semibold transition-all ${
+                              paymentMode[quote.id] === 'tarjeta'
+                                ? 'bg-[#010139] text-white shadow-md'
+                                : 'bg-white text-gray-600 border border-gray-300 hover:border-[#010139]'
+                            }`}
+                          >
+                            En Cuotas
+                          </button>
+                          <p className="text-[10px] text-gray-500 text-center mt-1">(2-10 cuotas)</p>
+                        </div>
                       </div>
                       
                       {/* Precio Principal Dinámico */}
                       <div className="text-center">
                         <div className="flex items-center justify-center gap-2 mb-1">
                           <span className="text-xs text-gray-600 font-medium">
-                            {paymentMode[quote.id] === 'contado' ? 'Pago al Contado' : 'Pago con Tarjeta'}
+                            {paymentMode[quote.id] === 'contado' ? 'Pago al Contado' : 'Pago en Cuotas'}
                           </span>
                           <AutoCloseTooltip 
                             content={paymentMode[quote.id] === 'contado' ? preciosTooltips.contado : preciosTooltips.tarjeta}
