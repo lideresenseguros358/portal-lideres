@@ -5358,6 +5358,12 @@ export async function actionPayFortnight(fortnight_id: string) {
       console.log(`[actionPayFortnight] Items agrupados: ${commItems.length} → ${groupedItems.size}`);
       
       const detailsToInsert = Array.from(groupedItems.values()).map((item: any) => {
+        // Determinar porcentaje aplicado (solo usar broker percent_default)
+        const percentApplied = item.brokers?.percent_default ?? 1.0;
+        
+        // Calcular commission_raw (reverso del cálculo)
+        const commissionRaw = item.gross_amount / percentApplied;
+        
         // Detectar si es código ASSA y extraer código del broker
         let assaCodeToSave = null;
         let isAssaCode = false;
@@ -5371,13 +5377,6 @@ export async function actionPayFortnight(fortnight_id: string) {
             isAssaCode = true; // Solo TRUE si tiene código
           }
         }
-        
-        // CRÍTICO: Para códigos ASSA usar 100%, NO percent_default
-        // El reporte ASSA ya trae la comisión correcta al 100%
-        const percentApplied = isAssaCode ? 1.0 : (item.brokers?.percent_default ?? 1.0);
-        
-        // Calcular commission_raw (reverso del cálculo)
-        const commissionRaw = item.gross_amount / percentApplied;
         
         return {
           fortnight_id: fortnight_id,
