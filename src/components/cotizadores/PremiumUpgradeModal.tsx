@@ -240,15 +240,15 @@ export default function PremiumUpgradeModal({
 
           {/* Endosos Premium */}
           {endososPremium.length > 0 && (
-            <div className="bg-yellow-50 border-2 border-yellow-400 rounded-xl p-4">
-              <h3 className="font-bold text-yellow-800 mb-3 flex items-center gap-2">
-                <FaStar className="text-yellow-600" />
+            <div className="bg-green-50 border-2 border-[#8AAA19] rounded-xl p-4">
+              <h3 className="font-bold text-[#010139] mb-3 flex items-center gap-2">
+                <FaStar className="text-[#8AAA19]" />
                 Endosos Incluidos en Plan Premium:
               </h3>
               <ul className="space-y-2">
                 {endososPremium.map((endoso, index) => (
-                  <li key={index} className="flex items-start gap-2 text-sm bg-white p-2 rounded-lg border border-yellow-200">
-                    <FaCheckCircle className="text-yellow-600 mt-1 flex-shrink-0" />
+                  <li key={index} className="flex items-start gap-2 text-sm bg-white p-2 rounded-lg border border-green-200">
+                    <FaCheckCircle className="text-[#8AAA19] mt-1 flex-shrink-0" />
                     <div>
                       <p className="font-semibold text-gray-800">{typeof endoso === 'string' ? endoso : endoso.nombre}</p>
                       {typeof endoso === 'object' && endoso.descripcion && (
@@ -285,8 +285,8 @@ export default function PremiumUpgradeModal({
           )}
 
           {/* Benefits Highlight */}
-          <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-lg">
-            <p className="text-sm text-gray-700">
+          <div className="bg-blue-50 border-l-4 border-[#010139] p-4 rounded-lg">
+            <p className="text-sm text-[#010139]">
               💡 <strong>Ventaja del Plan Premium:</strong> Incluye endosos especiales y beneficios adicionales que te brindan mayor protección y tranquilidad, <strong>con el mismo deducible que seleccionaste (${premiumPlan.deductible.toLocaleString()})</strong>.
             </p>
             {hasBreakdown && (
