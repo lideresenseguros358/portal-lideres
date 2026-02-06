@@ -167,10 +167,9 @@ export async function GET(request: NextRequest) {
       };
     }).sort((a, b) => a.broker_name.localeCompare(b.broker_name)); // Orden alfabético
 
-    // 6. Calcular totales (sin filtrar para mantener consistencia con los totales del historial)
-    // IMPORTANTE: Este valor debe coincidir con el total_paid_net que se muestra en la UI del historial
-    // Sumamos todos los brokers sin filtrar para consistencia con la vista principal
-    const totalCorredores = brokers.reduce((sum, b) => sum + b.gross_amount, 0);
+    // 6. Calcular totales USANDO NET_AMOUNT (con descuentos aplicados)
+    // CRÍTICO: Usar net_amount para que coincida con el total_paid_net del historial
+    const totalCorredores = brokers.reduce((sum, b) => sum + b.net_amount, 0);
     
     // Para diagnóstico, calculamos también lo que sería sin LISSA y sin inactivos
     const totalCorredoresFiltrado = brokers
@@ -179,18 +178,18 @@ export async function GET(request: NextRequest) {
         const isActive = activeBrokerIds.has(b.broker_id);
         
         if (isLissa) {
-          console.log('[fortnight-details] (diagnóstico) LISSA ignorado del total filtrado:', b.broker_name, b.gross_amount);
+          console.log('[fortnight-details] (diagnóstico) LISSA ignorado del total filtrado:', b.broker_name, b.net_amount);
           return false;
         }
         
         if (!isActive) {
-          console.log('[fortnight-details] (diagnóstico) Broker inactivo ignorado del total filtrado:', b.broker_name, b.gross_amount);
+          console.log('[fortnight-details] (diagnóstico) Broker inactivo ignorado del total filtrado:', b.broker_name, b.net_amount);
           return false;
         }
         
         return true;
       })
-      .reduce((sum, b) => sum + b.gross_amount, 0);
+      .reduce((sum, b) => sum + b.net_amount, 0);
     
     console.log('[fortnight-details] Total sin filtrar:', totalCorredores, 'Total filtrado:', totalCorredoresFiltrado);
       
