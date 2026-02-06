@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { FaUser, FaCar, FaIdCard, FaUpload } from 'react-icons/fa';
 import { toast } from 'sonner';
 import CedulaQRScanner from './CedulaQRScanner';
@@ -23,6 +23,7 @@ export interface EmissionData {
   segundoApellido?: string;
   cedula: string;
   fechaNacimiento: string;
+  estadoCivil: string; // soltero, casado, divorciado, viudo
   sexo: 'M' | 'F';
   email: string;
   telefono: string;
@@ -53,6 +54,7 @@ export default function EmissionDataForm({ quoteData, onContinue }: EmissionData
     segundoApellido: '',
     cedula: '',
     fechaNacimiento: '',
+    estadoCivil: 'soltero',
     sexo: 'M',
     email: '',
     telefono: '',
@@ -72,6 +74,80 @@ export default function EmissionDataForm({ quoteData, onContinue }: EmissionData
   const [cedulaFileName, setCedulaFileName] = useState('');
   const [licenciaFileName, setLicenciaFileName] = useState('');
   const [registroFileName, setRegistroFileName] = useState('');
+
+  // Cargar datos desde FormAutoCoberturaCompleta al montar
+  useEffect(() => {
+    const savedQuoteInput = sessionStorage.getItem('quoteInput');
+    if (savedQuoteInput) {
+      try {
+        const parsed = JSON.parse(savedQuoteInput);
+        if (parsed.cobertura === 'COMPLETA') {
+          // Extraer nombre completo y separar en componentes
+          const nombreCompleto = parsed.nombreCompleto || '';
+          const partes = nombreCompleto.trim().split(/\s+/);
+          
+          let primerNombre = '';
+          let segundoNombre = '';
+          let primerApellido = '';
+          let segundoApellido = '';
+          
+          if (partes.length >= 2) {
+            primerNombre = partes[0];
+            primerApellido = partes[1];
+            if (partes.length >= 3) {
+              segundoApellido = partes[2];
+            }
+            if (partes.length >= 4) {
+              segundoNombre = primerApellido;
+              primerApellido = segundoApellido || '';
+              segundoApellido = partes[3] || '';
+            }
+          } else if (partes.length === 1) {
+            primerNombre = partes[0];
+          }
+          
+          setFormData(prev => ({
+            ...prev,
+            primerNombre,
+            segundoNombre,
+            primerApellido,
+            segundoApellido,
+            fechaNacimiento: parsed.fechaNacimiento || '',
+            estadoCivil: parsed.estadoCivil || 'soltero',
+          }));
+        }
+      } catch (error) {
+        console.error('Error al cargar datos de cotización:', error);
+      }
+    }
+    
+    // Cargar datos guardados del formulario de emisión si existen
+    const savedEmissionData = sessionStorage.getItem('emissionFormData');
+    if (savedEmissionData) {
+      try {
+        const parsed = JSON.parse(savedEmissionData);
+        setFormData(prev => ({ ...prev, ...parsed }));
+        if (parsed.cedulaFile) setCedulaFileName('(archivo guardado)');
+        if (parsed.licenciaFile) setLicenciaFileName('(archivo guardado)');
+        if (parsed.registroFile) setRegistroFileName('(archivo guardado)');
+      } catch (error) {
+        console.error('Error al cargar datos de emisión guardados:', error);
+      }
+    }
+  }, []);
+
+  // Guardar datos en sessionStorage cuando cambian (para mantener durante proceso)
+  useEffect(() => {
+    if (formData.primerNombre || formData.email || formData.placa) {
+      // Solo guardar si hay algún dato significativo
+      const dataToSave = { ...formData };
+      // No guardar archivos en sessionStorage (demasiado grande)
+      delete dataToSave.cedulaFile;
+      delete dataToSave.licenciaFile;
+      delete dataToSave.registroFile;
+      sessionStorage.setItem('emissionFormData', JSON.stringify(dataToSave));
+    }
+  }, [formData]);
 
   const validate = (): boolean => {
     const newErrors: Record<string, string> = {};
@@ -286,12 +362,31 @@ export default function EmissionDataForm({ quoteData, onContinue }: EmissionData
                   type="date"
                   value={formData.fechaNacimiento}
                   onChange={(e) => setFormData({ ...formData, fechaNacimiento: e.target.value })}
-                  className={`w-full px-3 py-2.5 md:px-4 md:py-3 text-base border-2 rounded-lg focus:outline-none transition-colors ${
+                  className={`w-full max-w-full px-3 py-2.5 md:px-4 md:py-3 text-sm md:text-base border-2 rounded-lg focus:outline-none transition-colors ${
                     errors.fechaNacimiento ? 'border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
                   }`}
+                  style={{ minHeight: '50px' }}
                 />
                 {errors.fechaNacimiento && <p className="text-xs text-red-500 mt-1">{errors.fechaNacimiento}</p>}
               </div>
+            </div>
+
+            {/* Estado Civil */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Estado Civil <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={formData.estadoCivil}
+                onChange={(e) => setFormData({ ...formData, estadoCivil: e.target.value })}
+                className="w-full px-3 py-2.5 md:px-4 md:py-3 text-base border-2 border-gray-300 focus:border-[#8AAA19] rounded-lg focus:outline-none bg-white"
+                style={{ minHeight: '50px' }}
+              >
+                <option value="soltero">Soltero/a</option>
+                <option value="casado">Casado/a</option>
+                <option value="divorciado">Divorciado/a</option>
+                <option value="viudo">Viudo/a</option>
+              </select>
             </div>
 
             {/* Sexo */}
@@ -482,7 +577,18 @@ export default function EmissionDataForm({ quoteData, onContinue }: EmissionData
               {errors.licenciaFile && <p className="text-xs text-red-500 mt-1">{errors.licenciaFile}</p>}
               <p className="text-xs text-gray-500 mt-1">Imagen o PDF, máx. 5MB</p>
             </div>
+          </div>
+        </div>
 
+        {/* Datos del Vehículo */}
+        <div className="bg-white rounded-xl shadow-lg border-2 border-gray-100 p-5">
+          <h3 className="text-lg font-bold text-[#010139] mb-4 flex items-center gap-2">
+            <FaCar className="text-[#8AAA19]" />
+            Datos del Vehículo
+          </h3>
+
+          <div className="space-y-4">
+            {/* Registro Vehicular */}
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">
                 Adjuntar Registro Vehicular <span className="text-red-500">*</span>
@@ -511,16 +617,8 @@ export default function EmissionDataForm({ quoteData, onContinue }: EmissionData
               <p className="text-xs text-gray-500 mt-1">Tarjeta de circulación - Imagen o PDF, máx. 5MB</p>
             </div>
           </div>
-        </div>
 
-        {/* Datos del Vehículo */}
-        <div className="bg-white rounded-xl shadow-lg border-2 border-gray-100 p-5">
-          <h3 className="text-lg font-bold text-[#010139] mb-4 flex items-center gap-2">
-            <FaCar className="text-[#8AAA19]" />
-            Datos del Vehículo
-          </h3>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">
                 Placa <span className="text-red-500">*</span>
