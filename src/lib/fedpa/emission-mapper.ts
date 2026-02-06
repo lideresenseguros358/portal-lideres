@@ -59,7 +59,7 @@ export function mapEmissionDataToFedpa(
     Motor: vehicleData.motor,
     Placa: vehicleData.placa,
     MesVencimientoPlaca: undefined, // Opcional
-    Vin: vehicleData.vin,
+    Vin: vehicleData.vinChasis, // VIN/Chasis unificado
     Color: vehicleData.color,
     Pasajero: vehicleData.pasajeros,
     Puerta: vehicleData.puertas,
@@ -93,7 +93,7 @@ export function validateEmissionDataForFedpa(data: EmissionData): { valid: boole
  */
 export function validateVehicleDataForFedpa(data: VehicleData): { valid: boolean; error?: string } {
   if (!data.placa) return { valid: false, error: 'Placa requerida' };
-  if (!data.vin) return { valid: false, error: 'VIN requerido' };
+  if (!data.vinChasis) return { valid: false, error: 'VIN/Chasis requerido' };
   if (!data.motor) return { valid: false, error: 'Motor requerido' };
   if (!data.color) return { valid: false, error: 'Color requerido' };
   if (!data.pasajeros) return { valid: false, error: 'Pasajeros requerido' };

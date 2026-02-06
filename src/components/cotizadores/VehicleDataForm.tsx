@@ -19,9 +19,8 @@ interface VehicleDataFormProps {
 export interface VehicleData {
   // Campos del vehículo
   placa: string;
-  vin: string;
+  vinChasis: string; // VIN y Chasis en un solo campo (se divide en backend)
   motor: string;
-  chasis?: string;
   color: string;
   pasajeros: number;
   puertas: number;
@@ -34,9 +33,8 @@ export default function VehicleDataForm({ quoteData, onContinue }: VehicleDataFo
   const router = useRouter();
   const [formData, setFormData] = useState({
     placa: '',
-    vin: '',
+    vinChasis: '',
     motor: '',
-    chasis: '',
     color: '',
     pasajeros: 5,
     puertas: 4,
@@ -84,7 +82,7 @@ export default function VehicleDataForm({ quoteData, onContinue }: VehicleDataFo
     const newErrors: Record<string, string> = {};
     
     if (!formData.placa) newErrors.placa = 'Requerido';
-    if (!formData.vin) newErrors.vin = 'Requerido';
+    if (!formData.vinChasis) newErrors.vinChasis = 'Requerido';
     if (!formData.motor) newErrors.motor = 'Requerido';
     if (!formData.color) newErrors.color = 'Requerido';
     if (!registroVehicular) newErrors.registroVehicular = 'Requerido';
@@ -155,7 +153,7 @@ export default function VehicleDataForm({ quoteData, onContinue }: VehicleDataFo
           </div>
           <div>
             <label className="text-xs font-semibold text-gray-600 block mb-1">Año</label>
-            <div className="text-base font-medium text-gray-800">{quoteData.anio || 'N/A'}</div>
+            <div className="text-base font-medium text-gray-800">{quoteData.anno || quoteData.anio || 'N/A'}</div>
           </div>
           <div>
             <label className="text-xs font-semibold text-gray-600 block mb-1">Valor Asegurado</label>
@@ -191,18 +189,19 @@ export default function VehicleDataForm({ quoteData, onContinue }: VehicleDataFo
 
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">
-                VIN <span className="text-red-500">*</span>
+                VIN / Chasis <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
-                value={formData.vin}
-                onChange={(e) => setFormData({ ...formData, vin: e.target.value.toUpperCase() })}
+                value={formData.vinChasis}
+                onChange={(e) => setFormData({ ...formData, vinChasis: e.target.value.toUpperCase() })}
                 className={`w-full px-3 py-2.5 md:px-4 md:py-3 text-base border-2 rounded-lg focus:outline-none transition-colors ${
-                  errors.vin ? 'border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
+                  errors.vinChasis ? 'border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
                 }`}
-                placeholder="NÚMERO DE IDENTIFICACIÓN"
+                placeholder="NÚMERO DE IDENTIFICACIÓN VEHÍCULO"
               />
-              {errors.vin && <p className="text-xs text-red-500 mt-1">{errors.vin}</p>}
+              {errors.vinChasis && <p className="text-xs text-red-500 mt-1">{errors.vinChasis}</p>}
+              <p className="text-xs text-gray-500 mt-1">VIN o número de chasis del vehículo</p>
             </div>
 
             <div>
@@ -219,19 +218,6 @@ export default function VehicleDataForm({ quoteData, onContinue }: VehicleDataFo
                 placeholder="NÚMERO DE MOTOR"
               />
               {errors.motor && <p className="text-xs text-red-500 mt-1">{errors.motor}</p>}
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Chasis
-              </label>
-              <input
-                type="text"
-                value={formData.chasis}
-                onChange={(e) => setFormData({ ...formData, chasis: e.target.value.toUpperCase() })}
-                className="w-full px-3 py-2.5 md:px-4 md:py-3 text-base border-2 border-gray-300 focus:border-[#8AAA19] rounded-lg focus:outline-none"
-                placeholder="OPCIONAL"
-              />
             </div>
 
             <div>
