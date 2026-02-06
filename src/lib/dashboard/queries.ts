@@ -193,6 +193,7 @@ export async function getNetCommissions(userId: string, role: DashboardRole): Pr
   
   let totalPaid = 0;
   let totalOpen = 0;
+  let lastPaidFortnight: { period_start: string; period_end: string } | undefined;
 
   if (brokerId) {
     // Obtener código ASSA del broker
@@ -213,10 +214,10 @@ export async function getNetCommissions(userId: string, role: DashboardRole): Pr
     
     console.log('🔎 [getNetCommissions] TODAS las quincenas (últimas 5):', allFortnights);
     
-    // PASO 1: Buscar últimas quincenas PAID/READY
+    // PASO 1: Buscar últimas quincenas PAID/READY (incluir period_start y period_end)
     const { data: paidFortnights, error: fortnightsError } = await supabase
       .from('fortnights')
-      .select('id')
+      .select('id, period_start, period_end')
       .in('status', ['PAID', 'READY'])
       .order('period_end', { ascending: false })
       .limit(10);
@@ -249,6 +250,12 @@ export async function getNetCommissions(userId: string, role: DashboardRole): Pr
       if (commissions && commissions.length > 0) {
         totalPaid = commissions.reduce((acc: number, item: any) => acc + toNumber(item.commission_calculated), 0);
         console.log('✅ [getNetCommissions] totalPaid calculado:', totalPaid);
+        
+        // Guardar datos de la quincena para retornarlos
+        lastPaidFortnight = {
+          period_start: paidFortnights[0].period_start,
+          period_end: paidFortnights[0].period_end
+        };
       }
     }
 
@@ -291,6 +298,7 @@ export async function getNetCommissions(userId: string, role: DashboardRole): Pr
   return {
     lastPaid: totalPaid,
     open: totalOpen,
+    lastPaidFortnight,
   };
 }
 

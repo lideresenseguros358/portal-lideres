@@ -18,6 +18,10 @@ export interface FortnightStatus {
 export interface NetCommissions {
   lastPaid: number;
   open: number;
+  lastPaidFortnight?: {
+    period_start: string;
+    period_end: string;
+  };
 }
 
 export interface AnnualNet {

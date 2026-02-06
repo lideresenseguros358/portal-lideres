@@ -92,22 +92,13 @@ const BrokerDashboard = async ({ userId }: BrokerDashboardProps) => {
       fortnightStatus.paid.fortnight.period_start,
       fortnightStatus.paid.fortnight.period_end
     );
-  } else if (netCommissions.lastPaid > 0 && brokerId) {
-    // No hay quincena pagada reciente, buscar la última en historial
-    const lastFortnight = await supabase
-      .from('fortnights')
-      .select('period_start, period_end')
-      .in('status', ['PAID', 'READY'])
-      .order('period_end', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    
-    if (lastFortnight.data) {
-      paidRange = formatFortnightLabel(
-        lastFortnight.data.period_start,
-        lastFortnight.data.period_end
-      );
-    }
+  } else if (netCommissions.lastPaidFortnight) {
+    // Usar los datos de quincena que ya vienen de getNetCommissions (con admin access)
+    // Esto evita el problema de RLS en la query adicional
+    paidRange = formatFortnightLabel(
+      netCommissions.lastPaidFortnight.period_start,
+      netCommissions.lastPaidFortnight.period_end
+    );
   }
 
   // Find broker's position in ranking
