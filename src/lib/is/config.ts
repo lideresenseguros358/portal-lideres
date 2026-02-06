@@ -54,20 +54,20 @@ export const IS_ENDPOINTS = {
   // Autenticación
   TOKEN: '/tokens',
   
-  // Catálogos Auto
-  MARCAS: '/cotizaemisorauto/marcas',
-  MODELOS: '/cotizaemisorauto/modelos',
-  TIPO_PLANES: '/cotizaemisorauto/tipoplanes',
-  GRUPO_TARIFA: '/cotizaemisorauto/grupotarifa',
-  PLANES: '/cotizaemisorauto/planes',
+  // Catálogos Auto - SEGÚN DOCUMENTACIÓN OFICIAL
+  MARCAS: '/cotizaemisorauto/getmarcas',
+  MODELOS: '/cotizaemisorauto/getmodelos',
+  TIPO_PLANES: '/cotizaemisorauto/gettipoplanes',
+  GRUPO_TARIFA: '/cotizaemisorauto/getgrupotarifa',
+  PLANES: '/cotizaemisorauto/getplanes',
   TIPO_DOCUMENTOS: '/catalogos/tipodocumentos',
   
-  // Cotización Auto
-  GENERAR_COTIZACION: '/cotizaemisorauto/generarcotizacion',
-  COBERTURAS_COTIZACION: '/cotizaemisorauto/coberturascotizacion',
+  // Cotización Auto - SEGÚN DOCUMENTACIÓN OFICIAL
+  GENERAR_COTIZACION: '/cotizaemisorauto/getgenerarcotizacion',
+  COBERTURAS_COTIZACION: '/cotizaemisorauto/getcoberturascotizacion',
   
   // Emisión Auto
-  EMISION: '/cotizaemisorauto/emision',
+  EMISION: '/cotizaemisorauto/getemision',
   
   // Pago (a confirmar con IS)
   PAYMENT: '/payment/process', // Placeholder - confirmar con IS
