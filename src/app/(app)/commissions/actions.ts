@@ -3280,16 +3280,40 @@ export async function actionGetRetainedCommissions() {
   try {
     const supabase = getSupabaseAdmin();
     
-    // Obtener todas las comisiones retenidas (cerradas)
-    const { data, error } = await (supabase as any)
+    console.log('[actionGetRetainedCommissions] Iniciando consulta de retenidos pendientes...');
+    
+    // Obtener todas las comisiones retenidas pendientes con joins explícitos
+    const { data, error } = await supabase
       .from('retained_commissions')
-      .select('*, brokers(id, name), fortnights(period_start, period_end)')
+      .select(`
+        id,
+        broker_id,
+        fortnight_id,
+        gross_amount,
+        discount_amount,
+        net_amount,
+        status,
+        created_at,
+        insurers_detail,
+        brokers!inner(id, name),
+        fortnights!retained_commissions_fortnight_id_fkey(period_start, period_end)
+      `)
       .eq('status', 'pending')
       .order('created_at', { ascending: false });
     
-    if (error) throw error;
+    if (error) {
+      console.error('[actionGetRetainedCommissions] Error en consulta:', error);
+      throw error;
+    }
+    
+    console.log('[actionGetRetainedCommissions] Registros encontrados:', data?.length || 0);
+    if (data && data.length > 0) {
+      console.log('[actionGetRetainedCommissions] Primer registro:', data[0]);
+    }
+    
     return { ok: true as const, data: data || [] };
   } catch (error) {
+    console.error('[actionGetRetainedCommissions] Excepción:', error);
     return {
       ok: false as const,
       error: error instanceof Error ? error.message : 'Error desconocido',
@@ -5506,6 +5530,36 @@ export async function actionPayFortnight(fortnight_id: string) {
       }
     } else {
       console.log('[actionPayFortnight] ⚠️ No hay reportes de ajustes pendientes');
+    }
+    
+    // 6.7 CRÍTICO: Marcar retenciones asociadas a esta quincena como pagadas
+    console.log('[actionPayFortnight] Marcando retenciones asociadas como pagadas...');
+    const { data: associatedRetentions, error: retError } = await supabase
+      .from('retained_commissions')
+      .select('id, broker_id, net_amount')
+      .eq('applied_fortnight_id', fortnight_id)
+      .eq('status', 'associated_to_fortnight');
+    
+    if (associatedRetentions && associatedRetentions.length > 0) {
+      const retentionIds = associatedRetentions.map((r: any) => r.id);
+      console.log(`[actionPayFortnight] 🔍 Retenciones asociadas encontradas: ${retentionIds.length}`);
+      
+      const { error: updateRetError } = await supabase
+        .from('retained_commissions')
+        .update({
+          status: 'paid',
+          updated_at: new Date().toISOString()
+        })
+        .in('id', retentionIds);
+      
+      if (updateRetError) {
+        console.error('[actionPayFortnight] ❌ Error actualizando retained_commissions:', updateRetError);
+      } else {
+        const totalRetained = associatedRetentions.reduce((sum: number, r: any) => sum + (r.net_amount || 0), 0);
+        console.log(`[actionPayFortnight] ✅ ${retentionIds.length} retenciones marcadas como PAGADAS (Total: $${totalRetained.toFixed(2)})`);
+      }
+    } else {
+      console.log('[actionPayFortnight] ⚠️ No hay retenciones asociadas a esta quincena');
     }
     
     // 7. Marcar adelantos como aplicados (crear logs)
