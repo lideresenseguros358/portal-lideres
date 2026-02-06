@@ -1,12 +1,12 @@
 /**
  * Inspección Vehicular con Vista Superior
- * 10 puntos de foto para inspección completa
+ * 9 puntos de foto para inspección completa (sin registro vehicular)
  */
 
 'use client';
 
-import { useState } from 'react';
-import { FaCamera, FaCheck, FaUpload } from 'react-icons/fa';
+import { useState, useEffect } from 'react';
+import { FaCamera, FaCheck } from 'react-icons/fa';
 import { toast } from 'sonner';
 
 interface InspectionPhoto {
@@ -21,18 +21,42 @@ interface VehicleInspectionProps {
 }
 
 export default function VehicleInspection({ onContinue }: VehicleInspectionProps) {
+  // ORDEN DE CAPTURA: F, LI, LD, T, MA, KM, TB, AS, KEY
   const [photos, setPhotos] = useState<InspectionPhoto[]>([
     { id: 'frontal', name: 'Vista Frontal' },
-    { id: 'trasera', name: 'Vista Trasera' },
     { id: 'lateral-izq', name: 'Lateral Izquierdo' },
     { id: 'lateral-der', name: 'Lateral Derecho' },
-    { id: 'registro', name: 'Registro Vehicular' },
+    { id: 'trasera', name: 'Vista Trasera' },
     { id: 'motor', name: 'Motor Abierto' },
-    { id: 'asientos', name: 'Asientos' },
     { id: 'kilometraje', name: 'Kilometraje' },
-    { id: 'llave', name: 'Llave del Vehículo' },
     { id: 'tablero', name: 'Tablero' },
+    { id: 'asientos', name: 'Asientos' },
+    { id: 'llave', name: 'Llave del Vehículo' },
   ]);
+  
+  const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
+  const [currentHighlight, setCurrentHighlight] = useState<number>(0);
+
+  // Descripciones para tooltips
+  const photoDescriptions: Record<string, string> = {
+    'frontal': 'Toma una foto del frente del vehículo',
+    'lateral-izq': 'Toma una foto del lado izquierdo completo',
+    'lateral-der': 'Toma una foto del lado derecho completo',
+    'trasera': 'Toma una foto de la parte trasera del vehículo',
+    'motor': 'Abre el capó y toma foto del motor',
+    'kilometraje': 'Toma foto del odometro mostrando los kilómetros',
+    'tablero': 'Toma foto del tablero de instrumentos encendido',
+    'asientos': 'Toma foto del interior mostrando los asientos',
+    'llave': 'Toma foto de las llaves del vehículo',
+  };
+
+  // Animación de parpadeo secuencial
+  useEffect(() => {
+    const nextIncompleteIndex = photos.findIndex(p => !p.file);
+    if (nextIncompleteIndex !== -1) {
+      setCurrentHighlight(nextIncompleteIndex);
+    }
+  }, [photos]);
 
   const handlePhotoCapture = async (photoId: string) => {
     try {
@@ -110,84 +134,215 @@ export default function VehicleInspection({ onContinue }: VehicleInspectionProps
         </div>
       </div>
 
-      {/* Vista Superior del Auto */}
+      {/* Vista Superior del Auto con Botónes Interactivos */}
       <div className="bg-white rounded-2xl shadow-xl border-2 border-gray-200 p-6 mb-6">
         <h3 className="text-lg font-bold text-[#010139] mb-4 text-center">
-          🚗 Vistas del Vehículo
+          🚗 Puntos de Inspección del Vehículo
         </h3>
         
-        <div className="relative max-w-sm mx-auto mb-6">
+        <div className="relative max-w-md mx-auto">
           {/* SVG Vista Superior del Auto */}
-          <svg viewBox="0 0 200 300" className="w-full h-auto">
+          <svg viewBox="0 0 240 400" className="w-full h-auto">
+            {/* Definir animación de parpadeo */}
+            <defs>
+              <style>{`
+                @keyframes pulse {
+                  0%, 100% { opacity: 1; }
+                  50% { opacity: 0.4; }
+                }
+                .pulse-active {
+                  animation: pulse 1.5s ease-in-out infinite;
+                }
+              `}</style>
+            </defs>
+            
             {/* Cuerpo del auto */}
-            <rect x="40" y="50" width="120" height="200" rx="20" fill="#e5e7eb" stroke="#4b5563" strokeWidth="2"/>
+            <rect x="60" y="90" width="120" height="200" rx="20" fill="#e5e7eb" stroke="#4b5563" strokeWidth="2"/>
             
             {/* Parabrisas frontal */}
-            <rect x="50" y="60" width="100" height="30" rx="5" fill="#93c5fd" stroke="#4b5563" strokeWidth="1"/>
+            <rect x="70" y="100" width="100" height="30" rx="5" fill="#93c5fd" stroke="#4b5563" strokeWidth="1"/>
             
             {/* Ventanas laterales */}
-            <rect x="45" y="100" width="10" height="40" rx="2" fill="#93c5fd" stroke="#4b5563" strokeWidth="1"/>
-            <rect x="145" y="100" width="10" height="40" rx="2" fill="#93c5fd" stroke="#4b5563" strokeWidth="1"/>
-            <rect x="45" y="160" width="10" height="40" rx="2" fill="#93c5fd" stroke="#4b5563" strokeWidth="1"/>
-            <rect x="145" y="160" width="10" height="40" rx="2" fill="#93c5fd" stroke="#4b5563" strokeWidth="1"/>
+            <rect x="65" y="140" width="10" height="40" rx="2" fill="#93c5fd" stroke="#4b5563" strokeWidth="1"/>
+            <rect x="165" y="140" width="10" height="40" rx="2" fill="#93c5fd" stroke="#4b5563" strokeWidth="1"/>
+            <rect x="65" y="200" width="10" height="40" rx="2" fill="#93c5fd" stroke="#4b5563" strokeWidth="1"/>
+            <rect x="165" y="200" width="10" height="40" rx="2" fill="#93c5fd" stroke="#4b5563" strokeWidth="1"/>
             
             {/* Parabrisas trasero */}
-            <rect x="50" y="210" width="100" height="30" rx="5" fill="#93c5fd" stroke="#4b5563" strokeWidth="1"/>
+            <rect x="70" y="250" width="100" height="30" rx="5" fill="#93c5fd" stroke="#4b5563" strokeWidth="1"/>
             
-            {/* Puntos de captura */}
-            {/* Frontal */}
-            <circle cx="100" cy="40" r="15" fill={photos[0]?.file ? '#8AAA19' : '#f59e0b'} stroke="#fff" strokeWidth="2"/>
-            <text x="100" y="45" textAnchor="middle" fill="#fff" fontSize="12" fontWeight="bold">F</text>
+            {/* Botón F - Frontal */}
+            <g className="cursor-pointer" onMouseEnter={() => setActiveTooltip('frontal')} onMouseLeave={() => setActiveTooltip(null)}>
+              <circle 
+                cx="120" 
+                cy="70" 
+                r="18" 
+                fill={photos[0]?.file ? '#10b981' : '#3b82f6'} 
+                stroke="#fff" 
+                strokeWidth="3"
+                className={currentHighlight === 0 && !photos[0]?.file ? 'pulse-active' : ''}
+                onClick={() => handlePhotoCapture('frontal')}
+                style={{ cursor: 'pointer' }}
+              />
+              <text x="120" y="76" textAnchor="middle" fill="#fff" fontSize="16" fontWeight="bold" style={{ pointerEvents: 'none' }}>F</text>
+            </g>
             
-            {/* Trasera */}
-            <circle cx="100" cy="260" r="15" fill={photos[1]?.file ? '#8AAA19' : '#f59e0b'} stroke="#fff" strokeWidth="2"/>
-            <text x="100" y="265" textAnchor="middle" fill="#fff" fontSize="12" fontWeight="bold">T</text>
+            {/* Botón LI - Lateral Izquierdo */}
+            <g className="cursor-pointer" onMouseEnter={() => setActiveTooltip('lateral-izq')} onMouseLeave={() => setActiveTooltip(null)}>
+              <circle 
+                cx="30" 
+                cy="190" 
+                r="18" 
+                fill={photos[1]?.file ? '#10b981' : '#3b82f6'} 
+                stroke="#fff" 
+                strokeWidth="3"
+                className={currentHighlight === 1 && !photos[1]?.file ? 'pulse-active' : ''}
+                onClick={() => handlePhotoCapture('lateral-izq')}
+                style={{ cursor: 'pointer' }}
+              />
+              <text x="30" y="196" textAnchor="middle" fill="#fff" fontSize="14" fontWeight="bold" style={{ pointerEvents: 'none' }}>LI</text>
+            </g>
             
-            {/* Lateral Izquierdo */}
-            <circle cx="20" cy="150" r="15" fill={photos[2]?.file ? '#8AAA19' : '#f59e0b'} stroke="#fff" strokeWidth="2"/>
-            <text x="20" y="155" textAnchor="middle" fill="#fff" fontSize="12" fontWeight="bold">LI</text>
+            {/* Botón LD - Lateral Derecho */}
+            <g className="cursor-pointer" onMouseEnter={() => setActiveTooltip('lateral-der')} onMouseLeave={() => setActiveTooltip(null)}>
+              <circle 
+                cx="210" 
+                cy="190" 
+                r="18" 
+                fill={photos[2]?.file ? '#10b981' : '#3b82f6'} 
+                stroke="#fff" 
+                strokeWidth="3"
+                className={currentHighlight === 2 && !photos[2]?.file ? 'pulse-active' : ''}
+                onClick={() => handlePhotoCapture('lateral-der')}
+                style={{ cursor: 'pointer' }}
+              />
+              <text x="210" y="196" textAnchor="middle" fill="#fff" fontSize="14" fontWeight="bold" style={{ pointerEvents: 'none' }}>LD</text>
+            </g>
             
-            {/* Lateral Derecho */}
-            <circle cx="180" cy="150" r="15" fill={photos[3]?.file ? '#8AAA19' : '#f59e0b'} stroke="#fff" strokeWidth="2"/>
-            <text x="180" y="155" textAnchor="middle" fill="#fff" fontSize="12" fontWeight="bold">LD</text>
+            {/* Botón T - Trasera */}
+            <g className="cursor-pointer" onMouseEnter={() => setActiveTooltip('trasera')} onMouseLeave={() => setActiveTooltip(null)}>
+              <circle 
+                cx="120" 
+                cy="310" 
+                r="18" 
+                fill={photos[3]?.file ? '#10b981' : '#3b82f6'} 
+                stroke="#fff" 
+                strokeWidth="3"
+                className={currentHighlight === 3 && !photos[3]?.file ? 'pulse-active' : ''}
+                onClick={() => handlePhotoCapture('trasera')}
+                style={{ cursor: 'pointer' }}
+              />
+              <text x="120" y="316" textAnchor="middle" fill="#fff" fontSize="16" fontWeight="bold" style={{ pointerEvents: 'none' }}>T</text>
+            </g>
+            
+            {/* Botón MA - Motor Abierto (debajo de F) */}
+            <g className="cursor-pointer" onMouseEnter={() => setActiveTooltip('motor')} onMouseLeave={() => setActiveTooltip(null)}>
+              <circle 
+                cx="120" 
+                cy="115" 
+                r="16" 
+                fill={photos[4]?.file ? '#10b981' : '#3b82f6'} 
+                stroke="#fff" 
+                strokeWidth="3"
+                className={currentHighlight === 4 && !photos[4]?.file ? 'pulse-active' : ''}
+                onClick={() => handlePhotoCapture('motor')}
+                style={{ cursor: 'pointer' }}
+              />
+              <text x="120" y="121" textAnchor="middle" fill="#fff" fontSize="13" fontWeight="bold" style={{ pointerEvents: 'none' }}>MA</text>
+            </g>
+            
+            {/* Botón KM - Kilometraje (izquierda, debajo de MA) */}
+            <g className="cursor-pointer" onMouseEnter={() => setActiveTooltip('kilometraje')} onMouseLeave={() => setActiveTooltip(null)}>
+              <circle 
+                cx="90" 
+                cy="155" 
+                r="16" 
+                fill={photos[5]?.file ? '#10b981' : '#3b82f6'} 
+                stroke="#fff" 
+                strokeWidth="3"
+                className={currentHighlight === 5 && !photos[5]?.file ? 'pulse-active' : ''}
+                onClick={() => handlePhotoCapture('kilometraje')}
+                style={{ cursor: 'pointer' }}
+              />
+              <text x="90" y="161" textAnchor="middle" fill="#fff" fontSize="13" fontWeight="bold" style={{ pointerEvents: 'none' }}>KM</text>
+            </g>
+            
+            {/* Botón TB - Tablero (derecha, debajo de MA) */}
+            <g className="cursor-pointer" onMouseEnter={() => setActiveTooltip('tablero')} onMouseLeave={() => setActiveTooltip(null)}>
+              <circle 
+                cx="150" 
+                cy="155" 
+                r="16" 
+                fill={photos[6]?.file ? '#10b981' : '#3b82f6'} 
+                stroke="#fff" 
+                strokeWidth="3"
+                className={currentHighlight === 6 && !photos[6]?.file ? 'pulse-active' : ''}
+                onClick={() => handlePhotoCapture('tablero')}
+                style={{ cursor: 'pointer' }}
+              />
+              <text x="150" y="161" textAnchor="middle" fill="#fff" fontSize="13" fontWeight="bold" style={{ pointerEvents: 'none' }}>TB</text>
+            </g>
+            
+            {/* Botón AS - Asientos (centro) */}
+            <g className="cursor-pointer" onMouseEnter={() => setActiveTooltip('asientos')} onMouseLeave={() => setActiveTooltip(null)}>
+              <circle 
+                cx="120" 
+                cy="190" 
+                r="16" 
+                fill={photos[7]?.file ? '#10b981' : '#3b82f6'} 
+                stroke="#fff" 
+                strokeWidth="3"
+                className={currentHighlight === 7 && !photos[7]?.file ? 'pulse-active' : ''}
+                onClick={() => handlePhotoCapture('asientos')}
+                style={{ cursor: 'pointer' }}
+              />
+              <text x="120" y="196" textAnchor="middle" fill="#fff" fontSize="13" fontWeight="bold" style={{ pointerEvents: 'none' }}>AS</text>
+            </g>
+            
+            {/* Botón KEY - Llaves (debajo de AS) */}
+            <g className="cursor-pointer" onMouseEnter={() => setActiveTooltip('llave')} onMouseLeave={() => setActiveTooltip(null)}>
+              <circle 
+                cx="120" 
+                cy="235" 
+                r="16" 
+                fill={photos[8]?.file ? '#10b981' : '#3b82f6'} 
+                stroke="#fff" 
+                strokeWidth="3"
+                className={currentHighlight === 8 && !photos[8]?.file ? 'pulse-active' : ''}
+                onClick={() => handlePhotoCapture('llave')}
+                style={{ cursor: 'pointer' }}
+              />
+              <text x="120" y="241" textAnchor="middle" fill="#fff" fontSize="12" fontWeight="bold" style={{ pointerEvents: 'none' }}>KEY</text>
+            </g>
           </svg>
-        </div>
-
-        {/* Grid de Fotos */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          {photos.map((photo) => (
-            <button
-              key={photo.id}
-              onClick={() => handlePhotoCapture(photo.id)}
-              className={`relative aspect-square rounded-xl border-2 overflow-hidden transition-all ${
-                photo.file 
-                  ? 'border-[#8AAA19] bg-green-50' 
-                  : 'border-gray-300 hover:border-[#8AAA19] bg-gray-50'
-              }`}
-              type="button"
-            >
-              {photo.preview ? (
-                <>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img 
-                    src={photo.preview} 
-                    alt={photo.name}
-                    className="w-full h-full object-cover"
-                  />
-                  <div className="absolute top-1 right-1 bg-[#8AAA19] text-white rounded-full p-1">
-                    <FaCheck size={12} />
-                  </div>
-                </>
-              ) : (
-                <div className="flex flex-col items-center justify-center h-full p-2">
-                  <FaCamera className="text-2xl text-gray-400 mb-1" />
-                  <span className="text-[10px] font-semibold text-gray-600 text-center leading-tight">
-                    {photo.name}
-                  </span>
+          
+          {/* Tooltip */}
+          {activeTooltip && (
+            <div className="absolute top-0 left-1/2 transform -translate-x-1/2 -translate-y-full mb-2 z-10">
+              <div className="bg-[#010139] text-white px-4 py-2 rounded-lg shadow-xl text-sm font-semibold whitespace-nowrap">
+                {photoDescriptions[activeTooltip]}
+                <div className="absolute bottom-0 left-1/2 transform -translate-x-1/2 translate-y-full">
+                  <div className="border-8 border-transparent border-t-[#010139]"></div>
                 </div>
-              )}
-            </button>
-          ))}
+              </div>
+            </div>
+          )}
+        </div>
+        
+        {/* Leyenda */}
+        <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+            <span className="text-gray-600">Pendiente</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-green-500"></div>
+            <span className="text-gray-600">Completada</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-blue-500 animate-pulse"></div>
+            <span className="text-gray-600">Siguiente sugerida</span>
+          </div>
         </div>
       </div>
 
