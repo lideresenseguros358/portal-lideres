@@ -48,7 +48,7 @@ BEGIN;
 DO $$
 DECLARE
     v_fortnight_id uuid := 'b3836d79-d63d-474e-a9fe-fdffe43fc37e'; -- Quincena del 16 al 28 Feb 2026
-    v_user_id uuid := 'TU-USER-ID-AQUI'; -- ⚠️ REEMPLAZAR con tu ID de admin
+    v_user_id uuid := 'd681a368-ac31-49a9-84cc-1e28b63c2d47'; -- ⚠️ REEMPLAZAR con tu ID de admin
     discount_record RECORD;
     v_current_advance RECORD;
     v_new_amount numeric;

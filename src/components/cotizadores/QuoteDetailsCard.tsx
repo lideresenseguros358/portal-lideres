@@ -71,7 +71,8 @@ export default function QuoteDetailsCard({
   impuesto2 = 0,
   primaTotal
 }: QuoteDetailsCardProps) {
-  const [expandedSection, setExpandedSection] = useState<string | null>('coberturas');
+  const [mainExpanded, setMainExpanded] = useState(false);
+  const [expandedSection, setExpandedSection] = useState<string | null>(null);
 
   const toggleSection = (section: string) => {
     setExpandedSection(expandedSection === section ? null : section);
@@ -86,11 +87,22 @@ export default function QuoteDetailsCard({
   };
 
   return (
-    <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl p-4 md:p-6 mt-6 border border-gray-200 shadow-sm">
-      <h3 className="text-base md:text-lg font-semibold text-[#010139] mb-4 md:mb-6 flex items-center gap-2">
-        <FaShieldAlt className="text-[#8AAA19] text-lg" />
-        Detalles de la Cotización
-      </h3>
+    <div className="mt-4">
+      {/* Botón principal colapsable */}
+      <button
+        onClick={() => setMainExpanded(!mainExpanded)}
+        className="w-full flex items-center justify-between p-4 bg-gradient-to-r from-gray-50 to-white rounded-xl border-2 border-gray-200 hover:border-[#8AAA19] hover:shadow-md transition-all"
+      >
+        <span className="text-sm md:text-base font-bold text-[#010139] flex items-center gap-2">
+          <FaShieldAlt className="text-[#8AAA19] text-lg" />
+          Ver Detalles de la Cotización
+        </span>
+        {mainExpanded ? <FaChevronUp className="text-gray-400" /> : <FaChevronDown className="text-gray-400" />}
+      </button>
+
+      {/* Contenido expandible */}
+      {mainExpanded && (
+        <div className="bg-gradient-to-br from-gray-50 to-white rounded-xl p-4 md:p-6 mt-2 border border-gray-200 shadow-sm">
 
       {/* Suma Asegurada y Deducible */}
       {(sumaAsegurada > 0 || deducibleInfo) && (
@@ -105,41 +117,6 @@ export default function QuoteDetailsCard({
             <div>
               <p className="text-xs text-gray-500 mb-1">Deducible</p>
               <p className="text-base font-bold text-[#8AAA19]">{deducibleInfo.descripcion}</p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Límites de Responsabilidad Civil */}
-      {limites.length > 0 && (
-        <div className="mb-4 md:mb-5">
-          <button
-            onClick={() => toggleSection('limites')}
-            className="w-full flex items-center justify-between p-4 md:p-5 bg-white rounded-xl border border-gray-200 hover:border-[#8AAA19] hover:shadow-md transition-all"
-          >
-            <span className="text-sm md:text-base font-semibold text-[#010139] flex items-center gap-2 md:gap-3">
-              <FaShieldAlt className="text-[#8AAA19] text-lg" />
-              Límites de Responsabilidad Civil ({limites.length})
-            </span>
-            {expandedSection === 'limites' ? <FaChevronUp className="text-gray-400" /> : <FaChevronDown className="text-gray-400" />}
-          </button>
-          
-          {expandedSection === 'limites' && (
-            <div className="mt-3 md:mt-4 space-y-3">
-              {limites.map((limite, index) => (
-                <div key={index} className="bg-white p-4 md:p-5 rounded-xl border border-gray-100 shadow-sm">
-                  <p className="font-semibold text-sm md:text-base text-[#010139] mb-2">{limite.descripcion}</p>
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 text-xs md:text-sm text-gray-600">
-                    <span>Por persona: <strong className="text-[#010139]">{limite.limitePorPersona}</strong></span>
-                    {limite.limitePorAccidente && (
-                      <>
-                        <span className="hidden sm:inline">•</span>
-                        <span>Por accidente: <strong className="text-[#010139]">{limite.limitePorAccidente}</strong></span>
-                      </>
-                    )}
-                  </div>
-                </div>
-              ))}
             </div>
           )}
         </div>
@@ -243,53 +220,9 @@ export default function QuoteDetailsCard({
         </div>
       )}
 
-      {/* Desglose de Prima */}
-      {(primaBase !== undefined || impuesto1 !== undefined || impuesto2 !== undefined) && (
-        <div className="mt-5">
-          <button
-            onClick={() => toggleSection('prima')}
-            className="w-full flex items-center justify-between p-4 md:p-5 bg-gradient-to-r from-green-50 to-blue-50 rounded-xl border-2 border-[#8AAA19] hover:shadow-lg transition-all"
-          >
-            <span className="text-sm md:text-base font-bold text-[#010139] flex items-center gap-2 md:gap-3">
-              <FaMoneyBillWave className="text-[#8AAA19] text-lg" />
-              ¿Cómo se Calcula el Precio?
-            </span>
-            {expandedSection === 'prima' ? <FaChevronUp className="text-[#8AAA19]" /> : <FaChevronDown className="text-[#8AAA19]" />}
-          </button>
-          {expandedSection === 'prima' && (
-            <div className="mt-3 md:mt-4 p-4 md:p-5 bg-white rounded-xl border border-gray-200 space-y-3 text-sm md:text-base">
-              {primaBase !== undefined && primaBase > 0 && (
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Prima Base (sin impuestos):</span>
-                  <span className="font-medium text-gray-700">{formatCurrency(primaBase)}</span>
-                </div>
-              )}
-              {impuesto1 !== undefined && impuesto1 > 0 && (
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">+ Impuesto (5%):</span>
-                  <span className="font-medium text-gray-700">{formatCurrency(impuesto1)}</span>
-                </div>
-              )}
-              {impuesto2 !== undefined && impuesto2 > 0 && (
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">+ Recargo Legal (1%):</span>
-                  <span className="font-medium text-gray-700">{formatCurrency(impuesto2)}</span>
-                </div>
-              )}
-              <div className="flex justify-between items-center pt-4 border-t-2 border-[#8AAA19]">
-                <span className="font-bold text-base md:text-lg text-[#010139]">Total a Pagar Anual:</span>
-                <span className="font-bold text-xl md:text-2xl text-[#8AAA19]">{formatCurrency(primaTotal)}</span>
-              </div>
-              <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <p className="text-xs text-blue-800">
-                  ℹ️ El precio mostrado incluye todos los impuestos y recargos legales.
-                </p>
-              </div>
-            </div>
-          )}
         </div>
       )}
-      
+
       {/* Estilos personalizados para scrollbar */}
       <style jsx>{`
         .custom-scrollbar::-webkit-scrollbar {
