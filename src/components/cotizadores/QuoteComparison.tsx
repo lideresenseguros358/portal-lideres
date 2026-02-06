@@ -354,7 +354,7 @@ export default function QuoteComparison({ policyType, quotes, quoteData }: Quote
               
               {/* Card principal SIN RING VERDE - usa sombra */}
               <div 
-                className={`bg-white rounded-xl border-2 overflow-hidden transition-all duration-300 flex flex-col ${
+                className={`bg-white rounded-xl border-2 overflow-visible transition-all duration-300 flex flex-col ${
                   quote.isRecommended 
                     ? 'border-[#8AAA19] shadow-lg shadow-[#8AAA19]/30' 
                     : 'border-gray-200 hover:border-[#010139] shadow-md'
@@ -365,7 +365,7 @@ export default function QuoteComparison({ policyType, quotes, quoteData }: Quote
                 }`}
               >
                 {/* Header con Logo */}
-              <div className="bg-gradient-to-br from-[#010139] to-[#020270] p-4 text-white flex-shrink-0">
+              <div className="bg-gradient-to-br from-[#010139] to-[#020270] p-4 text-white flex-shrink-0 overflow-visible rounded-t-xl">
                 <div className="flex items-center gap-2 mb-2">
                   <InsurerLogo 
                     logoUrl={getLogoUrl(quote.insurerName)}
