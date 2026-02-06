@@ -57,6 +57,11 @@ export default function PaymentPlanSelector({ annualPremium, priceBreakdown, onC
   const totalToPay = installments === 1 
     ? monthlyPayment 
     : (priceBreakdown ? priceBreakdown.totalConTarjeta : monthlyPayment * installments);
+  
+  // Prima anual a mostrar en header (dinámica según cuotas)
+  const displayedAnnualPremium = priceBreakdown
+    ? (installments === 1 ? priceBreakdown.totalAlContado : priceBreakdown.totalConTarjeta)
+    : annualPremium;
 
   const handleContinue = () => {
     onContinue(installments, monthlyPayment);
@@ -125,9 +130,14 @@ export default function PaymentPlanSelector({ annualPremium, priceBreakdown, onC
           <FaMoneyBillWave className="text-4xl mx-auto mb-3 text-[#8AAA19]" />
           <div className="text-sm opacity-80 mb-1">Prima Anual Total</div>
           <div className="text-4xl sm:text-5xl font-bold mb-2">
-            ${annualPremium.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            ${displayedAnnualPremium.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
-          <div className="text-xs opacity-70">Incluye coberturas seleccionadas</div>
+          <div className="text-xs opacity-70">
+            {installments === 1 && priceBreakdown && priceBreakdown.totalAlContado < priceBreakdown.totalConTarjeta
+              ? 'Con descuento pronto pago'
+              : 'Incluye coberturas seleccionadas'
+            }
+          </div>
         </div>
       </div>
 
