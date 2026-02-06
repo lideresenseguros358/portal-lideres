@@ -3,6 +3,7 @@ import Link from "next/link";
 import { FaPlus, FaFileImport } from "react-icons/fa";
 import { getSupabaseServer } from "@/lib/supabase/server";
 import DatabaseTabs from "@/components/db/DatabaseTabs";
+import DatabaseSkeleton from "@/components/db/DatabaseSkeleton";
 import InlineSearchBar from "@/components/db/InlineSearchBar";
 import type { Tables } from "@/lib/supabase/server";
 import type { ClientWithPolicies, InsurerWithCount } from "@/types/db";
@@ -255,17 +256,19 @@ export default async function DatabasePage({
 
 
         {/* Database Tabs Content */}
-        <DatabaseTabs 
-          activeTab={activeTab}
-          clients={clients}
-          insurers={insurers}
-          brokers={brokers || []}
-          searchQuery={searchQuery}
-          role={role}
-          userEmail={user?.email || ''}
-          initialLimit={INITIAL_LIMIT}
-          totalCount={totalCount}
-        />
+        <Suspense fallback={<DatabaseSkeleton />}>
+          <DatabaseTabs 
+            activeTab={activeTab}
+            clients={clients}
+            insurers={insurers}
+            brokers={brokers || []}
+            searchQuery={searchQuery}
+            role={role}
+            userEmail={user?.email || ''}
+            initialLimit={INITIAL_LIMIT}
+            totalCount={totalCount}
+          />
+        </Suspense>
       </div>
     </div>
   );

@@ -14,6 +14,7 @@ import PreliminaryClientsTab from './PreliminaryClientsTab';
 import ExportFormatModal from './ExportFormatModal';
 import ExpedienteManager from '@/components/expediente/ExpedienteManager';
 import InlineSearchBar from './InlineSearchBar';
+import DatabaseSkeleton from './DatabaseSkeleton';
 import { ClientWithPolicies, InsurerWithCount } from '@/types/db';
 import { actionGetPreliminaryClients } from '@/app/(app)/db/preliminary-actions';
 import { actionLoadMoreClients } from '@/app/(app)/db/actions';
@@ -1239,7 +1240,13 @@ export default function DatabaseTabs({
   const [clients, setClients] = useState<ClientWithPolicies[]>(initialClients);
   const [displayedCount, setDisplayedCount] = useState(initialLimit);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
   const hasMore = displayedCount < totalCount;
+  
+  // Marcar como cargado después del primer render
+  useEffect(() => {
+    setIsInitialLoading(false);
+  }, []);
   const searchParams = useSearchParams();
   const router = useRouter();
   const modal = searchParams.get('modal');
@@ -1643,6 +1650,11 @@ export default function DatabaseTabs({
     );
   };
 
+  // Mostrar skeleton durante carga inicial
+  if (isInitialLoading) {
+    return <DatabaseSkeleton />;
+  }
+  
   return (
     <>
       {modal === 'new-client' && (
