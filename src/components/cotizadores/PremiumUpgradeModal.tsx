@@ -7,7 +7,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FaTimes, FaCheckCircle, FaStar, FaArrowUp } from 'react-icons/fa';
+import { FaTimes, FaCheckCircle, FaStar, FaArrowUp, FaChevronDown, FaChevronUp } from 'react-icons/fa';
 import { toast } from 'sonner';
 
 interface PremiumUpgradeModalProps {
@@ -44,6 +44,7 @@ export default function PremiumUpgradeModal({
   premiumPlan,
 }: PremiumUpgradeModalProps) {
   const [isVisible, setIsVisible] = useState(false);
+  const [expandedEndoso, setExpandedEndoso] = useState<number | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -238,26 +239,61 @@ export default function PremiumUpgradeModal({
 
           </div>
 
-          {/* Endosos Premium */}
+          {/* Endosos Premium - Desplegables */}
           {endososPremium.length > 0 && (
             <div className="bg-green-50 border-2 border-[#8AAA19] rounded-xl p-4">
               <h3 className="font-bold text-[#010139] mb-3 flex items-center gap-2">
                 <FaStar className="text-[#8AAA19]" />
                 Endosos Incluidos en Plan Premium:
               </h3>
-              <ul className="space-y-2">
-                {endososPremium.map((endoso, index) => (
-                  <li key={index} className="flex items-start gap-2 text-sm bg-white p-2 rounded-lg border border-green-200">
-                    <FaCheckCircle className="text-[#8AAA19] mt-1 flex-shrink-0" />
-                    <div>
-                      <p className="font-semibold text-gray-800">{typeof endoso === 'string' ? endoso : endoso.nombre}</p>
-                      {typeof endoso === 'object' && endoso.descripcion && (
-                        <p className="text-xs text-gray-600">{endoso.descripcion}</p>
+              <div className="space-y-2">
+                {endososPremium.map((endoso, index) => {
+                  const endosoNombre = typeof endoso === 'string' ? endoso : endoso.nombre;
+                  const endosoDesc = typeof endoso === 'object' ? endoso.descripcion : null;
+                  const isExpanded = expandedEndoso === index;
+                  
+                  return (
+                    <div key={index} className="bg-white rounded-lg border border-green-200 overflow-hidden">
+                      {/* Header desplegable */}
+                      <button
+                        onClick={() => setExpandedEndoso(isExpanded ? null : index)}
+                        className="w-full flex items-center justify-between p-3 hover:bg-green-50 transition-colors"
+                      >
+                        <div className="flex items-center gap-2 flex-1">
+                          <FaCheckCircle className="text-[#8AAA19] flex-shrink-0" />
+                          <span className="font-semibold text-gray-800 text-sm text-left">{endosoNombre}</span>
+                        </div>
+                        {isExpanded ? (
+                          <FaChevronUp className="text-gray-400 flex-shrink-0" />
+                        ) : (
+                          <FaChevronDown className="text-gray-400 flex-shrink-0" />
+                        )}
+                      </button>
+                      
+                      {/* Contenido expandible - beneficios */}
+                      {isExpanded && (
+                        <div className="px-3 pb-3 pt-1 bg-gray-50 border-t border-green-100">
+                          {endosoDesc && (
+                            <p className="text-xs text-gray-700 mb-2">{endosoDesc}</p>
+                          )}
+                          {/* Mostrar beneficios relacionados con este endoso */}
+                          {beneficiosPremium.length > 0 && (
+                            <div className="space-y-1.5 mt-2">
+                              <p className="text-xs font-semibold text-[#8AAA19]">Beneficios incluidos:</p>
+                              {beneficiosPremium.slice(0, 3).map((beneficio, bIdx) => (
+                                <div key={bIdx} className="flex items-start gap-1.5 text-xs text-gray-600">
+                                  <span className="text-[#8AAA19] mt-0.5">•</span>
+                                  <span>{typeof beneficio === 'string' ? beneficio : beneficio.nombre}</span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                       )}
                     </div>
-                  </li>
-                ))}
-              </ul>
+                  );
+                })}
+              </div>
             </div>
           )}
           
