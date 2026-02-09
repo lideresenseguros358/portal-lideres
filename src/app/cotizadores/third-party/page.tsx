@@ -34,8 +34,32 @@ export default function ThirdPartyPage() {
 
   const handleSelectPlan = (insurerId: string, planType: 'basic' | 'premium', plan: AutoThirdPartyPlan) => {
     setLoading(true);
-    // Redirigir al formulario de emisión con los datos del plan seleccionado
-    router.push(`/cotizadores/third-party/issue?insurer=${insurerId}&plan=${planType}`);
+    
+    if (insurerId === 'fedpa') {
+      // FEDPA: usar flujo completo con secciones (sin inspección ni banco acreedor)
+      sessionStorage.setItem('selectedQuote', JSON.stringify({
+        insurerName: 'FEDPA Seguros',
+        planType: planType === 'basic' ? 'Plan Básico' : 'Plan Premium',
+        annualPremium: plan.annualPremium,
+        _isReal: true,
+        _isFEDPA: true,
+        _planCode: plan.planCode || 426,
+        _includedCoverages: plan.includedCoverages,
+        _endosoPdf: plan.endosoPdf,
+        quoteData: {
+          cobertura: 'TERCEROS',
+          policyType: 'AUTO',
+          marca: '',
+          modelo: '',
+          ano: new Date().getFullYear(),
+          uso: '10',
+        },
+      }));
+      router.push('/cotizadores/emitir-danos-terceros');
+    } else {
+      // Otras aseguradoras: flujo existente
+      router.push(`/cotizadores/third-party/issue?insurer=${insurerId}&plan=${planType}`);
+    }
   };
 
   return (

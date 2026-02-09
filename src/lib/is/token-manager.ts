@@ -120,9 +120,9 @@ function extractTokenFromResponse(bodyText: string, contentType: string, endpoin
 /**
  * Llamar a un endpoint de tokens IS
  */
-async function callTokenEndpoint(url: string, primaryToken: string, label: string): Promise<string> {
+async function callTokenEndpoint(url: string, primaryToken: string, label: string, method: 'GET' | 'POST' = 'GET'): Promise<string> {
   const response = await fetch(url, {
-    method: 'GET',
+    method,
     headers: {
       'Authorization': `Bearer ${primaryToken}`,
       'Accept': 'application/json',
@@ -132,7 +132,7 @@ async function callTokenEndpoint(url: string, primaryToken: string, label: strin
   const status = response.status;
   const contentType = response.headers.get('content-type') || '';
   
-  console.log(`[IS Token Manager] GET ${url} - ${status} - ${contentType}`);
+  console.log(`[IS Token Manager] ${method} ${url} - ${status} - ${contentType}`);
 
   if (!response.ok) {
     const preview = await response.text();
@@ -173,30 +173,41 @@ async function fetchDailyToken(env: ISEnvironment): Promise<string> {
   const retrieveUrl = `${baseUrl}/tokens/diario`;
 
   try {
-    // PRIMERO: Intentar GENERAR el token diario (Paso 1 de la documentación)
-    console.log('[IS Token Manager] Paso 1: Generando token diario con /tokens...');
+    // PRIMERO: Intentar GENERAR el token diario con POST /tokens
+    // IMPORTANTE: IS requiere POST (no GET) para generar el token diario.
+    // GET /tokens devuelve 404 "Acceso denegado" pero POST /tokens funciona.
+    console.log('[IS Token Manager] Paso 1: Generando token diario con POST /tokens...');
     try {
-      const token = await callTokenEndpoint(generateUrl, primaryToken, '/tokens');
+      const token = await callTokenEndpoint(generateUrl, primaryToken, '/tokens (POST)', 'POST');
       
-      // Verificar que el token generado sea DIFERENTE al primary token
       if (token === primaryToken) {
-        console.warn('[IS Token Manager] ⚠️ /tokens devolvió el mismo token principal, intentando /tokens/diario...');
+        console.warn('[IS Token Manager] ⚠️ POST /tokens devolvió el mismo token principal, intentando /tokens/diario...');
       } else {
-        console.log('[IS Token Manager] ✅ Token diario GENERADO exitosamente (diferente al principal)');
+        console.log('[IS Token Manager] ✅ Token diario GENERADO exitosamente via POST /tokens');
         return token;
       }
-    } catch (genError: any) {
-      console.warn(`[IS Token Manager] /tokens falló: ${genError.message}, intentando /tokens/diario...`);
+    } catch (postError: any) {
+      console.warn(`[IS Token Manager] POST /tokens falló: ${postError.message}`);
+      
+      // Fallback: intentar GET /tokens (por si cambian la API)
+      try {
+        console.log('[IS Token Manager] Fallback: intentando GET /tokens...');
+        const token = await callTokenEndpoint(generateUrl, primaryToken, '/tokens (GET)', 'GET');
+        if (token !== primaryToken) {
+          console.log('[IS Token Manager] ✅ Token diario GENERADO via GET /tokens');
+          return token;
+        }
+      } catch (getError: any) {
+        console.warn(`[IS Token Manager] GET /tokens también falló: ${getError.message}`);
+      }
     }
     
-    // SEGUNDO: Si /tokens falla o devuelve el mismo token, intentar /tokens/diario
+    // SEGUNDO: Si /tokens falla, intentar /tokens/diario (recupera el último generado)
     console.log('[IS Token Manager] Intentando recuperar token con /tokens/diario...');
-    const dailyToken = await callTokenEndpoint(retrieveUrl, primaryToken, '/tokens/diario');
+    const dailyToken = await callTokenEndpoint(retrieveUrl, primaryToken, '/tokens/diario', 'GET');
     
-    // Verificar que sea diferente al primary
     if (dailyToken === primaryToken) {
-      console.warn('[IS Token Manager] ⚠️ /tokens/diario también devolvió el token principal');
-      console.warn('[IS Token Manager] Esto puede significar que IS no genera tokens diarios diferentes');
+      console.warn('[IS Token Manager] ⚠️ /tokens/diario devolvió el token principal');
       console.warn('[IS Token Manager] Usando el token tal cual (puede causar 401 en endpoints)');
     } else {
       console.log('[IS Token Manager] ✅ Token diario RECUPERADO exitosamente');

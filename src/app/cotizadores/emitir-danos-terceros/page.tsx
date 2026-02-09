@@ -1,552 +1,597 @@
 /**
  * Página de Emisión - Daños a Terceros
- * Versión simplificada sin inspección vehicular
- * Flujo lineal con menos requisitos que cobertura completa
+ * Replica el UX de cobertura completa con URL-based steps.
+ * Steps: payment → emission-data → vehicle → payment-info → review
+ * Sin inspección, sin paso separado de documentos (se piden en emission-data),
+ * declaración de veracidad integrada en review.
  */
 
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { FaMoneyBillWave, FaUser, FaCar, FaFileUpload, FaCheckCircle, FaCreditCard, FaClipboardCheck } from 'react-icons/fa';
+import { FaCheckCircle, FaMoneyBillWave, FaUser, FaCar, FaCreditCard, FaClipboardCheck } from 'react-icons/fa';
 
-// Componentes de secciones
-import EmissionSection, { type SectionStatus } from '@/components/cotizadores/emision/EmissionSection';
 import PaymentPlanSelector from '@/components/cotizadores/PaymentPlanSelector';
-import InsuredDataSection, { type InsuredData } from '@/components/cotizadores/emision/InsuredDataSection';
-import VehicleDataSection, { type VehicleData } from '@/components/cotizadores/emision/VehicleDataSection';
-import ClientDocumentsSection, { type ClientDocuments } from '@/components/cotizadores/emision/ClientDocumentsSection';
-import TruthDeclarationSection from '@/components/cotizadores/emision/TruthDeclarationSection';
+import EmissionDataForm, { type EmissionData } from '@/components/cotizadores/EmissionDataForm';
+import VehicleDataForm, { type VehicleData } from '@/components/cotizadores/VehicleDataForm';
 import CreditCardInput from '@/components/is/CreditCardInput';
+import LoadingSkeleton from '@/components/cotizadores/LoadingSkeleton';
+import EmissionProgressBar from '@/components/cotizadores/EmissionProgressBar';
+import EmissionBreadcrumb, { type EmissionStep, type BreadcrumbStepDef } from '@/components/cotizadores/EmissionBreadcrumb';
 
-interface Section {
-  id: string;
-  title: string;
-  subtitle: string;
-  icon: React.ReactNode;
-  status: SectionStatus;
-  canAccess: boolean;
-}
+// 5 steps for DT (no inspection)
+const DT_STEPS: BreadcrumbStepDef[] = [
+  { key: 'payment', label: 'Cuotas', shortLabel: 'Cuotas', icon: FaMoneyBillWave },
+  { key: 'emission-data', label: 'Cliente', shortLabel: 'Cliente', icon: FaUser },
+  { key: 'vehicle', label: 'Vehículo', shortLabel: 'Vehículo', icon: FaCar },
+  { key: 'payment-info', label: 'Pago', shortLabel: 'Pago', icon: FaCreditCard },
+  { key: 'review', label: 'Resumen', shortLabel: 'Resumen', icon: FaClipboardCheck },
+];
+
+const DT_TOTAL_STEPS = DT_STEPS.length;
+const DT_BASE_PATH = '/cotizadores/emitir-danos-terceros';
 
 export default function EmitirDanosTercerosPage() {
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, []);
+
+  const searchParams = useSearchParams();
   const router = useRouter();
-  
-  // Estado global
+  const step = (searchParams.get('step') || 'payment') as EmissionStep;
+
   const [loading, setLoading] = useState(true);
   const [selectedPlan, setSelectedPlan] = useState<any>(null);
   const [quoteData, setQuoteData] = useState<any>(null);
-  
-  // Datos de cada sección (menos que cobertura completa)
   const [installments, setInstallments] = useState(1);
   const [monthlyPayment, setMonthlyPayment] = useState(0);
-  const [insuredData, setInsuredData] = useState<InsuredData | null>(null);
+  const [emissionData, setEmissionData] = useState<EmissionData | null>(null);
   const [vehicleData, setVehicleData] = useState<VehicleData | null>(null);
-  const [documents, setDocuments] = useState<ClientDocuments | null>(null);
+  const [paymentToken, setPaymentToken] = useState('');
+  const [cardData, setCardData] = useState<{ last4: string; brand: string } | null>(null);
+  const [completedSteps, setCompletedSteps] = useState<EmissionStep[]>([]);
   const [declarationAccepted, setDeclarationAccepted] = useState(false);
-  const [creditCardToken, setCreditCardToken] = useState<string | null>(null);
-  const [cardLast4, setCardLast4] = useState<string | null>(null);
-  const [cardBrand, setCardBrand] = useState<string | null>(null);
-  
-  // Control de secciones (6 secciones en lugar de 8)
-  const [activeSectionId, setActiveSectionId] = useState<string>('payment');
-  const [sections, setSections] = useState<Section[]>([
-    {
-      id: 'payment',
-      title: 'Plan de Pago',
-      subtitle: 'Selecciona cómo deseas pagar tu póliza',
-      icon: <FaMoneyBillWave />,
-      status: 'in-progress',
-      canAccess: true,
-    },
-    {
-      id: 'insured',
-      title: 'Datos del Asegurado',
-      subtitle: 'Información del titular de la póliza',
-      icon: <FaUser />,
-      status: 'locked',
-      canAccess: false,
-    },
-    {
-      id: 'vehicle',
-      title: 'Datos del Vehículo',
-      subtitle: 'Información específica del vehículo',
-      icon: <FaCar />,
-      status: 'locked',
-      canAccess: false,
-    },
-    {
-      id: 'documents',
-      title: 'Documentos del Cliente',
-      subtitle: 'Adjunta los documentos requeridos',
-      icon: <FaFileUpload />,
-      status: 'locked',
-      canAccess: false,
-    },
-    {
-      id: 'declaration',
-      title: 'Declaración de Veracidad',
-      subtitle: 'Acepta los términos y condiciones',
-      icon: <FaCheckCircle />,
-      status: 'locked',
-      canAccess: false,
-    },
-    {
-      id: 'payment-method',
-      title: 'Datos de Pago',
-      subtitle: 'Ingresa los datos de tu tarjeta de crédito',
-      icon: <FaCreditCard />,
-      status: 'locked',
-      canAccess: false,
-    },
-    {
-      id: 'review',
-      title: 'Resumen y Confirmación',
-      subtitle: 'Revisa todos los datos antes de emitir',
-      icon: <FaClipboardCheck />,
-      status: 'locked',
-      canAccess: false,
-    },
-  ]);
+  const [isConfirming, setIsConfirming] = useState(false);
 
-  // Cargar datos iniciales
+  // Load initial data
   useEffect(() => {
-    const loadData = () => {
-      try {
-        setLoading(true);
-        
-        const storedQuote = sessionStorage.getItem('selectedQuote');
-        if (!storedQuote) {
-          router.push('/cotizadores');
-          return;
-        }
-
-        const data = JSON.parse(storedQuote);
-        setSelectedPlan(data);
-        setQuoteData(data.quoteData);
-        
-      } catch (err) {
-        console.error('Error cargando datos:', err);
-        router.push('/cotizadores');
-      } finally {
-        setLoading(false);
+    try {
+      setLoading(true);
+      const storedQuote = sessionStorage.getItem('selectedQuote');
+      if (!storedQuote) {
+        router.push('/cotizadores/third-party');
+        return;
       }
-    };
-
-    loadData();
+      const data = JSON.parse(storedQuote);
+      setSelectedPlan(data);
+      setQuoteData(data.quoteData || {
+        cobertura: 'TERCEROS',
+        policyType: 'AUTO',
+        marca: '',
+        modelo: '',
+        ano: new Date().getFullYear(),
+        uso: '10',
+      });
+    } catch (err) {
+      console.error('Error cargando datos:', err);
+      router.push('/cotizadores/third-party');
+    } finally {
+      setLoading(false);
+    }
   }, [router]);
 
-  // Actualizar estado de una sección
-  const updateSectionStatus = (sectionId: string, status: SectionStatus) => {
-    setSections(prev => prev.map(section => 
-      section.id === sectionId ? { ...section, status } : section
-    ));
+  // Step number for progress bar
+  const getStepNumber = (s: EmissionStep): number => {
+    const idx = DT_STEPS.findIndex(st => st.key === s);
+    return idx >= 0 ? idx + 1 : 1;
   };
 
-  // Desbloquear siguiente sección
-  const unlockNextSection = (currentSectionId: string) => {
-    const currentIndex = sections.findIndex(s => s.id === currentSectionId);
-    if (currentIndex < sections.length - 1) {
-      const nextSection = sections[currentIndex + 1];
-      if (nextSection) {
-        setSections(prev => prev.map((section, idx) => {
-          if (idx === currentIndex) {
-            return { ...section, status: 'complete' as SectionStatus };
-          }
-          if (idx === currentIndex + 1) {
-            return { ...section, status: 'in-progress' as SectionStatus, canAccess: true };
-          }
-          return section;
-        }));
-        setActiveSectionId(nextSection.id);
-      }
-    }
+  // Navigation helpers
+  const goToStep = (s: EmissionStep) => {
+    router.push(`${DT_BASE_PATH}?step=${s}`);
   };
 
-  // Handlers de cada sección
-  const handlePaymentComplete = (numInstallments: number, monthlyPaymentAmount: number) => {
+  // Step handlers
+  const handlePaymentPlanSelected = (numInstallments: number, monthlyPaymentAmount: number) => {
     setInstallments(numInstallments);
     setMonthlyPayment(monthlyPaymentAmount);
-    unlockNextSection('payment');
+    setCompletedSteps(prev => [...prev.filter(s => s !== 'payment'), 'payment']);
+    goToStep('emission-data');
   };
 
-  const handleInsuredDataComplete = (data: InsuredData) => {
-    setInsuredData(data);
-    unlockNextSection('insured');
+  const handleEmissionDataComplete = (data: EmissionData) => {
+    setEmissionData(data);
+    setCompletedSteps(prev => [...prev.filter(s => s !== 'emission-data'), 'emission-data']);
+    goToStep('vehicle');
+    toast.success('Datos guardados correctamente');
   };
 
   const handleVehicleDataComplete = (data: VehicleData) => {
     setVehicleData(data);
-    unlockNextSection('vehicle');
+    setCompletedSteps(prev => [...prev.filter(s => s !== 'vehicle'), 'vehicle']);
+    goToStep('payment-info');
+    toast.success('Datos del vehículo guardados');
   };
 
-  const handleDocumentsComplete = (data: ClientDocuments) => {
-    setDocuments(data);
-    unlockNextSection('documents');
+  const handlePaymentTokenReceived = (token: string, last4: string, brand: string) => {
+    setPaymentToken(token);
+    setCardData({ last4, brand });
+    setCompletedSteps(prev => [...prev.filter(s => s !== 'payment-info'), 'payment-info']);
+    goToStep('review');
+    toast.success('Información de pago guardada');
   };
 
-  const handleDeclarationComplete = () => {
-    setDeclarationAccepted(true);
-    unlockNextSection('declaration');
-  };
-
-  const handleCreditCardComplete = (token: string, last4: string, brand: string) => {
-    setCreditCardToken(token);
-    setCardLast4(last4);
-    setCardBrand(brand);
-    toast.success(`Tarjeta ${brand} ****${last4} registrada`);
-    unlockNextSection('payment-method');
-  };
-
-  const handleCreditCardError = (error: string) => {
+  const handlePaymentError = (error: string) => {
     toast.error(error);
   };
 
-  const handleActivateSection = (sectionId: string) => {
-    const section = sections.find(s => s.id === sectionId);
-    if (section && section.canAccess) {
-      setActiveSectionId(sectionId);
-      if (section.status === 'complete') {
-        updateSectionStatus(sectionId, 'in-progress');
-      }
+  // Helper: Convertir fecha YYYY-MM-DD a dd/mm/yyyy (formato FEDPA)
+  const convertToFedpaDate = (dateStr: string): string => {
+    if (!dateStr) return '';
+    if (dateStr.includes('-')) {
+      const [year, month, day] = dateStr.split('-');
+      return `${day}/${month}/${year}`;
     }
+    return dateStr;
   };
 
-  // Emisión final (simplificado para daños a terceros)
+  // Emission handler
   const handleConfirmEmission = async () => {
+    if (isConfirming) return;
+    setIsConfirming(true);
+
     try {
-      toast.info('Emitiendo póliza de Daños a Terceros...');
-      
-      // Detectar aseguradora
-      const isFedpaReal = selectedPlan?._isReal && selectedPlan?.insurerName?.includes('FEDPA');
-      const isInternacionalReal = selectedPlan?._isReal && selectedPlan?.insurerName?.includes('INTERNACIONAL');
-      
-      if (isFedpaReal || isInternacionalReal) {
-        // Lógica real de emisión (sin inspección ni PDF)
-        toast.success('Póliza emitida exitosamente');
+      const isFedpaReal = selectedPlan?._isReal && selectedPlan?._isFEDPA;
+
+      if (isFedpaReal) {
+        if (!emissionData) throw new Error('Faltan datos del asegurado');
+
+        // 1. Upload documents
+        toast.info('Subiendo documentos...');
+        const docsFormData = new FormData();
+        docsFormData.append('environment', 'DEV');
+        if (emissionData.cedulaFile) {
+          docsFormData.append('documento_identidad', emissionData.cedulaFile, emissionData.cedulaFile.name || 'documento_identidad.pdf');
+        }
+        if (emissionData.licenciaFile) {
+          docsFormData.append('licencia_conducir', emissionData.licenciaFile, emissionData.licenciaFile.name || 'licencia_conducir.pdf');
+        }
+
+        const docsResponse = await fetch('/api/fedpa/documentos/upload', {
+          method: 'POST',
+          body: docsFormData,
+        });
+
+        let idDoc = 'TEMP_DOC';
+        if (docsResponse.ok) {
+          const docsResult = await docsResponse.json();
+          idDoc = docsResult.idDoc || 'TEMP_DOC';
+        }
+
+        // 2. Get idCotizacion from sessionStorage
+        const tpQuoteRaw = sessionStorage.getItem('thirdPartyQuote');
+        const tpQuote = tpQuoteRaw ? JSON.parse(tpQuoteRaw) : null;
+
+        // 3. Emit policy
+        toast.info('Emitiendo póliza...');
+        const emisionResponse = await fetch('/api/fedpa/emision', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            environment: 'DEV',
+            IdCotizacion: tpQuote?.idCotizacion || '',
+            Plan: selectedPlan._planCode || 426,
+            idDoc,
+            PrimerNombre: emissionData.primerNombre,
+            PrimerApellido: emissionData.primerApellido,
+            SegundoNombre: emissionData.segundoNombre || '',
+            SegundoApellido: emissionData.segundoApellido || '',
+            Identificacion: emissionData.cedula,
+            FechaNacimiento: convertToFedpaDate(emissionData.fechaNacimiento),
+            Sexo: emissionData.sexo,
+            Email: emissionData.email,
+            Telefono: parseInt((emissionData.telefono || '0').replace(/\D/g, '')) || 0,
+            Celular: parseInt((emissionData.celular || '0').replace(/\D/g, '')) || 0,
+            Direccion: emissionData.direccion || 'Panama',
+            esPEP: emissionData.esPEP ? 1 : 0,
+            sumaAsegurada: 0,
+            Uso: '10',
+            Marca: selectedPlan._marcaCodigo || quoteData?.marca || '',
+            Modelo: selectedPlan._modeloCodigo || quoteData?.modelo || '',
+            Ano: (quoteData?.anno || quoteData?.anio || quoteData?.ano || new Date().getFullYear()).toString(),
+            Motor: vehicleData?.motor || '',
+            Placa: vehicleData?.placa || '',
+            Vin: vehicleData?.vinChasis || '',
+            Color: vehicleData?.color || '',
+            Pasajero: vehicleData?.pasajeros || 5,
+            Puerta: vehicleData?.puertas || 4,
+            PrimaTotal: selectedPlan.annualPremium,
+          }),
+        });
+
+        if (!emisionResponse.ok) {
+          const errorData = await emisionResponse.json();
+          throw new Error(errorData.error || 'Error al emitir póliza');
+        }
+
+        const emisionResult = await emisionResponse.json();
+        if (!emisionResult.success) {
+          throw new Error(emisionResult.error || 'Error al emitir póliza');
+        }
+
+        sessionStorage.setItem('emittedPolicy', JSON.stringify({
+          nroPoliza: emisionResult.nroPoliza || emisionResult.poliza,
+          insurer: 'FEDPA Seguros',
+          clientId: emisionResult.clientId,
+          policyId: emisionResult.policyId,
+          vigenciaDesde: emisionResult.desde || emisionResult.vigenciaDesde,
+          vigenciaHasta: emisionResult.hasta || emisionResult.vigenciaHasta,
+          method: 'emisor_plan',
+          tipoCobertura: 'Daños a Terceros',
+        }));
+
+        sessionStorage.removeItem('thirdPartyQuote');
+        sessionStorage.removeItem('selectedQuote');
+
+        toast.success(`¡Póliza emitida! Nº ${emisionResult.nroPoliza || emisionResult.poliza}`);
         router.push('/cotizadores/confirmacion');
       } else {
-        // Flujo simulado
-        setTimeout(() => {
-          toast.success('Póliza emitida exitosamente (simulado)');
-          router.push('/cotizadores/confirmacion');
-        }, 2000);
+        // Simulated flow for other insurers
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        toast.success('Póliza emitida exitosamente');
+        router.push('/cotizadores/confirmacion');
       }
-      
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error emitiendo:', error);
-      toast.error('Error al emitir la póliza');
+      toast.error(error.message || 'Error al emitir la póliza');
+      setIsConfirming(false);
     }
   };
 
-  if (loading) {
+  if (loading) return <LoadingSkeleton />;
+
+  if (!selectedPlan) {
     return (
-      <div className="flex justify-center items-center min-h-screen">
+      <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#8AAA19] mx-auto mb-4"></div>
-          <p className="text-gray-600">Cargando datos...</p>
+          <h2 className="text-2xl font-bold text-gray-700 mb-4">No hay datos disponibles</h2>
+          <button
+            onClick={() => router.push('/cotizadores/third-party')}
+            className="px-6 py-3 bg-[#010139] hover:bg-[#8AAA19] text-white rounded-lg font-semibold transition-colors cursor-pointer"
+          >
+            Volver a Comparativa
+          </button>
         </div>
       </div>
     );
   }
 
-  if (!selectedPlan) {
-    return null;
+  // ─── STEP 1: PLAN DE PAGO ───
+  if (step === 'payment') {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
+        <div className="pt-6">
+          <EmissionProgressBar currentStep={getStepNumber('payment')} totalSteps={DT_TOTAL_STEPS} />
+        </div>
+        <EmissionBreadcrumb
+          currentStep="payment"
+          completedSteps={completedSteps}
+          steps={DT_STEPS}
+          basePath={DT_BASE_PATH}
+        />
+        <div className="py-8 px-4">
+          <div className="max-w-2xl mx-auto mb-6">
+            <button
+              onClick={() => router.push('/cotizadores/third-party')}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 
+                bg-white border-2 border-gray-300 rounded-lg hover:bg-gray-50 
+                hover:border-gray-400 transition-colors"
+              type="button"
+            >
+              ← Volver a Comparativa
+            </button>
+          </div>
+          <PaymentPlanSelector
+            annualPremium={selectedPlan.annualPremium}
+            priceBreakdown={selectedPlan._priceBreakdown}
+            onContinue={handlePaymentPlanSelected}
+          />
+        </div>
+      </div>
+    );
   }
 
-  // Configuración por aseguradora
-  const requiresPEP = selectedPlan?.insurerName?.includes('FEDPA');
-  const requiresAccreedor = selectedPlan?.insurerName?.includes('FEDPA');
-
-  // Referencias seguras a secciones
-  const [paymentSection, insuredSection, vehicleSection, documentsSection, 
-         declarationSection, paymentMethodSection, reviewSection] = sections;
-
-  return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 py-8 px-4">
-      <div className="max-w-4xl mx-auto">
-        {/* Header Global */}
-        <div className="text-center mb-8">
-          <h1 className="text-3xl sm:text-4xl font-bold text-[#010139] mb-2">
-            Emisión de Póliza - Daños a Terceros
-          </h1>
-          <p className="text-gray-600">
-            {selectedPlan.insurerName} - {selectedPlan.planType}
-          </p>
-          <p className="text-lg font-bold text-[#8AAA19] mt-2">
-            ${selectedPlan.annualPremium.toLocaleString()} / año
-          </p>
+  // ─── STEP 2: DATOS DEL CLIENTE (incluye cédula y licencia) ───
+  if (step === 'emission-data') {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
+        <div className="pt-6">
+          <EmissionProgressBar currentStep={getStepNumber('emission-data')} totalSteps={DT_TOTAL_STEPS} />
         </div>
+        <EmissionBreadcrumb
+          currentStep="emission-data"
+          completedSteps={completedSteps}
+          steps={DT_STEPS}
+          basePath={DT_BASE_PATH}
+        />
+        <div className="py-8 px-4">
+          <EmissionDataForm
+            quoteData={quoteData}
+            onContinue={handleEmissionDataComplete}
+          />
+        </div>
+      </div>
+    );
+  }
 
-        {/* Secciones */}
-        <div className="space-y-6">
-          
-          {/* 1. PLAN DE PAGO */}
-          {paymentSection && (
-            <EmissionSection
-              id={paymentSection.id}
-              title={paymentSection.title}
-              subtitle={paymentSection.subtitle}
-              icon={paymentSection.icon}
-              status={paymentSection.status}
-              canAccess={paymentSection.canAccess}
-              isActive={activeSectionId === paymentSection.id}
-              onActivate={() => handleActivateSection(paymentSection.id)}
-          >
-            <div className="space-y-6">
-              {/* Botón volver a comparativa */}
-              <div className="flex justify-start">
-                <button
-                  onClick={() => router.push('/cotizadores')}
-                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 
-                    bg-white border-2 border-gray-300 rounded-lg hover:bg-gray-50 
-                    hover:border-gray-400 transition-colors"
-                  type="button"
-                >
-                  <span>←</span>
-                  Volver a Comparativa
-                </button>
-              </div>
+  // ─── STEP 3: DATOS DEL VEHÍCULO ───
+  if (step === 'vehicle') {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
+        <div className="pt-6">
+          <EmissionProgressBar currentStep={getStepNumber('vehicle')} totalSteps={DT_TOTAL_STEPS} />
+        </div>
+        <EmissionBreadcrumb
+          currentStep="vehicle"
+          completedSteps={completedSteps}
+          steps={DT_STEPS}
+          basePath={DT_BASE_PATH}
+        />
+        <div className="py-8 px-4">
+          <VehicleDataForm
+            quoteData={quoteData}
+            onContinue={handleVehicleDataComplete}
+          />
+        </div>
+      </div>
+    );
+  }
 
-              <PaymentPlanSelector
-                annualPremium={selectedPlan.annualPremium}
-                priceBreakdown={selectedPlan._priceBreakdown}
-                onContinue={handlePaymentComplete}
-              />
+  // ─── STEP 4: INFORMACIÓN DE PAGO ───
+  if (step === 'payment-info') {
+    const amount = installments === 1 ? selectedPlan.annualPremium : monthlyPayment;
+
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
+        <div className="pt-6">
+          <EmissionProgressBar currentStep={getStepNumber('payment-info')} totalSteps={DT_TOTAL_STEPS} />
+        </div>
+        <EmissionBreadcrumb
+          currentStep="payment-info"
+          completedSteps={completedSteps}
+          steps={DT_STEPS}
+          basePath={DT_BASE_PATH}
+        />
+        <div className="py-8 px-4">
+          <div className="max-w-2xl mx-auto">
+            <div className="text-center mb-6">
+              <h2 className="text-2xl sm:text-3xl font-bold text-[#010139] mb-2">
+                Información de Pago
+              </h2>
+              <p className="text-gray-600">
+                Completa los datos de tu tarjeta para procesar el pago
+              </p>
             </div>
-          </EmissionSection>
-          )}
 
-          {/* 2. DATOS DEL ASEGURADO */}
-          {insuredSection && (
-            <EmissionSection
-              id={insuredSection.id}
-              title={insuredSection.title}
-              subtitle={insuredSection.subtitle}
-              icon={insuredSection.icon}
-              status={insuredSection.status}
-              canAccess={insuredSection.canAccess}
-              isActive={activeSectionId === insuredSection.id}
-              onActivate={() => handleActivateSection(insuredSection.id)}
-            >
-              <InsuredDataSection
-                initialData={insuredData || undefined}
-                onComplete={handleInsuredDataComplete}
-                requiresPEP={requiresPEP}
-                requiresAccreedor={requiresAccreedor}
-              />
-            </EmissionSection>
-          )}
-
-          {/* 3. DATOS DEL VEHÍCULO */}
-          {vehicleSection && (
-            <EmissionSection
-              id={vehicleSection.id}
-              title={vehicleSection.title}
-              subtitle={vehicleSection.subtitle}
-              icon={vehicleSection.icon}
-              status={vehicleSection.status}
-              canAccess={vehicleSection.canAccess}
-              isActive={activeSectionId === vehicleSection.id}
-              onActivate={() => handleActivateSection(vehicleSection.id)}
-            >
-              <VehicleDataSection
-                initialData={vehicleData || undefined}
-                quoteData={quoteData}
-                onComplete={handleVehicleDataComplete}
-              />
-            </EmissionSection>
-          )}
-
-          {/* 4. DOCUMENTOS DEL CLIENTE (menos documentos) */}
-          {documentsSection && (
-            <EmissionSection
-              id={documentsSection.id}
-              title={documentsSection.title}
-              subtitle={documentsSection.subtitle}
-              icon={documentsSection.icon}
-              status={documentsSection.status}
-              canAccess={documentsSection.canAccess}
-              isActive={activeSectionId === documentsSection.id}
-              onActivate={() => handleActivateSection(documentsSection.id)}
-            >
-              <ClientDocumentsSection
-                initialData={documents || undefined}
-                onComplete={handleDocumentsComplete}
-              />
-            </EmissionSection>
-          )}
-
-          {/* 5. DECLARACIÓN DE VERACIDAD */}
-          {declarationSection && (
-            <EmissionSection
-              id={declarationSection.id}
-              title={declarationSection.title}
-              subtitle={declarationSection.subtitle}
-              icon={declarationSection.icon}
-              status={declarationSection.status}
-              canAccess={declarationSection.canAccess}
-              isActive={activeSectionId === declarationSection.id}
-              onActivate={() => handleActivateSection(declarationSection.id)}
-            >
-              <TruthDeclarationSection
-                onComplete={handleDeclarationComplete}
-              />
-            </EmissionSection>
-          )}
-
-          {/* 6. DATOS DE PAGO */}
-          {paymentMethodSection && (
-            <EmissionSection
-              id={paymentMethodSection.id}
-              title={paymentMethodSection.title}
-              subtitle={paymentMethodSection.subtitle}
-              icon={paymentMethodSection.icon}
-              status={paymentMethodSection.status}
-              canAccess={paymentMethodSection.canAccess}
-              isActive={activeSectionId === paymentMethodSection.id}
-              onActivate={() => handleActivateSection(paymentMethodSection.id)}
-            >
-              <div className="space-y-6">
-                <div className="bg-blue-50 border-2 border-blue-300 rounded-xl p-6">
-                  <p className="text-sm text-gray-700 mb-4">
-                    Ingresa los datos de tu tarjeta de crédito para procesar el pago de la póliza.
-                    Solo aceptamos Visa y Mastercard.
-                  </p>
+            <div className="bg-gradient-to-r from-[#010139] to-[#020270] rounded-2xl p-6 mb-6 text-white shadow-2xl">
+              <div className="text-center">
+                <div className="text-sm opacity-80 mb-1">
+                  {installments === 1 ? 'Pago Único' : `${installments} Cuotas de:`}
                 </div>
-
-                <CreditCardInput
-                  onTokenReceived={handleCreditCardComplete}
-                  onError={handleCreditCardError}
-                  environment={process.env.NODE_ENV === 'production' ? 'production' : 'development'}
-                />
-
-                {creditCardToken && (
-                  <div className="pt-6 border-t-2 border-gray-200">
-                    <button
-                      onClick={() => unlockNextSection('payment-method')}
-                      className="w-full py-4 px-6 rounded-xl font-bold text-lg
-                        bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white 
-                        hover:shadow-2xl hover:scale-105 transition-all duration-200"
-                      type="button"
-                    >
-                      Continuar al Resumen →
-                    </button>
+                <div className="text-4xl sm:text-5xl font-bold mb-2">
+                  ${amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                </div>
+                {installments > 1 && (
+                  <div className="text-xs opacity-70">
+                    Total: ${(amount * installments).toLocaleString('en-US', { minimumFractionDigits: 2 })}
                   </div>
                 )}
               </div>
-            </EmissionSection>
-          )}
+            </div>
 
-          {/* 7. RESUMEN Y CONFIRMACIÓN */}
-          {reviewSection && (
-            <EmissionSection
-              id={reviewSection.id}
-              title={reviewSection.title}
-              subtitle={reviewSection.subtitle}
-              icon={reviewSection.icon}
-              status={reviewSection.status}
-              canAccess={reviewSection.canAccess}
-              isActive={activeSectionId === reviewSection.id}
-              onActivate={() => handleActivateSection(reviewSection.id)}
-          >
-            <div className="space-y-6">
-              {/* Resumen Simplificado */}
-              <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-6 border-2 border-blue-200">
-                <h5 className="text-xl font-bold text-[#010139] mb-6 flex items-center gap-3">
-                  <FaClipboardCheck className="text-blue-600" />
-                  Resumen de Emisión - Daños a Terceros
-                </h5>
+            <CreditCardInput
+              onTokenReceived={handlePaymentTokenReceived}
+              onError={handlePaymentError}
+              environment="development"
+            />
 
-                {/* Plan y Pago */}
-                <div className="bg-white rounded-lg p-4 mb-4 shadow-sm">
-                  <h6 className="font-bold text-[#010139] mb-3 text-sm uppercase tracking-wide">Plan de Pago</h6>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <p className="text-gray-500">Cuotas</p>
-                      <p className="font-bold text-lg">{installments} cuota(s)</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-500">Pago Mensual</p>
-                      <p className="font-bold text-lg">${monthlyPayment.toFixed(2)}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-500">Prima Anual</p>
-                      <p className="font-bold text-lg text-[#8AAA19]">${selectedPlan.annualPremium.toFixed(2)}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-500">Método de Pago</p>
-                      <p className="font-bold">{cardBrand} ****{cardLast4}</p>
-                    </div>
+            {cardData && (
+              <div className="flex items-center gap-2 p-4 mt-4 bg-green-50 border-2 border-green-300 rounded-xl">
+                <FaCheckCircle className="text-[#8AAA19] flex-shrink-0" />
+                <p className="text-sm font-semibold text-green-800">
+                  Tarjeta {cardData.brand} ****{cardData.last4} registrada correctamente
+                </p>
+              </div>
+            )}
+
+            <div className="mt-6">
+              <button
+                onClick={() => goToStep('review')}
+                disabled={!paymentToken}
+                className={`w-full py-4 px-6 rounded-xl font-bold text-lg flex items-center justify-center gap-3 transition-all duration-200 ${
+                  paymentToken
+                    ? 'bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white hover:shadow-2xl hover:scale-105 cursor-pointer'
+                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                }`}
+                type="button"
+              >
+                Continuar al Resumen
+              </button>
+              {!paymentToken && (
+                <p className="text-xs text-gray-500 text-center mt-2">
+                  Ingresa los datos de tu tarjeta para continuar
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── STEP 5: RESUMEN Y CONFIRMACIÓN (con declaración de veracidad) ───
+  if (step === 'review') {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
+        <div className="pt-6">
+          <EmissionProgressBar currentStep={getStepNumber('review')} totalSteps={DT_TOTAL_STEPS} />
+        </div>
+        <EmissionBreadcrumb
+          currentStep="review"
+          completedSteps={completedSteps}
+          steps={DT_STEPS}
+          basePath={DT_BASE_PATH}
+        />
+        <div className="py-8 px-4">
+          <div className="max-w-3xl mx-auto">
+            <div className="text-center mb-8">
+              <h2 className="text-2xl sm:text-3xl font-bold text-[#010139] mb-2">
+                Resumen y Confirmación
+              </h2>
+              <p className="text-gray-600">Revisa todos los datos antes de emitir tu póliza</p>
+            </div>
+
+            <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-6 border-2 border-blue-200 space-y-4">
+              {/* Plan Info */}
+              <div className="bg-white rounded-lg p-4 shadow-sm">
+                <h6 className="font-bold text-[#010139] mb-3 text-sm uppercase tracking-wide">Póliza</h6>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <p className="text-gray-500">Aseguradora</p>
+                    <p className="font-bold">{selectedPlan.insurerName}</p>
                   </div>
-                </div>
-
-                {/* Datos del Asegurado */}
-                <div className="bg-white rounded-lg p-4 mb-4 shadow-sm">
-                  <h6 className="font-bold text-[#010139] mb-3 text-sm uppercase tracking-wide">Datos del Asegurado</h6>
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <p className="text-gray-500">Nombre Completo</p>
-                      <p className="font-bold">{insuredData?.primerNombre} {insuredData?.segundoNombre} {insuredData?.primerApellido} {insuredData?.segundoApellido}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-500">Cédula/Pasaporte</p>
-                      <p className="font-bold">{insuredData?.cedula}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-500">Email</p>
-                      <p className="font-bold">{insuredData?.email}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-500">Teléfono</p>
-                      <p className="font-bold">{insuredData?.celular}</p>
-                    </div>
+                  <div>
+                    <p className="text-gray-500">Cobertura</p>
+                    <p className="font-bold text-blue-600">Daños a Terceros</p>
                   </div>
-                </div>
-
-                {/* Datos del Vehículo */}
-                <div className="bg-white rounded-lg p-4 mb-4 shadow-sm">
-                  <h6 className="font-bold text-[#010139] mb-3 text-sm uppercase tracking-wide">Datos del Vehículo</h6>
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div>
-                      <p className="text-gray-500">Marca y Modelo</p>
-                      <p className="font-bold">{quoteData.marca} {quoteData.modelo} {quoteData.ano}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-500">Placa</p>
-                      <p className="font-bold">{vehicleData?.placa}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-500">Cobertura</p>
-                      <p className="font-bold text-blue-600">Daños a Terceros</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-500">Declaración</p>
-                      <p className="font-bold text-[#8AAA19] flex items-center gap-2">
-                        <FaCheckCircle /> Aceptada
-                      </p>
-                    </div>
+                  <div>
+                    <p className="text-gray-500">Prima Anual</p>
+                    <p className="font-bold text-lg text-[#8AAA19]">B/.{selectedPlan.annualPremium?.toFixed(2)}</p>
+                  </div>
+                  <div>
+                    <p className="text-gray-500">Forma de Pago</p>
+                    <p className="font-bold">
+                      {installments === 1 ? 'Contado' : `${installments} cuotas de B/.${monthlyPayment.toFixed(2)}`}
+                      {cardData && ` • ${cardData.brand} ****${cardData.last4}`}
+                    </p>
                   </div>
                 </div>
               </div>
 
-              {/* Botón Emitir */}
+              {/* Client Data */}
+              {emissionData && (
+                <div className="bg-white rounded-lg p-4 shadow-sm">
+                  <h6 className="font-bold text-[#010139] mb-3 text-sm uppercase tracking-wide">Datos del Asegurado</h6>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <p className="text-gray-500">Nombre</p>
+                      <p className="font-bold">{emissionData.primerNombre} {emissionData.segundoNombre} {emissionData.primerApellido} {emissionData.segundoApellido}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500">Cédula</p>
+                      <p className="font-bold">{emissionData.cedula}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500">Email</p>
+                      <p className="font-bold">{emissionData.email}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500">Teléfono</p>
+                      <p className="font-bold">{emissionData.celular || emissionData.telefono}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Vehicle Data */}
+              {vehicleData && (
+                <div className="bg-white rounded-lg p-4 shadow-sm">
+                  <h6 className="font-bold text-[#010139] mb-3 text-sm uppercase tracking-wide">Datos del Vehículo</h6>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <p className="text-gray-500">Vehículo</p>
+                      <p className="font-bold">{quoteData?.marca} {quoteData?.modelo} {quoteData?.anno || quoteData?.anio || quoteData?.ano}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500">Placa</p>
+                      <p className="font-bold">{vehicleData.placa}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500">VIN/Chasis</p>
+                      <p className="font-bold">{vehicleData.vinChasis}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500">Color</p>
+                      <p className="font-bold">{vehicleData.color}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Declaration of Veracity */}
+            <div className="mt-6 bg-yellow-50 border-2 border-yellow-300 rounded-xl p-6">
+              <h5 className="font-bold text-[#010139] mb-3 flex items-center gap-2">
+                <FaClipboardCheck className="text-yellow-600" />
+                Declaración de Veracidad
+              </h5>
+              <p className="text-sm text-gray-700 mb-4 leading-relaxed">
+                Declaro que toda la información proporcionada en esta solicitud es verídica y completa. 
+                Entiendo que cualquier omisión o falsedad en los datos suministrados puede resultar en la 
+                anulación de la póliza y/o la denegación de cualquier reclamo. Autorizo a la aseguradora 
+                a verificar la información proporcionada.
+              </p>
+              <label className="flex items-start gap-3 cursor-pointer group">
+                <input
+                  type="checkbox"
+                  checked={declarationAccepted}
+                  onChange={(e) => setDeclarationAccepted(e.target.checked)}
+                  className="mt-1 w-5 h-5 rounded border-2 border-gray-300 text-[#8AAA19] 
+                    focus:ring-[#8AAA19] cursor-pointer accent-[#8AAA19]"
+                />
+                <span className="text-sm font-semibold text-gray-800 group-hover:text-[#010139]">
+                  Acepto la declaración de veracidad y autorizo el procesamiento de mis datos
+                </span>
+              </label>
+            </div>
+
+            {/* Emit Button */}
+            <div className="mt-8">
               <button
                 onClick={handleConfirmEmission}
-                className="w-full py-5 px-6 rounded-xl font-bold text-xl
-                  bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white 
-                  hover:shadow-2xl hover:scale-105 transition-all duration-200
-                  flex items-center justify-center gap-3"
+                disabled={isConfirming || !declarationAccepted}
+                className={`w-full py-5 px-6 rounded-xl font-bold text-xl
+                  flex items-center justify-center gap-3 transition-all duration-200
+                  ${isConfirming || !declarationAccepted
+                    ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
+                    : 'bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white hover:shadow-2xl hover:scale-105'}`}
                 type="button"
               >
-                <FaCheckCircle className="text-2xl" />
-                Confirmar y Emitir Póliza →
+                {isConfirming ? (
+                  <>
+                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+                    Emitiendo póliza...
+                  </>
+                ) : (
+                  <>
+                    <FaCheckCircle className="text-2xl" />
+                    Confirmar y Emitir Póliza
+                  </>
+                )}
               </button>
+              {!declarationAccepted && (
+                <p className="text-xs text-gray-500 text-center mt-2">
+                  Debes aceptar la declaración de veracidad para continuar
+                </p>
+              )}
             </div>
-          </EmissionSection>
-          )}
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  }
+
+  return <LoadingSkeleton />;
 }

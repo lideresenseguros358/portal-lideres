@@ -155,7 +155,9 @@ export async function isRequest<T = any>(
   // B5: LOG URL COMPLETA para detectar paths relativos
   console.log(`[IS] URL completa: ${url}`);
   
-  // Obtener token diario (recomendado) o usar token principal como fallback
+  // Obtener token diario (OBLIGATORIO para endpoints de IS)
+  // IMPORTANTE: El token principal SOLO sirve para generar/recuperar el token diario.
+  // Usar el token principal en endpoints de datos siempre devuelve 401.
   let authToken: string;
   if (useEnvironmentToken) {
     // Usar token principal directamente (solo para obtener token diario)
@@ -164,9 +166,12 @@ export async function isRequest<T = any>(
   } else {
     const dailyToken = skipTokenRefresh ? null : await getDailyToken(env);
     if (!dailyToken) {
-      // Fallback a token principal si falla el diario
-      const { getISPrimaryToken } = await import('./config');
-      authToken = getISPrimaryToken(env);
+      console.error('[IS HTTP Client] No se pudo obtener token diario. El token principal NO funciona en endpoints de datos.');
+      return {
+        success: false,
+        error: 'No se pudo obtener token diario de IS. Verificar conectividad con POST /tokens.',
+        statusCode: 401,
+      };
     } else {
       authToken = dailyToken;
     }
@@ -224,16 +229,19 @@ export async function isRequest<T = any>(
       }
       
       // WAF/BLOCK: Detectar bloqueo por firewall de IS
-      // Puede venir como HTML (text/html) o como 401/403 con texto de bloqueo
+      // Puede venir como HTML (text/html), 401/403 con texto de bloqueo, o 404 "Acceso denegado"
       const isWafBlock = (contentType.includes('text/html') && !response.ok) ||
         responseText.includes('unauthorized activity') ||
-        responseText.includes('detected unauthorized');
+        responseText.includes('detected unauthorized') ||
+        (response.status === 404 && responseText.includes('Acceso denegado')) ||
+        (responseText.includes('_event_transid') && !responseText.includes('Table'));
       if (isWafBlock) {
-        console.error('[IS] ⛔ WAF/FIREWALL BLOCK detectado - IP bloqueada por IS');
-        console.error('[IS] Contactar a Internacional de Seguros para habilitar la IP del servidor');
+        console.error('[IS] ⛔ WAF/FIREWALL BLOCK detectado en:', endpoint);
+        console.error('[IS] Status:', response.status, '| Body:', responseText.substring(0, 100));
+        console.error('[IS] Contactar a Internacional de Seguros para habilitar este endpoint/IP');
         return {
           success: false,
-          error: 'API de IS bloqueada por firewall. Contactar a IS para habilitar la IP del servidor.',
+          error: `Endpoint bloqueado por firewall de IS (${response.status}): ${endpoint}. Contactar a IS.`,
           statusCode: response.status,
         };
       }
@@ -241,6 +249,11 @@ export async function isRequest<T = any>(
       let responseData: any;
       try {
         responseData = JSON.parse(responseText);
+        // IS API a veces retorna JSON double-encoded (string con JSON dentro)
+        // Ej: "{\r\n  \"Table\": [...]}" → necesita segundo parse
+        if (typeof responseData === 'string' && (responseData.startsWith('{') || responseData.startsWith('['))) {
+          try { responseData = JSON.parse(responseData); } catch { /* keep as string */ }
+        }
       } catch {
         // Si no es JSON, guardar como string
         responseData = responseText;
@@ -263,7 +276,13 @@ export async function isRequest<T = any>(
           console.log('[IS] Nuevo token (primeros 30 chars):', newToken.substring(0, 30) + '...');
           const primaryToken = getISPrimaryToken(env);
           if (newToken === primaryToken) {
-            console.warn('[IS] ⚠️ Token diario es IGUAL al principal - IS puede no soportar tokens diarios');
+            // IMPORTANTE: NO usar token principal en endpoints - siempre devuelve 401
+            console.error('[IS] ⚠️ Token diario es IGUAL al principal - NO se puede usar en endpoints');
+            return {
+              success: false,
+              error: 'No se pudo obtener token diario válido. El token principal no funciona en endpoints de IS.',
+              statusCode: 401,
+            };
           } else {
             console.log('[IS] ✅ Token diario es DIFERENTE al principal');
           }
@@ -271,9 +290,13 @@ export async function isRequest<T = any>(
           console.log('[IS] Reintentando con nuevo token...');
           continue;
         } else {
-          console.warn('[IS] No se pudo renovar token diario, usando token principal...');
-          authToken = getISPrimaryToken(env);
-          continue;
+          // NO hacer fallback a token principal - siempre da 401 en endpoints
+          console.error('[IS] No se pudo renovar token diario. Abortando request.');
+          return {
+            success: false,
+            error: 'No se pudo obtener token diario de IS. Verificar que POST /tokens funcione.',
+            statusCode: 401,
+          };
         }
       }
       

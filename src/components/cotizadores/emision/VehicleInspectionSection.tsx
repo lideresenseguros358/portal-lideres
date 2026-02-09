@@ -93,6 +93,40 @@ export default function VehicleInspectionSection({
 
   const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
   const [currentPendingIndex, setCurrentPendingIndex] = useState(0);
+  const [showFirstPhotoHint, setShowFirstPhotoHint] = useState(true);
+
+  // Restaurar fotos cacheadas al montar
+  useEffect(() => {
+    const cachedIndex = sessionStorage.getItem('inspectionPhotosIndex');
+    if (!cachedIndex) return;
+    try {
+      const ids: string[] = JSON.parse(cachedIndex);
+      setPhotos(prev => prev.map(photo => {
+        if (!ids.includes(photo.id)) return photo;
+        const cached = sessionStorage.getItem(`inspectionPhoto_${photo.id}`);
+        if (!cached) return photo;
+        try {
+          const { name, type, data } = JSON.parse(cached);
+          const byteString = atob(data);
+          const ab = new ArrayBuffer(byteString.length);
+          const ia = new Uint8Array(ab);
+          for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
+          const file = new File([ab], name, { type });
+          const preview = `data:${type};base64,${data}`;
+          return { ...photo, file, preview };
+        } catch (e) { return photo; }
+      }));
+      // If all photos were restored, don't show hint
+      if (ids.length > 0) setShowFirstPhotoHint(false);
+    } catch (e) { console.error('Error restaurando fotos inspeccion:', e); }
+  }, []);
+
+  // Auto-close the first photo hint after 8 seconds
+  useEffect(() => {
+    if (!showFirstPhotoHint) return;
+    const timer = setTimeout(() => setShowFirstPhotoHint(false), 8000);
+    return () => clearTimeout(timer);
+  }, [showFirstPhotoHint]);
 
   // Determinar índice del pendiente actual
   useEffect(() => {
@@ -134,6 +168,16 @@ export default function VehicleInspectionSection({
         photo.id === photoId ? { ...photo, file, preview } : photo
       ));
 
+      // Cachear foto en sessionStorage
+      try {
+        const base64 = preview.split(',')[1];
+        sessionStorage.setItem(`inspectionPhoto_${photoId}`, JSON.stringify({ name: file.name, type: file.type, data: base64 }));
+        // Actualizar indice de fotos cacheadas
+        const existingIndex = JSON.parse(sessionStorage.getItem('inspectionPhotosIndex') || '[]');
+        if (!existingIndex.includes(photoId)) existingIndex.push(photoId);
+        sessionStorage.setItem('inspectionPhotosIndex', JSON.stringify(existingIndex));
+      } catch (e) { console.warn('No se pudo cachear foto de inspeccion:', e); }
+
       const photoLabel = photos.find(p => p.id === photoId)?.label;
       toast.success(`Foto de ${photoLabel} capturada`);
     };
@@ -146,6 +190,13 @@ export default function VehicleInspectionSection({
       photo.id === photoId ? { ...photo, file: undefined, preview: undefined } : photo
     ));
     
+    // Eliminar del cache
+    try {
+      sessionStorage.removeItem(`inspectionPhoto_${photoId}`);
+      const existingIndex = JSON.parse(sessionStorage.getItem('inspectionPhotosIndex') || '[]');
+      sessionStorage.setItem('inspectionPhotosIndex', JSON.stringify(existingIndex.filter((id: string) => id !== photoId)));
+    } catch (e) { /* ignore */ }
+
     const photoLabel = photos.find(p => p.id === photoId)?.label;
     toast.info(`Foto de ${photoLabel} eliminada`);
   };
@@ -189,7 +240,7 @@ export default function VehicleInspectionSection({
     return (
       <div className="relative group">
         <button
-          onClick={() => !isLocked && handlePhotoCapture(photo.id)}
+          onClick={() => { if (isLocked) return; if (index === 0 && showFirstPhotoHint) setShowFirstPhotoHint(false); handlePhotoCapture(photo.id); }}
           onMouseEnter={() => setActiveTooltip(photo.id)}
           onMouseLeave={() => setActiveTooltip(null)}
           disabled={isLocked}
@@ -213,7 +264,7 @@ export default function VehicleInspectionSection({
         </button>
 
         {/* Tooltip (desktop hover / mobile tap) */}
-        {(activeTooltip === photo.id || isPending) && !isComplete && (
+        {(activeTooltip === photo.id || isPending) && !isComplete && !showFirstPhotoHint && (
           <div className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-3 w-64 
             bg-gray-900 text-white text-xs rounded-lg p-3 shadow-2xl
             pointer-events-none"
@@ -223,6 +274,21 @@ export default function VehicleInspectionSection({
             {/* Flecha */}
             <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1
               border-8 border-transparent border-t-gray-900"
+            />
+          </div>
+        )}
+
+        {/* Hint tooltip - only on first photo, auto-closes after 8s */}
+        {index === 0 && showFirstPhotoHint && !isComplete && (
+          <div
+            onClick={(e) => { e.stopPropagation(); setShowFirstPhotoHint(false); }}
+            className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-3
+              bg-[#8AAA19] text-white text-sm font-bold rounded-xl px-4 py-2.5 shadow-2xl
+              cursor-pointer animate-bounce whitespace-nowrap"
+          >
+            👆 Haz click aquí
+            <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1
+              border-8 border-transparent border-t-[#8AAA19]"
             />
           </div>
         )}

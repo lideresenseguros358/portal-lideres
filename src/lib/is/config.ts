@@ -48,25 +48,32 @@ export function getISPrimaryToken(env: ISEnvironment): string {
 export const INSURER_SLUG = 'INTERNACIONAL';
 export const CORREDOR_FIJO = 'oficina';
 
-// Endpoints
+// Endpoints — VERIFICADOS contra Swagger spec (swagger.json) Feb 2026
 // ⚠️ IMPORTANTE: Los paths NO incluyen /api porque ya está en la base URL
 export const IS_ENDPOINTS = {
-  // Autenticación
+  // Autenticación (POST /tokens genera, GET /tokens/diario recupera, GET /tokens/auto para auto)
   TOKEN: '/tokens',
+  TOKEN_DIARIO: '/tokens/diario',
+  TOKEN_AUTO: '/tokens/auto',
   
-  // Catálogos Auto - SEGÚN DOCUMENTACIÓN OFICIAL
+  // Catálogos Auto — Swagger: RestCotizaEmisorAuto
   MARCAS: '/cotizaemisorauto/getmarcas',
-  MODELOS: '/cotizaemisorauto/getmodelos',
+  MODELOS: '/cotizaemisorauto/getmodelos',                    // /{pagenumber}/{rowsperpage}
   TIPO_PLANES: '/cotizaemisorauto/gettipoplanes',
-  GRUPO_TARIFA: '/cotizaemisorauto/getgrupotarifa',
-  PLANES: '/cotizaemisorauto/getplanes',
+  GRUPO_TARIFA: '/cotizaemisorauto/getgrupotarifa',           // /{vCodTipoPlan}
+  PLANES: '/cotizaemisorauto/getplanes',                      // /{vCodTipoPlan}
   TIPO_DOCUMENTOS: '/catalogos/tipodocumentos',
+  PRECIOS_PLANES_TERCEROS: '/cotizaemisorauto/getpreciosplanesterceros', // /{vCodPlan}
   
-  // Cotización Auto - SEGÚN DOCUMENTACIÓN OFICIAL
-  GENERAR_COTIZACION: '/cotizaemisorauto/getgenerarcotizacion',
-  COBERTURAS_COTIZACION: '/cotizaemisorauto/getcoberturascotizacion',
+  // Cotización Auto — Swagger: POST con JSON body (CotizadorRequest)
+  // ⚠️ NO es GET con path params. Es POST /generarcotizacion con body JSON.
+  GENERAR_COTIZACION: '/cotizaemisorauto/generarcotizacion',
   
-  // Emisión Auto
+  // Coberturas — Swagger: GET /getlistacoberturas/{idpv}
+  // ⚠️ NO es getcoberturascotizacion. Es getlistacoberturas.
+  COBERTURAS_COTIZACION: '/cotizaemisorauto/getlistacoberturas',
+  
+  // Emisión Auto — Swagger: POST con JSON body (EmisorRequest)
   EMISION: '/cotizaemisorauto/getemision',
   
   // Pago (a confirmar con IS)

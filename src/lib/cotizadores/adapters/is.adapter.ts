@@ -56,22 +56,20 @@ export class ISAdapter implements AseguradoraAdapter {
   async cotizar(request: CotizacionRequest): Promise<CotizacionResponse> {
     try {
       const result = await generarCotizacionAuto({
-        vnombre: request.nombre,
-        vapellido: request.apellido,
-        // @ts-ignore - vtipodocumento no está en tipo pero es requerido
-        vtipodocumento: '1', // Por defecto cédula
-        vdocidentidad: request.cedula,
-        vtelefono: request.telefono,
-        vcorreo: request.email,
-        vcodmarca: parseInt(request.codigoMarca),
-        vcodmodelo: parseInt(request.codigoModelo),
-        vanioauto: request.anio,
-        vsumaaseg: request.valorVehiculo,
-        vcodplancobertura: parseInt(request.codigoPlan),
-        vlesionescorporalesporpersona: request.lesionesCorpora || 0,
-        vdaniosalapropiedadajenaporevento: request.daniosPropiedad || 0,
-        vgastosmedicosporpersona: request.gastosMedicos || 0,
-        vdeducible: request.deducible || 0,
+        codTipoDoc: 1, // Cédula por defecto
+        nroDoc: request.cedula,
+        nroNit: request.cedula,
+        nombre: request.nombre,
+        apellido: request.apellido,
+        telefono: (request.telefono || '').replace(/[-\s\(\)]/g, ''),
+        correo: request.email,
+        codMarca: parseInt(request.codigoMarca),
+        codModelo: parseInt(request.codigoModelo),
+        anioAuto: String(request.anio),
+        sumaAseg: String(request.valorVehiculo || '0'),
+        codPlanCobertura: parseInt(request.codigoPlan),
+        codPlanCoberturaAdic: 0,
+        codGrupoTarifa: 20, // PARTICULAR (default)
       }, this.env);
       
       if (result.success && result.idCotizacion) {

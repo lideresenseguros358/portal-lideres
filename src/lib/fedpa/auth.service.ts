@@ -151,17 +151,14 @@ export async function generarToken(
       return { success: true, token: bdToken };
     }
     
-    // No tenemos token guardado - intentar decodificar JWT del token principal
-    // para ver si podemos usarlo directamente
-    console.warn('[FEDPA Auth] ⚠️ No hay token guardado. Esperando 2s y reintentando...');
+    // No tenemos token guardado — un solo reintento rápido (2s)
+    console.warn('[FEDPA Auth] ⚠️ Reintento rápido en 2s...');
     await new Promise(resolve => setTimeout(resolve, 2000));
     
-    // Reintentar una vez más
     const retryResponse = await client.post<TokenResponse>(
       EMISOR_PLAN_ENDPOINTS.GENERAR_TOKEN,
       request
     );
-    
     const retryToken = retryResponse.data?.token || retryResponse.data?.Token || null;
     if (retryToken) {
       console.log('[FEDPA Auth] ✅ Token obtenido en reintento');
@@ -170,14 +167,39 @@ export async function generarToken(
       return { success: true, token: retryToken };
     }
     
-    // Último recurso: la API sigue diciendo "ya existe" y no tenemos el token
-    // Esto pasa cuando el servidor se reinicia y el token anterior se pierde
-    // Necesitamos esperar a que el token de FEDPA expire (generalmente ~50 min)
-    console.error('[FEDPA Auth] ❌ Token existe en FEDPA pero no lo tenemos guardado.');
-    console.error('[FEDPA Auth] El token de FEDPA expirará automáticamente. Reintentar en unos minutos.');
+    // Intentar ambiente alterno (PROD si estamos en DEV, o viceversa)
+    const altEnv: FedpaEnvironment = env === 'DEV' ? 'PROD' : 'DEV';
+    const altCacheKey = `fedpa_token_${altEnv}`;
+    const altCached = tokenCache.get(altCacheKey);
+    if (altCached && altCached.exp > Date.now()) {
+      console.log(`[FEDPA Auth] ✅ Usando token de ambiente alterno (${altEnv}) desde cache`);
+      return { success: true, token: altCached.token };
+    }
+    const altBdToken = await obtenerTokenDeBD(altEnv);
+    if (altBdToken) {
+      console.log(`[FEDPA Auth] ✅ Usando token de ambiente alterno (${altEnv}) desde BD`);
+      tokenCache.set(altCacheKey, { token: altBdToken, exp: Date.now() + TOKEN_TTL_MS });
+      return { success: true, token: altBdToken };
+    }
+    
+    // Intentar generar token en ambiente alterno
+    console.log(`[FEDPA Auth] Intentando generar token en ${altEnv}...`);
+    const altConfig = FEDPA_CONFIG[altEnv];
+    const altRequest: TokenRequest = { usuario: altConfig.usuario, clave: altConfig.clave, Amb: altEnv };
+    const altResponse = await client.post<TokenResponse>(EMISOR_PLAN_ENDPOINTS.GENERAR_TOKEN, altRequest);
+    const altToken = altResponse.data?.token || altResponse.data?.Token || null;
+    if (altToken) {
+      console.log(`[FEDPA Auth] ✅ Token generado en ambiente alterno (${altEnv})`);
+      tokenCache.set(altCacheKey, { token: altToken, exp: Date.now() + TOKEN_TTL_MS });
+      guardarTokenEnBD(altEnv, altToken).catch(() => {});
+      return { success: true, token: altToken };
+    }
+    
+    console.error(`[FEDPA Auth] ❌ Token no disponible en ${env} ni ${altEnv}.`);
+    console.error('[FEDPA Auth] Los tokens de FEDPA expiran automáticamente (~50 min). Intente de nuevo más tarde.');
     return {
       success: false,
-      error: 'Token FEDPA existe pero no está disponible localmente. Espere unos minutos e intente de nuevo.',
+      error: `Token FEDPA bloqueado en ambos ambientes. Espere ~50 min para que expire e intente de nuevo.`,
     };
   }
   

@@ -6,7 +6,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { FaCar, FaCamera, FaArrowRight, FaArrowLeft } from 'react-icons/fa';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
@@ -43,7 +43,58 @@ export default function VehicleDataForm({ quoteData, onContinue }: VehicleDataFo
   const [registroVehicular, setRegistroVehicular] = useState<File | null>(null);
   const [registroPreview, setRegistroPreview] = useState<string>('');
   const [notas, setNotas] = useState('');
+  const [registroFileName, setRegistroFileName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Restaurar datos cacheados al montar
+  useEffect(() => {
+    const savedData = sessionStorage.getItem('vehicleFormData');
+    if (savedData) {
+      try {
+        const parsed = JSON.parse(savedData);
+        setFormData(prev => ({ ...prev, ...parsed }));
+        if (parsed.notas) setNotas(parsed.notas);
+      } catch (e) { console.error('Error restaurando datos vehículo:', e); }
+    }
+    // Restaurar registro vehicular cacheado
+    const cachedRegistro = sessionStorage.getItem('vehicleRegistroFile');
+    if (cachedRegistro) {
+      try {
+        const { name, type, data } = JSON.parse(cachedRegistro);
+        const byteString = atob(data);
+        const ab = new ArrayBuffer(byteString.length);
+        const ia = new Uint8Array(ab);
+        for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
+        const file = new File([ab], name, { type });
+        setRegistroVehicular(file);
+        setRegistroFileName(name);
+        if (type.startsWith('image/')) {
+          setRegistroPreview(`data:${type};base64,${data}`);
+        }
+      } catch (e) { console.error('Error restaurando registro vehicular:', e); }
+    }
+  }, []);
+
+  // Guardar datos del formulario cuando cambian
+  useEffect(() => {
+    if (formData.placa || formData.vinChasis || formData.motor) {
+      sessionStorage.setItem('vehicleFormData', JSON.stringify({ ...formData, notas }));
+    }
+  }, [formData, notas]);
+
+  // Helper para cachear archivo como base64
+  const cacheFileToStorage = (key: string, file: File) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64 = (reader.result as string).split(',')[1];
+      try {
+        sessionStorage.setItem(key, JSON.stringify({ name: file.name, type: file.type, data: base64 }));
+      } catch (e) {
+        console.warn('No se pudo cachear archivo (muy grande):', e);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
 
   const handleRegistroChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -63,6 +114,8 @@ export default function VehicleDataForm({ quoteData, onContinue }: VehicleDataFo
     }
 
     setRegistroVehicular(file);
+    setRegistroFileName(file.name);
+    cacheFileToStorage('vehicleRegistroFile', file);
 
     // Preview solo para imágenes
     if (file.type.startsWith('image/')) {

@@ -54,7 +54,8 @@ export async function GET(request: NextRequest) {
         break;
         
       case 'planes':
-        data = await getPlanes(env);
+        const tipoPlanForPlanes = searchParams.get('tipoPlan') || '1'; // Default CC Particular
+        data = await getPlanes(tipoPlanForPlanes, env);
         break;
         
       case 'grupos_tarifa':

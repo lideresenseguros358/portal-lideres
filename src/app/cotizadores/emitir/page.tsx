@@ -147,14 +147,48 @@ export default function EmitirPage() {
         if (!emissionData || !inspectionPhotos.length) {
           throw new Error('Faltan datos de emisión o fotos de inspección');
         }
-        
-        // 1. Subir documentos
+
+        // Datos comunes de emisión
+        const emisionCommon = {
+          IdCotizacion: selectedPlan._idCotizacion || '',
+          Plan: selectedPlan._planCode || 1,
+          PrimerNombre: emissionData.primerNombre,
+          PrimerApellido: emissionData.primerApellido,
+          SegundoNombre: emissionData.segundoNombre || '',
+          SegundoApellido: emissionData.segundoApellido || '',
+          Identificacion: emissionData.cedula,
+          FechaNacimiento: convertToFedpaDate(emissionData.fechaNacimiento),
+          Sexo: emissionData.sexo,
+          Email: emissionData.email,
+          Telefono: parseInt(emissionData.telefono.replace(/\D/g, '') || '0'),
+          Celular: parseInt(emissionData.celular.replace(/\D/g, '') || '0'),
+          Direccion: emissionData.direccion,
+          esPEP: emissionData.esPEP ? 1 : 0,
+          Acreedor: emissionData.acreedor || '',
+          sumaAsegurada: quoteData.valorVehiculo || 0,
+          Uso: quoteData.uso || '10',
+          Marca: selectedPlan._marcaCodigo || quoteData.marca,
+          Modelo: selectedPlan._modeloCodigo || quoteData.modelo,
+          Ano: quoteData.anno?.toString() || quoteData.anio?.toString() || new Date().getFullYear().toString(),
+          Motor: vehicleData!.motor,
+          Placa: vehicleData!.placa,
+          Vin: vehicleData!.vinChasis,
+          Color: vehicleData!.color,
+          Pasajero: vehicleData!.pasajeros,
+          Puerta: vehicleData!.puertas,
+          PrimaTotal: selectedPlan.annualPremium,
+        };
+
+        // EmisorPlan (2024) — upload docs + emit con token Bearer
         toast.info('Subiendo documentos...');
+        
         const docsFormData = new FormData();
         docsFormData.append('environment', 'DEV');
-        docsFormData.append('documento_identidad', emissionData.cedulaFile!, 'documento_identidad');
-        docsFormData.append('licencia_conducir', emissionData.licenciaFile!, 'licencia_conducir');
-        docsFormData.append('registro_vehicular', vehicleData!.registroVehicular!, 'registro_vehicular');
+        docsFormData.append('documento_identidad', emissionData.cedulaFile!, emissionData.cedulaFile!.name || 'documento_identidad.pdf');
+        docsFormData.append('licencia_conducir', emissionData.licenciaFile!, emissionData.licenciaFile!.name || 'licencia_conducir.pdf');
+        if (vehicleData?.registroVehicular) {
+          docsFormData.append('registro_vehicular', vehicleData.registroVehicular, vehicleData.registroVehicular.name || 'registro_vehicular.pdf');
+        }
         
         const docsResponse = await fetch('/api/fedpa/documentos/upload', {
           method: 'POST',
@@ -169,48 +203,15 @@ export default function EmitirPage() {
         const docsResult = await docsResponse.json();
         console.log('[EMISIÓN FEDPA] Documentos subidos:', docsResult.idDoc);
         
-        // 2. Preparar datos de emisión
         toast.info('Emitiendo póliza...');
-        const emisionPayload = {
-          environment: 'DEV',
-          Plan: selectedPlan._planCode || 1,
-          idDoc: docsResult.idDoc,
-          
-          // Cliente
-          PrimerNombre: emissionData.primerNombre,
-          PrimerApellido: emissionData.primerApellido,
-          SegundoNombre: emissionData.segundoNombre || undefined,
-          SegundoApellido: emissionData.segundoApellido || undefined,
-          Identificacion: emissionData.cedula,
-          FechaNacimiento: convertToFedpaDate(emissionData.fechaNacimiento),
-          Sexo: emissionData.sexo,
-          Email: emissionData.email,
-          Telefono: parseInt(emissionData.telefono.replace(/\D/g, '')),
-          Celular: parseInt(emissionData.celular.replace(/\D/g, '')),
-          Direccion: emissionData.direccion,
-          esPEP: emissionData.esPEP ? 1 : 0,
-          Acreedor: emissionData.acreedor || undefined,
-          
-          // Vehículo
-          sumaAsegurada: quoteData.valorVehiculo || 0,
-          Uso: quoteData.uso || '10',
-          Marca: selectedPlan._marcaCodigo || quoteData.marca,
-          Modelo: selectedPlan._modeloCodigo || quoteData.modelo,
-          Ano: quoteData.anno?.toString() || quoteData.ano?.toString() || new Date().getFullYear().toString(),
-          Motor: vehicleData!.motor,
-          Placa: vehicleData!.placa,
-          Vin: vehicleData!.vinChasis,
-          Color: vehicleData!.color,
-          Pasajero: vehicleData!.pasajeros,
-          Puerta: vehicleData!.puertas,
-          
-          PrimaTotal: selectedPlan.annualPremium,
-        };
-        
         const emisionResponse = await fetch('/api/fedpa/emision', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(emisionPayload),
+          body: JSON.stringify({
+            environment: 'DEV',
+            ...emisionCommon,
+            idDoc: docsResult.idDoc,
+          }),
         });
         
         if (!emisionResponse.ok) {
@@ -219,15 +220,16 @@ export default function EmitirPage() {
         }
         
         const emisionResult = await emisionResponse.json();
-        console.log('[EMISIÓN FEDPA] Póliza emitida:', emisionResult.nroPoliza);
+        console.log('[EMISIÓN FEDPA] Póliza emitida:', emisionResult.nroPoliza || emisionResult.poliza);
         
         sessionStorage.setItem('emittedPolicy', JSON.stringify({
           nroPoliza: emisionResult.nroPoliza || emisionResult.poliza,
           insurer: 'FEDPA Seguros',
           clientId: emisionResult.clientId,
           policyId: emisionResult.policyId,
-          vigenciaDesde: emisionResult.desde,
-          vigenciaHasta: emisionResult.hasta,
+          vigenciaDesde: emisionResult.desde || emisionResult.vigenciaDesde,
+          vigenciaHasta: emisionResult.hasta || emisionResult.vigenciaHasta,
+          method: 'emisor_plan',
         }));
         
         toast.success(`¡Póliza FEDPA emitida! Nº ${emisionResult.nroPoliza || emisionResult.poliza}`);
@@ -513,10 +515,46 @@ export default function EmitirPage() {
 
           {/* Tarjeta 3D */}
           <CreditCardInput
-            onTokenReceived={handlePaymentTokenReceived}
+            onTokenReceived={(token: string, last4: string, brand: string) => {
+              setPaymentToken(token);
+              setCardData({ last4, brand });
+              setCompletedSteps(prev => [...prev, 'payment-info']);
+              toast.success(`Tarjeta ${brand} ****${last4} registrada`);
+            }}
             onError={handlePaymentError}
             environment="development"
           />
+
+          {/* Confirmación de tarjeta */}
+          {cardData && (
+            <div className="flex items-center gap-2 p-4 mt-4 bg-green-50 border-2 border-green-300 rounded-xl">
+              <svg className="w-5 h-5 text-[#8AAA19] flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" /></svg>
+              <p className="text-sm font-semibold text-green-800">
+                Tarjeta {cardData.brand} ****{cardData.last4} registrada correctamente
+              </p>
+            </div>
+          )}
+
+          {/* Botón Continuar al Resumen */}
+          <div className="mt-6">
+            <button
+              onClick={() => router.push('/cotizadores/emitir?step=review')}
+              disabled={!paymentToken}
+              className={`w-full py-4 px-6 rounded-xl font-bold text-lg flex items-center justify-center gap-3 transition-all duration-200 ${
+                paymentToken
+                  ? 'bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white hover:shadow-2xl hover:scale-105 cursor-pointer'
+                  : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+              }`}
+              type="button"
+            >
+              Continuar al Resumen
+            </button>
+            {!paymentToken && (
+              <p className="text-xs text-gray-500 text-center mt-2">
+                Ingresa los datos de tu tarjeta para continuar
+              </p>
+            )}
+          </div>
         </div>
         </div>
       </div>
@@ -546,6 +584,7 @@ export default function EmitirPage() {
             installments={installments}
             monthlyPayment={monthlyPayment}
             emissionData={emissionData}
+            vehicleData={vehicleData}
             inspectionPhotos={inspectionPhotos}
             onConfirm={handleConfirmEmission}
           />

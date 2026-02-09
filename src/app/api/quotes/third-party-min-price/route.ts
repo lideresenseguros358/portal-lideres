@@ -1,83 +1,96 @@
 /**
  * API Route: Obtener precio mínimo de Daños a Terceros (DINÁMICO)
- * Consulta tabla de BD actualizada automáticamente por cotizaciones reales
+ * Calcula el precio más económico entre todas las aseguradoras de DT.
+ * - Intenta obtener precios reales de FEDPA vía API
+ * - Usa precios estáticos de Internacional y otras aseguradoras
+ * - Retorna el mínimo global
  */
 
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { AUTO_THIRD_PARTY_INSURERS } from '@/lib/constants/auto-quotes';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
+export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
-    // Consultar precios de la tabla actualizada por cotizaciones reales
-    const { data: prices, error } = await supabase
-      .from('third_party_min_prices')
-      .select('insurer_name, min_price, last_updated_at')
-      .eq('policy_type', 'DANOS_TERCEROS')
-      .order('min_price', { ascending: true });
+    // Recopilar precios de todas las aseguradoras
+    const allPrices: { insurer: string; price: number; source: string }[] = [];
 
-    if (error) {
-      console.error('[Min Price] Error consultando BD:', error);
-      throw error;
-    }
-
-    if (!prices || prices.length === 0) {
-      // Fallback si no hay datos en BD
-      return NextResponse.json({
-        success: true,
-        minPrice: 130,
-        insurer: 'FEDPA',
-        plan: 'Daños a Terceros',
-        note: 'Precio de referencia inicial',
+    // 1. Precios estáticos de las constantes (siempre disponibles)
+    for (const insurer of AUTO_THIRD_PARTY_INSURERS) {
+      const cheapest = Math.min(insurer.basicPlan.annualPremium, insurer.premiumPlan.annualPremium);
+      allPrices.push({
+        insurer: insurer.name,
+        price: cheapest,
+        source: 'static',
       });
     }
 
-    // El primer elemento es el más económico (order by min_price ASC)
-    const minPriceData = prices[0];
+    // 2. Intentar obtener precios reales de FEDPA desde la API interna
+    try {
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : 'http://localhost:3000';
 
-    // Validación adicional de seguridad
-    if (!minPriceData) {
-      return NextResponse.json({
-        success: true,
-        minPrice: 130,
-        insurer: 'FEDPA',
-        plan: 'Daños a Terceros',
-        note: 'Precio de referencia inicial',
+      const fedpaRes = await fetch(`${baseUrl}/api/fedpa/third-party`, {
+        next: { revalidate: 3600 },
       });
+
+      if (fedpaRes.ok) {
+        const fedpaData = await fedpaRes.json();
+        if (fedpaData.success && fedpaData.plans?.length > 0) {
+          const fedpaPrices = fedpaData.plans.map((p: any) => p.annualPremium as number);
+          const fedpaMin = Math.min(...fedpaPrices);
+
+          // Reemplazar precio estático de FEDPA con el real
+          const fedpaIdx = allPrices.findIndex(p => p.insurer.toUpperCase().includes('FEDPA'));
+          if (fedpaIdx >= 0) {
+            allPrices[fedpaIdx] = { insurer: 'FEDPA Seguros', price: fedpaMin, source: 'api' };
+          } else {
+            allPrices.push({ insurer: 'FEDPA Seguros', price: fedpaMin, source: 'api' });
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[Min Price] No se pudo obtener precio real de FEDPA, usando estático');
     }
 
-    console.log('[Min Price] Precio desde BD:', {
-      insurer: minPriceData.insurer_name,
-      price: minPriceData.min_price,
-      lastUpdated: minPriceData.last_updated_at,
-    });
+    // Ordenar por precio ascendente
+    allPrices.sort((a, b) => a.price - b.price);
+
+    const cheapest = allPrices[0] || { insurer: 'Referencia', price: 130, source: 'fallback' };
 
     return NextResponse.json({
       success: true,
-      minPrice: parseFloat(minPriceData.min_price),
-      insurer: minPriceData.insurer_name,
+      minPrice: Math.round(cheapest.price),
+      insurer: cheapest.insurer,
+      source: cheapest.source,
       plan: 'Daños a Terceros',
-      lastUpdated: minPriceData.last_updated_at,
-      allPrices: prices.map(p => ({
-        insurer: p.insurer_name,
-        price: parseFloat(p.min_price),
+      allPrices: allPrices.map(p => ({
+        insurer: p.insurer,
+        price: Math.round(p.price),
+        source: p.source,
       })),
     });
-
   } catch (error) {
     console.error('[Min Price] Error general:', error);
-    
-    // Fallback en caso de error
+
+    // Fallback absoluto: buscar el mínimo de las constantes
+    let fallbackMin = 130;
+    try {
+      const prices = AUTO_THIRD_PARTY_INSURERS.flatMap(i => [
+        i.basicPlan.annualPremium,
+        i.premiumPlan.annualPremium,
+      ]);
+      fallbackMin = Math.round(Math.min(...prices));
+    } catch { /* use 130 */ }
+
     return NextResponse.json({
       success: true,
-      minPrice: 130,
-      insurer: 'FEDPA',
+      minPrice: fallbackMin,
+      insurer: 'Referencia',
       plan: 'Daños a Terceros',
-      note: 'Precio de referencia (error en consulta)',
+      note: 'Precio de referencia (fallback)',
     });
   }
 }

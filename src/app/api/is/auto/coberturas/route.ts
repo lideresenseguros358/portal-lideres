@@ -31,15 +31,20 @@ export async function GET(request: NextRequest) {
       );
     }
     
-    // Si es Daños a Terceros (sumaAsegurada = 0) y tiene precio, actualizar mínimo
-    const sumaAsegurada = searchParams.get('vsumaaseg');
+    // Si es Daños a Terceros (sumaAsegurada = 0) y tiene coberturas, actualizar mínimo
+    const sumaAsegurada = searchParams.get('vsumaaseg') || searchParams.get('sumaAseg');
     const isDanosTerceros = sumaAsegurada === '0' || sumaAsegurada === null;
-    if (isDanosTerceros && result.data?.primaTotal) {
-      // Actualizar precio mínimo en background (no bloquea respuesta)
-      updateThirdPartyMinPrice({
-        insurer: 'INTERNACIONAL',
-        price: result.data.primaTotal,
-      }).catch(err => console.error('[IS] Error actualizando precio mínimo:', err));
+    if (isDanosTerceros && result.data?.Table?.length) {
+      // Sumar primas de todas las coberturas
+      const primaTotal = result.data.Table.reduce(
+        (sum, cob) => sum + (parseFloat(cob.PRIMA1) || 0), 0
+      );
+      if (primaTotal > 0) {
+        updateThirdPartyMinPrice({
+          insurer: 'INTERNACIONAL',
+          price: primaTotal,
+        }).catch(err => console.error('[IS] Error actualizando precio mínimo:', err));
+      }
     }
     
     return NextResponse.json({

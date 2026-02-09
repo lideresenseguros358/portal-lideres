@@ -16,19 +16,26 @@ export interface VehicleData {
   color: string;
   pasajeros: number;
   puertas: number;
+  marca?: string;
+  modelo?: string;
+  ano?: string;
 }
 
 interface VehicleDataSectionProps {
   initialData?: Partial<VehicleData>;
   quoteData: any;
   onComplete: (data: VehicleData) => void;
+  showMarcaModelo?: boolean;
 }
 
 export default function VehicleDataSection({
   initialData,
   quoteData,
   onComplete,
+  showMarcaModelo = false,
 }: VehicleDataSectionProps) {
+  const needsMarcaModelo = showMarcaModelo || (!quoteData?.marca && !quoteData?.modelo);
+  
   const [formData, setFormData] = useState<VehicleData>({
     placa: initialData?.placa || '',
     vin: initialData?.vin || '',
@@ -36,6 +43,9 @@ export default function VehicleDataSection({
     color: initialData?.color || '',
     pasajeros: initialData?.pasajeros || 5,
     puertas: initialData?.puertas || 4,
+    marca: initialData?.marca || quoteData?.marca || '',
+    modelo: initialData?.modelo || quoteData?.modelo || '',
+    ano: initialData?.ano || quoteData?.ano?.toString() || quoteData?.anio?.toString() || '',
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -54,6 +64,11 @@ export default function VehicleDataSection({
     if (!formData.vin.trim()) newErrors.vin = 'VIN/Chasis es obligatorio';
     if (!formData.motor.trim()) newErrors.motor = 'Número de motor es obligatorio';
     if (!formData.color.trim()) newErrors.color = 'Color es obligatorio';
+    if (needsMarcaModelo) {
+      if (!formData.marca?.trim()) newErrors.marca = 'Marca es obligatoria';
+      if (!formData.modelo?.trim()) newErrors.modelo = 'Modelo es obligatorio';
+      if (!formData.ano?.trim()) newErrors.ano = 'Año es obligatorio';
+    }
 
     // Validar VIN (debe tener al menos 17 caracteres)
     if (formData.vin && formData.vin.length < 17) {
@@ -91,30 +106,77 @@ export default function VehicleDataSection({
         </div>
       </div>
 
-      {/* Información pre-cargada del quote */}
-      <div className="bg-gray-50 border-2 border-gray-200 rounded-xl p-4">
-        <h5 className="font-bold text-gray-700 mb-3">Información de la Cotización</h5>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+      {/* Marca, Modelo, Año - editable si no viene de cotización */}
+      {needsMarcaModelo ? (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
-            <p className="text-gray-500 text-xs">Marca</p>
-            <p className="font-semibold text-gray-900">{quoteData.marca || 'N/A'}</p>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Marca <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={formData.marca || ''}
+              onChange={(e) => handleChange('marca', e.target.value.toUpperCase())}
+              className={`${inputClass} ${errors.marca ? errorInputClass : normalInputClass}`}
+              placeholder="Ej: TOYOTA, KIA, HYUNDAI"
+            />
+            {errors.marca && <p className="text-red-500 text-xs mt-1">{errors.marca}</p>}
           </div>
           <div>
-            <p className="text-gray-500 text-xs">Modelo</p>
-            <p className="font-semibold text-gray-900">{quoteData.modelo || 'N/A'}</p>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Modelo <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={formData.modelo || ''}
+              onChange={(e) => handleChange('modelo', e.target.value.toUpperCase())}
+              className={`${inputClass} ${errors.modelo ? errorInputClass : normalInputClass}`}
+              placeholder="Ej: COROLLA, SPORTAGE"
+            />
+            {errors.modelo && <p className="text-red-500 text-xs mt-1">{errors.modelo}</p>}
           </div>
           <div>
-            <p className="text-gray-500 text-xs">Año</p>
-            <p className="font-semibold text-gray-900">{quoteData.ano || quoteData.anio || 'N/A'}</p>
-          </div>
-          <div>
-            <p className="text-gray-500 text-xs">Valor</p>
-            <p className="font-semibold text-gray-900">
-              ${(quoteData.valorVehiculo || 0).toLocaleString()}
-            </p>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Año <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={formData.ano || ''}
+              onChange={(e) => handleChange('ano', e.target.value)}
+              className={`${inputClass} ${errors.ano ? errorInputClass : normalInputClass}`}
+            >
+              <option value="">Seleccionar...</option>
+              {Array.from({ length: new Date().getFullYear() - 1959 }, (_, i) => new Date().getFullYear() + 1 - i).map(y => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
+            {errors.ano && <p className="text-red-500 text-xs mt-1">{errors.ano}</p>}
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="bg-gray-50 border-2 border-gray-200 rounded-xl p-4">
+          <h5 className="font-bold text-gray-700 mb-3">Información de la Cotización</h5>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+            <div>
+              <p className="text-gray-500 text-xs">Marca</p>
+              <p className="font-semibold text-gray-900">{quoteData.marca || 'N/A'}</p>
+            </div>
+            <div>
+              <p className="text-gray-500 text-xs">Modelo</p>
+              <p className="font-semibold text-gray-900">{quoteData.modelo || 'N/A'}</p>
+            </div>
+            <div>
+              <p className="text-gray-500 text-xs">Año</p>
+              <p className="font-semibold text-gray-900">{quoteData.ano || quoteData.anio || 'N/A'}</p>
+            </div>
+            <div>
+              <p className="text-gray-500 text-xs">Valor</p>
+              <p className="font-semibold text-gray-900">
+                ${(quoteData.valorVehiculo || 0).toLocaleString()}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Placa */}
       <div>

@@ -12,49 +12,59 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { environment = 'development', ...formData } = body;
     
-    console.log('[IS Quotes] Generando cotización...', {
-      marca: formData.vcodmarca,
-      modelo: formData.vcodmodelo,
-      valor: formData.vsumaaseg
-    });
+    // Aceptar tanto nombres viejos (vcodmarca) como nuevos (codMarca) del Swagger
+    const nroDoc = formData.nroDoc || formData.vnrodoc;
+    const nombre = formData.nombre || formData.vnombre;
+    const apellido = formData.apellido || formData.vapellido;
+    const correo = formData.correo || formData.vcorreo;
+    const telefono = formData.telefono || formData.vtelefono;
+    const codMarca = formData.codMarca || formData.vcodmarca;
+    const codModelo = formData.codModelo || formData.vcodmodelo;
+    const anioAuto = formData.anioAuto || formData.vanioauto;
+    const codPlanCobertura = formData.codPlanCobertura || formData.vcodplancobertura;
+    const codGrupoTarifa = formData.codGrupoTarifa || formData.vcodgrupotarifa;
     
-    // Validaciones básicas - usar datos directos sin normalización
-    if (!formData.vnrodoc || !formData.vnombre || !formData.vapellido || !formData.vcorreo) {
+    console.log('[IS Quotes API] Generando cotización...', { codMarca, codModelo, anioAuto });
+    
+    // Validaciones básicas
+    if (!nroDoc || !nombre || !apellido || !correo) {
       return NextResponse.json(
         { success: false, error: 'Faltan datos del cliente' },
         { status: 400 }
       );
     }
     
-    if (!formData.vcodmarca || !formData.vcodmodelo || !formData.vanioauto) {
+    if (!codMarca || !codModelo || !anioAuto) {
       return NextResponse.json(
         { success: false, error: 'Faltan datos del vehículo' },
         { status: 400 }
       );
     }
     
-    if (!formData.vcodplancobertura || !formData.vcodgrupotarifa) {
+    if (!codPlanCobertura || !codGrupoTarifa) {
       return NextResponse.json(
         { success: false, error: 'Faltan datos de cobertura' },
         { status: 400 }
       );
     }
     
-    // Generar cotización usando datos directos de IS (sin normalización a FEDPA)
+    // Generar cotización — POST /generarcotizacion con JSON body (Swagger CotizadorRequest)
     const result = await generarCotizacionAuto(
       {
-        vcodtipodoc: formData.vcodtipodoc || 1, // 1=CC por defecto
-        vnrodoc: formData.vnrodoc,
-        vnombre: formData.vnombre,
-        vapellido: formData.vapellido,
-        vtelefono: formData.vtelefono,
-        vcorreo: formData.vcorreo,
-        vcodmarca: formData.vcodmarca,
-        vcodmodelo: formData.vcodmodelo,
-        vanioauto: formData.vanioauto,
-        vsumaaseg: formData.vsumaaseg || 0,
-        vcodplancobertura: formData.vcodplancobertura,
-        vcodgrupotarifa: formData.vcodgrupotarifa,
+        codTipoDoc: formData.codTipoDoc || formData.vcodtipodoc || 1,
+        nroDoc,
+        nroNit: formData.nroNit || nroDoc,
+        nombre,
+        apellido,
+        telefono,
+        correo,
+        codMarca,
+        codModelo,
+        anioAuto: String(anioAuto),
+        sumaAseg: String(formData.sumaAseg || formData.vsumaaseg || '0'),
+        codPlanCobertura,
+        codPlanCoberturaAdic: formData.codPlanCoberturaAdic || 0,
+        codGrupoTarifa,
       },
       environment as ISEnvironment
     );
@@ -69,6 +79,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       idCotizacion: result.idCotizacion,
+      primaTotal: result.primaTotal,
     });
     
   } catch (error: any) {

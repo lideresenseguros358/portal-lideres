@@ -11,7 +11,8 @@ import {
   normalizeAssistanceBenefits, 
   normalizeDeductibles, 
   calcularDescuentoBuenConductor,
-  formatAsistencia 
+  formatAsistencia,
+  parseEndosoBeneficiosFromAPI,
 } from '@/lib/fedpa/beneficios-normalizer';
 import { toast } from 'sonner';
 import { FaCar, FaCompressArrowsAlt } from 'react-icons/fa';
@@ -436,6 +437,7 @@ const generateFedpaQuotes = async (quoteData: any): Promise<{ premium: any | nul
     // BENEFICIOS Y ASISTENCIAS
     // ============================================
     let asistenciasNormalizadas: any[] = [];
+    let beneficiosRawTexts: string[] = []; // Raw text from API for endoso parsing
     const deduciblesReales = normalizeDeductibles([], apiCoberturas, quoteData.deducible as 'bajo' | 'medio' | 'alto');
     
     try {
@@ -443,6 +445,11 @@ const generateFedpaQuotes = async (quoteData: any): Promise<{ premium: any | nul
       if (beneficiosResponse.ok) {
         const beneficiosData = await beneficiosResponse.json();
         const beneficiosRaw = beneficiosData.data || [];
+        
+        // Store raw texts for endoso parsing
+        beneficiosRawTexts = beneficiosRaw.map((b: any) => b.beneficio || b.BENEFICIOS || b.BENEFICIO || '').filter((t: string) => t.trim() !== '');
+        console.log(`[FEDPA] Beneficios RAW texts (${beneficiosRawTexts.length}):`, JSON.stringify(beneficiosRawTexts));
+        
         asistenciasNormalizadas = normalizeAssistanceBenefits(beneficiosRaw);
         console.log(`[FEDPA] Asistencias normalizadas:`, asistenciasNormalizadas.length);
       }
@@ -496,66 +503,71 @@ const generateFedpaQuotes = async (quoteData: any): Promise<{ premium: any | nul
       _deducibleOriginal: quoteData.deducible,
       _marcaNombre: quoteData.marca,
       _modeloNombre: quoteData.modelo,
+      // Campos requeridos para emisión
+      _planCode: parseInt(planInfo.planId),
+      _marcaCodigo: quoteData.marcaCodigo || quoteData.marca,
+      _modeloCodigo: quoteData.modeloCodigo || quoteData.modelo,
+      _uso: quoteData.uso || '10',
+      _anio: quoteData.anio || quoteData.anno || new Date().getFullYear(),
     };
+    
+    // ========== PARSEAR ENDOSOS DESDE API ==========
+    // La API /api/fedpa/planes/beneficios devuelve beneficios individuales del plan
+    // Estos son los beneficios del Endoso Full Extras
+    const parsedEndosos = parseEndosoBeneficiosFromAPI(beneficiosRawTexts);
+    
+    // Los beneficios del Full Extras vienen de la API
+    const fullExtrasBeneficiosAPI = parsedEndosos.fullExtrasBeneficios;
+    
+    // Los beneficios mejorados del Porcelana vienen de la API si están en formato blob,
+    // si no, se extraen del texto de la API buscando mejoras documentadas
+    const porcelanaBeneficiosAPI = parsedEndosos.porcelanaBeneficios;
+    
+    console.log('[FEDPA] Endosos parseados - Full Extras:', fullExtrasBeneficiosAPI.length, 'Porcelana:', porcelanaBeneficiosAPI.length);
+    
+    // Extraer datos de Muerte Accidental desde coberturas API (cobertura H)
+    const muerteAccidentalCob = apiCoberturas.find((c: any) => 
+      c.COBERTURA === 'H' || (c.DESCCOBERTURA || c.descripcion || '').toUpperCase().includes('MUERTE ACCIDENTAL')
+    );
+    const muerteAccidentalLimite = muerteAccidentalCob?.LIMITE || muerteAccidentalCob?.limite || '';
+    
+    // Extraer datos de Asistencia desde coberturas API (cobertura KC)
+    const asistenciaCob = apiCoberturas.find((c: any) => 
+      c.COBERTURA === 'KC' || (c.DESCCOBERTURA || c.descripcion || '').toUpperCase().includes('ASISTENCIA')
+    );
     
     // ========== PREMIUM: Endoso Porcelana + Full Extras ==========
     // NOTA: FEDPA PACK es solo para Daños a Terceros, NO aplica a Cobertura Completa
     const premiumEndosos = [
       { 
         codigo: 'PORCELANA', nombre: 'Endoso Porcelana', incluido: true,
-        descripcion: 'Cobertura premium para componentes estéticos y funcionales del vehículo',
-        subBeneficios: [
-          'Vidrios (parabrisas, ventanas laterales, trasero)',
-          'Faros delanteros y traseros',
-          'Espejos retrovisores',
-          'Luces antiniebla y direccionales',
-          'Molduras y emblemas',
-          'Pintura y porcelana (carrocería)',
-        ],
+        descripcion: parsedEndosos.porcelanaDescripcion 
+          || 'Beneficios iguales al Full Extras, con las siguientes mejoras',
+        subBeneficios: porcelanaBeneficiosAPI.length > 0
+          ? porcelanaBeneficiosAPI
+          : [
+              // Mejoras documentadas por FEDPA (puntos que se adicionan y mejoran sobre Full Extras)
+              'Pérdida de Efectos Personales dentro del Auto hasta la suma de B/.300.00',
+              'Auto de Alquiler por Colisión y/o Vuelco hasta por quince (15) días, en caso de que el vehículo sea arriba de 30,000.00 ó un vehículo 4x4',
+              'Descuentos del 20% en pagos de Deducibles, si el vehículo cuenta con sistema de GPS activado al momento del ROBO TOTAL DEL VEHICULO',
+            ],
       },
       { 
         codigo: 'K1', nombre: 'Endoso Full Extras', incluido: true,
-        descripcion: 'Cobertura de accesorios y extras instalados en el vehículo',
-        subBeneficios: [
-          'Accesorios instalados en el vehículo',
-          'Radio y sistema de sonido',
-          'Aros especiales / de lujo',
-          'Llantas y neumáticos',
-          'Extras y modificaciones del vehículo',
-        ],
+        descripcion: 'Beneficios incluidos en el plan',
+        subBeneficios: fullExtrasBeneficiosAPI,
       },
       { 
         codigo: 'H', nombre: 'Muerte Accidental', incluido: true,
-        descripcion: 'Conductor B/.500 + 4 pasajeros B/.5,000/B/.25,000',
-        subBeneficios: [
-          'Muerte accidental del conductor: B/.500.00',
-          'Cobertura para 4 pasajeros',
-          'Límite por persona: B/.5,000.00',
-          'Límite por accidente: B/.25,000.00',
-        ],
+        descripcion: muerteAccidentalLimite 
+          ? `Límite: ${muerteAccidentalLimite}` 
+          : 'Conductor y pasajeros',
+        subBeneficios: [],
       },
       { 
         codigo: 'KC', nombre: 'Asistencia Vial 24/7', incluido: true,
-        descripcion: 'Servicio de emergencia y asistencia en carretera',
-        subBeneficios: [
-          'Servicio de grúa',
-          'Paso de corriente',
-          'Suministro de gasolina',
-          'Cerrajero automotriz',
-          'Cambio de llanta',
-        ],
-      },
-      { 
-        codigo: 'VA', nombre: 'Valores Agregados', incluido: true,
-        descripcion: 'Beneficios adicionales exclusivos FEDPA',
-        subBeneficios: [
-          'Inspección "IN SITU"',
-          'Auto de alquiler por colisión (hasta 10 días)',
-          'Defensa penal hasta B/.2,000.00',
-          'Cobertura extraterritorial hasta Costa Rica',
-          '100% reembolso deducible si no es culpable',
-          'Descuento por buena experiencia',
-        ],
+        descripcion: asistenciaCob?.LIMITE || asistenciaCob?.limite || 'Incluido',
+        subBeneficios: [],
       },
     ];
     
@@ -588,30 +600,20 @@ const generateFedpaQuotes = async (quoteData: any): Promise<{ premium: any | nul
     const basicoEndosos = [
       { 
         codigo: 'K1', nombre: 'Endoso Full Extras', incluido: true,
-        descripcion: 'Cobertura de accesorios y extras instalados en el vehículo',
-        subBeneficios: [
-          'Accesorios instalados en el vehículo',
-          'Radio y sistema de sonido',
-          'Aros especiales / de lujo',
-          'Llantas y neumáticos',
-          'Extras y modificaciones del vehículo',
-        ],
+        descripcion: 'Beneficios incluidos en el plan',
+        subBeneficios: fullExtrasBeneficiosAPI,
       },
       { 
         codigo: 'H', nombre: 'Muerte Accidental', incluido: true,
-        descripcion: 'Conductor B/.500 + 4 pasajeros',
-        subBeneficios: [
-          'Muerte accidental del conductor: B/.500.00',
-          'Cobertura para 4 pasajeros',
-        ],
+        descripcion: muerteAccidentalLimite 
+          ? `Límite: ${muerteAccidentalLimite}` 
+          : 'Conductor y pasajeros',
+        subBeneficios: [],
       },
       { 
         codigo: 'KC', nombre: 'Asistencia Vial', incluido: true,
-        descripcion: 'Servicio de emergencia en carretera',
-        subBeneficios: [
-          'Servicio de grúa',
-          'Paso de corriente',
-        ],
+        descripcion: asistenciaCob?.LIMITE || asistenciaCob?.limite || 'Incluido',
+        subBeneficios: [],
       },
     ];
     

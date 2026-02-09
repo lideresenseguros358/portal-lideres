@@ -33,6 +33,7 @@ interface ClientDocumentsSectionProps {
     licencia?: string;
     registro?: string;
   };
+  requireRegistro?: boolean;
 }
 
 export default function ClientDocumentsSection({
@@ -43,6 +44,7 @@ export default function ClientDocumentsSection({
     licencia: 'Licencia de Conducir',
     registro: 'Registro Vehicular / Tarjeta de Circulación',
   },
+  requireRegistro = true,
 }: ClientDocumentsSectionProps) {
   const [documents, setDocuments] = useState<DocumentFile[]>([
     {
@@ -64,7 +66,7 @@ export default function ClientDocumentsSection({
       name: 'registro',
       label: documentNames.registro!,
       tooltip: 'Debe coincidir con la información del vehículo ingresado. Formato: JPG, PNG o PDF (máx 5MB)',
-      required: true,
+      required: requireRegistro,
     },
   ]);
 

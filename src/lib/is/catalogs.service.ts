@@ -281,11 +281,36 @@ export async function getGruposTarifa(
 }
 
 /**
- * Obtener planes de cobertura
+ * Obtener planes de cobertura para un tipo de plan
+ * Swagger: GET /api/cotizaemisorauto/getplanes/{vCodTipoPlan}
+ * ⚠️ El path param es OBLIGATORIO — sin él retorna 404
  */
-export async function getPlanes(env: ISEnvironment = 'development'): Promise<Plan[]> {
-  const data = await getCatalog<Plan>('planes', IS_ENDPOINTS.PLANES, env);
-  return data || [];
+export async function getPlanes(
+  vCodTipoPlan: string = '1',
+  env: ISEnvironment = 'development'
+): Promise<Plan[]> {
+  const endpoint = `${IS_ENDPOINTS.PLANES}/${vCodTipoPlan}`;
+  const cacheKey = `planes_${vCodTipoPlan}_${env}`;
+  
+  // Verificar memoria
+  const memoryCached = memoryCache.get(cacheKey);
+  if (memoryCached && Date.now() - memoryCached.timestamp < CACHE_TTL.CATALOGS) {
+    console.log(`[IS Catalogs] ⚡ Cache hit (memoria): planes tipo ${vCodTipoPlan}`);
+    return memoryCached.data;
+  }
+  
+  // Fetch
+  const response = await isGet<Plan[]>(endpoint, env);
+  
+  if (!response.success || !response.data) {
+    console.error(`[IS Catalogs] Error fetching planes tipo ${vCodTipoPlan}:`, response.error);
+    return [];
+  }
+  
+  // Cache en memoria
+  memoryCache.set(cacheKey, { data: response.data, timestamp: Date.now() });
+  
+  return response.data;
 }
 
 /**
@@ -314,7 +339,8 @@ export async function preloadCatalogs(env: ISEnvironment = 'development'): Promi
     getModelos(env),
     getTipoDocumentos(env),
     getTipoPlanes(env),
-    getPlanes(env),
+    getPlanes('1', env), // CC Particular
+    getPlanes('3', env), // DAT Particular
   ]);
   
   console.log('[IS Catalogs] Pre-carga completada');
@@ -333,7 +359,7 @@ export async function obtenerTodosCatalogos(
     // Fetch paralelo de todos los catálogos
     const [marcasRes, modelosRes, tipoPlanesRes, tipoDocsRes] = await Promise.allSettled([
       isGet<{ Table: ISMarca[] }>(IS_ENDPOINTS.MARCAS, env),
-      isGet<{ Table: ISModelo[] }>(IS_ENDPOINTS.MODELOS + '?pagenumber=1&rowsperpage=10000', env),
+      isGet<{ Table: ISModelo[] }>(IS_ENDPOINTS.MODELOS + '/1/10000', env),
       isGet<{ Table: ISTipoPlan[] }>(IS_ENDPOINTS.TIPO_PLANES, env),
       isGet<{ Table: ISTipoDocumento[] }>(IS_ENDPOINTS.TIPO_DOCUMENTOS, env),
     ]);
@@ -346,7 +372,7 @@ export async function obtenerTodosCatalogos(
     
     // Obtener planes para cada tipo de plan
     const planesPromises = tipoPlanes.map(tp => 
-      isGet<{ Table: ISPlan[] }>(`${IS_ENDPOINTS.PLANES}?vCodTipoPlan=${tp.DATO}`, env)
+      isGet<{ Table: ISPlan[] }>(`${IS_ENDPOINTS.PLANES}/${tp.DATO}`, env)
     );
     const planesResults = await Promise.allSettled(planesPromises);
     const planes: ISPlan[] = [];

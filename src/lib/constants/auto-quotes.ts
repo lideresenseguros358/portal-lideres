@@ -1,8 +1,17 @@
 // Tarifas de Daños a Terceros - Datos fijos por aseguradora
-// Actualizado: 28 de enero de 2026
+// Actualizado: 8 de febrero de 2026
+
+export interface CoverageItem {
+  code: string;
+  name: string;
+  limit: string;
+  prima: number;
+  primaBase?: number;
+}
 
 export interface AutoThirdPartyPlan {
   name: string;
+  opcion?: string;
   coverages: {
     bodilyInjury: string;
     propertyDamage: string;
@@ -15,15 +24,24 @@ export interface AutoThirdPartyPlan {
     roadAssistance: string;
     towing: string;
     legalAssistance: string;
+    fedpaAsist?: string;
   };
+  coverageList?: CoverageItem[];
   annualPremium: number;
   installments: {
     available: boolean;
     description?: string;
     amount?: number;
     payments?: number;
+    totalWithInstallments?: number;
   };
   notes?: string;
+  endoso?: string;
+  endosoPdf?: string;
+  endosoBenefits?: string[];
+  planCode?: number;
+  includedCoverages?: string[];
+  idCotizacion?: string | number;
 }
 
 export interface AutoInsurer {
@@ -92,55 +110,67 @@ export const AUTO_THIRD_PARTY_INSURERS: AutoInsurer[] = [
     color: 'bg-yellow-500',
     emoji: '🟨',
     basicPlan: {
-      name: 'Plan Básico',
+      name: 'Opción A',
+      opcion: 'A',
+      planCode: 426,
+      endoso: 'FEDPA ASIST BASICO',
+      endosoPdf: '/API FEDPA/ENDOSO ASIST BASICO.pdf',
       coverages: {
-        bodilyInjury: '5,000 / 10,000',
-        propertyDamage: '5,000',
+        bodilyInjury: '5,000.00/10,000.00',
+        propertyDamage: '5,000.00',
         medicalExpenses: 'no',
-        accidentalDeathDriver: 'no',
+        accidentalDeathDriver: '5,000.00',
         accidentalDeathPassengers: 'no',
-        funeralExpenses: '1,500 (para conductor)',
-        accidentAssistance: 'sí',
-        ambulance: 'sí',
-        roadAssistance: 'no',
-        towing: 'Por accidente (hasta B/.100.00, máximo 1 evento por año)',
-        legalAssistance: 'sí',
-      },
-      annualPremium: 130.00,
-      installments: {
-        available: true,
-        description: 'Prima anual B/.130 o en dos cuotas de B/.79.13',
-        amount: 79.13,
-        payments: 2,
-      },
-    },
-    premiumPlan: {
-      name: 'Plan Premium',
-      coverages: {
-        bodilyInjury: '5,000 / 10,000',
-        propertyDamage: '10,000',
-        medicalExpenses: '500 / 2,500',
-        accidentalDeathDriver: '5,000',
-        accidentalDeathPassengers: 'no',
-        funeralExpenses: '1,500',
+        funeralExpenses: '1,500.00',
         accidentAssistance: 'sí',
         ambulance: 'sí',
         roadAssistance: 'sí',
-        towing: 'Por accidente o avería (hasta B/.150.00 o máximo 2 eventos por año)',
+        towing: 'sí',
         legalAssistance: 'sí',
+        fedpaAsist: 'FEDPA Asist Básico',
       },
-      annualPremium: 155.00,
+      annualPremium: 161,
       installments: {
         available: true,
-        description: 'Prima anual B/.155 o en dos cuotas de B/.94.35',
-        amount: 94.35,
+        description: '2 cuotas mensuales',
+        amount: 98,
         payments: 2,
       },
+      includedCoverages: ['A', 'B', 'FAB', 'H-1', 'K6'],
+    },
+    premiumPlan: {
+      name: 'Opción C',
+      opcion: 'C',
+      planCode: 426,
+      endoso: 'FEDPA ASIST VIP',
+      endosoPdf: '/API FEDPA/ENDOSO ASIST VIP.pdf',
+      coverages: {
+        bodilyInjury: '5,000.00/10,000.00',
+        propertyDamage: '10,000.00',
+        medicalExpenses: '500.00/2,500.00',
+        accidentalDeathDriver: '5,000.00',
+        accidentalDeathPassengers: 'no',
+        funeralExpenses: '1,500.00',
+        accidentAssistance: 'sí',
+        ambulance: 'sí',
+        roadAssistance: 'sí',
+        towing: 'sí',
+        legalAssistance: 'sí',
+        fedpaAsist: 'FEDPA Asist VIP',
+      },
+      annualPremium: 175,
+      installments: {
+        available: true,
+        description: '2 cuotas mensuales',
+        amount: 106,
+        payments: 2,
+      },
+      includedCoverages: ['A', 'B', 'C', 'FAV', 'H-1', 'K6'],
     },
   },
 ];
 
-export const COVERAGE_LABELS = {
+export const COVERAGE_LABELS: Record<string, string> = {
   bodilyInjury: 'Lesiones corporales',
   propertyDamage: 'Daños a la propiedad',
   medicalExpenses: 'Gastos médicos',
@@ -152,6 +182,7 @@ export const COVERAGE_LABELS = {
   roadAssistance: 'Asistencia vial',
   towing: 'Grúa',
   legalAssistance: 'Asistencia legal',
+  fedpaAsist: 'Endoso FEDPA',
 };
 
 export const COMPREHENSIVE_COVERAGE_INSURERS = [

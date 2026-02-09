@@ -481,3 +481,146 @@ export function calcularDescuentoBuenConductor(
   };
 }
 
+// ============================================
+// PARSEAR ENDOSOS DESDE BENEFICIOS API
+// ============================================
+
+export interface ParsedEndosoData {
+  fullExtrasBeneficios: string[];
+  porcelanaBeneficios: string[];
+  porcelanaDescripcion: string;
+}
+
+/**
+ * Parsea el texto crudo de beneficios de la API FEDPA para extraer
+ * los sub-beneficios de Endoso Full Extras y Endoso Porcelana.
+ * 
+ * La API devuelve texto con formato:
+ * "ENDOSO FULL EXTRAS BENEFICIOS: 1. ... 2. ... 19. ..."
+ * "ENDOSO PORCELANA BENEFICIOS IGUAL AL ANTERIOR, SOLO QUE EN LOS PUNTOS
+ *  QUE DEBAJO SE DETALLAN SE ADICIONAN Y MEJORAN:: 6. ... 10. ... 15. ..."
+ */
+export function parseEndosoBeneficiosFromAPI(rawTexts: string[]): ParsedEndosoData {
+  const result: ParsedEndosoData = {
+    fullExtrasBeneficios: [],
+    porcelanaBeneficios: [],
+    porcelanaDescripcion: '',
+  };
+  
+  if (!rawTexts || rawTexts.length === 0) {
+    return result;
+  }
+  
+  // Join all texts into one blob for parsing
+  const fullText = rawTexts.join(' ');
+  
+  // Find the ENDOSO PORCELANA section marker
+  const porcelanaMarkerRegex = /ENDOSO\s+PORCELANA\s*/i;
+  const porcelanaMatch = fullText.match(porcelanaMarkerRegex);
+  
+  let fullExtrasText = '';
+  let porcelanaText = '';
+  
+  if (porcelanaMatch && porcelanaMatch.index !== undefined) {
+    fullExtrasText = fullText.substring(0, porcelanaMatch.index).trim();
+    porcelanaText = fullText.substring(porcelanaMatch.index).trim();
+  } else {
+    // No Porcelana section found, all text is Full Extras
+    fullExtrasText = fullText;
+  }
+  
+  // Extract numbered items from Full Extras section
+  // Remove the header "ENDOSO FULL EXTRAS BENEFICIOS:"
+  const fullExtrasClean = fullExtrasText
+    .replace(/ENDOSO\s+FULL\s+EXTRAS\s+BENEFICIOS\s*:?\s*/i, '')
+    .trim();
+  
+  result.fullExtrasBeneficios = extractNumberedItems(fullExtrasClean);
+  
+  // Fallback: if no numbered items found, the API may return individual text items
+  // In that case, use each raw text as a separate benefit
+  if (result.fullExtrasBeneficios.length === 0 && rawTexts.length > 1) {
+    // Check if any text contains "ENDOSO" markers — if not, they're individual benefits
+    const hasEndosoMarker = rawTexts.some(t => /ENDOSO\s+(FULL|PORCELANA)/i.test(t));
+    if (!hasEndosoMarker) {
+      result.fullExtrasBeneficios = rawTexts
+        .filter(t => t.trim().length > 0)
+        .map(t => t.trim());
+      console.log(`[FEDPA Parser] Fallback: using ${result.fullExtrasBeneficios.length} individual texts as Full Extras`);
+    }
+  }
+  
+  // Extract Porcelana description and numbered items
+  if (porcelanaText) {
+    // Extract the description/header of Porcelana section
+    const porcelanaHeaderMatch = porcelanaText.match(
+      /ENDOSO\s+PORCELANA\s+(.*?)(?=::\s*\d|:\s*\d)/is
+    );
+    if (porcelanaHeaderMatch && porcelanaHeaderMatch[1]) {
+      result.porcelanaDescripcion = porcelanaHeaderMatch[1]
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+    
+    // Extract the numbered items after the header
+    // Find where the numbered items start (after :: or :)
+    const itemsStartMatch = porcelanaText.match(/::\s*(\d)/);
+    if (itemsStartMatch && itemsStartMatch.index !== undefined) {
+      const itemsText = porcelanaText.substring(itemsStartMatch.index + 2).trim();
+      result.porcelanaBeneficios = extractNumberedItems(itemsText);
+    } else {
+      // Try single colon
+      const singleColonMatch = porcelanaText.match(/:\s*(\d)/);
+      if (singleColonMatch && singleColonMatch.index !== undefined) {
+        const itemsText = porcelanaText.substring(singleColonMatch.index + 1).trim();
+        result.porcelanaBeneficios = extractNumberedItems(itemsText);
+      }
+    }
+  }
+  
+  console.log(`[FEDPA Parser] Full Extras: ${result.fullExtrasBeneficios.length} items, Porcelana: ${result.porcelanaBeneficios.length} items`);
+  
+  return result;
+}
+
+/**
+ * Extrae items numerados de un texto.
+ * Formato: "1. texto 2. texto 3. texto"
+ * Los números pueden no ser consecutivos (ej: 6. 10. 15.)
+ */
+function extractNumberedItems(text: string): string[] {
+  if (!text) return [];
+  
+  const items: string[] = [];
+  
+  // Split by numbered pattern: digit(s) followed by period and space
+  // Use regex to find all "N. text" patterns
+  const regex = /(\d+)\.\s+/g;
+  const matches: { index: number; number: number }[] = [];
+  
+  let match;
+  while ((match = regex.exec(text)) !== null) {
+    matches.push({ index: match.index, number: parseInt(match[1] || '0') });
+  }
+  
+  for (let i = 0; i < matches.length; i++) {
+    const current = matches[i]!;
+    const start = current.index + current.number.toString().length + 2; // skip "N. "
+    const next = matches[i + 1];
+    const end = next ? next.index : text.length;
+    
+    let itemText = text.substring(start, end).trim();
+    // Clean trailing periods or whitespace
+    itemText = itemText.replace(/\s+/g, ' ').trim();
+    // Remove trailing period if it's the last char
+    if (itemText.endsWith('.')) {
+      itemText = itemText.slice(0, -1).trim();
+    }
+    
+    if (itemText.length > 0) {
+      items.push(itemText);
+    }
+  }
+  
+  return items;
+}

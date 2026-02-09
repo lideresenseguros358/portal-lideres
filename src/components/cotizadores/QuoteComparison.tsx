@@ -337,16 +337,15 @@ export default function QuoteComparison({ policyType, quotes, quoteData }: Quote
         </div>
 
         {/* Quotes Grid - 2x2 en desktop para mejor espaciado */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6 pt-12">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6 pt-8 sm:pt-10">
           {quotes.map((quote) => (
             <div key={quote.id} className="relative overflow-visible">
-              {/* Recommended Badge - Flotante ARRIBA del card SIN RECORTE */}
+              {/* Recommended Badge - Flotante ARRIBA del card, centrado */}
               {quote.isRecommended && (
-                <div className="absolute -top-8 left-1/2 -translate-x-1/2 z-20" style={{ transform: 'translate(-50%, 0)' }}>
-                  <span className="inline-flex items-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2 sm:py-3 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white text-xs sm:text-sm font-bold rounded-full border-2 border-white premium-badge">
-                    <FaStar className="text-yellow-300 animate-pulse text-sm sm:text-base" />
+                <div className="absolute -top-5 sm:-top-6 left-0 right-0 z-20 flex justify-center">
+                  <span className="inline-flex items-center gap-1 sm:gap-2 px-3 sm:px-6 py-1.5 sm:py-2.5 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white text-[11px] sm:text-sm font-bold rounded-full border-2 border-white shadow-lg premium-badge whitespace-nowrap">
+                    <FaStar className="text-yellow-300 animate-pulse text-xs sm:text-base" />
                     RECOMENDADA
-                    {/* Shimmer effect */}
                     <span className="absolute inset-0 premium-badge-shimmer pointer-events-none rounded-full"></span>
                   </span>
                 </div>

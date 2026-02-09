@@ -71,22 +71,24 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // Emitir póliza
+    // Emitir póliza — mapear campos viejos a nuevos (Swagger CotizadorRequest)
     const result = await emitirPolizaAuto(
       {
         vIdPv,
-        vcodtipodoc: parseInt(vcodtipodoc as string) || 1, // Asegurar que sea número (1=CC)
-        vnrodoc,
-        vnombre,
-        vapellido,
-        vtelefono,
-        vcorreo,
-        vcodmarca: parseInt(vcodmarca as string), // Asegurar que sea número
-        vcodmodelo: parseInt(vcodmodelo as string), // Asegurar que sea número
-        vanioauto: parseInt(vanioauto),
-        vsumaaseg: parseFloat(vsumaaseg) || 0,
-        vcodplancobertura: parseInt(vcodplancobertura as string), // Asegurar que sea número
-        vcodgrupotarifa: parseInt(vcodgrupotarifa as string), // Asegurar que sea número
+        codTipoDoc: parseInt(vcodtipodoc as string) || 1,
+        nroDoc: vnrodoc,
+        nroNit: vnrodoc,
+        nombre: vnombre,
+        apellido: vapellido,
+        telefono: vtelefono,
+        correo: vcorreo,
+        codMarca: parseInt(vcodmarca as string),
+        codModelo: parseInt(vcodmodelo as string),
+        anioAuto: String(vanioauto),
+        sumaAseg: String(vsumaaseg || '0'),
+        codPlanCobertura: parseInt(vcodplancobertura as string),
+        codPlanCoberturaAdic: 0,
+        codGrupoTarifa: parseInt(vcodgrupotarifa as string),
         paymentToken,
       },
       environment as ISEnvironment

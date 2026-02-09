@@ -11,13 +11,22 @@ import { FaMoneyBillWave, FaUser, FaCar, FaCamera, FaCreditCard, FaClipboardChec
 
 export type EmissionStep = 'payment' | 'emission-data' | 'vehicle' | 'inspection' | 'payment-info' | 'review';
 
+export interface BreadcrumbStepDef {
+  key: EmissionStep;
+  label: string;
+  shortLabel: string;
+  icon: any;
+}
+
 interface EmissionBreadcrumbProps {
   currentStep: EmissionStep;
   completedSteps?: EmissionStep[];
   onStepClick?: (step: EmissionStep) => void;
+  steps?: BreadcrumbStepDef[];
+  basePath?: string;
 }
 
-const STEPS: Array<{ key: EmissionStep; label: string; shortLabel: string; icon: any }> = [
+const DEFAULT_STEPS: BreadcrumbStepDef[] = [
   { key: 'payment', label: 'Cuotas', shortLabel: 'Cuotas', icon: FaMoneyBillWave },
   { key: 'emission-data', label: 'Cliente', shortLabel: 'Cliente', icon: FaUser },
   { key: 'vehicle', label: 'Vehículo', shortLabel: 'Vehículo', icon: FaCar },
@@ -29,11 +38,14 @@ const STEPS: Array<{ key: EmissionStep; label: string; shortLabel: string; icon:
 export default function EmissionBreadcrumb({ 
   currentStep, 
   completedSteps = [],
-  onStepClick 
+  onStepClick,
+  steps,
+  basePath = '/cotizadores/emitir',
 }: EmissionBreadcrumbProps) {
   const router = useRouter();
+  const activeSteps = steps || DEFAULT_STEPS;
   
-  const currentIndex = STEPS.findIndex(s => s.key === currentStep);
+  const currentIndex = activeSteps.findIndex(s => s.key === currentStep);
   
   const isStepCompleted = (step: EmissionStep) => completedSteps.includes(step);
   const isStepAccessible = (step: EmissionStep, index: number) => {
@@ -52,7 +64,7 @@ export default function EmissionBreadcrumb({
       onStepClick(step);
     } else {
       // Default: navegar con query param
-      router.push(`/cotizadores/emitir?step=${step}`);
+      router.push(`${basePath}?step=${step}`);
     }
   };
   
@@ -62,7 +74,7 @@ export default function EmissionBreadcrumb({
         {/* Mobile: Lista Vertical Compacta */}
         <div className="sm:hidden">
           <div className="flex flex-col gap-2">
-            {STEPS.map((step, index) => {
+            {activeSteps.map((step, index) => {
               const isCurrent = step.key === currentStep;
               const isCompleted = isStepCompleted(step.key);
               const isAccessible = isStepAccessible(step.key, index);
@@ -117,12 +129,12 @@ export default function EmissionBreadcrumb({
         
         {/* Desktop: Lista Horizontal */}
         <div className="hidden sm:flex items-center justify-between gap-1">
-          {STEPS.map((step, index) => {
+          {activeSteps.map((step, index) => {
             const isCurrent = step.key === currentStep;
             const isCompleted = isStepCompleted(step.key);
             const isAccessible = isStepAccessible(step.key, index);
             const Icon = step.icon;
-            const isLast = index === STEPS.length - 1;
+            const isLast = index === activeSteps.length - 1;
             
             return (
               <div key={step.key} className="flex items-center flex-1">

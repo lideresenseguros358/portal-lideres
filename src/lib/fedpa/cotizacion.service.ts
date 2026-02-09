@@ -60,7 +60,9 @@ export async function generarCotizacion(
   
   // Extraer datos de la primera cobertura (todas tienen los mismos totales)
   const primeraCob = coberturas[0] || {};
-  const idCotizacion = primeraCob.COTIZACION?.toString();
+  console.log('[FEDPA Cotización] Primera cobertura keys:', Object.keys(primeraCob));
+  console.log('[FEDPA Cotización] COTIZACION field:', primeraCob.COTIZACION, '| IdCotizacion:', primeraCob.IdCotizacion, '| IDCOTIZACION:', primeraCob.IDCOTIZACION);
+  const idCotizacion = (primeraCob.COTIZACION || primeraCob.IdCotizacion || primeraCob.IDCOTIZACION || primeraCob.cotizacion)?.toString();
   const primaTotal = primeraCob.TOTAL_PRIMA_IMPUESTO || primeraCob.TOTAL_PRIMA || 0;
   
   // Calcular prima base e impuestos sumando todas las coberturas

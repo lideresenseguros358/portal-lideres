@@ -4,28 +4,39 @@
  */
 
 import { ISEnvironment, IS_ENDPOINTS, CORREDOR_FIJO, INSURER_SLUG } from './config';
-import { isGet } from './http-client';
+import { isGet, isPost } from './http-client';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { getTodayLocalDate } from '../utils/dates';
 
+/**
+ * CotizadorRequest — Swagger schema exacto (Feb 2026)
+ * Endpoint: POST /api/cotizaemisorauto/generarcotizacion
+ * Body: application/json
+ */
 export interface CotizacionAutoRequest {
   // Cliente
-  vcodtipodoc: number; // 1=CC, 2=RUC, 3=PAS - DEBE SER NÚMERO
-  vnrodoc: string;
-  vnombre: string;
-  vapellido: string;
-  vtelefono: string;
-  vcorreo: string;
+  codTipoDoc: number;    // 1=Cédula, 2=RUC, 3=Pasaporte, 9=RUC Extranjero, 11=Cédula Extranjero
+  nroDoc: string;         // CIP/RUC con guiones
+  nroNit: string;         // CIP/RUC con guiones (mismo que nroDoc)
+  nombre: string;
+  apellido: string;
+  telefono: string;       // Sin guiones
+  correo: string;
   
   // Vehículo
-  vcodmarca: number; // Código numérico sin decimales (ej: 204 para Toyota)
-  vcodmodelo: number; // Código numérico sin decimales (ej: 1234 para Corolla)
-  vanioauto: number;
+  codMarca: number;       // Código sin decimales de getmarcas
+  codModelo: number;      // Código sin decimales de getmodelos
+  anioAuto: string;       // Año como string
   
   // Cobertura
-  vsumaaseg: number;
-  vcodplancobertura: number; // Código numérico (ej: 14 para Cobertura Completa)
-  vcodgrupotarifa: number; // Código numérico
+  sumaAseg: string;       // Valor del vehículo como string ("0" si no aplica)
+  codPlanCobertura: number;      // De getplanes
+  codPlanCoberturaAdic: number;  // De GetPlanesAdicionales, o 0
+  codGrupoTarifa: number;        // De getgrupotarifa
+  
+  // Opcionales
+  cantOcupantes?: string;        // "0" por defecto
+  codPlanCobAsiento?: string;    // "0" por defecto
 }
 
 export interface CotizacionAutoResponse {
@@ -36,27 +47,30 @@ export interface CotizacionAutoResponse {
   error?: string;
 }
 
+/**
+ * Respuesta de /getlistacoberturas/{idpv}
+ * Cada fila tiene COD_AMPARO, COBERTURA, LIMITES, PRIMA1, etc.
+ */
+export interface CoberturaItem {
+  COD_AMPARO: number;
+  COBERTURA: string;
+  LIMITES: string;
+  LIMITES2: string;
+  DEDUCIBLE1: string;
+  DEDUCIBLE2: string;
+  PRIMA1: string;
+  SN_DESCUENTO: string;
+}
+
 export interface CoberturasResponse {
-  coberturas?: Array<{
-    codigo: string;
-    descripcion: string;
-    limite?: number;
-    minimo?: number;
-    maximo?: number;
-  }>;
-  subtotales?: Record<string, number>;
-  primaTotal?: number;
-  primaneta?: number;
-  iva?: number;
-  total?: number;
-  sumaAsegurada?: number;
-  sumaAseguradaMin?: number;
-  sumaAseguradaMax?: number;
+  Table?: CoberturaItem[];
 }
 
 export interface EmisionAutoRequest extends CotizacionAutoRequest {
-  vIdPv: string; // ID de cotización
+  vIdPv: string; // ID de cotización (IDCOT)
   paymentToken?: string;
+  // Campos adicionales para emisión (EmisorRequest del Swagger)
+  // TODO: Agregar campos completos del EmisorRequest cuando se implemente emisión
 }
 
 export interface EmisionAutoResponse {
@@ -70,37 +84,46 @@ export interface EmisionAutoResponse {
 
 /**
  * Generar cotización de auto
+ * Swagger: POST /api/cotizaemisorauto/generarcotizacion
+ * Body: CotizadorRequest (JSON)
  */
 export async function generarCotizacionAuto(
   request: CotizacionAutoRequest,
   env: ISEnvironment = 'development'
-): Promise<{ success: boolean; idCotizacion?: string; error?: string }> {
+): Promise<{ success: boolean; idCotizacion?: string; primaTotal?: number; error?: string }> {
   // Trigger auto-actualización de catálogos en background (no bloquea)
   import('@/lib/is/catalog-updater').then(m => m.triggerCatalogUpdate('IS')).catch(() => {});
   
-  // REMOVER DECIMALES de códigos numéricos (crítico para IS)
-  const cleanMarca = Math.floor(Number(request.vcodmarca));
-  const cleanModelo = Math.floor(Number(request.vcodmodelo));
-  const cleanGrupo = Math.floor(Number(request.vcodgrupotarifa));
+  // Construir body JSON según Swagger CotizadorRequest
+  const body = {
+    codTipoDoc: Math.floor(Number(request.codTipoDoc)),
+    nroDoc: request.nroDoc,
+    nroNit: request.nroNit || request.nroDoc,
+    nombre: request.nombre,
+    apellido: request.apellido,
+    telefono: (request.telefono || '').replace(/[-\s\(\)]/g, ''),
+    correo: request.correo,
+    codMarca: Math.floor(Number(request.codMarca)),
+    codModelo: Math.floor(Number(request.codModelo)),
+    sumaAseg: String(request.sumaAseg || '0'),
+    anioAuto: String(request.anioAuto),
+    codPlanCobertura: Math.floor(Number(request.codPlanCobertura)),
+    codPlanCoberturaAdic: Math.floor(Number(request.codPlanCoberturaAdic || 0)),
+    codGrupoTarifa: Math.floor(Number(request.codGrupoTarifa)),
+    cantOcupantes: request.cantOcupantes || '0',
+    codPlanCobAsiento: request.codPlanCobAsiento || '0',
+  };
   
-  // Según documentación IS - los parámetros van como texto plano en el path (SIN URL encoding)
-  // Ejemplo doc: .../getgenerarcotizacion/1/8-000-000/prueba/prueba/60000000/prueba2prueba.com/2/15/M500/2023/306/20
-  // Limpiar teléfono: solo números, sin guiones ni espacios
-  const cleanTelefono = request.vtelefono.replace(/[-\s\(\)]/g, '');
+  console.log('[IS Quotes] POST /generarcotizacion', { marca: body.codMarca, modelo: body.codModelo, plan: body.codPlanCobertura, grupo: body.codGrupoTarifa });
   
-  // Orden: vcodtipodoc/vnrodoc/vnombre/vapellido/vtelefono/vcorreo/vcodmarca/vcodmodelo/vsumaaseg/vanioauto/vcodplancobertura/vcodgrupotarifa
-  const endpoint = `${IS_ENDPOINTS.GENERAR_COTIZACION}/${request.vcodtipodoc}/${request.vnrodoc}/${request.vnombre}/${request.vapellido}/${cleanTelefono}/${request.vcorreo}/${cleanMarca}/${cleanModelo}/${request.vsumaaseg}/${request.vanioauto}/${request.vcodplancobertura}/${cleanGrupo}`;
-  
-  console.log('[IS Quotes] Generando cotización...', { marca: cleanMarca, modelo: cleanModelo, valor: request.vsumaaseg });
-  
-  const response = await isGet<{ Table: Array<{
+  const response = await isPost<{ Table: Array<{
     RESOP: number;
     MSG: string;
     MSG_FIELDS: string | null;
     IDCOT: number;
     NROCOT: number;
     PTOTAL: number | null;
-  }> }>(endpoint, env);
+  }> }>(IS_ENDPOINTS.GENERAR_COTIZACION, body, env);
   
   if (!response.success) {
     console.error('[IS Quotes] Error generando cotización:', response.error);
@@ -144,20 +167,22 @@ export async function generarCotizacionAuto(
   return {
     success: true,
     idCotizacion,
+    primaTotal: tableData.PTOTAL ?? undefined,
   };
 }
 
 /**
  * Obtener coberturas de cotización
+ * Swagger: GET /api/cotizaemisorauto/getlistacoberturas/{idpv}
  */
 export async function obtenerCoberturasCotizacion(
-  vIdPv: string,
-  vIdOpt: 1 | 2 | 3 = 1,
+  idpv: string,
+  _vIdOpt: 1 | 2 | 3 = 1, // Mantenido por compatibilidad pero no se usa en Swagger
   env: ISEnvironment = 'development'
 ): Promise<{ success: boolean; data?: CoberturasResponse; error?: string }> {
-  console.log('[IS Quotes] Obteniendo coberturas...', { vIdPv, vIdOpt });
+  console.log('[IS Quotes] GET /getlistacoberturas/', idpv);
   
-  const endpoint = `${IS_ENDPOINTS.COBERTURAS_COTIZACION}?vIdPv=${vIdPv}&vIdOpt=${vIdOpt}`;
+  const endpoint = `${IS_ENDPOINTS.COBERTURAS_COTIZACION}/${idpv}`;
   
   const response = await isGet<CoberturasResponse>(endpoint, env);
   
@@ -188,7 +213,7 @@ export async function emitirPolizaAuto(
   // Según instructivo IS, la emisión requiere pasos adicionales y documentos
   console.log('[IS Quotes] Emisión solicitada pero no implementada:', {
     idCotizacion: request.vIdPv,
-    cliente: `${request.vnombre} ${request.vapellido}`,
+    cliente: `${request.nombre} ${request.apellido}`,
   });
   
   return {

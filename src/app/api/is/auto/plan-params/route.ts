@@ -17,15 +17,21 @@ import { getTipoPlanes, getGruposTarifa, getPlanes } from '@/lib/is/catalogs.ser
 
 // Valores por defecto de la documentación oficial IS (Postman screenshots)
 // Estos se usan cuando no hay datos en cache de Supabase
+// Valores VERIFICADOS contra API IS real (Feb 2026)
+// Tipo 1=CC Particular, 3=DAT Particular, 4=Premium, 6=Perdida Total, 7=Pick Up, 14=CC Comercial, 16=DAT Comercial
 const DEFAULTS = {
   tiposPlanes: [
+    { DATO: 1, TEXTO: 'Cobertura Completa Particular', ID_ORDEN: 1 },
     { DATO: 3, TEXTO: 'DAT Particular', ID_ORDEN: 2 },
     { DATO: 16, TEXTO: 'DAT Comercial', ID_ORDEN: 4 },
     { DATO: 14, TEXTO: 'Cobertura Completa Comercial', ID_ORDEN: 5 },
+    { DATO: 4, TEXTO: 'Plan Premium', ID_ORDEN: 6 },
     { DATO: 6, TEXTO: 'Perdida Total', ID_ORDEN: 8 },
+    { DATO: 7, TEXTO: 'Pick Up', ID_ORDEN: 9 },
   ],
-  // Valores de la documentación (Página 5 del manual)
-  CC: { vCodTipoPlan: 14, vcodgrupotarifa: 20, vcodplancobertura: 306 },
+  // CC Particular: tipo=1, grupo=20 (PARTICULAR), plan=29 (CC 5/10 - 5 - 500/2,500)
+  CC: { vCodTipoPlan: 1, vcodgrupotarifa: 20, vcodplancobertura: 29 },
+  // DAT Particular: tipo=3, grupo=20 (PARTICULAR), plan=306 (SOBAT 5/10)
   DAT: { vCodTipoPlan: 3, vcodgrupotarifa: 20, vcodplancobertura: 306 },
 };
 
@@ -49,10 +55,13 @@ export async function GET(request: NextRequest) {
   try {
     // Intentar obtener datos de catálogos cacheados en Supabase
     // Estas funciones leen de BD local, NO llaman a la API IS
+    // Determinar vCodTipoPlan correcto
+    const tipoPlanCode = (tipo === 'DAT' || tipo === 'DANOS_TERCEROS') ? '3' : '1';
+    
     const [tiposPlanesRaw, gruposTarifaRaw, planesRaw] = await Promise.allSettled([
       getTipoPlanes(env),
-      getGruposTarifa(tipo === 'DAT' ? '3' : '14', env),
-      getPlanes(env),
+      getGruposTarifa(tipoPlanCode, env),
+      getPlanes(tipoPlanCode, env), // ⚠️ MUST pass vCodTipoPlan — /getplanes without it returns 404
     ]);
     
     // Extraer datos o usar defaults
@@ -67,9 +76,10 @@ export async function GET(request: NextRequest) {
     let vCodTipoPlan: number;
     
     if (tipo === 'CC' || tipo === 'COBERTURA_COMPLETA') {
+      // CC Particular = tipo 1 (NOT 14 which is CC Comercial)
       const ccPlan = tiposPlanes.find((t: any) => 
-        t.TEXTO?.toUpperCase().includes('COBERTURA COMPLETA') || 
-        t.TEXTO?.toUpperCase().includes('COMPLETA')
+        t.TEXTO?.toUpperCase().includes('COBERTURA COMPLETA') && 
+        t.TEXTO?.toUpperCase().includes('PARTICULAR')
       );
       vCodTipoPlan = (ccPlan as any)?.DATO || DEFAULTS.CC.vCodTipoPlan;
     } else if (tipo === 'DAT' || tipo === 'DANOS_TERCEROS') {

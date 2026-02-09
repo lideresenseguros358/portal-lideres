@@ -6,7 +6,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FaUser, FaCar, FaIdCard, FaUpload } from 'react-icons/fa';
+import { FaUser, FaCar, FaIdCard, FaUpload, FaCamera, FaCheckCircle } from 'react-icons/fa';
 import { toast } from 'sonner';
 import CedulaQRScanner from './CedulaQRScanner';
 
@@ -109,11 +109,37 @@ export default function EmissionDataForm({ quoteData, onContinue }: EmissionData
       try {
         const parsed = JSON.parse(savedEmissionData);
         setFormData(prev => ({ ...prev, ...parsed }));
-        if (parsed.cedulaFile) setCedulaFileName('(archivo guardado)');
-        if (parsed.licenciaFile) setLicenciaFileName('(archivo guardado)');
       } catch (error) {
         console.error('Error al cargar datos de emisión guardados:', error);
       }
+    }
+
+    // Restaurar archivos cacheados como File objects desde base64
+    const cachedCedula = sessionStorage.getItem('emissionCedulaFile');
+    if (cachedCedula) {
+      try {
+        const { name, type, data } = JSON.parse(cachedCedula);
+        const byteString = atob(data);
+        const ab = new ArrayBuffer(byteString.length);
+        const ia = new Uint8Array(ab);
+        for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
+        const file = new File([ab], name, { type });
+        setFormData(prev => ({ ...prev, cedulaFile: file }));
+        setCedulaFileName(name);
+      } catch (e) { console.error('Error restaurando cédula:', e); }
+    }
+    const cachedLicencia = sessionStorage.getItem('emissionLicenciaFile');
+    if (cachedLicencia) {
+      try {
+        const { name, type, data } = JSON.parse(cachedLicencia);
+        const byteString = atob(data);
+        const ab = new ArrayBuffer(byteString.length);
+        const ia = new Uint8Array(ab);
+        for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
+        const file = new File([ab], name, { type });
+        setFormData(prev => ({ ...prev, licenciaFile: file }));
+        setLicenciaFileName(name);
+      } catch (e) { console.error('Error restaurando licencia:', e); }
     }
   }, []);
 
@@ -161,6 +187,20 @@ export default function EmissionDataForm({ quoteData, onContinue }: EmissionData
     onContinue(formData);
   };
 
+  // Helper to cache a file as base64 in sessionStorage
+  const cacheFileToStorage = (key: string, file: File) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64 = (reader.result as string).split(',')[1];
+      try {
+        sessionStorage.setItem(key, JSON.stringify({ name: file.name, type: file.type, data: base64 }));
+      } catch (e) {
+        console.warn('No se pudo cachear archivo (muy grande):', e);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleCedulaFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -171,6 +211,7 @@ export default function EmissionDataForm({ quoteData, onContinue }: EmissionData
       setFormData({ ...formData, cedulaFile: file });
       setCedulaFileName(file.name);
       setErrors({ ...errors, cedulaFile: '' });
+      cacheFileToStorage('emissionCedulaFile', file);
     }
   };
 
@@ -184,6 +225,7 @@ export default function EmissionDataForm({ quoteData, onContinue }: EmissionData
       setFormData({ ...formData, licenciaFile: file });
       setLicenciaFileName(file.name);
       setErrors({ ...errors, licenciaFile: '' });
+      cacheFileToStorage('emissionLicenciaFile', file);
     }
   };
 
@@ -496,14 +538,19 @@ export default function EmissionDataForm({ quoteData, onContinue }: EmissionData
                 />
                 <label
                   htmlFor="cedula-upload"
-                  className={`flex items-center justify-center gap-2 w-full px-4 py-3 border-2 rounded-lg cursor-pointer transition-colors ${
-                    errors.cedulaFile ? 'border-red-500 bg-red-50' : 'border-gray-300 hover:border-[#8AAA19] bg-gray-50'
+                  className={`flex items-center justify-center gap-2 w-full px-4 py-3 rounded-lg cursor-pointer transition-colors font-semibold text-base ${
+                    cedulaFileName
+                      ? 'bg-green-50 border-2 border-[#8AAA19] text-[#8AAA19]'
+                      : errors.cedulaFile
+                        ? 'bg-red-50 border-2 border-red-500 text-red-600'
+                        : 'bg-[#8AAA19] text-white hover:bg-[#6d8814]'
                   }`}
                 >
-                  <FaUpload className="text-gray-600" />
-                  <span className="text-sm font-medium text-gray-700">
-                    {cedulaFileName || 'Seleccionar archivo'}
-                  </span>
+                  {cedulaFileName ? (
+                    <><FaCheckCircle className="text-lg" /> {cedulaFileName}</>
+                  ) : (
+                    <><FaCamera className="text-lg" /> Subir Documento</>
+                  )}
                 </label>
               </div>
               {errors.cedulaFile && <p className="text-xs text-red-500 mt-1">{errors.cedulaFile}</p>}
@@ -524,14 +571,19 @@ export default function EmissionDataForm({ quoteData, onContinue }: EmissionData
                 />
                 <label
                   htmlFor="licencia-upload"
-                  className={`flex items-center justify-center gap-2 w-full px-4 py-3 border-2 rounded-lg cursor-pointer transition-colors ${
-                    errors.licenciaFile ? 'border-red-500 bg-red-50' : 'border-gray-300 hover:border-[#8AAA19] bg-gray-50'
+                  className={`flex items-center justify-center gap-2 w-full px-4 py-3 rounded-lg cursor-pointer transition-colors font-semibold text-base ${
+                    licenciaFileName
+                      ? 'bg-green-50 border-2 border-[#8AAA19] text-[#8AAA19]'
+                      : errors.licenciaFile
+                        ? 'bg-red-50 border-2 border-red-500 text-red-600'
+                        : 'bg-[#8AAA19] text-white hover:bg-[#6d8814]'
                   }`}
                 >
-                  <FaUpload className="text-gray-600" />
-                  <span className="text-sm font-medium text-gray-700">
-                    {licenciaFileName || 'Seleccionar archivo'}
-                  </span>
+                  {licenciaFileName ? (
+                    <><FaCheckCircle className="text-lg" /> {licenciaFileName}</>
+                  ) : (
+                    <><FaCamera className="text-lg" /> Subir Documento</>
+                  )}
                 </label>
               </div>
               {errors.licenciaFile && <p className="text-xs text-red-500 mt-1">{errors.licenciaFile}</p>}

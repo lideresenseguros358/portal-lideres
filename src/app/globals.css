@@ -94,7 +94,7 @@ textarea:not([data-no-uppercase]) {
 /* Prevenir zoom automático en iOS - TODOS los inputs deben tener mínimo 16px */
 @media (max-width: 768px) {
   /* Todos los tipos de input */
-  input,
+  input:not([data-no-zoom]),
   textarea,
   select {
     font-size: 16px !important;
@@ -103,8 +103,8 @@ textarea:not([data-no-uppercase]) {
   }
   
   /* Asegurar que inputs con clases text-sm o text-xs también tengan 16px */
-  input.text-sm,
-  input.text-xs,
+  input.text-sm:not([data-no-zoom]),
+  input.text-xs:not([data-no-zoom]),
   textarea.text-sm,
   textarea.text-xs,
   select.text-sm,
@@ -123,7 +123,7 @@ textarea:not([data-no-uppercase]) {
 
 /* Prevenir zoom en iOS Safari - aplicar a todos los dispositivos táctiles */
 @supports (-webkit-touch-callout: none) {
-  input,
+  input:not([data-no-zoom]),
   textarea,
   select {
     font-size: max(16px, 1rem) !important;

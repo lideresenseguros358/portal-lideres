@@ -451,40 +451,38 @@ export default function FormAutoCoberturaCompleta() {
                 />
               </label>
               <div className="bg-gradient-to-br from-slate-50 to-slate-100 rounded-xl p-4 md:p-6 border-2 border-[#8AAA19]">
-                {/* Input editable - estructura igualada a daños propiedad */}
+                {/* Input editable - campo de texto con formato de moneda */}
                 <div className="text-center mb-4">
-                  <span 
-                    contentEditable
-                    suppressContentEditableWarning
+                  <input
+                    type="text"
                     inputMode="numeric"
-                    onInput={(e) => {
-                      const text = e.currentTarget.textContent || '';
-                      setValorInputTemp(text);
-                    }}
+                    data-no-zoom="true"
+                    value={valorInputTemp !== '' ? valorInputTemp : `$${formData.valorVehiculo.toLocaleString('en-US')}`}
                     onFocus={(e) => {
-                      const range = document.createRange();
-                      const sel = window.getSelection();
-                      range.selectNodeContents(e.currentTarget);
-                      sel?.removeAllRanges();
-                      sel?.addRange(range);
+                      setValorInputTemp(String(formData.valorVehiculo));
+                      setTimeout(() => e.target.select(), 0);
                     }}
-                    onBlur={(e) => {
-                      const text = e.currentTarget.textContent || '';
-                      const numStr = text.replace(/[$,]/g, '');
-                      const num = parseInt(numStr);
-                      if (!isNaN(num) && num >= 5000 && num <= 100000) {
-                        setFormData({ ...formData, valorVehiculo: num });
+                    onChange={(e) => {
+                      const raw = e.target.value.replace(/[^0-9]/g, '');
+                      if (raw.length <= 6) {
+                        setValorInputTemp(raw);
+                        const num = parseInt(raw);
+                        if (!isNaN(num) && num >= 5000 && num <= 100000) {
+                          setFormData(prev => ({ ...prev, valorVehiculo: num }));
+                        }
                       }
-                      e.currentTarget.textContent = `$${formData.valorVehiculo.toLocaleString('en-US')}`;
+                    }}
+                    onBlur={() => {
+                      const num = parseInt(valorInputTemp);
+                      if (!isNaN(num)) {
+                        const clamped = Math.max(5000, Math.min(100000, num));
+                        setFormData(prev => ({ ...prev, valorVehiculo: clamped }));
+                      }
                       setValorInputTemp('');
                     }}
-                    className="text-2xl sm:text-3xl md:text-4xl font-bold text-[#8AAA19] focus:outline-none cursor-pointer block"
-                  >
-                    {valorInputTemp || `$${formData.valorVehiculo.toLocaleString('en-US')}`}
-                  </span>
-                  <p className="text-xs sm:text-sm text-gray-600 font-medium mt-2">
-                    👆 Toque para editar
-                  </p>
+                    className="text-4xl sm:text-5xl md:text-6xl font-bold text-[#8AAA19] bg-transparent border-none focus:outline-none text-center w-full cursor-pointer"
+                  />
+                  <p className="text-xs sm:text-sm text-gray-600 mt-1">Toque el monto para editarlo</p>
                 </div>
                 
                 {/* Slider con mejor responsive */}

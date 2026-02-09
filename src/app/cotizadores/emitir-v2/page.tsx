@@ -251,8 +251,14 @@ export default function EmitirV2Page() {
     }
   };
 
+  // Estado de emisión para evitar doble click
+  const [isEmitting, setIsEmitting] = useState(false);
+
   // Emisión final
   const handleConfirmEmission = async () => {
+    if (isEmitting) return;
+    setIsEmitting(true);
+    
     try {
       toast.info('Emitiendo póliza...');
       
@@ -261,52 +267,62 @@ export default function EmitirV2Page() {
       const isInternacionalReal = selectedPlan?._isReal && selectedPlan?.insurerName?.includes('INTERNACIONAL');
       
       if (isFedpaReal) {
-        // Emisión FEDPA con documentos
+        // ========== PASO 1: Subir documentos ==========
         const docsFormData = new FormData();
         docsFormData.append('environment', 'DEV');
         if (documents?.cedulaFile) docsFormData.append('documento_identidad', documents.cedulaFile);
         if (documents?.licenciaFile) docsFormData.append('licencia_conducir', documents.licenciaFile);
         if (documents?.registroFile) docsFormData.append('registro_vehicular', documents.registroFile);
         
+        toast.info('Subiendo documentos...');
         const docsResponse = await fetch('/api/fedpa/documentos/upload', {
           method: 'POST',
           body: docsFormData,
         });
         
-        if (!docsResponse.ok) throw new Error('Error subiendo documentos');
+        if (!docsResponse.ok) {
+          const docsError = await docsResponse.json().catch(() => ({}));
+          throw new Error(docsError.error || 'Error subiendo documentos');
+        }
         const docsResult = await docsResponse.json();
+        if (!docsResult.success) throw new Error(docsResult.error || 'Error subiendo documentos');
         
-        // Emitir póliza FEDPA
+        // ========== PASO 2: Emitir póliza FEDPA ==========
+        toast.info('Generando póliza...');
         const emisionPayload = {
           environment: 'DEV',
-          Plan: selectedPlan._planCode || 1,
+          Plan: selectedPlan._planCode || parseInt(selectedPlan._idCotizacion) || 411,
           idDoc: docsResult.idDoc,
+          // Cliente
           PrimerNombre: insuredData?.primerNombre,
           PrimerApellido: insuredData?.primerApellido,
-          SegundoNombre: insuredData?.segundoNombre,
-          SegundoApellido: insuredData?.segundoApellido,
+          SegundoNombre: insuredData?.segundoNombre || '',
+          SegundoApellido: insuredData?.segundoApellido || '',
           Identificacion: insuredData?.cedula,
           FechaNacimiento: insuredData?.fechaNacimiento?.split('-').reverse().join('/'),
           Sexo: insuredData?.sexo,
           Email: insuredData?.email,
-          Telefono: parseInt(insuredData?.telefono.replace(/\D/g, '') || '0'),
-          Celular: parseInt(insuredData?.celular.replace(/\D/g, '') || '0'),
+          Telefono: parseInt(insuredData?.telefono?.replace(/\D/g, '') || '0'),
+          Celular: parseInt(insuredData?.celular?.replace(/\D/g, '') || '0'),
           Direccion: insuredData?.direccion,
           esPEP: insuredData?.esPEP ? 1 : 0,
-          Acreedor: insuredData?.acreedor,
-          sumaAsegurada: quoteData.valorVehiculo,
-          Uso: quoteData.uso || '10',
-          Marca: selectedPlan._marcaCodigo,
-          Modelo: selectedPlan._modeloCodigo,
-          Ano: quoteData.ano?.toString(),
+          Acreedor: insuredData?.acreedor || '',
+          // Vehículo
+          sumaAsegurada: quoteData?.valorVehiculo || selectedPlan._sumaAsegurada || 0,
+          Uso: selectedPlan._uso || quoteData?.uso || '10',
+          Marca: selectedPlan._marcaCodigo || quoteData?.marcaCodigo || quoteData?.marca,
+          Modelo: selectedPlan._modeloCodigo || quoteData?.modeloCodigo || quoteData?.modelo,
+          Ano: (selectedPlan._anio || quoteData?.anio || quoteData?.anno || new Date().getFullYear()).toString(),
           Motor: vehicleData?.motor,
           Placa: vehicleData?.placa,
           Vin: vehicleData?.vin,
           Color: vehicleData?.color,
-          Pasajero: vehicleData?.pasajeros,
-          Puerta: vehicleData?.puertas,
+          Pasajero: vehicleData?.pasajeros || 5,
+          Puerta: vehicleData?.puertas || 4,
           PrimaTotal: selectedPlan.annualPremium,
         };
+        
+        console.log('[Emisión] Payload FEDPA:', emisionPayload);
         
         const emisionResponse = await fetch('/api/fedpa/emision', {
           method: 'POST',
@@ -314,31 +330,62 @@ export default function EmitirV2Page() {
           body: JSON.stringify(emisionPayload),
         });
         
-        if (!emisionResponse.ok) throw new Error('Error emitiendo póliza');
         const emisionResult = await emisionResponse.json();
         
+        if (!emisionResponse.ok || !emisionResult.success) {
+          throw new Error(emisionResult.error || 'Error emitiendo póliza FEDPA');
+        }
+        
+        // ========== PASO 3: Guardar datos completos para confirmación ==========
         sessionStorage.setItem('emittedPolicy', JSON.stringify({
-          nroPoliza: emisionResult.nroPoliza,
+          nroPoliza: emisionResult.poliza || emisionResult.nroPoliza,
           insurer: 'FEDPA Seguros',
+          vigenciaDesde: emisionResult.desde || emisionResult.vigenciaDesde,
+          vigenciaHasta: emisionResult.hasta || emisionResult.vigenciaHasta,
+          cotizacion: emisionResult.cotizacion,
+          policyId: emisionResult.policyId,
+          clientId: emisionResult.clientId,
+          primaTotal: selectedPlan.annualPremium,
+          planType: selectedPlan.planType,
+          asegurado: `${insuredData?.primerNombre} ${insuredData?.primerApellido}`,
+          cedula: insuredData?.cedula,
+          vehiculo: `${quoteData?.marca} ${quoteData?.modelo} ${emisionPayload.Ano}`,
+          placa: vehicleData?.placa,
         }));
         
         toast.success('¡Póliza emitida exitosamente!');
         router.push('/cotizadores/confirmacion');
         
       } else if (isInternacionalReal) {
-        // Emisión IS (simplificado)
-        toast.success('¡Póliza emitida exitosamente!');
-        router.push('/cotizadores/confirmacion');
+        // IS: Emisión pendiente (API bloqueada)
+        toast.error('Internacional de Seguros: emisión no disponible temporalmente. Contacte soporte.');
+        setIsEmitting(false);
+        return;
       } else {
-        // Simulado
+        // Simulado (demo)
         await new Promise(resolve => setTimeout(resolve, 2000));
-        toast.success('¡Póliza emitida exitosamente!');
+        
+        sessionStorage.setItem('emittedPolicy', JSON.stringify({
+          nroPoliza: `DEMO-${Date.now()}`,
+          insurer: selectedPlan?.insurerName || 'Demo',
+          vigenciaDesde: new Date().toLocaleDateString('es-PA'),
+          vigenciaHasta: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toLocaleDateString('es-PA'),
+          primaTotal: selectedPlan?.annualPremium,
+          planType: selectedPlan?.planType,
+          asegurado: `${insuredData?.primerNombre} ${insuredData?.primerApellido}`,
+          vehiculo: `${quoteData?.marca} ${quoteData?.modelo}`,
+          placa: vehicleData?.placa,
+          isDemo: true,
+        }));
+        
+        toast.success('¡Póliza emitida exitosamente! (Demo)');
         router.push('/cotizadores/confirmacion');
       }
       
     } catch (error: any) {
       console.error('Error emitiendo:', error);
       toast.error(error.message || 'Error al emitir póliza');
+      setIsEmitting(false);
     }
   };
 
@@ -408,27 +455,11 @@ export default function EmitirV2Page() {
               isActive={activeSectionId === paymentSection.id}
               onActivate={() => handleActivateSection(paymentSection.id)}
           >
-            <div className="space-y-6">
-              {/* Botón volver a comparativa */}
-              <div className="flex justify-start">
-                <button
-                  onClick={() => router.push('/cotizadores')}
-                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 
-                    bg-white border-2 border-gray-300 rounded-lg hover:bg-gray-50 
-                    hover:border-gray-400 transition-colors"
-                  type="button"
-                >
-                  <span>←</span>
-                  Volver a Comparativa
-                </button>
-              </div>
-
-              <PaymentPlanSelector
-                annualPremium={selectedPlan.annualPremium}
-                priceBreakdown={selectedPlan._priceBreakdown}
-                onContinue={handlePaymentComplete}
-              />
-            </div>
+            <PaymentPlanSelector
+              annualPremium={selectedPlan.annualPremium}
+              priceBreakdown={selectedPlan._priceBreakdown}
+              onContinue={handlePaymentComplete}
+            />
           </EmissionSection>
           )}
 
@@ -556,18 +587,34 @@ export default function EmitirV2Page() {
                 />
 
                 {creditCardToken && (
-                  <div className="pt-6 border-t-2 border-gray-200">
-                    <button
-                      onClick={() => unlockNextSection('payment-method')}
-                      className="w-full py-4 px-6 rounded-xl font-bold text-lg
-                        bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white 
-                        hover:shadow-2xl hover:scale-105 transition-all duration-200"
-                      type="button"
-                    >
-                      Continuar al Resumen →
-                    </button>
+                  <div className="flex items-center gap-2 p-4 bg-green-50 border-2 border-green-300 rounded-xl">
+                    <FaCheckCircle className="text-[#8AAA19] text-xl flex-shrink-0" />
+                    <p className="text-sm font-semibold text-green-800">
+                      Tarjeta {cardBrand} ****{cardLast4} registrada correctamente
+                    </p>
                   </div>
                 )}
+
+                <div className="pt-4 border-t-2 border-gray-200">
+                  <button
+                    onClick={() => unlockNextSection('payment-method')}
+                    disabled={!creditCardToken}
+                    className={`w-full py-4 px-6 rounded-xl font-bold text-lg flex items-center justify-center gap-3 transition-all duration-200 ${
+                      creditCardToken
+                        ? 'bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white hover:shadow-2xl hover:scale-105 cursor-pointer'
+                        : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                    }`}
+                    type="button"
+                  >
+                    <FaClipboardCheck className="text-xl" />
+                    Continuar al Resumen
+                  </button>
+                  {!creditCardToken && (
+                    <p className="text-xs text-gray-500 text-center mt-2">
+                      Ingresa los datos de tu tarjeta para continuar
+                    </p>
+                  )}
+                </div>
               </div>
             </EmissionSection>
           )}
@@ -704,14 +751,26 @@ export default function EmitirV2Page() {
               {/* Botón Emitir */}
               <button
                 onClick={handleConfirmEmission}
-                className="w-full py-5 px-6 rounded-xl font-bold text-xl
-                  bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white 
-                  hover:shadow-2xl hover:scale-105 transition-all duration-200
-                  flex items-center justify-center gap-3"
+                disabled={isEmitting}
+                className={`w-full py-5 px-6 rounded-xl font-bold text-xl
+                  flex items-center justify-center gap-3 transition-all duration-200
+                  ${isEmitting
+                    ? 'bg-gray-400 text-gray-200 cursor-not-allowed'
+                    : 'bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white hover:shadow-2xl hover:scale-105'
+                  }`}
                 type="button"
               >
-                <FaCheckCircle className="text-2xl" />
-                Confirmar y Emitir Póliza →
+                {isEmitting ? (
+                  <>
+                    <div className="w-6 h-6 border-3 border-white border-t-transparent rounded-full animate-spin" />
+                    Emitiendo póliza...
+                  </>
+                ) : (
+                  <>
+                    <FaCheckCircle className="text-2xl" />
+                    Confirmar y Emitir Póliza
+                  </>
+                )}
               </button>
             </div>
           </EmissionSection>
