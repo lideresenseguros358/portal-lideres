@@ -69,6 +69,10 @@ export interface CotizacionAutoRequest {
   // Opcionales
   cantOcupantes?: string;        // "0" por defecto
   codPlanCobAsiento?: string;    // "0" por defecto
+  
+  // Requeridos desde Feb 2026
+  fecNacimiento?: string;        // Fecha nacimiento dd/MM/yyyy
+  codProvincia?: number;         // Código provincia (8=Panamá)
 }
 
 export interface CotizacionAutoResponse {
@@ -150,6 +154,8 @@ export async function generarCotizacionAuto(
     codGrupoTarifa: Math.floor(Number(request.codGrupoTarifa)),
     cantOcupantes: request.cantOcupantes || '0',
     codPlanCobAsiento: request.codPlanCobAsiento || '0',
+    fecNacimiento: request.fecNacimiento || '01/01/1990',
+    codProvincia: Math.floor(Number(request.codProvincia || 8)),
   };
   
   // DEDUPLICACIÓN: Evitar doble-click

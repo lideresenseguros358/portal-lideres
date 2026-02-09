@@ -465,6 +465,15 @@ export default function QuoteComparison({ policyType, quotes, quoteData }: Quote
                             Elige de 2 a 10 cuotas en el proceso de emisión
                           </div>
                         )}
+                        
+                        {/* Descuento buena experiencia (IS) */}
+                        {quote._descuentoBuenaExp > 0 && (
+                          <div className="mt-2 px-2 py-1 bg-green-100 rounded-lg text-center">
+                            <span className="text-[10px] text-green-700 font-semibold">
+                              ✓ Desc. buena experiencia: -${quote._descuentoBuenaExp.toLocaleString('en-US', {minimumFractionDigits: 2})} ({quote._descuentoPorcentaje}%)
+                            </span>
+                          </div>
+                        )}
                       </div>
                     </>
                   ) : (
@@ -496,6 +505,14 @@ export default function QuoteComparison({ policyType, quotes, quoteData }: Quote
                           </span>
                         </div>
                       )}
+                    </div>
+                  ) : quote._deducibleInfo?.tooltip ? (
+                    <div className="mt-3 space-y-1">
+                      {quote._deducibleInfo.tooltip.split('\n').map((line: string, i: number) => (
+                        <div key={i} className="flex items-center justify-center gap-1 text-xs text-gray-600">
+                          <span className="font-semibold text-[#010139]">{line}</span>
+                        </div>
+                      ))}
                     </div>
                   ) : (
                     <div className="flex items-center justify-center gap-2 mt-3 text-xs text-gray-600">

@@ -112,6 +112,26 @@ async function obtenerTokenDeDB(amb: string): Promise<string | null> {
   return null;
 }
 
+async function limpiarTokenDeDB(amb: string): Promise<void> {
+  try {
+    const supabase = getSupabaseAdmin();
+    await (supabase as any)
+      .from('fedpa_tokens')
+      .delete()
+      .eq('amb', amb);
+    console.log(`[FEDPA Auth] Token expirado eliminado de DB (amb=${amb})`);
+  } catch {
+    // Intentar system_config
+    try {
+      const supabase = getSupabaseAdmin();
+      await (supabase as any)
+        .from('system_config')
+        .delete()
+        .eq('key', `fedpa_token_${amb}`);
+    } catch { /* silenciar */ }
+  }
+}
+
 async function actualizarLastOk(amb: string): Promise<void> {
   try {
     const supabase = getSupabaseAdmin();
@@ -240,7 +260,9 @@ export async function generarToken(
         actualizarLastOk(env).catch(() => {});
         return { success: true, token: dbToken };
       }
-      console.warn(`[FEDPA Auth] Token de DB no pasó probe (amb=${env}). Token expirado en FEDPA.`);
+      console.warn(`[FEDPA Auth] Token de DB no pasó probe (amb=${env}). Limpiando token expirado de DB...`);
+      // Limpiar token expirado de DB para que no bloquee futuras generaciones
+      await limpiarTokenDeDB(env);
     }
     
     // 2c. Cache memoria expirado (< 10 min) — intentar probe
@@ -253,8 +275,24 @@ export async function generarToken(
       }
     }
     
-    // 2d. NO tenemos token en ningún lado → NEEDS_FEDPA_TOKEN_RESET
-    // NO reintentar, NO probar otro ambiente, NO spamear la API
+    // 2d. Intentar extraer token de CUALQUIER campo string largo en la respuesta
+    const rawData = response.data as any;
+    if (rawData && typeof rawData === 'object') {
+      for (const key of Object.keys(rawData)) {
+        const val = rawData[key];
+        if (typeof val === 'string' && val.length > 50 && val.includes('.')) {
+          // Parece un JWT
+          console.log(`[FEDPA Auth] 🔍 Posible token encontrado en campo "${key}" (${val.length} chars)`);
+          tokenCache.set(cacheKey, { token: val, exp: Date.now() + TOKEN_TTL_MS });
+          guardarTokenEnDB(env, val, 'extracted_from_response').catch(() => {});
+          return { success: true, token: val };
+        }
+      }
+      // Log completo para debugging
+      console.warn('[FEDPA Auth] Respuesta completa (sin token encontrado):', JSON.stringify(rawData).substring(0, 500));
+    }
+    
+    // 2e. NO tenemos token en ningún lado → NEEDS_FEDPA_TOKEN_RESET
     console.error(`[FEDPA Auth] ❌ NEEDS_FEDPA_TOKEN_RESET (amb=${env})`);
     console.error('[FEDPA Auth] FEDPA indica token existente pero no lo devuelve; no hay token local.');
     console.error('[FEDPA Auth] Requiere: esperar ~50 min para expiración, o reset manual del token en FEDPA.');
@@ -313,6 +351,52 @@ export async function obtenerToken(
   if (!result.success && cached && cached.exp > now - 5 * 60 * 1000) {
     console.warn(`[FEDPA Auth] Generación falló, usando token reciente de cache (expiró hace ${Math.round((now - cached.exp) / 60000)}min)`);
     return { success: true, token: cached.token };
+  }
+  
+  // 4. Si needsReset, reintentar con esperas progresivas (el token FEDPA expira en ~50 min)
+  // Intentar 3 veces con esperas de 15s cada una (total ~45s)
+  if (result.needsReset) {
+    const RETRY_DELAYS = [15_000, 15_000, 15_000]; // 3 reintentos de 15s
+    
+    for (let i = 0; i < RETRY_DELAYS.length; i++) {
+      const delay = RETRY_DELAYS[i] ?? 15_000;
+      console.log(`[FEDPA Auth] ⏳ Token bloqueado. Reintento ${i + 1}/${RETRY_DELAYS.length} en ${delay / 1000}s (amb=${env})...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      
+      // Revisar DB primero (otro proceso pudo haber guardado el token)
+      const dbTokenRetry = await obtenerTokenDeDB(env);
+      if (dbTokenRetry) {
+        const isValid = await probeToken(dbTokenRetry, env);
+        if (isValid) {
+          tokenCache.set(cacheKey, { token: dbTokenRetry, exp: Date.now() + TOKEN_TTL_MS });
+          actualizarLastOk(env).catch(() => {});
+          console.log(`[FEDPA Auth] ✅ Token recuperado de DB en reintento ${i + 1} (amb=${env})`);
+          return { success: true, token: dbTokenRetry };
+        }
+        // Token de DB no sirve, limpiarlo
+        await limpiarTokenDeDB(env);
+      }
+      
+      // Intentar generar nuevo
+      const retryResult = await generarToken(env);
+      if (retryResult.success) {
+        console.log(`[FEDPA Auth] ✅ Retry ${i + 1} exitoso (amb=${env})`);
+        return retryResult;
+      }
+      
+      // Si ya no es needsReset (otro error), no seguir reintentando
+      if (!retryResult.needsReset) {
+        return retryResult;
+      }
+    }
+    
+    // Todos los reintentos fallaron
+    console.error(`[FEDPA Auth] ❌ Todos los reintentos fallaron (amb=${env}). Token FEDPA bloqueado.`);
+    return {
+      success: false,
+      needsReset: true,
+      error: `Token FEDPA bloqueado después de ${RETRY_DELAYS.length} reintentos. El token existente en FEDPA no ha expirado aún (~50 min TTL). Espere o use la función de seed manual.`,
+    };
   }
   
   return result;

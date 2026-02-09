@@ -65,6 +65,8 @@ export async function POST(request: NextRequest) {
         codPlanCobertura,
         codPlanCoberturaAdic: formData.codPlanCoberturaAdic || 0,
         codGrupoTarifa,
+        fecNacimiento: formData.fecNacimiento || '01/01/1990',
+        codProvincia: formData.codProvincia || 8,
       },
       environment as ISEnvironment
     );

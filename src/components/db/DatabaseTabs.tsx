@@ -1750,14 +1750,12 @@ export default function DatabaseTabs({
         />
       )}
       {modal === 'edit-client' && clientToEdit && (
-        <Modal title="Editar Cliente" onClose={() => router.push('/db?tab=clients')}>
-          <ClientForm 
-            client={clientToEdit} 
-            onClose={() => router.push('/db?tab=clients', { scroll: false })}
-            expedienteModalOpen={expedienteUploadModalOpen}
-            onExpedienteModalChange={setExpedienteUploadModalOpen}
-          />
-        </Modal>
+        <ClientForm 
+          client={clientToEdit} 
+          onClose={() => router.push('/db?tab=clients', { scroll: false })}
+          expedienteModalOpen={expedienteUploadModalOpen}
+          onExpedienteModalChange={setExpedienteUploadModalOpen}
+        />
       )}
 
       {/* Modal de Expediente - Separado y completamente independiente */}

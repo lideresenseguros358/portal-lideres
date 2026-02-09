@@ -40,18 +40,62 @@ const mapDeductibleToVIdOpt = (deductible: string): 1 | 2 | 3 => {
   }
 };
 
+// ============================================
+// IS ENDOSOS: Definiciones oficiales desde imagen de IS
+// ============================================
+const IS_ENDOSOS = {
+  PLUS: {
+    codigo: 'PLUS',
+    nombre: 'Endoso Plus',
+    costoAnual: 35.00,
+    beneficios: [
+      'Alquiler de auto por colisión: Hasta 10 días',
+      'Muerte accidental: B/.10,000 por asegurado',
+      'Pérdida de efectos personales: Hasta B/.100 por asegurado',
+      'Adelanto de gastos médicos por hospitalización: Hasta B/.500 por cada 1 conductor y 4 ocupantes',
+    ],
+  },
+  CENTENARIO: {
+    codigo: 'CENTENARIO',
+    nombre: 'Endoso Plus Centenario',
+    costoAnual: 60.00,
+    beneficios: [
+      'Alquiler de auto por colisión: Hasta 15 días',
+      'Muerte accidental: B/.15,000 por asegurado',
+      'Revisado sin costo',
+      'Pérdida de efectos personales: Hasta B/.350 por asegurado',
+      'Adelanto de gastos médicos por hospitalización: Hasta B/.500 por cada 1 conductor y 4 ocupantes',
+      'Bono de mantenimiento: B/.50',
+      'Descuento en deducible de comprensivo: 20%',
+      'Asistencia en viaje, hospedaje, transporte o renta de vehículo: Hasta B/.100',
+      'Descuento en póliza de optiseguro residencial: 30%',
+      'Adelanto de gastos funerarios: Hasta B/.1,500 para la conductora y hasta B/.500 por ocupante',
+    ],
+  },
+  // Beneficios exclusivos del plan (no endoso)
+  BENEFICIOS_GENERALES: [
+    'Grúa (desperfectos mecánicos) hasta B/.150 o máximo 3 eventos por año',
+    'Alquiler de auto por 30 días en caso de robo, después de las 72 horas',
+    'No aplica depreciación para autos nuevos 0 kms en caso de pérdida total el primer año',
+    'Cobertura extraterritorial por 30 días a Costa Rica',
+    'Servicios de Ambulancia, 24 horas los 365 días de año',
+    'Descuentos especiales en la instalación de sistemas de alarma y accesorios en centros autorizados',
+    'Asistencia Legal',
+    'Devolución del 100% en el deducible de colisión',
+  ],
+};
+
 /**
  * Genera cotización REAL con INTERNACIONAL usando las APIs
+ * UNA sola llamada a la API, genera datos para ambas tarjetas (básico y premium)
  */
-const generateInternacionalRealQuote = async (quoteData: any) => {
+const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: any | null; premium: any | null }> => {
   try {
-    // Usar códigos numéricos que vienen del formulario
     const vcodmarca = quoteData.marcaCodigo || 204;
     const vcodmodelo = quoteData.modeloCodigo || 1234;
     const vIdOpt = mapDeductibleToVIdOpt(quoteData.deducible || 'bajo');
     
-    // PASO CRÍTICO: Obtener vcodplancobertura y vcodgrupotarifa REALES de la API IS
-    // (Antes estaban hardcodeados como 14 y 1, causando error 404)
+    // Obtener parámetros de plan
     console.log('[IS] Obteniendo parámetros de plan dinámicamente...');
     const planParamsRes = await fetch('/api/is/auto/plan-params?tipo=CC&env=development');
     
@@ -63,17 +107,16 @@ const generateInternacionalRealQuote = async (quoteData: any) => {
       if (planParams.success) {
         vcodplancobertura = planParams.vcodplancobertura;
         vcodgrupotarifa = planParams.vcodgrupotarifa;
-        console.log('[IS] Parámetros obtenidos de API:', { vcodplancobertura, vcodgrupotarifa });
       } else {
         console.error('[IS] Error obteniendo parámetros:', planParams.error);
-        return null;
+        return { basico: null, premium: null };
       }
     } else {
       console.error('[IS] Error HTTP obteniendo parámetros de plan');
-      return null;
+      return { basico: null, premium: null };
     }
     
-    // Llamar API para generar cotización con parámetros REALES
+    // UNA sola llamada a la API de cotización
     const quoteResponse = await fetch('/api/is/auto/quote', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -96,46 +139,61 @@ const generateInternacionalRealQuote = async (quoteData: any) => {
     
     if (!quoteResponse.ok) {
       const errorBody = await quoteResponse.json().catch(() => null);
-      const errorMsg = errorBody?.error || `Error HTTP ${quoteResponse.status}`;
-      console.error('[IS] Error en cotización:', errorMsg);
-      if (errorBody?.isTemporary) {
-        console.warn('[IS] Servicio temporalmente no disponible. Reintentar en unos minutos.');
-      }
-      return null;
+      console.error('[IS] Error en cotización:', errorBody?.error || `HTTP ${quoteResponse.status}`);
+      return { basico: null, premium: null };
     }
     
     const quoteResult = await quoteResponse.json();
     if (!quoteResult.success || !quoteResult.idCotizacion) {
       console.error('[IS] No se obtuvo cotización:', quoteResult.error || 'Sin ID');
-      return null;
+      return { basico: null, premium: null };
     }
     
     const idCotizacion = quoteResult.idCotizacion;
     console.log('[INTERNACIONAL] ID Cotización:', idCotizacion);
     
-    // Obtener coberturas y precio real con vIdOpt según deducible
+    // Obtener coberturas
     const coberturasResponse = await fetch(`/api/is/auto/coberturas?vIdPv=${idCotizacion}&vIdOpt=${vIdOpt}&env=development`);
     
     if (!coberturasResponse.ok) {
       console.error('Error en API coberturas:', await coberturasResponse.text());
-      return null;
+      return { basico: null, premium: null };
     }
     
     const coberturasResult = await coberturasResponse.json();
     if (!coberturasResult.success) {
       console.error('No se obtuvieron coberturas');
-      return null;
+      return { basico: null, premium: null };
     }
     
     const apiCoberturas = coberturasResult.data?.Table || [];
-    const primaTotal = apiCoberturas.reduce((sum: number, c: any) => sum + (parseFloat(c[`PRIMA${vIdOpt}`] || c.PRIMA || 0)), 0);
     
-    console.log(`[IS] Opción ${vIdOpt}: ${apiCoberturas.length} coberturas, Prima: $${primaTotal.toFixed(2)}`);
+    // ============================================
+    // DESCUENTO POR BUENA EXPERIENCIA
+    // SN_DESCUENTO = 'S' indica que la cobertura permite descuento
+    // Aplicar máximo descuento automáticamente
+    // ============================================
+    const coberturasConDescuento = apiCoberturas.filter((c: any) => c.SN_DESCUENTO === 'S');
+    const MAX_DESCUENTO_BUENA_EXP = 0.15; // 15% máximo descuento por buena experiencia
     
-    // OBTENER deducibles REALES: COMPRENSIVO (fijo) y COLISION (variable)
-    const dedKey = `DEDUCIBLE${vIdOpt}`;
+    let primaBase = 0;
+    let descuentoTotal = 0;
     
-    // Buscar coberturas específicas por nombre
+    apiCoberturas.forEach((c: any) => {
+      const prima = parseFloat(c.PRIMA || c.PRIMA1 || 0);
+      primaBase += prima;
+      if (c.SN_DESCUENTO === 'S') {
+        descuentoTotal += prima * MAX_DESCUENTO_BUENA_EXP;
+      }
+    });
+    
+    const primaConDescuento = primaBase - descuentoTotal;
+    
+    console.log(`[IS] Prima base: $${primaBase.toFixed(2)}, Descuento buena exp: $${descuentoTotal.toFixed(2)} (${coberturasConDescuento.length} coberturas elegibles), Prima final: $${primaConDescuento.toFixed(2)}`);
+    
+    // ============================================
+    // DEDUCIBLES REALES
+    // ============================================
     const coberturaComprensivo = apiCoberturas.find((c: any) => 
       c.COBERTURA?.toUpperCase().includes('COMPRENSIVO')
     );
@@ -144,36 +202,36 @@ const generateInternacionalRealQuote = async (quoteData: any) => {
       c.COBERTURA?.toUpperCase().includes('VUELCO')
     );
     
-    const deducibleComprensivo = coberturaComprensivo?.[dedKey] || '';
-    const deducibleColision = coberturaColision?.[dedKey] || '';
-    
-    // Mostrar ambos deducibles si existen
-    const deducibleReal = (deducibleColision && deducibleComprensivo)
-      ? `Colisión: ${deducibleColision} | Comprensivo: ${deducibleComprensivo}`
-      : deducibleColision || deducibleComprensivo || 'Según póliza';
+    const deducibleComprensivo = coberturaComprensivo?.DEDUCIBLE1 || '';
+    const deducibleColision = coberturaColision?.DEDUCIBLE1 || '';
     
     const deducibleInfo = {
-      valor: 0,
+      valor: parseFloat(deducibleColision) || 0,
       tipo: quoteData.deducible || 'medio',
-      descripcion: deducibleReal,
+      descripcion: (deducibleColision && deducibleComprensivo)
+        ? `Colisión: ${deducibleColision} | Comprensivo: ${deducibleComprensivo}`
+        : deducibleColision || deducibleComprensivo || 'Según póliza',
+      tooltip: (deducibleColision && deducibleComprensivo)
+        ? `Colisión/Vuelco: ${deducibleColision}\nComprensivo: ${deducibleComprensivo}`
+        : undefined,
     };
     
-    // Mapear coberturas con TODOS los detalles según documentación IS
-    const coberturasDetalladas = apiCoberturas.map((c: any) => {
-      const deducibleKey = `DEDUCIBLE${vIdOpt}`;
-      return {
-        codigo: c.COD_AMPARO,
-        nombre: c.COBERTURA,
-        descripcion: c.COBERTURA,
-        limite: c.LIMITES || 'Incluido',
-        prima: parseFloat(c[`PRIMA${vIdOpt}`] || c.PRIMA || 0),
-        deducible: c[deducibleKey] || '',
-        incluida: true
-      };
-    });
+    // ============================================
+    // COBERTURAS DETALLADAS
+    // ============================================
+    const coberturasDetalladas = apiCoberturas.map((c: any) => ({
+      codigo: c.COD_AMPARO,
+      nombre: c.COBERTURA,
+      descripcion: c.COBERTURA,
+      limite: c.LIMITES || 'Incluido',
+      prima: parseFloat(c.PRIMA || c.PRIMA1 || 0),
+      deducible: c.DEDUCIBLE1 || '',
+      incluida: true,
+      tieneDescuento: c.SN_DESCUENTO === 'S',
+    }));
     
-    // Extraer límites de responsabilidad civil de las coberturas
-    const limites = [];
+    // Límites de responsabilidad civil
+    const limites: any[] = [];
     const lesionesCobertura = apiCoberturas.find((c: any) => 
       c.COBERTURA?.toUpperCase().includes('LESIONES') || 
       c.COBERTURA?.toUpperCase().includes('CORPORALES')
@@ -186,7 +244,6 @@ const generateInternacionalRealQuote = async (quoteData: any) => {
         descripcion: 'Lesiones Corporales'
       });
     }
-    
     const propiedadCobertura = apiCoberturas.find((c: any) => 
       c.COBERTURA?.toUpperCase().includes('PROPIEDAD') || 
       c.COBERTURA?.toUpperCase().includes('DAÑOS')
@@ -198,7 +255,6 @@ const generateInternacionalRealQuote = async (quoteData: any) => {
         descripcion: 'Daños a la Propiedad'
       });
     }
-    
     const medicosCobertura = apiCoberturas.find((c: any) => 
       c.COBERTURA?.toUpperCase().includes('MÉDICOS') || 
       c.COBERTURA?.toUpperCase().includes('MEDICOS')
@@ -212,43 +268,15 @@ const generateInternacionalRealQuote = async (quoteData: any) => {
       });
     }
     
-    // Determinar si es básico o premium según planType del input
-    const esPremium = quoteData.planType === 'premium';
-    
-    // Extraer beneficios/endosos adicionales para plan premium
-    const beneficiosPremium = esPremium ? [
-      'Asistencia vial 24/7',
-      'Vehículo de reemplazo',
-      'Cobertura en Centroamérica',
-      'Protección de accesorios'
-    ] : [];
-    
-    const endososPremium = esPremium ? [
-      'Endoso de Cobertura Ampliada',
-      'Endoso de Protección Total'
-    ] : [];
-    
-    // Retornar en formato compatible con QuoteComparison CON TODOS LOS DETALLES
-    return {
-      id: 'internacional-real',
+    // ============================================
+    // DATOS COMPARTIDOS
+    // ============================================
+    const sharedData = {
       insurerName: 'INTERNACIONAL de Seguros',
-      planType: esPremium ? 'premium' as const : 'basico' as const,
-      isRecommended: esPremium,
-      annualPremium: primaTotal,
-      deductible: deducibleInfo.valor,
-      coverages: coberturasDetalladas.map((c: any) => ({
-        name: c.nombre,
-        included: true,
-      })),
-      // DATOS COMPLETOS PARA VISUALIZACIÓN
       _coberturasDetalladas: coberturasDetalladas,
       _limites: limites,
-      _beneficios: beneficiosPremium,
-      _endosos: endososPremium,
       _deducibleInfo: deducibleInfo,
       _sumaAsegurada: quoteData.valorVehiculo || 0,
-      _endosoIncluido: esPremium ? 'Endoso Premium' : 'Endoso Básico',
-      // Datos adicionales para emisión
       _isReal: true,
       _idCotizacion: idCotizacion,
       _vcodmarca: vcodmarca,
@@ -259,10 +287,106 @@ const generateInternacionalRealQuote = async (quoteData: any) => {
       _deducibleOriginal: quoteData.deducible,
       _marcaNombre: quoteData.marca,
       _modeloNombre: quoteData.modelo,
+      _descuentoBuenaExp: descuentoTotal,
+      _descuentoPorcentaje: descuentoTotal > 0 ? MAX_DESCUENTO_BUENA_EXP * 100 : 0,
     };
+    
+    // ============================================
+    // BÁSICO: Endoso Plus ($35/año)
+    // ============================================
+    const primaBasico = primaConDescuento + IS_ENDOSOS.PLUS.costoAnual;
+    const basicoEndosos = [
+      {
+        codigo: IS_ENDOSOS.PLUS.codigo,
+        nombre: IS_ENDOSOS.PLUS.nombre,
+        incluido: true,
+        descripcion: `Costo anual: B/.${IS_ENDOSOS.PLUS.costoAnual.toFixed(2)} (no incluye impuestos)`,
+        subBeneficios: IS_ENDOSOS.PLUS.beneficios,
+      },
+    ];
+    
+    const basico = {
+      ...sharedData,
+      id: 'internacional-basico',
+      planType: 'basico' as const,
+      isRecommended: false,
+      annualPremium: primaBasico,
+      deductible: deducibleInfo.valor,
+      coverages: coberturasDetalladas.map((c: any) => ({ name: c.nombre, included: true })),
+      _priceBreakdown: {
+        primaBase: primaBase,
+        descuentoBuenConductor: descuentoTotal,
+        descuentoPorcentaje: descuentoTotal > 0 ? MAX_DESCUENTO_BUENA_EXP * 100 : 0,
+        costoEndoso: IS_ENDOSOS.PLUS.costoAnual,
+        impuesto: 0,
+        totalConTarjeta: primaBasico,
+        totalAlContado: Math.round(primaBasico * 0.95 * 100) / 100, // 5% descuento contado
+        ahorroContado: Math.round(primaBasico * 0.05 * 100) / 100,
+        descuentoProntoPago: Math.round(primaBasico * 0.05 * 100) / 100,
+      },
+      _beneficios: IS_ENDOSOS.BENEFICIOS_GENERALES.map(b => ({ nombre: b, descripcion: b, incluido: true })),
+      _endosos: basicoEndosos,
+      _endosoIncluido: 'Endoso Plus',
+    };
+    
+    // ============================================
+    // PREMIUM: Endoso Plus Centenario ($60/año)
+    // ============================================
+    const primaPremium = primaConDescuento + IS_ENDOSOS.CENTENARIO.costoAnual;
+    const premiumEndosos = [
+      {
+        codigo: IS_ENDOSOS.CENTENARIO.codigo,
+        nombre: IS_ENDOSOS.CENTENARIO.nombre,
+        incluido: true,
+        descripcion: `Costo anual: B/.${IS_ENDOSOS.CENTENARIO.costoAnual.toFixed(2)} (no incluye impuestos)`,
+        subBeneficios: IS_ENDOSOS.CENTENARIO.beneficios,
+      },
+      {
+        codigo: IS_ENDOSOS.PLUS.codigo,
+        nombre: IS_ENDOSOS.PLUS.nombre,
+        incluido: true,
+        descripcion: 'Incluido en Centenario (beneficios base)',
+        subBeneficios: IS_ENDOSOS.PLUS.beneficios,
+      },
+    ];
+    
+    const premium = {
+      ...sharedData,
+      id: 'internacional-premium',
+      planType: 'premium' as const,
+      isRecommended: true,
+      annualPremium: primaPremium,
+      deductible: deducibleInfo.valor,
+      coverages: [
+        ...coberturasDetalladas.map((c: any) => ({ name: c.nombre, included: true })),
+        { name: 'ENDOSO PLUS CENTENARIO (beneficios mejorados)', included: true },
+      ],
+      _priceBreakdown: {
+        primaBase: primaBase,
+        descuentoBuenConductor: descuentoTotal,
+        descuentoPorcentaje: descuentoTotal > 0 ? MAX_DESCUENTO_BUENA_EXP * 100 : 0,
+        costoEndoso: IS_ENDOSOS.CENTENARIO.costoAnual,
+        impuesto: 0,
+        totalConTarjeta: primaPremium,
+        totalAlContado: Math.round(primaPremium * 0.95 * 100) / 100,
+        ahorroContado: Math.round(primaPremium * 0.05 * 100) / 100,
+        descuentoProntoPago: Math.round(primaPremium * 0.05 * 100) / 100,
+      },
+      _beneficios: IS_ENDOSOS.BENEFICIOS_GENERALES.map(b => ({ nombre: b, descripcion: b, incluido: true })),
+      _endosos: premiumEndosos,
+      _endosoIncluido: 'Endoso Plus Centenario',
+    };
+    
+    console.log(`[IS] ✅ Básico: $${primaBasico.toFixed(2)} (Endoso Plus $${IS_ENDOSOS.PLUS.costoAnual})`);
+    console.log(`[IS] ✅ Premium: $${primaPremium.toFixed(2)} (Endoso Centenario $${IS_ENDOSOS.CENTENARIO.costoAnual})`);
+    if (descuentoTotal > 0) {
+      console.log(`[IS] ✅ Descuento buena experiencia aplicado: -$${descuentoTotal.toFixed(2)} (${MAX_DESCUENTO_BUENA_EXP * 100}%)`);
+    }
+    
+    return { basico, premium };
   } catch (error) {
     console.error('[INTERNACIONAL] Error generando cotización real:', error);
-    return null;
+    return { basico: null, premium: null };
   }
 };
 
@@ -694,24 +818,14 @@ export default function ComparePage() {
         if (policyType === 'auto-completa') {
           const realQuotes: any[] = [];
           
-          // INTERNACIONAL: generar plan básico y premium
-          // IMPORTANTE: Ambos usan el MISMO deducible del form, diferencia es el ENDOSO
+          // INTERNACIONAL: UNA sola llamada a la API, genera ambas tarjetas
+          // Básico = Endoso Plus ($35), Premium = Endoso Plus Centenario ($60)
           try {
-            // Plan Básico - SIN endoso premium
-            const intBasico = await generateInternacionalRealQuote({ ...input, planType: 'basico' });
-            if (intBasico) {
-              intBasico.id = 'internacional-basico';
-              intBasico.planType = 'basico';
-              realQuotes.push(intBasico);
-            }
-            
-            // Plan Premium - CON endoso alto (más beneficios)
-            const intPremium = await generateInternacionalRealQuote({ ...input, planType: 'premium' });
-            if (intPremium) {
-              intPremium.id = 'internacional-premium';
-              intPremium.planType = 'premium';
-              intPremium.isRecommended = true;
-              realQuotes.push(intPremium);
+            const isQuotes = await generateInternacionalQuotes(input);
+            if (isQuotes.basico) realQuotes.push(isQuotes.basico);
+            if (isQuotes.premium) realQuotes.push(isQuotes.premium);
+            if (!isQuotes.basico && !isQuotes.premium) {
+              console.warn('[IS] No se pudieron generar cotizaciones');
             }
           } catch (error) {
             console.error('Error obteniendo cotizaciones INTERNACIONAL:', error);

@@ -56,6 +56,9 @@ export default function PremiumUpgradeModal({
     setTimeout(onClose, 300);
   };
 
+  // Detect if this is IS (Internacional) or FEDPA to show correct endoso names
+  const isIS = insurerName.toUpperCase().includes('INTERNACIONAL');
+  
   const hasBreakdown = premiumPlan._priceBreakdown && basicPlan._priceBreakdown;
   
   const precioBasicoTarjeta = hasBreakdown ? basicPlan._priceBreakdown.totalConTarjeta : basicPlan.premium;
@@ -134,7 +137,9 @@ export default function PremiumUpgradeModal({
           </button>
           <div className="flex items-center gap-3 mb-1">
             <FaStar className="text-yellow-300 text-2xl" />
-            <h2 className="text-xl font-bold">¡Mejora a Endoso Porcelana!</h2>
+            <h2 className="text-xl font-bold">
+              {isIS ? '¡Mejora a Endoso Plus Centenario!' : '¡Mejora a Endoso Porcelana!'}
+            </h2>
           </div>
           <p className="text-white/80 text-xs">{insurerName} — Protección superior para tu vehículo</p>
         </div>
@@ -149,7 +154,7 @@ export default function PremiumUpgradeModal({
               <div className="absolute top-0 right-0 w-16 h-16 bg-[#8AAA19]/10 rounded-bl-full"></div>
               <div className="text-center mb-3">
                 <span className="inline-block px-2.5 py-1 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white text-[10px] font-bold rounded-full shadow-md uppercase tracking-wide">
-                  ⭐ Premium — Porcelana
+                  ⭐ Premium — {isIS ? 'Centenario' : 'Porcelana'}
                 </span>
               </div>
               <div className="text-center mb-3">
@@ -180,7 +185,7 @@ export default function PremiumUpgradeModal({
             <div className="border-2 border-gray-200 rounded-xl p-4 bg-gray-50/50 opacity-75">
               <div className="text-center mb-3">
                 <span className="inline-block px-2.5 py-1 bg-gray-200 text-gray-600 text-[10px] font-bold rounded-full uppercase tracking-wide">
-                  Básico — Full Extras
+                  Básico — {isIS ? 'Plus' : 'Full Extras'}
                 </span>
               </div>
               <div className="text-center mb-3">
@@ -312,7 +317,11 @@ export default function PremiumUpgradeModal({
           {/* Highlight */}
           <div className="bg-blue-50 border-l-4 border-[#010139] p-3 rounded-lg">
             <p className="text-xs text-[#010139]">
-              💡 <strong>El Endoso Porcelana</strong> cubre vidrios, faros, espejos, luces, molduras y pintura — componentes que se dañan frecuentemente y son costosos de reparar. <strong>Mismo deducible</strong> que el plan básico.
+              {isIS ? (
+                <>💡 <strong>El Endoso Plus Centenario</strong> incluye más días de alquiler, mayor cobertura de muerte accidental, bono de mantenimiento, descuento en deducible de comprensivo y más. <strong>Mismo deducible</strong> que el plan básico.</>
+              ) : (
+                <>💡 <strong>El Endoso Porcelana</strong> cubre vidrios, faros, espejos, luces, molduras y pintura — componentes que se dañan frecuentemente y son costosos de reparar. <strong>Mismo deducible</strong> que el plan básico.</>
+              )}
             </p>
           </div>
         </div>
@@ -324,13 +333,13 @@ export default function PremiumUpgradeModal({
             className="w-full py-3 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg font-bold hover:shadow-xl transition-all cursor-pointer flex items-center justify-center gap-2 text-sm"
           >
             <FaStar className="text-yellow-300" />
-            Mejorar a Premium — Endoso Porcelana
+            {isIS ? 'Mejorar a Premium — Endoso Centenario' : 'Mejorar a Premium — Endoso Porcelana'}
           </button>
           <button
             onClick={onContinueBasic}
             className="w-full py-2 bg-gray-200 text-gray-600 rounded-lg font-medium hover:bg-gray-300 transition-colors cursor-pointer text-xs"
           >
-            Continuar con Plan Básico (Full Extras)
+            {isIS ? 'Continuar con Plan Básico (Endoso Plus)' : 'Continuar con Plan Básico (Full Extras)'}
           </button>
         </div>
       </div>
