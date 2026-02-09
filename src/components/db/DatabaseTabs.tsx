@@ -1257,6 +1257,13 @@ export default function DatabaseTabs({
   const policyId = searchParams.get('policy');
   const editClientId = searchParams.get('editClient');
   const editPolicyId = searchParams.get('editPolicy');
+  const currentSearch = searchParams.get('search') || '';
+
+  // Helper: build DB URL preserving the current search param
+  const dbUrl = (params: string) => {
+    const base = `/db?tab=clients${currentSearch ? `&search=${encodeURIComponent(currentSearch)}` : ''}`;
+    return params ? `${base}&${params}` : base;
+  };
   
   const [showExpedienteModal, setShowExpedienteModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
@@ -1429,8 +1436,8 @@ export default function DatabaseTabs({
 
   const clientToEdit = editClientId ? clients.find(c => c.id === editClientId) : null;
 
-  const handleView = (id: string) => router.push(`/db?tab=clients&modal=view-client&editClient=${id}`, { scroll: false });
-  const handleEdit = (id: string) => router.push(`/db?tab=clients&modal=edit-client&editClient=${id}`, { scroll: false });
+  const handleView = (id: string) => router.push(dbUrl(`modal=view-client&editClient=${id}`), { scroll: false });
+  const handleEdit = (id: string) => router.push(dbUrl(`modal=edit-client&editClient=${id}`), { scroll: false });
   const handleDelete = async (id: string) => {
     const client = clients.find(c => c.id === id);
     const clientName = client?.name || 'este cliente';
@@ -1483,7 +1490,7 @@ export default function DatabaseTabs({
     );
     
     if (clientWithPolicy) {
-      router.push(`/db?tab=clients&modal=edit-client&editClient=${clientWithPolicy.id}&editPolicy=${policyId}`, { scroll: false });
+      router.push(dbUrl(`modal=edit-client&editClient=${clientWithPolicy.id}&editPolicy=${policyId}`), { scroll: false });
     } else {
       toast.error('No se encontró el cliente de esta póliza');
     }
@@ -1732,10 +1739,10 @@ export default function DatabaseTabs({
     <>
       {modal === 'new-client' && (
         <ClientPolicyWizard
-          onClose={() => router.push('/db?tab=clients')}
+          onClose={() => router.push(dbUrl(''))}
           onSuccess={() => {
             // Navegar directamente - el cambio de URL refresca automáticamente
-            router.push('/db?tab=clients');
+            router.push(dbUrl(''));
           }}
           role={role}
           userEmail={userEmail}
@@ -1744,15 +1751,15 @@ export default function DatabaseTabs({
       {modal === 'view-client' && clientToEdit && (
         <ClientDetailsModal
           client={clientToEdit}
-          onClose={() => router.push('/db?tab=clients', { scroll: false })}
-          onEdit={() => router.push(`/db?tab=clients&modal=edit-client&editClient=${clientToEdit.id}`, { scroll: false })}
+          onClose={() => router.push(dbUrl(''), { scroll: false })}
+          onEdit={() => router.push(dbUrl(`modal=edit-client&editClient=${clientToEdit.id}`), { scroll: false })}
           onOpenExpediente={() => setExpedienteUploadModalOpen(true)}
         />
       )}
       {modal === 'edit-client' && clientToEdit && (
         <ClientForm 
           client={clientToEdit} 
-          onClose={() => router.push('/db?tab=clients', { scroll: false })}
+          onClose={() => router.push(dbUrl(''), { scroll: false })}
           expedienteModalOpen={expedienteUploadModalOpen}
           onExpedienteModalChange={setExpedienteUploadModalOpen}
         />
