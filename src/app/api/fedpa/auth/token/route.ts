@@ -4,15 +4,30 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { generarToken, renovarToken, obtenerToken } from '@/lib/fedpa/auth.service';
+import { generarToken, renovarToken, obtenerToken, seedToken } from '@/lib/fedpa/auth.service';
 import type { FedpaEnvironment } from '@/lib/fedpa/config';
 
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { action = 'get', environment = 'PROD' } = body;
+    const { action = 'get', environment = 'PROD', token: manualToken } = body;
     
     const env = environment as FedpaEnvironment;
+    
+    // Acción especial: seed manual de token
+    if (action === 'seed') {
+      if (!manualToken) {
+        return NextResponse.json(
+          { success: false, error: 'Se requiere campo "token" para seed manual' },
+          { status: 400 }
+        );
+      }
+      const seedResult = await seedToken(env, manualToken);
+      if (!seedResult.success) {
+        return NextResponse.json({ success: false, error: seedResult.error }, { status: 400 });
+      }
+      return NextResponse.json({ success: true, message: 'Token seeded manualmente' });
+    }
     
     let result;
     
@@ -30,9 +45,17 @@ export async function POST(request: NextRequest) {
     }
     
     if (!result.success) {
+      const status = result.needsReset ? 503 : 400;
       return NextResponse.json(
-        { success: false, error: result.error },
-        { status: 400 }
+        {
+          success: false,
+          error: result.error,
+          needsReset: result.needsReset || false,
+          hint: result.needsReset
+            ? 'Use action="seed" con un token obtenido manualmente, o espere ~50 min.'
+            : undefined,
+        },
+        { status }
       );
     }
     
@@ -59,9 +82,10 @@ export async function GET(request: NextRequest) {
     const result = await obtenerToken(env);
     
     if (!result.success) {
+      const status = result.needsReset ? 503 : 400;
       return NextResponse.json(
-        { success: false, error: result.error },
-        { status: 400 }
+        { success: false, error: result.error, needsReset: result.needsReset || false },
+        { status }
       );
     }
     

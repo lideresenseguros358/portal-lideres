@@ -9,6 +9,8 @@ import type { EmitirPolizaRequest } from '@/lib/fedpa/types';
 import type { FedpaEnvironment } from '@/lib/fedpa/config';
 
 export async function POST(request: NextRequest) {
+  const requestId = `emi-${Date.now().toString(36)}`;
+  
   try {
     const body = await request.json();
     const { environment = 'PROD', ...emisionData } = body;
@@ -23,7 +25,7 @@ export async function POST(request: NextRequest) {
     
     if (missing.length > 0) {
       return NextResponse.json(
-        { success: false, error: `Campos requeridos faltantes: ${missing.join(', ')}` },
+        { success: false, error: `Campos requeridos faltantes: ${missing.join(', ')}`, requestId },
         { status: 400 }
       );
     }
@@ -32,7 +34,7 @@ export async function POST(request: NextRequest) {
     const fechaRegex = /^\d{2}\/\d{2}\/\d{4}$/;
     if (!fechaRegex.test(emisionData.FechaNacimiento)) {
       return NextResponse.json(
-        { success: false, error: 'FechaNacimiento debe estar en formato dd/mm/yyyy' },
+        { success: false, error: 'FechaNacimiento debe estar en formato dd/mm/yyyy', requestId },
         { status: 400 }
       );
     }
@@ -40,7 +42,7 @@ export async function POST(request: NextRequest) {
     // Validar sexo
     if (!['M', 'F'].includes(emisionData.Sexo)) {
       return NextResponse.json(
-        { success: false, error: 'Sexo debe ser M o F' },
+        { success: false, error: 'Sexo debe ser M o F', requestId },
         { status: 400 }
       );
     }
@@ -48,10 +50,17 @@ export async function POST(request: NextRequest) {
     // Validar PEP
     if (![0, 1].includes(emisionData.esPEP)) {
       return NextResponse.json(
-        { success: false, error: 'esPEP debe ser 0 o 1' },
+        { success: false, error: 'esPEP debe ser 0 o 1', requestId },
         { status: 400 }
       );
     }
+    
+    console.log(`[API FEDPA Emisión] ${requestId} Iniciando emisión:`, {
+      plan: emisionData.Plan,
+      idDoc: emisionData.idDoc,
+      cliente: `${emisionData.PrimerNombre} ${emisionData.PrimerApellido}`,
+      vehiculo: `${emisionData.Marca} ${emisionData.Modelo} ${emisionData.Ano}`,
+    });
     
     const env = environment as FedpaEnvironment;
     const emisionRequest: EmitirPolizaRequest = {
@@ -92,21 +101,30 @@ export async function POST(request: NextRequest) {
       PrimaTotal: emisionData.PrimaTotal,
     };
     
-    // Emitir con FEDPA
+    // Emitir con FEDPA — NO reintentar automáticamente (operación crítica)
     const result = await emitirPoliza(emisionRequest, env);
     
     if (!result.success) {
+      // Detectar si es error de token
+      const isTokenError = result.error?.toLowerCase().includes('token') || result.error?.toLowerCase().includes('autenticar');
+      const status = isTokenError ? 424 : 400;
+      const code = isTokenError ? 'TOKEN_NOT_AVAILABLE' : 'EMISSION_FAILED';
+      
+      console.error(`[API FEDPA Emisión] ${requestId} Error:`, { code, error: result.error });
+      
       return NextResponse.json(
-        { success: false, error: result.error },
-        { status: 400 }
+        { success: false, error: result.error, code, requestId },
+        { status }
       );
     }
+    
+    console.log(`[API FEDPA Emisión] ${requestId} Póliza emitida:`, { poliza: result.poliza });
     
     // Crear cliente y póliza en sistema interno
     const { clientId, policyId, error: dbError } = await crearClienteYPolizaFEDPA(emisionRequest, result);
     
     if (dbError) {
-      console.warn('[API FEDPA Emisión] No se pudo guardar en BD:', dbError);
+      console.warn(`[API FEDPA Emisión] ${requestId} No se pudo guardar en BD:`, dbError);
       // No fallar la emisión si BD falla
     }
     
@@ -122,12 +140,13 @@ export async function POST(request: NextRequest) {
       hasta: result.hasta,
       clientId,
       policyId,
+      requestId,
       message: `Póliza ${result.poliza} emitida exitosamente`,
     });
   } catch (error: any) {
-    console.error('[API FEDPA Emisión] Error:', error);
+    console.error(`[API FEDPA Emisión] ${requestId} Error no controlado:`, error);
     return NextResponse.json(
-      { success: false, error: error.message || 'Error emitiendo póliza' },
+      { success: false, error: error.message || 'Error emitiendo póliza', requestId },
       { status: 500 }
     );
   }

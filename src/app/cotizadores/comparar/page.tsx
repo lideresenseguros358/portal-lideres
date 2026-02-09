@@ -95,13 +95,18 @@ const generateInternacionalRealQuote = async (quoteData: any) => {
     });
     
     if (!quoteResponse.ok) {
-      console.error('Error en API quote:', await quoteResponse.text());
+      const errorBody = await quoteResponse.json().catch(() => null);
+      const errorMsg = errorBody?.error || `Error HTTP ${quoteResponse.status}`;
+      console.error('[IS] Error en cotización:', errorMsg);
+      if (errorBody?.isTemporary) {
+        console.warn('[IS] Servicio temporalmente no disponible. Reintentar en unos minutos.');
+      }
       return null;
     }
     
     const quoteResult = await quoteResponse.json();
     if (!quoteResult.success || !quoteResult.idCotizacion) {
-      console.error('No se obtuvo ID de cotización');
+      console.error('[IS] No se obtuvo cotización:', quoteResult.error || 'Sin ID');
       return null;
     }
     

@@ -129,6 +129,7 @@ export async function POST(request: NextRequest) {
       nroPoliza: result.nroPoliza,
       poliza: result.nroPoliza, // Alias
       pdfUrl: result.pdfUrl,
+      pdfBase64: result.pdfBase64,
       clientId: clientePolicyResult.clientId,
       policyId: clientePolicyResult.policyId,
       ramo: 'AUTO',

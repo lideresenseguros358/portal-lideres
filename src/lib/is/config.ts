@@ -64,6 +64,7 @@ export const IS_ENDPOINTS = {
   PLANES: '/cotizaemisorauto/getplanes',                      // /{vCodTipoPlan}
   TIPO_DOCUMENTOS: '/catalogos/tipodocumentos',
   PRECIOS_PLANES_TERCEROS: '/cotizaemisorauto/getpreciosplanesterceros', // /{vCodPlan}
+  PLANES_ADICIONALES: '/cotizaemisorauto/getplanesadicionales',          // /{vCodTipoPlan?}
   
   // Cotización Auto — Swagger: POST con JSON body (CotizadorRequest)
   // ⚠️ NO es GET con path params. Es POST /generarcotizacion con body JSON.
@@ -80,13 +81,18 @@ export const IS_ENDPOINTS = {
   PAYMENT: '/payment/process', // Placeholder - confirmar con IS
 } as const;
 
-// Retry config
+// Retry config — backoff con jitter para evitar thundering herd
 export const RETRY_CONFIG = {
   maxRetries: 3,
+  baseDelays: [800, 2000, 5000], // ms — exponencial con jitter
+  retryableStatusCodes: [408, 429, 500, 502, 503, 504],
+  // Legacy (used by existing code)
   initialDelayMs: 2000,
   backoffMultiplier: 2,
-  retryableStatusCodes: [408, 429, 500, 502, 503, 504],
 };
+
+// User-Agent consistente para evitar WAF flags
+export const IS_USER_AGENT = 'LideresPortal/1.0 (+https://portal.lideresenseguros.com)';
 
 // Validaciones
 export const VALIDATION_RULES = {

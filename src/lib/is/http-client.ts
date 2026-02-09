@@ -3,9 +3,10 @@
  * Incluye: retry con backoff, token refresh, logging, timeout
  */
 
-import { ISEnvironment, RETRY_CONFIG, getISBaseUrl, getISPrimaryToken } from './config';
+import { ISEnvironment, RETRY_CONFIG, getISBaseUrl, getISPrimaryToken, IS_USER_AGENT } from './config';
 import { getDailyTokenWithRetry, invalidateToken } from './token-manager';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { checkRateLimit, isCircuitOpen, recordWafFailure, recordSuccess, getBackoffDelay, type RateLimitCategory } from './rate-limiter';
 import crypto from 'crypto';
 
 // ============================================
@@ -129,31 +130,47 @@ export async function isRequest<T = any>(
     useEnvironmentToken = false,
   } = options;
   
+  // CIRCUIT BREAKER: Si está abierto, no hacer request
+  if (isCircuitOpen(env)) {
+    console.error(`[IS] ⛔ Circuit breaker ABIERTO para ${env} — rechazando ${method} ${endpoint}`);
+    return {
+      success: false,
+      error: 'Servicio de IS temporalmente no disponible (circuit breaker activo). Intente en unos minutos.',
+      statusCode: 503,
+    };
+  }
+  
+  // RATE LIMIT: Determinar categoría y esperar slot
+  const rlCategory: RateLimitCategory = method === 'POST' ? 'quote' : 'catalog';
+  const rlAllowed = await checkRateLimit(env, rlCategory);
+  if (!rlAllowed) {
+    console.warn(`[IS] Rate limit excedido para ${rlCategory} (${env})`);
+    return {
+      success: false,
+      error: 'Demasiadas solicitudes a IS. Intente en unos segundos.',
+      statusCode: 429,
+    };
+  }
+  
   // IS P1: CONSTRUIR URL usando helper seguro (previene /api/api)
   const baseUrl = getISBaseUrl(env);
   
   let url: string;
   if (endpoint.startsWith('http')) {
-    // Ya es URL absoluta
     url = endpoint;
   } else {
-    // Usar helper que previene /api/api
     url = joinUrl(baseUrl, endpoint);
   }
   
   // Validación: URL debe ser absoluta con https
   if (!url.startsWith('http')) {
     console.error('[IS HTTP Client] ERROR: URL no es absoluta:', url);
-    console.error('[IS HTTP Client] baseUrl:', baseUrl, 'endpoint:', endpoint);
     return {
       success: false,
       error: 'URL debe ser absoluta (https://...)',
       statusCode: 0,
     };
   }
-  
-  // B5: LOG URL COMPLETA para detectar paths relativos
-  console.log(`[IS] URL completa: ${url}`);
   
   // Obtener token diario (OBLIGATORIO para endpoints de IS)
   // IMPORTANTE: El token principal SOLO sirve para generar/recuperar el token diario.
@@ -183,14 +200,23 @@ export async function isRequest<T = any>(
     try {
       const startTime = Date.now();
       
-      // Preparar request
+      // Preparar request con headers consistentes (evitar WAF flags)
+      const requestId = crypto.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const fetchHeaders: Record<string, string> = {
+        'Authorization': `Bearer ${authToken}`,
+        'Accept': 'application/json',
+        'User-Agent': IS_USER_AGENT,
+        'X-Request-Id': requestId,
+        'Accept-Language': 'es-PA,es;q=0.9,en;q=0.8',
+        ...headers,
+      };
+      // Solo agregar Content-Type si hay body
+      if (body && (method === 'POST' || method === 'PUT')) {
+        fetchHeaders['Content-Type'] = 'application/json';
+      }
       const fetchOptions: RequestInit = {
         method,
-        headers: {
-          'Authorization': `Bearer ${authToken}`,
-          'Content-Type': 'application/json',
-          ...headers,
-        },
+        headers: fetchHeaders,
         signal: AbortSignal.timeout(timeout),
       };
       
@@ -229,19 +255,27 @@ export async function isRequest<T = any>(
       }
       
       // WAF/BLOCK: Detectar bloqueo por firewall de IS
-      // Puede venir como HTML (text/html), 401/403 con texto de bloqueo, o 404 "Acceso denegado"
       const isWafBlock = (contentType.includes('text/html') && !response.ok) ||
         responseText.includes('unauthorized activity') ||
         responseText.includes('detected unauthorized') ||
         (response.status === 404 && responseText.includes('Acceso denegado')) ||
+        (response.status === 403 && !responseText.includes('Table')) ||
+        (response.status === 429) ||
         (responseText.includes('_event_transid') && !responseText.includes('Table'));
       if (isWafBlock) {
-        console.error('[IS] ⛔ WAF/FIREWALL BLOCK detectado en:', endpoint);
-        console.error('[IS] Status:', response.status, '| Body:', responseText.substring(0, 100));
-        console.error('[IS] Contactar a Internacional de Seguros para habilitar este endpoint/IP');
+        // Registrar fallo en circuit breaker
+        recordWafFailure(env);
+        console.warn(`[IS] ⛔ WAF block (${requestId}): ${endpoint} — ${response.status} (attempt ${attempt + 1}/${RETRY_CONFIG.maxRetries + 1})`);
+        if (attempt < RETRY_CONFIG.maxRetries) {
+          const wafDelay = getBackoffDelay(attempt, [3000, 6000, 12000]);
+          console.log(`[IS] WAF retry en ${Math.round(wafDelay)}ms...`);
+          await sleep(wafDelay);
+          continue;
+        }
+        console.error(`[IS] ⛔ WAF persistente (${requestId}): ${endpoint} — ${responseText.substring(0, 80)}`);
         return {
           success: false,
-          error: `Endpoint bloqueado por firewall de IS (${response.status}): ${endpoint}. Contactar a IS.`,
+          error: 'Servicio de IS temporalmente no disponible. El firewall está limitando las solicitudes. Intente nuevamente en unos minutos.',
           statusCode: response.status,
         };
       }
@@ -311,16 +345,17 @@ export async function isRequest<T = any>(
         };
       }
       
-      // Manejar errores recuperables (5xx, 429) - NO 404
-      if (RETRY_CONFIG.retryableStatusCodes.includes(response.status) && attempt < RETRY_CONFIG.maxRetries) {
-        const delay = RETRY_CONFIG.initialDelayMs * Math.pow(RETRY_CONFIG.backoffMultiplier, attempt);
-        console.log(`[IS] Error ${response.status}, reintentando en ${delay}ms...`);
+      // Manejar errores recuperables (5xx) — solo GET
+      if (RETRY_CONFIG.retryableStatusCodes.includes(response.status) && method === 'GET' && attempt < RETRY_CONFIG.maxRetries) {
+        const delay = getBackoffDelay(attempt);
+        console.log(`[IS] Error ${response.status}, reintentando GET en ${Math.round(delay)}ms...`);
         await sleep(delay);
         continue;
       }
       
-      // Respuesta exitosa
+      // Respuesta exitosa — registrar éxito en circuit breaker
       if (response.ok) {
+        recordSuccess(env);
         return {
           success: true,
           data: responseData,
@@ -340,9 +375,9 @@ export async function isRequest<T = any>(
       lastError = error;
       console.error(`[IS] Error en request (attempt ${attempt + 1}):`, error.message);
       
-      // Si es timeout o network error, reintentar
-      if (attempt < RETRY_CONFIG.maxRetries) {
-        const delay = RETRY_CONFIG.initialDelayMs * Math.pow(RETRY_CONFIG.backoffMultiplier, attempt);
+      // Si es timeout o network error, reintentar solo GET
+      if (method === 'GET' && attempt < RETRY_CONFIG.maxRetries) {
+        const delay = getBackoffDelay(attempt);
         await sleep(delay);
         continue;
       }

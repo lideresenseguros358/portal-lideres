@@ -1241,7 +1241,9 @@ export default function DatabaseTabs({
   const [displayedCount, setDisplayedCount] = useState(initialLimit);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [isInitialLoading, setIsInitialLoading] = useState(true);
-  const hasMore = displayedCount < totalCount;
+  const [isLoadingFiltered, setIsLoadingFiltered] = useState(false);
+  const [filteredTotalCount, setFilteredTotalCount] = useState<number | null>(null);
+  const [filteredServerClients, setFilteredServerClients] = useState<ClientWithPolicies[] | null>(null);
   
   // Marcar como cargado después del primer render
   useEffect(() => {
@@ -1265,15 +1267,28 @@ export default function DatabaseTabs({
   const [preliminaryCount, setPreliminaryCount] = useState(0);
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState<FilterOptions>({});
+  const [filteredDisplayedCount, setFilteredDisplayedCount] = useState(50);
 
   // Sincronizar estado local cuando cambian los clientes desde el servidor (por búsqueda)
   useEffect(() => {
     setClients(initialClients);
     setDisplayedCount(initialClients.length);
+    // Limpiar estado filtrado cuando cambia la búsqueda
+    setFilteredServerClients(null);
+    setFilteredTotalCount(null);
+    setFilteredDisplayedCount(50);
   }, [initialClients, searchQuery]);
   
   // Función para cargar más clientes
   const handleLoadMore = async () => {
+    const hasActiveFiltersNow = !!(filters.broker || filters.insurer || filters.ramo || filters.month !== undefined);
+    
+    if (hasActiveFiltersNow && filteredServerClients) {
+      // Con filtros activos, simplemente mostrar más del set ya cargado
+      setFilteredDisplayedCount(prev => prev + 50);
+      return;
+    }
+    
     setIsLoadingMore(true);
     try {
       const response = await fetch('/api/db/load-more', {
@@ -1304,6 +1319,82 @@ export default function DatabaseTabs({
       setIsLoadingMore(false);
     }
   };
+
+  // Cargar clientes filtrados del servidor cuando cambian los filtros
+  useEffect(() => {
+    const hasActiveFiltersNow = !!(filters.broker || filters.insurer || filters.ramo || filters.month !== undefined);
+    
+    if (!hasActiveFiltersNow) {
+      // Sin filtros → usar datos paginados normales
+      setFilteredServerClients(null);
+      setFilteredTotalCount(null);
+      setFilteredDisplayedCount(50);
+      return;
+    }
+    
+    // Con filtros → cargar TODOS los clientes que coinciden desde el servidor
+    const fetchFiltered = async () => {
+      setIsLoadingFiltered(true);
+      try {
+        const response = await fetch('/api/db/load-more', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            offset: 0,
+            limit: 5000,
+            searchQuery: searchQuery || '',
+            filters
+          })
+        });
+        
+        if (!response.ok) throw new Error('Error al cargar clientes filtrados');
+        
+        const data = await response.json();
+        
+        if (data.ok && data.clients) {
+          // Aplicar filtro de pólizas del lado del cliente para las sub-pólizas
+          const clientsWithFilteredPolicies = data.clients.map((client: ClientWithPolicies) => {
+            let filteredPolicies = [...(client.policies || [])];
+            
+            if (filters.insurer) {
+              filteredPolicies = filteredPolicies.filter(p => p.insurer_id === filters.insurer);
+            }
+            if (filters.ramo) {
+              filteredPolicies = filteredPolicies.filter(p => p.ramo?.toLowerCase() === filters.ramo?.toLowerCase());
+            }
+            if (filters.month !== undefined) {
+              filteredPolicies = filteredPolicies.filter(p => {
+                if (!p.renewal_date) return false;
+                const parts = p.renewal_date.split('-');
+                if (parts.length < 2 || !parts[1]) return false;
+                const month = parseInt(parts[1]) - 1;
+                return month === filters.month;
+              });
+            }
+            
+            return { ...client, policies: filteredPolicies };
+          }).filter((client: ClientWithPolicies) => {
+            // Mantener solo clientes con pólizas que coinciden (si hay filtros de póliza)
+            if (filters.insurer || filters.ramo || filters.month !== undefined) {
+              return client.policies && client.policies.length > 0;
+            }
+            return true;
+          });
+          
+          setFilteredServerClients(clientsWithFilteredPolicies);
+          setFilteredTotalCount(clientsWithFilteredPolicies.length);
+          setFilteredDisplayedCount(50);
+        }
+      } catch (error) {
+        console.error('Error loading filtered clients:', error);
+        toast.error('Error al cargar clientes filtrados');
+      } finally {
+        setIsLoadingFiltered(false);
+      }
+    };
+    
+    fetchFiltered();
+  }, [filters, searchQuery]);
 
   // Load preliminary count
   useEffect(() => {
@@ -1418,58 +1509,29 @@ export default function DatabaseTabs({
     }
   };
 
-  // Aplicar filtros a los clientes Y sus pólizas
+  // Clientes filtrados: usar datos del servidor si hay filtros activos, sino filtrar localmente
   const filteredClients = useMemo(() => {
-    let filtered = clients.map(client => {
-      // Primero filtrar las pólizas del cliente
-      let filteredPolicies = [...(client.policies || [])];
+    const hasActiveFiltersNow = !!(filters.broker || filters.insurer || filters.ramo || filters.month !== undefined);
+    
+    if (hasActiveFiltersNow && filteredServerClients) {
+      // Datos del servidor ya filtrados → paginar localmente
+      return filteredServerClients.slice(0, filteredDisplayedCount);
+    }
+    
+    // Sin filtros → usar datos paginados normales
+    return clients;
+  }, [clients, filters, filteredServerClients, filteredDisplayedCount]);
 
-      if (filters.insurer) {
-        filteredPolicies = filteredPolicies.filter(p => p.insurer_id === filters.insurer);
-      }
-
-      if (filters.ramo) {
-        filteredPolicies = filteredPolicies.filter(p => p.ramo?.toLowerCase() === filters.ramo?.toLowerCase());
-      }
-
-      if (filters.month !== undefined) {
-        filteredPolicies = filteredPolicies.filter(p => {
-          if (!p.renewal_date) return false;
-          // Parse manual sin Date object para evitar timezone
-          const parts = p.renewal_date.split('-');
-          if (parts.length < 2 || !parts[1]) return false;
-          const month = parseInt(parts[1]) - 1;
-          return month === filters.month;
-        });
-      }
-
-      // Retornar cliente con pólizas filtradas
-      return {
-        ...client,
-        policies: filteredPolicies
-      };
-    });
-
-    // Luego filtrar clientes que tienen al menos una póliza que cumple los criterios
-    // o que cumplen el filtro de corredor
-    filtered = filtered.filter(client => {
-      // Si hay filtro de corredor, aplicarlo
-      if (filters.broker && role === 'master') {
-        if ((client as any).brokers?.id !== filters.broker) {
-          return false;
-        }
-      }
-
-      // Si hay filtros de póliza, el cliente debe tener al menos una póliza filtrada
-      if (filters.insurer || filters.ramo || filters.month !== undefined) {
-        return client.policies && client.policies.length > 0;
-      }
-
-      return true;
-    });
-
-    return filtered;
-  }, [clients, filters, role]);
+  // hasMore dinámico
+  const hasMore = useMemo(() => {
+    const hasActiveFiltersNow = !!(filters.broker || filters.insurer || filters.ramo || filters.month !== undefined);
+    
+    if (hasActiveFiltersNow && filteredServerClients) {
+      return filteredDisplayedCount < filteredServerClients.length;
+    }
+    
+    return displayedCount < totalCount;
+  }, [filters, filteredServerClients, filteredDisplayedCount, displayedCount, totalCount]);
 
   const handleToggleClient = (clientId: string) => {
     setSelectedClients((prev) => {
@@ -1593,32 +1655,33 @@ export default function DatabaseTabs({
   };
 
   // Obtener opciones únicas para filtros
+  // Usar las props completas (insurers, brokers) para que TODAS las opciones estén disponibles
   const filterOptions = useMemo(() => {
-    const insurerMap = new Map<string, {id: string, name: string}>();
+    // Ramos: extraer de los clientes cargados + filtrados del servidor
     const ramoSet = new Set<string>();
-    const brokerMap = new Map<string, {id: string, name: string}>();
-
-    clients.forEach(client => {
+    const allClients = filteredServerClients || clients;
+    allClients.forEach(client => {
       client.policies?.forEach(policy => {
-        if (policy.insurer_id && policy.insurers?.name) {
-          insurerMap.set(policy.insurer_id, { id: policy.insurer_id, name: policy.insurers.name });
-        }
         if (policy.ramo) {
           ramoSet.add(policy.ramo);
         }
       });
-      if ((client as any).brokers) {
-        const broker = (client as any).brokers;
-        brokerMap.set(broker.id, { id: broker.id, name: broker.name });
-      }
+    });
+    // También de los clientes iniciales
+    clients.forEach(client => {
+      client.policies?.forEach(policy => {
+        if (policy.ramo) {
+          ramoSet.add(policy.ramo);
+        }
+      });
     });
 
     return {
-      insurers: Array.from(insurerMap.values()),
+      insurers: insurers.map(ins => ({ id: ins.id, name: ins.name })).sort((a, b) => a.name.localeCompare(b.name)),
       ramos: Array.from(ramoSet).sort(),
-      brokers: Array.from(brokerMap.values()).sort((a, b) => a.name.localeCompare(b.name))
+      brokers: brokers.map((b: any) => ({ id: b.id, name: b.name })).sort((a: any, b: any) => a.name.localeCompare(b.name))
     };
-  }, [clients]);
+  }, [clients, filteredServerClients, insurers, brokers]);
 
   const hasActiveFilters = Object.keys(filters).length > 0;
 
@@ -1628,6 +1691,16 @@ export default function DatabaseTabs({
     }
     if (view === 'preliminary') {
       return <PreliminaryClientsTab insurers={insurers} brokers={brokers} userRole={role} />;
+    }
+    if (isLoadingFiltered) {
+      return (
+        <div className="flex items-center justify-center py-12">
+          <div className="flex flex-col items-center gap-3">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#8AAA19]"></div>
+            <span className="text-sm text-gray-500 font-medium">Cargando clientes filtrados...</span>
+          </div>
+        </div>
+      );
     }
     return (
       <ClientsListView 
@@ -1954,7 +2027,14 @@ export default function DatabaseTabs({
                   </span>
                 )}
                 <span className="text-xs text-gray-600">
-                  {filteredClients.length} de {clients.length} clientes
+                  {isLoadingFiltered ? (
+                    <span className="inline-flex items-center gap-1">
+                      <span className="animate-spin inline-block w-3 h-3 border-2 border-gray-400 border-t-transparent rounded-full"></span>
+                      Cargando...
+                    </span>
+                  ) : (
+                    `${filteredServerClients ? filteredServerClients.length : filteredClients.length} de ${totalCount} clientes`
+                  )}
                 </span>
               </div>
             )}

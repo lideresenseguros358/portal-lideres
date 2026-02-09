@@ -70,9 +70,14 @@ export async function POST(request: NextRequest) {
     );
     
     if (!result.success || !result.idCotizacion) {
+      const isWafError = result.error?.includes('temporalmente no disponible') || result.error?.includes('firewall');
       return NextResponse.json(
-        { success: false, error: result.error || 'Error al generar cotización' },
-        { status: 500 }
+        { 
+          success: false, 
+          error: result.error || 'Error al generar cotización',
+          isTemporary: isWafError, // Para que el frontend pueda mostrar "reintentar"
+        },
+        { status: isWafError ? 503 : 500 }
       );
     }
     

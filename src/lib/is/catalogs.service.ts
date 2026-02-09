@@ -314,6 +314,63 @@ export async function getPlanes(
 }
 
 /**
+ * Obtener planes adicionales
+ * Swagger: GET /api/cotizaemisorauto/getplanesadicionales/{vCodTipoPlan?}
+ */
+export async function getPlanesAdicionales(
+  vCodTipoPlan?: string,
+  env: ISEnvironment = 'development'
+): Promise<any[]> {
+  const endpoint = vCodTipoPlan 
+    ? `${IS_ENDPOINTS.PLANES_ADICIONALES}/${vCodTipoPlan}`
+    : IS_ENDPOINTS.PLANES_ADICIONALES;
+  const cacheKey = `planes_adicionales_${vCodTipoPlan || 'all'}_${env}`;
+  
+  const memoryCached = memoryCache.get(cacheKey);
+  if (memoryCached && Date.now() - memoryCached.timestamp < CACHE_TTL.CATALOGS) {
+    console.log(`[IS Catalogs] ⚡ Cache hit (memoria): planes adicionales`);
+    return memoryCached.data;
+  }
+  
+  const response = await isGet<any[]>(endpoint, env);
+  
+  if (!response.success || !response.data) {
+    console.error('[IS Catalogs] Error fetching planes adicionales:', response.error);
+    return [];
+  }
+  
+  memoryCache.set(cacheKey, { data: response.data, timestamp: Date.now() });
+  return response.data;
+}
+
+/**
+ * Obtener precios de planes de terceros
+ * Swagger: GET /api/cotizaemisorauto/getpreciosplanesterceros/{vCodPlan}
+ */
+export async function getPreciosPlanTerceros(
+  vCodPlan: string,
+  env: ISEnvironment = 'development'
+): Promise<any[]> {
+  const endpoint = `${IS_ENDPOINTS.PRECIOS_PLANES_TERCEROS}/${vCodPlan}`;
+  const cacheKey = `precios_plan_${vCodPlan}_${env}`;
+  
+  const memoryCached = memoryCache.get(cacheKey);
+  if (memoryCached && Date.now() - memoryCached.timestamp < CACHE_TTL.CATALOGS) {
+    return memoryCached.data;
+  }
+  
+  const response = await isGet<any[]>(endpoint, env);
+  
+  if (!response.success || !response.data) {
+    console.error('[IS Catalogs] Error fetching precios plan terceros:', response.error);
+    return [];
+  }
+  
+  memoryCache.set(cacheKey, { data: response.data, timestamp: Date.now() });
+  return response.data;
+}
+
+/**
  * Invalidar cache (útil para forzar refresh)
  */
 export async function invalidateCache(catalogType?: string, env?: ISEnvironment): Promise<void> {

@@ -158,6 +158,21 @@ export class FedpaHttpClient {
 
     return this.fetchWithRetry<T>(url, options);
   }
+
+  // ============================================
+  // GET Raw (para streaming de PDFs, etc.)
+  // ============================================
+
+  async getRaw(endpoint: string): Promise<Response> {
+    const url = `${this.baseUrl}${endpoint}`;
+
+    return fetch(url, {
+      method: 'GET',
+      headers: {
+        ...(this.token && { 'Authorization': `Bearer ${this.token}` }),
+      },
+    });
+  }
 }
 
 // ============================================

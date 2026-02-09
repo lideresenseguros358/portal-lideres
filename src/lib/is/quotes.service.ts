@@ -7,6 +7,38 @@ import { ISEnvironment, IS_ENDPOINTS, CORREDOR_FIJO, INSURER_SLUG } from './conf
 import { isGet, isPost } from './http-client';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { getTodayLocalDate } from '../utils/dates';
+import crypto from 'crypto';
+
+// ============================================
+// DEDUPLICACIÓN: Evitar doble-click / refresh
+// ============================================
+const recentRequests = new Map<string, { response: any; timestamp: number }>();
+const DEDUP_TTL = 120_000; // 120 segundos
+
+function getIdempotencyKey(body: Record<string, any>): string {
+  // Hash de payload normalizado + hora truncada a minuto
+  const hourBucket = new Date().toISOString().slice(0, 16); // YYYY-MM-DDTHH:MM
+  const normalized = JSON.stringify(body, Object.keys(body).sort());
+  const hash = crypto.createHash('sha256').update(`${normalized}|${hourBucket}`).digest('hex').slice(0, 16);
+  return hash;
+}
+
+function checkDedup(key: string): any | null {
+  const cached = recentRequests.get(key);
+  if (cached && Date.now() - cached.timestamp < DEDUP_TTL) {
+    console.log(`[IS Quotes] ♻️ Dedup hit — devolviendo respuesta cacheada (key: ${key.slice(0, 8)})`);
+    return cached.response;
+  }
+  return null;
+}
+
+function saveDedup(key: string, response: any): void {
+  recentRequests.set(key, { response, timestamp: Date.now() });
+  // Limpiar entradas viejas
+  for (const [k, v] of recentRequests) {
+    if (Date.now() - v.timestamp > DEDUP_TTL) recentRequests.delete(k);
+  }
+}
 
 /**
  * CotizadorRequest — Swagger schema exacto (Feb 2026)
@@ -82,15 +114,21 @@ export interface EmisionAutoResponse {
   error?: string;
 }
 
+type QuoteResult = { success: boolean; idCotizacion?: string; primaTotal?: number; nroCotizacion?: number; error?: string };
+
 /**
  * Generar cotización de auto
  * Swagger: POST /api/cotizaemisorauto/generarcotizacion
  * Body: CotizadorRequest (JSON)
+ * 
+ * Incluye:
+ * - Deduplicación (anti doble-click)
+ * - Auto-retry con sumaAseg=0 si rango es 0-0
  */
 export async function generarCotizacionAuto(
   request: CotizacionAutoRequest,
   env: ISEnvironment = 'development'
-): Promise<{ success: boolean; idCotizacion?: string; primaTotal?: number; error?: string }> {
+): Promise<QuoteResult> {
   // Trigger auto-actualización de catálogos en background (no bloquea)
   import('@/lib/is/catalog-updater').then(m => m.triggerCatalogUpdate('IS')).catch(() => {});
   
@@ -114,8 +152,46 @@ export async function generarCotizacionAuto(
     codPlanCobAsiento: request.codPlanCobAsiento || '0',
   };
   
-  console.log('[IS Quotes] POST /generarcotizacion', { marca: body.codMarca, modelo: body.codModelo, plan: body.codPlanCobertura, grupo: body.codGrupoTarifa });
+  // DEDUPLICACIÓN: Evitar doble-click
+  const dedupKey = getIdempotencyKey(body);
+  const cached = checkDedup(dedupKey);
+  if (cached) return cached;
   
+  console.log('[IS Quotes] POST /generarcotizacion', {
+    marca: body.codMarca, modelo: body.codModelo,
+    plan: body.codPlanCobertura, grupo: body.codGrupoTarifa,
+    sumaAseg: body.sumaAseg,
+  });
+  
+  const result = await _callGenerarCotizacion(body, env);
+  
+  // AUTO-RETRY: Si error "Suma asegurada no permitida" y rango 0-0, reintentar con sumaAseg=0
+  if (!result.success && result.error) {
+    const msg = result.error.toLowerCase();
+    const isRangeZero = msg.includes('suma asegurada') && (msg.includes('0 a 0') || msg.includes('0.00 a 0.00'));
+    if (isRangeZero && body.sumaAseg !== '0') {
+      console.log('[IS Quotes] ⚠️ Rango sumaAseg 0-0 detectado. Reintentando con sumaAseg=0...');
+      body.sumaAseg = '0';
+      const retryResult = await _callGenerarCotizacion(body, env);
+      if (retryResult.success) {
+        saveDedup(dedupKey, retryResult);
+        return retryResult;
+      }
+      return retryResult;
+    }
+  }
+  
+  if (result.success) {
+    saveDedup(dedupKey, result);
+  }
+  return result;
+}
+
+/** Llamada interna a POST /generarcotizacion */
+async function _callGenerarCotizacion(
+  body: Record<string, any>,
+  env: ISEnvironment
+): Promise<QuoteResult> {
   const response = await isPost<{ Table: Array<{
     RESOP: number;
     MSG: string;
@@ -162,12 +238,13 @@ export async function generarCotizacionAuto(
     };
   }
   
-  console.log('[IS Quotes] Cotización generada:', idCotizacion, 'Prima:', tableData.PTOTAL);
+  console.log('[IS Quotes] ✅ Cotización generada:', idCotizacion, 'Prima:', tableData.PTOTAL, 'NroCot:', tableData.NROCOT);
   
   return {
     success: true,
     idCotizacion,
     primaTotal: tableData.PTOTAL ?? undefined,
+    nroCotizacion: tableData.NROCOT,
   };
 }
 
@@ -204,21 +281,83 @@ export async function obtenerCoberturasCotizacion(
 
 /**
  * Emitir póliza de auto
+ * Swagger: POST /api/cotizaemisorauto/getemision
+ * Body: EmisorRequest (JSON) — incluye vIdPv del IDCOT de la cotización
  */
 export async function emitirPolizaAuto(
   request: EmisionAutoRequest,
   env: ISEnvironment = 'development'
-): Promise<{ success: boolean; nroPoliza?: string; pdfUrl?: string; error?: string }> {
-  // TODO: Implementar emisión cuando se tenga documentación completa de IS
-  // Según instructivo IS, la emisión requiere pasos adicionales y documentos
-  console.log('[IS Quotes] Emisión solicitada pero no implementada:', {
-    idCotizacion: request.vIdPv,
-    cliente: `${request.nombre} ${request.apellido}`,
-  });
+): Promise<{ success: boolean; nroPoliza?: string; pdfUrl?: string; pdfBase64?: string; error?: string }> {
+  if (!request.vIdPv) {
+    return { success: false, error: 'Falta ID de cotización (vIdPv) para emitir' };
+  }
+  
+  // Construir body para EmisorRequest según Swagger
+  const body = {
+    vIdPv: request.vIdPv,
+    codTipoDoc: Math.floor(Number(request.codTipoDoc)),
+    nroDoc: request.nroDoc,
+    nroNit: request.nroNit || request.nroDoc,
+    nombre: request.nombre,
+    apellido: request.apellido,
+    telefono: (request.telefono || '').replace(/[-\s\(\)]/g, ''),
+    correo: request.correo,
+    codMarca: Math.floor(Number(request.codMarca)),
+    codModelo: Math.floor(Number(request.codModelo)),
+    sumaAseg: String(request.sumaAseg || '0'),
+    anioAuto: String(request.anioAuto),
+    codPlanCobertura: Math.floor(Number(request.codPlanCobertura)),
+    codPlanCoberturaAdic: Math.floor(Number(request.codPlanCoberturaAdic || 0)),
+    codGrupoTarifa: Math.floor(Number(request.codGrupoTarifa)),
+    cantOcupantes: request.cantOcupantes || '0',
+    codPlanCobAsiento: request.codPlanCobAsiento || '0',
+  };
+  
+  console.log('[IS Emission] POST /getemision', { vIdPv: body.vIdPv, cliente: `${body.nombre} ${body.apellido}` });
+  
+  const response = await isPost<{ Table: Array<{
+    RESOP: number;
+    MSG: string;
+    MSG_FIELDS: string | null;
+    NRO_POLIZA?: string;
+    NROPOLIZA?: string;
+    PDF_URL?: string;
+    PDF_BASE64?: string;
+  }> }>(IS_ENDPOINTS.EMISION, body, env);
+  
+  if (!response.success) {
+    console.error('[IS Emission] Error emitiendo póliza:', response.error);
+    return {
+      success: false,
+      error: response.error || 'Error al emitir póliza',
+    };
+  }
+  
+  const tableData = response.data?.Table?.[0];
+  
+  if (!tableData) {
+    console.error('[IS Emission] Respuesta sin datos:', response.data);
+    return { success: false, error: 'No se recibió respuesta de emisión válida' };
+  }
+  
+  if (tableData.RESOP !== 1) {
+    console.error('[IS Emission] Error en emisión:', tableData.MSG);
+    return { success: false, error: tableData.MSG || 'Error al emitir póliza' };
+  }
+  
+  const nroPoliza = tableData.NRO_POLIZA || tableData.NROPOLIZA || '';
+  if (!nroPoliza) {
+    console.error('[IS Emission] Respuesta sin número de póliza:', tableData);
+    return { success: false, error: 'No se recibió número de póliza' };
+  }
+  
+  console.log('[IS Emission] ✅ Póliza emitida:', nroPoliza);
   
   return {
-    success: false,
-    error: 'Emisión de auto no implementada aún - pendiente documentación completa de IS',
+    success: true,
+    nroPoliza,
+    pdfUrl: tableData.PDF_URL,
+    pdfBase64: tableData.PDF_BASE64,
   };
 }
 
