@@ -1434,12 +1434,22 @@ export default function DatabaseTabs({
     return count;
   }, [clients]);
 
-  const clientToEdit = editClientId ? clients.find(c => c.id === editClientId) : null;
+  // Unificar todos los clientes disponibles (paginados + filtrados del servidor)
+  // para que los lookups de modales funcionen sin importar de dónde vino el cliente
+  const allAvailableClients = useMemo(() => {
+    if (!filteredServerClients) return clients;
+    const map = new Map<string, ClientWithPolicies>();
+    clients.forEach(c => map.set(c.id, c));
+    filteredServerClients.forEach(c => { if (!map.has(c.id)) map.set(c.id, c); });
+    return Array.from(map.values());
+  }, [clients, filteredServerClients]);
+
+  const clientToEdit = editClientId ? allAvailableClients.find(c => c.id === editClientId) : null;
 
   const handleView = (id: string) => router.push(dbUrl(`modal=view-client&editClient=${id}`), { scroll: false });
   const handleEdit = (id: string) => router.push(dbUrl(`modal=edit-client&editClient=${id}`), { scroll: false });
   const handleDelete = async (id: string) => {
-    const client = clients.find(c => c.id === id);
+    const client = allAvailableClients.find(c => c.id === id);
     const clientName = client?.name || 'este cliente';
     const policiesCount = client?.policies?.length || 0;
     
@@ -1485,7 +1495,7 @@ export default function DatabaseTabs({
 
   const handleEditPolicy = (policyId: string) => {
     // Encontrar el cliente que tiene esta póliza
-    const clientWithPolicy = clients.find(c => 
+    const clientWithPolicy = allAvailableClients.find(c => 
       c.policies?.some(p => p.id === policyId)
     );
     
