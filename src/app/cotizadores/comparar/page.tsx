@@ -150,7 +150,8 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
     }
     
     const idCotizacion = quoteResult.idCotizacion;
-    console.log('[INTERNACIONAL] ID Cotización:', idCotizacion);
+    const apiPrimaTotal = quoteResult.primaTotal; // PTOTAL from generarcotizacion — REAL discounted price
+    console.log('[INTERNACIONAL] ID Cotización:', idCotizacion, '| PTOTAL (prima real):', apiPrimaTotal);
     
     // Obtener coberturas
     const coberturasResponse = await fetch(`/api/is/auto/coberturas?vIdPv=${idCotizacion}&vIdOpt=${vIdOpt}&env=development`);
@@ -169,33 +170,27 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
     const apiCoberturas = coberturasResult.data?.Table || [];
     
     // ============================================
-    // DESCUENTO POR BUENA EXPERIENCIA
-    // SN_DESCUENTO = 'S' indica que la cobertura permite descuento
-    // 15% es el máximo por regla de negocio de IS
-    // Solo se aplica cuando la API marca SN_DESCUENTO='S'
+    // PRECIO REAL: PTOTAL de generarcotizacion
+    // PTOTAL ya incluye el descuento de buena experiencia aplicado por IS
+    // PRIMA1 en coberturas son tarifas brutas SIN descuento (solo para display)
     // ============================================
-    const MAX_DESCUENTO_BUENA_EXP = 0.15; // 15% máximo (regla de negocio IS)
-    const coberturasConDescuento = apiCoberturas.filter((c: any) => c.SN_DESCUENTO === 'S');
-    
-    let primaBase = 0;
-    let descuentoTotal = 0;
-    
+    let primaSumBruta = 0; // Suma de PRIMA1 (tarifas brutas, solo referencia)
     apiCoberturas.forEach((c: any) => {
-      const prima = parseFloat(c.PRIMA1 || '0');
-      primaBase += prima;
-      if (c.SN_DESCUENTO === 'S') {
-        descuentoTotal += prima * MAX_DESCUENTO_BUENA_EXP;
-      }
+      primaSumBruta += parseFloat(c.PRIMA1 || '0');
     });
     
-    const primaConDescuento = primaBase - descuentoTotal;
+    // PTOTAL es la prima REAL con descuento de buena experiencia ya aplicado
+    const primaConDescuento = apiPrimaTotal || primaSumBruta;
+    const descuentoTotal = primaSumBruta - primaConDescuento;
+    const descuentoPorcentaje = primaSumBruta > 0 ? Math.round((descuentoTotal / primaSumBruta) * 10000) / 100 : 0;
     
-    if (coberturasConDescuento.length > 0) {
-      console.log(`[IS] ✅ Descuento buena experiencia DISPONIBLE: -$${descuentoTotal.toFixed(2)} (${MAX_DESCUENTO_BUENA_EXP * 100}% sobre ${coberturasConDescuento.length} coberturas elegibles)`);
+    console.log(`[IS] Prima bruta (sum PRIMA1): $${primaSumBruta.toFixed(2)}`);
+    console.log(`[IS] PTOTAL (prima real con descuento): $${primaConDescuento.toFixed(2)}`);
+    if (descuentoTotal > 0) {
+      console.log(`[IS] ✅ Descuento buena experiencia: -$${descuentoTotal.toFixed(2)} (${descuentoPorcentaje}%)`);
     } else {
-      console.log(`[IS] ℹ️ Sin descuento buena experiencia (ninguna cobertura con SN_DESCUENTO=S)`);
+      console.log(`[IS] ℹ️ Sin descuento buena experiencia (PTOTAL = suma bruta)`);
     }
-    console.log(`[IS] Prima base: $${primaBase.toFixed(2)}, Descuento: $${descuentoTotal.toFixed(2)}, Prima final: $${primaConDescuento.toFixed(2)}`);
     
     // ============================================
     // DEDUCIBLES REALES
@@ -294,13 +289,21 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
       _marcaNombre: quoteData.marca,
       _modeloNombre: quoteData.modelo,
       _descuentoBuenaExp: descuentoTotal,
-      _descuentoPorcentaje: descuentoTotal > 0 ? MAX_DESCUENTO_BUENA_EXP * 100 : 0,
+      _descuentoPorcentaje: descuentoPorcentaje,
     };
+    
+    // ============================================
+    // IMPUESTOS IS: 5% impuesto sobre primas + 1% timbres = 6% total
+    // IS screenshot confirma: (PTOTAL + endoso) × 1.06 = total anual
+    // ============================================
+    const IS_TAX_RATE = 0.06; // 6% (5% impuesto + 1% timbres)
     
     // ============================================
     // BÁSICO: Endoso Plus ($35/año)
     // ============================================
-    const primaBasico = primaConDescuento + IS_ENDOSOS.PLUS.costoAnual;
+    const subtotalBasico = primaConDescuento + IS_ENDOSOS.PLUS.costoAnual;
+    const impuestoBasico = Math.round(subtotalBasico * IS_TAX_RATE * 100) / 100;
+    const primaBasico = Math.round((subtotalBasico + impuestoBasico) * 100) / 100;
     const basicoEndosos = [
       {
         codigo: IS_ENDOSOS.PLUS.codigo,
@@ -320,11 +323,11 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
       deductible: deducibleInfo.valor,
       coverages: coberturasDetalladas.map((c: any) => ({ name: c.nombre, included: true })),
       _priceBreakdown: {
-        primaBase: primaBase,
+        primaBase: primaConDescuento,
         descuentoBuenConductor: descuentoTotal,
-        descuentoPorcentaje: descuentoTotal > 0 ? MAX_DESCUENTO_BUENA_EXP * 100 : 0,
+        descuentoPorcentaje: descuentoPorcentaje,
         costoEndoso: IS_ENDOSOS.PLUS.costoAnual,
-        impuesto: 0,
+        impuesto: impuestoBasico,
         totalConTarjeta: primaBasico,
         totalAlContado: Math.round(primaBasico * 0.95 * 100) / 100, // 5% descuento contado
         ahorroContado: Math.round(primaBasico * 0.05 * 100) / 100,
@@ -338,7 +341,9 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
     // ============================================
     // PREMIUM: Endoso Plus Centenario ($60/año)
     // ============================================
-    const primaPremium = primaConDescuento + IS_ENDOSOS.CENTENARIO.costoAnual;
+    const subtotalPremium = primaConDescuento + IS_ENDOSOS.CENTENARIO.costoAnual;
+    const impuestoPremium = Math.round(subtotalPremium * IS_TAX_RATE * 100) / 100;
+    const primaPremium = Math.round((subtotalPremium + impuestoPremium) * 100) / 100;
     const premiumEndosos = [
       {
         codigo: IS_ENDOSOS.CENTENARIO.codigo,
@@ -368,11 +373,11 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
         { name: 'ENDOSO PLUS CENTENARIO (beneficios mejorados)', included: true },
       ],
       _priceBreakdown: {
-        primaBase: primaBase,
+        primaBase: primaConDescuento,
         descuentoBuenConductor: descuentoTotal,
-        descuentoPorcentaje: descuentoTotal > 0 ? MAX_DESCUENTO_BUENA_EXP * 100 : 0,
+        descuentoPorcentaje: descuentoPorcentaje,
         costoEndoso: IS_ENDOSOS.CENTENARIO.costoAnual,
-        impuesto: 0,
+        impuesto: impuestoPremium,
         totalConTarjeta: primaPremium,
         totalAlContado: Math.round(primaPremium * 0.95 * 100) / 100,
         ahorroContado: Math.round(primaPremium * 0.05 * 100) / 100,
@@ -386,7 +391,7 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
     console.log(`[IS] ✅ Básico: $${primaBasico.toFixed(2)} (Endoso Plus $${IS_ENDOSOS.PLUS.costoAnual})`);
     console.log(`[IS] ✅ Premium: $${primaPremium.toFixed(2)} (Endoso Centenario $${IS_ENDOSOS.CENTENARIO.costoAnual})`);
     if (descuentoTotal > 0) {
-      console.log(`[IS] ✅ Descuento buena experiencia aplicado: -$${descuentoTotal.toFixed(2)} (${MAX_DESCUENTO_BUENA_EXP * 100}%)`);
+      console.log(`[IS] ✅ Descuento buena experiencia aplicado: -$${descuentoTotal.toFixed(2)} (${descuentoPorcentaje}%)`);
     }
     
     return { basico, premium };
