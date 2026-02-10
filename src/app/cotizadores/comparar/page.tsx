@@ -174,22 +174,34 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
     // PTOTAL ya incluye el descuento de buena experiencia aplicado por IS
     // PRIMA1 en coberturas son tarifas brutas SIN descuento (solo para display)
     // ============================================
-    let primaSumBruta = 0; // Suma de PRIMA1 (tarifas brutas, solo referencia)
-    apiCoberturas.forEach((c: any) => {
-      primaSumBruta += parseFloat(c.PRIMA1 || '0');
-    });
+    // PTOTAL es la prima REAL cotizada por IS (ya incluye cualquier descuento interno)
+    // PRIMA1 en coberturas son tarifas de referencia, NO el precio real
+    // Fallback: si PTOTAL no disponible, usar suma de PRIMA1 como último recurso
+    let primaSumBruta = 0;
+    apiCoberturas.forEach((c: any) => { primaSumBruta += parseFloat(c.PRIMA1 || '0'); });
+    const primaConDescuento = (apiPrimaTotal && apiPrimaTotal > 0) ? apiPrimaTotal : primaSumBruta;
     
-    // PTOTAL es la prima REAL con descuento de buena experiencia ya aplicado
-    const primaConDescuento = apiPrimaTotal || primaSumBruta;
-    const descuentoTotal = primaSumBruta - primaConDescuento;
-    const descuentoPorcentaje = primaSumBruta > 0 ? Math.round((descuentoTotal / primaSumBruta) * 10000) / 100 : 0;
+    // Solo mostrar descuento de buena experiencia si IS lo marca explícitamente
+    // SN_DESCUENTO='S' en coberturas = IS otorga descuento de buena experiencia
+    const coberturasConDescuento = apiCoberturas.filter((c: any) => c.SN_DESCUENTO === 'S');
+    const tieneDescuentoBuenaExp = coberturasConDescuento.length > 0;
     
-    console.log(`[IS] Prima bruta (sum PRIMA1): $${primaSumBruta.toFixed(2)}`);
-    console.log(`[IS] PTOTAL (prima real con descuento): $${primaConDescuento.toFixed(2)}`);
-    if (descuentoTotal > 0) {
-      console.log(`[IS] ✅ Descuento buena experiencia: -$${descuentoTotal.toFixed(2)} (${descuentoPorcentaje}%)`);
+    // Si hay descuento explícito, calcular el monto (15% máx por regla de negocio IS)
+    let descuentoTotal = 0;
+    let descuentoPorcentaje = 0;
+    if (tieneDescuentoBuenaExp) {
+      const MAX_DESC = 0.15;
+      coberturasConDescuento.forEach((c: any) => {
+        descuentoTotal += parseFloat(c.PRIMA1 || '0') * MAX_DESC;
+      });
+      descuentoPorcentaje = MAX_DESC * 100;
+    }
+    
+    console.log(`[IS] PTOTAL (prima real cotizada): $${primaConDescuento.toFixed(2)}`);
+    if (tieneDescuentoBuenaExp) {
+      console.log(`[IS] ✅ Descuento buena experiencia: -$${descuentoTotal.toFixed(2)} (${descuentoPorcentaje}% sobre ${coberturasConDescuento.length} coberturas)`);
     } else {
-      console.log(`[IS] ℹ️ Sin descuento buena experiencia (PTOTAL = suma bruta)`);
+      console.log(`[IS] ℹ️ Sin descuento buena experiencia explícito (SN_DESCUENTO vacío)`);
     }
     
     // ============================================
