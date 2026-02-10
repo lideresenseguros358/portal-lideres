@@ -382,6 +382,9 @@ export async function emitirPolizaAuto(
       FecVigHasta: vigHasta,
       TxtComentarios: '',
     },
+    // TODO: Documentos requiere entries con {TipoDocumento, NroDocumento, Descripcion, Url}
+    // IS tester retorna "Object reference not set" — posible limitación del ambiente tester
+    // o necesita URLs reales de documentos subidos
     Documentos: [] as any[],
     FormaPago: request.formaPago || 2,
     CantCuotas: request.cantCuotas || 10,
