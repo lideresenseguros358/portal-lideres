@@ -440,15 +440,19 @@ export default function FinalQuoteSummary({
               )}
             </div>
 
-            {/* Total a Pagar */}
+            {/* Total a Pagar — muestra cuota mensual como monto principal */}
             <div className="bg-[#8AAA19] rounded-lg p-4 mb-6">
               <div className="text-sm opacity-90 mb-1">Total a Pagar</div>
               <div className="text-3xl font-bold">
-                ${((installments > 1 ? monthlyPayment * installments : selectedPlan?.annualPremium) || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                ${monthlyPayment.toLocaleString('en-US', { minimumFractionDigits: 2 })}
               </div>
-              {installments > 1 && (
+              {installments > 1 ? (
                 <div className="text-xs opacity-90 mt-1">
-                  {installments} pagos de ${monthlyPayment.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                  Total: ${(monthlyPayment * installments).toLocaleString('en-US', { minimumFractionDigits: 2 })} en {installments} cuotas
+                </div>
+              ) : (
+                <div className="text-xs opacity-90 mt-1">
+                  Pago único anual
                 </div>
               )}
             </div>

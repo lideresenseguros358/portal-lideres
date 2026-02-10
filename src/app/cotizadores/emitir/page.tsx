@@ -252,19 +252,33 @@ export default function EmitirPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             vIdPv: selectedPlan._idCotizacion,
-            vcodtipodoc: 1, // 1=CC (Cédula), 2=RUC, 3=PAS
+            // Datos del cliente
+            vcodtipodoc: 1, // 1=Cédula, 2=RUC, 3=Pasaporte
             vnrodoc: emissionData.cedula,
             vnombre: emissionData.primerNombre,
             vapellido: `${emissionData.primerApellido} ${emissionData.segundoApellido || ''}`.trim(),
             vtelefono: emissionData.telefono,
             vcorreo: emissionData.email,
+            vfecnacimiento: convertToFedpaDate(emissionData.fechaNacimiento),
+            vsexo: emissionData.sexo,
+            vdireccion: emissionData.direccion,
+            // Datos del vehículo
             vcodmarca: selectedPlan._vcodmarca,
             vcodmodelo: selectedPlan._vcodmodelo,
             vanioauto: quoteData.anio || new Date().getFullYear(),
             vsumaaseg: quoteData.valorVehiculo || 15000,
             vcodplancobertura: selectedPlan._vcodplancobertura,
             vcodgrupotarifa: selectedPlan._vcodgrupotarifa,
+            vplaca: vehicleData?.placa || '',
+            vmotor: vehicleData?.motor || '',
+            vchasis: vehicleData?.vinChasis || '',
+            vcolor: vehicleData?.color || '',
+            vcantpasajeros: vehicleData?.pasajeros || 5,
+            vcantpuertas: vehicleData?.puertas || 4,
+            // Pago
             paymentToken,
+            formaPago: installments === 1 ? 1 : 2,
+            cantCuotas: installments,
             tipo_cobertura: 'Cobertura Completa',
             vmarca_label: quoteData.marca,
             vmodelo_label: quoteData.modelo,

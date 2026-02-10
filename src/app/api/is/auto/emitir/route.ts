@@ -16,13 +16,17 @@ export async function POST(request: NextRequest) {
       vIdPv,
       paymentToken,
       tipo_cobertura,
-      // Todos los campos del request original
+      // Datos del cliente
       vcodtipodoc,
       vnrodoc,
       vnombre,
       vapellido,
       vtelefono,
       vcorreo,
+      vfecnacimiento,
+      vsexo,
+      vdireccion,
+      // Datos del vehículo
       vcodmarca,
       vmarca_label,
       vcodmodelo,
@@ -31,6 +35,15 @@ export async function POST(request: NextRequest) {
       vsumaaseg,
       vcodplancobertura,
       vcodgrupotarifa,
+      vplaca,
+      vmotor,
+      vchasis,
+      vcolor,
+      vcantpasajeros,
+      vcantpuertas,
+      // Pago
+      formaPago,
+      cantCuotas,
       environment = 'development',
     } = body;
     
@@ -71,17 +84,19 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // Emitir póliza — mapear campos viejos a nuevos (Swagger CotizadorRequest)
+    // Emitir póliza — estructura anidada para getemision
     const result = await emitirPolizaAuto(
       {
         vIdPv,
         codTipoDoc: parseInt(vcodtipodoc as string) || 1,
         nroDoc: vnrodoc,
-        nroNit: vnrodoc,
         nombre: vnombre,
         apellido: vapellido,
         telefono: vtelefono,
         correo: vcorreo,
+        fechaNacimiento: vfecnacimiento,
+        sexo: vsexo,
+        direccion: vdireccion,
         codMarca: parseInt(vcodmarca as string),
         codModelo: parseInt(vcodmodelo as string),
         anioAuto: String(vanioauto),
@@ -89,7 +104,15 @@ export async function POST(request: NextRequest) {
         codPlanCobertura: parseInt(vcodplancobertura as string),
         codPlanCoberturaAdic: 0,
         codGrupoTarifa: parseInt(vcodgrupotarifa as string),
+        placa: vplaca,
+        motor: vmotor,
+        chasis: vchasis,
+        color: vcolor,
+        cantPasajeros: parseInt(vcantpasajeros as string) || 5,
+        cantPuertas: parseInt(vcantpuertas as string) || 4,
         paymentToken,
+        formaPago: parseInt(formaPago as string) || 2,
+        cantCuotas: parseInt(cantCuotas as string) || 10,
       },
       environment as ISEnvironment
     );
