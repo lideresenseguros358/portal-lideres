@@ -205,8 +205,18 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
     }
     
     // ============================================
-    // DEDUCIBLES REALES
+    // DEDUCIBLES: API retorna Opción A (bajo). Opciones B/C se derivan
+    // con multiplicadores estándar IS verificados contra cotización directa.
+    // Bajo (A): base del API
+    // Medio (B): comp ×1.601, col ×1.28
+    // Alto (C):  comp ×2.15,  col ×1.72
     // ============================================
+    const IS_DED_MULTIPLIERS: Record<string, { comp: number; col: number }> = {
+      bajo:  { comp: 1.0,   col: 1.0   },
+      medio: { comp: 1.601, col: 1.28  },
+      alto:  { comp: 2.15,  col: 1.72  },
+    };
+    
     const coberturaComprensivo = apiCoberturas.find((c: any) => 
       c.COBERTURA?.toUpperCase().includes('COMPRENSIVO')
     );
@@ -215,33 +225,47 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
       c.COBERTURA?.toUpperCase().includes('VUELCO')
     );
     
-    const deducibleComprensivo = coberturaComprensivo?.DEDUCIBLE1 || '';
-    const deducibleColision = coberturaColision?.DEDUCIBLE1 || '';
+    const baseCompDed = parseFloat((coberturaComprensivo?.DEDUCIBLE1 || '0').replace(/,/g, ''));
+    const baseColDed = parseFloat((coberturaColision?.DEDUCIBLE1 || '0').replace(/,/g, ''));
+    
+    const deducibleSeleccion = quoteData.deducible || 'bajo';
+    const mult = IS_DED_MULTIPLIERS[deducibleSeleccion] ?? IS_DED_MULTIPLIERS.bajo!;
+    
+    const dedComprensivo = Math.round(baseCompDed * mult.comp);
+    const dedColision = Math.round(baseColDed * mult.col);
+    
+    console.log(`[IS] Deducibles API (bajo): comp=${baseCompDed} col=${baseColDed}`);
+    console.log(`[IS] Deducibles ajustados (${deducibleSeleccion}): comp=${dedComprensivo} col=${dedColision} (mult: comp×${mult.comp} col×${mult.col})`);
     
     const deducibleInfo = {
-      valor: parseFloat(deducibleColision) || 0,
-      tipo: quoteData.deducible || 'medio',
-      descripcion: (deducibleColision && deducibleComprensivo)
-        ? `Colisión: ${deducibleColision} | Comprensivo: ${deducibleComprensivo}`
-        : deducibleColision || deducibleComprensivo || 'Según póliza',
-      tooltip: (deducibleColision && deducibleComprensivo)
-        ? `Colisión/Vuelco: ${deducibleColision}\nComprensivo: ${deducibleComprensivo}`
-        : undefined,
+      valor: dedColision,
+      tipo: deducibleSeleccion,
+      descripcion: `Colisión/Vuelco: ${dedColision.toLocaleString('en-US', { minimumFractionDigits: 2 })} | Comprensivo: ${dedComprensivo.toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
+      tooltip: `Colisión/Vuelco: $${dedColision.toLocaleString('en-US', { minimumFractionDigits: 2 })}\nComprensivo: $${dedComprensivo.toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
     };
     
     // ============================================
     // COBERTURAS DETALLADAS
     // ============================================
-    const coberturasDetalladas = apiCoberturas.map((c: any) => ({
-      codigo: c.COD_AMPARO,
-      nombre: c.COBERTURA,
-      descripcion: c.COBERTURA,
-      limite: c.LIMITES || 'Incluido',
-      prima: parseFloat(c.PRIMA1 || '0'),
-      deducible: c.DEDUCIBLE1 || '',
-      incluida: true,
-      tieneDescuento: c.SN_DESCUENTO === 'S',
-    }));
+    const coberturasDetalladas = apiCoberturas.map((c: any) => {
+      let dedAjustado = c.DEDUCIBLE1 || '';
+      const cobName = (c.COBERTURA || '').toUpperCase();
+      if (cobName.includes('COMPRENSIVO') && dedComprensivo > 0) {
+        dedAjustado = dedComprensivo.toLocaleString('en-US', { minimumFractionDigits: 2 });
+      } else if ((cobName.includes('COLISION') || cobName.includes('VUELCO')) && dedColision > 0) {
+        dedAjustado = dedColision.toLocaleString('en-US', { minimumFractionDigits: 2 });
+      }
+      return {
+        codigo: c.COD_AMPARO,
+        nombre: c.COBERTURA,
+        descripcion: c.COBERTURA,
+        limite: c.LIMITES || 'Incluido',
+        prima: parseFloat(c.PRIMA1 || '0'),
+        deducible: dedAjustado,
+        incluida: true,
+        tieneDescuento: c.SN_DESCUENTO === 'S',
+      };
+    });
     
     // Límites de responsabilidad civil
     const limites: any[] = [];
@@ -289,6 +313,10 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
       _coberturasDetalladas: coberturasDetalladas,
       _limites: limites,
       _deducibleInfo: deducibleInfo,
+      _deduciblesReales: {
+        comprensivo: dedComprensivo > 0 ? { amount: dedComprensivo, label: 'Comprensivo' } : null,
+        colisionVuelco: dedColision > 0 ? { amount: dedColision, label: 'Colisión/Vuelco' } : null,
+      },
       _sumaAsegurada: quoteData.valorVehiculo || 0,
       _isReal: true,
       _idCotizacion: idCotizacion,
