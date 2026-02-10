@@ -339,32 +339,37 @@ export default function QuoteComparison({ policyType, quotes, quoteData }: Quote
         {/* Quotes Grid - 2x2 en desktop para mejor espaciado */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6 pt-8 sm:pt-10">
           {quotes.map((quote) => (
-            <div key={quote.id} className="relative overflow-visible">
+            <div key={quote.id} className={`relative overflow-visible ${quote.isRecommended ? 'md:-mt-2 md:mb-2' : ''}`}>
               {/* Recommended Badge - Flotante ARRIBA del card, centrado */}
               {quote.isRecommended && (
                 <div className="absolute -top-5 sm:-top-6 left-0 right-0 z-20 flex justify-center">
-                  <span className="inline-flex items-center gap-1 sm:gap-2 px-3 sm:px-6 py-1.5 sm:py-2.5 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white text-[11px] sm:text-sm font-bold rounded-full border-2 border-white shadow-lg premium-badge whitespace-nowrap">
-                    <FaStar className="text-yellow-300 animate-pulse text-xs sm:text-base" />
+                  <span className="inline-flex items-center gap-1.5 sm:gap-2 px-4 sm:px-8 py-2 sm:py-2.5 bg-gradient-to-r from-[#8AAA19] via-[#9dbd2e] to-[#8AAA19] text-white text-[11px] sm:text-sm font-extrabold rounded-full border-2 border-white shadow-xl premium-badge whitespace-nowrap tracking-wide">
+                    <FaStar className="text-yellow-300 animate-pulse text-sm sm:text-base" />
                     RECOMENDADA
+                    <FaStar className="text-yellow-300 animate-pulse text-sm sm:text-base" />
                     <span className="absolute inset-0 premium-badge-shimmer pointer-events-none rounded-full"></span>
                   </span>
                 </div>
               )}
               
-              {/* Card principal SIN RING VERDE - usa sombra */}
+              {/* Card principal - Premium gets enhanced styling */}
               <div 
-                className={`bg-white rounded-xl border-2 overflow-visible transition-all duration-300 flex flex-col ${
+                className={`rounded-xl overflow-visible transition-all duration-300 flex flex-col ${
                   quote.isRecommended 
-                    ? 'border-[#8AAA19] shadow-lg shadow-[#8AAA19]/30' 
-                    : 'border-gray-200 hover:border-[#010139] shadow-md'
+                    ? 'border-2 border-[#8AAA19] shadow-xl shadow-[#8AAA19]/20 ring-1 ring-[#8AAA19]/30 bg-gradient-to-b from-white to-green-50/30' 
+                    : 'border-2 border-gray-200 hover:border-[#010139] shadow-md bg-white'
                 } ${
                   selectedQuote === quote.id 
                     ? 'shadow-2xl shadow-[#010139]/40 scale-[1.02]' 
                     : ''
                 }`}
               >
-                {/* Header con Logo */}
-              <div className="bg-gradient-to-br from-[#010139] to-[#020270] p-4 text-white flex-shrink-0 overflow-visible rounded-t-xl">
+                {/* Header con Logo - Premium gets golden accent */}
+              <div className={`p-4 text-white flex-shrink-0 overflow-visible rounded-t-xl ${
+                quote.isRecommended
+                  ? 'bg-gradient-to-br from-[#010139] via-[#020270] to-[#0a0a5c] border-b-4 border-[#8AAA19]'
+                  : 'bg-gradient-to-br from-[#010139] to-[#020270]'
+              }`}>
                 <div className="flex items-center gap-2 mb-2">
                   <InsurerLogo 
                     logoUrl={getLogoUrl(quote.insurerName)}
@@ -377,9 +382,9 @@ export default function QuoteComparison({ policyType, quotes, quoteData }: Quote
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
-                    <span className={`inline-block px-2 py-1 rounded-full text-[10px] font-semibold ${
+                    <span className={`inline-block px-2.5 py-1 rounded-full text-[10px] font-bold ${
                       quote.planType === 'premium' 
-                        ? 'bg-[#8AAA19] text-white'
+                        ? 'bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white shadow-sm'
                         : 'bg-white/20 text-white'
                     }`}>
                       {quote.planType === 'premium' ? 'Premium' : 'Básico'}
@@ -391,7 +396,7 @@ export default function QuoteComparison({ policyType, quotes, quoteData }: Quote
                     )}
                   </div>
                   {quote.isRecommended && (
-                    <FaStar className="text-[#8AAA19] text-lg" />
+                    <FaStar className="text-[#8AAA19] text-lg drop-shadow-sm" />
                   )}
                 </div>
               </div>
@@ -615,7 +620,11 @@ export default function QuoteComparison({ policyType, quotes, quoteData }: Quote
                 <div className="space-y-3 flex-shrink-0 mt-4">
                   <button
                     onClick={() => handleSelectPlan(quote.id)}
-                    className="w-full py-4 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-xl font-bold text-base hover:shadow-xl transition-all cursor-pointer flex items-center justify-center gap-2"
+                    className={`w-full py-4 rounded-xl font-bold text-base transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                      quote.isRecommended
+                        ? 'bg-gradient-to-r from-[#8AAA19] via-[#9dbd2e] to-[#8AAA19] text-white hover:shadow-xl hover:scale-[1.02] shadow-lg shadow-[#8AAA19]/30'
+                        : 'bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white hover:shadow-xl'
+                    }`}
                   >
                     <FaCheckCircle className="text-white text-lg" />
                     Seleccionar Este Plan

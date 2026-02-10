@@ -171,16 +171,17 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
     // ============================================
     // DESCUENTO POR BUENA EXPERIENCIA
     // SN_DESCUENTO = 'S' indica que la cobertura permite descuento
-    // Aplicar máximo descuento automáticamente
+    // 15% es el máximo por regla de negocio de IS
+    // Solo se aplica cuando la API marca SN_DESCUENTO='S'
     // ============================================
+    const MAX_DESCUENTO_BUENA_EXP = 0.15; // 15% máximo (regla de negocio IS)
     const coberturasConDescuento = apiCoberturas.filter((c: any) => c.SN_DESCUENTO === 'S');
-    const MAX_DESCUENTO_BUENA_EXP = 0.15; // 15% máximo descuento por buena experiencia
     
     let primaBase = 0;
     let descuentoTotal = 0;
     
     apiCoberturas.forEach((c: any) => {
-      const prima = parseFloat(c.PRIMA || c.PRIMA1 || 0);
+      const prima = parseFloat(c.PRIMA1 || '0');
       primaBase += prima;
       if (c.SN_DESCUENTO === 'S') {
         descuentoTotal += prima * MAX_DESCUENTO_BUENA_EXP;
@@ -189,7 +190,12 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
     
     const primaConDescuento = primaBase - descuentoTotal;
     
-    console.log(`[IS] Prima base: $${primaBase.toFixed(2)}, Descuento buena exp: $${descuentoTotal.toFixed(2)} (${coberturasConDescuento.length} coberturas elegibles), Prima final: $${primaConDescuento.toFixed(2)}`);
+    if (coberturasConDescuento.length > 0) {
+      console.log(`[IS] ✅ Descuento buena experiencia DISPONIBLE: -$${descuentoTotal.toFixed(2)} (${MAX_DESCUENTO_BUENA_EXP * 100}% sobre ${coberturasConDescuento.length} coberturas elegibles)`);
+    } else {
+      console.log(`[IS] ℹ️ Sin descuento buena experiencia (ninguna cobertura con SN_DESCUENTO=S)`);
+    }
+    console.log(`[IS] Prima base: $${primaBase.toFixed(2)}, Descuento: $${descuentoTotal.toFixed(2)}, Prima final: $${primaConDescuento.toFixed(2)}`);
     
     // ============================================
     // DEDUCIBLES REALES
@@ -224,7 +230,7 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
       nombre: c.COBERTURA,
       descripcion: c.COBERTURA,
       limite: c.LIMITES || 'Incluido',
-      prima: parseFloat(c.PRIMA || c.PRIMA1 || 0),
+      prima: parseFloat(c.PRIMA1 || '0'),
       deducible: c.DEDUCIBLE1 || '',
       incluida: true,
       tieneDescuento: c.SN_DESCUENTO === 'S',
@@ -822,8 +828,8 @@ export default function ComparePage() {
           // Básico = Endoso Plus ($35), Premium = Endoso Plus Centenario ($60)
           try {
             const isQuotes = await generateInternacionalQuotes(input);
-            if (isQuotes.basico) realQuotes.push(isQuotes.basico);
             if (isQuotes.premium) realQuotes.push(isQuotes.premium);
+            if (isQuotes.basico) realQuotes.push(isQuotes.basico);
             if (!isQuotes.basico && !isQuotes.premium) {
               console.warn('[IS] No se pudieron generar cotizaciones');
             }
