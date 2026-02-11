@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { FaCheck, FaTimes, FaInfoCircle, FaStar, FaArrowRight, FaSpinner, FaChevronDown, FaChevronUp, FaShieldAlt } from 'react-icons/fa';
+import { useState, useEffect, useRef } from 'react';
+import { FaCheck, FaTimes, FaStar, FaArrowRight, FaSpinner, FaChevronDown, FaChevronUp, FaShieldAlt } from 'react-icons/fa';
 import { toast } from 'sonner';
 import { AUTO_THIRD_PARTY_INSURERS, COVERAGE_LABELS, AutoThirdPartyPlan, AutoInsurer, CoverageItem } from '@/lib/constants/auto-quotes';
 import InsurerLogo from '@/components/shared/InsurerLogo';
@@ -11,14 +11,13 @@ interface ThirdPartyComparisonProps {
 }
 
 export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyComparisonProps) {
-  const [selectedPlan, setSelectedPlan] = useState<{insurer: AutoInsurer, plan: AutoThirdPartyPlan, type: 'basic' | 'premium'} | null>(null);
-  const [showInstallmentsModal, setShowInstallmentsModal] = useState(false);
   const [insurerLogos, setInsurerLogos] = useState<Record<string, string | null>>({});
   const [generatingQuote, setGeneratingQuote] = useState(false);
-  const [loadingFedpaPlans, setLoadingFedpaPlans] = useState(false);
-  const [fedpaPlansLoaded, setFedpaPlansLoaded] = useState(false);
+  const [loadingPlans, setLoadingPlans] = useState(false);
+  const [plansLoaded, setPlansLoaded] = useState(false);
   const [insurersData, setInsurersData] = useState<AutoInsurer[]>(AUTO_THIRD_PARTY_INSURERS);
-  const [expandedEndoso, setExpandedEndoso] = useState<Record<string, boolean>>({});
+  const [expandedBenefits, setExpandedBenefits] = useState<Record<string, boolean>>({});
+  const fetchingRef = useRef(false);
 
   useEffect(() => {
     fetch('/api/insurers')
@@ -44,102 +43,113 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
       .catch(err => console.error('Error loading insurer logos:', err));
   }, []);
 
-  // Cargar planes de FEDPA en tiempo real
+  // Cargar planes de FEDPA e IS en tiempo real
   useEffect(() => {
-    const loadFedpaPlans = async () => {
-      if (fedpaPlansLoaded) return;
-      setLoadingFedpaPlans(true);
+    const loadAllPlans = async () => {
+      if (plansLoaded || fetchingRef.current) return;
+      fetchingRef.current = true;
+      setLoadingPlans(true);
       
       try {
-        const response = await fetch('/api/fedpa/third-party');
-        const data = await response.json();
-        
-        if (data.success && data.plans?.length > 0) {
-          setInsurersData(prevInsurers => {
-            return prevInsurers.map(insurer => {
-              if (insurer.id !== 'fedpa') return insurer;
+        const [fedpaRes, isRes] = await Promise.allSettled([
+          fetch('/api/fedpa/third-party').then(r => r.json()),
+          fetch('/api/is/third-party').then(r => r.json()),
+        ]);
+
+        const fedpaData = fedpaRes.status === 'fulfilled' ? fedpaRes.value : null;
+        const isData = isRes.status === 'fulfilled' ? isRes.value : null;
+
+        setInsurersData(prevInsurers => {
+          return prevInsurers.map(insurer => {
+            // ── FEDPA ──
+            if (insurer.id === 'fedpa' && fedpaData?.success && fedpaData.plans?.length > 0) {
+              const basicApi = fedpaData.plans.find((p: any) => p.planType === 'basic');
+              const premiumApi = fedpaData.plans.find((p: any) => p.planType === 'premium');
               
-              const basicApi = data.plans.find((p: any) => p.planType === 'basic');
-              const premiumApi = data.plans.find((p: any) => p.planType === 'premium');
-              
-              const mapApiPlan = (apiPlan: any, fallback: AutoThirdPartyPlan): AutoThirdPartyPlan => {
+              const mapFedpaPlan = (apiPlan: any, fallback: AutoThirdPartyPlan): AutoThirdPartyPlan => {
                 if (!apiPlan) return fallback;
-                
-                // Build coverages object from coverageList
                 const covList: CoverageItem[] = apiPlan.coverageList || [];
-                const findCov = (code: string) => covList.find(c => c.code === code);
                 
+                // Keep fixed prices and names from constants ($130/$165, Plan Básico/Plan VIP)
+                // Only take coverageList, endoso data, and idCotizacion from API
                 return {
                   ...fallback,
-                  name: apiPlan.name || fallback.name,
-                  opcion: apiPlan.opcion,
-                  annualPremium: apiPlan.annualPremium,
-                  coverageList: covList,
-                  endoso: apiPlan.endoso,
-                  endosoPdf: apiPlan.endosoPdf,
-                  endosoBenefits: apiPlan.endosoBenefits,
-                  planCode: data.planCode || 426,
-                  includedCoverages: apiPlan.includedCoverages,
-                  idCotizacion: apiPlan.idCotizacion,
-                  installments: {
-                    available: true,
-                    payments: apiPlan.installments?.payments || 2,
-                    amount: apiPlan.installments?.amount,
-                    totalWithInstallments: apiPlan.installments?.totalWithInstallments,
-                    description: `${apiPlan.installments?.payments || 2} cuotas mensuales`,
-                  },
-                  coverages: {
-                    bodilyInjury: findCov('A')?.limit || fallback.coverages.bodilyInjury,
-                    propertyDamage: findCov('B')?.limit || fallback.coverages.propertyDamage,
-                    medicalExpenses: findCov('C')?.limit || 'no',
-                    accidentalDeathDriver: findCov('H-1')?.limit || fallback.coverages.accidentalDeathDriver,
-                    accidentalDeathPassengers: findCov('H')?.limit || 'no',
-                    funeralExpenses: findCov('K6')?.limit || fallback.coverages.funeralExpenses,
-                    accidentAssistance: 'sí',
-                    ambulance: 'sí',
-                    roadAssistance: 'sí',
-                    towing: 'sí',
-                    legalAssistance: 'sí',
-                    fedpaAsist: findCov('FAB')?.name || findCov('FAV')?.name || fallback.coverages.fedpaAsist,
-                  },
+                  coverageList: covList.length > 0 ? covList : fallback.coverageList,
+                  endoso: fallback.endoso || apiPlan.endoso,
+                  endosoPdf: fallback.endosoPdf || apiPlan.endosoPdf,
+                  endosoBenefits: (fallback.endosoBenefits && fallback.endosoBenefits.length > 0) ? fallback.endosoBenefits : apiPlan.endosoBenefits,
+                  planCode: fedpaData.planCode || fallback.planCode || 426,
+                  includedCoverages: apiPlan.includedCoverages || fallback.includedCoverages,
+                  idCotizacion: apiPlan.idCotizacion || fallback.idCotizacion,
                 };
               };
               
               return {
                 ...insurer,
-                basicPlan: mapApiPlan(basicApi, insurer.basicPlan),
-                premiumPlan: mapApiPlan(premiumApi, insurer.premiumPlan),
+                basicPlan: mapFedpaPlan(basicApi, insurer.basicPlan),
+                premiumPlan: mapFedpaPlan(premiumApi, insurer.premiumPlan),
               };
-            });
+            }
+
+            // ── INTERNACIONAL DE SEGUROS ──
+            if (insurer.id === 'internacional' && isData?.success && isData.plans?.length > 0) {
+              const basicApi = isData.plans.find((p: any) => p.planType === 'basic');
+              const premiumApi = isData.plans.find((p: any) => p.planType === 'premium');
+
+              const mapIsPlan = (apiPlan: any, fallback: AutoThirdPartyPlan): AutoThirdPartyPlan => {
+                if (!apiPlan) return fallback;
+                const covList: CoverageItem[] = apiPlan.coverageList || [];
+
+                return {
+                  ...fallback,
+                  // Update price from API, keep name and coverages (benefits) from constants
+                  annualPremium: apiPlan.annualPremium || fallback.annualPremium,
+                  coverageList: covList.length > 0 ? covList : undefined,
+                  installments: {
+                    available: false,
+                    description: 'Solo al contado',
+                  },
+                };
+              };
+
+              return {
+                ...insurer,
+                basicPlan: mapIsPlan(basicApi, insurer.basicPlan),
+                premiumPlan: mapIsPlan(premiumApi, insurer.premiumPlan),
+              };
+            }
+
+            return insurer;
           });
-          
-          setFedpaPlansLoaded(true);
-          toast.success('Precios FEDPA actualizados', { duration: 2000 });
-        }
+        });
+        
+        setPlansLoaded(true);
+        if (fedpaData?.success) toast.success('Precios actualizados en tiempo real', { duration: 2000 });
       } catch (error) {
-        console.error('[ThirdParty] Error cargando planes de FEDPA:', error);
+        console.error('[ThirdParty] Error cargando planes:', error);
       } finally {
-        setLoadingFedpaPlans(false);
+        setLoadingPlans(false);
       }
     };
     
-    loadFedpaPlans();
-  }, [fedpaPlansLoaded]);
+    loadAllPlans();
+  }, [plansLoaded]);
 
   const handlePlanClick = async (insurer: AutoInsurer, plan: AutoThirdPartyPlan, type: 'basic' | 'premium') => {
+    // IS: generate quote on-the-fly with correct plan codes (306=SOAT, 307=Intermedio)
     if (insurer.id === 'internacional') {
       try {
         setGeneratingQuote(true);
         toast.loading('Generando cotización...');
-        const vcodplancobertura = type === 'basic' ? 5 : 16;
+        const vcodplancobertura = type === 'basic' ? 306 : 307;
         const quoteResponse = await fetch('/api/is/auto/quote', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             vcodtipodoc: 1, vnrodoc: '0-0-0', vnombre: 'Cliente', vapellido: 'Temporal',
             vtelefono: '0000-0000', vcorreo: 'temp@ejemplo.com',
-            vcodmarca: 204, vcodmodelo: 1234, vanioauto: new Date().getFullYear(),
-            vsumaaseg: 0, vcodplancobertura, vcodgrupotarifa: 1, environment: 'development',
+            vcodmarca: 156, vcodmodelo: 2563, vanioauto: new Date().getFullYear(),
+            vsumaaseg: 0, vcodplancobertura, vcodgrupotarifa: 20, environment: 'development',
           }),
         });
         if (!quoteResponse.ok) throw new Error('Error al generar cotización');
@@ -147,7 +157,7 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
         if (!quoteResult.success || !quoteResult.idCotizacion) throw new Error('No se obtuvo ID de cotización');
         sessionStorage.setItem('thirdPartyQuote', JSON.stringify({
           idCotizacion: quoteResult.idCotizacion, insurerId: insurer.id, insurerName: insurer.name,
-          planType: type, vcodplancobertura, vcodgrupotarifa: 1, annualPremium: plan.annualPremium, isRealAPI: true,
+          planType: type, vcodplancobertura, vcodgrupotarifa: 20, annualPremium: plan.annualPremium, isRealAPI: true,
         }));
         toast.dismiss();
         toast.success('Cotización generada');
@@ -162,6 +172,7 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
       }
     }
     
+    // FEDPA: store quote data for emission flow
     if (insurer.id === 'fedpa') {
       sessionStorage.setItem('thirdPartyQuote', JSON.stringify({
         insurerId: insurer.id, insurerName: insurer.name, planType: type,
@@ -172,19 +183,8 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
       }));
     }
     
-    if (plan.installments.available) {
-      setSelectedPlan({ insurer, plan, type });
-      setShowInstallmentsModal(true);
-    } else {
-      onSelectPlan(insurer.id, type, plan);
-    }
-  };
-
-  const handleConfirmInstallments = () => {
-    if (selectedPlan) {
-      setShowInstallmentsModal(false);
-      onSelectPlan(selectedPlan.insurer.id, selectedPlan.type, selectedPlan.plan);
-    }
+    // Go directly to emission — payment modal in emission flow handles contado vs cuotas
+    onSelectPlan(insurer.id, type, plan);
   };
 
   const getLogoUrl = (insurerName: string): string | null => {
@@ -197,8 +197,23 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
     return null;
   };
 
-  const toggleEndoso = (key: string) => {
-    setExpandedEndoso(prev => ({ ...prev, [key]: !prev[key] }));
+  const toggleBenefits = (key: string) => {
+    setExpandedBenefits(prev => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  // Helper: render a benefit value badge
+  const renderBenefitValue = (value: string) => {
+    if (value === 'no') {
+      return <span className="text-red-400 flex items-center gap-1"><FaTimes size={10} /> No incluido</span>;
+    }
+    if (value === 'sí') {
+      return <span className="text-[#8AAA19] font-semibold flex items-center gap-1"><FaCheck size={10} /> Incluido</span>;
+    }
+    // "Conexión" and similar partial values → gray to differentiate
+    if (value.toLowerCase().includes('conexión')) {
+      return <span className="text-gray-400 italic text-xs">{value}</span>;
+    }
+    return <span className="text-[#8AAA19] font-semibold">{value}</span>;
   };
 
   // Render a single plan card section
@@ -208,20 +223,26 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
     type: 'basic' | 'premium',
     isPremium: boolean
   ) => {
-    const endosoKey = `${insurer.id}-${type}`;
-    const isEndosoExpanded = expandedEndoso[endosoKey] || false;
+    const benefitsKey = `${insurer.id}-${type}-benefits`;
+    const isBenefitsExpanded = expandedBenefits[benefitsKey] || false;
     const hasCoverageList = plan.coverageList && plan.coverageList.length > 0;
 
+    // All benefit keys to show (including excluded with red X)
+    const allBenefitKeys = [
+      'accidentAssistance', 'ambulance', 'roadAssistance', 'towing', 'legalAssistance',
+      'accidentalDeathDriver', 'accidentalDeathPassengers', 'funeralExpenses',
+    ];
+
     return (
-      <div className={`p-6 ${isPremium ? 'bg-gradient-to-br from-green-50 to-white' : 'border-b-2 border-gray-100'}`}>
+      <div className={`p-4 sm:p-6 ${isPremium ? 'bg-gradient-to-br from-green-50 to-white' : 'border-b-2 border-gray-100'}`}>
         {/* Plan Header */}
         <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            <span className="font-bold text-[#010139] text-lg">{plan.name || (isPremium ? 'Plan Premium' : 'Plan Básico')}</span>
-            {isPremium && <FaStar className="text-[#8AAA19]" />}
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="font-bold text-[#010139] text-base sm:text-lg truncate">{plan.name || (isPremium ? 'Plan Premium' : 'Plan Básico')}</span>
+            {isPremium && <FaStar className="text-[#8AAA19] flex-shrink-0" />}
           </div>
-          <div className="text-right">
-            <div className={`text-3xl font-black ${isPremium ? 'text-[#8AAA19]' : 'text-[#010139]'}`}>
+          <div className="text-right flex-shrink-0 ml-2">
+            <div className={`text-2xl sm:text-3xl font-black ${isPremium ? 'text-[#8AAA19]' : 'text-[#010139]'}`}>
               B/.{plan.annualPremium.toFixed(0)}
             </div>
             <div className="text-xs text-gray-600">/año</div>
@@ -242,44 +263,49 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
         )}
 
         {/* Coberturas por accidentes - from API coverageList */}
-        <div className="mb-4">
-          <h5 className="text-sm font-bold text-gray-800 mb-3 flex items-center gap-2">
+        <div className="mb-3">
+          <h5 className="text-sm font-bold text-gray-800 mb-2 flex items-center gap-2">
             <FaShieldAlt className="text-[#010139]" />
             Coberturas por accidentes
           </h5>
           
-          {hasCoverageList ? (
-            <div className="border border-gray-200 rounded-lg overflow-hidden">
-              <div className="grid grid-cols-[1fr_auto] bg-gray-50 px-3 py-2 text-xs font-bold text-gray-600 border-b border-gray-200">
-                <span>Cobertura</span>
-                <span>Límite</span>
-              </div>
-              {plan.coverageList!.map((cov, idx) => (
-                <div key={cov.code} className={`grid grid-cols-[1fr_auto] px-3 py-2.5 text-sm ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'} ${idx < plan.coverageList!.length - 1 ? 'border-b border-gray-100' : ''}`}>
-                  <span className="text-gray-700 font-medium">{cov.name}</span>
-                  <span className="text-[#8AAA19] font-semibold text-right whitespace-nowrap">
-                    {cov.limit === 'INCLUIDO' ? (
-                      <span className="inline-flex items-center gap-1"><FaCheck size={10} /> INCLUIDO</span>
-                    ) : (
-                      cov.limit
-                    )}
-                  </span>
+          {hasCoverageList ? (() => {
+            // Filter out endoso rows (FAB, FAV, FAP) — those are shown in the benefits dropdown
+            const filteredCovList = plan.coverageList!.filter(
+              cov => !['FAB', 'FAV', 'FAP'].includes(cov.code)
+            );
+            return (
+              <div className="border border-gray-200 rounded-lg overflow-hidden">
+                <div className="grid grid-cols-[1fr_auto] bg-gray-50 px-3 py-2 text-xs font-bold text-gray-600 border-b border-gray-200">
+                  <span>Cobertura</span>
+                  <span>Límite</span>
                 </div>
-              ))}
-            </div>
-          ) : (
-            /* Fallback: use coverages object */
-            <div className="space-y-2">
-              {Object.entries(plan.coverages).map(([key, value]) => {
-                if (key === 'fedpaAsist') return null;
+                {filteredCovList.map((cov, idx) => (
+                  <div key={cov.code} className={`grid grid-cols-[1fr_auto] gap-2 px-3 py-2 text-xs sm:text-sm ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'} ${idx < filteredCovList.length - 1 ? 'border-b border-gray-100' : ''}`}>
+                    <span className="text-gray-700 font-medium">{cov.name}</span>
+                    <span className="text-[#8AAA19] font-semibold text-right whitespace-nowrap">
+                      {cov.limit === 'INCLUIDO' ? (
+                        <span className="inline-flex items-center gap-1"><FaCheck size={10} /> INCLUIDO</span>
+                      ) : (
+                        cov.limit
+                      )}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            );
+          })() : (
+            /* Fallback: use coverages object — only monetary coverages */
+            <div className="border border-gray-200 rounded-lg overflow-hidden">
+              {['bodilyInjury', 'propertyDamage', 'medicalExpenses'].map((key, idx) => {
+                const value = plan.coverages[key as keyof typeof plan.coverages];
+                if (!value) return null;
                 return (
-                  <div key={key} className="flex items-center justify-between text-sm py-1 border-b border-gray-50">
-                    <span className="text-gray-700 font-medium">{COVERAGE_LABELS[key] || key}</span>
+                  <div key={key} className={`grid grid-cols-[1fr_auto] gap-2 px-3 py-2 text-xs sm:text-sm ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'} border-b border-gray-100 last:border-b-0`}>
+                    <span className="text-gray-700 font-medium">{COVERAGE_LABELS[key]}</span>
                     <span className="text-right">
                       {value === 'no' ? (
-                        <span className="text-gray-400 flex items-center gap-1"><FaTimes size={10} /> No incluido</span>
-                      ) : value === 'sí' ? (
-                        <span className="text-[#8AAA19] font-semibold flex items-center gap-1"><FaCheck size={10} /> Incluido</span>
+                        <span className="text-red-400 flex items-center gap-1"><FaTimes size={10} /> No incluido</span>
                       ) : (
                         <span className="text-[#8AAA19] font-semibold">{value}</span>
                       )}
@@ -291,62 +317,70 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
           )}
         </div>
 
-        {/* Endoso expandable dropdown */}
-        {plan.endoso && (
-          <div className="mb-4">
-            <button
-              onClick={() => toggleEndoso(endosoKey)}
-              className="w-full flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm font-semibold text-[#010139] hover:bg-blue-100 transition-colors"
-            >
-              <span className="flex items-center gap-2">
-                <FaShieldAlt className="text-blue-500" />
-                {plan.endoso}
-              </span>
-              {isEndosoExpanded ? <FaChevronUp className="text-blue-500" /> : <FaChevronDown className="text-blue-500" />}
-            </button>
-            
-            {isEndosoExpanded && (
-              <div className="mt-2 bg-blue-50/50 border border-blue-100 rounded-lg p-4">
-                {plan.endosoBenefits && plan.endosoBenefits.length > 0 ? (
-                  <ul className="space-y-2">
+        {/* Beneficios y Asistencia — single collapsible dropdown */}
+        <div className="mb-3">
+          <button
+            onClick={() => toggleBenefits(benefitsKey)}
+            className="w-full flex items-center justify-between bg-gray-50 border border-gray-200 rounded-lg px-3 py-2.5 text-sm font-semibold text-gray-800 hover:bg-gray-100 transition-colors"
+          >
+            <span className="flex items-center gap-2">
+              <FaShieldAlt className="text-[#8AAA19]" size={14} />
+              Beneficios y Asistencia
+            </span>
+            {isBenefitsExpanded ? <FaChevronUp className="text-gray-500" size={12} /> : <FaChevronDown className="text-gray-500" size={12} />}
+          </button>
+
+          {isBenefitsExpanded && (
+            <div className="mt-1 border border-gray-200 rounded-lg overflow-hidden">
+              {/* Benefit items table */}
+              {allBenefitKeys.map((key, idx) => {
+                const value = plan.coverages[key as keyof typeof plan.coverages] || 'no';
+                return (
+                  <div key={key} className={`flex items-start justify-between gap-2 px-3 py-2 text-xs sm:text-sm ${idx % 2 === 0 ? 'bg-white' : 'bg-gray-50'} border-b border-gray-100`}>
+                    <span className="text-gray-700 font-medium">{COVERAGE_LABELS[key] || key}</span>
+                    <span className="text-right flex-shrink-0">
+                      {renderBenefitValue(value)}
+                    </span>
+                  </div>
+                );
+              })}
+
+              {/* Endoso benefits list */}
+              {plan.endosoBenefits && plan.endosoBenefits.length > 0 && (
+                <div className="bg-blue-50/50 p-3 sm:p-4">
+                  <p className="text-xs font-bold text-[#010139] mb-2 flex items-center gap-1.5">
+                    <FaShieldAlt className="text-blue-500" size={11} />
+                    {plan.endoso || 'Endoso de Asistencia'}
+                  </p>
+                  <ul className="space-y-1.5">
                     {plan.endosoBenefits.map((benefit, idx) => (
-                      <li key={idx} className="flex items-start gap-2 text-sm text-gray-700">
-                        <FaCheck className="text-[#8AAA19] flex-shrink-0 mt-0.5" size={12} />
+                      <li key={idx} className="flex items-start gap-2 text-xs sm:text-sm text-gray-700">
+                        <FaCheck className="text-[#8AAA19] flex-shrink-0 mt-0.5" size={10} />
                         <span>{benefit}</span>
                       </li>
                     ))}
                   </ul>
-                ) : (
-                  <div className="text-sm text-gray-600">
-                    <p className="font-medium mb-2">Beneficios incluidos:</p>
-                    <ul className="space-y-1.5">
-                      <li className="flex items-start gap-2"><FaCheck className="text-[#8AAA19] flex-shrink-0 mt-0.5" size={12} /><span>Asistencia vial 24/7</span></li>
-                      <li className="flex items-start gap-2"><FaCheck className="text-[#8AAA19] flex-shrink-0 mt-0.5" size={12} /><span>Servicio de grúa</span></li>
-                      <li className="flex items-start gap-2"><FaCheck className="text-[#8AAA19] flex-shrink-0 mt-0.5" size={12} /><span>Asistencia médica telefónica</span></li>
-                      <li className="flex items-start gap-2"><FaCheck className="text-[#8AAA19] flex-shrink-0 mt-0.5" size={12} /><span>Auxilio en carretera (gasolina, batería, llantas)</span></li>
-                    </ul>
-                    {plan.endosoPdf && (
-                      <a
-                        href={plan.endosoPdf}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 mt-3 text-xs text-blue-600 hover:underline"
-                      >
-                        Ver documento completo del endoso →
-                      </a>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        )}
+                  {plan.endosoPdf && (
+                    <a
+                      href={plan.endosoPdf}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 mt-2 text-xs text-blue-600 hover:underline"
+                    >
+                      Ver documento completo del endoso →
+                    </a>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Emit Button */}
         <button
           onClick={() => handlePlanClick(insurer, plan, type)}
           disabled={generatingQuote}
-          className={`w-full px-6 py-3 rounded-xl transition-all font-bold group flex items-center justify-center gap-2 ${
+          className={`w-full px-4 sm:px-6 py-3 rounded-xl transition-all font-bold group flex items-center justify-center gap-2 text-sm sm:text-base ${
             isPremium
               ? 'bg-gradient-to-r from-[#8AAA19] to-[#6d8814] hover:shadow-2xl text-white'
               : 'bg-gradient-to-r from-[#010139] to-[#020270] hover:shadow-lg text-white'
@@ -364,12 +398,12 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
 
   return (
     <>
-      {loadingFedpaPlans && (
+      {loadingPlans && (
         <div className="mb-4 bg-blue-50 border-2 border-blue-200 rounded-lg p-4 flex items-center gap-3">
           <FaSpinner className="animate-spin text-blue-600 text-xl" />
           <div>
-            <p className="font-semibold text-blue-900">Actualizando planes de FEDPA...</p>
-            <p className="text-sm text-blue-700">Obteniendo datos en tiempo real desde la API</p>
+            <p className="font-semibold text-blue-900">Actualizando planes...</p>
+            <p className="text-sm text-blue-700">Obteniendo precios en tiempo real desde las aseguradoras</p>
           </div>
         </div>
       )}
@@ -394,60 +428,6 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
         ))}
       </div>
 
-      {/* Installments Modal */}
-      {showInstallmentsModal && selectedPlan && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4 overflow-y-auto">
-          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto my-4 sm:my-8">
-            <div className="p-6">
-              <div className="flex items-start gap-3 mb-6">
-                <FaInfoCircle className="text-blue-500 flex-shrink-0 mt-1" size={24} />
-                <div>
-                  <h3 className="text-xl font-bold text-[#010139] mb-2">Opciones de Pago</h3>
-                  <p className="text-gray-600 text-sm">{selectedPlan.insurer.name} - {selectedPlan.plan.name}</p>
-                </div>
-              </div>
-
-              <div className="space-y-4 mb-6">
-                <div className="border-2 border-gray-200 rounded-lg p-4 hover:border-[#8AAA19] transition-all cursor-pointer"
-                  onClick={handleConfirmInstallments}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-semibold text-[#010139]">Al Contado</span>
-                    <span className="text-2xl font-bold text-[#8AAA19]">B/.{selectedPlan.plan.annualPremium.toFixed(2)}</span>
-                  </div>
-                  <p className="text-sm text-gray-600">Vigencia por 1 año</p>
-                </div>
-
-                {selectedPlan.plan.installments.amount && selectedPlan.plan.installments.payments && (
-                  <div className="border-2 border-[#8AAA19] bg-green-50 rounded-lg p-4 hover:border-[#6d8814] transition-all cursor-pointer"
-                    onClick={handleConfirmInstallments}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-semibold text-[#010139]">{selectedPlan.plan.installments.payments} Cuotas/Mensuales</span>
-                      <div className="text-right">
-                        <div className="text-2xl font-bold text-[#010139]">
-                          B/.{(selectedPlan.plan.installments.totalWithInstallments || (selectedPlan.plan.installments.amount * selectedPlan.plan.installments.payments)).toFixed(2)}
-                        </div>
-                      </div>
-                    </div>
-                    <p className="text-sm text-gray-600">Vigencia por 1 año</p>
-                    <p className="text-xs text-gray-500 mt-1">
-                      ({selectedPlan.plan.installments.payments} pagos de B/.{selectedPlan.plan.installments.amount.toFixed(2)})
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              <button
-                onClick={() => setShowInstallmentsModal(false)}
-                className="w-full px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-all"
-              >
-                Cancelar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 }

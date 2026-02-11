@@ -93,47 +93,171 @@ export async function emitirPoliza(
 
 /**
  * Emitir póliza usando Emisor Externo (2021) - Fallback
+ * Bundlea documentos + datos de emisión en un solo POST multipart.
+ * NO requiere Bearer token — usa Usuario/Clave en el body.
  */
 export async function emitirPolizaFallback(
-  request: any,
-  env: FedpaEnvironment = 'PROD'
+  request: EmitirPolizaRequest,
+  env: FedpaEnvironment = 'PROD',
+  documentos?: {
+    documento_identidad?: File[];
+    licencia_conducir?: File[];
+    registro_vehicular?: File[];
+  }
 ): Promise<EmitirPolizaResponse> {
-  console.log('[FEDPA Emisión] Usando fallback (Emisor Externo)...');
+  console.log('[FEDPA Emisión Externo] Usando Emisor Externo (2021)...');
   
   const config = FEDPA_CONFIG[env];
-  const client = createFedpaClient('emisorExterno', env);
   
-  // Transformar request a formato Emisor Externo
-  const externalRequest = {
-    // Estructura según manual 2021
+  // Normalizar datos
+  const normalizedRequest = normalizarDatosEmision(request);
+  
+  // Construir payload según manual 2021 (crear_poliza_auto_cc_externos)
+  const now = new Date();
+  const fechaHora = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')} ${now.getHours() >= 12 ? 'PM' : 'AM'}`;
+  
+  const dataPayload = {
+    FechaHora: fechaHora,
+    Monto: String(normalizedRequest.PrimaTotal || '0'),
+    Aprobada: 'S',
+    NroTransaccion: `PORTAL-${Date.now()}`,
+    FechaAprobada: fechaHora,
+    Ramo: '04',
+    SubRamo: '07',
+    FechaDesde: '',
+    FechaHasta: '',
+    Opcion: 'A',
     Usuario: config.usuario,
     Clave: config.clave,
-    // ... mapear campos según sea necesario
-    // TODO: Implementar mapeo completo cuando se necesite
+    Entidad: [{
+      Juridico: 'N',
+      NombreEmpresa: '',
+      PrimerNombre: normalizedRequest.PrimerNombre,
+      SegundoNombre: normalizedRequest.SegundoNombre || '',
+      PrimerApellido: normalizedRequest.PrimerApellido,
+      SegundoApellido: normalizedRequest.SegundoApellido || '',
+      DocumentoIdentificacion: 'CED',
+      Cedula: normalizedRequest.Identificacion,
+      Ruc: '',
+      FechaNacimiento: normalizedRequest.FechaNacimiento,
+      Sexo: normalizedRequest.Sexo,
+      CodPais: '999',
+      CodProvincia: '999',
+      CodCorregimiento: '999',
+      Email: normalizedRequest.Email,
+      TelefonoOficina: '',
+      Celular: String(normalizedRequest.Celular || ''),
+      Direccion: normalizedRequest.Direccion || 'PANAMA',
+      IdVinculo: '1',
+    }],
+    Auto: {
+      CodMarca: normalizedRequest.Marca,
+      CodModelo: normalizedRequest.Modelo,
+      Ano: String(normalizedRequest.Ano),
+      Placa: normalizedRequest.Placa,
+      Chasis: normalizedRequest.Vin,
+      Motor: normalizedRequest.Motor,
+      Color: normalizedRequest.Color,
+    },
+    // Campos adicionales del plan
+    IdCotizacion: '',
+    NroPoliza: '',
+    CodPlan: String(normalizedRequest.Plan),
+    SumaAsegurada: String(normalizedRequest.sumaAsegurada || 0),
+    CantidadPasajeros: normalizedRequest.Pasajero || 5,
+    Puerta: normalizedRequest.Puerta || 4,
+    Uso: normalizedRequest.Uso || '10',
+    esPEP: normalizedRequest.esPEP || 0,
   };
   
-  const response = await client.post(
-    EMISOR_EXTERNO_ENDPOINTS.CREAR_POLIZA,
-    externalRequest
-  );
+  console.log('[FEDPA Emisión Externo] Payload:', JSON.stringify(dataPayload).substring(0, 500));
   
-  if (!response.success) {
-    console.error('[FEDPA Emisión] Error en fallback:', response.error);
-    return {
-      success: false,
-      error: typeof response.error === 'string' ? response.error : 'Error emitiendo póliza (fallback)',
+  // Construir FormData multipart
+  const formData = new FormData();
+  formData.append('data', JSON.stringify(dataPayload));
+  
+  // Agregar documentos si están disponibles
+  if (documentos) {
+    const MIME_TO_EXT: Record<string, string> = {
+      'application/pdf': 'pdf', 'image/jpeg': 'jpg', 'image/jpg': 'jpg',
+      'image/png': 'png', 'image/gif': 'gif', 'image/bmp': 'bmp',
+      'image/webp': 'webp', 'image/tiff': 'tiff',
     };
+    
+    for (const file of (documentos.documento_identidad || [])) {
+      const ext = MIME_TO_EXT[file.type] || 'pdf';
+      formData.append('file', file, `documento_identidad.${ext}`);
+    }
+    for (const file of (documentos.licencia_conducir || [])) {
+      const ext = MIME_TO_EXT[file.type] || 'pdf';
+      formData.append('file', file, `licencia_conducir.${ext}`);
+    }
+    for (const file of (documentos.registro_vehicular || [])) {
+      const ext = MIME_TO_EXT[file.type] || 'pdf';
+      formData.append('file', file, `registro_vehicular.${ext}`);
+    }
   }
   
-  const data = (response.data || {}) as any;
+  // POST multipart a Emisor Externo (no necesita Bearer token)
+  const baseUrl = config.emisorExternoUrl;
+  const url = `${baseUrl}${EMISOR_EXTERNO_ENDPOINTS.CREAR_POLIZA}`;
   
-  return {
-    success: true,
-    amb: env,
-    poliza: data.poliza || data.nroPoliza,
-    desde: data.desde || data.vigenciaDesde,
-    hasta: data.hasta || data.vigenciaHasta,
-  };
+  console.log('[FEDPA Emisión Externo] POST', url);
+  
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      body: formData,
+      // No Content-Type header — browser sets multipart boundary automatically
+    });
+    
+    const responseText = await response.text();
+    console.log('[FEDPA Emisión Externo] Status:', response.status, 'Body:', responseText.substring(0, 500));
+    
+    let data: any;
+    try {
+      data = JSON.parse(responseText);
+    } catch {
+      return {
+        success: false,
+        error: `Respuesta no JSON de FEDPA: ${responseText.substring(0, 200)}`,
+      };
+    }
+    
+    if (!response.ok) {
+      return {
+        success: false,
+        error: data.msg || data.message || `HTTP ${response.status}`,
+      };
+    }
+    
+    // Verificar respuesta exitosa
+    if (data.success === false) {
+      return {
+        success: false,
+        error: data.msg || data.message || 'Error en emisión FEDPA',
+      };
+    }
+    
+    const resultado: EmitirPolizaResponse = {
+      success: true,
+      amb: data.amb || env,
+      cotizacion: data.cotizacion || data.IdCotizacion,
+      poliza: data.poliza || data.NroPoliza || data.nroPoliza,
+      desde: data.desde || data.FechaDesde || data.vigenciaDesde,
+      hasta: data.hasta || data.FechaHasta || data.vigenciaHasta,
+    };
+    
+    console.log('[FEDPA Emisión Externo] ✅ Póliza emitida:', resultado.poliza);
+    return resultado;
+    
+  } catch (error: any) {
+    console.error('[FEDPA Emisión Externo] Error de red:', error);
+    return {
+      success: false,
+      error: error.message || 'Error de red al emitir póliza',
+    };
+  }
 }
 
 // ============================================

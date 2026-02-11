@@ -8,7 +8,26 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { subirDocumentos, validarDocumentosMinimos } from '@/lib/fedpa/documentos.service';
+import { generarToken } from '@/lib/fedpa/auth.service';
 import type { FedpaEnvironment } from '@/lib/fedpa/config';
+
+/**
+ * Fast token check: intenta obtener token SIN reintentos largos.
+ * Cache → DB → un solo POST /generartoken. Si falla, retorna inmediatamente.
+ */
+async function obtenerTokenRapido(
+  env: FedpaEnvironment
+): Promise<{ success: boolean; error?: string }> {
+  // generarToken ya revisa cache y DB internamente antes de llamar a FEDPA.
+  // Si FEDPA dice "Ya existe token registrado" y no hay token local,
+  // retorna needsReset=true sin reintentos (eso lo hace obtenerToken, no generarToken).
+  const result = await generarToken(env);
+  if (result.success) return { success: true };
+  if (result.needsReset) {
+    return { success: false, error: 'Token FEDPA bloqueado. Usando método alternativo.' };
+  }
+  return { success: false, error: result.error || 'No se pudo obtener token' };
+}
 
 export async function POST(request: NextRequest) {
   const requestId = `doc-${Date.now().toString(36)}`;
@@ -53,6 +72,25 @@ export async function POST(request: NextRequest) {
     }
     
     const env = environment as FedpaEnvironment;
+    
+    // ── FAST TOKEN CHECK: evitar esperar ~57s de reintentos ──
+    // Intentar obtener token UNA sola vez sin reintentos largos.
+    // Si no hay token disponible, retornar 424 inmediatamente para que
+    // el frontend use el fallback Emisor Externo.
+    const quickTokenCheck = await obtenerTokenRapido(env);
+    if (!quickTokenCheck.success) {
+      console.warn(`[API FEDPA Documentos] ${requestId} Token no disponible (fast check). Retornando 424 para fallback.`);
+      return NextResponse.json(
+        {
+          success: false,
+          error: quickTokenCheck.error || 'Token FEDPA no disponible. Usando método alternativo.',
+          code: 'TOKEN_NOT_AVAILABLE',
+          requestId,
+        },
+        { status: 424 }
+      );
+    }
+    
     const result = await subirDocumentos(documentos, env);
     
     if (!result.success) {

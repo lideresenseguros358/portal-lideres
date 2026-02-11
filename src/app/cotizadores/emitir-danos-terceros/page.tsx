@@ -1,8 +1,9 @@
 /**
  * Página de Emisión - Daños a Terceros
  * Replica el UX de cobertura completa con URL-based steps.
- * Steps: payment → emission-data → vehicle → payment-info → review
- * Sin inspección, sin paso separado de documentos (se piden en emission-data),
+ * Steps: emission-data → vehicle → payment-info → review
+ * Sin inspección, sin cuotas (modal de pago maneja contado vs cuotas),
+ * sin paso separado de documentos (se piden en emission-data),
  * declaración de veracidad integrada en review.
  */
 
@@ -11,9 +12,7 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { FaCheckCircle, FaMoneyBillWave, FaUser, FaCar, FaCreditCard, FaClipboardCheck } from 'react-icons/fa';
-
-import PaymentPlanSelector from '@/components/cotizadores/PaymentPlanSelector';
+import { FaCheckCircle, FaUser, FaCar, FaCreditCard, FaClipboardCheck } from 'react-icons/fa';
 import EmissionDataForm, { type EmissionData } from '@/components/cotizadores/EmissionDataForm';
 import VehicleDataForm, { type VehicleData } from '@/components/cotizadores/VehicleDataForm';
 import CreditCardInput from '@/components/is/CreditCardInput';
@@ -21,9 +20,8 @@ import LoadingSkeleton from '@/components/cotizadores/LoadingSkeleton';
 import EmissionProgressBar from '@/components/cotizadores/EmissionProgressBar';
 import EmissionBreadcrumb, { type EmissionStep, type BreadcrumbStepDef } from '@/components/cotizadores/EmissionBreadcrumb';
 
-// 5 steps for DT (no inspection)
+// 4 steps for DT (no inspection, no cuotas — payment modal handles contado vs cuotas)
 const DT_STEPS: BreadcrumbStepDef[] = [
-  { key: 'payment', label: 'Cuotas', shortLabel: 'Cuotas', icon: FaMoneyBillWave },
   { key: 'emission-data', label: 'Cliente', shortLabel: 'Cliente', icon: FaUser },
   { key: 'vehicle', label: 'Vehículo', shortLabel: 'Vehículo', icon: FaCar },
   { key: 'payment-info', label: 'Pago', shortLabel: 'Pago', icon: FaCreditCard },
@@ -40,13 +38,13 @@ export default function EmitirDanosTercerosPage() {
 
   const searchParams = useSearchParams();
   const router = useRouter();
-  const step = (searchParams.get('step') || 'payment') as EmissionStep;
+  const step = (searchParams.get('step') || 'emission-data') as EmissionStep;
 
   const [loading, setLoading] = useState(true);
   const [selectedPlan, setSelectedPlan] = useState<any>(null);
   const [quoteData, setQuoteData] = useState<any>(null);
-  const [installments, setInstallments] = useState(1);
-  const [monthlyPayment, setMonthlyPayment] = useState(0);
+  const [installments] = useState(1);
+  const [monthlyPayment] = useState(0);
   const [emissionData, setEmissionData] = useState<EmissionData | null>(null);
   const [vehicleData, setVehicleData] = useState<VehicleData | null>(null);
   const [paymentToken, setPaymentToken] = useState('');
@@ -94,13 +92,6 @@ export default function EmitirDanosTercerosPage() {
   };
 
   // Step handlers
-  const handlePaymentPlanSelected = (numInstallments: number, monthlyPaymentAmount: number) => {
-    setInstallments(numInstallments);
-    setMonthlyPayment(monthlyPaymentAmount);
-    setCompletedSteps(prev => [...prev.filter(s => s !== 'payment'), 'payment']);
-    goToStep('emission-data');
-  };
-
   const handleEmissionDataComplete = (data: EmissionData) => {
     setEmissionData(data);
     setCompletedSteps(prev => [...prev.filter(s => s !== 'emission-data'), 'emission-data']);
@@ -148,7 +139,45 @@ export default function EmitirDanosTercerosPage() {
       if (isFedpaReal) {
         if (!emissionData) throw new Error('Faltan datos del asegurado');
 
-        // 1. Upload documents
+        // Get idCotizacion from sessionStorage
+        const tpQuoteRaw = sessionStorage.getItem('thirdPartyQuote');
+        const tpQuote = tpQuoteRaw ? JSON.parse(tpQuoteRaw) : null;
+
+        // Datos comunes de emisión
+        const emisionCommon = {
+          IdCotizacion: tpQuote?.idCotizacion || '',
+          Plan: selectedPlan._planCode || 426,
+          PrimerNombre: emissionData.primerNombre,
+          PrimerApellido: emissionData.primerApellido,
+          SegundoNombre: emissionData.segundoNombre || '',
+          SegundoApellido: emissionData.segundoApellido || '',
+          Identificacion: emissionData.cedula,
+          FechaNacimiento: convertToFedpaDate(emissionData.fechaNacimiento),
+          Sexo: emissionData.sexo,
+          Email: emissionData.email,
+          Telefono: parseInt((emissionData.telefono || '0').replace(/\D/g, '')) || 0,
+          Celular: parseInt((emissionData.celular || '0').replace(/\D/g, '')) || 0,
+          Direccion: emissionData.direccion || 'Panama',
+          esPEP: emissionData.esPEP ? 1 : 0,
+          sumaAsegurada: 0,
+          Uso: '10',
+          Marca: selectedPlan._marcaCodigo || quoteData?.marca || '',
+          Modelo: selectedPlan._modeloCodigo || quoteData?.modelo || '',
+          Ano: (quoteData?.anno || quoteData?.anio || quoteData?.ano || new Date().getFullYear()).toString(),
+          Motor: vehicleData?.motor || '',
+          Placa: vehicleData?.placa || '',
+          Vin: vehicleData?.vinChasis || '',
+          Color: vehicleData?.color || '',
+          Pasajero: vehicleData?.pasajeros || 5,
+          Puerta: vehicleData?.puertas || 4,
+          PrimaTotal: selectedPlan.annualPremium,
+        };
+
+        // ── Intentar EmisorPlan (2024) primero; si token bloqueado → Emisor Externo (2021) ──
+        let emisionResult: any = null;
+        let usedMethod = 'emisor_plan';
+
+        // PASO 1: Intentar subir documentos con EmisorPlan (requiere Bearer token)
         toast.info('Subiendo documentos...');
         const docsFormData = new FormData();
         docsFormData.append('environment', 'DEV');
@@ -164,62 +193,72 @@ export default function EmitirDanosTercerosPage() {
           body: docsFormData,
         });
 
-        let idDoc = 'TEMP_DOC';
-        if (docsResponse.ok) {
-          const docsResult = await docsResponse.json();
-          idDoc = docsResult.idDoc || 'TEMP_DOC';
+        const docsResponseData = await docsResponse.json();
+        const isTokenBlocked = docsResponse.status === 424 || docsResponseData.code === 'TOKEN_NOT_AVAILABLE';
+
+        if (docsResponse.ok && docsResponseData.success) {
+          // ── EmisorPlan path: docs uploaded OK → emit with idDoc ──
+          console.log('[EMISIÓN DT FEDPA] Documentos subidos (EmisorPlan):', docsResponseData.idDoc);
+
+          toast.info('Emitiendo póliza...');
+          const emisionResponse = await fetch('/api/fedpa/emision', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              environment: 'DEV',
+              ...emisionCommon,
+              idDoc: docsResponseData.idDoc,
+            }),
+          });
+
+          const emisionResponseData = await emisionResponse.json();
+
+          if (!emisionResponse.ok || !emisionResponseData.success) {
+            if (emisionResponse.status === 424 || emisionResponseData.code === 'TOKEN_NOT_AVAILABLE') {
+              console.warn('[EMISIÓN DT FEDPA] EmisorPlan emisión falló por token, usando fallback...');
+            } else {
+              throw new Error(emisionResponseData.error || 'Error emitiendo póliza');
+            }
+          } else {
+            emisionResult = emisionResponseData;
+            usedMethod = 'emisor_plan';
+          }
+        } else if (isTokenBlocked) {
+          console.warn('[EMISIÓN DT FEDPA] Token bloqueado, usando Emisor Externo (2021)...');
+        } else {
+          throw new Error(docsResponseData.error || 'Error subiendo documentos');
         }
 
-        // 2. Get idCotizacion from sessionStorage
-        const tpQuoteRaw = sessionStorage.getItem('thirdPartyQuote');
-        const tpQuote = tpQuoteRaw ? JSON.parse(tpQuoteRaw) : null;
+        // ── FALLBACK: Emisor Externo (2021) — bundlea docs + emisión sin token ──
+        if (!emisionResult) {
+          toast.info('Usando método alternativo de emisión...');
+          usedMethod = 'emisor_externo';
 
-        // 3. Emit policy
-        toast.info('Emitiendo póliza...');
-        const emisionResponse = await fetch('/api/fedpa/emision', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            environment: 'DEV',
-            IdCotizacion: tpQuote?.idCotizacion || '',
-            Plan: selectedPlan._planCode || 426,
-            idDoc,
-            PrimerNombre: emissionData.primerNombre,
-            PrimerApellido: emissionData.primerApellido,
-            SegundoNombre: emissionData.segundoNombre || '',
-            SegundoApellido: emissionData.segundoApellido || '',
-            Identificacion: emissionData.cedula,
-            FechaNacimiento: convertToFedpaDate(emissionData.fechaNacimiento),
-            Sexo: emissionData.sexo,
-            Email: emissionData.email,
-            Telefono: parseInt((emissionData.telefono || '0').replace(/\D/g, '')) || 0,
-            Celular: parseInt((emissionData.celular || '0').replace(/\D/g, '')) || 0,
-            Direccion: emissionData.direccion || 'Panama',
-            esPEP: emissionData.esPEP ? 1 : 0,
-            sumaAsegurada: 0,
-            Uso: '10',
-            Marca: selectedPlan._marcaCodigo || quoteData?.marca || '',
-            Modelo: selectedPlan._modeloCodigo || quoteData?.modelo || '',
-            Ano: (quoteData?.anno || quoteData?.anio || quoteData?.ano || new Date().getFullYear()).toString(),
-            Motor: vehicleData?.motor || '',
-            Placa: vehicleData?.placa || '',
-            Vin: vehicleData?.vinChasis || '',
-            Color: vehicleData?.color || '',
-            Pasajero: vehicleData?.pasajeros || 5,
-            Puerta: vehicleData?.puertas || 4,
-            PrimaTotal: selectedPlan.annualPremium,
-          }),
-        });
+          const fallbackForm = new FormData();
+          fallbackForm.append('environment', 'DEV');
+          fallbackForm.append('emisionData', JSON.stringify(emisionCommon));
+          if (emissionData.cedulaFile) {
+            fallbackForm.append('documento_identidad', emissionData.cedulaFile, emissionData.cedulaFile.name || 'documento_identidad.pdf');
+          }
+          if (emissionData.licenciaFile) {
+            fallbackForm.append('licencia_conducir', emissionData.licenciaFile, emissionData.licenciaFile.name || 'licencia_conducir.pdf');
+          }
 
-        if (!emisionResponse.ok) {
-          const errorData = await emisionResponse.json();
-          throw new Error(errorData.error || 'Error al emitir póliza');
+          const fallbackResponse = await fetch('/api/fedpa/emision/fallback', {
+            method: 'POST',
+            body: fallbackForm,
+          });
+
+          const fallbackData = await fallbackResponse.json();
+
+          if (!fallbackResponse.ok || !fallbackData.success) {
+            throw new Error(fallbackData.error || 'Error emitiendo póliza (método alternativo)');
+          }
+
+          emisionResult = fallbackData;
         }
 
-        const emisionResult = await emisionResponse.json();
-        if (!emisionResult.success) {
-          throw new Error(emisionResult.error || 'Error al emitir póliza');
-        }
+        console.log(`[EMISIÓN DT FEDPA] Póliza emitida (${usedMethod}):`, emisionResult.nroPoliza || emisionResult.poliza);
 
         sessionStorage.setItem('emittedPolicy', JSON.stringify({
           nroPoliza: emisionResult.nroPoliza || emisionResult.poliza,
@@ -228,7 +267,7 @@ export default function EmitirDanosTercerosPage() {
           policyId: emisionResult.policyId,
           vigenciaDesde: emisionResult.desde || emisionResult.vigenciaDesde,
           vigenciaHasta: emisionResult.hasta || emisionResult.vigenciaHasta,
-          method: 'emisor_plan',
+          method: usedMethod,
           tipoCobertura: 'Daños a Terceros',
         }));
 
@@ -268,15 +307,15 @@ export default function EmitirDanosTercerosPage() {
     );
   }
 
-  // ─── STEP 1: PLAN DE PAGO ───
-  if (step === 'payment') {
+  // ─── STEP 1: DATOS DEL CLIENTE (incluye cédula y licencia) ───
+  if (step === 'emission-data') {
     return (
       <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
         <div className="pt-6">
-          <EmissionProgressBar currentStep={getStepNumber('payment')} totalSteps={DT_TOTAL_STEPS} />
+          <EmissionProgressBar currentStep={getStepNumber('emission-data')} totalSteps={DT_TOTAL_STEPS} />
         </div>
         <EmissionBreadcrumb
-          currentStep="payment"
+          currentStep="emission-data"
           completedSteps={completedSteps}
           steps={DT_STEPS}
           basePath={DT_BASE_PATH}
@@ -293,30 +332,6 @@ export default function EmitirDanosTercerosPage() {
               ← Volver a Comparativa
             </button>
           </div>
-          <PaymentPlanSelector
-            annualPremium={selectedPlan.annualPremium}
-            priceBreakdown={selectedPlan._priceBreakdown}
-            onContinue={handlePaymentPlanSelected}
-          />
-        </div>
-      </div>
-    );
-  }
-
-  // ─── STEP 2: DATOS DEL CLIENTE (incluye cédula y licencia) ───
-  if (step === 'emission-data') {
-    return (
-      <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
-        <div className="pt-6">
-          <EmissionProgressBar currentStep={getStepNumber('emission-data')} totalSteps={DT_TOTAL_STEPS} />
-        </div>
-        <EmissionBreadcrumb
-          currentStep="emission-data"
-          completedSteps={completedSteps}
-          steps={DT_STEPS}
-          basePath={DT_BASE_PATH}
-        />
-        <div className="py-8 px-4">
           <EmissionDataForm
             quoteData={quoteData}
             onContinue={handleEmissionDataComplete}
@@ -326,7 +341,7 @@ export default function EmitirDanosTercerosPage() {
     );
   }
 
-  // ─── STEP 3: DATOS DEL VEHÍCULO ───
+  // ─── STEP 2: DATOS DEL VEHÍCULO ───
   if (step === 'vehicle') {
     return (
       <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
@@ -349,7 +364,7 @@ export default function EmitirDanosTercerosPage() {
     );
   }
 
-  // ─── STEP 4: INFORMACIÓN DE PAGO ───
+  // ─── STEP 3: INFORMACIÓN DE PAGO ───
   if (step === 'payment-info') {
     const amount = installments === 1 ? selectedPlan.annualPremium : monthlyPayment;
 
@@ -431,7 +446,7 @@ export default function EmitirDanosTercerosPage() {
     );
   }
 
-  // ─── STEP 5: RESUMEN Y CONFIRMACIÓN (con declaración de veracidad) ───
+  // ─── STEP 4: RESUMEN Y CONFIRMACIÓN (con declaración de veracidad) ───
   if (step === 'review') {
     return (
       <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">

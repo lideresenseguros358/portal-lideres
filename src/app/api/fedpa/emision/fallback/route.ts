@@ -1,12 +1,14 @@
 /**
  * Endpoint: Emitir Póliza FEDPA via Emisor Externo (2021)
  * POST /api/fedpa/emision/fallback
- * 
- * Usa crear_poliza_auto_cc_externos que NO requiere Bearer token.
- * Recibe FormData con documentos + datos JSON.
+ *
+ * Flujo completo según manual Emisor Externo 2021:
+ *   1. get_cotizacion  → IdCotizacion, SubRamo, prima real
+ *   2. get_nropoliza   → NroPoliza
+ *   3. crear_poliza_auto_cc_externos → multipart (data JSON + File1/File2/File3)
+ *
+ * NO requiere Bearer token — usa Usuario/Clave en body/params.
  * Fallback para cuando EmisorPlan (2024) tiene token bloqueado.
- * 
- * REQUISITO CLAVE: IdCotizacion (obtenido en paso de cotización)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -32,14 +34,6 @@ export async function POST(request: NextRequest) {
     }
     const emisionData = JSON.parse(emisionDataRaw);
 
-    // VALIDAR IdCotizacion - requerido por Emisor Externo
-    if (!emisionData.IdCotizacion) {
-      return NextResponse.json(
-        { success: false, error: 'Falta IdCotizacion. Se requiere el ID de cotización FEDPA.' },
-        { status: 400 }
-      );
-    }
-
     // Extract files
     const cedulaFile = incomingForm.get('documento_identidad') as File | null;
     const licenciaFile = incomingForm.get('licencia_conducir') as File | null;
@@ -52,25 +46,89 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log('[FEDPA Emisión Fallback] Usando Emisor Externo (2021) - sin token...');
-    console.log('[FEDPA Emisión Fallback] Datos:', {
-      idCotizacion: emisionData.IdCotizacion,
+    console.log('[FEDPA Fallback] Usando Emisor Externo (2021) - sin token...');
+    console.log('[FEDPA Fallback] Datos:', {
       cliente: `${emisionData.PrimerNombre} ${emisionData.PrimerApellido}`,
       identificacion: emisionData.Identificacion,
       vehiculo: `Marca:${emisionData.Marca} Modelo:${emisionData.Modelo} Año:${emisionData.Ano}`,
       plan: emisionData.Plan,
       prima: emisionData.PrimaTotal,
-      archivos: {
-        cedula: !!cedulaFile,
-        licencia: !!licenciaFile,
-        registro: !!registroFile,
-      },
+      sumaAsegurada: emisionData.sumaAsegurada,
     });
 
     // ============================================
-    // PASO 1: Obtener NroPoliza (requerido por API)
+    // PASO 1: COTIZAR via Emisor Externo get_cotizacion
+    // Obtiene IdCotizacion + SubRamo + prima real
+    // (Manual página 8 — POST con JSON body)
     // ============================================
-    console.log('[FEDPA Emisión Fallback] Obteniendo NroPoliza...');
+    console.log('[FEDPA Fallback] PASO 1: Cotizando via Emisor Externo...');
+    const cotizBody: Record<string, any> = {
+      Ano: parseInt(emisionData.Ano) || new Date().getFullYear(),
+      Uso: emisionData.Uso || '10',
+      CantidadPasajeros: parseInt(emisionData.Pasajero) || 5,
+      SumaAsegurada: String(emisionData.sumaAsegurada || 0),
+      CodLimiteLesiones: '1',   // Default: 10,000/20,000
+      CodLimitePropiedad: '7',  // Default: 50,000/50,000
+      CodLimiteGastosMedico: '16', // Default: 10,000/50,000
+      EndosoIncluido: 'S',
+      CodPlan: String(emisionData.Plan || '411'),
+      CodMarca: String(emisionData.Marca || ''),
+      CodModelo: String(emisionData.Modelo || ''),
+      Nombre: emisionData.PrimerNombre || '',
+      Apellido: emisionData.PrimerApellido || '',
+      Cedula: emisionData.Identificacion || '',
+      Telefono: String(emisionData.Celular || emisionData.Telefono || ''),
+      Email: emisionData.Email || '',
+      Usuario: config.usuario,
+      Clave: config.clave,
+    };
+
+    const cotizResponse = await fetch(
+      `${EMISOR_EXTERNO_BASE}/Polizas/get_cotizacion`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cotizBody),
+      }
+    );
+
+    let idCotizacion = '';
+    let subRamo = '07'; // Default DT, will be overridden by cotización response
+    let primaReal = emisionData.PrimaTotal || 0;
+
+    if (cotizResponse.ok) {
+      try {
+        const cotizData = await cotizResponse.json();
+        console.log('[FEDPA Fallback] get_cotizacion response (first 500):', JSON.stringify(cotizData).substring(0, 500));
+
+        // Response is an array of coverages; all share the same COTIZACION and SUBRAMO
+        const firstItem = Array.isArray(cotizData) ? cotizData[0] : cotizData;
+        if (firstItem) {
+          idCotizacion = String(firstItem.COTIZACION || '');
+          subRamo = String(firstItem.SUBRAMO || '07');
+          primaReal = firstItem.TOTAL_PRIMA_IMPUESTO || primaReal;
+          console.log('[FEDPA Fallback] ✅ Cotización OK:', { idCotizacion, subRamo, primaReal });
+        }
+      } catch (parseErr) {
+        console.warn('[FEDPA Fallback] Error parseando cotización:', parseErr);
+      }
+    } else {
+      const errText = await cotizResponse.text().catch(() => '');
+      console.warn('[FEDPA Fallback] get_cotizacion falló (HTTP', cotizResponse.status, '):', errText.substring(0, 300));
+      // Continue with whatever IdCotizacion we have from the frontend
+      idCotizacion = String(emisionData.IdCotizacion || '');
+    }
+
+    if (!idCotizacion) {
+      console.warn('[FEDPA Fallback] Sin IdCotizacion — usando valor del frontend:', emisionData.IdCotizacion);
+      idCotizacion = String(emisionData.IdCotizacion || '');
+    }
+
+    // ============================================
+    // PASO 2: Obtener NroPoliza
+    // (Manual página 7 — POST con JSON body)
+    // ============================================
+    console.log('[FEDPA Fallback] PASO 2: Obteniendo NroPoliza...');
     const nroPolizaResponse = await fetch(
       `${EMISOR_EXTERNO_BASE}/Polizas/get_nropoliza`,
       {
@@ -80,90 +138,78 @@ export async function POST(request: NextRequest) {
       }
     );
 
-    if (!nroPolizaResponse.ok) {
-      console.error('[FEDPA Emisión Fallback] Error obteniendo NroPoliza:', nroPolizaResponse.status);
-      return NextResponse.json(
-        { success: false, error: 'No se pudo obtener número de póliza de FEDPA' },
-        { status: 502 }
-      );
+    let nroPoliza = '';
+    if (nroPolizaResponse.ok) {
+      try {
+        const nroPolizaData = await nroPolizaResponse.json();
+        nroPoliza = String(Array.isArray(nroPolizaData) ? nroPolizaData[0]?.NUMPOL : nroPolizaData?.NUMPOL || '');
+        console.log('[FEDPA Fallback] ✅ NroPoliza:', nroPoliza || '(vacío)');
+      } catch (parseErr) {
+        console.warn('[FEDPA Fallback] Error parseando NroPoliza:', parseErr);
+      }
+    } else {
+      console.warn('[FEDPA Fallback] get_nropoliza falló (HTTP', nroPolizaResponse.status, ')');
     }
-
-    const nroPolizaData = await nroPolizaResponse.json();
-    const nroPoliza = Array.isArray(nroPolizaData) ? nroPolizaData[0]?.NUMPOL : nroPolizaData?.NUMPOL;
-    
-    if (!nroPoliza) {
-      console.error('[FEDPA Emisión Fallback] NroPoliza vacío:', JSON.stringify(nroPolizaData));
-      return NextResponse.json(
-        { success: false, error: 'FEDPA no devolvió número de póliza' },
-        { status: 502 }
-      );
-    }
-    console.log('[FEDPA Emisión Fallback] NroPoliza obtenido:', nroPoliza);
 
     // ============================================
-    // PASO 2: Determinar tipo de documento
-    // DocumentoIdentificacion = tipo (C=Cédula, R=RUC, P=Pasaporte)
-    // Cedula = número de cédula, Ruc = número de RUC
+    // PASO 3: Determinar tipo de documento
     // ============================================
     const identificacion = emisionData.Identificacion || '';
-    let tipoDoc = 'C'; // Default: Cédula
+    let tipoDoc = 'CED';
     let cedula = identificacion;
     let ruc = '';
-    
-    if (identificacion.toUpperCase().startsWith('E-') || identificacion.toUpperCase().startsWith('PE-')) {
-      tipoDoc = 'C'; // Extranjero con cédula panameña
-      cedula = identificacion;
-    } else if (identificacion.includes('-DV-') || identificacion.match(/^\d{1,3}-\d+-\d+-DV/)) {
-      tipoDoc = 'R'; // RUC
+
+    if (identificacion.includes('-DV-') || identificacion.match(/^\d{1,3}-\d+-\d+-DV/)) {
+      tipoDoc = 'RUC';
       ruc = identificacion;
       cedula = '';
     } else if (identificacion.match(/^[A-Z]{2}\d+/) || identificacion.length > 12) {
-      tipoDoc = 'P'; // Pasaporte
+      tipoDoc = 'PAS';
     }
 
-    // Fechas de vigencia
+    // Fechas
     const today = new Date();
     const dd = today.getDate().toString().padStart(2, '0');
     const mm = (today.getMonth() + 1).toString().padStart(2, '0');
     const yyyy = today.getFullYear();
-    const fechaDesde = `${dd}/${mm}/${yyyy}`;
-    const fechaHasta = `${dd}/${mm}/${yyyy + 1}`;
+    const fechaDesde = `${yyyy}-${mm}-${dd}`;
+    const fechaHasta = `${yyyy + 1}-${mm}-${dd}`;
+    const hours = today.getHours();
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const h12 = hours % 12 || 12;
+    const fechaHora = `${yyyy}-${mm}-${dd} ${h12.toString().padStart(2,'0')}:${today.getMinutes().toString().padStart(2,'0')}:${today.getSeconds().toString().padStart(2,'0')} ${ampm}`;
+
+    // Convertir FechaNacimiento a YYYY-MM-DD si viene en DD/MM/YYYY
+    let fechaNac = emisionData.FechaNacimiento || '';
+    if (fechaNac.includes('/')) {
+      const parts = fechaNac.split('/');
+      if (parts.length === 3 && parts[2].length === 4) {
+        fechaNac = `${parts[2]}-${parts[1]}-${parts[0]}`;
+      }
+    }
 
     // ============================================
-    // PASO 3: CONSTRUIR REQUEST EMISOR EXTERNO (2021)
-    // Formato: crear_poliza_auto_cc_externos
+    // PASO 4: CONSTRUIR PAYLOAD crear_poliza_auto_cc_externos
+    // (Manual página 9 — multipart form-data)
     // ============================================
     const externoData: Record<string, any> = {
-      // Autenticación (inline, no token)
-      Usuario: config.usuario,
-      Clave: config.clave,
-      
-      // IDs requeridos
-      IdCotizacion: emisionData.IdCotizacion,
-      NroPoliza: nroPoliza,
-      
-      // Ramo Auto
+      FechaHora: fechaHora,
+      Monto: String(primaReal),
+      Aprobada: 'S',
+      NroTransaccion: 'P-1',
+      FechaAprobada: fechaHora,
       Ramo: '04',
-      SubRamo: '07',
-      
-      // Vigencia
+      SubRamo: subRamo,
+      IdCotizacion: idCotizacion,
+      NroPoliza: nroPoliza,
       FechaDesde: fechaDesde,
       FechaHasta: fechaHasta,
-      
-      // Plan/Opción
-      Opcion: String(emisionData.Plan),
-      
-      // Pago
-      FechaHora: new Date().toISOString(),
-      Monto: String(emisionData.PrimaTotal || 0),
-      Aprobada: 'S',
-      NroTransaccion: `TXN-${Date.now()}`,
-      FechaAprobada: fechaDesde,
-      
-      // Entidad (asegurado)
+      Opcion: 'A',
+      Usuario: config.usuario,
+      Clave: config.clave,
       Entidad: [{
         Juridico: 'N',
-        NombreCompleto: `${emisionData.PrimerNombre} ${emisionData.SegundoNombre || ''} ${emisionData.PrimerApellido} ${emisionData.SegundoApellido || ''}`.replace(/\s+/g, ' ').trim(),
+        NombreEmpresa: '',
         PrimerNombre: emisionData.PrimerNombre || '',
         SegundoNombre: emisionData.SegundoNombre || '',
         PrimerApellido: emisionData.PrimerApellido || '',
@@ -171,17 +217,17 @@ export async function POST(request: NextRequest) {
         DocumentoIdentificacion: tipoDoc,
         Cedula: cedula,
         Ruc: ruc,
-        CodPais: '507',
-        CodProvincia: '8',
-        CodCorregiemiento: '1',
+        FechaNacimiento: fechaNac,
+        Sexo: emisionData.Sexo || 'M',
+        CodPais: '999',
+        CodProvincia: '999',
+        CodCorregimiento: '999',
         Email: emisionData.Email || '',
         TelefonoOficina: String(emisionData.Telefono || ''),
         Celular: String(emisionData.Celular || ''),
-        Direccion: emisionData.Direccion || 'Panama',
+        Direccion: emisionData.Direccion || 'PANAMA',
         IdVinculo: '1',
       }],
-      
-      // Auto
       Auto: {
         CodMarca: String(emisionData.Marca || ''),
         CodModelo: String(emisionData.Modelo || ''),
@@ -193,67 +239,90 @@ export async function POST(request: NextRequest) {
       },
     };
 
-    console.log('[FEDPA Emisión Fallback] Payload:', JSON.stringify(externoData, null, 2).substring(0, 1500));
+    console.log('[FEDPA Fallback] PASO 4: Payload crear_poliza:', JSON.stringify(externoData, null, 2).substring(0, 1500));
 
-    // Build FormData for Emisor Externo
-    const outgoingForm = new FormData();
-    outgoingForm.append('data', JSON.stringify(externoData));
+    // Re-buffer ALL files upfront into ArrayBuffers (streams can only be read once)
+    const cedulaBytes = await cedulaFile.arrayBuffer();
+    const licenciaBytes = await licenciaFile.arrayBuffer();
+    const registroBytes = registroFile ? await registroFile.arrayBuffer() : null;
 
-    // Append files as file0, file1, file2 (matching fedpa-api.ts pattern)
-    // Preserve original filename with extension — FEDPA server needs the extension
-    const getFileName = (file: File, fallbackName: string) => {
-      const ext = file.name?.split('.').pop() || 'pdf';
-      return `${fallbackName}.${ext}`;
-    };
-    outgoingForm.append('file0', cedulaFile, getFileName(cedulaFile, 'documento_identidad'));
-    outgoingForm.append('file1', licenciaFile, getFileName(licenciaFile, 'licencia_conducir'));
-    if (registroFile) {
-      outgoingForm.append('file2', registroFile, getFileName(registroFile, 'registro_vehicular'));
-    }
-
-    console.log('[FEDPA Emisión Fallback] Enviando a Emisor Externo...');
-
-    const response = await fetch(
-      `${EMISOR_EXTERNO_BASE}/Polizas/crear_poliza_auto_cc_externos`,
-      {
-        method: 'POST',
-        body: outgoingForm,
+    // Helper: build a fresh FormData (needed for retries since streams are consumed)
+    const buildForm = () => {
+      const form = new FormData();
+      form.append('data', JSON.stringify(externoData));
+      form.append('File1', new Blob([cedulaBytes], { type: cedulaFile.type || 'image/jpeg' }), cedulaFile.name || 'documento_identidad.jpg');
+      form.append('File2', new Blob([licenciaBytes], { type: licenciaFile.type || 'image/jpeg' }), licenciaFile.name || 'licencia_conducir.jpg');
+      if (registroBytes) {
+        form.append('File3', new Blob([registroBytes], { type: registroFile!.type || 'application/pdf' }), registroFile!.name || 'registro_vehicular.pdf');
       }
-    );
+      return form;
+    };
 
-    const responseText = await response.text();
-    console.log('[FEDPA Emisión Fallback] Response status:', response.status);
-    console.log('[FEDPA Emisión Fallback] Response body:', responseText.substring(0, 1000));
+    console.log('[FEDPA Fallback] Enviando a crear_poliza_auto_cc_externos...', {
+      File1: `${cedulaFile.name} (${cedulaBytes.byteLength}b)`,
+      File2: `${licenciaFile.name} (${licenciaBytes.byteLength}b)`,
+      File3: registroFile ? `${registroFile.name} (${registroBytes?.byteLength}b)` : 'N/A',
+    });
+
+    // ── Enviar con reintentos para errores transitorios (disco FEDPA) ──
+    const MAX_RETRIES = 2;
+    let lastResponseText = '';
+    let lastStatus = 0;
+
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      if (attempt > 0) {
+        console.log(`[FEDPA Fallback] Reintento ${attempt}/${MAX_RETRIES} en 3s...`);
+        await new Promise(r => setTimeout(r, 3000));
+      }
+
+      const response = await fetch(
+        `${EMISOR_EXTERNO_BASE}/Polizas/crear_poliza_auto_cc_externos`,
+        { method: 'POST', body: buildForm() }
+      );
+
+      lastResponseText = await response.text();
+      lastStatus = response.status;
+      console.log(`[FEDPA Fallback] Attempt ${attempt + 1} - Status: ${response.status}, Body: ${lastResponseText.substring(0, 500)}`);
+
+      const isDiskError = lastResponseText.includes('dispositivo no est') || lastResponseText.includes('device is not ready');
+      if (isDiskError && attempt < MAX_RETRIES) {
+        console.warn('[FEDPA Fallback] Error de disco FEDPA (transient), reintentando...');
+        continue;
+      }
+      break;
+    }
 
     let data: any;
     try {
-      data = JSON.parse(responseText);
+      data = JSON.parse(lastResponseText);
     } catch {
-      console.error('[FEDPA Emisión Fallback] Response no es JSON:', responseText.substring(0, 300));
+      console.error('[FEDPA Fallback] Response no es JSON:', lastResponseText.substring(0, 300));
       return NextResponse.json(
-        { success: false, error: `Respuesta inesperada de FEDPA: ${responseText.substring(0, 300)}` },
+        { success: false, error: `Respuesta inesperada de FEDPA: ${lastResponseText.substring(0, 300)}` },
         { status: 502 }
       );
     }
 
-    // Check for API-level errors
     if (data.error || data.Error) {
       const errorMsg = data.error || data.Error || data.Mensaje || 'Error desconocido';
-      console.error('[FEDPA Emisión Fallback] Error API:', errorMsg);
+      console.error('[FEDPA Fallback] Error API:', errorMsg);
+      const isDiskError = errorMsg.includes('dispositivo no est') || errorMsg.includes('device is not ready');
+      const userMsg = isDiskError
+        ? 'El servidor de FEDPA tiene un problema temporal con su almacenamiento. Por favor intente en unos minutos o contacte a FEDPA.'
+        : errorMsg;
       return NextResponse.json(
-        { success: false, error: errorMsg },
-        { status: 400 }
+        { success: false, error: userMsg, fedpaError: errorMsg, code: isDiskError ? 'FEDPA_DISK_ERROR' : 'FEDPA_API_ERROR' },
+        { status: 502 }
       );
     }
 
-    if (!response.ok) {
+    if (!lastStatus || lastStatus >= 400) {
       return NextResponse.json(
-        { success: false, error: data.Mensaje || data.message || data.error || `Error HTTP ${response.status}` },
-        { status: response.status }
+        { success: false, error: data.Mensaje || data.message || data.error || `Error HTTP ${lastStatus}` },
+        { status: lastStatus || 502 }
       );
     }
 
-    // Usar nroPoliza ya obtenido o el que devuelva la API
     const polizaEmitida = data.NroPoliza || data.poliza || data.nroPoliza || data.POLIZA || data.NUMPOL || nroPoliza;
     
     if (!polizaEmitida) {
