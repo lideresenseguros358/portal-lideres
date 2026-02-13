@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 interface VehicleDataFormProps {
   quoteData: any;
   onContinue: (vehicleData: VehicleData) => void;
+  isInternacional?: boolean;
 }
 
 export interface VehicleData {
@@ -24,12 +25,17 @@ export interface VehicleData {
   color: string;
   pasajeros: number;
   puertas: number;
+  kilometraje?: string;
+  tipoCombustible?: 'GASOLINA' | 'DIESEL';
+  tipoTransmision?: 'AUTOMATICO' | 'MANUAL';
+  aseguradoAnteriormente?: boolean;
+  aseguradoraAnterior?: string;
   registroVehicular: File | null;
   registroVehicularUrl?: string;
   notas?: string;
 }
 
-export default function VehicleDataForm({ quoteData, onContinue }: VehicleDataFormProps) {
+export default function VehicleDataForm({ quoteData, onContinue, isInternacional = false }: VehicleDataFormProps) {
   const router = useRouter();
   const [formData, setFormData] = useState({
     placa: '',
@@ -38,6 +44,11 @@ export default function VehicleDataForm({ quoteData, onContinue }: VehicleDataFo
     color: '',
     pasajeros: 5,
     puertas: 4,
+    kilometraje: '',
+    tipoCombustible: 'GASOLINA' as 'GASOLINA' | 'DIESEL',
+    tipoTransmision: 'AUTOMATICO' as 'AUTOMATICO' | 'MANUAL',
+    aseguradoAnteriormente: false,
+    aseguradoraAnterior: '',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [registroVehicular, setRegistroVehicular] = useState<File | null>(null);
@@ -139,6 +150,7 @@ export default function VehicleDataForm({ quoteData, onContinue }: VehicleDataFo
     if (!formData.motor) newErrors.motor = 'Requerido';
     if (!formData.color) newErrors.color = 'Requerido';
     if (!registroVehicular) newErrors.registroVehicular = 'Requerido';
+    if (isInternacional && !formData.kilometraje) newErrors.kilometraje = 'Requerido para Internacional';
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -323,6 +335,91 @@ export default function VehicleDataForm({ quoteData, onContinue }: VehicleDataFo
                 <option value={4}>4 puertas</option>
                 <option value={5}>5 puertas</option>
               </select>
+            </div>
+
+            {/* Kilometraje - siempre visible */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Kilometraje {isInternacional && <span className="text-red-500">*</span>}
+              </label>
+              <input
+                type="text"
+                value={formData.kilometraje}
+                onChange={(e) => setFormData({ ...formData, kilometraje: e.target.value.replace(/[^0-9]/g, '') })}
+                className={`w-full px-3 py-2.5 md:px-4 md:py-3 text-base border-2 rounded-lg focus:outline-none transition-colors ${
+                  errors.kilometraje ? 'border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
+                }`}
+                placeholder="EJ: 45000"
+              />
+              {errors.kilometraje && <p className="text-xs text-red-500 mt-1">{errors.kilometraje}</p>}
+            </div>
+
+            {/* Tipo de Combustible */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Tipo de Combustible {isInternacional && <span className="text-red-500">*</span>}
+              </label>
+              <select
+                value={formData.tipoCombustible}
+                onChange={(e) => setFormData({ ...formData, tipoCombustible: e.target.value as 'GASOLINA' | 'DIESEL' })}
+                className="w-full px-3 py-2.5 md:px-4 md:py-3 text-base border-2 border-gray-300 focus:border-[#8AAA19] rounded-lg focus:outline-none bg-white"
+              >
+                <option value="GASOLINA">Gasolina</option>
+                <option value="DIESEL">Diesel</option>
+              </select>
+            </div>
+
+            {/* Tipo de Transmisión */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Tipo de Transmisión {isInternacional && <span className="text-red-500">*</span>}
+              </label>
+              <select
+                value={formData.tipoTransmision}
+                onChange={(e) => setFormData({ ...formData, tipoTransmision: e.target.value as 'AUTOMATICO' | 'MANUAL' })}
+                className="w-full px-3 py-2.5 md:px-4 md:py-3 text-base border-2 border-gray-300 focus:border-[#8AAA19] rounded-lg focus:outline-none bg-white"
+              >
+                <option value="AUTOMATICO">Automático</option>
+                <option value="MANUAL">Manual</option>
+              </select>
+            </div>
+
+            {/* Asegurado Anteriormente */}
+            <div className="md:col-span-2">
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                ¿Estuvo asegurado anteriormente?
+              </label>
+              <div className="flex items-center gap-4 mb-2">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="aseguradoAnteriormente"
+                    checked={formData.aseguradoAnteriormente === true}
+                    onChange={() => setFormData({ ...formData, aseguradoAnteriormente: true })}
+                    className="w-4 h-4 text-[#8AAA19]"
+                  />
+                  <span className="text-sm text-gray-700">Sí</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="aseguradoAnteriormente"
+                    checked={formData.aseguradoAnteriormente === false}
+                    onChange={() => setFormData({ ...formData, aseguradoAnteriormente: false, aseguradoraAnterior: '' })}
+                    className="w-4 h-4 text-[#8AAA19]"
+                  />
+                  <span className="text-sm text-gray-700">No</span>
+                </label>
+              </div>
+              {formData.aseguradoAnteriormente && (
+                <input
+                  type="text"
+                  value={formData.aseguradoraAnterior}
+                  onChange={(e) => setFormData({ ...formData, aseguradoraAnterior: e.target.value.toUpperCase() })}
+                  className="w-full px-3 py-2.5 md:px-4 md:py-3 text-base border-2 border-gray-300 focus:border-[#8AAA19] rounded-lg focus:outline-none transition-colors"
+                  placeholder="Nombre de la aseguradora anterior"
+                />
+              )}
             </div>
           </div>
         </div>

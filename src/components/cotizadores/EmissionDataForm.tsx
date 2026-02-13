@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { FaUser, FaCar, FaIdCard, FaUpload, FaCamera, FaCheckCircle } from 'react-icons/fa';
 import { toast } from 'sonner';
 import CedulaQRScanner from './CedulaQRScanner';
@@ -29,6 +29,12 @@ export interface EmissionData {
   telefono: string;
   celular: string;
   direccion: string;
+  // Dirección estructurada (IS)
+  codProvincia?: number;
+  codDistrito?: number;
+  codCorregimiento?: number;
+  codUrbanizacion?: number;
+  casaApto?: string;
   esPEP: boolean;
   acreedor?: string;
   cedulaFile?: File;
@@ -56,6 +62,61 @@ export default function EmissionDataForm({ quoteData, onContinue }: EmissionData
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [cedulaFileName, setCedulaFileName] = useState('');
   const [licenciaFileName, setLicenciaFileName] = useState('');
+
+  // IS Address catalogs — cascading dropdowns
+  const isInternacional = quoteData?.insurerName?.includes('INTERNACIONAL') || false;
+  const [provincias, setProvincias] = useState<{ DATO: number; TEXTO: string }[]>([]);
+  const [distritos, setDistritos] = useState<{ DATO: number; TEXTO: string }[]>([]);
+  const [corregimientos, setCorregimientos] = useState<{ DATO: number; TEXTO: string }[]>([]);
+  const [urbanizaciones, setUrbanizaciones] = useState<{ DATO: number; TEXTO: string }[]>([]);
+  const [loadingAddr, setLoadingAddr] = useState<string>('');
+
+  // Fetch provincias on mount (only for IS)
+  useEffect(() => {
+    if (!isInternacional) return;
+    setLoadingAddr('provincias');
+    fetch('/api/is/catalogos/direccion?tipo=provincias&codpais=1')
+      .then(r => r.json())
+      .then(d => { if (d.data) setProvincias(d.data); })
+      .catch(() => {})
+      .finally(() => setLoadingAddr(''));
+  }, [isInternacional]);
+
+  // Fetch distritos when provincia changes
+  const fetchDistritos = useCallback((codProvincia: number) => {
+    setDistritos([]);
+    setCorregimientos([]);
+    setFormData(prev => ({ ...prev, codDistrito: undefined, codCorregimiento: undefined, codUrbanizacion: undefined }));
+    if (!codProvincia) return;
+    setLoadingAddr('distritos');
+    fetch(`/api/is/catalogos/direccion?tipo=distritos&codpais=1&codprovincia=${codProvincia}`)
+      .then(r => r.json())
+      .then(d => { if (d.data) setDistritos(d.data); })
+      .catch(() => {})
+      .finally(() => setLoadingAddr(''));
+  }, []);
+
+  // Fetch corregimientos when distrito changes
+  const fetchCorregimientos = useCallback((codProvincia: number, codDistrito: number) => {
+    setCorregimientos([]);
+    setFormData(prev => ({ ...prev, codCorregimiento: undefined, codUrbanizacion: undefined }));
+    if (!codDistrito) return;
+    setLoadingAddr('corregimientos');
+    fetch(`/api/is/catalogos/direccion?tipo=corregimientos&codpais=1&codprovincia=${codProvincia}&coddistrito=${codDistrito}`)
+      .then(r => r.json())
+      .then(d => { if (d.data) setCorregimientos(d.data); })
+      .catch(() => {})
+      .finally(() => setLoadingAddr(''));
+  }, []);
+
+  // Fetch urbanizaciones once (large catalog, fetch on mount for IS)
+  useEffect(() => {
+    if (!isInternacional) return;
+    fetch('/api/is/catalogos/direccion?tipo=urbanizaciones&page=1&size=5000')
+      .then(r => r.json())
+      .then(d => { if (d.data) setUrbanizaciones(d.data); })
+      .catch(() => {});
+  }, [isInternacional]);
 
   // Cargar datos desde FormAutoCoberturaCompleta al montar
   useEffect(() => {
@@ -167,6 +228,13 @@ export default function EmissionDataForm({ quoteData, onContinue }: EmissionData
     if (!formData.telefono) newErrors.telefono = 'Requerido';
     if (!formData.celular) newErrors.celular = 'Requerido';
     if (!formData.direccion) newErrors.direccion = 'Requerido';
+    
+    // Dirección estructurada (IS)
+    if (isInternacional) {
+      if (!formData.codProvincia) newErrors.codProvincia = 'Selecciona provincia';
+      if (!formData.codDistrito) newErrors.codDistrito = 'Selecciona distrito';
+      if (!formData.codCorregimiento) newErrors.codCorregimiento = 'Selecciona corregimiento';
+    }
     
     // Documentos del cliente
     if (!formData.cedulaFile) newErrors.cedulaFile = 'Adjunta cédula/pasaporte';
@@ -489,6 +557,123 @@ export default function EmissionDataForm({ quoteData, onContinue }: EmissionData
               />
               {errors.direccion && <p className="text-xs text-red-500 mt-1">{errors.direccion}</p>}
             </div>
+
+            {/* IS Address Dropdowns — solo para Internacional */}
+            {isInternacional && (
+              <div className="bg-gray-50 border-2 border-gray-200 rounded-xl p-4 space-y-4">
+                <p className="text-sm font-semibold text-gray-700 mb-1">Dirección Estructurada (requerido por Internacional)</p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Provincia */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1">
+                      Provincia <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={formData.codProvincia || ''}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value) || 0;
+                        setFormData(prev => ({ ...prev, codProvincia: val || undefined }));
+                        fetchDistritos(val);
+                      }}
+                      className={`w-full px-3 py-2.5 text-base border-2 rounded-lg focus:outline-none bg-white ${
+                        errors.codProvincia ? 'border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
+                      }`}
+                      disabled={loadingAddr === 'provincias'}
+                    >
+                      <option value="">{loadingAddr === 'provincias' ? 'Cargando...' : 'Seleccionar provincia'}</option>
+                      {provincias.map(p => (
+                        <option key={p.DATO} value={p.DATO}>{p.TEXTO}</option>
+                      ))}
+                    </select>
+                    {errors.codProvincia && <p className="text-xs text-red-500 mt-1">{errors.codProvincia}</p>}
+                  </div>
+
+                  {/* Distrito */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1">
+                      Distrito <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={formData.codDistrito || ''}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value) || 0;
+                        setFormData(prev => ({ ...prev, codDistrito: val || undefined }));
+                        if (formData.codProvincia) fetchCorregimientos(formData.codProvincia, val);
+                      }}
+                      className={`w-full px-3 py-2.5 text-base border-2 rounded-lg focus:outline-none bg-white ${
+                        errors.codDistrito ? 'border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
+                      }`}
+                      disabled={!formData.codProvincia || loadingAddr === 'distritos'}
+                    >
+                      <option value="">{loadingAddr === 'distritos' ? 'Cargando...' : 'Seleccionar distrito'}</option>
+                      {distritos.map(d => (
+                        <option key={d.DATO} value={d.DATO}>{d.TEXTO}</option>
+                      ))}
+                    </select>
+                    {errors.codDistrito && <p className="text-xs text-red-500 mt-1">{errors.codDistrito}</p>}
+                  </div>
+
+                  {/* Corregimiento */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1">
+                      Corregimiento <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      value={formData.codCorregimiento || ''}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value) || 0;
+                        setFormData(prev => ({ ...prev, codCorregimiento: val || undefined }));
+                      }}
+                      className={`w-full px-3 py-2.5 text-base border-2 rounded-lg focus:outline-none bg-white ${
+                        errors.codCorregimiento ? 'border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
+                      }`}
+                      disabled={!formData.codDistrito || loadingAddr === 'corregimientos'}
+                    >
+                      <option value="">{loadingAddr === 'corregimientos' ? 'Cargando...' : 'Seleccionar corregimiento'}</option>
+                      {corregimientos.map(c => (
+                        <option key={c.DATO} value={c.DATO}>{c.TEXTO}</option>
+                      ))}
+                    </select>
+                    {errors.codCorregimiento && <p className="text-xs text-red-500 mt-1">{errors.codCorregimiento}</p>}
+                  </div>
+
+                  {/* Urbanización */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1">
+                      Urbanización / Barriada
+                    </label>
+                    <select
+                      value={formData.codUrbanizacion || ''}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value) || 0;
+                        setFormData(prev => ({ ...prev, codUrbanizacion: val || undefined }));
+                      }}
+                      className="w-full px-3 py-2.5 text-base border-2 border-gray-300 focus:border-[#8AAA19] rounded-lg focus:outline-none bg-white"
+                    >
+                      <option value="">Seleccionar (opcional)</option>
+                      {urbanizaciones.map(u => (
+                        <option key={u.DATO} value={u.DATO}>{u.TEXTO}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Casa / Apto */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">
+                    Casa / Apartamento
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.casaApto || ''}
+                    onChange={(e) => setFormData({ ...formData, casaApto: e.target.value })}
+                    className="w-full px-3 py-2.5 text-base border-2 border-gray-300 focus:border-[#8AAA19] rounded-lg focus:outline-none"
+                    placeholder="Ej: Casa 12-B, Apto 3C"
+                  />
+                </div>
+              </div>
+            )}
 
             {/* PEP Checkbox */}
             <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">

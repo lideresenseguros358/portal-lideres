@@ -20,12 +20,21 @@ export async function POST(request: NextRequest) {
       vcodtipodoc,
       vnrodoc,
       vnombre,
-      vapellido,
+      vapellido1,
+      vapellido2,
       vtelefono,
+      vcelular,
       vcorreo,
       vfecnacimiento,
       vsexo,
       vdireccion,
+      vestadocivil,
+      // Dirección estructurada IS
+      vcodprovincia,
+      vcoddistrito,
+      vcodcorregimiento,
+      vcodurbanizacion,
+      vcasaapto,
       // Datos del vehículo
       vcodmarca,
       vmarca_label,
@@ -41,6 +50,7 @@ export async function POST(request: NextRequest) {
       vcolor,
       vcantpasajeros,
       vcantpuertas,
+      vtipotransmision,
       // Pago
       formaPago,
       cantCuotas,
@@ -91,12 +101,20 @@ export async function POST(request: NextRequest) {
         codTipoDoc: parseInt(vcodtipodoc as string) || 1,
         nroDoc: vnrodoc,
         nombre: vnombre,
-        apellido: vapellido,
+        apellido1: vapellido1,
+        apellido2: vapellido2 || '',
         telefono: vtelefono,
+        celular: vcelular || vtelefono,
         correo: vcorreo,
         fechaNacimiento: vfecnacimiento,
         sexo: vsexo,
         direccion: vdireccion,
+        estadoCivil: vestadocivil,
+        codProvincia: parseInt(vcodprovincia) || undefined,
+        codDistrito: parseInt(vcoddistrito) || undefined,
+        codCorregimiento: parseInt(vcodcorregimiento) || undefined,
+        codUrbanizacion: parseInt(vcodurbanizacion) || 0,
+        casaApto: vcasaapto || '',
         codMarca: parseInt(vcodmarca as string),
         codModelo: parseInt(vcodmodelo as string),
         anioAuto: String(vanioauto),
@@ -108,6 +126,7 @@ export async function POST(request: NextRequest) {
         motor: vmotor,
         chasis: vchasis,
         color: vcolor,
+        tipoTransmision: vtipotransmision,
         cantPasajeros: parseInt(vcantpasajeros as string) || 5,
         cantPuertas: parseInt(vcantpuertas as string) || 4,
         paymentToken,
@@ -118,8 +137,9 @@ export async function POST(request: NextRequest) {
     );
     
     if (!result.success || !result.nroPoliza) {
+      console.error('[API IS Auto Emitir] Emission failed:', JSON.stringify(result));
       return NextResponse.json(
-        { success: false, error: result.error || 'Error al emitir póliza' },
+        { success: false, error: result.error || 'Error al emitir poliza', details: result },
         { status: 500 }
       );
     }
@@ -130,7 +150,7 @@ export async function POST(request: NextRequest) {
       broker_id: oficinaBroker.p_id,
       nro_poliza: result.nroPoliza,
       cliente_nombre: vnombre,
-      cliente_apellido: vapellido,
+      cliente_apellido: `${vapellido1} ${vapellido2 || ''}`.trim(),
       cliente_documento: vnrodoc,
       cliente_telefono: vtelefono,
       cliente_correo: vcorreo,
@@ -158,7 +178,7 @@ export async function POST(request: NextRequest) {
       ramo: 'AUTO',
       // Datos del cliente para visualización
       cliente: {
-        nombre: `${vnombre} ${vapellido}`.trim(),
+        nombre: `${vnombre} ${vapellido1} ${vapellido2 || ''}`.trim(),
         cedula: vnrodoc,
         email: vcorreo,
         telefono: vtelefono,

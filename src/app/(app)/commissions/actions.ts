@@ -2390,25 +2390,22 @@ export async function actionApplyAdvancePayment(payload: {
       const advanceReason = (advanceData as any)?.reason || 'Adelanto';
       
       // Actualizar bank_transfers con el monto usado
+      // remaining_amount y status son columnas generadas, solo actualizar used_amount
       const newUsedAmount = transferUsed + amount;
-      const newRemainingAmount = transferAmount - newUsedAmount;
-      const newStatus = newRemainingAmount <= 0.01 ? 'used' : 
-                       newUsedAmount > 0 ? 'partial' : 'available';
       
       const { error: updateTransferError } = await supabase
         .from('bank_transfers')
         .update({
           used_amount: newUsedAmount,
-          remaining_amount: newRemainingAmount,
-          status: newStatus
         } satisfies TablesUpdate<'bank_transfers'>)
         .eq('id', transfer.id);
       
       if (updateTransferError) throw updateTransferError;
       
-      console.log(`📝 Bank transfer actualizado - Usado: $${newUsedAmount.toFixed(2)} - Remanente: $${newRemainingAmount.toFixed(2)} - Status: ${newStatus}`);
+      console.log(`📝 Bank transfer actualizado - Usado: $${newUsedAmount.toFixed(2)}`);
       
       // Crear registro en payment_details para trazabilidad
+      // purpose tiene CHECK constraint: 'poliza' | 'devolucion' | 'otro'
       const { error: detailError } = await supabase
         .from('payment_details')
         .insert([{
@@ -2416,15 +2413,15 @@ export async function actionApplyAdvancePayment(payload: {
           payment_id: null, // No hay pending_payment en este flujo
           policy_number: `ADV-${advance_id.substring(0, 8)}`,
           insurer_name: 'ADELANTO',
-          client_name: `Adelanto: ${brokerName}`,
-          purpose: advanceReason,
+          client_name: `Adelanto: ${brokerName} - ${advanceReason}`,
+          purpose: 'otro',
           amount_used: amount,
           paid_at: payment_date || new Date().toISOString()
         }] satisfies TablesInsert<'payment_details'>[]);
       
       if (detailError) {
-        console.error('Error creating payment detail:', detailError);
-        // No fallar, solo log
+        console.error('❌ Error creating payment_details for advance transfer:', JSON.stringify(detailError));
+        throw new Error(`Error al registrar en historial de banco: ${detailError.message}`);
       }
       
       console.log(`✅ Transferencia aplicada al adelanto - Registrada en historial banco`);

@@ -18,11 +18,12 @@ interface InspectionPhoto {
 
 interface VehicleInspectionProps {
   onContinue: (photos: InspectionPhoto[]) => void;
+  isInternacional?: boolean;
 }
 
-export default function VehicleInspection({ onContinue }: VehicleInspectionProps) {
-  // ORDEN DE CAPTURA: F, LI, LD, T, MA, KM, TB, AS, KEY
-  const [photos, setPhotos] = useState<InspectionPhoto[]>([
+export default function VehicleInspection({ onContinue, isInternacional = false }: VehicleInspectionProps) {
+  // ORDEN DE CAPTURA: F, LI, LD, T, MA, KM, TB, AS, KEY, CH (IS only)
+  const basePhotos: InspectionPhoto[] = [
     { id: 'frontal', name: 'Vista Frontal' },
     { id: 'lateral-izq', name: 'Lateral Izquierdo' },
     { id: 'lateral-der', name: 'Lateral Derecho' },
@@ -32,10 +33,30 @@ export default function VehicleInspection({ onContinue }: VehicleInspectionProps
     { id: 'tablero', name: 'Tablero' },
     { id: 'asientos', name: 'Asientos' },
     { id: 'llave', name: 'Llave del Vehículo' },
-  ]);
+    ...(isInternacional ? [{ id: 'chasis-placa', name: 'Placa de Chasis' }] : []),
+  ];
+  const [photos, setPhotos] = useState<InspectionPhoto[]>(basePhotos);
   
   const [activeTooltip, setActiveTooltip] = useState<string | null>(null);
   const [currentHighlight, setCurrentHighlight] = useState<number>(0);
+
+  // IS-specific inspection questions (only for Cobertura Completa)
+  const [tieneExtras, setTieneExtras] = useState(false);
+  const [extrasSeleccionados, setExtrasSeleccionados] = useState<string[]>([]);
+  const [extrasDetalle, setExtrasDetalle] = useState('');
+  const [buenEstadoFisico, setBuenEstadoFisico] = useState(true);
+
+  const EXTRAS_OPTIONS = [
+    'Alarma de Fca.', 'Otra Alarma', 'Inmobilizer', 'GPS', 'Copas de Lujo',
+    'Rines Magnesio', 'Halógenos', 'Deflector de aire', 'Ventana de Techo',
+    'Bola de Trailer', 'Retrovisores', 'Retrovisores c/señal/luz', 'Antena Eléctrica',
+    'Mataburro', 'Estribos', 'Spoiler', 'Ext. Guardafango', 'Ventanas Eléctricas',
+    'Papel Ahumado', 'Air Bags', 'Aire Acondicionado', 'Cierre de ptas. Elect.',
+    'Tapicería de Tela', 'Tapicería de Cuero', 'Timón de posiciones',
+    'Timón Hidráulico', 'Viceras con espejos', 'Asiento del. Entero',
+    'Cd Player', 'R/Cassette', 'Bocinas', 'Amplificador', 'Ecualizador',
+    'Teléfono', 'DVD',
+  ];
 
   // Descripciones para tooltips
   const photoDescriptions: Record<string, string> = {
@@ -48,6 +69,7 @@ export default function VehicleInspection({ onContinue }: VehicleInspectionProps
     'tablero': 'Toma foto del tablero de instrumentos encendido',
     'asientos': 'Toma foto del interior mostrando los asientos',
     'llave': 'Toma foto de las llaves del vehículo',
+    'chasis-placa': 'Placa de chasis: se encuentra por lo general en el marco de la puerta del conductor o en la pared de la cabina de motor',
   };
 
   // Animación de parpadeo secuencial
@@ -101,8 +123,26 @@ export default function VehicleInspection({ onContinue }: VehicleInspectionProps
       toast.error(`Faltan ${missingPhotos.length} foto(s) por capturar`);
       return;
     }
+
+    // Attach IS inspection metadata to photos array for parent access
+    const photosWithMeta = photos as any;
+    if (isInternacional) {
+      photosWithMeta._isInspectionData = {
+        tieneExtras,
+        extrasSeleccionados: tieneExtras ? extrasSeleccionados : [],
+        extrasDetalle: tieneExtras ? extrasDetalle : '',
+        buenEstadoFisico,
+      };
+      // Also store in sessionStorage for later PDF generation
+      sessionStorage.setItem('isInspectionData', JSON.stringify({
+        tieneExtras,
+        extrasSeleccionados: tieneExtras ? extrasSeleccionados : [],
+        extrasDetalle: tieneExtras ? extrasDetalle : '',
+        buenEstadoFisico,
+      }));
+    }
     
-    onContinue(photos);
+    onContinue(photosWithMeta);
   };
 
   const completedCount = photos.filter(p => p.file).length;
@@ -314,6 +354,24 @@ export default function VehicleInspection({ onContinue }: VehicleInspectionProps
               />
               <text x="120" y="241" textAnchor="middle" fill="#fff" fontSize="12" fontWeight="bold" style={{ pointerEvents: 'none' }}>KEY</text>
             </g>
+            
+            {/* Botón CH - Placa de Chasis (debajo de KEY, solo IS) */}
+            {isInternacional && photos[9] && (
+              <g className="cursor-pointer" onMouseEnter={() => setActiveTooltip('chasis-placa')} onMouseLeave={() => setActiveTooltip(null)}>
+                <circle 
+                  cx="120" 
+                  cy="270" 
+                  r="16" 
+                  fill={photos[9]?.file ? '#10b981' : '#3b82f6'} 
+                  stroke="#fff" 
+                  strokeWidth="3"
+                  className={currentHighlight === 9 && !photos[9]?.file ? 'pulse-active' : ''}
+                  onClick={() => handlePhotoCapture('chasis-placa')}
+                  style={{ cursor: 'pointer' }}
+                />
+                <text x="120" y="276" textAnchor="middle" fill="#fff" fontSize="12" fontWeight="bold" style={{ pointerEvents: 'none' }}>CH</text>
+              </g>
+            )}
           </svg>
           
           {/* Tooltip */}
@@ -345,6 +403,120 @@ export default function VehicleInspection({ onContinue }: VehicleInspectionProps
           </div>
         </div>
       </div>
+
+      {/* IS-specific: Inspection Questions for Cobertura Completa */}
+      {isInternacional && (
+        <div className="space-y-6">
+          {/* Pregunta 1: Extras */}
+          <div className="bg-white rounded-2xl shadow-xl border-2 border-gray-200 p-6">
+            <h3 className="text-lg font-bold text-[#010139] mb-4">
+              🔧 ¿Su auto cuenta con extras?
+            </h3>
+            <p className="text-sm text-gray-600 mb-4">Favor detallar si aplica</p>
+            
+            <div className="flex items-center gap-4 mb-4">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="tieneExtras"
+                  checked={tieneExtras === true}
+                  onChange={() => setTieneExtras(true)}
+                  className="w-4 h-4 text-[#8AAA19]"
+                />
+                <span className="text-sm font-semibold text-gray-700">Sí</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="tieneExtras"
+                  checked={tieneExtras === false}
+                  onChange={() => { setTieneExtras(false); setExtrasSeleccionados([]); setExtrasDetalle(''); }}
+                  className="w-4 h-4 text-[#8AAA19]"
+                />
+                <span className="text-sm font-semibold text-gray-700">No</span>
+              </label>
+            </div>
+
+            {tieneExtras && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {EXTRAS_OPTIONS.map((extra) => (
+                    <label key={extra} className="flex items-center gap-2 cursor-pointer text-sm">
+                      <input
+                        type="checkbox"
+                        checked={extrasSeleccionados.includes(extra)}
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setExtrasSeleccionados(prev => [...prev, extra]);
+                          } else {
+                            setExtrasSeleccionados(prev => prev.filter(x => x !== extra));
+                          }
+                        }}
+                        className="w-4 h-4 text-[#8AAA19] rounded"
+                      />
+                      <span className="text-gray-700">{extra}</span>
+                    </label>
+                  ))}
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Detallar extras con valores exactos
+                  </label>
+                  <textarea
+                    value={extrasDetalle}
+                    onChange={(e) => setExtrasDetalle(e.target.value)}
+                    rows={3}
+                    className="w-full px-3 py-2.5 text-sm border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none resize-none"
+                    placeholder="Ej: Rines Magnesio $500, Alarma $200..."
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Pregunta 2: Estado Físico */}
+          <div className="bg-white rounded-2xl shadow-xl border-2 border-gray-200 p-6">
+            <h3 className="text-lg font-bold text-[#010139] mb-4">
+              🚗 ¿Su vehículo se encuentra en buen estado físico?
+            </h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Si marca &quot;Sí&quot;, todas las partes del vehículo se marcarán como &quot;B&quot; (Bueno) en el formulario de inspección.
+            </p>
+            
+            <div className="flex items-center gap-4">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="buenEstadoFisico"
+                  checked={buenEstadoFisico === true}
+                  onChange={() => setBuenEstadoFisico(true)}
+                  className="w-4 h-4 text-[#8AAA19]"
+                />
+                <span className="text-sm font-semibold text-gray-700">Sí, en buen estado</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="radio"
+                  name="buenEstadoFisico"
+                  checked={buenEstadoFisico === false}
+                  onChange={() => setBuenEstadoFisico(false)}
+                  className="w-4 h-4 text-[#8AAA19]"
+                />
+                <span className="text-sm font-semibold text-gray-700">No</span>
+              </label>
+            </div>
+            
+            {buenEstadoFisico && (
+              <div className="mt-3 p-3 bg-green-50 border border-green-200 rounded-lg">
+                <p className="text-xs text-green-800">
+                  ✅ Se marcará &quot;B&quot; (Bueno) en todas las partes del formulario de inspección IS.
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Botón Continuar */}
       <div className="space-y-3">

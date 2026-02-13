@@ -16,6 +16,7 @@ import FinalQuoteSummary from '@/components/cotizadores/FinalQuoteSummary';
 import LoadingSkeleton from '@/components/cotizadores/LoadingSkeleton';
 import EmissionProgressBar from '@/components/cotizadores/EmissionProgressBar';
 import EmissionBreadcrumb, { type EmissionStep } from '@/components/cotizadores/EmissionBreadcrumb';
+import SignaturePad from '@/components/cotizadores/SignaturePad';
 
 export default function EmitirPage() {
   // A7: Scroll to top al montar
@@ -37,6 +38,8 @@ export default function EmitirPage() {
   const [paymentToken, setPaymentToken] = useState<string>('');
   const [cardData, setCardData] = useState<{ last4: string; brand: string } | null>(null);
   const [completedSteps, setCompletedSteps] = useState<EmissionStep[]>([]);
+  const [signatureDataUrl, setSignatureDataUrl] = useState<string>('');
+  const [showSignaturePad, setShowSignaturePad] = useState(false);
 
   useEffect(() => {
     const loadData = () => {
@@ -93,8 +96,16 @@ export default function EmitirPage() {
     // Marcar paso completado
     setCompletedSteps(prev => [...prev, 'vehicle']);
     
-    // Ir a inspección vehicular
-    router.push('/cotizadores/emitir?step=inspection');
+    // Only CC (Cobertura Completa) needs inspection step
+    // IS DT (Daños a Terceros) skips inspection and goes to payment
+    const isCC = quoteData?.cobertura === 'COMPLETA';
+    if (isCC) {
+      router.push('/cotizadores/emitir?step=inspection');
+    } else {
+      // Skip inspection for DT
+      setCompletedSteps(prev => [...prev, 'inspection']);
+      router.push('/cotizadores/emitir?step=payment-info');
+    }
     toast.success('Datos del vehículo guardados');
   };
 
@@ -284,12 +295,16 @@ export default function EmitirPage() {
       } else if (isInternacionalReal) {
         console.log('[EMISIÓN INTERNACIONAL] Iniciando emisión con API real...');
         
-        if (!emissionData || !inspectionPhotos.length) {
-          throw new Error('Faltan datos de emisión o fotos de inspección');
+        if (!emissionData) {
+          throw new Error('Faltan datos de emisión');
         }
         
-        // Preparar nombre completo
-        const nombreCompleto = `${emissionData.primerNombre} ${emissionData.segundoNombre || ''} ${emissionData.primerApellido} ${emissionData.segundoApellido || ''}`.trim();
+        const isCC = quoteData.cobertura === 'COMPLETA';
+        const tipoCobertura = isCC ? 'Cobertura Completa' : 'Daños a Terceros';
+        
+        if (isCC && !inspectionPhotos.length) {
+          throw new Error('Faltan fotos de inspección para Cobertura Completa');
+        }
         
         // Emitir con API real de INTERNACIONAL
         toast.info('Emitiendo póliza...');
@@ -298,17 +313,24 @@ export default function EmitirPage() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             vIdPv: selectedPlan._idCotizacion,
-            // Datos del cliente
-            vcodtipodoc: 1, // 1=Cédula, 2=RUC, 3=Pasaporte
+            vcodtipodoc: 1,
             vnrodoc: emissionData.cedula,
-            vnombre: emissionData.primerNombre,
-            vapellido: `${emissionData.primerApellido} ${emissionData.segundoApellido || ''}`.trim(),
+            vnombre: `${emissionData.primerNombre} ${emissionData.segundoNombre || ''}`.trim(),
+            vapellido1: emissionData.primerApellido,
+            vapellido2: emissionData.segundoApellido || '',
             vtelefono: emissionData.telefono,
+            vcelular: emissionData.celular || emissionData.telefono,
             vcorreo: emissionData.email,
             vfecnacimiento: convertToFedpaDate(emissionData.fechaNacimiento),
             vsexo: emissionData.sexo,
             vdireccion: emissionData.direccion,
-            // Datos del vehículo
+            vestadocivil: emissionData.estadoCivil || 'soltero',
+            // Dirección estructurada IS
+            vcodprovincia: emissionData.codProvincia,
+            vcoddistrito: emissionData.codDistrito,
+            vcodcorregimiento: emissionData.codCorregimiento,
+            vcodurbanizacion: emissionData.codUrbanizacion || 0,
+            vcasaapto: emissionData.casaApto || '',
             vcodmarca: selectedPlan._vcodmarca,
             vcodmodelo: selectedPlan._vcodmodelo,
             vanioauto: quoteData.anio || new Date().getFullYear(),
@@ -319,13 +341,13 @@ export default function EmitirPage() {
             vmotor: vehicleData?.motor || '',
             vchasis: vehicleData?.vinChasis || '',
             vcolor: vehicleData?.color || '',
+            vtipotransmision: vehicleData?.tipoTransmision || 'AUTOMATICO',
             vcantpasajeros: vehicleData?.pasajeros || 5,
             vcantpuertas: vehicleData?.puertas || 4,
-            // Pago
             paymentToken,
             formaPago: installments === 1 ? 1 : 2,
             cantCuotas: installments,
-            tipo_cobertura: 'Cobertura Completa',
+            tipo_cobertura: tipoCobertura,
             vmarca_label: quoteData.marca,
             vmodelo_label: quoteData.modelo,
             environment: 'development',
@@ -334,17 +356,111 @@ export default function EmitirPage() {
         
         if (!emisionResponse.ok) {
           const errorData = await emisionResponse.json();
-          throw new Error(errorData.error || 'Error al emitir p\u00f3liza');
+          throw new Error(errorData.error || 'Error al emitir póliza');
         }
         
         const emisionResult = await emisionResponse.json();
         if (!emisionResult.success) {
-          throw new Error(emisionResult.error || 'Error al emitir p\u00f3liza');
+          throw new Error(emisionResult.error || 'Error al emitir póliza');
         }
         
-        console.log('[EMISION INTERNACIONAL] P\u00f3liza emitida:', emisionResult.nroPoliza);
+        console.log('[EMISION INTERNACIONAL] Póliza emitida:', emisionResult.nroPoliza);
         
-        // Guardar datos de la p\u00f3liza para la confirmaci\u00f3n
+        // ═══ ENVIAR EXPEDIENTE POR CORREO ═══
+        toast.info('Enviando expediente por correo...');
+        try {
+          const expedienteForm = new FormData();
+          expedienteForm.append('tipoCobertura', isCC ? 'CC' : 'DT');
+          expedienteForm.append('environment', 'development');
+          expedienteForm.append('nroPoliza', emisionResult.nroPoliza || '');
+          expedienteForm.append('firmaDataUrl', signatureDataUrl || '');
+          
+          // Client data
+          expedienteForm.append('clientData', JSON.stringify({
+            primerNombre: emissionData.primerNombre,
+            segundoNombre: emissionData.segundoNombre,
+            primerApellido: emissionData.primerApellido,
+            segundoApellido: emissionData.segundoApellido,
+            cedula: emissionData.cedula,
+            email: emissionData.email,
+            telefono: emissionData.telefono,
+            celular: emissionData.celular,
+            direccion: emissionData.direccion,
+            fechaNacimiento: emissionData.fechaNacimiento,
+          }));
+          
+          // Vehicle data
+          expedienteForm.append('vehicleData', JSON.stringify({
+            placa: vehicleData?.placa,
+            vinChasis: vehicleData?.vinChasis,
+            motor: vehicleData?.motor,
+            color: vehicleData?.color,
+            pasajeros: vehicleData?.pasajeros,
+            puertas: vehicleData?.puertas,
+            kilometraje: vehicleData?.kilometraje,
+            tipoCombustible: vehicleData?.tipoCombustible,
+            tipoTransmision: vehicleData?.tipoTransmision,
+            aseguradoAnteriormente: vehicleData?.aseguradoAnteriormente,
+            aseguradoraAnterior: vehicleData?.aseguradoraAnterior,
+          }));
+          
+          // Quote data
+          expedienteForm.append('quoteData', JSON.stringify({
+            marca: quoteData.marca,
+            modelo: quoteData.modelo,
+            anio: quoteData.anio || quoteData.anno,
+            valorVehiculo: quoteData.valorVehiculo,
+            tipoVehiculo: quoteData.tipoVehiculo || 'SEDAN',
+            cobertura: quoteData.cobertura,
+          }));
+          
+          // IS inspection data (extras, physical condition) - only for CC
+          if (isCC) {
+            const isInspData = sessionStorage.getItem('isInspectionData');
+            if (isInspData) {
+              expedienteForm.append('inspectionData', isInspData);
+            }
+          }
+          
+          // Document files
+          if (emissionData.cedulaFile) {
+            expedienteForm.append('cedulaFile', emissionData.cedulaFile);
+          }
+          if (emissionData.licenciaFile) {
+            expedienteForm.append('licenciaFile', emissionData.licenciaFile);
+          }
+          if (vehicleData?.registroVehicular) {
+            expedienteForm.append('registroVehicularFile', vehicleData.registroVehicular);
+          }
+          
+          // Inspection photos (only for CC)
+          if (isCC && inspectionPhotos.length > 0) {
+            for (const photo of inspectionPhotos) {
+              if (photo.file) {
+                expedienteForm.append(`photo_${photo.id}`, photo.file);
+              }
+            }
+          }
+          
+          const expedienteResponse = await fetch('/api/is/auto/send-expediente', {
+            method: 'POST',
+            body: expedienteForm,
+          });
+          
+          const expedienteResult = await expedienteResponse.json();
+          if (expedienteResult.success) {
+            console.log('[IS EXPEDIENTE] ✅ Correo enviado:', expedienteResult.messageId);
+            toast.success('Expediente enviado por correo');
+          } else {
+            console.error('[IS EXPEDIENTE] Error:', expedienteResult.error);
+            toast.warning('Póliza emitida pero hubo un error enviando el expediente por correo');
+          }
+        } catch (expError: any) {
+          console.error('[IS EXPEDIENTE] Error enviando expediente:', expError);
+          toast.warning('Póliza emitida pero hubo un error enviando el expediente por correo');
+        }
+        
+        // Guardar datos de la póliza para la confirmación
         sessionStorage.setItem('emittedPolicy', JSON.stringify({
           nroPoliza: emisionResult.nroPoliza,
           pdfUrl: emisionResult.pdfUrl,
@@ -353,7 +469,7 @@ export default function EmitirPage() {
           policyId: emisionResult.policyId,
         }));
         
-        toast.success(`\u00a1P\u00f3liza emitida! N\u00ba ${emisionResult.nroPoliza}`);
+        toast.success(`¡Póliza emitida! Nº ${emisionResult.nroPoliza}`);
         router.push('/cotizadores/confirmacion');
         
       } else {
@@ -404,9 +520,12 @@ export default function EmitirPage() {
 
   const isAutoCompleta = quoteData.cobertura === 'COMPLETA';
   const policyType = quoteData.policyType || 'AUTO'; // VIDA, INCENDIO, CONTENIDO, AUTO
+  const isInternacional = !!(selectedPlan?._isReal && selectedPlan?.insurerName?.includes('INTERNACIONAL'));
 
   // Determinar step inicial según tipo
-  const initialStep = isAutoCompleta ? 'payment' : 'payment-info';
+  // IS DT still needs emission-data and vehicle steps (for documents), just no inspection
+  const needsFullWizard = isAutoCompleta || isInternacional;
+  const initialStep = needsFullWizard ? 'payment' : 'payment-info';
   const currentStep = step || initialStep;
 
   // Mapeo de steps: determinar número de paso actual
@@ -422,8 +541,8 @@ export default function EmitirPage() {
     return stepMap[currentStep] || 1;
   };
 
-  // Step 1: Selección de plan de pago (solo para auto completa)
-  if (currentStep === 'payment' && isAutoCompleta) {
+  // Step 1: Selección de plan de pago (auto completa o IS)
+  if (currentStep === 'payment' && needsFullWizard) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
         {/* Progress Bar */}
@@ -449,8 +568,8 @@ export default function EmitirPage() {
     );
   }
 
-  // Step 2: Datos de emisión (solo para auto completa)
-  if (currentStep === 'emission-data' && isAutoCompleta) {
+  // Step 2: Datos de emisión (auto completa o IS)
+  if (currentStep === 'emission-data' && needsFullWizard) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
         {/* Progress Bar */}
@@ -467,7 +586,7 @@ export default function EmitirPage() {
         {/* Contenido */}
         <div className="py-8 px-4">
           <EmissionDataForm
-            quoteData={quoteData}
+            quoteData={{ ...quoteData, insurerName: selectedPlan?.insurerName }}
             onContinue={handleEmissionDataComplete}
           />
         </div>
@@ -475,8 +594,8 @@ export default function EmitirPage() {
     );
   }
 
-  // Step 3: Datos del Vehículo (solo para auto completa)
-  if (currentStep === 'vehicle' && isAutoCompleta) {
+  // Step 3: Datos del Vehículo (auto completa o IS)
+  if (currentStep === 'vehicle' && needsFullWizard) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
         {/* Progress Bar */}
@@ -495,6 +614,7 @@ export default function EmitirPage() {
           <VehicleDataForm
             quoteData={quoteData}
             onContinue={handleVehicleDataComplete}
+            isInternacional={isInternacional}
           />
         </div>
       </div>
@@ -520,6 +640,7 @@ export default function EmitirPage() {
         <div className="py-8 px-4">
           <VehicleInspection
             onContinue={handleInspectionComplete}
+            isInternacional={isInternacional}
           />
         </div>
       </div>
@@ -623,6 +744,23 @@ export default function EmitirPage() {
 
   // Step 6: Resumen final y confirmación (todos los tipos)
   if (currentStep === 'review') {
+    // For IS Internacional: require signature before emitting
+    const handleEmitClick = () => {
+      if (isInternacional && !signatureDataUrl) {
+        setShowSignaturePad(true);
+        return;
+      }
+      handleConfirmEmission();
+    };
+
+    const handleSignatureComplete = (dataUrl: string) => {
+      setSignatureDataUrl(dataUrl);
+      setShowSignaturePad(false);
+      toast.success('Firma capturada correctamente');
+      // Auto-proceed with emission after signing
+      setTimeout(() => handleConfirmEmission(), 300);
+    };
+
     return (
       <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
         {/* Progress Bar */}
@@ -646,9 +784,32 @@ export default function EmitirPage() {
             emissionData={emissionData}
             vehicleData={vehicleData}
             inspectionPhotos={inspectionPhotos}
-            onConfirm={handleConfirmEmission}
+            onConfirm={handleEmitClick}
           />
+
+          {/* Signature indicator for IS */}
+          {isInternacional && signatureDataUrl && (
+            <div className="max-w-2xl mx-auto mt-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-3">
+              <span className="text-green-600 text-lg">✅</span>
+              <span className="text-sm text-green-800 font-semibold">Firma digital capturada</span>
+              <button
+                onClick={() => setShowSignaturePad(true)}
+                className="ml-auto text-xs text-blue-600 underline"
+                type="button"
+              >
+                Cambiar firma
+              </button>
+            </div>
+          )}
         </div>
+
+        {/* Signature Pad Modal */}
+        {showSignaturePad && (
+          <SignaturePad
+            onSignatureComplete={handleSignatureComplete}
+            onCancel={() => setShowSignaturePad(false)}
+          />
+        )}
       </div>
     );
   }

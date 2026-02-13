@@ -175,6 +175,89 @@ export async function actionUpdatePreliminaryClient(id: string, updates: any) {
       .single();
 
     if (error) {
+      // Si el trigger rechaza porque la póliza ya existe, actualizar la info existente
+      if (error.message && error.message.includes('ya existe') && cleanedUpdates.policy_number) {
+        console.log('[Preliminar] Póliza ya existe, actualizando info existente...');
+        
+        const admin = getSupabaseAdmin();
+        
+        // Buscar la póliza existente con su cliente
+        const { data: existingPolicy } = await admin
+          .from('policies')
+          .select('id, client_id, broker_id')
+          .eq('policy_number', cleanedUpdates.policy_number)
+          .single();
+        
+        if (!existingPolicy) {
+          return { ok: false as const, error: 'La póliza existe pero no se pudo encontrar para actualizar.' };
+        }
+        
+        console.log('[Preliminar] Póliza encontrada:', existingPolicy.id, '- Cliente:', existingPolicy.client_id);
+        
+        // Actualizar datos del cliente
+        const clientUpdate: any = {};
+        if (cleanedUpdates.client_name) clientUpdate.name = cleanedUpdates.client_name;
+        if (cleanedUpdates.national_id) clientUpdate.national_id = cleanedUpdates.national_id;
+        if (cleanedUpdates.email) clientUpdate.email = cleanedUpdates.email;
+        if (cleanedUpdates.phone) clientUpdate.phone = cleanedUpdates.phone;
+        if (cleanedUpdates.birth_date) clientUpdate.birth_date = cleanedUpdates.birth_date;
+        if (cleanedUpdates.broker_id) clientUpdate.broker_id = cleanedUpdates.broker_id;
+        
+        if (Object.keys(clientUpdate).length > 0) {
+          const { error: clientError } = await admin
+            .from('clients')
+            .update(clientUpdate)
+            .eq('id', existingPolicy.client_id);
+          
+          if (clientError) {
+            console.error('[Preliminar] Error actualizando cliente:', clientError);
+          } else {
+            console.log('[Preliminar] Cliente actualizado:', clientUpdate);
+          }
+        }
+        
+        // Actualizar datos de la póliza
+        const policyUpdate: any = {};
+        if (cleanedUpdates.ramo) policyUpdate.ramo = cleanedUpdates.ramo;
+        if (cleanedUpdates.insurer_id) policyUpdate.insurer_id = cleanedUpdates.insurer_id;
+        if (cleanedUpdates.start_date) policyUpdate.start_date = cleanedUpdates.start_date;
+        if (cleanedUpdates.renewal_date) policyUpdate.renewal_date = cleanedUpdates.renewal_date;
+        if (cleanedUpdates.broker_id) policyUpdate.broker_id = cleanedUpdates.broker_id;
+        if (cleanedUpdates.notes) policyUpdate.notas = cleanedUpdates.notes;
+        
+        if (Object.keys(policyUpdate).length > 0) {
+          const { error: policyError } = await admin
+            .from('policies')
+            .update(policyUpdate)
+            .eq('id', existingPolicy.id);
+          
+          if (policyError) {
+            console.error('[Preliminar] Error actualizando póliza:', policyError);
+          } else {
+            console.log('[Preliminar] Póliza actualizada:', policyUpdate);
+          }
+        }
+        
+        // Marcar el registro temporal como migrado
+        await admin
+          .from('temp_client_import')
+          .update({ 
+            migrated: true, 
+            migrated_at: new Date().toISOString(),
+            client_id: existingPolicy.client_id,
+            policy_id: existingPolicy.id
+          })
+          .eq('id', id);
+        
+        console.log('[Preliminar] Registro temporal marcado como migrado (póliza existente actualizada)');
+        
+        revalidatePath('/db');
+        return { 
+          ok: true as const, 
+          data: { migrated: true, updatedExisting: true }
+        };
+      }
+      
       console.error('Error updating preliminary client:', error);
       return { ok: false as const, error: error.message };
     }

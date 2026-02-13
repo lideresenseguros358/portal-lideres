@@ -104,16 +104,27 @@ export interface CoberturasResponse {
 
 export interface EmisionAutoRequest {
   vIdPv: string; // ID de cotización (IDCOT) — requerido
+  opcion?: number; // Opción de emisión (1, 2 o 3) — default 1
   // DatosGenerales
   codTipoDoc: number;    // 1=Cédula, 2=RUC, 3=Pasaporte
   nroDoc: string;
-  nombre: string;
-  apellido: string;
+  nombre: string;        // Primer y segundo nombre
+  apellido1: string;     // Primer apellido
+  apellido2?: string;    // Segundo apellido
+  apeCasada?: string;    // Apellido de casada
   telefono: string;
+  celular?: string;
   correo: string;
   fechaNacimiento?: string; // dd/MM/yyyy
   sexo?: string;           // M o F
-  direccion?: string;
+  direccion?: string;      // Dirección textual (se parsea para campos IS)
+  estadoCivil?: string;    // soltero, casado, divorciado, viudo
+  // Dirección estructurada (IS)
+  codProvincia?: number;
+  codDistrito?: number;
+  codCorregimiento?: number;
+  codUrbanizacion?: number;
+  casaApto?: string;
   // DatosAuto
   codMarca: number;
   codModelo: number;
@@ -126,12 +137,15 @@ export interface EmisionAutoRequest {
   motor?: string;
   chasis?: string;
   color?: string;
+  tipoTransmision?: string; // AUTOMATICO o MANUAL
   cantPasajeros?: number;
   cantPuertas?: number;
   // Pago
   paymentToken?: string;
   formaPago?: number;      // 1=Contado, 2=Financiado
   cantCuotas?: number;     // Número de cuotas
+  // Documentos
+  documentUrls?: string[]; // URLs de documentos adjuntos
 }
 
 export interface EmisionAutoResponse {
@@ -312,8 +326,8 @@ export async function obtenerCoberturasCotizacion(
 
 /**
  * Emitir póliza de auto
- * Swagger: POST /api/cotizaemisorauto/getemision
- * Body: EmisorRequest (JSON) — incluye vIdPv del IDCOT de la cotización
+ * API Doc (Actualizada) Paso 11: POST /api/cotizaemisorauto/getemision
+ * Body structure from pages 6-13 of api-documentation Actualizada.pdf
  */
 export async function emitirPolizaAuto(
   request: EmisionAutoRequest,
@@ -323,10 +337,6 @@ export async function emitirPolizaAuto(
     return { success: false, error: 'Falta ID de cotización (vIdPv) para emitir' };
   }
   
-  // Construir body para EmisorRequest según Swagger (estructura anidada)
-  // La API requiere: DatosGenerales, DatosAuto, Documentos, CodTransaccion
-  const telefonoClean = (request.telefono || '').replace(/[-\s\(\)]/g, '');
-  
   // Fechas de vigencia: desde hoy, hasta 1 año después
   const hoy = new Date();
   const vigDesde = `${String(hoy.getDate()).padStart(2, '0')}/${String(hoy.getMonth() + 1).padStart(2, '0')}/${hoy.getFullYear()}`;
@@ -334,113 +344,167 @@ export async function emitirPolizaAuto(
   hastaDate.setFullYear(hastaDate.getFullYear() + 1);
   const vigHasta = `${String(hastaDate.getDate()).padStart(2, '0')}/${String(hastaDate.getMonth() + 1).padStart(2, '0')}/${hastaDate.getFullYear()}`;
   
-  // Separar apellidos (primer y segundo)
-  const apellidos = (request.apellido || '').trim().split(/\s+/);
-  const apellido1 = apellidos[0] || '';
-  const apellido2 = apellidos.slice(1).join(' ') || '';
+  const telefonoClean = (request.telefono || '').replace(/[-\s\(\)]/g, '');
+  const celularClean = (request.celular || request.telefono || '').replace(/[-\s\(\)]/g, '');
   
+  // Mapear estadoCivil del formulario a código IS (/catalogos/estadocivil)
+  const estadoCivilMap: Record<string, number> = {
+    'soltero': 1, 'casado': 2, 'divorciado': 3, 'viudo': 4,
+  };
+  const ecivil = estadoCivilMap[request.estadoCivil || ''] || 1;
+  
+  // Mapear tipoTransmision del formulario a código IS (/cotizaemisorauto/gettransmision)
+  const codTransmision = (request.tipoTransmision === 'MANUAL') ? 2 : 1; // 1=Automático, 2=Manual
+  
+  // Mapear color del formulario a código IS (/cotizaemisorauto/colores)
+  // Catálogo IS: mapeamos colores comunes a códigos conocidos
+  const colorMap: Record<string, string> = {
+    'BLANCO': '01', 'NEGRO': '02', 'GRIS': '03', 'PLATA': '04',
+    'PLATEADO': '04', 'AZUL': '05', 'ROJO': '06', 'VERDE': '07',
+    'AMARILLO': '08', 'NARANJA': '09', 'MARRON': '10', 'BEIGE': '11',
+    'DORADO': '12', 'VINO': '13', 'CELESTE': '14',
+  };
+  const colorUpper = (request.color || '').toUpperCase().trim();
+  const codColor = colorMap[colorUpper] || '06'; // Default: 06 si no se encuentra
+  
+  // Dirección: usar códigos del formulario si están disponibles, sino defaults Panamá
+  const defaultDir = {
+    codPais: 1,           // Panamá
+    codProvincia: request.codProvincia || 8,
+    codDistrito: request.codDistrito || 1,
+    codCorregimiento: request.codCorregimiento || 1,
+    codUrbanizacion: request.codUrbanizacion || 0,
+    calle: request.direccion || 'N/A',
+    casaApto: request.casaApto || '',
+    aptoPostal: '',
+  };
+  
+  // Documentos: IS requiere al menos 1 entrada con { url: "..." }
+  // Si no hay URLs reales, enviar placeholder
+  const documentos = (request.documentUrls && request.documentUrls.length > 0)
+    ? request.documentUrls.map(url => ({ url }))
+    : [{ url: '' }];
+  
+  // Body según API Doc Actualizada (pages 6-8, 11-13)
   const body = {
-    CodTransaccion: String(request.vIdPv),
-    DatosGenerales: {
-      codTipoDoc: Math.floor(Number(request.codTipoDoc)),
-      nroDoc: request.nroDoc,
-      vNroDoc: request.nroDoc,
-      nroNit: request.nroDoc,
-      vNroNit: request.nroDoc,
-      nombre: request.nombre,
-      apellido: request.apellido,
-      Apellido1: apellido1,
-      Apellido2: apellido2,
-      ApeCasada: '',
-      telefono: telefonoClean,
-      TelOfi: telefonoClean,
-      TelRes: telefonoClean,
-      Celular: telefonoClean,
-      correo: request.correo,
+    idPv: parseInt(String(request.vIdPv)),
+    nroPol: 0,
+    codTransaccion: '',
+    opcion: request.opcion || 1,
+    cantcuotas: request.cantCuotas || 1,
+    datosGenerales: {
+      nombre: request.nombre || '',
+      apellido1: request.apellido1 || '',
+      apellido2: request.apellido2 || '',
+      apeCasada: request.apeCasada || '',
+      tipoDoc: Math.floor(Number(request.codTipoDoc)) || 1,
+      vNroDoc: request.nroDoc || '',
+      vNroNit: '0',
+      esExtranjero: 0,
+      paisExtranjero: 0,
       fecNacimiento: request.fechaNacimiento || '',
       sexo: request.sexo || 'M',
-      direccion: request.direccion || '',
-      CodSocio: '0',
-      Adicional: '',
+      ecivil,              // Mapeado desde formulario (soltero=1, casado=2, divorciado=3, viudo=4)
+      ocupacion: 12,       // 12=Administrativo (hardcoded — no se recolecta en formulario)
+      telRes: telefonoClean,
+      telOfi: telefonoClean,
+      celular: celularClean,
+      correo: request.correo || '',
+      adicional: '',
+      codSocio: '',
+      dirResidencial: defaultDir,
+      dirOficina: defaultDir,
     },
-    DatosAuto: {
-      codMarca: Math.floor(Number(request.codMarca)),
-      codModelo: Math.floor(Number(request.codModelo)),
-      sumaAseg: String(request.sumaAseg || '0'),
-      anioAuto: String(request.anioAuto),
-      codPlanCobertura: Math.floor(Number(request.codPlanCobertura)),
-      codPlanCoberturaAdic: Math.floor(Number(request.codPlanCoberturaAdic || 0)),
-      codGrupoTarifa: Math.floor(Number(request.codGrupoTarifa)),
-      placa: request.placa || '',
+    datosAuto: {
       motor: request.motor || '',
       chasis: request.chasis || '',
-      color: request.color || '',
-      cantPasajeros: request.cantPasajeros || 5,
-      cantPuertas: request.cantPuertas || 4,
-      TxtBenef: 'N/A',
-      FecVigDesde: vigDesde,
-      FecVigHasta: vigHasta,
-      TxtComentarios: '',
+      placa: request.placa || '',
+      codMarca: Math.floor(Number(request.codMarca)),
+      codModelo: Math.floor(Number(request.codModelo)),
+      aaaModelo: parseInt(String(request.anioAuto)) || new Date().getFullYear(),
+      codTransmision,      // Mapeado desde formulario (AUTOMATICO=1, MANUAL=2)
+      codGrupoTarifa: Math.floor(Number(request.codGrupoTarifa)),
+      codColor,             // Mapeado desde color del formulario a código IS
+      capacidad: request.cantPasajeros || 5,
+      cilindros: 4,        // 4 cilindros (hardcoded default)
+      sumaAseg: parseInt(String(request.sumaAseg)) || 0,
+      fecVigDesde: vigDesde,
+      fecVigHasta: vigHasta,
+      idPlanCobertura: Math.floor(Number(request.codPlanCobertura)),
+      pjeBexp: 0,          // Porcentaje buena experiencia
+      codTipoConducto: 0,
+      codConducto: 0,
+      idPlanCobAdic: Math.floor(Number(request.codPlanCoberturaAdic || 0)),
+      snCargo: 0,
+      codBenef: 0,
+      txtBenef: '',
+      txtComentarios: '',
+      cntTermino: 0,
+      idPlanCobAdicAsiento: 0,
     },
-    // TODO: Documentos requiere entries con {TipoDocumento, NroDocumento, Descripcion, Url}
-    // IS tester retorna "Object reference not set" — posible limitación del ambiente tester
-    // o necesita URLs reales de documentos subidos
-    Documentos: [] as any[],
-    FormaPago: request.formaPago || 2,
-    CantCuotas: request.cantCuotas || 10,
+    documentos,
   };
   
   console.log('[IS Emission] POST /getemision FULL BODY:', JSON.stringify(body, null, 2));
   
   const response = await isPost<{ Table: Array<{
-    RESOP: number;
-    MSG: string;
-    MSG_FIELDS: string | null;
-    NRO_POLIZA?: string;
-    NROPOLIZA?: string;
-    PDF_URL?: string;
-    PDF_BASE64?: string;
+    Column1: number;       // Result code: >=1 = success, <0 = error
+    NroPol: number;        // Policy number (or 0/1 on error)
+    Descripcion: string;   // Message
+    Error: string;         // Error details
+    CodSucursal: number;   // Branch code
+    LinkDescarga: string;  // PDF download URL
   }> }>(IS_ENDPOINTS.EMISION, body, env);
   
-  // IS getemision puede retornar 400 con Table[0].Msg cuando hay error de procesamiento
   // Extraer el mensaje de error real de la respuesta
   const tableData = response.data?.Table?.[0] as any;
   
   if (!response.success) {
-    const isMsg = tableData?.Msg || tableData?.MSG || '';
-    console.error('[IS Emission] Error emitiendo póliza:', response.error);
-    console.error('[IS Emission] IS Msg:', isMsg);
-    console.error('[IS Emission] Response data:', JSON.stringify(response.data, null, 2));
-    console.error('[IS Emission] Status code:', response.statusCode);
-    return {
-      success: false,
-      error: isMsg || response.error || 'Error al emitir póliza',
-    };
+    const rawData = response.data as any;
+    const validationErrors = rawData?.errors ? JSON.stringify(rawData.errors) : '';
+    const isMsg = tableData?.Descripcion || tableData?.Msg || tableData?.MSG || '';
+    const errorTitle = rawData?.title || '';
+    const rawStr = typeof rawData === 'string' ? rawData : '';
+    const bestError = validationErrors || isMsg || errorTitle || rawStr || response.error || 'Error al emitir poliza';
+    console.error('[IS Emission] Error. Status:', response.statusCode, 'Error:', bestError);
+    console.error('[IS Emission] Raw response:', JSON.stringify(rawData, null, 2));
+    return { success: false, error: bestError };
   }
   
   if (!tableData) {
-    console.error('[IS Emission] Respuesta sin datos:', response.data);
-    return { success: false, error: 'No se recibió respuesta de emisión válida' };
+    console.error('[IS Emission] Respuesta sin datos. Full response.data:', JSON.stringify(response.data, null, 2));
+    return { success: false, error: 'Respuesta IS sin datos: ' + JSON.stringify(response.data).substring(0, 300) };
   }
   
-  if (tableData.RESOP !== 1) {
-    console.error('[IS Emission] Error en emisión:', tableData.MSG);
-    return { success: false, error: tableData.MSG || 'Error al emitir póliza' };
+  // IS getemision response fields:
+  // Column1: >=1 = success, <0 = error (-2 = polizas agotados, etc.)
+  // Descripcion: human-readable message
+  // NroPol: policy number on success
+  // LinkDescarga: PDF download URL on success
+  const resultCode = tableData.Column1;
+  const descripcion = tableData.Descripcion || '';
+  const errorDetail = tableData.Error || '';
+  
+  console.log('[IS Emission] Column1:', resultCode, 'Descripcion:', descripcion, 'NroPol:', tableData.NroPol);
+  
+  if (resultCode < 0 || resultCode === 0) {
+    console.error('[IS Emission] Error en emision. Column1:', resultCode, 'Desc:', descripcion, 'Error:', errorDetail);
+    return { success: false, error: descripcion || errorDetail || 'Error IS code=' + resultCode };
   }
   
-  const nroPoliza = tableData.NRO_POLIZA || tableData.NROPOLIZA || '';
-  if (!nroPoliza) {
-    console.error('[IS Emission] Respuesta sin número de póliza:', tableData);
-    return { success: false, error: 'No se recibió número de póliza' };
+  const nroPoliza = String(tableData.NroPol || '');
+  if (!nroPoliza || nroPoliza === '0' || nroPoliza === '1') {
+    console.error('[IS Emission] Respuesta sin numero de poliza valido:', tableData);
+    return { success: false, error: descripcion || 'No se recibio numero de poliza' };
   }
   
-  console.log('[IS Emission] ✅ Póliza emitida:', nroPoliza);
+  const pdfUrl = tableData.LinkDescarga || '';
+  console.log('[IS Emission] Poliza emitida:', nroPoliza, 'PDF:', pdfUrl);
   
   return {
     success: true,
     nroPoliza,
-    pdfUrl: tableData.PDF_URL,
-    pdfBase64: tableData.PDF_BASE64,
+    pdfUrl: pdfUrl || undefined,
   };
 }
 

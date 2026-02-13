@@ -39,6 +39,7 @@ export default function PreliminaryClientsTab({ insurers, brokers: brokersProp, 
   const [expedienteModalOpen, setExpedienteModalOpen] = useState<Record<string, boolean>>({});
   const [showExpedienteInEdit, setShowExpedienteInEdit] = useState(false);
   const [documentType, setDocumentType] = useState<'cedula' | 'pasaporte' | 'ruc'>('cedula');
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     loadPreliminaryClients();
@@ -204,11 +205,62 @@ export default function PreliminaryClientsTab({ insurers, brokers: brokersProp, 
   const cancelEdit = () => {
     setEditingId(null);
     setEditForm({});
+    setFormErrors({});
     setExistingPolicyClient(null);
+  };
+
+  const validateForm = (): boolean => {
+    const errors: Record<string, string> = {};
+
+    if (!editForm.client_name?.trim()) {
+      errors.client_name = 'El nombre del cliente es obligatorio';
+    }
+    if (!editForm.national_id?.trim()) {
+      errors.national_id = 'El documento de identidad es obligatorio';
+    }
+    if (!editForm.email?.trim()) {
+      errors.email = 'El correo electrónico es obligatorio';
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editForm.email.trim())) {
+      errors.email = 'El correo electrónico no tiene un formato válido (ej: correo@ejemplo.com)';
+    }
+    if (!editForm.phone?.trim()) {
+      errors.phone = 'El teléfono es obligatorio';
+    }
+    if (documentType !== 'ruc' && !editForm.birth_date) {
+      errors.birth_date = 'La fecha de nacimiento es obligatoria';
+    }
+    if (!editForm.policy_number?.trim()) {
+      errors.policy_number = 'El número de póliza es obligatorio';
+    }
+    if (!editForm.ramo) {
+      errors.ramo = 'El tipo de póliza es obligatorio';
+    }
+    if (!editForm.insurer_id) {
+      errors.insurer_id = 'La aseguradora es obligatoria';
+    }
+    if (!editForm.renewal_date) {
+      errors.renewal_date = 'La fecha de renovación es obligatoria';
+    }
+    if (userRole === 'master' && !editForm.broker_id) {
+      errors.broker_id = 'El corredor es obligatorio';
+    }
+
+    setFormErrors(errors);
+
+    if (Object.keys(errors).length > 0) {
+      const fieldNames = Object.values(errors);
+      toast.error(`Faltan ${fieldNames.length} campo(s) por completar`, {
+        description: fieldNames.slice(0, 3).join(' • ') + (fieldNames.length > 3 ? ` • y ${fieldNames.length - 3} más...` : ''),
+        duration: 6000
+      });
+      return false;
+    }
+    return true;
   };
 
   const saveEdit = async () => {
     if (!editingId) return;
+    if (!validateForm()) return;
 
     setSaving(true);
     
@@ -233,20 +285,44 @@ export default function PreliminaryClientsTab({ insurers, brokers: brokersProp, 
     const result = await actionUpdatePreliminaryClient(editingId, updateData);
 
     if (result.ok) {
-      toast.success('Cliente preliminar actualizado');
-      
       // Check if it was auto-migrated
-      if (result.data?.migrated) {
+      if (result.data?.migrated && result.data?.updatedExisting) {
+        toast.success('✅ Póliza existente actualizada', {
+          description: 'La póliza ya existía en la base de datos. Se actualizó la información del cliente y la póliza con los datos ingresados.',
+          duration: 6000
+        });
+      } else if (result.data?.migrated) {
         toast.success('✅ Cliente migrado automáticamente a la base de datos', {
           description: 'Todos los datos obligatorios fueron completados'
         });
+      } else {
+        toast.success('Cliente preliminar actualizado');
       }
       
       setEditingId(null);
       setEditForm({});
       loadPreliminaryClients();
     } else {
-      toast.error(result.error);
+      // Mostrar errores claros según el tipo
+      const errorMsg = result.error || 'Error desconocido';
+      if (errorMsg.includes('ya existe')) {
+        toast.error('Póliza duplicada', {
+          description: errorMsg + '. Verifique el número de póliza o elimine este registro preliminar si ya fue ingresado.',
+          duration: 8000
+        });
+        setFormErrors(prev => ({ ...prev, policy_number: errorMsg }));
+      } else if (errorMsg.includes('national_id') || errorMsg.includes('cédula')) {
+        toast.error('Error con documento de identidad', {
+          description: errorMsg,
+          duration: 6000
+        });
+        setFormErrors(prev => ({ ...prev, national_id: errorMsg }));
+      } else {
+        toast.error('Error al guardar', {
+          description: errorMsg,
+          duration: 6000
+        });
+      }
     }
     setSaving(false);
   };
@@ -709,54 +785,73 @@ export default function PreliminaryClientsTab({ insurers, brokers: brokersProp, 
                         <input
                           type="text"
                           value={editForm.client_name}
-                          onChange={createUppercaseHandler((e) => setEditForm({ ...editForm, client_name: e.target.value }))}
-                          className={`w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none min-h-[44px] ${uppercaseInputClass}`}
+                          onChange={createUppercaseHandler((e) => { setEditForm({ ...editForm, client_name: e.target.value }); setFormErrors(prev => { const n = {...prev}; delete n.client_name; return n; }); })}
+                          className={`w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none min-h-[44px] ${uppercaseInputClass} ${formErrors.client_name ? 'border-red-400 bg-red-50/30' : ''}`}
                           style={{ WebkitAppearance: 'none' }}
                           placeholder="NOMBRE COMPLETO DEL CLIENTE"
                         />
+                        {formErrors.client_name && <p className="text-xs text-red-600 mt-1">⚠️ {formErrors.client_name}</p>}
                       </div>
                       <div className="sm:col-span-2">
                         <NationalIdInput
                           value={editForm.national_id}
-                          onChange={(value) => setEditForm({ ...editForm, national_id: value })}
+                          onChange={(value) => { setEditForm({ ...editForm, national_id: value }); setFormErrors(prev => { const n = {...prev}; delete n.national_id; return n; }); }}
                           onDocumentTypeChange={(type) => setDocumentType(type)}
                           label="Documento de Identidad"
-                          helperText={existingPolicyClient ? (
-                            <div className="mt-1 p-2 bg-green-50 border border-green-200 rounded-lg">
-                              <p className="text-xs text-green-800 flex items-center gap-1">
-                                <FaCheckCircle className="text-green-600" />
-                                <strong>Cliente existente:</strong> {existingPolicyClient.name}
-                              </p>
-                              <p className="text-xs text-green-700 mt-1">Datos autocompletados. Completa la póliza y actualiza datos faltantes.</p>
-                            </div>
-                          ) : null}
+                          required
+                          hasError={!!formErrors.national_id}
+                          error={formErrors.national_id}
+                          helperText={
+                            searchingPolicy ? (
+                              <div className="mt-1 p-2 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-2">
+                                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
+                                <p className="text-xs text-blue-700">Buscando cliente en base de datos...</p>
+                              </div>
+                            ) : existingPolicyClient ? (
+                              <div className="mt-1 p-3 bg-green-50 border border-green-300 rounded-lg">
+                                <p className="text-sm text-green-800 flex items-center gap-1 font-semibold">
+                                  <FaCheckCircle className="text-green-600" />
+                                  Cliente encontrado en base de datos
+                                </p>
+                                <div className="mt-2 grid grid-cols-2 gap-1 text-xs text-green-700">
+                                  <span><strong>Nombre:</strong> {existingPolicyClient.name || '—'}</span>
+                                  <span><strong>Email:</strong> {existingPolicyClient.email || '—'}</span>
+                                  <span><strong>Teléfono:</strong> {existingPolicyClient.phone || '—'}</span>
+                                  <span><strong>Nacimiento:</strong> {existingPolicyClient.birth_date || '—'}</span>
+                                </div>
+                                <p className="text-xs text-green-600 mt-2 font-medium">✅ Datos del cliente autocompletados. Solo completa la información de la póliza.</p>
+                              </div>
+                            ) : null
+                          }
                         />
                       </div>
                       <div className="sm:col-span-2">
                         <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
-                          Email
+                          Email <span className="text-red-500">*</span>
                         </label>
                         <input
                           type="email"
                           value={editForm.email}
-                          onChange={(e) => setEditForm({ ...editForm, email: e.target.value.toLowerCase() })}
-                          className="w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none min-h-[44px]"
+                          onChange={(e) => { setEditForm({ ...editForm, email: e.target.value.toLowerCase() }); setFormErrors(prev => { const n = {...prev}; delete n.email; return n; }); }}
+                          className={`w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none min-h-[44px] ${formErrors.email ? 'border-red-400 bg-red-50/30' : ''}`}
                           style={{ WebkitAppearance: 'none' }}
                           placeholder="correo@ejemplo.com"
                         />
+                        {formErrors.email && <p className="text-xs text-red-600 mt-1">⚠️ {formErrors.email}</p>}
                       </div>
                       <div>
                         <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
-                          Teléfono
+                          Teléfono <span className="text-red-500">*</span>
                         </label>
                         <input
                           type="tel"
                           value={editForm.phone}
-                          onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
-                          className="w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none min-h-[44px]"
+                          onChange={(e) => { setEditForm({ ...editForm, phone: e.target.value }); setFormErrors(prev => { const n = {...prev}; delete n.phone; return n; }); }}
+                          className={`w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none min-h-[44px] ${formErrors.phone ? 'border-red-400 bg-red-50/30' : ''}`}
                           style={{ WebkitAppearance: 'none' }}
                           placeholder="6000-0000"
                         />
+                        {formErrors.phone && <p className="text-xs text-red-600 mt-1">⚠️ {formErrors.phone}</p>}
                       </div>
                       {documentType !== 'ruc' && (
                         <div className="w-full max-w-full overflow-hidden">
@@ -767,10 +862,11 @@ export default function PreliminaryClientsTab({ insurers, brokers: brokersProp, 
                             type="date"
                             required
                             value={editForm.birth_date}
-                            onChange={(e) => setEditForm({ ...editForm, birth_date: e.target.value })}
-                            className="w-full max-w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+                            onChange={(e) => { setEditForm({ ...editForm, birth_date: e.target.value }); setFormErrors(prev => { const n = {...prev}; delete n.birth_date; return n; }); }}
+                            className={`w-full max-w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none ${formErrors.birth_date ? 'border-red-400 bg-red-50/30' : ''}`}
                             style={{ WebkitAppearance: 'none' }}
                           />
+                          {formErrors.birth_date && <p className="text-xs text-red-600 mt-1">⚠️ {formErrors.birth_date}</p>}
                         </div>
                       )}
                     </div>
@@ -824,8 +920,8 @@ export default function PreliminaryClientsTab({ insurers, brokers: brokersProp, 
                         <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                           Tipo de Póliza
                         </label>
-                        <Select value={editForm.ramo} onValueChange={(value) => setEditForm({ ...editForm, ramo: value })}>
-                          <SelectTrigger className="w-full h-9 text-sm">
+                        <Select value={editForm.ramo} onValueChange={(value) => { setEditForm({ ...editForm, ramo: value }); setFormErrors(prev => { const n = {...prev}; delete n.ramo; return n; }); }}>
+                          <SelectTrigger className={`w-full h-9 text-sm ${formErrors.ramo ? 'border-red-400 bg-red-50/30' : ''}`}>
                             <SelectValue placeholder="Seleccionar tipo..." />
                           </SelectTrigger>
                           <SelectContent className="max-h-60">
@@ -836,6 +932,7 @@ export default function PreliminaryClientsTab({ insurers, brokers: brokersProp, 
                             ))}
                           </SelectContent>
                         </Select>
+                        {formErrors.ramo && <p className="text-xs text-red-600 mt-1">⚠️ {formErrors.ramo}</p>}
                       </div>
                       <div>
                         <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
@@ -843,10 +940,10 @@ export default function PreliminaryClientsTab({ insurers, brokers: brokersProp, 
                         </label>
                         <Select 
                           value={editForm.insurer_id} 
-                          onValueChange={(value) => setEditForm({ ...editForm, insurer_id: value })}
+                          onValueChange={(value) => { setEditForm({ ...editForm, insurer_id: value }); setFormErrors(prev => { const n = {...prev}; delete n.insurer_id; return n; }); }}
                           disabled={userRole !== 'master'}
                         >
-                          <SelectTrigger className={`w-full h-9 text-sm sm:text-base ${userRole !== 'master' ? 'bg-gray-100 cursor-not-allowed' : ''}`}>
+                          <SelectTrigger className={`w-full h-9 text-sm sm:text-base ${userRole !== 'master' ? 'bg-gray-100 cursor-not-allowed' : ''} ${formErrors.insurer_id ? 'border-red-400 bg-red-50/30' : ''}`}>
                             <SelectValue placeholder="Seleccionar..." />
                           </SelectTrigger>
                           <SelectContent className="max-h-60">
@@ -855,14 +952,15 @@ export default function PreliminaryClientsTab({ insurers, brokers: brokersProp, 
                             ))}
                           </SelectContent>
                         </Select>
+                        {formErrors.insurer_id && <p className="text-xs text-red-600 mt-1">⚠️ {formErrors.insurer_id}</p>}
                       </div>
                       {userRole === 'master' && (
                         <div className="sm:col-span-2">
                           <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-1">
                             Corredor <span className="text-red-500">*</span>
                           </label>
-                          <Select value={editForm.broker_id} onValueChange={(value) => setEditForm({ ...editForm, broker_id: value })}>
-                            <SelectTrigger className="w-full h-9 text-sm border-2 border-gray-300 focus:border-[#8AAA19]">
+                          <Select value={editForm.broker_id} onValueChange={(value) => { setEditForm({ ...editForm, broker_id: value }); setFormErrors(prev => { const n = {...prev}; delete n.broker_id; return n; }); }}>
+                            <SelectTrigger className={`w-full h-9 text-sm border-2 border-gray-300 focus:border-[#8AAA19] ${formErrors.broker_id ? 'border-red-400 bg-red-50/30' : ''}`}>
                               <SelectValue placeholder="Seleccionar corredor...">
                                 {editForm.broker_id 
                                   ? (brokers.find((b: any) => b.id === editForm.broker_id)?.name || 'Seleccionar corredor...')
@@ -882,6 +980,7 @@ export default function PreliminaryClientsTab({ insurers, brokers: brokersProp, 
                               )}
                             </SelectContent>
                           </Select>
+                          {formErrors.broker_id && <p className="text-xs text-red-600 mt-1">⚠️ {formErrors.broker_id}</p>}
                         </div>
                       )}
                       <div className="w-full max-w-full overflow-hidden">
@@ -903,10 +1002,11 @@ export default function PreliminaryClientsTab({ insurers, brokers: brokersProp, 
                         <input
                           type="date"
                           value={editForm.renewal_date}
-                          onChange={(e) => setEditForm({ ...editForm, renewal_date: e.target.value })}
-                          className="w-full max-w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+                          onChange={(e) => { setEditForm({ ...editForm, renewal_date: e.target.value }); setFormErrors(prev => { const n = {...prev}; delete n.renewal_date; return n; }); }}
+                          className={`w-full max-w-full px-3 sm:px-4 py-2 sm:py-2.5 text-sm sm:text-base border-2 rounded-lg focus:border-[#8AAA19] focus:outline-none ${formErrors.renewal_date ? 'border-red-400 bg-red-50/30' : ''}`}
                           style={{ WebkitAppearance: 'none' }}
                         />
+                        {formErrors.renewal_date && <p className="text-xs text-red-600 mt-1">⚠️ {formErrors.renewal_date}</p>}
                         {editForm.start_date && (
                           <p className="text-xs text-green-600 mt-1">✓ Auto-calculada (un año desde inicio)</p>
                         )}

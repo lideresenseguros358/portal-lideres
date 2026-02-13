@@ -330,13 +330,44 @@ const ClientForm = memo(function ClientForm({ client, onClose, readOnly = false,
         
         // Si hay cambio de broker, usar action que reasigna cliente + TODAS las pólizas
         if (userRole === 'master' && formData.broker_id && formData.broker_id !== client.broker_id) {
-          const result = await actionReassignClientAndPolicies(client.id, formData.broker_id);
           
-          if (!result.ok) {
-            throw new Error(result.error || 'Error reasignando cliente y pólizas');
+          if (makeAdjustments && commissionData) {
+            // Con ajustes retroactivos: crear adelanto al broker antiguo + reporte de ajuste al nuevo
+            console.log('[BROKER CHANGE] Reasignando CON ajustes retroactivos...');
+            const response = await fetch('/api/clients/reassign-broker', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                clientId: client.id,
+                oldBrokerId: client.broker_id,
+                newBrokerId: formData.broker_id,
+                makeAdjustments: true,
+                commissionsData: commissionData.commissionsByFortnight,
+                clientData: payload
+              })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok || !data.success) {
+              throw new Error(data.error || 'Error al reasignar con ajustes');
+            }
+
+            toast.success('Cliente reasignado con ajustes retroactivos', {
+              description: data.message,
+              duration: 8000
+            });
+          } else {
+            // Sin ajustes: solo cambiar broker_id en cliente y pólizas
+            console.log('[BROKER CHANGE] Reasignando SIN ajustes retroactivos...');
+            const result = await actionReassignClientAndPolicies(client.id, formData.broker_id);
+            
+            if (!result.ok) {
+              throw new Error(result.error || 'Error reasignando cliente y pólizas');
+            }
+            
+            toast.success('Cliente y todas sus pólizas reasignadas correctamente');
           }
-          
-          toast.success('Cliente y todas sus pólizas reasignadas correctamente');
         } else {
           // Solo incluir broker_id si el usuario es Master (API rechaza broker_id de no-masters)
           if (userRole === 'master') {

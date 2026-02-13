@@ -123,6 +123,11 @@ export function PayAdvanceModal({ isOpen, onClose, onSuccess, brokerId, brokerNa
             status: transfer.status || 'available'
           });
 
+          // Auto-llenar fecha de la transferencia bancaria
+          if (transfer.date) {
+            setTransferDate(transfer.date);
+          }
+
           // Auto-llenar montos si hay adelantos seleccionados
           if (advancePayments.length === 0 && pendingAdvances.length > 0) {
             let remaining = remainingAmount;
@@ -174,13 +179,34 @@ export function PayAdvanceModal({ isOpen, onClose, onSuccess, brokerId, brokerNa
   };
 
   const handlePayAll = () => {
-    const newPayments: AdvancePayment[] = pendingAdvances.map(advance => ({
-      advanceId: advance.id,
-      amount: advance.amount,
-      reason: advance.reason || 'Sin motivo'
-    }));
-    setAdvancePayments(newPayments);
-    toast.success('Montos completos asignados a todos los adelantos');
+    if (paymentType === 'transfer' && refValidation?.exists) {
+      let remaining = refValidation.remainingAmount;
+      const newPayments: AdvancePayment[] = [];
+      for (const advance of pendingAdvances) {
+        if (remaining <= 0) break;
+        const amountToApply = Math.min(advance.amount, remaining);
+        newPayments.push({
+          advanceId: advance.id,
+          amount: amountToApply,
+          reason: advance.reason || 'Sin motivo'
+        });
+        remaining -= amountToApply;
+      }
+      setAdvancePayments(newPayments);
+      if (remaining <= 0 && pendingAdvances.some(a => !newPayments.find(p => p.advanceId === a.id) || (newPayments.find(p => p.advanceId === a.id)?.amount || 0) < a.amount)) {
+        toast.warning('El saldo disponible no cubre todos los adelantos. Se asignó hasta el máximo disponible.');
+      } else {
+        toast.success('Montos asignados a todos los adelantos');
+      }
+    } else {
+      const newPayments: AdvancePayment[] = pendingAdvances.map(advance => ({
+        advanceId: advance.id,
+        amount: advance.amount,
+        reason: advance.reason || 'Sin motivo'
+      }));
+      setAdvancePayments(newPayments);
+      toast.success('Montos completos asignados a todos los adelantos');
+    }
   };
 
   const handleSubmit = async () => {
@@ -202,8 +228,8 @@ export function PayAdvanceModal({ isOpen, onClose, onSuccess, brokerId, brokerNa
         return;
       }
       
-      // Validar que no exceda el monto disponible
-      if (totalAssigned > refValidation.remainingAmount) {
+      // Validar que no exceda el monto disponible (con tolerancia de centavos)
+      if (totalAssigned > refValidation.remainingAmount + 0.01) {
         toast.error(`El monto total ($${totalAssigned.toFixed(2)}) excede el saldo disponible de la referencia ($${refValidation.remainingAmount.toFixed(2)})`);
         return;
       }
@@ -223,13 +249,19 @@ export function PayAdvanceModal({ isOpen, onClose, onSuccess, brokerId, brokerNa
     try {
       // Aplicar pago a cada adelanto seleccionado
       for (const payment of advancePayments) {
-        const result = await actionApplyAdvancePayment({
+        const payload = {
           advance_id: payment.advanceId,
           amount: payment.amount,
           payment_type: paymentType === 'transfer' ? 'external_transfer' : 'cash',
           reference_number: paymentType === 'transfer' ? referenceNumber : undefined,
           payment_date: paymentType === 'transfer' ? transferDate : cashDate,
-        });
+        };
+
+        console.log('[PayAdvanceModal] Calling actionApplyAdvancePayment:', payload);
+
+        const result = await actionApplyAdvancePayment(payload);
+
+        console.log('[PayAdvanceModal] Result:', result);
 
         if (!result.ok) {
           toast.error(`Error en adelanto "${payment.reason}"`, { description: result.error });
@@ -246,9 +278,9 @@ export function PayAdvanceModal({ isOpen, onClose, onSuccess, brokerId, brokerNa
       resetForm();
       onSuccess();
       onClose();
-    } catch (error) {
-      toast.error('Error inesperado al procesar el pago');
-      console.error(error);
+    } catch (error: any) {
+      console.error('[PayAdvanceModal] Error:', error);
+      toast.error('Error inesperado al procesar el pago', { description: error?.message || String(error) });
     } finally {
       setLoading(false);
     }
@@ -318,23 +350,42 @@ export function PayAdvanceModal({ isOpen, onClose, onSuccess, brokerId, brokerNa
                     value={referenceNumber}
                     onChange={(e) => setReferenceNumber(e.target.value.toUpperCase())}
                     placeholder="Ej: REF123456"
-                    className="uppercase pr-10"
+                    className="uppercase pr-10 focus-visible:ring-0 focus-visible:ring-offset-0"
                   />
                   <div className="absolute right-3 top-1/2 -translate-y-1/2">
                     {validatingRef && <FaSpinner className="animate-spin text-gray-400" />}
-                    {!validatingRef && refValidation?.exists && (
+                    {!validatingRef && refValidation?.exists && refValidation.remainingAmount > 0.01 && (
                       <FaCheckCircle className="text-green-600" />
+                    )}
+                    {!validatingRef && refValidation?.exists && refValidation.remainingAmount <= 0.01 && (
+                      <FaExclamationTriangle className="text-red-600" />
                     )}
                     {!validatingRef && referenceNumber && !refValidation?.exists && referenceNumber.length >= 3 && (
                       <FaExclamationTriangle className="text-red-600" />
                     )}
                   </div>
                 </div>
-                {refValidation?.exists && (
+                {refValidation?.exists && refValidation.remainingAmount <= 0.01 && (
+                  <div className="text-xs space-y-1 p-2 bg-red-50 border border-red-300 rounded">
+                    <p className="text-red-800 font-semibold">🚫 Transferencia ya utilizada en su totalidad</p>
+                    <p className="text-red-700">Monto total: <span className="font-mono font-bold">${refValidation.amount.toFixed(2)}</span></p>
+                    <p className="text-red-700">Usado: <span className="font-mono">${refValidation.usedAmount.toFixed(2)}</span></p>
+                    <p className="text-red-700">Disponible: <span className="font-mono font-bold text-red-900">$0.00</span></p>
+                    <p className="text-red-600 mt-1 font-medium">No se puede usar esta referencia. Debe usar otra referencia con saldo disponible.</p>
+                  </div>
+                )}
+                {refValidation?.exists && refValidation.remainingAmount > 0.01 && refValidation.usedAmount > 0 && (
+                  <div className="text-xs space-y-1 p-2 bg-amber-50 border border-amber-300 rounded">
+                    <p className="text-amber-800 font-semibold">⚠️ Referencia parcialmente usada</p>
+                    <p className="text-amber-700">Monto total: <span className="font-mono font-bold">${refValidation.amount.toFixed(2)}</span></p>
+                    <p className="text-amber-700">Usado: <span className="font-mono">${refValidation.usedAmount.toFixed(2)}</span></p>
+                    <p className="text-amber-700">Disponible: <span className="font-mono font-bold text-green-700">${refValidation.remainingAmount.toFixed(2)}</span></p>
+                  </div>
+                )}
+                {refValidation?.exists && refValidation.remainingAmount > 0.01 && refValidation.usedAmount === 0 && (
                   <div className="text-xs space-y-1 p-2 bg-green-50 border border-green-200 rounded">
-                    <p className="text-green-800 font-semibold">✅ Referencia encontrada</p>
+                    <p className="text-green-800 font-semibold">✅ Referencia disponible</p>
                     <p className="text-green-700">Monto total: <span className="font-mono font-bold">${refValidation.amount.toFixed(2)}</span></p>
-                    <p className="text-green-700">Usado: <span className="font-mono">${refValidation.usedAmount.toFixed(2)}</span></p>
                     <p className="text-green-700">Disponible: <span className="font-mono font-bold">${refValidation.remainingAmount.toFixed(2)}</span></p>
                   </div>
                 )}
@@ -351,6 +402,7 @@ export function PayAdvanceModal({ isOpen, onClose, onSuccess, brokerId, brokerNa
                   type="date"
                   value={transferDate}
                   onChange={(e) => setTransferDate(e.target.value)}
+                  className="focus-visible:ring-0 focus-visible:ring-offset-0"
                 />
               </div>
             </div>
@@ -363,7 +415,7 @@ export function PayAdvanceModal({ isOpen, onClose, onSuccess, brokerId, brokerNa
                   size="sm"
                   variant="outline"
                   onClick={handlePayAll}
-                  disabled={!refValidation?.exists}
+                  disabled={!refValidation?.exists || refValidation.remainingAmount <= 0.01}
                   className="text-xs hover:bg-[#8AAA19] hover:text-white"
                 >
                   💰 Pagar Todo
@@ -392,8 +444,8 @@ export function PayAdvanceModal({ isOpen, onClose, onSuccess, brokerId, brokerNa
                             onChange={(e) => handleAdvanceAmountChange(advance.id, e.target.value, advance.reason || 'Sin motivo')}
                             onWheel={(e) => e.currentTarget.blur()}
                             placeholder="0.00"
-                            className="text-right text-sm"
-                            disabled={!refValidation?.exists}
+                            className="text-right text-sm focus-visible:ring-0 focus-visible:ring-offset-0"
+                            disabled={!refValidation?.exists || refValidation.remainingAmount <= 0.01}
                           />
                         </div>
                         <div className="col-span-2 flex justify-center">
@@ -431,6 +483,7 @@ export function PayAdvanceModal({ isOpen, onClose, onSuccess, brokerId, brokerNa
                 type="date"
                 value={cashDate}
                 onChange={(e) => setCashDate(e.target.value)}
+                className="focus-visible:ring-0 focus-visible:ring-offset-0"
               />
             </div>
 
@@ -470,7 +523,7 @@ export function PayAdvanceModal({ isOpen, onClose, onSuccess, brokerId, brokerNa
                             onChange={(e) => handleAdvanceAmountChange(advance.id, e.target.value, advance.reason || 'Sin motivo')}
                             onWheel={(e) => e.currentTarget.blur()}
                             placeholder="0.00"
-                            className="text-right text-sm"
+                            className="text-right text-sm focus-visible:ring-0 focus-visible:ring-offset-0"
                           />
                         </div>
                         <div className="col-span-2 flex justify-center">
@@ -497,9 +550,17 @@ export function PayAdvanceModal({ isOpen, onClose, onSuccess, brokerId, brokerNa
 
         {/* Footer */}
         <div className="standard-modal-footer">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-semibold text-gray-700">Total a Pagar:</span>
-            <span className="text-xl font-bold text-[#8AAA19] font-mono">${totalAssigned.toFixed(2)}</span>
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold text-gray-700">Total a Pagar:</span>
+              <span className={`text-xl font-bold font-mono ${
+                paymentType === 'transfer' && refValidation?.exists && totalAssigned > refValidation.remainingAmount + 0.01
+                  ? 'text-red-600' : 'text-[#8AAA19]'
+              }`}>${totalAssigned.toFixed(2)}</span>
+            </div>
+            {paymentType === 'transfer' && refValidation?.exists && totalAssigned > refValidation.remainingAmount + 0.01 && (
+              <p className="text-xs text-red-600 font-medium">⚠️ El monto excede el disponible (${refValidation.remainingAmount.toFixed(2)})</p>
+            )}
           </div>
           
           <div className="flex gap-3">
@@ -517,7 +578,7 @@ export function PayAdvanceModal({ isOpen, onClose, onSuccess, brokerId, brokerNa
             <button
               type="button"
               onClick={handleSubmit}
-              disabled={loading}
+              disabled={loading || (paymentType === 'transfer' && refValidation?.exists === true && totalAssigned > refValidation.remainingAmount + 0.01) || (paymentType === 'transfer' && refValidation?.exists === true && refValidation.remainingAmount <= 0.01)}
               className="standard-modal-button-primary"
             >
               {loading ? (

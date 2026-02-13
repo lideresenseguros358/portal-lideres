@@ -52,9 +52,7 @@ export async function POST(request: NextRequest) {
     const { error: clientUpdateError } = await supabaseAdmin
       .from('clients')
       .update({ 
-        broker_id: newBrokerId,
-        ...clientData,
-        updated_at: new Date().toISOString()
+        broker_id: newBrokerId
       })
       .eq('id', clientId);
 
@@ -85,14 +83,14 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 3. Obtener percent_default de ambos brokers
-    const { data: oldBroker } = await supabase
+    // 3. Obtener percent_default de ambos brokers (usar admin para bypassear RLS)
+    const { data: oldBroker } = await supabaseAdmin
       .from('brokers')
       .select('percent_default')
       .eq('id', oldBrokerId)
       .single();
 
-    const { data: newBroker } = await supabase
+    const { data: newBroker } = await supabaseAdmin
       .from('brokers')
       .select('percent_default')
       .eq('id', newBrokerId)
@@ -105,61 +103,91 @@ export async function POST(request: NextRequest) {
     const percentOld = oldBroker.percent_default || 0;
     const percentNew = newBroker.percent_default || 0;
 
+    console.log(`[REASSIGN] Broker antiguo: ${oldBrokerId} (${percentOld}%), Broker nuevo: ${newBrokerId} (${percentNew}%)`);
+
     if (percentOld === 0 || percentNew === 0) {
       throw new Error('Los brokers deben tener porcentajes de comisión configurados');
     }
 
-    // 4. Procesar cada comm_item y crear adjustment_report_items
-    const reportItems = [];
+    // 4. Procesar cada comm_item: calcular comisiones y preparar pending_items
+    //    check-commissions envía:
+    //      - gross_amount: monto bruto del reporte (commission_raw)
+    //      - broker_commission: gross_amount * (percentOld / 100) = lo que se le pagó al broker antiguo
+    //    Para el nuevo broker:
+    //      - commission_raw = gross_amount (el monto bruto original)
+    //      - broker_commission_new = gross_amount * (percentNew / 100)
+    const pendingItemsToCreate: any[] = [];
     let totalDebt = 0;
     let totalNewCommissions = 0;
-    const processedCommItems = [];
+    const processedCommItems: any[] = [];
 
     for (const fortnight of commissionsData) {
       for (const item of fortnight.items) {
-        // Comisión que recibió el broker antiguo (YA PAGADA en comm_items)
-        const commissionPaid = item.broker_commission;
+        // Lo que se le pagó al broker antiguo
+        const commissionPaid = item.broker_commission || 0;
         
-        // CALCULAR EN REVERSA: comision_pagada / percent_antiguo = comision_bruta
-        const commissionRaw = commissionPaid / (percentOld / 100);
+        // gross_amount es el monto bruto del reporte (= commission_raw)
+        // Si check-commissions envió gross_amount, usarlo directamente
+        // Si no, hacer cálculo reverso: commissionPaid / (percentOld / 100)
+        const commissionRaw = item.gross_amount || (commissionPaid / (percentOld / 100));
         
-        // CALCULAR NUEVA COMISIÓN: comision_bruta * percent_nuevo = comision_nueva
+        // Calcular nueva comisión: commission_raw * (percentNew / 100)
         const newCommission = commissionRaw * (percentNew / 100);
 
         totalDebt += commissionPaid;
         totalNewCommissions += newCommission;
 
-        // Crear item para adjustment_report (reporte de ajustes pre-aprobado)
-        reportItems.push({
+        pendingItemsToCreate.push({
           policy_number: item.policy_number,
           insured_name: item.insured_name || null,
           insurer_id: item.insurer_id || null,
           commission_raw: commissionRaw,
-          broker_commission: newCommission,
-          pending_item_id: null, // No viene de pending_items, viene de reasignación
-          notes: `Reasignación desde broker anterior. Comm original: $${commissionPaid.toFixed(2)} (${percentOld}%). Bruto: $${commissionRaw.toFixed(2)}. Nueva comm: $${newCommission.toFixed(2)} (${percentNew}%).`
+          fortnight_id: fortnight.fortnight_id || null,
+          status: 'in_review',
+          assigned_broker_id: newBrokerId,
+          assigned_by: user.id,
+          assigned_at: new Date().toISOString(),
+          assignment_notes: `Reasignación de broker. Bruto: $${commissionRaw.toFixed(2)}. Comm antiguo: $${commissionPaid.toFixed(2)} (${percentOld}%). Comm nuevo: $${newCommission.toFixed(2)} (${percentNew}%).`,
+          _broker_commission: newCommission
         });
 
-        // Registrar comm_item procesado para referencia
         processedCommItems.push({
-          comm_item_id: item.comm_item_id || null,
+          comm_item_id: item.id || null,
           policy_number: item.policy_number,
           fortnight_id: fortnight.fortnight_id,
           old_commission: commissionPaid,
-          new_commission: newCommission
+          new_commission: newCommission,
+          commission_raw: commissionRaw
         });
       }
     }
 
-    // 5. Crear reporte de ajustes PRE-APROBADO para nuevo broker
-    const { data: report, error: reportError } = await supabase
+    console.log(`[REASSIGN] Items procesados: ${processedCommItems.length}. Deuda total: $${totalDebt.toFixed(2)}. Nuevas comisiones: $${totalNewCommissions.toFixed(2)}`);
+
+    // 5. Crear pending_items (requerido por adjustment_report_items FK)
+    const pendingInserts = pendingItemsToCreate.map(({ _broker_commission, ...rest }) => rest);
+    
+    const { data: createdPendingItems, error: pendingError } = await supabaseAdmin
+      .from('pending_items')
+      .insert(pendingInserts)
+      .select();
+
+    if (pendingError || !createdPendingItems) {
+      console.error('Error creating pending_items for reassignment:', pendingError);
+      throw new Error('Error al crear items pendientes para reasignación');
+    }
+
+    console.log(`[REASSIGN] Creados ${createdPendingItems.length} pending_items`);
+
+    // 6. Crear reporte de ajustes PRE-APROBADO para nuevo broker
+    const { data: report, error: reportError } = await supabaseAdmin
       .from('adjustment_reports')
       .insert({
         broker_id: newBrokerId,
-        status: 'approved', // ← PRE-APROBADO automáticamente
+        status: 'approved',
         total_amount: totalNewCommissions,
-        broker_notes: `Reasignación automática de cliente desde otro broker. ${reportItems.length} comisiones recalculadas.`,
-        admin_notes: `AUTO-APROBADO: Reasignación de broker. Cliente ID: ${clientId}. Broker anterior: ${oldBrokerId} (${percentOld}%). Total comisiones antiguas: $${totalDebt.toFixed(2)}. Broker nuevo: ${newBrokerId} (${percentNew}%). Total comisiones nuevas: $${totalNewCommissions.toFixed(2)}. Deuda creada al broker anterior. Esperando confirmación de pago manual por master.`,
+        broker_notes: `Reasignación automática de cliente desde otro broker. ${createdPendingItems.length} comisiones recalculadas.`,
+        admin_notes: `AUTO-APROBADO: Reasignación de broker. Cliente ID: ${clientId}. Broker anterior: ${oldBrokerId} (${percentOld}%). Total comisiones antiguas: $${totalDebt.toFixed(2)}. Broker nuevo: ${newBrokerId} (${percentNew}%). Total comisiones nuevas: $${totalNewCommissions.toFixed(2)}.`,
         reviewed_by: user.id,
         reviewed_at: new Date().toISOString()
       })
@@ -171,29 +199,36 @@ export async function POST(request: NextRequest) {
       throw new Error('Error al crear reporte de ajustes');
     }
 
-    // 6. Insertar items del reporte
-    const itemsToInsert = reportItems.map(item => ({
-      ...item,
-      report_id: report.id
+    console.log(`[REASSIGN] Reporte de ajustes creado: ${report.id}`);
+
+    // 7. Crear adjustment_report_items vinculando pending_items al reporte
+    const reportItemsToInsert = createdPendingItems.map((pendingItem: any, index: number) => ({
+      report_id: report.id,
+      pending_item_id: pendingItem.id,
+      commission_raw: pendingItem.commission_raw,
+      broker_commission: pendingItemsToCreate[index]._broker_commission
     }));
 
-    const { error: itemsError } = await (supabase as any)
+    const { error: itemsError } = await supabaseAdmin
       .from('adjustment_report_items')
-      .insert(itemsToInsert);
+      .insert(reportItemsToInsert);
 
     if (itemsError) {
       console.error('Error creating adjustment report items:', itemsError);
-      // Rollback: eliminar el reporte
-      await supabase.from('adjustment_reports').delete().eq('id', report.id);
+      // Rollback
+      await supabaseAdmin.from('adjustment_reports').delete().eq('id', report.id);
+      await supabaseAdmin.from('pending_items').delete().in('id', createdPendingItems.map((p: any) => p.id));
       throw new Error('Error al crear items del reporte de ajustes');
     }
 
-    // 7. Crear adelanto (deuda) para el broker antiguo
-    const { data: advance, error: advanceError } = await supabase
+    console.log(`[REASSIGN] ${reportItemsToInsert.length} items vinculados al reporte`);
+
+    // 8. Crear adelanto (deuda) para el broker antiguo
+    const { data: advance, error: advanceError } = await supabaseAdmin
       .from('advances')
       .insert({
         broker_id: oldBrokerId,
-        amount: -Math.abs(totalDebt), // Negativo = deuda
+        amount: Math.abs(totalDebt), // Positivo = adelanto/deuda que debe devolver
         reason: `DEUDA por reasignación de cliente. Cliente reasignado a otro corredor. Total comisiones a recuperar: $${totalDebt.toFixed(2)}. Esta deuda se irá descontando de futuras comisiones.`,
         status: 'PENDING',
         created_by: user.id,
@@ -215,7 +250,7 @@ export async function POST(request: NextRequest) {
         advanceId: advance.id,
         debtAmount: totalDebt,
         adjustmentReportId: report.id,
-        adjustmentItemsCount: reportItems.length,
+        adjustmentItemsCount: reportItemsToInsert.length,
         oldBrokerId: oldBrokerId,
         oldBrokerPercent: percentOld,
         newBrokerId: newBrokerId,

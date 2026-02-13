@@ -77,6 +77,12 @@ export const IS_ENDPOINTS = {
   // Emisión Auto — Swagger: POST con JSON body (EmisorRequest)
   EMISION: '/cotizaemisorauto/getemision',
   
+  // Catálogos de Dirección — para emisión
+  PROVINCIAS: '/catalogos/provincias',                     // /{codpais}
+  DISTRITOS: '/catalogos/distritos',                       // /{codpais}/{codprovincia}
+  CORREGIMIENTOS: '/catalogos/corregimientos',              // /{codpais}/{codprovincia}/{coddistrito}
+  URBANIZACIONES: '/catalogos/urbanizacion',                // {pagenumber}/{pagesize}
+  
   // Pago (a confirmar con IS)
   PAYMENT: '/payment/process', // Placeholder - confirmar con IS
 } as const;
