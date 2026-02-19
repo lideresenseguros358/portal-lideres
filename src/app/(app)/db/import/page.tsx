@@ -281,9 +281,13 @@ export default function ImportPage() {
         setImportProgress(0);
       }, 500);
       
-      if (data.success && data.success > 0) {
+      const totalProcessed = (data.success || 0) + (data.policiesUpdated || 0);
+      if (totalProcessed > 0) {
+        const parts = [];
+        if (data.success > 0) parts.push(`${data.success} nuevas`);
+        if (data.policiesUpdated > 0) parts.push(`${data.policiesUpdated} actualizadas`);
         toast.success('Importación completada', {
-          description: `${data.success} clientes importados`
+          description: `Pólizas: ${parts.join(', ')}`
         });
       } else {
         toast.error('Error en la importación', {
@@ -646,61 +650,84 @@ export default function ImportPage() {
             <div className="p-8 space-y-6">
           {/* Resultado principal con contadores */}
           <div className="rounded-xl shadow-lg p-8 text-center bg-white border-2 border-[#8AAA19]">
-            {importResult.success > 0 ? (
+            {(importResult.success > 0 || importResult.policiesUpdated > 0) ? (
               <FaCheckCircle className="text-green-600 text-6xl mx-auto mb-4" />
             ) : (
               <FaExclamationTriangle className="text-red-600 text-6xl mx-auto mb-4" />
             )}
             <h3 className="text-2xl font-bold text-[#010139] mb-4">
-              {importResult.success > 0 ? '✅ Importación Completada' : '⚠️ Importación con Errores'}
+              {(importResult.success > 0 || importResult.policiesUpdated > 0) ? '✅ Importación Completada' : '⚠️ Importación con Errores'}
             </h3>
             
             {/* Contadores principales */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
               <div className="bg-green-50 rounded-lg p-4 border border-green-200">
-                <p className="text-sm text-green-700 font-semibold">Pólizas Nuevas</p>
+                <p className="text-xs text-green-700 font-semibold">Pólizas Nuevas</p>
                 <p className="text-3xl font-bold text-green-600">{importResult.success || 0}</p>
               </div>
               
+              <div className="bg-teal-50 rounded-lg p-4 border border-teal-200">
+                <p className="text-xs text-teal-700 font-semibold">Pólizas Actualizadas</p>
+                <p className="text-3xl font-bold text-teal-600">{importResult.policiesUpdated || 0}</p>
+              </div>
+              
               <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-                <p className="text-sm text-blue-700 font-semibold">Clientes Nuevos</p>
+                <p className="text-xs text-blue-700 font-semibold">Clientes Nuevos</p>
                 <p className="text-3xl font-bold text-blue-600">{importResult.clientsCreated || 0}</p>
               </div>
               
               <div className="bg-purple-50 rounded-lg p-4 border border-purple-200">
-                <p className="text-sm text-purple-700 font-semibold">Clientes Actualizados</p>
+                <p className="text-xs text-purple-700 font-semibold">Clientes Actualizados</p>
                 <p className="text-3xl font-bold text-purple-600">{importResult.clientsUpdated || 0}</p>
               </div>
             </div>
             
             <p className="text-sm text-gray-600">
-              Total de clientes procesados: <strong>{(importResult.clientsCreated || 0) + (importResult.clientsUpdated || 0)}</strong>
+              Total pólizas procesadas: <strong>{(importResult.success || 0) + (importResult.policiesUpdated || 0)}</strong> · 
+              Total clientes procesados: <strong>{(importResult.clientsCreated || 0) + (importResult.clientsUpdated || 0)}</strong>
             </p>
           </div>
 
-          {/* Pólizas Duplicadas (separado de errores) */}
-          {importResult.errors && importResult.errors.filter((e: any) => e.isDuplicate).length > 0 && (
-            <div className="bg-blue-50 border-2 border-blue-300 rounded-xl overflow-hidden">
+          {/* Registros de Otro Corredor (clientes o pólizas que pertenecen a otro broker) */}
+          {importResult.clientDuplicates && importResult.clientDuplicates.length > 0 && (
+            <div className="bg-orange-50 border-2 border-orange-300 rounded-xl overflow-hidden">
               <button
                 onClick={() => setShowDuplicates(!showDuplicates)}
-                className="w-full flex items-center justify-between p-4 hover:bg-blue-100 transition"
+                className="w-full flex items-center justify-between p-4 hover:bg-orange-100 transition"
               >
                 <div className="flex items-center gap-3">
-                  <FaInfoCircle className="text-blue-600 text-xl" />
-                  <h4 className="text-lg font-bold text-blue-800">
-                    Pólizas ya Existentes ({importResult.errors.filter((e: any) => e.isDuplicate).length})
+                  <FaExclamationTriangle className="text-orange-600 text-xl" />
+                  <h4 className="text-lg font-bold text-orange-800">
+                    Registros de Otro Corredor ({importResult.clientDuplicates.length})
                   </h4>
                 </div>
-                {showDuplicates ? <FaChevronUp className="text-blue-600" /> : <FaChevronDown className="text-blue-600" />}
+                {showDuplicates ? <FaChevronUp className="text-orange-600" /> : <FaChevronDown className="text-orange-600" />}
               </button>
               
               {showDuplicates && (
-                <div className="p-4 pt-0 space-y-2 max-h-60 overflow-y-auto">
-                  {importResult.errors.filter((e: any) => e.isDuplicate).map((error: any, idx: number) => (
-                    <div key={idx} className="bg-white rounded p-3 border-l-4 border-blue-500 text-sm">
-                      <p className="font-semibold text-blue-900">Fila {error.row}</p>
-                      <p className="text-blue-700">{error.message}</p>
-                      <p className="text-xs text-blue-600 mt-1">💡 Esta póliza ya está registrada en la base de datos</p>
+                <div className="p-4 pt-0 space-y-3 max-h-60 overflow-y-auto">
+                  {importResult.clientDuplicates.map((duplicate: any, idx: number) => (
+                    <div key={idx} className="bg-white rounded-lg p-4 border-l-4 border-orange-500 shadow-sm">
+                      <div className="flex items-start gap-3">
+                        <span className="text-2xl flex-shrink-0">
+                          {duplicate.policyNumber ? '📄' : '👥'}
+                        </span>
+                        <div className="flex-1">
+                          <p className="font-semibold text-orange-900 text-sm mb-1">
+                            Fila {duplicate.row} - {duplicate.clientName || 'Cliente'}
+                            {duplicate.policyNumber && <span className="text-orange-600"> · Póliza: {duplicate.policyNumber}</span>}
+                          </p>
+                          <p className="text-orange-700 text-sm">{duplicate.message}</p>
+                          
+                          <div className="mt-2 flex items-start gap-2 bg-red-50 border border-red-200 rounded p-2">
+                            <FaInfoCircle className="text-red-600 mt-0.5 flex-shrink-0" />
+                            <p className="text-xs text-red-800">
+                              <strong>🚫 No importado:</strong> Este registro pertenece al corredor <strong>{duplicate.brokerName || 'otro corredor'}</strong>. 
+                              Si crees que es un error o el cliente cambió de corredor, contacta con un administrativo.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -708,8 +735,8 @@ export default function ImportPage() {
             </div>
           )}
 
-          {/* Errores Reales */}
-          {importResult.errors && importResult.errors.filter((e: any) => !e.isDuplicate).length > 0 && (
+          {/* Errores de Importación (validación, aseguradora no encontrada, errores de BD) */}
+          {importResult.errors && importResult.errors.length > 0 && (
             <div className="bg-red-50 border-2 border-red-300 rounded-xl overflow-hidden">
               <button
                 onClick={() => setShowErrors(!showErrors)}
@@ -718,7 +745,7 @@ export default function ImportPage() {
                 <div className="flex items-center gap-3">
                   <FaExclamationTriangle className="text-red-600 text-xl" />
                   <h4 className="text-lg font-bold text-red-800">
-                    Errores de Importación ({importResult.errors.filter((e: any) => !e.isDuplicate).length})
+                    Registros Excluidos ({importResult.errors.length})
                   </h4>
                 </div>
                 {showErrors ? <FaChevronUp className="text-red-600" /> : <FaChevronDown className="text-red-600" />}
@@ -726,23 +753,22 @@ export default function ImportPage() {
               
               {showErrors && (
                 <div className="p-4 pt-0 space-y-3 max-h-96 overflow-y-auto">
-                  {importResult.errors.filter((e: any) => !e.isDuplicate).map((error: any, idx: number) => {
-                    // Determinar el tipo de error y el tooltip de ayuda
+                  {importResult.errors.map((error: any, idx: number) => {
                     let tooltipText = '';
                     let errorIcon = '❌';
                     
-                    if (error.message?.includes('Broker no encontrado') || error.message?.includes('profile')) {
+                    if (error.errorType === 'insurer_not_found') {
+                      tooltipText = 'La aseguradora no existe en el sistema. Verifica que el nombre coincida exactamente con las aseguradoras registradas.';
+                      errorIcon = '🏢';
+                    } else if (error.errorType === 'validation') {
+                      tooltipText = 'Falta información requerida o el formato no es válido. Completa todos los campos obligatorios en el CSV.';
+                      errorIcon = '📝';
+                    } else if (error.errorType === 'db_error') {
+                      tooltipText = 'Error en la base de datos al procesar el registro. Verifica los datos y vuelve a intentar.';
+                      errorIcon = '⚠️';
+                    } else if (error.message?.includes('Broker no encontrado') || error.message?.includes('profile')) {
                       tooltipText = 'El email del broker no existe en el sistema. Verifica el email o crea el broker primero.';
                       errorIcon = '👤';
-                    } else if (error.message?.includes('Aseguradora no encontrada')) {
-                      tooltipText = 'La aseguradora no existe en el sistema. Verifica el nombre o créala en la sección de Aseguradoras.';
-                      errorIcon = '🏢';
-                    } else if (error.message?.includes('obligatorio')) {
-                      tooltipText = 'Falta información requerida. Completa todos los campos obligatorios en el CSV.';
-                      errorIcon = '📝';
-                    } else if (error.message?.includes('Error creando póliza')) {
-                      tooltipText = 'Error en la base de datos al crear la póliza. Verifica los datos y vuelve a intentar.';
-                      errorIcon = '⚠️';
                     } else {
                       tooltipText = 'Error inesperado. Revisa los datos del CSV o contacta al administrador.';
                     }
@@ -754,14 +780,14 @@ export default function ImportPage() {
                           <div className="flex-1">
                             <p className="font-semibold text-red-900 text-sm">
                               Fila {error.row || 'N/A'}
+                              {error.policyNumber && <span className="text-red-600"> · Póliza: {error.policyNumber}</span>}
                             </p>
                             <p className="text-red-700 text-sm mt-1">{error.message}</p>
                             
-                            {/* Tooltip de ayuda */}
                             <div className="mt-2 flex items-start gap-2 bg-blue-50 border border-blue-200 rounded p-2">
                               <FaInfoCircle className="text-blue-600 mt-0.5 flex-shrink-0" />
                               <p className="text-xs text-blue-800">
-                                <strong>💡 Solución:</strong> {tooltipText}
+                                <strong>� Solución:</strong> {tooltipText}
                               </p>
                             </div>
                           </div>
@@ -774,59 +800,6 @@ export default function ImportPage() {
             </div>
           )}
 
-          {/* Clientes Duplicados en Base de Datos */}
-          {importResult.clientDuplicates && importResult.clientDuplicates.length > 0 && (
-            <div className="bg-orange-50 border-2 border-orange-300 rounded-xl overflow-hidden">
-              <button
-                onClick={() => setShowDuplicates(!showDuplicates)}
-                className="w-full flex items-center justify-between p-4 hover:bg-orange-100 transition"
-              >
-                <div className="flex items-center gap-3">
-                  <FaExclamationTriangle className="text-orange-600 text-xl" />
-                  <h4 className="text-lg font-bold text-orange-800">
-                    Clientes Duplicados ({importResult.clientDuplicates.length})
-                  </h4>
-                </div>
-                {showDuplicates ? <FaChevronUp className="text-orange-600" /> : <FaChevronDown className="text-orange-600" />}
-              </button>
-              
-              {showDuplicates && (
-                <div className="p-4 pt-0 space-y-3 max-h-60 overflow-y-auto">
-                  {importResult.clientDuplicates.map((duplicate: any, idx: number) => (
-                    <div key={idx} className="bg-white rounded-lg p-4 border-l-4 border-orange-500 shadow-sm">
-                      <div className="flex items-start gap-3">
-                        <span className="text-2xl flex-shrink-0">
-                          {duplicate.duplicateReason === 'other_broker' ? '👥' : '📋'}
-                        </span>
-                        <div className="flex-1">
-                          <p className="font-semibold text-orange-900 text-sm mb-1">
-                            Fila {duplicate.row} - {duplicate.clientName || 'Cliente'}
-                          </p>
-                          <p className="text-orange-700 text-sm">{duplicate.message}</p>
-                          
-                          {/* Tooltip de ayuda según el motivo */}
-                          <div className="mt-2 flex items-start gap-2 bg-blue-50 border border-blue-200 rounded p-2">
-                            <FaInfoCircle className="text-blue-600 mt-0.5 flex-shrink-0" />
-                            <p className="text-xs text-blue-800">
-                              {duplicate.duplicateReason === 'other_broker' ? (
-                                <>
-                                  <strong>🚫 Motivo:</strong> Este cliente ya está registrado en la base de datos con <strong>otro corredor</strong>. No puedes importarlo.
-                                </>
-                              ) : (
-                                <>
-                                  <strong>✓ Motivo:</strong> Este cliente y sus pólizas ya existen en <strong>tu propia base de datos</strong>. No es necesario reimportarlo.
-                                </>
-                              )}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
 
           {/* Duplicados dentro del CSV */}
           {importResult.csvDuplicates && importResult.csvDuplicates.length > 0 && (
@@ -863,7 +836,7 @@ export default function ImportPage() {
             </div>
           )}
 
-          {/* Registros excluidos (broker no encontrado) */}
+          {/* Registros excluidos por broker no encontrado */}
           {importResult.excluded && importResult.excluded.length > 0 && (
             <div className="bg-amber-50 border-2 border-amber-300 rounded-xl overflow-hidden">
               <button
@@ -873,7 +846,7 @@ export default function ImportPage() {
                 <div className="flex items-center gap-3">
                   <FaExclamationTriangle className="text-amber-600 text-xl" />
                   <h4 className="text-lg font-bold text-amber-800">
-                    Registros Excluidos - Broker No Encontrado ({importResult.excluded.length})
+                    Broker No Encontrado ({importResult.excluded.length})
                   </h4>
                 </div>
                 {showExcluded ? <FaChevronUp className="text-amber-600" /> : <FaChevronDown className="text-amber-600" />}
@@ -882,14 +855,19 @@ export default function ImportPage() {
               {showExcluded && (
                 <div className="p-4 pt-0 space-y-2 max-h-60 overflow-y-auto">
                   {importResult.excluded.map((excluded: any, idx: number) => (
-                    <div key={idx} className="bg-white rounded p-3 border-l-4 border-amber-500 text-sm">
-                      <p className="font-semibold text-amber-900">Fila {excluded.row}</p>
-                      <p className="text-amber-700">{excluded.message}</p>
-                      <div className="mt-2 flex items-start gap-2 bg-blue-50 border border-blue-200 rounded p-2">
-                        <FaInfoCircle className="text-blue-600 mt-0.5 flex-shrink-0" />
-                        <p className="text-xs text-blue-800">
-                          <strong>💡 Solución:</strong> El broker con este email no existe. Crea el broker primero o verifica el email en el CSV.
-                        </p>
+                    <div key={idx} className="bg-white rounded-lg p-4 border-l-4 border-amber-500 shadow-sm">
+                      <div className="flex items-start gap-3">
+                        <span className="text-2xl flex-shrink-0">👤</span>
+                        <div className="flex-1">
+                          <p className="font-semibold text-amber-900 text-sm">Fila {excluded.row}</p>
+                          <p className="text-amber-700 text-sm mt-1">{excluded.message}</p>
+                          <div className="mt-2 flex items-start gap-2 bg-blue-50 border border-blue-200 rounded p-2">
+                            <FaInfoCircle className="text-blue-600 mt-0.5 flex-shrink-0" />
+                            <p className="text-xs text-blue-800">
+                              <strong>💡 Solución:</strong> El broker con este email no existe en el sistema. Crea el broker primero o verifica el email en el CSV.
+                            </p>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   ))}

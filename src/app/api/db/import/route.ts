@@ -24,8 +24,11 @@ interface ImportError {
   row: number;
   message: string;
   isDuplicate?: boolean; // Para identificar pólizas duplicadas vs errores reales
-  duplicateReason?: 'same_broker' | 'other_broker'; // Motivo de duplicado de cliente
+  duplicateReason?: 'same_broker' | 'other_broker'; // Motivo de duplicado
   clientName?: string; // Para mostrar en UI
+  policyNumber?: string; // Número de póliza
+  brokerName?: string; // Nombre del broker actual (para duplicados de otro broker)
+  errorType?: 'validation' | 'insurer_not_found' | 'broker_not_found' | 'duplicate_other_broker' | 'db_error' | 'unknown'; // Tipo de error para categorización en UI
 }
 
 export async function POST(request: NextRequest) {
@@ -50,8 +53,9 @@ export async function POST(request: NextRequest) {
     const errors: ImportError[] = [];
     const excluded: ImportError[] = []; // Broker no encontrado
     const csvDuplicates: ImportError[] = []; // Duplicados dentro del CSV
-    const clientDuplicates: ImportError[] = []; // Clientes duplicados en BD
+    const clientDuplicates: ImportError[] = []; // Clientes/pólizas de otro broker en BD
     let successCount = 0;
+    let policiesUpdated = 0; // Pólizas actualizadas (ya existían, se actualizaron datos)
     let clientsCreated = 0; // Clientes nuevos creados
     let clientsUpdated = 0; // Clientes actualizados
 
@@ -74,33 +78,34 @@ export async function POST(request: NextRequest) {
         const result = await processClientGroup(supabase, rows, userRole, userBrokerId, clientDuplicates);
         
         if (result.success) {
-          successCount += result.policiesCreated || rows.length;
+          successCount += result.policiesCreated || 0;
+          policiesUpdated += result.policiesUpdated || 0;
           if (result.clientCreated) clientsCreated++;
           if (result.clientUpdated) clientsUpdated++;
         } else if (result.partialSuccess) {
-          // Algunas pólizas se crearon, otras no
+          // Algunas pólizas se crearon/actualizaron, otras no
           successCount += result.policiesCreated || 0;
+          policiesUpdated += result.policiesUpdated || 0;
           if (result.clientCreated) clientsCreated++;
           if (result.clientUpdated) clientsUpdated++;
           if (result.errors) {
             errors.push(...result.errors);
           }
         } else if (result.skipGroup) {
-          // Broker no encontrado - excluir este grupo sin contar como error
+          // Broker no encontrado - excluir este grupo
           const brokerEmail = rows[0]?.broker_email || 'desconocido';
           rows.forEach((row) => {
             excluded.push({
               row: row._rowNumber || 0,
               message: `Broker no encontrado: ${brokerEmail}`,
+              errorType: 'broker_not_found',
             });
           });
         } else {
           // Falló todo el grupo
           if (result.errors && result.errors.length > 0) {
-            // Si hay errores detallados, usarlos (mantienen isDuplicate y otros flags)
             errors.push(...result.errors);
           } else {
-            // Si no hay errores detallados, crear genéricos
             rows.forEach((row) => {
               errors.push({
                 row: row._rowNumber || 0,
@@ -121,18 +126,21 @@ export async function POST(request: NextRequest) {
 
     console.log(`[IMPORT API] Importación completada:`);
     console.log(`  - Pólizas creadas: ${successCount}`);
+    console.log(`  - Pólizas actualizadas: ${policiesUpdated}`);
     console.log(`  - Clientes nuevos: ${clientsCreated}`);
     console.log(`  - Clientes actualizados: ${clientsUpdated}`);
     console.log(`  - Errores: ${errors.length}`);
     console.log(`  - Broker no encontrado: ${excluded.length}`);
     console.log(`  - Duplicados en CSV: ${csvDuplicates.length}`);
+    console.log(`  - Duplicados otro broker: ${clientDuplicates.length}`);
     
     return NextResponse.json({
       success: successCount,
+      policiesUpdated, // Pólizas actualizadas
       errors,
       excluded, // Broker no encontrado
       csvDuplicates, // Duplicados dentro del CSV
-      clientDuplicates, // Clientes duplicados en BD
+      clientDuplicates, // Clientes/pólizas de otro broker en BD
       clientsCreated, // Clientes nuevos
       clientsUpdated, // Clientes actualizados
       totalGroups,
@@ -277,7 +285,34 @@ function groupByClient(rows: (CSVRow & { _rowNumber?: number })[]): Record<strin
 }
 
 /**
+ * Helper: obtener nombre del broker por broker_id
+ */
+async function getBrokerNameById(supabase: any, brokerId: string): Promise<string> {
+  try {
+    const { data: broker } = await supabase
+      .from('brokers')
+      .select('p_id')
+      .eq('id', brokerId)
+      .single();
+    if (!broker) return 'Desconocido';
+    
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('full_name, email')
+      .eq('id', broker.p_id)
+      .single();
+    
+    return profile?.full_name || profile?.email || 'Desconocido';
+  } catch {
+    return 'Desconocido';
+  }
+}
+
+/**
  * Procesa un grupo de pólizas para un mismo cliente
+ * - Clientes existentes del mismo broker: ACTUALIZA datos del cliente
+ * - Pólizas existentes del mismo broker: ACTUALIZA datos de la póliza
+ * - Clientes/pólizas de otro broker: reporta con nombre del broker
  */
 async function processClientGroup(
   supabase: any,
@@ -289,11 +324,12 @@ async function processClientGroup(
   success: boolean; 
   partialSuccess?: boolean;
   policiesCreated?: number;
-  clientCreated?: boolean; // Si se creó un cliente nuevo
-  clientUpdated?: boolean; // Si se actualizó un cliente existente
+  policiesUpdated?: number;
+  clientCreated?: boolean;
+  clientUpdated?: boolean;
   error?: string;
   errors?: ImportError[];
-  skipGroup?: boolean; // Para skipear grupos con broker no encontrado
+  skipGroup?: boolean;
 }> {
   console.log('[IMPORT API] ========== PROCESANDO GRUPO ==========');
   console.log('[IMPORT API] Filas en grupo:', rows.length);
@@ -322,11 +358,8 @@ async function processClientGroup(
   let brokerEmail: string;
   
   if (userRole === 'broker' && userBrokerId) {
-    // Si es broker, usar directamente su propio ID
-    // userBrokerId ya es el broker.id del usuario
     brokerId = userBrokerId;
     
-    // Obtener el email del profile del broker (solo para logs, no es crítico)
     const { data: brokerData } = await supabase
       .from('brokers')
       .select('p_id')
@@ -338,7 +371,6 @@ async function processClientGroup(
       return { success: false, error: 'Broker del usuario no encontrado' };
     }
     
-    // Obtener email del profile
     const { data: profileData } = await supabase
       .from('profiles')
       .select('email')
@@ -353,17 +385,13 @@ async function processClientGroup(
     brokerEmail = profileData.email;
     console.log('[IMPORT API] Broker encontrado (usuario):', brokerId, 'email:', brokerEmail);
   } else {
-    // Si es master, usar broker_email del CSV y buscar el broker
     if (!firstRow.broker_email) {
       return { success: false, error: 'broker_email es obligatorio para usuarios master' };
     }
     brokerEmail = firstRow.broker_email.toString().trim().toLowerCase();
 
-    // 2. Buscar broker por email (en dos pasos para mayor confiabilidad)
     console.log('[IMPORT API] Buscando profile con email:', brokerEmail);
-    console.log('[IMPORT API] Email length:', brokerEmail.length, 'chars:', JSON.stringify(brokerEmail));
     
-    // Paso 1: Buscar profile por email (case-insensitive)
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('id, email')
@@ -377,7 +405,6 @@ async function processClientGroup(
 
     console.log('[IMPORT API] Profile encontrado:', profile.id);
 
-    // Paso 2: Buscar broker por user_id (p_id)
     const { data: broker, error: brokerError } = await supabase
       .from('brokers')
       .select('id, p_id')
@@ -386,7 +413,6 @@ async function processClientGroup(
 
     if (brokerError || !broker) {
       console.log('[IMPORT API] Broker no encontrado para profile:', brokerError);
-      // Retornar null para skipear este grupo (broker no encontrado)
       return { success: false, error: `Broker no encontrado: ${brokerEmail}`, skipGroup: true };
     }
 
@@ -395,13 +421,11 @@ async function processClientGroup(
   }
 
   // 3. Buscar cliente existente por cédula o nombre
-  let existingClient = null;
-  // Normalizar nombre: eliminar acentos, ñ→n, puntuación, y MAYÚSCULAS
+  let existingClient: any = null;
   const normalizedName = firstRow.client_name.trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/ñ/g, 'n').replace(/Ñ/g, 'N').replace(/[^\w\s\-]/g, '').toUpperCase();
   const normalizedId = firstRow.national_id?.trim().toUpperCase();
 
   if (normalizedId) {
-    // Buscar por cédula (prioritario)
     const { data } = await supabase
       .from('clients')
       .select('*')
@@ -411,83 +435,56 @@ async function processClientGroup(
   }
 
   if (!existingClient && normalizedName) {
-    // Buscar por nombre si no se encontró por cédula
     const { data } = await supabase
       .from('clients')
-      .select('*, brokers!inner(id)')
+      .select('*')
       .eq('name', normalizedName)
       .single();
     existingClient = data;
   }
 
-  // VERIFICAR SI EL CLIENTE YA EXISTE Y DETECTAR DUPLICADO
+  // VERIFICAR SI EL CLIENTE YA EXISTE CON OTRO BROKER
   if (existingClient && clientDuplicates) {
-    const existingBrokerId = (existingClient as any).brokers?.id || existingClient.broker_id;
-    const isDifferentBroker = existingBrokerId !== brokerId;
+    const existingBrokerId = existingClient.broker_id;
+    const isDifferentBroker = existingBrokerId && existingBrokerId !== brokerId;
     
     if (isDifferentBroker) {
-      // Cliente duplicado - registrado con OTRO broker
+      // Cliente de OTRO broker - obtener nombre del broker para el reporte
+      const otherBrokerName = await getBrokerNameById(supabase, existingBrokerId);
+      
       clientDuplicates.push({
         row: firstRow._rowNumber || 0,
-        message: `Cliente "${firstRow.client_name}" ya existe en base de datos`,
+        message: `Cliente "${firstRow.client_name}" ya existe registrado con el corredor: ${otherBrokerName}`,
         isDuplicate: true,
         duplicateReason: 'other_broker',
         clientName: firstRow.client_name,
+        brokerName: otherBrokerName,
+        errorType: 'duplicate_other_broker',
       });
       return {
         success: false,
-        error: `Cliente duplicado (registrado con otro corredor)`,
-        skipGroup: true,
+        error: `Cliente duplicado (registrado con corredor: ${otherBrokerName})`,
       };
-    } else {
-      // Cliente duplicado - registrado con EL MISMO broker
-      // Verificar si todas las pólizas ya existen
-      let allPoliciesExist = true;
-      for (const row of rows) {
-        const { data: existingPolicy } = await supabase
-          .from('policies')
-          .select('id')
-          .eq('policy_number', row.policy_number?.trim().toUpperCase())
-          .single();
-        
-        if (!existingPolicy) {
-          allPoliciesExist = false;
-          break;
-        }
-      }
-      
-      if (allPoliciesExist) {
-        clientDuplicates.push({
-          row: firstRow._rowNumber || 0,
-          message: `Cliente "${firstRow.client_name}" y sus pólizas ya existen en tu base de datos`,
-          isDuplicate: true,
-          duplicateReason: 'same_broker',
-          clientName: firstRow.client_name,
-        });
-        return {
-          success: false,
-          error: `Cliente y pólizas duplicados (ya en tu base de datos)`,
-          skipGroup: true,
-        };
-      }
-      // Si no todas las pólizas existen, continuar para agregar las faltantes
     }
+    // Si es el MISMO broker, continuar para actualizar cliente y pólizas
   }
 
   // ==============================================================
-  // PRIMERO: VALIDAR TODAS LAS PÓLIZAS ANTES DE CREAR/ACTUALIZAR CLIENTE
-  // Esto evita crear clientes sin pólizas
+  // VALIDAR TODAS LAS PÓLIZAS Y SEPARAR: nuevas, actualizables, errores
   // ==============================================================
   
   const policyErrors: ImportError[] = [];
-  const validPolicies: typeof rows = [];
+  const newPolicies: (CSVRow & { _rowNumber?: number })[] = [];
+  const updatePolicies: { row: CSVRow & { _rowNumber?: number }; existingId: string }[] = [];
 
   for (const row of rows) {
     // Validar campos obligatorios de póliza
     if (!row.policy_number?.trim()) {
       policyErrors.push({
         row: row._rowNumber || 0,
-        message: 'policy_number está vacío - campo obligatorio',
+        message: 'Número de póliza vacío - campo obligatorio',
+        errorType: 'validation',
+        policyNumber: '',
       });
       continue;
     }
@@ -495,7 +492,9 @@ async function processClientGroup(
     if (!row.insurer_name?.trim()) {
       policyErrors.push({
         row: row._rowNumber || 0,
-        message: 'insurer_name está vacío - campo obligatorio',
+        message: 'Nombre de aseguradora vacío - campo obligatorio',
+        errorType: 'validation',
+        policyNumber: row.policy_number?.trim(),
       });
       continue;
     }
@@ -503,7 +502,9 @@ async function processClientGroup(
     if (!row.ramo?.trim()) {
       policyErrors.push({
         row: row._rowNumber || 0,
-        message: 'ramo está vacío - campo obligatorio',
+        message: 'Ramo vacío - campo obligatorio',
+        errorType: 'validation',
+        policyNumber: row.policy_number?.trim(),
       });
       continue;
     }
@@ -511,7 +512,9 @@ async function processClientGroup(
     if (!row.start_date?.trim() || !row.renewal_date?.trim()) {
       policyErrors.push({
         row: row._rowNumber || 0,
-        message: 'start_date y renewal_date son obligatorios',
+        message: 'Fecha de inicio y fecha de renovación son obligatorias',
+        errorType: 'validation',
+        policyNumber: row.policy_number?.trim(),
       });
       continue;
     }
@@ -519,7 +522,9 @@ async function processClientGroup(
     if (!row.status?.trim()) {
       policyErrors.push({
         row: row._rowNumber || 0,
-        message: 'status está vacío - campo obligatorio',
+        message: 'Estado de póliza vacío - campo obligatorio',
+        errorType: 'validation',
+        policyNumber: row.policy_number?.trim(),
       });
       continue;
     }
@@ -534,7 +539,9 @@ async function processClientGroup(
     if (insurerError || !insurer) {
       policyErrors.push({
         row: row._rowNumber || 0,
-        message: `Aseguradora no encontrada: ${row.insurer_name}`,
+        message: `Aseguradora no encontrada: "${row.insurer_name}". Verifica que el nombre coincida exactamente con las aseguradoras registradas.`,
+        errorType: 'insurer_not_found',
+        policyNumber: row.policy_number?.trim(),
       });
       continue;
     }
@@ -542,36 +549,43 @@ async function processClientGroup(
     // Verificar si la póliza ya existe en BD
     const { data: existingPolicy } = await supabase
       .from('policies')
-      .select('id')
+      .select('id, broker_id')
       .eq('policy_number', row.policy_number.trim().toUpperCase())
       .single();
 
     if (existingPolicy) {
-      policyErrors.push({
-        row: row._rowNumber || 0,
-        message: `Póliza ${row.policy_number} ya existe en la base de datos`,
-        isDuplicate: true, // IMPORTANTE: Flag para separar duplicados de errores
-      });
+      // Póliza existe - verificar si es del mismo broker o de otro
+      if (existingPolicy.broker_id !== brokerId) {
+        // Póliza de OTRO broker
+        const otherBrokerName = await getBrokerNameById(supabase, existingPolicy.broker_id);
+        clientDuplicates?.push({
+          row: row._rowNumber || 0,
+          message: `Póliza "${row.policy_number}" ya existe registrada con el corredor: ${otherBrokerName}`,
+          isDuplicate: true,
+          duplicateReason: 'other_broker',
+          clientName: firstRow.client_name,
+          policyNumber: row.policy_number?.trim(),
+          brokerName: otherBrokerName,
+          errorType: 'duplicate_other_broker',
+        });
+      } else {
+        // Póliza del MISMO broker → marcar para ACTUALIZAR
+        updatePolicies.push({ row, existingId: existingPolicy.id });
+      }
       continue;
     }
 
-    // Póliza válida - guardar para crear después
-    validPolicies.push(row);
+    // Póliza nueva válida
+    newPolicies.push(row);
   }
 
-  // Si NO hay pólizas válidas para crear, NO crear el cliente
-  if (validPolicies.length === 0) {
-    console.log('[IMPORT API] No hay pólizas válidas - no se creará el cliente');
+  // Si NO hay pólizas nuevas NI actualizables, verificar si hay algo que hacer
+  if (newPolicies.length === 0 && updatePolicies.length === 0) {
+    console.log('[IMPORT API] No hay pólizas para crear ni actualizar');
     
-    // Verificar si todos son duplicados
-    const allDuplicates = policyErrors.every(e => e.isDuplicate);
-    
-    if (allDuplicates && policyErrors.length > 0) {
-      return {
-        success: false,
-        error: `Todas las pólizas de este cliente ya existen en la base de datos`,
-        errors: policyErrors,
-      };
+    if (policyErrors.length === 0) {
+      // Todo fueron duplicados de otro broker (ya reportados en clientDuplicates)
+      return { success: false, error: 'Todas las pólizas pertenecen a otro corredor' };
     }
     
     return { 
@@ -582,36 +596,43 @@ async function processClientGroup(
   }
 
   // ==============================================================
-  // AHORA SÍ: CREAR O ACTUALIZAR CLIENTE
-  // Solo si hay al menos una póliza válida para crear
+  // CREAR O ACTUALIZAR CLIENTE
   // ==============================================================
   
   let clientId: string;
   let clientCreated = false;
   let clientUpdated = false;
   
-  // Si es RUC (empresa), la fecha de nacimiento es opcional
   const isCompany = isRUC(normalizedId);
   const isPreliminary = !normalizedId || !firstRow.email?.trim() || !firstRow.phone?.trim() || (!isCompany && !firstRow.birth_date?.trim());
 
   if (existingClient) {
-    // Cliente existe: ACTUALIZAR datos faltantes
+    // Cliente existe con MISMO broker: ACTUALIZAR datos (sobreescribir con CSV si hay datos)
     const updateData: any = {};
     let needsUpdate = false;
 
-    if (!existingClient.national_id && normalizedId) {
+    // Actualizar nombre si cambió
+    if (normalizedName && existingClient.name !== normalizedName) {
+      updateData.name = normalizedName;
+      needsUpdate = true;
+    }
+    // Actualizar cédula si el CSV trae y es diferente
+    if (normalizedId && existingClient.national_id !== normalizedId) {
       updateData.national_id = normalizedId;
       needsUpdate = true;
     }
-    if (!existingClient.email && firstRow.email?.trim()) {
+    // Actualizar email si el CSV trae
+    if (firstRow.email?.trim() && existingClient.email !== firstRow.email.trim()) {
       updateData.email = firstRow.email.trim();
       needsUpdate = true;
     }
-    if (!existingClient.phone && firstRow.phone?.trim()) {
+    // Actualizar teléfono si el CSV trae
+    if (firstRow.phone?.trim() && existingClient.phone !== firstRow.phone.trim()) {
       updateData.phone = firstRow.phone.trim();
       needsUpdate = true;
     }
-    if (!existingClient.birth_date && firstRow.birth_date?.trim()) {
+    // Actualizar fecha de nacimiento si el CSV trae
+    if (firstRow.birth_date?.trim() && existingClient.birth_date !== firstRow.birth_date.trim()) {
       updateData.birth_date = firstRow.birth_date.trim();
       needsUpdate = true;
     }
@@ -632,6 +653,7 @@ async function processClientGroup(
         return { success: false, error: `Error actualizando cliente: ${updateError.message}` };
       }
       clientUpdated = true;
+      console.log('[IMPORT API] Cliente actualizado:', existingClient.id, 'campos:', Object.keys(updateData));
     }
 
     clientId = existingClient.id;
@@ -660,14 +682,13 @@ async function processClientGroup(
   }
 
   // ==============================================================
-  // FINALMENTE: CREAR LAS PÓLIZAS VÁLIDAS
+  // CREAR PÓLIZAS NUEVAS
   // ==============================================================
   
   let policiesCreated = 0;
 
-  for (const row of validPolicies) {
+  for (const row of newPolicies) {
     try {
-      // Buscar aseguradora (ya validada antes, pero necesitamos el objeto)
       const { data: insurer } = await supabase
         .from('insurers')
         .select('id, name')
@@ -675,24 +696,19 @@ async function processClientGroup(
         .single();
 
       if (!insurer) {
-        // No debería pasar porque ya validamos antes
         policyErrors.push({
           row: row._rowNumber || 0,
           message: `Error inesperado: aseguradora no encontrada`,
+          errorType: 'db_error',
         });
         continue;
       }
 
-      // Determinar commission_override
-      // REGLA ESPECIAL: Vida ASSA = 100% override
-      // Para todos los demás: null (usa default del broker)
       const ramoNormalized = row.ramo.trim().toUpperCase();
       const insurerNormalized = insurer.name.trim().toUpperCase();
       const isVidaASSA = ramoNormalized === 'VIDA' && insurerNormalized === 'ASSA';
-      
       const commissionOverride = isVidaASSA ? 100 : null;
 
-      // Crear póliza
       const policyData: any = {
         policy_number: row.policy_number.trim().toUpperCase(),
         client_id: clientId,
@@ -703,7 +719,7 @@ async function processClientGroup(
         renewal_date: row.renewal_date.trim(),
         status: row.status.trim().toUpperCase() as any,
         notas: row.notas?.trim() || null,
-        percent_override: commissionOverride, // CORRECCIÓN: columna real es percent_override
+        percent_override: commissionOverride,
       };
 
       const { error: policyError } = await supabase.from('policies').insert(policyData);
@@ -712,6 +728,8 @@ async function processClientGroup(
         policyErrors.push({
           row: row._rowNumber || 0,
           message: `Error creando póliza: ${policyError.message}`,
+          errorType: 'db_error',
+          policyNumber: row.policy_number?.trim(),
         });
         continue;
       }
@@ -722,43 +740,105 @@ async function processClientGroup(
       policyErrors.push({
         row: row._rowNumber || 0,
         message: error instanceof Error ? `Error creando póliza: ${error.message}` : `Error desconocido al crear póliza`,
+        errorType: 'db_error',
       });
     }
   }
 
-  // Retornar resultado según cuántas pólizas se crearon
-  const totalAttempted = validPolicies.length;
+  // ==============================================================
+  // ACTUALIZAR PÓLIZAS EXISTENTES (mismo broker)
+  // ==============================================================
   
-  if (policiesCreated === totalAttempted && policyErrors.length === 0) {
-    // Todas las pólizas válidas se crearon exitosamente
+  let policiesUpdatedCount = 0;
+
+  for (const { row, existingId } of updatePolicies) {
+    try {
+      const { data: insurer } = await supabase
+        .from('insurers')
+        .select('id, name')
+        .eq('name', row.insurer_name.trim().toUpperCase())
+        .single();
+
+      if (!insurer) {
+        policyErrors.push({
+          row: row._rowNumber || 0,
+          message: `Error inesperado: aseguradora no encontrada al actualizar`,
+          errorType: 'db_error',
+        });
+        continue;
+      }
+
+      const ramoNormalized = row.ramo.trim().toUpperCase();
+      const insurerNormalized = insurer.name.trim().toUpperCase();
+      const isVidaASSA = ramoNormalized === 'VIDA' && insurerNormalized === 'ASSA';
+      const commissionOverride = isVidaASSA ? 100 : null;
+
+      const updateData: any = {
+        client_id: clientId,
+        insurer_id: insurer.id,
+        ramo: ramoNormalized,
+        start_date: row.start_date.trim(),
+        renewal_date: row.renewal_date.trim(),
+        status: row.status.trim().toUpperCase(),
+        percent_override: commissionOverride,
+      };
+      
+      if (row.notas?.trim()) {
+        updateData.notas = row.notas.trim();
+      }
+
+      const { error: updateError } = await supabase
+        .from('policies')
+        .update(updateData)
+        .eq('id', existingId);
+
+      if (updateError) {
+        policyErrors.push({
+          row: row._rowNumber || 0,
+          message: `Error actualizando póliza ${row.policy_number}: ${updateError.message}`,
+          errorType: 'db_error',
+          policyNumber: row.policy_number?.trim(),
+        });
+        continue;
+      }
+
+      policiesUpdatedCount++;
+      console.log('[IMPORT API] Póliza actualizada:', row.policy_number);
+    } catch (error) {
+      console.error('[IMPORT API] Error actualizando póliza fila', row._rowNumber, ':', error);
+      policyErrors.push({
+        row: row._rowNumber || 0,
+        message: error instanceof Error ? `Error actualizando póliza: ${error.message}` : `Error desconocido al actualizar póliza`,
+        errorType: 'db_error',
+      });
+    }
+  }
+
+  // Retornar resultado
+  const totalProcessed = policiesCreated + policiesUpdatedCount;
+  
+  if (totalProcessed > 0 && policyErrors.length === 0) {
     return { 
       success: true, 
       policiesCreated,
+      policiesUpdated: policiesUpdatedCount,
       clientCreated,
       clientUpdated,
     };
-  } else if (policiesCreated > 0) {
-    // Algunas pólizas se crearon, otras fallaron o eran duplicadas
+  } else if (totalProcessed > 0) {
     return { 
       success: false,
       partialSuccess: true, 
       policiesCreated,
+      policiesUpdated: policiesUpdatedCount,
       clientCreated,
       clientUpdated,
       errors: policyErrors,
     };
-  } else if (policyErrors.every(e => e.isDuplicate)) {
-    // Todas eran duplicadas - cliente ya existe con estas pólizas
-    return { 
-      success: false, 
-      error: 'Todas las pólizas de este cliente ya existen en la base de datos',
-      errors: policyErrors,
-    };
   } else {
-    // Errores reales al crear pólizas
     return { 
       success: false, 
-      error: 'No se pudo crear ninguna póliza válida para este cliente',
+      error: 'No se pudo crear ni actualizar ninguna póliza para este cliente',
       errors: policyErrors,
     };
   }

@@ -10,8 +10,8 @@ import {
   getPolicyDocuments,
   deleteExpedienteDocument,
   getExpedienteDocumentUrl,
-  getPolicyDocumentCount,
-  MAX_DOCUMENTS_PER_POLICY,
+  getClientDocumentLimit,
+  DOCUMENTS_PER_POLICY,
   type DocumentType,
   type ExpedienteDocument,
 } from '@/lib/storage/expediente';
@@ -57,7 +57,7 @@ export default function ExpedienteManager({
   
   const [previewDoc, setPreviewDoc] = useState<{ url: string; name: string; type: string } | null>(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
-  const [policyDocCount, setPolicyDocCount] = useState<{ count: number; remaining: number } | null>(null);
+  const [clientDocLimit, setClientDocLimit] = useState<{ count: number; maxAllowed: number; remaining: number; policyCount: number } | null>(null);
 
   // Upload form state
   const [uploadFile, setUploadFile] = useState<File | null>(null);
@@ -115,12 +115,17 @@ export default function ExpedienteManager({
         if (policyDocsResult.ok && policyDocsResult.data) {
           allDocs = [...allDocs, ...policyDocsResult.data];
         }
-        
-        // Load policy document count
-        const countResult = await getPolicyDocumentCount(policyId);
-        if (countResult.ok && countResult.count !== undefined && countResult.remaining !== undefined) {
-          setPolicyDocCount({ count: countResult.count, remaining: countResult.remaining });
-        }
+      }
+
+      // Load client document limit (5 × number of policies)
+      const limitResult = await getClientDocumentLimit(clientId);
+      if (limitResult.ok && limitResult.count !== undefined && limitResult.maxAllowed !== undefined && limitResult.remaining !== undefined && limitResult.policyCount !== undefined) {
+        setClientDocLimit({
+          count: limitResult.count,
+          maxAllowed: limitResult.maxAllowed,
+          remaining: limitResult.remaining,
+          policyCount: limitResult.policyCount,
+        });
       }
 
       setDocuments(allDocs);
@@ -575,48 +580,31 @@ export default function ExpedienteManager({
             </div>
 
             <div className="standard-modal-content">
-              {/* Policy Document Limit Warning */}
-              {policyId && policyDocCount && (
+              {/* Client Document Limit Info */}
+              {clientDocLimit && (
                 <div className={`rounded-lg p-4 border-l-4 ${
-                  policyDocCount.remaining > 0 
-                    ? 'bg-blue-50 border-blue-500' 
+                  clientDocLimit.remaining > 0
+                    ? 'bg-blue-50 border-blue-500'
                     : 'bg-red-50 border-red-500'
                 }`}>
                   <div className="flex items-start gap-2">
                     <div className="flex-shrink-0 text-lg">
-                      {policyDocCount.remaining > 0 ? '📊' : '⚠️'}
+                      {clientDocLimit.remaining > 0 ? '📊' : '⚠️'}
                     </div>
                     <div className="flex-1">
                       <p className={`text-sm font-semibold ${
-                        policyDocCount.remaining > 0 ? 'text-blue-900' : 'text-red-900'
+                        clientDocLimit.remaining > 0 ? 'text-blue-900' : 'text-red-900'
                       }`}>
-                        {policyDocCount.remaining > 0 
-                          ? `Documentos de póliza: ${policyDocCount.count} de ${MAX_DOCUMENTS_PER_POLICY}` 
-                          : `Límite alcanzado: ${policyDocCount.count}/${MAX_DOCUMENTS_PER_POLICY}`}
+                        {clientDocLimit.remaining > 0
+                          ? `Documentos del cliente: ${clientDocLimit.count} de ${clientDocLimit.maxAllowed}`
+                          : `Límite alcanzado: ${clientDocLimit.count}/${clientDocLimit.maxAllowed}`}
                       </p>
                       <p className={`text-xs mt-1 ${
-                        policyDocCount.remaining > 0 ? 'text-blue-700' : 'text-red-700'
+                        clientDocLimit.remaining > 0 ? 'text-blue-700' : 'text-red-700'
                       }`}>
-                        {policyDocCount.remaining > 0 
-                          ? `Puedes subir ${policyDocCount.remaining} documento(s) más para esta póliza.` 
-                          : 'Esta póliza ya tiene el máximo de documentos permitidos. Elimina alguno para subir uno nuevo.'}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Client Documents Info (no limit) */}
-              {!policyId && (
-                <div className="rounded-lg p-4 border-l-4 bg-green-50 border-green-500">
-                  <div className="flex items-start gap-2">
-                    <div className="flex-shrink-0 text-lg">💼</div>
-                    <div className="flex-1">
-                      <p className="text-sm font-semibold text-green-900">
-                        Documentos del Cliente
-                      </p>
-                      <p className="text-xs mt-1 text-green-700">
-                        Puedes subir documentos sin límite de cantidad. Los documentos del cliente están disponibles para todas sus pólizas.
+                        {clientDocLimit.remaining > 0
+                          ? `Límite: ${DOCUMENTS_PER_POLICY} documentos × ${clientDocLimit.policyCount} póliza(s) = ${clientDocLimit.maxAllowed} en total. Puedes subir ${clientDocLimit.remaining} más.`
+                          : `Este cliente ya tiene el máximo de documentos permitidos (${DOCUMENTS_PER_POLICY} por cada una de sus ${clientDocLimit.policyCount} póliza(s)). Elimina alguno para subir uno nuevo.`}
                       </p>
                     </div>
                   </div>
@@ -734,7 +722,7 @@ export default function ExpedienteManager({
               <button
                 type="button"
                 onClick={handleUpload}
-                disabled={uploading || !uploadFile || (!!policyId && policyDocCount !== null && policyDocCount?.remaining === 0)}
+                disabled={uploading || !uploadFile || (clientDocLimit !== null && clientDocLimit.remaining === 0)}
                 className="standard-modal-button-primary"
               >
                   {uploading ? (

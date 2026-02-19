@@ -251,6 +251,20 @@ export async function PUT(request: NextRequest) {
           .single();
         break;
 
+      case 'create_link':
+        // Crear vínculo entre archivo fuente y archivo vinculado
+        if (!params.source_file_id || !params.linked_file_id) {
+          return NextResponse.json({ error: 'source_file_id y linked_file_id son requeridos' }, { status: 400 });
+        }
+        const { error: linkError } = await supabase
+          .from('download_file_links')
+          .insert([{
+            source_file_id: params.source_file_id,
+            linked_file_id: params.linked_file_id
+          }]);
+        if (linkError) throw linkError;
+        return NextResponse.json({ success: true });
+
       default:
         return NextResponse.json({ error: 'Acción no válida' }, { status: 400 });
     }

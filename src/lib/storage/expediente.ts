@@ -26,7 +26,9 @@ export interface ExpedienteDocument {
 
 const BUCKET_NAME = 'expediente';
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
-const MAX_DOCUMENTS_PER_POLICY = 5; // Máximo de documentos por póliza
+const DOCUMENTS_PER_POLICY = 5; // Documentos permitidos por cada póliza del cliente
+/** @deprecated Use DOCUMENTS_PER_POLICY */
+const MAX_DOCUMENTS_PER_POLICY = DOCUMENTS_PER_POLICY; // Alias para compatibilidad
 const ALLOWED_MIME_TYPES = [
   'application/pdf',
   'image/jpeg',
@@ -122,22 +124,38 @@ export async function uploadExpedienteDocument(
     
     // "otros" can be for client or policy, no validation needed
 
-    // Check document limit for policy documents
-    if (policyId) {
+    // Check document limit: total docs for client vs (5 × number of policies)
+    {
+      // Count total docs already uploaded for this client
       const { data: existingDocs, error: countError } = await supabase
         .from('expediente_documents')
         .select('id')
-        .eq('policy_id', policyId);
-      
+        .eq('client_id', clientId);
+
       if (countError) {
         console.error('Error checking document count:', countError);
         return { ok: false, error: 'Error al verificar cantidad de documentos' };
       }
-      
-      if (existingDocs && existingDocs.length >= MAX_DOCUMENTS_PER_POLICY) {
+
+      // Count number of policies the client has
+      const { data: policies, error: policiesError } = await supabase
+        .from('policies')
+        .select('id')
+        .eq('client_id', clientId);
+
+      if (policiesError) {
+        console.error('Error counting client policies:', policiesError);
+        return { ok: false, error: 'Error al verificar pólizas del cliente' };
+      }
+
+      const policyCount = policies?.length || 1;
+      const maxAllowed = policyCount * DOCUMENTS_PER_POLICY;
+      const currentCount = existingDocs?.length || 0;
+
+      if (currentCount >= maxAllowed) {
         return {
           ok: false,
-          error: `Esta póliza ya tiene el máximo de ${MAX_DOCUMENTS_PER_POLICY} documentos permitidos. Elimina algún documento existente para subir uno nuevo.`,
+          error: `Este cliente ya tiene el máximo de ${maxAllowed} documento(s) permitidos (${DOCUMENTS_PER_POLICY} por cada una de sus ${policyCount} póliza(s)). Elimina algún documento existente para subir uno nuevo.`,
         };
       }
     }
@@ -394,28 +412,43 @@ export async function updateDocumentNotes(
 }
 
 /**
- * Get document count for a policy
+ * Get document count for a client (total across all policies)
+ * Limit = DOCUMENTS_PER_POLICY × number of policies the client has
  */
-export async function getPolicyDocumentCount(
-  policyId: string
-): Promise<{ ok: boolean; count?: number; remaining?: number; error?: string }> {
+export async function getClientDocumentLimit(
+  clientId: string
+): Promise<{ ok: boolean; count?: number; maxAllowed?: number; remaining?: number; policyCount?: number; error?: string }> {
   try {
     const supabase = supabaseClient();
 
-    const { data, error } = await supabase
+    // Count total docs for this client
+    const { data: docs, error: docsError } = await supabase
       .from('expediente_documents')
       .select('id')
-      .eq('policy_id', policyId);
+      .eq('client_id', clientId);
 
-    if (error) {
-      console.error('Error counting policy documents:', error);
-      return { ok: false, error: error.message };
+    if (docsError) {
+      console.error('Error counting client documents:', docsError);
+      return { ok: false, error: docsError.message };
     }
 
-    const count = data?.length || 0;
-    const remaining = Math.max(0, MAX_DOCUMENTS_PER_POLICY - count);
+    // Count policies
+    const { data: policies, error: policiesError } = await supabase
+      .from('policies')
+      .select('id')
+      .eq('client_id', clientId);
 
-    return { ok: true, count, remaining };
+    if (policiesError) {
+      console.error('Error counting client policies:', policiesError);
+      return { ok: false, error: policiesError.message };
+    }
+
+    const policyCount = policies?.length || 1;
+    const maxAllowed = policyCount * DOCUMENTS_PER_POLICY;
+    const count = docs?.length || 0;
+    const remaining = Math.max(0, maxAllowed - count);
+
+    return { ok: true, count, maxAllowed, remaining, policyCount };
   } catch (error: any) {
     console.error('Unexpected error counting documents:', error);
     return { ok: false, error: error.message || 'Error inesperado' };
@@ -423,6 +456,16 @@ export async function getPolicyDocumentCount(
 }
 
 /**
+ * @deprecated Use getClientDocumentLimit instead
+ */
+export async function getPolicyDocumentCount(
+  policyId: string
+): Promise<{ ok: boolean; count?: number; remaining?: number; error?: string }> {
+  // Legacy: kept for compatibility, returns dummy values
+  return { ok: true, count: 0, remaining: 999 };
+}
+
+/**
  * Export constants for UI usage
  */
-export { MAX_DOCUMENTS_PER_POLICY, MAX_FILE_SIZE, ALLOWED_MIME_TYPES };
+export { MAX_DOCUMENTS_PER_POLICY, DOCUMENTS_PER_POLICY, MAX_FILE_SIZE, ALLOWED_MIME_TYPES };

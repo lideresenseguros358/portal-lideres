@@ -10,7 +10,9 @@ import {
   FaInfoCircle,
   FaMoneyBillWave,
   FaCalendarAlt,
-  FaCheckCircle
+  FaCheckCircle,
+  FaFilePdf,
+  FaFileExcel,
 } from 'react-icons/fa';
 import { Card, CardContent } from '@/components/ui/card';
 
@@ -38,9 +40,23 @@ interface AdjustmentItem {
   insurer_name: string | null;
 }
 
+// Helper: group reports by paid_date
+function groupByDate(reports: AdjustmentReport[]): Map<string, AdjustmentReport[]> {
+  const map = new Map<string, AdjustmentReport[]>();
+  for (const r of reports) {
+    const key = r.paid_date
+      ? new Date(r.paid_date).toLocaleDateString('es-PA')
+      : new Date(r.created_at).toLocaleDateString('es-PA');
+    if (!map.has(key)) map.set(key, []);
+    map.get(key)!.push(r);
+  }
+  return map;
+}
+
 export default function PaidAdjustmentsView() {
   const [reports, setReports] = useState<AdjustmentReport[]>([]);
   const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState<'pdf' | 'xlsx' | null>(null);
   const [expandedReports, setExpandedReports] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -70,6 +86,148 @@ export default function PaidAdjustmentsView() {
     });
   };
 
+  const handleDownloadPDF = async () => {
+    if (reports.length === 0) return;
+    setDownloading('pdf');
+    try {
+      const { default: jsPDF } = await import('jspdf');
+      const { default: autoTable } = await import('jspdf-autotable');
+
+      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+      const grouped = groupByDate(reports);
+      const totalPaid = reports.reduce((s, r) => s + r.total_amount, 0);
+      const totalItems = reports.reduce((s, r) => s + r.items.length, 0);
+
+      // Title
+      doc.setFontSize(16);
+      doc.setTextColor(1, 1, 57);
+      doc.text('Reporte de Ajustes Pagados', 14, 16);
+      doc.setFontSize(9);
+      doc.setTextColor(100, 100, 100);
+      doc.text(`Generado: ${new Date().toLocaleDateString('es-PA')}  |  Total pagado: $${totalPaid.toLocaleString('en-US', { minimumFractionDigits: 2 })}  |  ${reports.length} reportes  |  ${totalItems} items`, 14, 22);
+
+      let startY = 28;
+
+      for (const [dateLabel, dateReports] of grouped) {
+        const dateTotal = dateReports.reduce((s, r) => s + r.total_amount, 0);
+
+        // Date group header
+        doc.setFontSize(11);
+        doc.setTextColor(1, 1, 57);
+        doc.text(`Fecha de pago: ${dateLabel}  —  Total: $${dateTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, 14, startY);
+        startY += 4;
+
+        // Rows: one row per item
+        const rows: (string | number)[][] = [];
+        for (const report of dateReports) {
+          for (const item of report.items) {
+            rows.push([
+              report.broker_name,
+              item.insured_name || '—',
+              item.policy_number,
+              item.insurer_name || '—',
+              `$${item.commission_raw.toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
+              `$${item.broker_commission.toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
+              report.payment_mode === 'immediate' ? 'Inmediato' : 'Quincena',
+            ]);
+          }
+        }
+
+        autoTable(doc, {
+          startY,
+          head: [['Corredor', 'Asegurado', 'Póliza', 'Aseguradora', 'Bruto', 'Comisión', 'Modo Pago']],
+          body: rows,
+          styles: { fontSize: 8, cellPadding: 2 },
+          headStyles: { fillColor: [138, 170, 25], textColor: 255, fontStyle: 'bold' },
+          alternateRowStyles: { fillColor: [245, 245, 245] },
+          margin: { left: 14, right: 14 },
+          didDrawPage: () => {},
+        });
+
+        startY = (doc as any).lastAutoTable.finalY + 8;
+      }
+
+      doc.save(`ajustes_pagados_${new Date().toISOString().slice(0, 10)}.pdf`);
+      toast.success('PDF descargado');
+    } catch (err) {
+      console.error(err);
+      toast.error('Error al generar PDF');
+    } finally {
+      setDownloading(null);
+    }
+  };
+
+  const handleDownloadXLSX = async () => {
+    if (reports.length === 0) return;
+    setDownloading('xlsx');
+    try {
+      const XLSX = await import('xlsx');
+      const grouped = groupByDate(reports);
+
+      const wb = XLSX.utils.book_new();
+
+      // Sheet 1: Summary by date
+      const summaryRows: (string | number)[][] = [
+        ['Fecha de Pago', 'Reportes', 'Items', 'Total Pagado ($)'],
+      ];
+      for (const [dateLabel, dateReports] of grouped) {
+        summaryRows.push([
+          dateLabel,
+          dateReports.length,
+          dateReports.reduce((s, r) => s + r.items.length, 0),
+          dateReports.reduce((s, r) => s + r.total_amount, 0),
+        ]);
+      }
+      summaryRows.push([
+        'TOTAL',
+        reports.length,
+        reports.reduce((s, r) => s + r.items.length, 0),
+        reports.reduce((s, r) => s + r.total_amount, 0),
+      ]);
+      const wsSummary = XLSX.utils.aoa_to_sheet(summaryRows);
+      wsSummary['!cols'] = [{ wch: 16 }, { wch: 10 }, { wch: 8 }, { wch: 18 }];
+      XLSX.utils.book_append_sheet(wb, wsSummary, 'Resumen');
+
+      // Sheet 2: Detail (all items)
+      const detailRows: (string | number)[][] = [
+        ['Fecha de Pago', 'Corredor', 'Asegurado', 'Póliza', 'Aseguradora', 'Bruto ($)', 'Comisión ($)', 'Modo Pago', 'Nota Broker', 'Nota Master'],
+      ];
+      for (const [dateLabel, dateReports] of grouped) {
+        for (const report of dateReports) {
+          for (const item of report.items) {
+            detailRows.push([
+              dateLabel,
+              report.broker_name,
+              item.insured_name || '',
+              item.policy_number,
+              item.insurer_name || '',
+              item.commission_raw,
+              item.broker_commission,
+              report.payment_mode === 'immediate' ? 'Inmediato' : 'Quincena',
+              report.notes || '',
+              report.admin_notes || '',
+            ]);
+          }
+        }
+      }
+      const wsDetail = XLSX.utils.aoa_to_sheet(detailRows);
+      wsDetail['!cols'] = [
+        { wch: 14 }, { wch: 22 }, { wch: 24 }, { wch: 18 },
+        { wch: 18 }, { wch: 12 }, { wch: 12 }, { wch: 12 },
+        { wch: 28 }, { wch: 28 },
+      ];
+      XLSX.utils.book_append_sheet(wb, wsDetail, 'Detalle');
+
+      XLSX.writeFile(wb, `ajustes_pagados_${new Date().toISOString().slice(0, 10)}.xlsx`);
+      toast.success('Excel descargado');
+    } catch (err) {
+      console.error(err);
+      toast.error('Error al generar Excel');
+    } finally {
+      setDownloading(null);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -97,6 +255,36 @@ export default function PaidAdjustmentsView() {
 
   return (
     <div className="space-y-3 sm:space-y-4">
+      {/* Header con botones de descarga */}
+      <div className="flex items-center justify-end gap-2">
+        <button
+          onClick={handleDownloadPDF}
+          disabled={downloading !== null || reports.length === 0}
+          title="Descargar PDF"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors shadow-sm"
+        >
+          {downloading === 'pdf' ? (
+            <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
+          ) : (
+            <FaFilePdf size={14} />
+          )}
+          <span className="hidden sm:inline">PDF</span>
+        </button>
+        <button
+          onClick={handleDownloadXLSX}
+          disabled={downloading !== null || reports.length === 0}
+          title="Descargar Excel"
+          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold text-white bg-green-700 hover:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors shadow-sm"
+        >
+          {downloading === 'xlsx' ? (
+            <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
+          ) : (
+            <FaFileExcel size={14} />
+          )}
+          <span className="hidden sm:inline">Excel</span>
+        </button>
+      </div>
+
       {/* Resumen */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
         <Card className="bg-gradient-to-br from-green-50 to-white border-green-200">

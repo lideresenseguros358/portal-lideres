@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { FaUpload, FaDownload, FaEdit, FaTrash, FaFileAlt, FaFilePdf, FaFileImage, FaFile, FaPlus, FaTimes, FaStar, FaRegStar, FaArrowUp, FaArrowDown, FaSearch, FaFolderOpen, FaPencilAlt } from 'react-icons/fa';
+import { FaUpload, FaDownload, FaEdit, FaTrash, FaFileAlt, FaFilePdf, FaFileImage, FaFile, FaPlus, FaTimes, FaStar, FaRegStar, FaArrowUp, FaArrowDown, FaSearch, FaFolderOpen, FaPencilAlt, FaLink } from 'react-icons/fa';
 import { toast } from 'sonner';
 
 interface Document {
@@ -48,6 +48,13 @@ export default function DocumentsList({ scope, policyType, insurerId, isMaster, 
   const [targetSectionId, setTargetSectionId] = useState('');
   const [availableSections, setAvailableSections] = useState<any[]>([]);
   const [loadingSections, setLoadingSections] = useState(false);
+  // Estado para vincular documento existente
+  const [uploadTab, setUploadTab] = useState<'new' | 'existing'>('new');
+  const [linkSearch, setLinkSearch] = useState('');
+  const [linkResults, setLinkResults] = useState<any[]>([]);
+  const [linkSearching, setLinkSearching] = useState(false);
+  const [selectedLinkFile, setSelectedLinkFile] = useState<any | null>(null);
+  const [linking, setLinking] = useState(false);
 
   useEffect(() => {
     loadDocuments();
@@ -221,6 +228,112 @@ export default function DocumentsList({ scope, policyType, insurerId, isMaster, 
     } finally {
       setLoadingSections(false);
     }
+  };
+
+  const searchExistingFiles = async (term: string) => {
+    setLinkSearch(term);
+    if (!term.trim()) {
+      setLinkResults([]);
+      return;
+    }
+    setLinkSearching(true);
+    try {
+      const res = await fetch(
+        `/api/downloads/files/by-insurer?insurer_id=${insurerId}&exclude_section_id=${uploadSectionId}&search=${encodeURIComponent(term)}`
+      );
+      const data = await res.json();
+      if (data.success) {
+        setLinkResults(data.files || []);
+      }
+    } catch (error) {
+      console.error('Error searching existing files:', error);
+    } finally {
+      setLinkSearching(false);
+    }
+  };
+
+  const loadAllInsurerFiles = async () => {
+    setLinkSearching(true);
+    try {
+      const res = await fetch(
+        `/api/downloads/files/by-insurer?insurer_id=${insurerId}&exclude_section_id=${uploadSectionId}`
+      );
+      const data = await res.json();
+      if (data.success) {
+        setLinkResults(data.files || []);
+      }
+    } catch (error) {
+      console.error('Error loading insurer files:', error);
+    } finally {
+      setLinkSearching(false);
+    }
+  };
+
+  const handleLinkExisting = async () => {
+    if (!selectedLinkFile || !uploadSectionId) {
+      toast.error('Selecciona un archivo y una sección');
+      return;
+    }
+
+    setLinking(true);
+    try {
+      // Crear un nuevo registro en download_files apuntando al mismo file_url
+      const createRes = await fetch('/api/downloads/files', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          section_id: uploadSectionId,
+          name: selectedLinkFile.name,
+          file_url: selectedLinkFile.file_url,
+          mark_as_new: uploadMarkNew,
+          duplicate_in: [],
+          link_changes: true
+        })
+      });
+
+      const createData = await createRes.json();
+      if (!createData.success) {
+        throw new Error(createData.error || 'Error al vincular archivo');
+      }
+
+      // Crear link entre el archivo original y el nuevo
+      const newFileId = createData.file?.id;
+      if (newFileId) {
+        await fetch('/api/downloads/files', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: 'link',
+            action: 'create_link',
+            params: {
+              source_file_id: selectedLinkFile.id,
+              linked_file_id: newFileId
+            }
+          })
+        });
+      }
+
+      toast.success('Documento vinculado exitosamente');
+      setShowUploadModal(false);
+      resetUploadState();
+      loadDocuments();
+      onUpdate?.();
+    } catch (error: any) {
+      console.error('Error linking file:', error);
+      toast.error(error.message || 'Error al vincular archivo');
+    } finally {
+      setLinking(false);
+    }
+  };
+
+  const resetUploadState = () => {
+    setUploadFile(null);
+    setUploadSectionId('');
+    setUploadMarkNew(false);
+    setUploadTab('new');
+    setLinkSearch('');
+    setLinkResults([]);
+    setSelectedLinkFile(null);
   };
 
   const handleUpdateName = async (newName: string) => {
@@ -632,16 +745,15 @@ export default function DocumentsList({ scope, policyType, insurerId, isMaster, 
 
       {/* Modal de carga de documento */}
       {showUploadModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-lg font-bold text-[#010139]">Cargar Documento</h3>
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full my-4 sm:my-8 max-h-[90vh] flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 pb-4 flex-shrink-0">
+              <h3 className="text-lg font-bold text-[#010139]">Agregar Documento</h3>
               <button
                 onClick={() => {
                   setShowUploadModal(false);
-                  setUploadFile(null);
-                  setUploadSectionId('');
-                  setUploadMarkNew(false);
+                  resetUploadState();
                 }}
                 className="text-gray-400 hover:text-gray-600"
               >
@@ -650,7 +762,7 @@ export default function DocumentsList({ scope, policyType, insurerId, isMaster, 
             </div>
             
             {sections.length === 0 ? (
-              <div className="text-center py-8">
+              <div className="text-center py-8 px-6">
                 <FaFolderOpen className="mx-auto text-5xl text-gray-300 mb-4" />
                 <h4 className="text-lg font-semibold text-gray-700 mb-2">
                   No hay secciones disponibles
@@ -669,29 +781,44 @@ export default function DocumentsList({ scope, policyType, insurerId, isMaster, 
                 </button>
               </div>
             ) : (
-            <div className="space-y-4">
-              {/* Selección de archivo */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Archivo *
-                </label>
-                <input
-                  type="file"
-                  onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
-                  className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none"
-                  accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
-                />
-                {uploadFile && (
-                  <p className="mt-2 text-sm text-gray-600">
-                    Seleccionado: {uploadFile.name}
-                  </p>
-                )}
-              </div>
+            <>
+            {/* Tabs */}
+            <div className="flex border-b border-gray-200 px-6 flex-shrink-0">
+              <button
+                onClick={() => setUploadTab('new')}
+                className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 transition-all ${
+                  uploadTab === 'new'
+                    ? 'border-[#8AAA19] text-[#8AAA19]'
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                <FaUpload size={12} />
+                Subir nuevo
+              </button>
+              <button
+                onClick={() => {
+                  setUploadTab('existing');
+                  if (linkResults.length === 0 && !linkSearch) {
+                    loadAllInsurerFiles();
+                  }
+                }}
+                className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 transition-all ${
+                  uploadTab === 'existing'
+                    ? 'border-[#8AAA19] text-[#8AAA19]'
+                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                <FaLink size={12} />
+                Vincular existente
+              </button>
+            </div>
 
-              {/* Selección de sección */}
-              <div>
+            {/* Body */}
+            <div className="p-6 overflow-y-auto flex-1">
+              {/* Selección de sección (compartida entre ambos tabs) */}
+              <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Sección *
+                  Sección destino *
                 </label>
                 <select
                   value={uploadSectionId}
@@ -707,42 +834,176 @@ export default function DocumentsList({ scope, policyType, insurerId, isMaster, 
                 </select>
               </div>
 
-              {/* Marcar como nuevo */}
-              <div>
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={uploadMarkNew}
-                    onChange={(e) => setUploadMarkNew(e.target.checked)}
-                    className="w-4 h-4 text-[#8AAA19] rounded focus:ring-[#8AAA19]"
-                  />
-                  <span className="text-sm text-gray-700">Marcar como nuevo (48 horas)</span>
-                </label>
-              </div>
+              {/* Tab: Subir nuevo */}
+              {uploadTab === 'new' && (
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Archivo *
+                    </label>
+                    <input
+                      type="file"
+                      onChange={(e) => setUploadFile(e.target.files?.[0] || null)}
+                      className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none"
+                      accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
+                    />
+                    {uploadFile && (
+                      <p className="mt-2 text-sm text-gray-600">
+                        Seleccionado: {uploadFile.name}
+                      </p>
+                    )}
+                  </div>
 
-              {/* Botones */}
-              <div className="flex gap-3 pt-4">
-                <button
-                  onClick={() => {
-                    setShowUploadModal(false);
-                    setUploadFile(null);
-                    setUploadSectionId('');
-                    setUploadMarkNew(false);
-                  }}
-                  className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-all font-medium"
-                  disabled={uploading}
-                >
-                  Cancelar
-                </button>
+                  <div>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={uploadMarkNew}
+                        onChange={(e) => setUploadMarkNew(e.target.checked)}
+                        className="w-4 h-4 text-[#8AAA19] rounded focus:ring-[#8AAA19]"
+                      />
+                      <span className="text-sm text-gray-700">Marcar como nuevo (48 horas)</span>
+                    </label>
+                  </div>
+                </div>
+              )}
+
+              {/* Tab: Vincular existente */}
+              {uploadTab === 'existing' && (
+                <div className="space-y-4">
+                  <p className="text-xs text-gray-500 bg-blue-50 border border-blue-200 rounded-lg p-3">
+                    <FaLink className="inline mr-1 text-blue-500" />
+                    Busca un documento que ya existe en otra sección de esta aseguradora para vincularlo aquí. No se duplica el archivo en storage.
+                  </p>
+
+                  {/* Buscador */}
+                  <div className="flex items-center gap-2 border-2 border-gray-300 rounded-lg focus-within:border-[#8AAA19] bg-white px-3 py-2">
+                    <FaSearch className="text-gray-400 flex-shrink-0" />
+                    <input
+                      type="text"
+                      placeholder="Buscar documento por nombre..."
+                      value={linkSearch}
+                      onChange={(e) => searchExistingFiles(e.target.value)}
+                      className="flex-1 min-w-0 border-0 focus:outline-none focus:ring-0 text-gray-700 placeholder-gray-400 bg-transparent p-0 text-sm"
+                    />
+                    {linkSearch && (
+                      <button
+                        onClick={() => {
+                          setLinkSearch('');
+                          loadAllInsurerFiles();
+                        }}
+                        className="text-gray-400 hover:text-gray-600"
+                      >
+                        <FaTimes size={12} />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Resultados */}
+                  <div className="max-h-60 overflow-y-auto border border-gray-200 rounded-lg">
+                    {linkSearching ? (
+                      <div className="text-center py-6">
+                        <div className="inline-block animate-spin rounded-full h-6 w-6 border-2 border-[#8AAA19] border-t-transparent"></div>
+                        <p className="text-xs text-gray-500 mt-2">Buscando...</p>
+                      </div>
+                    ) : linkResults.length === 0 ? (
+                      <div className="text-center py-6">
+                        <FaFileAlt className="mx-auto text-3xl text-gray-300 mb-2" />
+                        <p className="text-sm text-gray-500">
+                          {linkSearch ? 'No se encontraron documentos' : 'No hay documentos en otras secciones'}
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-gray-100">
+                        {linkResults.map((file) => (
+                          <button
+                            key={file.id}
+                            onClick={() => setSelectedLinkFile(
+                              selectedLinkFile?.id === file.id ? null : file
+                            )}
+                            className={`w-full text-left px-4 py-3 hover:bg-gray-50 transition-all flex items-start gap-3 ${
+                              selectedLinkFile?.id === file.id ? 'bg-[#8AAA19]/10 border-l-4 border-[#8AAA19]' : ''
+                            }`}
+                          >
+                            <FaFilePdf className="text-red-500 flex-shrink-0 mt-0.5" />
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-[#010139] truncate">
+                                {file.name}
+                              </p>
+                              <p className="text-xs text-gray-500 mt-0.5">
+                                Sección: {file.section_name}
+                              </p>
+                            </div>
+                            {selectedLinkFile?.id === file.id && (
+                              <span className="text-xs px-2 py-0.5 bg-[#8AAA19] text-white rounded-full font-bold flex-shrink-0">
+                                ✓
+                              </span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {selectedLinkFile && (
+                    <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                      <p className="text-sm text-green-800 font-medium">
+                        Documento seleccionado: {selectedLinkFile.name}
+                      </p>
+                      <p className="text-xs text-green-600 mt-1">
+                        Se vinculará en la sección destino sin duplicar el archivo.
+                      </p>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={uploadMarkNew}
+                        onChange={(e) => setUploadMarkNew(e.target.checked)}
+                        className="w-4 h-4 text-[#8AAA19] rounded focus:ring-[#8AAA19]"
+                      />
+                      <span className="text-sm text-gray-700">Marcar como nuevo (48 horas)</span>
+                    </label>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="flex gap-3 p-6 pt-4 border-t border-gray-200 flex-shrink-0">
+              <button
+                onClick={() => {
+                  setShowUploadModal(false);
+                  resetUploadState();
+                }}
+                className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-all font-medium"
+                disabled={uploading || linking}
+              >
+                Cancelar
+              </button>
+              {uploadTab === 'new' ? (
                 <button
                   onClick={handleUpload}
                   disabled={!uploadFile || !uploadSectionId || uploading}
-                  className="flex-1 px-4 py-2 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg hover:shadow-lg transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-lg hover:shadow-lg transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {uploading ? 'Cargando...' : 'Cargar'}
+                  <FaUpload className="text-white" size={12} />
+                  {uploading ? 'Cargando...' : 'Subir'}
                 </button>
-              </div>
+              ) : (
+                <button
+                  onClick={handleLinkExisting}
+                  disabled={!selectedLinkFile || !uploadSectionId || linking}
+                  className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-[#010139] to-[#020270] text-white rounded-lg hover:shadow-lg transition-all font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <FaLink className="text-white" size={12} />
+                  {linking ? 'Vinculando...' : 'Vincular'}
+                </button>
+              )}
             </div>
+            </>
             )}
           </div>
         </div>
