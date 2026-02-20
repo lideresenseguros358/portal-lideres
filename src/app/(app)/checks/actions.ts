@@ -797,60 +797,65 @@ export async function actionCreatePendingPayment(payment: {
     
     // Si hay divisiones, asignar referencias con el monto de cada división
     if (hasDivisions && !isBrokerDeduction && payment.divisions && pendingPayments.length === payment.divisions.length) {
-      console.log('📊 Asignando referencias a divisiones con excedente decreciente...');
+      console.log('📊 Asignando referencias a divisiones...');
       
-      // Calcular el excedente total inicial
       const totalReferenceAmount = payment.references.reduce((sum, ref) => sum + Number(ref.amount), 0);
       const totalDivisionsAmount = payment.divisions.reduce((sum, div) => sum + Number(div.amount), 0);
-      let remainingExcess = totalReferenceAmount - totalDivisionsAmount;
       
       console.log(`💰 Total referencias: $${totalReferenceAmount.toFixed(2)}`);
       console.log(`💰 Total divisiones: $${totalDivisionsAmount.toFixed(2)}`);
-      console.log(`💰 Excedente inicial: $${remainingExcess.toFixed(2)}`);
       
-      // Para cada división, asignar referencias con el monto de la división
+      // Track how much of each reference has been consumed across divisions
+      const refRemaining = payment.references.map(ref => ({
+        ...ref,
+        remaining: Number(ref.amount),
+      }));
+      
       for (let i = 0; i < pendingPayments.length; i++) {
         const pendingPayment = pendingPayments[i];
         const division = payment.divisions[i];
         
-        // Validar que existan ambos
         if (!pendingPayment || !division) {
           console.error(`❌ Error: División ${i} no encontrada`);
           continue;
         }
         
-        const divisionAmount = Number(division.amount);
-        
-        // IMPORTANTE: Calcular excedente ANTES de consumir esta división
-        const excessBeforeThisDivision = remainingExcess > 0 ? remainingExcess : 0;
+        let divisionAmountLeft = Number(division.amount);
         
         console.log(`📝 División ${i + 1}/${pendingPayments.length}:`, {
           client: pendingPayment.client_name,
-          amount: divisionAmount,
-          excedente_antes: excessBeforeThisDivision
+          amount: divisionAmountLeft,
         });
         
-        // Generar notas con excedente ACTUAL (antes de consumir esta división)
         const divisionNotes: string[] = [];
         
-        for (const ref of payment.references) {
-          divisionNotes.push(
-            `REF ${ref.reference_number}: USADO $${divisionAmount.toFixed(2)} (EXCEDENTE $${excessBeforeThisDivision.toFixed(2)})`
-          );
+        // Distribute this division's amount across references sequentially
+        for (const ref of refRemaining) {
+          if (divisionAmountLeft <= AMOUNT_TOLERANCE) break;
+          if (ref.remaining <= AMOUNT_TOLERANCE) continue;
           
-          console.log(`  └─ Ref ${ref.reference_number}: USADO $${divisionAmount.toFixed(2)} (EXCEDENTE $${excessBeforeThisDivision.toFixed(2)})`);
+          // Use as much as possible from this reference
+          const useFromRef = Math.min(divisionAmountLeft, ref.remaining);
+          // Round to 2 decimals to avoid floating point issues
+          const useRounded = Math.round(useFromRef * 100) / 100;
+          
+          ref.remaining = Math.round((ref.remaining - useRounded) * 100) / 100;
+          divisionAmountLeft = Math.round((divisionAmountLeft - useRounded) * 100) / 100;
+          
+          divisionNotes.push(`REF ${ref.reference_number}: $${useRounded.toFixed(2)}`);
+          console.log(`  └─ Ref ${ref.reference_number}: USADO $${useRounded.toFixed(2)} (restante ref: $${ref.remaining.toFixed(2)})`);
           
           allReferencesToInsert.push({
             payment_id: pendingPayment.id,
             reference_number: ref.reference_number,
             date: ref.date,
             amount: ref.amount, // Monto total de la transferencia bancaria
-            amount_to_use: divisionAmount, // Monto de esta división
+            amount_to_use: useRounded, // Solo lo que esta división consume de esta referencia
             exists_in_bank: bankRefMap.has(ref.reference_number)
           });
         }
         
-        // Actualizar las notas del pago con la información de excedente
+        // Update payment notes
         const currentMetadata = typeof pendingPayment.notes === 'string' 
           ? JSON.parse(pendingPayment.notes) 
           : pendingPayment.notes || {};
@@ -858,22 +863,17 @@ export async function actionCreatePendingPayment(payment: {
         const updatedMetadata = {
           ...currentMetadata,
           reference_notes: divisionNotes.join(' | '),
-          excess_at_creation: excessBeforeThisDivision
         };
         
-        // Actualizar el pago con las notas mejoradas
         await supabase
           .from('pending_payments')
           .update({ notes: JSON.stringify(updatedMetadata) })
           .eq('id', pendingPayment.id);
         
-        // DESPUÉS de guardar, restar el monto de esta división del excedente para la siguiente
-        remainingExcess -= divisionAmount;
-        
-        console.log(`  └─ Excedente después de división ${i + 1}: $${remainingExcess.toFixed(2)}`);
+        console.log(`  └─ División ${i + 1} completada`);
       }
       
-      console.log('✅ Referencias asignadas a divisiones con excedente decreciente');
+      console.log('✅ Referencias asignadas a divisiones correctamente');
     } else {
       // Lógica para pagos sin divisiones o descuentos a corredor con divisiones
       for (const pendingPayment of pendingPayments) {

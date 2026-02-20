@@ -755,8 +755,8 @@ export async function parseCsvXlsx(file: File, mappingRules: MappingRule[] = [],
 
     const insurerSlug = getInsurerSlug(String((insurer as any)?.name || ''));
 
-    if (insurerSlug === 'assistcard' && isImage) {
-      console.log('[PARSER] Detectado ASSISTCARD (imagen) - Usando parser especial');
+    if (insurerSlug === 'assistcard' && (isImage || isPdf)) {
+      console.log(`[PARSER] Detectado ASSISTCARD (${isImage ? 'imagen' : 'PDF'}) - Usando parser especial`);
       const arrayBuffer = await file.arrayBuffer();
       const { parseAssistcardImage } = await import('@/lib/parsers/assistcard-parser');
       const parsed = await parseAssistcardImage(arrayBuffer, file.name);

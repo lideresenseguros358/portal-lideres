@@ -446,15 +446,16 @@ export async function previewMapping(options: PreviewMappingOptions) {
     log('Insurer name:', String((insurer as any)?.name || ''));
     log('Insurer slug:', insurerSlug);
 
-    // PARSER ESPECIAL PARA ASSISTCARD (JPG/PNG con OCR)
+    // PARSER ESPECIAL PARA ASSISTCARD (JPG/PNG con OCR o PDF con texto nativo)
     if (insurerSlug === 'assistcard') {
       log('Detectado ASSISTCARD - Usando parser especial');
       try {
         const fileExtension = fileName.toLowerCase().split('.').pop();
         const isImage = ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'tiff', 'tif'].includes(fileExtension || '');
+        const isPdf = fileExtension === 'pdf';
 
-        if (!isImage) {
-          log('ASSISTCARD: archivo no imagen - usando parseo normal');
+        if (!isImage && !isPdf) {
+          log('ASSISTCARD: archivo no imagen ni PDF - usando parseo normal');
         } else {
           const { parseAssistcardImage } = await import('@/lib/parsers/assistcard-parser');
           const rows = await parseAssistcardImage(fileBuffer, fileName);
