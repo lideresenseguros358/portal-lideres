@@ -638,28 +638,29 @@ export async function actionUploadImport(formData: FormData) {
         )
       );
 
-      const batchSize = 40;
-      for (let i = 0; i < terms.length; i += batchSize) {
-        const batch = terms.slice(i, i + batchSize);
-        const orClause = batch
-          .map(term => {
-            const clean = String(term).replace(/%/g, '');
+      // First: try exact match on full policy numbers
+      const { data: exactData } = await supabase
+        .from('policies')
+        .select(`
+          policy_number,
+          broker_id,
+          client_id,
+          percent_override,
+          clients(national_id),
+          brokers!inner(percent_default)
+        `)
+        .in('policy_number', policyNumbers.length > 0 ? policyNumbers : ['__NONE__']);
 
-            if (insurerSlug === 'univivir') {
-              // "2735" puede estar como "2735" o terminar en "-2735"
-              return `policy_number.eq.${clean},policy_number.ilike.%-${clean}`;
-            }
+      existingPolicies.push(...(exactData || []));
+      console.log(`[MATCHING][${insurerName}] Nivel 1 - Exact match policies: ${(exactData || []).length}`);
 
-            // Segment match estricto: traer candidatos por delimitadores, y luego validar por segmentos exactos en JS.
-            // Incluye:
-            // - policy_number = term
-            // - contiene "-term-" (segmento interno)
-            // - empieza con "term-" o termina con "-term" (segmento borde)
-            return `policy_number.eq.${clean},policy_number.ilike.%-${clean}-%25,policy_number.ilike.${clean}-%25,policy_number.ilike.%-${clean}`;
-          })
-          .join(',');
+      // Second: for segment-match insurers, fetch all policies for this insurer and match in JS
+      // (PostgREST .or() with ilike wildcards has encoding issues)
+      if (usesStrictSegmentMatch) {
+        const exactPNs = new Set((exactData || []).map((p: any) => p.policy_number));
+        const termsSet = new Set(terms);
 
-        const { data } = await supabase
+        const { data: allInsurerPolicies } = await supabase
           .from('policies')
           .select(`
             policy_number,
@@ -669,9 +670,53 @@ export async function actionUploadImport(formData: FormData) {
             clients(national_id),
             brokers!inner(percent_default)
           `)
-          .or(orClause);
+          .eq('insurer_id', parsed.insurer_id);
 
-        existingPolicies.push(...(data || []));
+        const allPols = allInsurerPolicies || [];
+        console.log(`[MATCHING][${insurerName}] Nivel 1 - Total policies for insurer: ${allPols.length}`);
+
+        for (const pol of allPols) {
+          const pn = String(pol.policy_number || '').trim();
+          if (exactPNs.has(pn)) continue; // already matched
+          const parts = pn.split('-').map((x: string) => x.trim()).filter(Boolean);
+          const matched = parts.some((part: string) => termsSet.has(part));
+          if (matched) {
+            existingPolicies.push(pol);
+          }
+        }
+        console.log(`[MATCHING][${insurerName}] Nivel 1 - After segment match: ${existingPolicies.length}`);
+      } else {
+        // UNIVIVIR: use the .or() approach (it works for simple patterns)
+        const batchSize = 40;
+        for (let i = 0; i < terms.length; i += batchSize) {
+          const batch = terms.slice(i, i + batchSize);
+          const orClause = batch
+            .map(term => {
+              const clean = String(term).replace(/%/g, '');
+              return `policy_number.eq.${clean},policy_number.ilike.%-${clean}`;
+            })
+            .join(',');
+
+          const { data } = await supabase
+            .from('policies')
+            .select(`
+              policy_number,
+              broker_id,
+              client_id,
+              percent_override,
+              clients(national_id),
+              brokers!inner(percent_default)
+            `)
+            .or(orClause);
+
+          // Only add entries not already in existingPolicies
+          const existingPNs = new Set(existingPolicies.map((p: any) => p.policy_number));
+          for (const pol of (data || [])) {
+            if (!existingPNs.has(pol.policy_number)) {
+              existingPolicies.push(pol);
+            }
+          }
+        }
       }
     } else {
       // Aseguradoras restantes: SOLO exact match completo
@@ -714,20 +759,122 @@ export async function actionUploadImport(formData: FormData) {
     // NIVEL 2: Buscar en preliminar (temp_client_import) - NUEVO
     // Solo para pólizas que NO están en policies
     const unmatchedPolicyNumbers = policyNumbers.filter(pn => !policyMap.has(pn));
+    let preliminarPoliciesAll: any[] = [];
+    
+    console.log(`[MATCHING][${insurerName}] Unmatched policy numbers: ${unmatchedPolicyNumbers.length} (sample: ${unmatchedPolicyNumbers.slice(0, 3).join(', ')})`);
+    
+    // DEBUG: Check what exists in temp_client_import for this insurer
+    if (usesStrictSegmentMatch && unmatchedPolicyNumbers.length > 0) {
+      const samplePNs = unmatchedPolicyNumbers.slice(0, 3);
+      const { data: debugPrelim } = await supabase
+        .from('temp_client_import')
+        .select('policy_number, broker_id, insurer_id')
+        .eq('insurer_id', parsed.insurer_id)
+        .limit(5);
+      console.log(`[MATCHING][${insurerName}] DEBUG temp_client_import for insurer: ${JSON.stringify((debugPrelim || []).map((p: any) => ({ pn: p.policy_number, broker: p.broker_id })))}`);
+      
+      // Also check without broker filter
+      const firstTerm = getPolicySearchTerm(insurerSlug!, samplePNs[0]!);
+      const { data: debugSegment } = await supabase
+        .from('temp_client_import')
+        .select('policy_number, broker_id')
+        .ilike('policy_number', `%${firstTerm}%`)
+        .limit(5);
+      console.log(`[MATCHING][${insurerName}] DEBUG segment search for "${firstTerm}": ${JSON.stringify((debugSegment || []).map((p: any) => ({ pn: p.policy_number, broker: p.broker_id })))}`);
+    }
     
     if (unmatchedPolicyNumbers.length > 0) {
-      const { data: preliminarPolicies } = await supabase
-        .from('temp_client_import')
-        .select(`
-          policy_number,
-          broker_id,
-          brokers!inner(percent_default)
-        `)
-        .in('policy_number', unmatchedPolicyNumbers)
-        .not('broker_id', 'is', null);
+      // Para aseguradoras con segment match (FEDPA, MB, etc.), buscar por segmento también en preliminar
+      if (usesStrictSegmentMatch && insurerSlug) {
+        // First: exact match (always works)
+        const { data: exactPrelim, error: exactPrelimError } = await supabase
+          .from('temp_client_import')
+          .select(`
+            policy_number,
+            broker_id,
+            brokers!inner(percent_default)
+          `)
+          .in('policy_number', unmatchedPolicyNumbers.length > 0 ? unmatchedPolicyNumbers : ['__NONE__'])
+          .not('broker_id', 'is', null);
+
+        if (exactPrelimError) {
+          console.error(`[MATCHING][${insurerName}] Nivel 2 exact query error:`, exactPrelimError.message);
+        }
+        preliminarPoliciesAll.push(...(exactPrelim || []));
+        console.log(`[MATCHING][${insurerName}] Nivel 2 - Exact match preliminar: ${(exactPrelim || []).length}`);
+
+        // Second: segment-based match for remaining unmatched
+        // Fetch all temp_client_import for this insurer and match segments in JS
+        // (PostgREST .or() with ilike wildcards has encoding issues)
+        const exactMatchedPNs = new Set((exactPrelim || []).map((p: any) => p.policy_number));
+        const stillUnmatched = unmatchedPolicyNumbers.filter(pn => !exactMatchedPNs.has(pn));
+
+        if (stillUnmatched.length > 0) {
+          const { data: allInsurerPrelim } = await supabase
+            .from('temp_client_import')
+            .select(`
+              policy_number,
+              broker_id,
+              brokers!inner(percent_default)
+            `)
+            .eq('insurer_id', parsed.insurer_id)
+            .not('broker_id', 'is', null);
+
+          const allPrelimEntries = allInsurerPrelim || [];
+          console.log(`[MATCHING][${insurerName}] Nivel 2 - Total preliminar entries for insurer: ${allPrelimEntries.length}`);
+
+          // Build a set of search terms from unmatched policy numbers
+          const searchTerms = new Set(
+            stillUnmatched
+              .map(pn => getPolicySearchTerm(insurerSlug, String(pn || '').trim()))
+              .filter(Boolean)
+          );
+
+          console.log(`[MATCHING][${insurerName}] Nivel 2 - Segment terms: ${Array.from(searchTerms).slice(0, 5).join(', ')}...`);
+
+          // Build a set of 3rd segments from all preliminar entries for comparison
+          const prelimSegments = new Set(
+            allPrelimEntries.map((e: any) => {
+              const parts = String(e.policy_number || '').split('-').map((x: string) => x.trim()).filter(Boolean);
+              return parts[2] || ''; // 3rd segment (index 2) for FEDPA
+            }).filter(Boolean)
+          );
+          console.log(`[MATCHING][${insurerName}] Nivel 2 - Prelim 3rd segments sample: ${Array.from(prelimSegments).slice(0, 10).join(', ')}`);
+          console.log(`[MATCHING][${insurerName}] Nivel 2 - Report search terms sample: ${Array.from(searchTerms).slice(0, 10).join(', ')}`);
+          
+          // Find intersection
+          const intersection = Array.from(searchTerms).filter(t => prelimSegments.has(t));
+          console.log(`[MATCHING][${insurerName}] Nivel 2 - Matching segments (intersection): ${intersection.length} -> ${intersection.slice(0, 10).join(', ')}`);
+
+          // Match: for each preliminar entry, check if its policy_number contains any search term as a segment
+          for (const entry of allPrelimEntries) {
+            const pn = String(entry.policy_number || '').trim();
+            const parts = pn.split('-').map((x: string) => x.trim()).filter(Boolean);
+            const matched = parts.some((part: string) => searchTerms.has(part));
+            if (matched && !exactMatchedPNs.has(pn)) {
+              preliminarPoliciesAll.push(entry);
+            }
+          }
+
+          console.log(`[MATCHING][${insurerName}] Nivel 2 - Segment matches from preliminar: ${preliminarPoliciesAll.length - (exactPrelim || []).length}`);
+        }
+      } else {
+        // Exact match para aseguradoras sin segment match
+        const { data: preliminarPolicies } = await supabase
+          .from('temp_client_import')
+          .select(`
+            policy_number,
+            broker_id,
+            brokers!inner(percent_default)
+          `)
+          .in('policy_number', unmatchedPolicyNumbers)
+          .not('broker_id', 'is', null);
+
+        preliminarPoliciesAll = preliminarPolicies || [];
+      }
       
       let preliminarMatches = 0;
-      (preliminarPolicies || []).forEach((p: any) => {
+      (preliminarPoliciesAll || []).forEach((p: any) => {
         // Solo agregar si NO existe ya en policyMap (policies tiene prioridad)
         if (!policyMap.has(p.policy_number) && p.broker_id) {
           const percent = p.brokers?.percent_default ?? 1.0;
@@ -830,14 +977,17 @@ export async function actionUploadImport(formData: FormData) {
       if (insurerSlug && ['mb', 'fedpa', 'regional', 'optima', 'aliado', 'acerta'].includes(insurerSlug)) {
         const term = String(getPolicySearchTerm(insurerSlug, rawPolicyNumber) || '').trim();
         if (term) {
-          const strictCandidates = (existingPolicies || []).filter((p: any) => {
+          // Search in both policies table results AND preliminar results
+          const allCandidateSources = [...(existingPolicies || []), ...(preliminarPoliciesAll || [])];
+          const strictCandidates = allCandidateSources.filter((p: any) => {
             const pn = String(p.policy_number || '').trim();
             if (pn === term) return true;
             const parts = pn.split('-').map(x => x.trim()).filter(Boolean);
             return parts.includes(term);
           });
 
-          if (strictCandidates.length === 1) {
+          if (strictCandidates.length >= 1) {
+            // Use first match (prefer exact, then segment)
             const pn = String(strictCandidates[0].policy_number);
             return {
               matchedPolicyNumber: pn,
@@ -5212,6 +5362,7 @@ export async function actionPayFortnight(fortnight_id: string) {
                   broker_id: item.temp_assigned_broker_id,
                   renewal_date: null,
                   migrated: false,
+                  status: 'ACTIVA',
                   source: 'draft_identified',
                   notes: 'Identificado en zona de trabajo de Nueva Quincena',
                   fortnight_id: fortnight_id  // Agregar ID de la quincena para referencia
@@ -6496,6 +6647,7 @@ export async function actionConfirmAdjustmentsPaid(claimIds: string[]) {
             broker_id: claim.broker_id,
             renewal_date: null, // Broker debe completar
             migrated: false,
+            status: 'ACTIVA',
             source: 'adjustments_paid',
             notes: 'Cliente registrado desde ajuste pagado. Por favor complete la información faltante.',
           });
