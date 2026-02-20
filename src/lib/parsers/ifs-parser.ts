@@ -104,15 +104,39 @@ function normalizeIFSText(text: string): string {
 
 
 async function extractIFSText(fileBuffer: ArrayBuffer): Promise<string> {
-  // Intentar extraer texto nativo del PDF con pdf-parse
+  const buf = Buffer.from(fileBuffer);
+
+  // 1) Intentar pdf-parse
+  let text = '';
   try {
     const pdfParse = (await import('pdf-parse')).default as any;
-    const result = await pdfParse(Buffer.from(fileBuffer));
-    const text = String(result?.text || '');
-    return text.trim();
-  } catch {
-    return '';
+    const result = await pdfParse(buf);
+    text = String(result?.text || '').trim();
+    console.log(`[IFS extractText] pdf-parse: ${text.length} caracteres`);
+    if (text.length > 20) {
+      console.log('[IFS extractText] pdf-parse primeras 5 líneas:', text.split('\n').slice(0, 5).join(' | '));
+      return text;
+    }
+  } catch (e) {
+    console.log('[IFS extractText] pdf-parse falló:', e instanceof Error ? e.message : e);
   }
+
+  // 2) Intentar unpdf
+  try {
+    const { extractText } = await import('unpdf');
+    const uint8 = new Uint8Array(buf);
+    const result = await extractText(uint8);
+    const unpdfText = Array.isArray(result.text) ? result.text.join('\n') : String(result.text || '');
+    console.log(`[IFS extractText] unpdf: ${unpdfText.length} caracteres`);
+    if (unpdfText.trim().length > 20) {
+      console.log('[IFS extractText] unpdf primeras 5 líneas:', unpdfText.split('\n').slice(0, 5).join(' | '));
+      return unpdfText.trim();
+    }
+  } catch (e) {
+    console.log('[IFS extractText] unpdf falló:', e instanceof Error ? e.message : e);
+  }
+
+  return text; // Return whatever we got (even if short)
 }
 
 const POLICY_RE = /[A-Z]{2,10}-\d{2,6}(?:-[A-Z]-\d{1,3})?/;
@@ -130,31 +154,24 @@ function isLikelyClientName(s: string): boolean {
 export async function parseIFSPDF(fileBuffer: ArrayBuffer): Promise<IFSRow[]> {
   let rawText = await extractIFSText(fileBuffer);
   
-  // Si no se pudo extraer texto, es un PDF escaneado - intentar OCR directo
-  if (!rawText || rawText.trim().length < 100) {
-    console.log('[IFS] PDF sin texto extraíble detectado, intentando OCR...');
+  // Si no se pudo extraer texto suficiente, usar Google Vision OCR para PDFs
+  if (!rawText || rawText.trim().length < 20) {
+    console.log('[IFS] PDF sin texto extraíble, usando Google Vision batchAnnotateFiles...');
     try {
-      const { extractTextFromImageBuffer } = await import('@/lib/services/vision-ocr');
+      const { extractTextFromPDFVision } = await import('@/lib/services/vision-ocr');
+      rawText = await extractTextFromPDFVision(Buffer.from(fileBuffer));
       
-      console.log('[IFS] Aplicando Google Vision OCR al PDF...');
-      rawText = await extractTextFromImageBuffer(fileBuffer);
-      
-      console.log(`[IFS] OCR completado: ${rawText.length} caracteres extraídos`);
-      
-      if (!rawText || rawText.trim().length < 100) {
-        throw new Error('OCR no pudo extraer suficiente texto del PDF');
+      if (!rawText || rawText.trim().length < 20) {
+        throw new Error('Vision API no pudo extraer texto del PDF');
       }
     } catch (ocrError) {
-      console.error('[IFS] Error en OCR:', ocrError instanceof Error ? ocrError.message : String(ocrError));
+      console.error('[IFS] Error en Vision OCR:', ocrError instanceof Error ? ocrError.message : String(ocrError));
       throw new Error(
-        'PDF ESCANEADO DETECTADO - Requiere conversión manual\n\n' +
-        'Este PDF es una imagen escaneada. Para procesarlo:\n\n' +
-        '1. Abre el PDF en cualquier visor\n' +
-        '2. Usa "Guardar como imagen" o "Exportar a JPG/PNG"\n' +
-        '3. Sube la imagen resultante en la sección de ASSISTCARD\n\n' +
-        '✅ ASSISTCARD procesa tablas en imágenes perfectamente.\n\n' +
-        'Nota: La conversión automática PDF→Imagen en Node.js requiere\n' +
-        'dependencias nativas complejas que no están disponibles en este servidor.'
+        'No se pudo extraer texto del PDF de IFS.\n\n' +
+        'Alternativas:\n' +
+        '1. Exporta el reporte a Excel/CSV desde el sistema de IFS\n' +
+        '2. Abre el PDF, selecciona todo el texto, cópialo y pégalo en un archivo .txt\n' +
+        '3. Guarda el PDF como imagen (JPG/PNG) y súbelo aquí'
       );
     }
   }
@@ -188,10 +205,12 @@ export async function parseIFSPDF(fileBuffer: ArrayBuffer): Promise<IFSRow[]> {
       ? between.replace(/\s+/g, ' ').trim()
       : null;
 
-    // Extract commission amount: first money token after the percent
+    // Extract commission amount: first money token after the percent (preserve negative sign)
     const afterPercent = u.slice(percentStart + percentMatch[0].length);
-    const monies = afterPercent.match(new RegExp(MONEY_TOKEN_RE, 'g')) || [];
-    const gross_amount = monies.length > 0 ? parseMoneyToken(monies[0] || '') : 0;
+    const signedMoneyRe = /-?\s*(?:\d{1,3}(?:,\d{3})*\.\d{2}|\d+\.\d{2})/g;
+    const moneyMatch = signedMoneyRe.exec(afterPercent);
+    const gross_amount = moneyMatch ? parseMoneyToken(moneyMatch[0]) : 0;
+    console.log(`[IFS] afterPercent: "${afterPercent.slice(0, 60)}" -> match: "${moneyMatch?.[0]}" -> amount: ${gross_amount}`);
     if (!gross_amount) continue;
 
     rows.push({

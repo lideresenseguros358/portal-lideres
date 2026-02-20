@@ -84,7 +84,7 @@ export default function BrokerTotals({ draftFortnightId, fortnightLabel = 'Quinc
   const [openMenuBroker, setOpenMenuBroker] = useState<string | null>(null);
   const [isExportingAll, setIsExportingAll] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [brokerDebts, setBrokerDebts] = useState<Map<string, { has_debts: boolean; debt_count: number; has_recurring: boolean }>>(new Map());
+  const [brokerDebts, setBrokerDebts] = useState<Map<string, { has_debts: boolean; debt_count: number; has_recurring: boolean; recurrence_count: number }>>(new Map());
 
   useEffect(() => {
     const loadDetails = async () => {
@@ -102,13 +102,14 @@ export default function BrokerTotals({ draftFortnightId, fortnightLabel = 'Quinc
           const debtsData = await debtsResponse.json();
           
           if (debtsData.ok) {
-            const debtsMap = new Map<string, { has_debts: boolean; debt_count: number; has_recurring: boolean }>(
+            const debtsMap = new Map<string, { has_debts: boolean; debt_count: number; has_recurring: boolean; recurrence_count: number }>(
               (debtsData.data || []).map((d: any) => [
                 d.broker_id as string,
                 {
                   has_debts: d.has_debts as boolean,
                   debt_count: d.debt_count as number,
                   has_recurring: d.has_recurring as boolean,
+                  recurrence_count: (d.recurrence_count as number) || 0,
                 },
               ])
             );
@@ -392,14 +393,21 @@ export default function BrokerTotals({ draftFortnightId, fortnightLabel = 'Quinc
                       {brokerData.is_retained && (
                         <span className="text-xs bg-red-600 text-white px-2 py-0.5 rounded-full font-semibold">RET</span>
                       )}
-                      {brokerDebts.has(brokerId) && brokerDebts.get(brokerId)?.has_debts && (
-                        <span 
-                          className="text-xs bg-orange-500 text-white px-2 py-0.5 rounded-full font-semibold flex items-center gap-1"
-                          title={`${brokerDebts.get(brokerId)?.debt_count || 0} deuda(s) activa(s)${brokerDebts.get(brokerId)?.has_recurring ? ' (incluye recurrente)' : ''}`}
-                        >
-                          💰 {brokerDebts.get(brokerId)?.debt_count || 0}
-                        </span>
-                      )}
+                      {brokerDebts.has(brokerId) && brokerDebts.get(brokerId)?.has_debts && (() => {
+                        const bd = brokerDebts.get(brokerId)!;
+                        const parts: string[] = [];
+                        if (bd.debt_count > 0) parts.push(`${bd.debt_count} adelanto(s)`);
+                        if (bd.has_recurring) parts.push(`${bd.recurrence_count} recurrente(s)`);
+                        const total = bd.debt_count + bd.recurrence_count;
+                        return (
+                          <span 
+                            className="text-xs bg-orange-500 text-white px-2 py-0.5 rounded-full font-semibold flex items-center gap-1"
+                            title={parts.join(' + ')}
+                          >
+                            {bd.debt_count > 0 && bd.has_recurring ? `${bd.debt_count}+${bd.recurrence_count}` : total}
+                          </span>
+                        );
+                      })()}
                     </div>
                   </div>
                   <div className="relative flex-shrink-0 overflow-visible">
@@ -563,14 +571,21 @@ export default function BrokerTotals({ draftFortnightId, fortnightLabel = 'Quinc
                       {brokerData.is_retained && (
                         <span className="text-xs bg-red-600 text-white px-2.5 py-1 rounded-full font-semibold shadow-sm">RETENIDO</span>
                       )}
-                      {brokerDebts.has(brokerId) && brokerDebts.get(brokerId)?.has_debts && (
-                        <span 
-                          className="text-xs bg-orange-500 text-white px-2.5 py-1 rounded-full font-semibold shadow-sm flex items-center gap-1"
-                          title={`${brokerDebts.get(brokerId)?.debt_count || 0} deuda(s) activa(s)${brokerDebts.get(brokerId)?.has_recurring ? ' (incluye recurrente)' : ''}`}
-                        >
-                          💰 {brokerDebts.get(brokerId)?.debt_count || 0}
-                        </span>
-                      )}
+                      {brokerDebts.has(brokerId) && brokerDebts.get(brokerId)?.has_debts && (() => {
+                        const bd = brokerDebts.get(brokerId)!;
+                        const parts: string[] = [];
+                        if (bd.debt_count > 0) parts.push(`${bd.debt_count} adelanto(s) pendiente(s)`);
+                        if (bd.has_recurring) parts.push(`${bd.recurrence_count} recurrencia(s) activa(s)`);
+                        const total = bd.debt_count + bd.recurrence_count;
+                        return (
+                          <span 
+                            className="text-xs bg-orange-500 text-white px-2.5 py-1 rounded-full font-semibold shadow-sm flex items-center gap-1"
+                            title={parts.join(' + ')}
+                          >
+                            {bd.debt_count > 0 && bd.has_recurring ? `${bd.debt_count}+${bd.recurrence_count}` : total}
+                          </span>
+                        );
+                      })()}
                     </div>
                   </TableCell>
                   <TableCell className="text-right font-mono text-gray-800 text-base py-4">

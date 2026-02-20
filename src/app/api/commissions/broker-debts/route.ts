@@ -36,7 +36,7 @@ export async function GET(request: NextRequest) {
     const { data: advances, error: advancesError } = await supabase
       .from('advances')
       .select('id, broker_id, amount, status, is_recurring, recurrence_id')
-      .in('status', ['pending', 'partial'])
+      .in('status', ['pending', 'partial', 'PENDING', 'PARTIAL'])
       .gt('amount', 0);
 
     if (advancesError) {
@@ -84,12 +84,12 @@ export async function GET(request: NextRequest) {
     console.log('[broker-debts] Applicable recurrences for', fortnightType, ':', applicableRecurrences.length);
 
     // 4. Agrupar por broker_id
-    const brokerDebtsMap = new Map<string, { has_debts: boolean; debt_count: number; has_recurring: boolean }>();
+    const brokerDebtsMap = new Map<string, { has_debts: boolean; debt_count: number; has_recurring: boolean; recurrence_count: number }>();
 
     // Contar adelantos activos por broker
     (advances || []).forEach(adv => {
       if (!brokerDebtsMap.has(adv.broker_id)) {
-        brokerDebtsMap.set(adv.broker_id, { has_debts: false, debt_count: 0, has_recurring: false });
+        brokerDebtsMap.set(adv.broker_id, { has_debts: false, debt_count: 0, has_recurring: false, recurrence_count: 0 });
       }
       const brokerData = brokerDebtsMap.get(adv.broker_id)!;
       brokerData.has_debts = true;
@@ -104,11 +104,12 @@ export async function GET(request: NextRequest) {
     // Agregar brokers con recurrencias aplicables (aunque no tengan adelantos aún)
     applicableRecurrences.forEach(rec => {
       if (!brokerDebtsMap.has(rec.broker_id)) {
-        brokerDebtsMap.set(rec.broker_id, { has_debts: true, debt_count: 0, has_recurring: true });
+        brokerDebtsMap.set(rec.broker_id, { has_debts: true, debt_count: 0, has_recurring: true, recurrence_count: 1 });
       } else {
         const brokerData = brokerDebtsMap.get(rec.broker_id)!;
         brokerData.has_recurring = true;
         brokerData.has_debts = true;
+        brokerData.recurrence_count += 1;
       }
     });
 
@@ -118,6 +119,7 @@ export async function GET(request: NextRequest) {
       has_debts: data.has_debts,
       debt_count: data.debt_count,
       has_recurring: data.has_recurring,
+      recurrence_count: data.recurrence_count,
     }));
 
     console.log('[broker-debts] Brokers with debts:', result.length);
