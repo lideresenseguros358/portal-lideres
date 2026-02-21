@@ -26,6 +26,9 @@ import {
   FaInfoCircle,
   FaDollarSign,
   FaUserCheck,
+  FaDownload,
+  FaFilePdf,
+  FaFileExcel,
 } from 'react-icons/fa';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -51,6 +54,8 @@ interface Props {
 // Componente para vista de reportes pagados de Broker
 function BrokerPaidReportsList({ reports }: { reports: any[] }) {
   const [expandedReports, setExpandedReports] = useState<Set<string>>(new Set());
+  const [downloadModal, setDownloadModal] = useState<any | null>(null);
+  const [downloading, setDownloading] = useState<'pdf' | 'xlsx' | null>(null);
 
   const toggleReport = (reportId: string) => {
     setExpandedReports(prev => {
@@ -70,6 +75,82 @@ function BrokerPaidReportsList({ reports }: { reports: any[] }) {
       currency: 'USD',
       minimumFractionDigits: 2
     }).format(amount);
+  };
+
+  const handleDownloadReport = async (report: any, format: 'pdf' | 'xlsx') => {
+    setDownloading(format);
+    try {
+      const paidDate = report.paid_date
+        ? new Date(report.paid_date).toLocaleDateString('es-PA')
+        : new Date(report.created_at).toLocaleDateString('es-PA');
+      const items = report.items || [];
+      const totalAmount = items.reduce((s: number, i: any) => s + (i.broker_commission || 0), 0);
+
+      if (format === 'pdf') {
+        const { default: jsPDF } = await import('jspdf');
+        const { default: autoTable } = await import('jspdf-autotable');
+
+        const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+        doc.setFontSize(16);
+        doc.setTextColor(1, 1, 57);
+        doc.text('Reporte de Ajuste Pagado', 14, 16);
+        doc.setFontSize(10);
+        doc.setTextColor(100, 100, 100);
+        doc.text(`Fecha de pago: ${paidDate}  |  Total: ${formatMoney(totalAmount)}  |  ${items.length} items`, 14, 23);
+
+        const rows = items.map((item: any) => [
+          item.insured_name || '\u2014',
+          item.policy_number,
+          item.insurer_name || '\u2014',
+          formatMoney(Math.abs(item.commission_raw || 0)),
+          formatMoney(Math.abs(item.broker_commission || 0)),
+        ]);
+
+        autoTable(doc, {
+          startY: 30,
+          head: [['Asegurado', 'P\u00f3liza', 'Aseguradora', 'Bruto', 'Comisi\u00f3n']],
+          body: rows,
+          styles: { fontSize: 8, cellPadding: 2 },
+          headStyles: { fillColor: [138, 170, 25], textColor: 255, fontStyle: 'bold' },
+          alternateRowStyles: { fillColor: [245, 245, 245] },
+          margin: { left: 14, right: 14 },
+        });
+
+        doc.save(`ajuste_pagado_${new Date().toISOString().slice(0, 10)}.pdf`);
+        toast.success('PDF descargado');
+      } else {
+        const XLSX = await import('xlsx');
+        const wb = XLSX.utils.book_new();
+        const detailRows: (string | number)[][] = [
+          ['Fecha Pago', 'Asegurado', 'P\u00f3liza', 'Aseguradora', 'Bruto ($)', 'Comisi\u00f3n ($)'],
+        ];
+        for (const item of items) {
+          detailRows.push([
+            paidDate,
+            item.insured_name || '',
+            item.policy_number,
+            item.insurer_name || '',
+            item.commission_raw,
+            item.broker_commission,
+          ]);
+        }
+        detailRows.push([]);
+        detailRows.push(['', '', '', 'TOTAL:', '', totalAmount]);
+        const ws = XLSX.utils.aoa_to_sheet(detailRows);
+        ws['!cols'] = [
+          { wch: 14 }, { wch: 24 }, { wch: 18 }, { wch: 18 }, { wch: 12 }, { wch: 12 },
+        ];
+        XLSX.utils.book_append_sheet(wb, ws, 'Detalle');
+        XLSX.writeFile(wb, `ajuste_pagado_${new Date().toISOString().slice(0, 10)}.xlsx`);
+        toast.success('Excel descargado');
+      }
+      setDownloadModal(null);
+    } catch (err) {
+      console.error(err);
+      toast.error(`Error al generar ${format.toUpperCase()}`);
+    } finally {
+      setDownloading(null);
+    }
   };
 
   if (reports.length === 0) {
@@ -138,9 +219,20 @@ function BrokerPaidReportsList({ reports }: { reports: any[] }) {
                   </div>
                 </div>
                 
-                <Button variant="ghost" size="sm" className="ml-2">
-                  {isExpanded ? '▼' : '▶'}
-                </Button>
+                <div className="flex items-center gap-1 ml-2 flex-shrink-0">
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setDownloadModal(report); }}
+                    className="p-1.5 hover:bg-blue-50 rounded transition-colors"
+                    title="Descargar reporte"
+                  >
+                    <FaDownload className="text-[#010139]" size={14} />
+                  </button>
+                  {isExpanded ? (
+                    <FaChevronDown className="text-gray-400" size={12} />
+                  ) : (
+                    <FaChevronRight className="text-gray-400" size={12} />
+                  )}
+                </div>
               </div>
 
               {isExpanded && (
@@ -180,6 +272,61 @@ function BrokerPaidReportsList({ reports }: { reports: any[] }) {
           </Card>
         );
       })}
+
+      {/* Modal de selección de formato */}
+      {downloadModal && (
+        <div 
+          className="fixed inset-0 flex items-center justify-center z-50" 
+          style={{ backgroundColor: 'rgba(0, 0, 0, 0.7)' }}
+          onClick={() => { if (!downloading) setDownloadModal(null); }}
+        >
+          <Card className="w-full max-w-sm m-4 bg-white shadow-2xl" onClick={(e: React.MouseEvent) => e.stopPropagation()}>
+            <CardContent className="p-6">
+              <h3 className="text-lg font-bold text-[#010139] mb-2">Descargar Reporte</h3>
+              <p className="text-sm text-gray-600 mb-1">
+                Reporte de Ajustes
+              </p>
+              <p className="text-xs text-gray-500 mb-4">
+                {(downloadModal.items || []).length} item(s) · {formatMoney(Math.abs(downloadModal.total_amount || 0))}
+              </p>
+              <div className="flex gap-3">
+                <Button
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+                  disabled={downloading !== null}
+                  onClick={() => handleDownloadReport(downloadModal, 'pdf')}
+                >
+                  {downloading === 'pdf' ? (
+                    <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2" />
+                  ) : (
+                    <FaFilePdf className="mr-2" />
+                  )}
+                  PDF
+                </Button>
+                <Button
+                  className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                  disabled={downloading !== null}
+                  onClick={() => handleDownloadReport(downloadModal, 'xlsx')}
+                >
+                  {downloading === 'xlsx' ? (
+                    <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2" />
+                  ) : (
+                    <FaFileExcel className="mr-2" />
+                  )}
+                  Excel
+                </Button>
+              </div>
+              <Button
+                variant="ghost"
+                className="w-full mt-3"
+                disabled={downloading !== null}
+                onClick={() => setDownloadModal(null)}
+              >
+                Cancelar
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </div>
   );
 }

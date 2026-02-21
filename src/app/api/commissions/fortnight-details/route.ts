@@ -186,7 +186,7 @@ export async function GET(request: NextRequest) {
         
         return true;
       })
-      .reduce((sum, b) => sum + b.net_amount, 0);
+      .reduce((sum, b) => sum + b.net_amount - (b.discounts_json?.total || 0), 0);
     
     console.log('[fortnight-details] Total Corredores (sin LISSA ni inactivos):', totalCorredores);
       

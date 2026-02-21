@@ -22,6 +22,7 @@ interface AdvanceRecurrence {
   start_date: string;
   fortnight_type: string | null;
   is_active: boolean | null;
+  amount?: number | null;
 }
 
 interface Advance {
@@ -1008,7 +1009,7 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
                               </div>
                             </TableCell>
                             <TableCell className="text-right font-mono text-purple-900 font-semibold">
-                              ${advance.amount.toFixed(2)}
+                              ${(advance.amount > 0 ? advance.amount : (advance.advance_recurrences?.amount || advance.amount)).toFixed(2)}
                             </TableCell>
                             <TableCell className="text-center text-sm text-purple-700">
                               {advance.fortnight_type === 'BOTH' ? (
@@ -1098,7 +1099,7 @@ export function AdvancesTab({ role, brokerId, brokers }: Props) {
                             </p>
                           </div>
                           <div className="text-right flex-shrink-0">
-                            <p className="text-sm font-mono font-bold text-purple-900">${advance.amount.toFixed(2)}</p>
+                            <p className="text-sm font-mono font-bold text-purple-900">${(advance.amount > 0 ? advance.amount : (advance.advance_recurrences?.amount || advance.amount)).toFixed(2)}</p>
                             <p className="text-[10px] text-purple-600">sugerido</p>
                           </div>
                         </div>

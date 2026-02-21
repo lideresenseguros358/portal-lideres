@@ -311,7 +311,7 @@ async function createPreliminarRecords(
             insurer_id: pendingItem.insurer_id,
             source: 'ajuste_pagado',
             source_id: report.id, // ID del adjustment_report
-            status: 'pending',
+            status: 'ACTIVA',
             migrated: false,
             notes: `Ajuste pagado el ${new Date().toLocaleDateString('es-PA')}. Requiere completar datos del cliente.`
           });

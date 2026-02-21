@@ -19,6 +19,7 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
   const [brokers, setBrokers] = useState<any[]>([]);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [pendingDeductionChange, setPendingDeductionChange] = useState<boolean | null>(null);
+  const [showDeleteAdvanceModal, setShowDeleteAdvanceModal] = useState(false);
 
   // Parse metadata from notes
   const parseMetadata = () => {
@@ -218,7 +219,10 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
     }
   };
 
-  const handleSave = async () => {
+  const doSave = async (forceConvertToTransfer: boolean = false) => {
+    const effectiveIsBrokerDeduction = forceConvertToTransfer ? false : isBrokerDeduction;
+    const effectivePaymentMethod = forceConvertToTransfer ? 'bank_transfer' : paymentMethod;
+
     // Validaciones básicas
     if (!formData.client_name.trim()) {
       toast.error('El nombre del cliente es requerido');
@@ -234,7 +238,7 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
     const validReferences = references.filter(ref => ref.reference_number.trim());
 
     // Si NO es descuento a corredor, requerimos referencias bancarias
-    if (!isBrokerDeduction) {
+    if (!effectiveIsBrokerDeduction) {
       if (validReferences.length === 0) {
         toast.error('Debe agregar al menos una referencia bancaria');
         return;
@@ -282,7 +286,7 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
     }
 
     // Validar selección de corredor cuando se marca como descuento a corredor
-    if (isBrokerDeduction) {
+    if (effectiveIsBrokerDeduction) {
       if (!deductionBrokerId) {
         toast.error('Debe seleccionar el corredor al que se le descontará este pago');
         return;
@@ -325,8 +329,9 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
           amount_to_use: parseFloat(ref.amount_to_use || ref.amount)
         })),
         divisions: hasDivisions ? divisions.filter(div => parseFloat(div.amount || '0') > 0) : undefined,
-        is_broker_deduction: isBrokerDeduction,
-        deduction_broker_id: isBrokerDeduction ? deductionBrokerId : undefined,
+        is_broker_deduction: effectiveIsBrokerDeduction,
+        deduction_broker_id: effectiveIsBrokerDeduction ? deductionBrokerId : undefined,
+        delete_advance: forceConvertToTransfer, // Signal backend to DELETE (not just cancel) the advance
       });
 
       if (result.ok) {
@@ -340,6 +345,28 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSave = () => {
+    const validRefs = references.filter(ref => ref.reference_number.trim());
+    const wasOriginallyBrokerDeduction = initialBrokerDeduction && metadata.advance_id;
+    
+    // Case A: Still marked as broker deduction but user added references
+    // → Show modal to confirm converting to bank transfer and deleting advance
+    if (wasOriginallyBrokerDeduction && validRefs.length > 0 && isBrokerDeduction) {
+      setShowDeleteAdvanceModal(true);
+      return;
+    }
+    
+    // Case B: User already switched radio to bank_transfer from broker_deduction
+    // → Show modal to confirm deleting the advance before saving
+    if (wasOriginallyBrokerDeduction && !isBrokerDeduction && validRefs.length > 0) {
+      setShowDeleteAdvanceModal(true);
+      return;
+    }
+    
+    // Normal save
+    doSave(false);
   };
 
   const addReference = () => {
@@ -1091,7 +1118,67 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
         </div>
       </div>
       
-      {/* Modal de confirmación */}
+      {/* Modal de confirmación: Eliminar adelanto al agregar referencia */}
+      {showDeleteAdvanceModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[10000] p-4">
+          <div className="bg-white rounded-lg max-w-md w-full p-6 shadow-2xl">
+            <div className="flex items-start gap-3 mb-4">
+              <div className="flex-shrink-0 w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
+                <FaExclamationTriangle className="text-red-600" size={24} />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-lg font-bold text-gray-900 mb-2">
+                  🗑️ Confirmar Eliminación de Deuda
+                </h3>
+                <p className="text-sm text-gray-600 mb-3">
+                  Este pago está registrado como <strong>descuento a corredor</strong> y tiene un adelanto asociado como deuda al broker.
+                </p>
+                <div className="bg-red-50 border-l-4 border-red-500 p-3 rounded-r mb-3">
+                  <p className="text-sm text-red-800 font-semibold">
+                    Al agregar una referencia bancaria:
+                  </p>
+                  <ul className="text-xs text-red-700 mt-2 space-y-1 ml-4 list-disc">
+                    <li>La deuda del adelanto al corredor será <strong>eliminada permanentemente</strong></li>
+                    <li>El pago pasará al flujo normal de transferencias bancarias</li>
+                    <li>Aparecerá en el historial del banco con la referencia ingresada</li>
+                    <li>Esta acción <strong>no se puede deshacer</strong></li>
+                  </ul>
+                </div>
+                <div className="bg-blue-50 border-l-4 border-blue-500 p-3 rounded-r">
+                  <p className="text-xs text-blue-800">
+                    💡 <strong>Monto:</strong> ${parseFloat(formData.amount_to_pay || '0').toFixed(2)} — <strong>Referencia:</strong> {references.filter(r => r.reference_number.trim())[0]?.reference_number || 'N/A'}
+                  </p>
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+              <button
+                type="button"
+                onClick={() => setShowDeleteAdvanceModal(false)}
+                className="flex-1 px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition font-medium"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDeleteAdvanceModal(false);
+                  setPaymentMethod('bank_transfer');
+                  setIsBrokerDeduction(false);
+                  doSave(true);
+                }}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium flex items-center justify-center gap-2"
+              >
+                <FaTrash className="text-white" />
+                <span className="text-white">Eliminar Deuda y Guardar</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de confirmación: Cambio de método de pago */}
       {showConfirmModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[10000] p-4">
           <div className="bg-white rounded-lg max-w-md w-full p-6 shadow-2xl">
@@ -1140,7 +1227,8 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
                   setIsBrokerDeduction(false);
                   setShowConfirmModal(false);
                   setPendingDeductionChange(null);
-                  toast.info('El adelanto será cancelado al guardar los cambios');
+                  // Show the delete advance modal so user can add references and confirm
+                  toast.info('Ahora agrega una referencia bancaria y guarda para eliminar la deuda');
                 }}
                 className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium flex items-center justify-center gap-2"
               >

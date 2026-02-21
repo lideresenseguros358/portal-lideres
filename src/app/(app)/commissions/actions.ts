@@ -1510,6 +1510,57 @@ export async function actionCreateDraftFortnight(payload: unknown) {
       console.log(`[actionCreateDraftFortnight] ✓ ${queuedAdjustments.length} ajustes inyectados exitosamente`);
     }
 
+    // Sincronizar adelantos recurrentes: crear nuevos PENDING si los anteriores ya fueron pagados
+    try {
+      console.log('[actionCreateDraftFortnight] Sincronizando adelantos recurrentes...');
+      const { data: activeRecurrences } = await (supabase as any)
+        .from('advance_recurrences')
+        .select('*')
+        .eq('is_active', true);
+      
+      let syncCount = 0;
+      for (const rec of (activeRecurrences || [])) {
+        // Verificar si ha expirado
+        if (rec.end_date && new Date(rec.end_date) < new Date()) continue;
+        
+        // Solo crear nuevos si NO hay pendientes/parciales
+        const { data: pendingAdvances } = await supabase
+          .from('advances')
+          .select('id')
+          .eq('recurrence_id', rec.id)
+          .in('status', ['pending', 'PENDING', 'partial', 'PARTIAL']);
+        
+        if (pendingAdvances && pendingAdvances.length > 0) continue;
+        
+        // Crear nuevos adelantos
+        const advancesToCreate: any[] = [];
+        if (rec.fortnight_type === 'BOTH') {
+          advancesToCreate.push(
+            { broker_id: rec.broker_id, amount: rec.amount, reason: rec.reason, status: 'pending', created_by: userId, is_recurring: true, recurrence_id: rec.id },
+            { broker_id: rec.broker_id, amount: rec.amount, reason: rec.reason, status: 'pending', created_by: userId, is_recurring: true, recurrence_id: rec.id }
+          );
+        } else {
+          advancesToCreate.push(
+            { broker_id: rec.broker_id, amount: rec.amount, reason: rec.reason, status: 'pending', created_by: userId, is_recurring: true, recurrence_id: rec.id }
+          );
+        }
+        
+        const { error: insertErr } = await supabase.from('advances').insert(advancesToCreate);
+        if (!insertErr) {
+          syncCount += advancesToCreate.length;
+          await (supabase as any).from('advance_recurrences').update({
+            recurrence_count: (rec.recurrence_count || 0) + advancesToCreate.length,
+            last_generated_at: new Date().toISOString(),
+          }).eq('id', rec.id);
+        }
+      }
+      if (syncCount > 0) {
+        console.log(`[actionCreateDraftFortnight] ✅ ${syncCount} adelantos recurrentes sincronizados`);
+      }
+    } catch (syncErr) {
+      console.error('[actionCreateDraftFortnight] Error sincronizando recurrencias (no crítico):', syncErr);
+    }
+
     revalidatePath('/(app)/commissions');
     return { ok: true as const, data };
   } catch (error) {
@@ -2277,7 +2328,7 @@ export async function actionGetAdvances(brokerId?: string, year?: number) {
   try {
     let query = supabase
       .from('advances')
-      .select('*, brokers(id, name), advance_recurrences(end_date, start_date, fortnight_type, is_active)')
+      .select('*, brokers(id, name), advance_recurrences(end_date, start_date, fortnight_type, is_active, amount)')
       .order('created_at', { ascending: false });
 
     // Filter by broker_id if provided
@@ -3929,7 +3980,11 @@ export async function actionGetClosedFortnights(year: number, month: number, for
 
       // Calcular totales DESDE fortnight_broker_totals (ya guardados) EXCLUYENDO LISSA y brokers inactivos
       const total_paid_gross = validBrokers.reduce((sum: number, bt: any) => sum + (Number(bt.gross_amount) || 0), 0);
-      const total_paid_net = validBrokers.reduce((sum: number, bt: any) => sum + (Number(bt.net_amount) || 0), 0);
+      const total_paid_net = validBrokers.reduce((sum: number, bt: any) => {
+        const net = Number(bt.net_amount) || 0;
+        const discTotal = Number(bt.discounts_json?.total) || 0;
+        return sum + net - discTotal;
+      }, 0);
       
       // CRÍTICO: Calcular total_imported desde comm_imports de ESTA quincena
       const { data: fnImports } = await supabase
@@ -5838,6 +5893,38 @@ export async function actionPayFortnight(fortnight_id: string) {
           totalAdvancesApplied++;
         }
 
+        // Actualizar saldo del advance
+        const { data: step7Advance } = await supabase
+          .from('advances')
+          .select('amount, status, is_recurring, recurrence_id')
+          .eq('id', adv.advance_id)
+          .single();
+        
+        if (step7Advance) {
+          const step7NewAmount = step7Advance.amount - adv.amount;
+          const step7FullyPaid = step7NewAmount <= 0;
+          
+          if (step7FullyPaid && step7Advance.is_recurring && step7Advance.recurrence_id) {
+            // Recurrente: resetear al monto original
+            const { data: step7Rec } = await (supabase as any)
+              .from('advance_recurrences')
+              .select('amount, is_active')
+              .eq('id', step7Advance.recurrence_id)
+              .single();
+            
+            if (step7Rec && step7Rec.is_active) {
+              await supabase.from('advances').update({ amount: step7Rec.amount, status: 'PENDING' }).eq('id', adv.advance_id);
+              console.log(`[actionPayFortnight]   🔄 Advance recurrente ${adv.advance_id.substring(0, 8)} reseteado a $${step7Rec.amount}`);
+            } else {
+              await supabase.from('advances').update({ amount: 0, status: 'PAID' }).eq('id', adv.advance_id);
+            }
+          } else if (step7FullyPaid) {
+            await supabase.from('advances').update({ amount: 0, status: 'PAID' }).eq('id', adv.advance_id);
+          } else {
+            await supabase.from('advances').update({ amount: Math.max(0, step7NewAmount), status: 'PARTIAL' }).eq('id', adv.advance_id);
+          }
+        }
+
         totalDiscount += adv.amount;
       }
 
@@ -5845,53 +5932,27 @@ export async function actionPayFortnight(fortnight_id: string) {
         continue;
       }
 
-      const periodLabel = formatFortnightLabel(fortnight.period_start ?? null, fortnight.period_end ?? null);
-      const referenceNumber = `DESCUENTO-COMISIONES-${fortnight_id}-${bt.broker_id}`.toUpperCase();
-      const periodDate = toIsoDate(fortnight.period_end ?? null);
-      const nowIso = new Date().toISOString();
-
-      const { error: bankTransferError } = await supabase
-        .from('bank_transfers')
-        .insert([
-          {
-            date: periodDate as string,
-            reference_number: referenceNumber,
-            transaction_code: 'DESCUENTO_COMISIONES',
-            description: `Broker: ${bt.brokers?.name ?? 'N/D'} — Quincena: ${periodLabel || fortnight_id}`,
-            amount: totalDiscount,
-            imported_at: nowIso,
-            used_amount: totalDiscount,
-          } satisfies TablesInsert<'bank_transfers'>,
-        ]);
-
-      if (bankTransferError) {
-        throw bankTransferError;
-      }
-
-      const pendingPayload = {
-        client_name: bt.brokers?.name ?? 'Broker',
-        insurer_name: null,
-        policy_number: null,
-        purpose: 'devolucion',
-        amount_to_pay: totalDiscount,
-        total_received: totalDiscount,
-        can_be_paid: true,
-        status: 'pending',
-        notes: JSON.stringify({
-          source: 'fortnight_discount',
-          fortnight_id,
-          broker_id: bt.broker_id,
-        }),
-        created_at: nowIso,
-        created_by: userId,
-      } satisfies TablesInsert<'pending_payments'>;
-
-      const { error: pendingError } = await supabase
-        .from('pending_payments')
-        .insert([pendingPayload]);
-
-      if (pendingError) {
-        throw pendingError;
+      // Habilitar pending_payments existentes vinculados a estos adelantos
+      const step7AdvanceIds = discounts.adelantos.map((a: any) => a.advance_id).filter(Boolean);
+      if (step7AdvanceIds.length > 0) {
+        const { data: step7Pending } = await supabase
+          .from('pending_payments')
+          .select('id, notes')
+          .eq('status', 'pending')
+          .eq('can_be_paid', false);
+        
+        for (const pp of (step7Pending || [])) {
+          try {
+            const meta = typeof pp.notes === 'string' ? JSON.parse(pp.notes) : pp.notes;
+            if (meta?.advance_id && step7AdvanceIds.includes(meta.advance_id)) {
+              await supabase
+                .from('pending_payments')
+                .update({ can_be_paid: true })
+                .eq('id', pp.id);
+              console.log(`[actionPayFortnight]   ✅ pending_payment ${pp.id} habilitado (advance ${meta.advance_id})`);
+            }
+          } catch (_e) { /* skip */ }
+        }
       }
     }
     
@@ -5934,7 +5995,7 @@ export async function actionPayFortnight(fortnight_id: string) {
           // 2. Reducir saldo del advance
           const { data: currentAdvance, error: advError } = await supabase
             .from('advances')
-            .select('amount, status')
+            .select('amount, status, is_recurring, recurrence_id')
             .eq('id', discount.advance_id)
             .single();
           
@@ -5944,19 +6005,54 @@ export async function actionPayFortnight(fortnight_id: string) {
           }
           
           const newAmount = currentAdvance.amount - discount.amount;
-          const newStatus = newAmount <= 0 ? 'paid' : (currentAdvance.status === 'pending' ? 'partial' : currentAdvance.status);
+          const isFullyPaid = newAmount <= 0;
           
-          const { error: updateAdvError } = await supabase
-            .from('advances')
-            .update({
-              amount: Math.max(0, newAmount),
-              status: newStatus,
-            })
-            .eq('id', discount.advance_id);
-          
-          if (updateAdvError) {
-            console.error(`[actionPayFortnight]   ❌ Error actualizando advance:`, updateAdvError);
-            continue;
+          // ADELANTOS RECURRENTES: resetear al monto original cuando se pagan completamente
+          if (isFullyPaid && currentAdvance.is_recurring && currentAdvance.recurrence_id) {
+            const { data: recurrence } = await (supabase as any)
+              .from('advance_recurrences')
+              .select('amount, is_active')
+              .eq('id', currentAdvance.recurrence_id)
+              .single();
+            
+            if (recurrence && recurrence.is_active) {
+              // Resetear a monto original y mantener PENDING para la próxima quincena
+              const { error: updateAdvError } = await supabase
+                .from('advances')
+                .update({
+                  amount: recurrence.amount,
+                  status: 'PENDING',
+                })
+                .eq('id', discount.advance_id);
+              
+              if (updateAdvError) {
+                console.error(`[actionPayFortnight]   ❌ Error reseteando advance recurrente:`, updateAdvError);
+              } else {
+                console.log(`[actionPayFortnight]   🔄 Advance recurrente ${discount.advance_id.substring(0, 8)} reseteado a $${recurrence.amount} (PENDING)`);
+              }
+            } else {
+              // Recurrencia inactiva o no encontrada → marcar como PAID normalmente
+              const { error: updateAdvError } = await supabase
+                .from('advances')
+                .update({ amount: 0, status: 'PAID' })
+                .eq('id', discount.advance_id);
+              if (updateAdvError) console.error(`[actionPayFortnight]   ❌ Error actualizando advance:`, updateAdvError);
+            }
+          } else {
+            // Adelanto normal o parcialmente pagado
+            const newStatus = isFullyPaid ? 'PAID' : (currentAdvance.status.toUpperCase() === 'PENDING' ? 'PARTIAL' : currentAdvance.status);
+            const { error: updateAdvError } = await supabase
+              .from('advances')
+              .update({
+                amount: Math.max(0, newAmount),
+                status: newStatus,
+              })
+              .eq('id', discount.advance_id);
+            
+            if (updateAdvError) {
+              console.error(`[actionPayFortnight]   ❌ Error actualizando advance:`, updateAdvError);
+              continue;
+            }
           }
           
           // 3. Marcar discount como aplicado
@@ -5977,16 +6073,128 @@ export async function actionPayFortnight(fortnight_id: string) {
       }
       
       console.log(`[actionPayFortnight] ✅ FORTNIGHT_DISCOUNTS: ${discountsProcessed}/${fortnightDiscounts.length} procesados`);
+      
+      // 7.5.1 CRÍTICO: Actualizar fortnight_broker_totals con los descuentos reales
+      // Agrupar descuentos por broker_id
+      const discountsByBroker: Record<string, { total: number; details: { advance_id: string; amount: number; reason: string }[] }> = {};
+      
+      for (const discount of fortnightDiscounts) {
+        if (!discountsByBroker[discount.broker_id]) {
+          discountsByBroker[discount.broker_id] = { total: 0, details: [] };
+        }
+        const brokerDisc = discountsByBroker[discount.broker_id]!;
+        brokerDisc.total += discount.amount;
+        
+        // Obtener razón del adelanto
+        const { data: advanceData } = await supabase
+          .from('advances')
+          .select('reason')
+          .eq('id', discount.advance_id)
+          .single();
+        
+        brokerDisc.details.push({
+          advance_id: discount.advance_id,
+          amount: discount.amount,
+          reason: advanceData?.reason || 'Adelanto',
+        });
+      }
+      
+      console.log(`[actionPayFortnight] 📊 Descuentos agrupados por broker: ${Object.keys(discountsByBroker).length}`);
+      
+      for (const [brokerId, discountData] of Object.entries(discountsByBroker)) {
+        // Actualizar fortnight_broker_totals con descuento y neto real
+        const { data: currentBT } = await supabase
+          .from('fortnight_broker_totals')
+          .select('gross_amount, net_amount, discounts_json, brokers(name, bank_account_no, beneficiary_name)')
+          .eq('fortnight_id', fortnight_id)
+          .eq('broker_id', brokerId)
+          .single();
+        
+        if (currentBT) {
+          const discountsJson = {
+            adelantos: discountData.details.map(d => ({
+              advance_id: d.advance_id,
+              amount: d.amount,
+              description: d.reason,
+            })),
+            total: discountData.total,
+            details: discountData.details.map(d => ({
+              reason: d.reason,
+              amount: d.amount,
+            })),
+          };
+          
+          await supabase
+            .from('fortnight_broker_totals')
+            .update({
+              discounts_json: discountsJson,
+            })
+            .eq('fortnight_id', fortnight_id)
+            .eq('broker_id', brokerId);
+          
+          const realNet = currentBT.gross_amount - discountData.total;
+          console.log(`[actionPayFortnight]   📊 ${(currentBT.brokers as any)?.name}: Bruto $${currentBT.gross_amount.toFixed(2)} - Desc $${discountData.total.toFixed(2)} = Neto $${realNet.toFixed(2)}`);
+          
+          // 7.5.2 CRÍTICO: Habilitar pending_payments existentes vinculados a los adelantos pagados
+          // El flujo normal ya creó pending_payments con can_be_paid=false cuando se registró el descuento.
+          // Ahora que el adelanto fue pagado (via fortnight_discounts), habilitamos esos pagos pendientes.
+          const advanceIds = discountData.details.map(d => d.advance_id);
+          
+          // Buscar pending_payments que tengan advance_id en sus notes (metadata)
+          const { data: allBrokerPending } = await supabase
+            .from('pending_payments')
+            .select('id, notes, can_be_paid')
+            .eq('status', 'pending')
+            .eq('can_be_paid', false);
+          
+          let enabledCount = 0;
+          for (const pp of (allBrokerPending || [])) {
+            try {
+              const meta = typeof pp.notes === 'string' ? JSON.parse(pp.notes) : pp.notes;
+              if (meta?.advance_id && advanceIds.includes(meta.advance_id)) {
+                await supabase
+                  .from('pending_payments')
+                  .update({ can_be_paid: true })
+                  .eq('id', pp.id);
+                enabledCount++;
+                console.log(`[actionPayFortnight]   ✅ pending_payment ${pp.id} habilitado (advance ${meta.advance_id})`);
+              }
+            } catch (_e) { /* skip unparseable notes */ }
+          }
+          
+          if (enabledCount > 0) {
+            console.log(`[actionPayFortnight]   ✅ ${enabledCount} pago(s) pendiente(s) habilitados para ${(currentBT.brokers as any)?.name}`);
+          } else {
+            console.log(`[actionPayFortnight]   ⚠️ No se encontraron pagos pendientes para habilitar (broker ${brokerId})`);
+          }
+        }
+      }
     } else {
       console.log('[actionPayFortnight] ⚠️ No hay descuentos pendientes en fortnight_discounts');
     }
     console.log('[actionPayFortnight] ========== FIN FORTNIGHT_DISCOUNTS ==========');
     
-    // 8. Notificar brokers que reciben pago (AMBAS: email + campanita)
+    // 8. Re-fetch broker totals con descuentos ya aplicados para notificaciones correctas
+    const { data: updatedBrokerTotals } = await supabase
+      .from('fortnight_broker_totals')
+      .select(`
+        *,
+        brokers (
+          id,
+          name,
+          bank_account_no,
+          beneficiary_name
+        )
+      `)
+      .eq('fortnight_id', fortnight_id);
+    
+    const finalBrokerTotals = updatedBrokerTotals || brokerTotals;
+    
+    // Notificar brokers que reciben pago (AMBAS: email + campanita)
     // Solo notificar a brokers que:
     // - NO tienen descuento del 100% (net_amount > 0)
     // - NO están retenidos
-    const brokersToNotify = brokerTotals.filter(bt => 
+    const brokersToNotify = finalBrokerTotals.filter(bt => 
       bt.net_amount > 0 && !bt.is_retained
     );
     

@@ -43,11 +43,12 @@ export async function POST() {
       try {
         console.log('[sync-recurrences] Checking recurrence:', recurrence.id);
         
-        // Verificar si ya existe CUALQUIER adelanto con este recurrence_id
+        // Verificar si ya existe algún adelanto PENDIENTE o PARCIAL con este recurrence_id
         const { data: existingAdvances, error: checkError } = await supabase
           .from('advances')
           .select('id, status')
-          .eq('recurrence_id', recurrence.id);
+          .eq('recurrence_id', recurrence.id)
+          .in('status', ['pending', 'PENDING', 'partial', 'PARTIAL']);
         
         if (checkError) {
           console.error('[sync-recurrences] Error checking advances:', checkError);
@@ -55,12 +56,14 @@ export async function POST() {
           continue;
         }
         
-        // Si ya existe adelanto (sin importar status), saltar
+        // Si ya existe adelanto pendiente/parcial, no crear nuevos
         if (existingAdvances && existingAdvances.length > 0) {
-          console.log('[sync-recurrences] Recurrence', recurrence.id, 'already has advance(s), skipping');
+          console.log('[sync-recurrences] Recurrence', recurrence.id, 'already has', existingAdvances.length, 'pending/partial advance(s), skipping');
           skipped++;
           continue;
         }
+        
+        console.log('[sync-recurrences] Recurrence', recurrence.id, 'needs new advance(s)');
         
         // 3. Verificar si ha expirado
         if (recurrence.end_date) {

@@ -102,28 +102,46 @@ export async function extractTextFromImageBuffer(fileBuffer: ArrayBuffer): Promi
   }
 }
 
-async function extractTextFromPDFVision(pdfBuffer: Buffer): Promise<string> {
+export async function extractTextFromPDFVision(pdfBuffer: Buffer): Promise<string> {
   const client = getVisionClient();
   
-  console.log('[VISION-PDF] Procesando PDF con Google Vision API...');
+  console.log('[VISION-PDF] Procesando PDF con batchAnnotateFiles...');
   
   try {
-    // Para PDFs, usar documentTextDetection que está optimizado para documentos
-    const [result] = await client.documentTextDetection({
-      image: {
-        content: pdfBuffer.toString('base64'),
-      },
+    const [result] = await client.batchAnnotateFiles({
+      requests: [{
+        inputConfig: {
+          content: pdfBuffer.toString('base64'),
+          mimeType: 'application/pdf',
+        },
+        features: [{ type: 'DOCUMENT_TEXT_DETECTION' }],
+        // Process up to 5 pages
+        pages: [1, 2, 3, 4, 5],
+      }],
     });
     
-    const fullText = result.fullTextAnnotation;
+    const responses = result.responses || [];
+    const allText: string[] = [];
     
-    if (!fullText || !fullText.text) {
+    for (const fileResponse of responses) {
+      const pageResponses = fileResponse.responses || [];
+      for (const pageResp of pageResponses) {
+        const text = pageResp.fullTextAnnotation?.text;
+        if (text) {
+          allText.push(text);
+        }
+      }
+    }
+    
+    const fullText = allText.join('\n');
+    
+    if (!fullText) {
       console.log('[VISION-PDF] No se detectó texto en el PDF');
       return '';
     }
     
-    console.log(`[VISION-PDF] ✅ Texto extraído del PDF: ${fullText.text.length} caracteres`);
-    return fullText.text;
+    console.log(`[VISION-PDF] ✅ Texto extraído del PDF: ${fullText.length} caracteres (${allText.length} páginas)`);
+    return fullText;
     
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);

@@ -493,7 +493,7 @@ export default function FortnightDetailView({ fortnightId, fortnightData }: Fort
                       <div className="flex justify-between items-center pb-2">
                         <p className="text-sm font-semibold text-gray-700">Total Bruto:</p>
                         <p className="text-lg font-bold text-gray-900 font-mono">
-                          ${broker.net_amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          ${broker.gross_amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </p>
                       </div>
 

@@ -16,6 +16,7 @@ export default function BankHistoryTab({ onImportSuccess, refreshTrigger }: Bank
   const [loading, setLoading] = useState(true);
   const [showImportModal, setShowImportModal] = useState(false);
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
+  const [mobileTooltip, setMobileTooltip] = useState<string | null>(null);
   const [filters, setFilters] = useState({
     status: 'all',
     startDate: '',
@@ -201,18 +202,18 @@ export default function BankHistoryTab({ onImportSuccess, refreshTrigger }: Bank
             <p className="text-sm">Intenta con otro término de búsqueda</p>
           </div>
         ) : (
-          <div className="hidden md:block overflow-x-auto">
-            <table className="w-full min-w-[800px]">
+          <div className="hidden md:block">
+            <table className="w-full table-fixed">
               <thead className="bg-gradient-to-r from-gray-50 to-gray-100">
                 <tr>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Fecha</th>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Referencia</th>
-                  <th className="px-6 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Descripción</th>
-                  <th className="px-6 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">Monto</th>
-                  <th className="px-6 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">Usado</th>
-                  <th className="px-6 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">Disponible</th>
-                  <th className="px-6 py-4 text-center text-xs font-bold text-gray-700 uppercase tracking-wider">Estado</th>
-                  <th className="px-6 py-4"></th>
+                  <th className="w-[10%] px-3 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Fecha</th>
+                  <th className="w-[14%] px-3 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Referencia</th>
+                  <th className="w-[26%] px-3 py-4 text-left text-xs font-bold text-gray-700 uppercase tracking-wider">Descripción</th>
+                  <th className="w-[11%] px-3 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">Monto</th>
+                  <th className="w-[11%] px-3 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">Usado</th>
+                  <th className="w-[11%] px-3 py-4 text-right text-xs font-bold text-gray-700 uppercase tracking-wider">Disponible</th>
+                  <th className="w-[12%] px-3 py-4 text-center text-xs font-bold text-gray-700 uppercase tracking-wider">Estado</th>
+                  <th className="w-[5%] px-2 py-4"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
@@ -227,36 +228,41 @@ export default function BankHistoryTab({ onImportSuccess, refreshTrigger }: Bank
                         className="hover:bg-gray-50 transition-colors cursor-pointer"
                         onClick={() => hasDetails && toggleRow(transfer.id)}
                       >
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <td className="px-3 py-4 text-sm text-gray-900 truncate">
                           {new Date(transfer.date).toLocaleDateString('es-PA')}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="text-sm font-mono font-semibold text-[#010139]">
+                        <td className="px-3 py-4 overflow-hidden">
+                          <span
+                            className="text-sm font-mono font-semibold text-[#010139] block truncate cursor-default"
+                            title={transfer.reference_number}
+                          >
                             {transfer.reference_number}
                           </span>
                         </td>
-                        <td className="px-6 py-4 text-sm text-gray-600 max-w-xs truncate" title={transfer.description || ''}>
-                          {transfer.description}
+                        <td className="px-3 py-4 overflow-hidden">
+                          <span className="text-sm text-gray-600 block truncate" title={transfer.description || ''}>
+                            {transfer.description}
+                          </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right">
+                        <td className="px-3 py-4 text-right whitespace-nowrap">
                           <span className="text-sm font-bold text-gray-900">
                             ${parseFloat(transfer.amount).toFixed(2)}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right">
+                        <td className="px-3 py-4 text-right whitespace-nowrap">
                           <span className="text-sm font-semibold text-red-600">
                             ${parseFloat(transfer.used_amount || 0).toFixed(2)}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right">
+                        <td className="px-3 py-4 text-right whitespace-nowrap">
                           <span className="text-sm font-semibold text-[#8AAA19]">
                             ${parseFloat(transfer.remaining_amount || 0).toFixed(2)}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                        <td className="px-3 py-4 text-center whitespace-nowrap">
                           {getStatusBadge(transfer.status)}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                        <td className="px-2 py-4 text-center">
                           {hasDetails && (
                             isExpanded ? <FaChevronDown className="text-gray-400" /> : <FaChevronRight className="text-gray-400" />
                           )}
@@ -335,9 +341,20 @@ export default function BankHistoryTab({ onImportSuccess, refreshTrigger }: Bank
                         <p className="text-xs text-gray-500">
                           {new Date(transfer.date).toLocaleDateString('es-PA')}
                         </p>
-                        <p className="text-sm font-mono font-bold text-[#010139] mt-1">
+                        <p
+                          className="text-sm font-mono font-bold text-[#010139] mt-1 max-w-[180px] truncate"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMobileTooltip(mobileTooltip === transfer.id ? null : transfer.id);
+                          }}
+                        >
                           {transfer.reference_number}
                         </p>
+                        {mobileTooltip === transfer.id && (
+                          <p className="text-xs font-mono text-gray-600 mt-1 break-all bg-gray-100 rounded px-2 py-1">
+                            {transfer.reference_number}
+                          </p>
+                        )}
                       </div>
                       {getStatusBadge(transfer.status)}
                     </div>

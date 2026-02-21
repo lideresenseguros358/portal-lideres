@@ -2189,6 +2189,7 @@ export async function actionUpdatePendingPaymentFull(paymentId: string, updates:
   divisions?: Array<any>;
   is_broker_deduction?: boolean;
   deduction_broker_id?: string;
+  delete_advance?: boolean;
 }) {
   try {
     const supabaseServer = await getSupabaseServer();
@@ -2297,17 +2298,47 @@ export async function actionUpdatePendingPaymentFull(paymentId: string, updates:
       metadata.source = 'broker_deduction';
     }
 
-    // Caso 2: antes SÍ era descuento a corredor y ahora NO lo es -> cancelar adelanto
+    // Caso 2: antes SÍ era descuento a corredor y ahora NO lo es -> eliminar o cancelar adelanto
     if (originalIsBrokerDeduction && !willBeBrokerDeduction && originalAdvanceId) {
-      console.log(`🧹 Cancelando adelanto ligado al pago ${paymentId} (ID adelanto: ${originalAdvanceId})...`);
-      const { error: cancelAdvanceError } = await supabase
-        .from('advances')
-        .update({ status: 'CANCELLED' } satisfies TablesUpdate<'advances'>)
-        .eq('id', originalAdvanceId);
+      if (updates.delete_advance) {
+        // ELIMINAR completamente el adelanto (usuario confirmó desde modal)
+        console.log(`🗑️ ELIMINANDO adelanto ligado al pago ${paymentId} (ID adelanto: ${originalAdvanceId})...`);
+        
+        // Primero eliminar advance_logs asociados
+        const { error: deleteLogsError } = await supabase
+          .from('advance_logs')
+          .delete()
+          .eq('advance_id', originalAdvanceId);
+        
+        if (deleteLogsError) {
+          console.error('❌ Error eliminando advance_logs:', deleteLogsError);
+          // No es crítico, continuar
+        }
+        
+        // Luego eliminar el adelanto
+        const { error: deleteAdvanceError } = await supabase
+          .from('advances')
+          .delete()
+          .eq('id', originalAdvanceId);
 
-      if (cancelAdvanceError) {
-        console.error('❌ Error cancelando adelanto ligado:', cancelAdvanceError);
-        throw cancelAdvanceError;
+        if (deleteAdvanceError) {
+          console.error('❌ Error eliminando adelanto:', deleteAdvanceError);
+          throw deleteAdvanceError;
+        }
+        
+        console.log('✅ Adelanto eliminado completamente');
+      } else {
+        // Solo cancelar (flujo original)
+        console.log(`🧹 Cancelando adelanto ligado al pago ${paymentId} (ID adelanto: ${originalAdvanceId})...`);
+        const { error: cancelAdvanceError } = await supabase
+          .from('advances')
+          .update({ status: 'CANCELLED' } satisfies TablesUpdate<'advances'>)
+          .eq('id', originalAdvanceId);
+
+        if (cancelAdvanceError) {
+          console.error('❌ Error cancelando adelanto ligado:', cancelAdvanceError);
+          throw cancelAdvanceError;
+        }
       }
 
       // Limpiar metadata de descuento a corredor
@@ -2341,8 +2372,8 @@ export async function actionUpdatePendingPaymentFull(paymentId: string, updates:
         insurer_name: updates.purpose === 'poliza' && !updates.divisions ? updates.insurer_name : null,
         amount_to_pay: updates.amount_to_pay,
         notes: JSON.stringify(metadata),
-        // Si es descuento a corredor, mantener can_be_paid en false para que dependa del adelanto
-        ...(willBeBrokerDeduction ? { can_be_paid: false } : {}),
+        // Si es descuento a corredor, mantener can_be_paid en false; si se convirtió a transferencia, habilitar
+        can_be_paid: willBeBrokerDeduction ? false : true,
       } satisfies TablesUpdate<'pending_payments'>)
       .eq('id', paymentId);
 

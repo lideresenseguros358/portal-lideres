@@ -867,6 +867,49 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
         toast.success('Cliente y póliza creados exitosamente');
       }
       
+      // SYNC: Eliminar registros preliminares que coincidan por cédula o número de póliza
+      try {
+        const normalizedNationalId = formData.national_id?.toUpperCase().trim();
+        const normalizedPolicyNumber = formData.policy_number?.toUpperCase().trim();
+        
+        if (normalizedNationalId || normalizedPolicyNumber) {
+          const supabase = supabaseClient();
+          
+          // Buscar preliminares que coincidan por cédula O por número de póliza
+          let query = supabase
+            .from('temp_client_import')
+            .select('id, client_name, policy_number, national_id')
+            .eq('migrated', false);
+          
+          // Buscar por cédula
+          if (normalizedNationalId) {
+            const { data: byNationalId } = await query.eq('national_id', normalizedNationalId);
+            if (byNationalId && byNationalId.length > 0) {
+              const ids = byNationalId.map(r => r.id);
+              console.log(`[ClientPolicyWizard] 🧹 Eliminando ${ids.length} preliminar(es) por cédula ${normalizedNationalId}:`, byNationalId.map(r => r.client_name));
+              await supabase.from('temp_client_import').update({ migrated: true, migrated_at: new Date().toISOString() }).in('id', ids);
+            }
+          }
+          
+          // Buscar por número de póliza
+          if (normalizedPolicyNumber) {
+            const { data: byPolicy } = await supabase
+              .from('temp_client_import')
+              .select('id, client_name, policy_number')
+              .eq('migrated', false)
+              .eq('policy_number', normalizedPolicyNumber);
+            
+            if (byPolicy && byPolicy.length > 0) {
+              const ids = byPolicy.map(r => r.id);
+              console.log(`[ClientPolicyWizard] 🧹 Eliminando ${ids.length} preliminar(es) por póliza ${normalizedPolicyNumber}:`, byPolicy.map(r => r.client_name));
+              await supabase.from('temp_client_import').update({ migrated: true, migrated_at: new Date().toISOString() }).in('id', ids);
+            }
+          }
+        }
+      } catch (syncErr) {
+        console.error('[ClientPolicyWizard] Error limpiando preliminares (no crítico):', syncErr);
+      }
+
       onSuccess();
       onClose();
     } catch (error: any) {

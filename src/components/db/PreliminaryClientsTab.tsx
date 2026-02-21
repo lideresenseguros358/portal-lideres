@@ -40,6 +40,8 @@ export default function PreliminaryClientsTab({ insurers, brokers: brokersProp, 
   const [showExpedienteInEdit, setShowExpedienteInEdit] = useState(false);
   const [documentType, setDocumentType] = useState<'cedula' | 'pasaporte' | 'ruc'>('cedula');
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [existingClientBrokerWarning, setExistingClientBrokerWarning] = useState<{clientName: string; brokerName: string; isOtherBroker: boolean} | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     loadPreliminaryClients();
@@ -96,11 +98,13 @@ export default function PreliminaryClientsTab({ insurers, brokers: brokersProp, 
   const searchExistingClient = async (nationalId: string) => {
     setSearchingPolicy(true);
     try {
-      const { data: client } = await supabaseClient()
-        .from('clients')
-        .select('*')
-        .eq('national_id', nationalId.toUpperCase())
-        .single();
+      // Usar RPC para bypass RLS y ver clientes de otros brokers (como el wizard)
+      const { data: clientData, error: clientError } = await (supabaseClient() as any)
+        .rpc('rpc_search_client_by_national_id', {
+          p_national_id: nationalId.toUpperCase()
+        });
+
+      const client = (clientData as any)?.[0] || null;
 
       if (client) {
         setExistingPolicyClient(client);
@@ -114,15 +118,35 @@ export default function PreliminaryClientsTab({ insurers, brokers: brokersProp, 
           birth_date: client.birth_date || prev.birth_date,
         }));
 
-        toast.success(`Cliente encontrado: ${client.name}`, {
-          description: 'Datos autocompletados. Completa los datos de la póliza y actualiza cualquier dato faltante del cliente.'
-        });
+        // Detectar si el cliente pertenece a otro broker
+        const brokerName = client.broker_name || 'Desconocido';
+        const clientBrokerId = client.broker_id || null;
+        const currentBrokerId = editForm.broker_id || null;
+        
+        if (clientBrokerId && currentBrokerId && clientBrokerId !== currentBrokerId) {
+          setExistingClientBrokerWarning({
+            clientName: client.name,
+            brokerName,
+            isOtherBroker: true
+          });
+          toast.warning(`Cliente registrado con otro corredor: ${brokerName}`, {
+            description: `${client.name} está asignado a ${brokerName}. Puedes continuar: la póliza se agregará al corredor seleccionado.`,
+            duration: 6000
+          });
+        } else {
+          setExistingClientBrokerWarning(null);
+          toast.success(`Cliente encontrado: ${client.name}`, {
+            description: 'Datos autocompletados. Completa los datos de la póliza y actualiza cualquier dato faltante del cliente.'
+          });
+        }
       } else {
         setExistingPolicyClient(null);
+        setExistingClientBrokerWarning(null);
       }
     } catch (error) {
       console.error('Error buscando cliente:', error);
       setExistingPolicyClient(null);
+      setExistingClientBrokerWarning(null);
     } finally {
       setSearchingPolicy(false);
     }
@@ -170,6 +194,8 @@ export default function PreliminaryClientsTab({ insurers, brokers: brokersProp, 
     setEditingId(client.id);
     setExpandedClients(prev => new Set(prev).add(client.id));
     setExistingPolicyClient(null);
+    setExistingClientBrokerWarning(null);
+    setSaveError(null);
     setShowExpedienteInEdit(false);
     
     // Obtener broker_id desde la relación brokers
@@ -207,6 +233,8 @@ export default function PreliminaryClientsTab({ insurers, brokers: brokersProp, 
     setEditForm({});
     setFormErrors({});
     setExistingPolicyClient(null);
+    setExistingClientBrokerWarning(null);
+    setSaveError(null);
   };
 
   const validateForm = (): boolean => {
@@ -260,11 +288,11 @@ export default function PreliminaryClientsTab({ insurers, brokers: brokersProp, 
 
   const saveEdit = async () => {
     if (!editingId) return;
+    setSaveError(null);
     if (!validateForm()) return;
 
     setSaving(true);
     
-    // CRÍTICO: Crear objeto sin status explícitamente
     const updateData = {
       client_name: editForm.client_name,
       national_id: editForm.national_id,
@@ -278,14 +306,12 @@ export default function PreliminaryClientsTab({ insurers, brokers: brokersProp, 
       renewal_date: editForm.renewal_date,
       broker_id: editForm.broker_id,
       notes: editForm.notes,
-      // ❌ NO INCLUIR status
     };
     
-    console.log('[PreliminaryClientsTab] Enviando update SIN status:', updateData);
+    console.log('[PreliminaryClientsTab] Enviando update:', updateData);
     const result = await actionUpdatePreliminaryClient(editingId, updateData);
 
     if (result.ok) {
-      // Check if it was auto-migrated
       if (result.data?.migrated && result.data?.updatedExisting) {
         toast.success('✅ Póliza existente actualizada', {
           description: 'La póliza ya existía en la base de datos. Se actualizó la información del cliente y la póliza con los datos ingresados.',
@@ -301,28 +327,32 @@ export default function PreliminaryClientsTab({ insurers, brokers: brokersProp, 
       
       setEditingId(null);
       setEditForm({});
+      setSaveError(null);
       loadPreliminaryClients();
     } else {
-      // Mostrar errores claros según el tipo
+      // Mapear errores técnicos a mensajes claros para el usuario
       const errorMsg = result.error || 'Error desconocido';
+      let userFriendlyError = '';
+      
       if (errorMsg.includes('ya existe')) {
-        toast.error('Póliza duplicada', {
-          description: errorMsg + '. Verifique el número de póliza o elimine este registro preliminar si ya fue ingresado.',
-          duration: 8000
-        });
-        setFormErrors(prev => ({ ...prev, policy_number: errorMsg }));
-      } else if (errorMsg.includes('national_id') || errorMsg.includes('cédula')) {
-        toast.error('Error con documento de identidad', {
-          description: errorMsg,
-          duration: 6000
-        });
-        setFormErrors(prev => ({ ...prev, national_id: errorMsg }));
+        userFriendlyError = `El número de póliza "${editForm.policy_number}" ya está registrado en la base de datos. Si deseas actualizar la información de esa póliza, el sistema lo hará automáticamente. Si es una póliza diferente, verifica que el número sea correcto.`;
+        setFormErrors(prev => ({ ...prev, policy_number: 'Esta póliza ya existe en la base de datos' }));
+      } else if (errorMsg.includes('national_id') || errorMsg.includes('cédula') || errorMsg.includes('duplicate') && errorMsg.includes('national')) {
+        userFriendlyError = `Ya existe un cliente con el documento de identidad "${editForm.national_id}". Verifica que el número sea correcto o busca al cliente existente en la base de datos.`;
+        setFormErrors(prev => ({ ...prev, national_id: 'Este documento ya está registrado' }));
+      } else if (errorMsg.includes('email') && errorMsg.includes('duplicate')) {
+        userFriendlyError = `El correo electrónico "${editForm.email}" ya está registrado con otro cliente. Verifica que sea el correo correcto.`;
+        setFormErrors(prev => ({ ...prev, email: 'Este correo ya está registrado' }));
+      } else if (errorMsg.includes('violates') || errorMsg.includes('constraint')) {
+        userFriendlyError = 'Hay un conflicto con los datos ingresados. Revisa que no haya información duplicada (cédula, póliza o correo) y que todos los campos tengan el formato correcto.';
+      } else if (errorMsg.includes('permission') || errorMsg.includes('denied') || errorMsg.includes('RLS')) {
+        userFriendlyError = 'No tienes permisos para realizar esta acción. Contacta al administrador.';
       } else {
-        toast.error('Error al guardar', {
-          description: errorMsg,
-          duration: 6000
-        });
+        userFriendlyError = `No se pudo guardar los cambios: ${errorMsg}. Si el problema persiste, contacta al administrador.`;
       }
+      
+      setSaveError(userFriendlyError);
+      toast.error('No se pudo guardar', { description: 'Revisa los errores indicados en el formulario', duration: 5000 });
     }
     setSaving(false);
   };
@@ -771,6 +801,55 @@ export default function PreliminaryClientsTab({ insurers, brokers: brokersProp, 
       {editingId && (
         <Modal title="Editar Cliente Preliminar" onClose={cancelEdit}>
           <div className="space-y-6">
+                  {/* Error Summary Panel - Visible when there are validation or save errors */}
+                  {(Object.keys(formErrors).length > 0 || saveError) && (
+                    <div className="bg-red-50 border-2 border-red-300 rounded-lg p-4">
+                      <div className="flex items-start gap-3">
+                        <FaExclamationTriangle className="text-red-500 mt-0.5 flex-shrink-0" size={20} />
+                        <div className="flex-1">
+                          <h4 className="font-bold text-red-900 text-sm mb-2">
+                            ⚠️ No se puede guardar — Revisa lo siguiente:
+                          </h4>
+                          {saveError && (
+                            <div className="bg-white border border-red-200 rounded p-3 mb-2">
+                              <p className="text-sm text-red-800">{saveError}</p>
+                            </div>
+                          )}
+                          {Object.keys(formErrors).length > 0 && (
+                            <ul className="space-y-1">
+                              {Object.entries(formErrors).map(([field, msg]) => (
+                                <li key={field} className="text-xs text-red-700 flex items-start gap-1.5">
+                                  <span className="text-red-400 mt-0.5">•</span>
+                                  <span>{msg}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Broker Warning - Client registered with another broker */}
+                  {existingClientBrokerWarning && (
+                    <div className="bg-amber-50 border-2 border-amber-400 rounded-lg p-4">
+                      <div className="flex items-start gap-3">
+                        <FaExclamationTriangle className="text-amber-500 mt-0.5 flex-shrink-0" size={20} />
+                        <div className="flex-1">
+                          <h4 className="font-bold text-amber-900 text-sm mb-1">
+                            ⚠️ Cliente registrado con otro corredor
+                          </h4>
+                          <p className="text-xs text-amber-800 mb-2">
+                            <strong>{existingClientBrokerWarning.clientName}</strong> ya está asignado al corredor <strong>{existingClientBrokerWarning.brokerName}</strong>.
+                          </p>
+                          <p className="text-xs text-amber-700">
+                            Puedes continuar — la póliza se registrará con el corredor que selecciones aquí. Los datos del cliente se actualizarán en la base de datos.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Client Info */}
                   <div className="space-y-4">
                     <h4 className="text-sm sm:text-base font-semibold text-gray-700 flex items-center gap-2">
@@ -808,18 +887,28 @@ export default function PreliminaryClientsTab({ insurers, brokers: brokersProp, 
                                 <p className="text-xs text-blue-700">Buscando cliente en base de datos...</p>
                               </div>
                             ) : existingPolicyClient ? (
-                              <div className="mt-1 p-3 bg-green-50 border border-green-300 rounded-lg">
-                                <p className="text-sm text-green-800 flex items-center gap-1 font-semibold">
-                                  <FaCheckCircle className="text-green-600" />
-                                  Cliente encontrado en base de datos
+                              <div className={`mt-1 p-3 rounded-lg border ${existingClientBrokerWarning ? 'bg-amber-50 border-amber-300' : 'bg-green-50 border-green-300'}`}>
+                                <p className={`text-sm flex items-center gap-1 font-semibold ${existingClientBrokerWarning ? 'text-amber-800' : 'text-green-800'}`}>
+                                  {existingClientBrokerWarning ? (
+                                    <><FaExclamationTriangle className="text-amber-500" /> Cliente encontrado — Registrado con otro corredor</>
+                                  ) : (
+                                    <><FaCheckCircle className="text-green-600" /> Cliente encontrado en base de datos</>
+                                  )}
                                 </p>
-                                <div className="mt-2 grid grid-cols-2 gap-1 text-xs text-green-700">
+                                <div className={`mt-2 grid grid-cols-2 gap-1 text-xs ${existingClientBrokerWarning ? 'text-amber-700' : 'text-green-700'}`}>
                                   <span><strong>Nombre:</strong> {existingPolicyClient.name || '—'}</span>
                                   <span><strong>Email:</strong> {existingPolicyClient.email || '—'}</span>
                                   <span><strong>Teléfono:</strong> {existingPolicyClient.phone || '—'}</span>
                                   <span><strong>Nacimiento:</strong> {existingPolicyClient.birth_date || '—'}</span>
+                                  {existingClientBrokerWarning && (
+                                    <span className="col-span-2"><strong>Corredor actual:</strong> {existingClientBrokerWarning.brokerName}</span>
+                                  )}
                                 </div>
-                                <p className="text-xs text-green-600 mt-2 font-medium">✅ Datos del cliente autocompletados. Solo completa la información de la póliza.</p>
+                                {existingClientBrokerWarning ? (
+                                  <p className="text-xs text-amber-600 mt-2 font-medium">⚠️ La póliza se registrará con el corredor que selecciones. Los datos del cliente se actualizarán.</p>
+                                ) : (
+                                  <p className="text-xs text-green-600 mt-2 font-medium">✅ Datos del cliente autocompletados. Solo completa la información de la póliza.</p>
+                                )}
                               </div>
                             ) : null
                           }

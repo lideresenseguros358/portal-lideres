@@ -13,8 +13,10 @@ import {
   FaCheckCircle,
   FaFilePdf,
   FaFileExcel,
+  FaDownload,
 } from 'react-icons/fa';
 import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 
 interface AdjustmentReport {
   id: string;
@@ -56,8 +58,10 @@ function groupByDate(reports: AdjustmentReport[]): Map<string, AdjustmentReport[
 export default function PaidAdjustmentsView() {
   const [reports, setReports] = useState<AdjustmentReport[]>([]);
   const [loading, setLoading] = useState(true);
-  const [downloading, setDownloading] = useState<'pdf' | 'xlsx' | null>(null);
+  const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
   const [expandedReports, setExpandedReports] = useState<Set<string>>(new Set());
+  const [downloadModal, setDownloadModal] = useState<AdjustmentReport | null>(null);
+  const [downloading, setDownloading] = useState<'pdf' | 'xlsx' | null>(null);
 
   useEffect(() => {
     loadReports();
@@ -86,143 +90,86 @@ export default function PaidAdjustmentsView() {
     });
   };
 
-  const handleDownloadPDF = async () => {
-    if (reports.length === 0) return;
-    setDownloading('pdf');
+  const handleDownloadReport = async (report: AdjustmentReport, format: 'pdf' | 'xlsx') => {
+    setDownloading(format);
     try {
-      const { default: jsPDF } = await import('jspdf');
-      const { default: autoTable } = await import('jspdf-autotable');
+      const paidDate = report.paid_date
+        ? new Date(report.paid_date).toLocaleDateString('es-PA')
+        : new Date(report.created_at).toLocaleDateString('es-PA');
 
-      const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
-      const grouped = groupByDate(reports);
-      const totalPaid = reports.reduce((s, r) => s + r.total_amount, 0);
-      const totalItems = reports.reduce((s, r) => s + r.items.length, 0);
+      if (format === 'pdf') {
+        const { default: jsPDF } = await import('jspdf');
+        const { default: autoTable } = await import('jspdf-autotable');
 
-      // Title
-      doc.setFontSize(16);
-      doc.setTextColor(1, 1, 57);
-      doc.text('Reporte de Ajustes Pagados', 14, 16);
-      doc.setFontSize(9);
-      doc.setTextColor(100, 100, 100);
-      doc.text(`Generado: ${new Date().toLocaleDateString('es-PA')}  |  Total pagado: $${totalPaid.toLocaleString('en-US', { minimumFractionDigits: 2 })}  |  ${reports.length} reportes  |  ${totalItems} items`, 14, 22);
+        const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
 
-      let startY = 28;
-
-      for (const [dateLabel, dateReports] of grouped) {
-        const dateTotal = dateReports.reduce((s, r) => s + r.total_amount, 0);
-
-        // Date group header
-        doc.setFontSize(11);
+        doc.setFontSize(16);
         doc.setTextColor(1, 1, 57);
-        doc.text(`Fecha de pago: ${dateLabel}  —  Total: $${dateTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}`, 14, startY);
-        startY += 4;
+        doc.text('Reporte de Ajuste Pagado', 14, 16);
+        doc.setFontSize(10);
+        doc.setTextColor(100, 100, 100);
+        doc.text(`Corredor: ${report.broker_name}`, 14, 23);
+        doc.text(`Fecha de pago: ${paidDate}  |  Total: $${report.total_amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}  |  ${report.items.length} items`, 14, 28);
+        doc.text(`Modo: ${report.payment_mode === 'immediate' ? 'Pago Inmediato' : 'Quincena'}`, 14, 33);
 
-        // Rows: one row per item
-        const rows: (string | number)[][] = [];
-        for (const report of dateReports) {
-          for (const item of report.items) {
-            rows.push([
-              report.broker_name,
-              item.insured_name || '—',
-              item.policy_number,
-              item.insurer_name || '—',
-              `$${item.commission_raw.toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
-              `$${item.broker_commission.toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
-              report.payment_mode === 'immediate' ? 'Inmediato' : 'Quincena',
-            ]);
-          }
-        }
+        const rows = report.items.map((item) => [
+          item.insured_name || '—',
+          item.policy_number,
+          item.insurer_name || '—',
+          `$${item.commission_raw.toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
+          `$${item.broker_commission.toLocaleString('en-US', { minimumFractionDigits: 2 })}`,
+        ]);
 
         autoTable(doc, {
-          startY,
-          head: [['Corredor', 'Asegurado', 'Póliza', 'Aseguradora', 'Bruto', 'Comisión', 'Modo Pago']],
+          startY: 38,
+          head: [['Asegurado', 'Póliza', 'Aseguradora', 'Bruto', 'Comisión']],
           body: rows,
           styles: { fontSize: 8, cellPadding: 2 },
           headStyles: { fillColor: [138, 170, 25], textColor: 255, fontStyle: 'bold' },
           alternateRowStyles: { fillColor: [245, 245, 245] },
           margin: { left: 14, right: 14 },
-          didDrawPage: () => {},
         });
 
-        startY = (doc as any).lastAutoTable.finalY + 8;
-      }
+        const safeFileName = report.broker_name.replace(/[^a-zA-Z0-9]/g, '_');
+        doc.save(`ajuste_${safeFileName}_${new Date().toISOString().slice(0, 10)}.pdf`);
+        toast.success('PDF descargado');
+      } else {
+        const XLSX = await import('xlsx');
+        const wb = XLSX.utils.book_new();
 
-      doc.save(`ajustes_pagados_${new Date().toISOString().slice(0, 10)}.pdf`);
-      toast.success('PDF descargado');
-    } catch (err) {
-      console.error(err);
-      toast.error('Error al generar PDF');
-    } finally {
-      setDownloading(null);
-    }
-  };
-
-  const handleDownloadXLSX = async () => {
-    if (reports.length === 0) return;
-    setDownloading('xlsx');
-    try {
-      const XLSX = await import('xlsx');
-      const grouped = groupByDate(reports);
-
-      const wb = XLSX.utils.book_new();
-
-      // Sheet 1: Summary by date
-      const summaryRows: (string | number)[][] = [
-        ['Fecha de Pago', 'Reportes', 'Items', 'Total Pagado ($)'],
-      ];
-      for (const [dateLabel, dateReports] of grouped) {
-        summaryRows.push([
-          dateLabel,
-          dateReports.length,
-          dateReports.reduce((s, r) => s + r.items.length, 0),
-          dateReports.reduce((s, r) => s + r.total_amount, 0),
-        ]);
-      }
-      summaryRows.push([
-        'TOTAL',
-        reports.length,
-        reports.reduce((s, r) => s + r.items.length, 0),
-        reports.reduce((s, r) => s + r.total_amount, 0),
-      ]);
-      const wsSummary = XLSX.utils.aoa_to_sheet(summaryRows);
-      wsSummary['!cols'] = [{ wch: 16 }, { wch: 10 }, { wch: 8 }, { wch: 18 }];
-      XLSX.utils.book_append_sheet(wb, wsSummary, 'Resumen');
-
-      // Sheet 2: Detail (all items)
-      const detailRows: (string | number)[][] = [
-        ['Fecha de Pago', 'Corredor', 'Asegurado', 'Póliza', 'Aseguradora', 'Bruto ($)', 'Comisión ($)', 'Modo Pago', 'Nota Broker', 'Nota Master'],
-      ];
-      for (const [dateLabel, dateReports] of grouped) {
-        for (const report of dateReports) {
-          for (const item of report.items) {
-            detailRows.push([
-              dateLabel,
-              report.broker_name,
-              item.insured_name || '',
-              item.policy_number,
-              item.insurer_name || '',
-              item.commission_raw,
-              item.broker_commission,
-              report.payment_mode === 'immediate' ? 'Inmediato' : 'Quincena',
-              report.notes || '',
-              report.admin_notes || '',
-            ]);
-          }
+        const detailRows: (string | number)[][] = [
+          ['Corredor', 'Fecha Pago', 'Asegurado', 'Póliza', 'Aseguradora', 'Bruto ($)', 'Comisión ($)', 'Modo Pago'],
+        ];
+        for (const item of report.items) {
+          detailRows.push([
+            report.broker_name,
+            paidDate,
+            item.insured_name || '',
+            item.policy_number,
+            item.insurer_name || '',
+            item.commission_raw,
+            item.broker_commission,
+            report.payment_mode === 'immediate' ? 'Inmediato' : 'Quincena',
+          ]);
         }
-      }
-      const wsDetail = XLSX.utils.aoa_to_sheet(detailRows);
-      wsDetail['!cols'] = [
-        { wch: 14 }, { wch: 22 }, { wch: 24 }, { wch: 18 },
-        { wch: 18 }, { wch: 12 }, { wch: 12 }, { wch: 12 },
-        { wch: 28 }, { wch: 28 },
-      ];
-      XLSX.utils.book_append_sheet(wb, wsDetail, 'Detalle');
+        detailRows.push([]);
+        detailRows.push(['', '', '', '', 'TOTAL:', '', report.total_amount]);
 
-      XLSX.writeFile(wb, `ajustes_pagados_${new Date().toISOString().slice(0, 10)}.xlsx`);
-      toast.success('Excel descargado');
+        const ws = XLSX.utils.aoa_to_sheet(detailRows);
+        ws['!cols'] = [
+          { wch: 22 }, { wch: 14 }, { wch: 24 }, { wch: 18 },
+          { wch: 18 }, { wch: 12 }, { wch: 12 }, { wch: 12 },
+        ];
+        XLSX.utils.book_append_sheet(wb, ws, 'Detalle');
+
+        const safeFileName = report.broker_name.replace(/[^a-zA-Z0-9]/g, '_');
+        XLSX.writeFile(wb, `ajuste_${safeFileName}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+        toast.success('Excel descargado');
+      }
+      setDownloadModal(null);
     } catch (err) {
       console.error(err);
-      toast.error('Error al generar Excel');
+      toast.error(`Error al generar ${format.toUpperCase()}`);
     } finally {
       setDownloading(null);
     }
@@ -255,36 +202,6 @@ export default function PaidAdjustmentsView() {
 
   return (
     <div className="space-y-3 sm:space-y-4">
-      {/* Header con botones de descarga */}
-      <div className="flex items-center justify-end gap-2">
-        <button
-          onClick={handleDownloadPDF}
-          disabled={downloading !== null || reports.length === 0}
-          title="Descargar PDF"
-          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors shadow-sm"
-        >
-          {downloading === 'pdf' ? (
-            <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
-          ) : (
-            <FaFilePdf size={14} />
-          )}
-          <span className="hidden sm:inline">PDF</span>
-        </button>
-        <button
-          onClick={handleDownloadXLSX}
-          disabled={downloading !== null || reports.length === 0}
-          title="Descargar Excel"
-          className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-semibold text-white bg-green-700 hover:bg-green-800 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors shadow-sm"
-        >
-          {downloading === 'xlsx' ? (
-            <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
-          ) : (
-            <FaFileExcel size={14} />
-          )}
-          <span className="hidden sm:inline">Excel</span>
-        </button>
-      </div>
-
       {/* Resumen */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
         <Card className="bg-gradient-to-br from-green-50 to-white border-green-200">
@@ -334,146 +251,204 @@ export default function PaidAdjustmentsView() {
         </Card>
       </div>
 
-      {/* Lista de reportes pagados */}
-      {reports.map((report) => {
-        const isExpanded = expandedReports.has(report.id);
-        const paidDate = report.paid_date ? new Date(report.paid_date) : new Date(report.created_at);
-        const isImmediate = report.payment_mode === 'immediate';
+      {/* Lista de reportes agrupados por fecha de pago */}
+      {(() => {
+        const grouped = groupByDate(reports);
+        return Array.from(grouped.entries()).map(([dateLabel, dateReports]) => {
+          const isDateExpanded = expandedDates.has(dateLabel);
+          const dateTotal = dateReports.reduce((s, r) => s + r.total_amount, 0);
+          const dateItems = dateReports.reduce((s, r) => s + r.items.length, 0);
 
-        return (
-          <Card key={report.id} className="overflow-hidden shadow hover:shadow-md transition-shadow">
-            <div className="p-3 sm:p-4">
-              {/* Header del reporte */}
-              <div className="flex items-start gap-2 sm:gap-3">
-                {/* Icono de estado */}
-                <div className="flex-shrink-0 p-2 bg-green-100 rounded-lg">
-                  <FaCheckCircle className="text-green-600" size={16} />
-                </div>
-
-                {/* Info del reporte */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-bold text-[#010139] text-sm sm:text-base truncate">
-                        {report.broker_name}
-                      </h3>
-                      <div className="flex flex-wrap items-center gap-2 mt-1">
-                        <span className="text-xs sm:text-sm text-gray-600">
-                          {report.items.length} item(s)
-                        </span>
-                        <span className="text-xs text-gray-400">•</span>
-                        <span className="text-xs sm:text-sm font-semibold text-[#8AAA19]">
-                          ${report.total_amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2 mt-1">
-                        <span className="text-[10px] sm:text-xs text-gray-500">
-                          <FaCalendarAlt className="inline mr-1" size={10} />
-                          Pagado: {paidDate.toLocaleDateString('es-PA')}
-                        </span>
-                        {isImmediate ? (
-                          <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">
-                            Pago Inmediato
-                          </span>
-                        ) : (
-                          <span className="text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">
-                            Quincena
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Botón Expandir */}
-                    <button
-                      onClick={() => toggleReport(report.id)}
-                      className="p-1 hover:bg-gray-100 rounded transition-colors flex-shrink-0"
-                    >
-                      {isExpanded ? (
-                        <FaChevronDown className="text-gray-600" size={14} />
-                      ) : (
-                        <FaChevronRight className="text-gray-600" size={14} />
-                      )}
-                    </button>
-                  </div>
-
-                  {/* Notas si existen y no está expandido */}
-                  {(report.notes || report.admin_notes) && !isExpanded && (
-                    <div className="mt-2 text-xs text-gray-600 italic truncate">
-                      {report.admin_notes || report.notes}
-                    </div>
+          return (
+            <Card key={dateLabel} className="overflow-hidden shadow-lg border-2 border-gray-100">
+              {/* Date group header - clickable */}
+              <div
+                className="flex items-center justify-between p-3 sm:p-4 bg-gradient-to-r from-gray-50 to-gray-100 cursor-pointer hover:from-gray-100 hover:to-gray-150 transition-all"
+                onClick={() => {
+                  setExpandedDates(prev => {
+                    const next = new Set(prev);
+                    next.has(dateLabel) ? next.delete(dateLabel) : next.add(dateLabel);
+                    return next;
+                  });
+                }}
+              >
+                <div className="flex items-center gap-2 sm:gap-3">
+                  {isDateExpanded ? (
+                    <FaChevronDown className="text-[#010139] text-sm" />
+                  ) : (
+                    <FaChevronRight className="text-gray-400 text-sm" />
                   )}
-                </div>
-              </div>
-
-              {/* Detalle expandido */}
-              {isExpanded && (
-                <div className="mt-3 pt-3 border-t border-gray-200 space-y-2">
-                  {/* Notas */}
-                  {report.notes && (
-                    <div className="text-xs sm:text-sm">
-                      <span className="font-semibold text-gray-700">Nota broker:</span>
-                      <p className="text-gray-600 italic mt-1">{report.notes}</p>
-                    </div>
-                  )}
-                  {report.admin_notes && (
-                    <div className="text-xs sm:text-sm">
-                      <span className="font-semibold text-gray-700">Nota master:</span>
-                      <p className="text-gray-600 italic mt-1">{report.admin_notes}</p>
-                    </div>
-                  )}
-
-                  {/* Información de pago */}
-                  <div className="text-xs sm:text-sm bg-gray-50 rounded p-2">
-                    <span className="font-semibold text-gray-700">Método de pago:</span>
-                    <p className="text-gray-600 mt-1">
-                      {isImmediate ? (
-                        <>
-                          <FaMoneyBillWave className="inline mr-1" />
-                          Pago inmediato (TXT Banco General)
-                        </>
-                      ) : (
-                        <>
-                          <FaCalendarAlt className="inline mr-1" />
-                          Siguiente quincena
-                          {report.fortnight_id && ` (ID: ${report.fortnight_id.slice(0, 8)}...)`}
-                        </>
-                      )}
+                  <div>
+                    <h3 className="font-bold text-[#010139] text-sm sm:text-base">
+                      <FaCalendarAlt className="inline mr-1.5" size={12} />
+                      {dateLabel}
+                    </h3>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {dateReports.length} reporte(s) · {dateItems} item(s)
                     </p>
                   </div>
+                </div>
+                <span className="text-sm sm:text-base font-bold text-[#8AAA19]">
+                  ${dateTotal.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              </div>
 
-                  {/* Items del reporte */}
-                  <div className="text-xs sm:text-sm">
-                    <span className="font-semibold text-gray-700">Items pagados:</span>
-                    <div className="mt-2 space-y-1.5">
-                      {report.items.map((item) => (
-                        <div 
-                          key={item.id} 
-                          className="p-2 bg-gray-50 rounded text-xs"
+              {/* Expanded: broker reports inside this date */}
+              {isDateExpanded && (
+                <div className="p-2 sm:p-3 space-y-2">
+                  {dateReports.map((report) => {
+                    const isExpanded = expandedReports.has(report.id);
+                    const isImmediate = report.payment_mode === 'immediate';
+
+                    return (
+                      <div
+                        key={report.id}
+                        className="border rounded-lg overflow-hidden hover:shadow-sm transition-shadow"
+                      >
+                        {/* Broker card header - entire area clickable */}
+                        <div
+                          className="flex items-center gap-2 sm:gap-3 p-3 cursor-pointer"
+                          onClick={() => toggleReport(report.id)}
                         >
-                          <div className="flex justify-between items-start gap-2">
-                            <div className="flex-1 min-w-0">
-                              <p className="font-medium text-gray-800 truncate">{item.insured_name}</p>
-                              <p className="text-gray-600 text-[10px]">{item.policy_number} • {item.insurer_name}</p>
-                            </div>
-                            <div className="text-right flex-shrink-0">
-                              <p className="font-semibold text-[#8AAA19]">
-                                ${item.broker_commission.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                              </p>
-                              <p className="text-gray-500 text-[10px]">
-                                Bruto: ${item.commission_raw.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                              </p>
+                          <div className="flex-shrink-0 p-1.5 bg-green-100 rounded-lg">
+                            <FaCheckCircle className="text-green-600" size={14} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-bold text-[#010139] text-sm truncate">
+                              {report.broker_name}
+                            </h4>
+                            <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                              <span className="text-xs text-gray-600">
+                                {report.items.length} item(s)
+                              </span>
+                              <span className="text-xs text-gray-400">•</span>
+                              <span className="text-xs font-semibold text-[#8AAA19]">
+                                ${report.total_amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </span>
+                              {isImmediate ? (
+                                <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full">Inmediato</span>
+                              ) : (
+                                <span className="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full">Quincena</span>
+                              )}
                             </div>
                           </div>
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setDownloadModal(report); }}
+                              className="p-1.5 hover:bg-blue-50 rounded transition-colors"
+                              title="Descargar reporte"
+                            >
+                              <FaDownload className="text-[#010139]" size={13} />
+                            </button>
+                            {isExpanded ? (
+                              <FaChevronDown className="text-gray-400" size={12} />
+                            ) : (
+                              <FaChevronRight className="text-gray-400" size={12} />
+                            )}
+                          </div>
                         </div>
-                      ))}
-                    </div>
-                  </div>
+
+                        {/* Expanded detail */}
+                        {isExpanded && (
+                          <div className="px-3 pb-3 pt-1 border-t border-gray-100 space-y-2">
+                            {report.notes && (
+                              <div className="text-xs">
+                                <span className="font-semibold text-gray-700">Nota broker:</span>
+                                <p className="text-gray-600 italic mt-0.5">{report.notes}</p>
+                              </div>
+                            )}
+                            {report.admin_notes && (
+                              <div className="text-xs">
+                                <span className="font-semibold text-gray-700">Nota master:</span>
+                                <p className="text-gray-600 italic mt-0.5">{report.admin_notes}</p>
+                              </div>
+                            )}
+                            <div className="space-y-1">
+                              {report.items.map((item) => (
+                                <div key={item.id} className="p-2 bg-gray-50 rounded text-xs">
+                                  <div className="flex justify-between items-start gap-2">
+                                    <div className="flex-1 min-w-0">
+                                      <p className="font-medium text-gray-800 truncate">{item.insured_name}</p>
+                                      <p className="text-gray-600 text-[10px]">{item.policy_number} • {item.insurer_name}</p>
+                                    </div>
+                                    <div className="text-right flex-shrink-0">
+                                      <p className="font-semibold text-[#8AAA19]">
+                                        ${item.broker_commission.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                      </p>
+                                      <p className="text-gray-500 text-[10px]">
+                                        Bruto: ${item.commission_raw.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
-            </div>
+            </Card>
+          );
+        });
+      })()}
+
+      {/* Modal de selección de formato */}
+      {downloadModal && (
+        <div 
+          className="fixed inset-0 flex items-center justify-center z-50" 
+          style={{ backgroundColor: 'rgba(0, 0, 0, 0.7)' }}
+          onClick={() => { if (!downloading) setDownloadModal(null); }}
+        >
+          <Card className="w-full max-w-sm m-4 bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <CardContent className="p-6">
+              <h3 className="text-lg font-bold text-[#010139] mb-2">Descargar Reporte</h3>
+              <p className="text-sm text-gray-600 mb-1">
+                {downloadModal.broker_name}
+              </p>
+              <p className="text-xs text-gray-500 mb-4">
+                {downloadModal.items.length} item(s) · ${downloadModal.total_amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
+              </p>
+              <div className="flex gap-3">
+                <Button
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+                  disabled={downloading !== null}
+                  onClick={() => handleDownloadReport(downloadModal, 'pdf')}
+                >
+                  {downloading === 'pdf' ? (
+                    <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2" />
+                  ) : (
+                    <FaFilePdf className="mr-2" />
+                  )}
+                  PDF
+                </Button>
+                <Button
+                  className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                  disabled={downloading !== null}
+                  onClick={() => handleDownloadReport(downloadModal, 'xlsx')}
+                >
+                  {downloading === 'xlsx' ? (
+                    <div className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full mr-2" />
+                  ) : (
+                    <FaFileExcel className="mr-2" />
+                  )}
+                  Excel
+                </Button>
+              </div>
+              <Button
+                variant="ghost"
+                className="w-full mt-3"
+                disabled={downloading !== null}
+                onClick={() => setDownloadModal(null)}
+              >
+                Cancelar
+              </Button>
+            </CardContent>
           </Card>
-        );
-      })}
+        </div>
+      )}
     </div>
   );
 }

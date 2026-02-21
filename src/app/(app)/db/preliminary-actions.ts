@@ -158,8 +158,8 @@ export async function actionUpdatePreliminaryClient(id: string, updates: any) {
     if (updates.renewal_date !== undefined) {
       cleanedUpdates.renewal_date = updates.renewal_date || null;
     }
-    // OMITIR status completamente - tipo enum causa error
-    // Status se asigna en creación y no cambia en updates
+    // Siempre enviar status='ACTIVA' para que el trigger use un valor válido del enum
+    cleanedUpdates.status = 'ACTIVA';
     if (updates.broker_id !== undefined) {
       cleanedUpdates.broker_id = updates.broker_id || null;
     }
