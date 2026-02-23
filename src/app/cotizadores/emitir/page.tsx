@@ -144,6 +144,7 @@ export default function EmitirPage() {
   };
 
   const handleConfirmEmission = async () => {
+    if (isConfirming) return; // Prevent double-click
     try {
       setIsConfirming(true);
       
