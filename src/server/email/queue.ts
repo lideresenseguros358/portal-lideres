@@ -1,18 +1,18 @@
 /**
  * SISTEMA DE COLA Y RATE-LIMITING PARA SMTP
  * ==========================================
- * Implementa envío serializado con intervalos seguros para Zoho Mail
+ * Implementa envío serializado con intervalos seguros para ZeptoMail
  * 
- * REGLAS ZOHO MAIL SMTP:
- * - NO soporta burst sending (envíos en ráfaga)
- * - Límite dinámico por reputación (50-500 correos/hora)
- * - Requiere serialización (1 a la vez)
+ * ZEPTOMAIL SMTP:
+ * - Diseñado para envío transaccional masivo
+ * - Límites mucho más altos que Zoho (miles/hora)
+ * - Soporta envío rápido pero mantenemos serialización por seguridad
  * 
- * CONFIGURACIÓN SEGURA:
+ * CONFIGURACIÓN:
  * - Concurrencia: 1 correo activo a la vez
- * - Intervalo: 15 segundos entre correos
- * - Máximo por lote: 80 correos
- * - Reintentos: 1 vez con 60 seg de espera
+ * - Intervalo: 3 segundos entre correos (20/min = 1200/hora)
+ * - Máximo por lote: 200 correos
+ * - Reintentos: 1 vez con 30 seg de espera
  */
 
 import { sendEmail } from './sendEmail';
@@ -21,17 +21,17 @@ import type { SendEmailParams } from './types';
 // ==================== CONFIGURACIÓN ====================
 
 const RATE_LIMIT_CONFIG = {
-  /** Segundos entre cada correo (15s = 4 correos/min = 240/hora) */
-  DELAY_BETWEEN_EMAILS: 15 * 1000, // 15 segundos en milisegundos
+  /** Segundos entre cada correo (3s = 20 correos/min = 1200/hora) */
+  DELAY_BETWEEN_EMAILS: 3 * 1000, // 3 segundos en milisegundos
   
   /** Máximo de correos por lote */
-  MAX_BATCH_SIZE: 80,
+  MAX_BATCH_SIZE: 200,
   
   /** Delay antes de reintentar si hay error de rate limit */
-  RETRY_DELAY: 60 * 1000, // 60 segundos
+  RETRY_DELAY: 30 * 1000, // 30 segundos
   
   /** Tiempo de bloqueo si hay error crítico */
-  CRITICAL_ERROR_LOCKOUT: 60 * 60 * 1000, // 1 hora
+  CRITICAL_ERROR_LOCKOUT: 30 * 60 * 1000, // 30 minutos
 } as const;
 
 // ==================== DETECCIÓN DE ERRORES ====================

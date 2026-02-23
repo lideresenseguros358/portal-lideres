@@ -367,8 +367,8 @@ export async function GET() {
         portal: portalStatus ? 'connected' : 'disconnected',
         tramites: tramitesStatus ? 'connected' : 'disconnected',
       },
-      host: process.env.ZOHO_SMTP_HOST || 'smtppro.zoho.com',
-      port: process.env.ZOHO_SMTP_PORT || '465',
+      host: process.env.ZEPTO_SMTP_HOST || 'smtp.zeptomail.com',
+      port: process.env.ZEPTO_SMTP_PORT || '465',
     });
     
   } catch (error: any) {

@@ -35,12 +35,10 @@ export async function GET(request: NextRequest) {
       'FEATURE_ENABLE_IMAP',
     ],
     smtp: [
-      'ZOHO_SMTP_HOST',
-      'ZOHO_SMTP_PORT',
-      'ZOHO_SMTP_USER_PORTAL',
-      'ZOHO_SMTP_PASS_PORTAL',
-      'ZOHO_SMTP_USER_TRAMITES',
-      'ZOHO_SMTP_PASS_TRAMITES',
+      'ZEPTO_SMTP_HOST',
+      'ZEPTO_SMTP_PORT',
+      'ZEPTO_SMTP_USER',
+      'ZEPTO_SMTP_PASS',
     ],
     vertex: [
       'GOOGLE_CLOUD_PROJECT',

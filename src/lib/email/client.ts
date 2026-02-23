@@ -1,27 +1,16 @@
 /**
- * Email Client - Resend
- * Configuración centralizada para envío de emails
+ * Email Client - ZeptoMail SMTP
+ * ==============================
+ * Configuración centralizada para envío de emails vía ZeptoMail.
+ * Reemplaza Resend API — todos los correos salen por portal@lideresenseguros.com
  */
 
-import { Resend } from 'resend';
-
-// Cliente singleton de Resend (lazy initialization)
-let resendInstance: Resend | null = null;
-
-function getResendClient(): Resend {
-  if (!resendInstance) {
-    if (!process.env.RESEND_API_KEY) {
-      throw new Error('RESEND_API_KEY no está configurada en las variables de entorno');
-    }
-    resendInstance = new Resend(process.env.RESEND_API_KEY);
-  }
-  return resendInstance;
-}
+import { getTransport, getFromAddress } from '@/server/email/mailer';
 
 // Configuración por defecto
 export const EMAIL_CONFIG = {
-  from: process.env.RESEND_FROM_EMAIL || 'Líderes en Seguros <contacto@lideresenseguros.com>',
-  replyTo: process.env.RESEND_REPLY_TO || 'contacto@lideresenseguros.com',
+  from: 'Líderes en Seguros <portal@lideresenseguros.com>',
+  replyTo: 'portal@lideresenseguros.com',
   
   // URLs base para links y assets
   baseUrl: process.env.NEXT_PUBLIC_BASE_URL || 'http://localhost:3000',
@@ -52,13 +41,15 @@ export interface SendEmailOptions {
 }
 
 /**
- * Función helper para enviar emails
+ * Función helper para enviar emails vía ZeptoMail SMTP
  */
 export async function sendEmail(options: SendEmailOptions) {
   try {
-    const resend = getResendClient();
-    const result = await resend.emails.send({
-      from: EMAIL_CONFIG.from,
+    const transport = getTransport('PORTAL');
+    const from = getFromAddress('PORTAL');
+
+    const info = await transport.sendMail({
+      from,
       to: options.to,
       cc: options.cc,
       bcc: options.bcc,
@@ -68,9 +59,9 @@ export async function sendEmail(options: SendEmailOptions) {
       replyTo: options.replyTo || EMAIL_CONFIG.replyTo,
     });
 
-    return { success: true, data: result };
+    return { success: true, data: { id: info.messageId } };
   } catch (error) {
-    console.error('Error enviando email:', error);
+    console.error('[EMAIL-CLIENT] Error enviando email vía ZeptoMail:', error);
     return { success: false, error };
   }
 }

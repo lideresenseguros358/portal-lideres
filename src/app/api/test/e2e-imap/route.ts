@@ -95,15 +95,16 @@ Timestamp: ${new Date().toISOString()}
     `.trim();
 
     try {
-      // Configurar transporter SMTP
+      // Configurar transporter SMTP (ZeptoMail)
       const transporter = nodemailer.createTransport({
-        host: process.env.ZOHO_SMTP_HOST || 'smtp.zoho.com',
-        port: parseInt(process.env.ZOHO_SMTP_PORT || '587'),
-        secure: false,
+        host: process.env.ZEPTO_SMTP_HOST || 'smtp.zeptomail.com',
+        port: parseInt(process.env.ZEPTO_SMTP_PORT || '465'),
+        secure: true,
         auth: {
-          user: process.env.ZOHO_SMTP_USER || 'portal@lideresenseguros.com',
-          pass: process.env.ZOHO_SMTP_PASS,
+          user: process.env.ZEPTO_SMTP_USER || 'emailapikey',
+          pass: process.env.ZEPTO_SMTP_PASS,
         },
+        tls: { minVersion: 'TLSv1.2' },
       });
 
       // Enviar email
