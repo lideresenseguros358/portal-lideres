@@ -188,7 +188,7 @@ export async function POST(request: NextRequest) {
         marca: vmarca_label || 'N/A',
         modelo: vmodelo_label || 'N/A',
         ano: parseInt(vanioauto),
-        placa: 'Por asignar', // No tenemos placa en el flujo actual
+        placa: vplaca || 'Por asignar',
       },
       // Vigencia por defecto (1 año)
       vigencia: {
