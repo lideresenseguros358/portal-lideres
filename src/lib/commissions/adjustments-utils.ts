@@ -68,7 +68,7 @@ export function calculateBrokerCommission(
   broker: BrokerInfo
 ): number {
   const percent = broker.percent_default ?? 0;
-  return rawAmount * (percent / 100);
+  return rawAmount * percent; // percent_default es DECIMAL (0.80 = 80%), NO dividir /100
 }
 
 /**
@@ -97,7 +97,7 @@ export function calculateSelectionTotals(
 } {
   const percent = getBrokerPercent(broker);
   const totalRaw = items.reduce((sum, item) => sum + Math.abs(item.gross_amount), 0);
-  const totalBroker = totalRaw * (percent / 100);
+  const totalBroker = totalRaw * percent; // percent_default es DECIMAL (0.80 = 80%), NO dividir /100
 
   return {
     totalRaw,

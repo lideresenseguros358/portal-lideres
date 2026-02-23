@@ -90,7 +90,7 @@ export function MasterClaimsView() {
     const totalBroker = selectedClaims.reduce((sum, claim) => {
       const amount = claim.comm_items?.gross_amount || 0;
       const percent = claim.brokers?.percent_default || 0;
-      return sum + (Math.abs(amount) * (percent / 100));
+      return sum + (Math.abs(amount) * percent); // percent_default es DECIMAL (0.80 = 80%), NO dividir /100
     }, 0);
 
     return {

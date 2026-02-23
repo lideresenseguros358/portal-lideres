@@ -53,7 +53,7 @@ export function ClaimsReportCard({
   }, 0);
 
   const brokerPercent = items[0]?.brokers?.percent_default || 0;
-  const totalBroker = totalRaw * (brokerPercent / 100);
+  const totalBroker = totalRaw * brokerPercent; // percent_default es DECIMAL (0.80 = 80%), NO dividir /100
 
   return (
     <Card 
@@ -136,7 +136,7 @@ export function ClaimsReportCard({
                         if (!item) return null;
 
                         const rawAmount = Math.abs(item.gross_amount);
-                        const brokerAmount = rawAmount * (brokerPercent / 100);
+                        const brokerAmount = rawAmount * brokerPercent; // percent_default es DECIMAL, NO dividir /100
 
                         return (
                           <TableRow key={claim.id} className="hover:bg-gray-50">

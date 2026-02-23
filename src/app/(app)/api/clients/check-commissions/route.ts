@@ -7,7 +7,7 @@ import { getSupabaseServer } from '@/lib/supabase/server';
  * Retorna el total y desglose por quincena.
  *
  * NOTA: comm_items.gross_amount es el monto bruto de la comisión.
- *       broker_commission = gross_amount * (percent_default / 100).
+ *       broker_commission = gross_amount * percent_default (percent_default es DECIMAL: 0.80 = 80%).
  *       comm_imports.period_label almacena el fortnight_id (no hay FK directa).
  */
 export async function POST(request: NextRequest) {
@@ -173,9 +173,9 @@ export async function POST(request: NextRequest) {
         };
       }
 
-      // broker_commission = gross_amount * (percent_default / 100)
+      // broker_commission = gross_amount * percent_default (percent_default es DECIMAL: 0.80 = 80%)
       const grossAmount = Math.abs(item.gross_amount || 0);
-      const brokerCommission = grossAmount * (percentOld / 100);
+      const brokerCommission = grossAmount * percentOld;
 
       acc[fortnightId].total_commission += brokerCommission;
       acc[fortnightId].items.push({

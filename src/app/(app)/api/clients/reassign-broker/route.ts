@@ -112,10 +112,11 @@ export async function POST(request: NextRequest) {
     // 4. Procesar cada comm_item: calcular comisiones y preparar pending_items
     //    check-commissions envía:
     //      - gross_amount: monto bruto del reporte (commission_raw)
-    //      - broker_commission: gross_amount * (percentOld / 100) = lo que se le pagó al broker antiguo
+    //      - broker_commission: gross_amount * percentOld = lo que se le pagó al broker antiguo
     //    Para el nuevo broker:
     //      - commission_raw = gross_amount (el monto bruto original)
-    //      - broker_commission_new = gross_amount * (percentNew / 100)
+    //      - broker_commission_new = gross_amount * percentNew
+    //    NOTA: percent_default es DECIMAL (0.80 = 80%), NO dividir /100
     const pendingItemsToCreate: any[] = [];
     let totalDebt = 0;
     let totalNewCommissions = 0;
@@ -128,11 +129,12 @@ export async function POST(request: NextRequest) {
         
         // gross_amount es el monto bruto del reporte (= commission_raw)
         // Si check-commissions envió gross_amount, usarlo directamente
-        // Si no, hacer cálculo reverso: commissionPaid / (percentOld / 100)
-        const commissionRaw = item.gross_amount || (commissionPaid / (percentOld / 100));
+        // Si no, hacer cálculo reverso: commissionPaid / percentOld
+        // NOTA: percent_default es DECIMAL (0.80 = 80%), NO dividir /100
+        const commissionRaw = item.gross_amount || (commissionPaid / percentOld);
         
-        // Calcular nueva comisión: commission_raw * (percentNew / 100)
-        const newCommission = commissionRaw * (percentNew / 100);
+        // Calcular nueva comisión: commission_raw * percentNew
+        const newCommission = commissionRaw * percentNew;
 
         totalDebt += commissionPaid;
         totalNewCommissions += newCommission;
