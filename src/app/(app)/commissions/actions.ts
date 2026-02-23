@@ -5413,64 +5413,54 @@ export async function actionPayFortnight(fortnight_id: string) {
               console.log(`[actionPayFortnight]   ℹ️ Ya existe en comm_items`);
             }
             
-            // Registrar en preliminar DIRECTAMENTE sin depender de buscar la póliza primero
-            console.log(`[actionPayFortnight]   📋 Verificando si ya existe en preliminar...`);
-
-            // Verificar si ya existe en temp_client_import
-            const { data: existingPrelim, error: prelimError } = await supabase
-              .from('temp_client_import')
+            // Verificar si la póliza ya existe en BD real (policies)
+            const { data: existingPolicy } = await supabase
+              .from('policies')
               .select('id')
               .eq('policy_number', item.policy_number)
-              .eq('broker_id', item.temp_assigned_broker_id)
               .maybeSingle();
-            
-            if (prelimError) {
-              console.error(`[actionPayFortnight]   ❌ Error verificando temp_client_import:`, prelimError);
-            }
-            
-            // Insertar directamente en preliminar sin depender de encontrar la póliza en BD
-            if (!existingPrelim) {
-              const { error: prelimInsertError } = await supabase
-                .from('temp_client_import')
-                .insert({
-                  policy_number: item.policy_number,
-                  client_name: item.insured_name,
-                  insurer_id: item.insurer_id,
-                  broker_id: item.temp_assigned_broker_id,
-                  renewal_date: null,
-                  migrated: false,
-                  status: 'ACTIVA',
-                  source: 'draft_identified',
-                  notes: 'Identificado en zona de trabajo de Nueva Quincena',
-                  fortnight_id: fortnight_id  // Agregar ID de la quincena para referencia
-                });
-              
-              if (prelimInsertError) {
-                console.error(`[actionPayFortnight]   ❌ Error insertando temp_client_import:`, prelimInsertError);
-              } else {
-                preliminarInserted++;
-                console.log(`[actionPayFortnight]   ✅✅✅ CLIENTE REGISTRADO EN PRELIMINAR (temp_client_import) ✅✅✅`);
-              }
+
+            if (existingPolicy) {
+              console.log(`[actionPayFortnight]   📄 Póliza ya existe en BD — no crear preliminar`);
             } else {
-              console.log(`[actionPayFortnight]   ℹ️ Ya existe en temp_client_import`);
-            }
-            
-            // Intentar buscar la póliza solo para fines de registro
-            try {
-              const { data: existingPolicy } = await supabase
-                .from('policies')
-                .select('id, client_id')
+              // Solo crear preliminar si NO existe en policies
+              console.log(`[actionPayFortnight]   📋 Verificando si ya existe en preliminar...`);
+
+              const { data: existingPrelim, error: prelimError } = await supabase
+                .from('temp_client_import')
+                .select('id')
                 .eq('policy_number', item.policy_number)
                 .maybeSingle();
-                
-              if (existingPolicy) {
-                console.log(`[actionPayFortnight]   📄 Póliza encontrada - Client ID: ${existingPolicy.client_id} (solo informativo)`);
-              } else {
-                console.log(`[actionPayFortnight]   ℹ️ Póliza no encontrada en BD (se registra en preliminar de todas formas)`);
+              
+              if (prelimError) {
+                console.error(`[actionPayFortnight]   ❌ Error verificando temp_client_import:`, prelimError);
               }
-            } catch (policyError) {
-              // Solo para fines de log, no afecta el flujo
-              console.log(`[actionPayFortnight]   ℹ️ Error al buscar póliza (solo informativo):`, policyError);
+              
+              if (!existingPrelim) {
+                const { error: prelimInsertError } = await supabase
+                  .from('temp_client_import')
+                  .insert({
+                    policy_number: item.policy_number,
+                    client_name: item.insured_name,
+                    insurer_id: item.insurer_id,
+                    broker_id: item.temp_assigned_broker_id,
+                    renewal_date: null,
+                    migrated: false,
+                    status: 'ACTIVA',
+                    source: 'draft_identified',
+                    notes: 'Identificado en zona de trabajo de Nueva Quincena',
+                    fortnight_id: fortnight_id
+                  });
+                
+                if (prelimInsertError) {
+                  console.error(`[actionPayFortnight]   ❌ Error insertando temp_client_import:`, prelimInsertError);
+                } else {
+                  preliminarInserted++;
+                  console.log(`[actionPayFortnight]   ✅ Cliente registrado en preliminar`);
+                }
+              } else {
+                console.log(`[actionPayFortnight]   ℹ️ Ya existe en temp_client_import`);
+              }
             }
           } catch (itemError) {
             console.error(`[actionPayFortnight]   ❌❌❌ ERROR CRÍTICO:`, itemError);

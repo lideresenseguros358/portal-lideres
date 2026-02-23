@@ -296,27 +296,79 @@ async function createPreliminarRecords(
   try {
     console.log('[createPreliminarRecords] Creando registros preliminares en temp_client_import...');
     
+    // Recopilar todos los policy_numbers para verificar duplicados en lote
+    const allPolicyNumbers: string[] = [];
+    for (const report of reports) {
+      for (const item of (report.adjustment_report_items || [])) {
+        if (item.pending_items?.policy_number) {
+          allPolicyNumbers.push(item.pending_items.policy_number);
+        }
+      }
+    }
+
+    // Verificar cuáles ya existen en policies (BD real)
+    const existingInPolicies = new Set<string>();
+    if (allPolicyNumbers.length > 0) {
+      const { data: existing } = await supabase
+        .from('policies')
+        .select('policy_number')
+        .in('policy_number', allPolicyNumbers);
+      (existing || []).forEach((p: any) => existingInPolicies.add(p.policy_number));
+    }
+
+    // Verificar cuáles ya existen en temp_client_import (preliminar)
+    const existingInPrelim = new Set<string>();
+    if (allPolicyNumbers.length > 0) {
+      const { data: existing } = await supabase
+        .from('temp_client_import')
+        .select('policy_number')
+        .in('policy_number', allPolicyNumbers);
+      (existing || []).forEach((p: any) => existingInPrelim.add(p.policy_number));
+    }
+
     const preliminarRecords: any[] = [];
+    let skippedExisting = 0;
+    let skippedDuplicate = 0;
 
     for (const report of reports) {
-      // Crear un registro por cada item del reporte
       for (const item of (report.adjustment_report_items || [])) {
         const pendingItem = item.pending_items;
         
         if (pendingItem) {
+          const pn = pendingItem.policy_number;
+
+          // Skip si ya existe en policies (BD real)
+          if (pn && existingInPolicies.has(pn)) {
+            skippedExisting++;
+            continue;
+          }
+
+          // Skip si ya existe en preliminar
+          if (pn && existingInPrelim.has(pn)) {
+            skippedDuplicate++;
+            continue;
+          }
+
           preliminarRecords.push({
             broker_id: report.broker_id,
             client_name: pendingItem.insured_name || 'POR COMPLETAR',
-            policy_number: pendingItem.policy_number,
+            policy_number: pn,
             insurer_id: pendingItem.insurer_id,
             source: 'ajuste_pagado',
-            source_id: report.id, // ID del adjustment_report
+            source_id: report.id,
             status: 'ACTIVA',
             migrated: false,
             notes: `Ajuste pagado el ${new Date().toLocaleDateString('es-PA')}. Requiere completar datos del cliente.`
           });
+
+          // Marcar para no duplicar dentro del mismo lote
+          if (pn) existingInPrelim.add(pn);
         }
       }
+    }
+
+    if (skippedExisting > 0 || skippedDuplicate > 0) {
+      console.log(`[createPreliminarRecords] Omitidos: ${skippedExisting} ya en BD, ${skippedDuplicate} ya en preliminar`);
     }
 
     if (preliminarRecords.length > 0) {
@@ -326,18 +378,8 @@ async function createPreliminarRecords(
 
       if (insertError) {
         console.error('Error inserting preliminar records:', insertError);
-        // No fallar todo el proceso si falla preliminar
       } else {
         console.log(`[createPreliminarRecords] ${preliminarRecords.length} registros preliminares creados`);
-        
-        // TODO: Crear notificación al broker para que complete los datos
-        // await supabase.from('notifications').insert({
-        //   target: broker.p_id,
-        //   broker_id: report.broker_id,
-        //   notification_type: 'info',
-        //   title: 'Nuevos Clientes en Preliminar',
-        //   body: `Tienes ${preliminarRecords.length} cliente(s) pendiente(s) de completar datos`
-        // });
       }
     }
   } catch (error) {
