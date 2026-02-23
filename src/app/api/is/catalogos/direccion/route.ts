@@ -54,7 +54,10 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'tipo inválido. Usar: provincias, distritos, corregimientos, urbanizaciones' }, { status: 400 });
     }
 
-    const response = await isGet<{ Table: any[] }>(endpoint, env);
+    // Urbanizaciones siempre retorna 401 en IS — usar skipTokenRefresh para evitar
+    // que invalide el cache de token y cause race conditions con otros catálogos concurrentes
+    const requestOptions = tipo === 'urbanizaciones' ? { skipTokenRefresh: true } : undefined;
+    const response = await isGet<{ Table: any[] }>(endpoint, env, requestOptions);
 
     if (!response.success) {
       // Urbanizaciones es opcional — si falla (ej: 401 persistente), retornar array vacío en vez de 500

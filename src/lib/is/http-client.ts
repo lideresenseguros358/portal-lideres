@@ -181,7 +181,7 @@ export async function isRequest<T = any>(
     const { getISPrimaryToken } = await import('./config');
     authToken = getISPrimaryToken(env);
   } else {
-    const dailyToken = skipTokenRefresh ? null : await getDailyToken(env);
+    const dailyToken = await getDailyToken(env);
     if (!dailyToken) {
       console.error('[IS HTTP Client] No se pudo obtener token diario. El token principal NO funciona en endpoints de datos.');
       return {
@@ -425,9 +425,10 @@ async function saveAudit(
  */
 export async function isGet<T = any>(
   endpoint: string,
-  env: ISEnvironment = 'development'
+  env: ISEnvironment = 'development',
+  options?: Partial<ISRequestOptions>
 ): Promise<ISResponse<T>> {
-  return isRequest<T>(endpoint, { method: 'GET' }, env);
+  return isRequest<T>(endpoint, { method: 'GET', ...options }, env);
 }
 
 /**
