@@ -208,7 +208,7 @@ export default function VehicleDataSection({
             onChange={(e) => handleChange('vin', e.target.value.toUpperCase())}
             className={`${inputClass} ${errors.vin ? errorInputClass : normalInputClass}`}
             placeholder="1HGBH41JXMN109186"
-            maxLength={17}
+            maxLength={20}
           />
           {errors.vin && (
             <p className="text-red-500 text-xs mt-1">{errors.vin}</p>
@@ -226,6 +226,7 @@ export default function VehicleDataSection({
             onChange={(e) => handleChange('motor', e.target.value.toUpperCase())}
             className={`${inputClass} ${errors.motor ? errorInputClass : normalInputClass}`}
             placeholder="ABC123456"
+            maxLength={20}
           />
           {errors.motor && (
             <p className="text-red-500 text-xs mt-1">{errors.motor}</p>

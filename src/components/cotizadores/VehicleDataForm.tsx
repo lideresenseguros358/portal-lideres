@@ -264,6 +264,7 @@ export default function VehicleDataForm({ quoteData, onContinue, isInternacional
                   errors.vinChasis ? 'border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
                 }`}
                 placeholder="NÚMERO DE IDENTIFICACIÓN VEHÍCULO"
+                maxLength={20}
               />
               {errors.vinChasis && <p className="text-xs text-red-500 mt-1">{errors.vinChasis}</p>}
               <p className="text-xs text-gray-500 mt-1">VIN o número de chasis del vehículo</p>
@@ -281,6 +282,7 @@ export default function VehicleDataForm({ quoteData, onContinue, isInternacional
                   errors.motor ? 'border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
                 }`}
                 placeholder="NÚMERO DE MOTOR"
+                maxLength={20}
               />
               {errors.motor && <p className="text-xs text-red-500 mt-1">{errors.motor}</p>}
             </div>

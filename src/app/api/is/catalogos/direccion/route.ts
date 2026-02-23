@@ -57,6 +57,11 @@ export async function GET(request: NextRequest) {
     const response = await isGet<{ Table: any[] }>(endpoint, env);
 
     if (!response.success) {
+      // Urbanizaciones es opcional — si falla (ej: 401 persistente), retornar array vacío en vez de 500
+      if (tipo === 'urbanizaciones') {
+        console.warn('[IS Catálogos Dirección] Urbanizaciones no disponible (IS retornó error). Retornando lista vacía.');
+        return NextResponse.json({ success: true, data: [], warning: 'Catálogo de urbanizaciones no disponible temporalmente' });
+      }
       return NextResponse.json({ error: response.error || 'Error consultando catálogo' }, { status: 500 });
     }
 

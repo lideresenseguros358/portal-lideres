@@ -344,8 +344,12 @@ export async function emitirPolizaAuto(
   hastaDate.setFullYear(hastaDate.getFullYear() + 1);
   const vigHasta = `${String(hastaDate.getDate()).padStart(2, '0')}/${String(hastaDate.getMonth() + 1).padStart(2, '0')}/${hastaDate.getFullYear()}`;
   
-  const telefonoClean = (request.telefono || '').replace(/[-\s\(\)]/g, '');
-  const celularClean = (request.celular || request.telefono || '').replace(/[-\s\(\)]/g, '');
+  const telefonoClean = (request.telefono || '').replace(/[-\s\(\)]/g, '').substring(0, 15);
+  const celularClean = (request.celular || request.telefono || '').replace(/[-\s\(\)]/g, '').substring(0, 15);
+  
+  // Truncar campos de texto a longitudes máximas de IS para evitar error
+  // "Los datos de cadena o binarios se truncarían" (SQL truncation)
+  const safe = (val: string | undefined, maxLen: number) => (val || '').substring(0, maxLen);
   
   // Mapear estadoCivil del formulario a código IS (/catalogos/estadocivil)
   const estadoCivilMap: Record<string, number> = {
@@ -368,14 +372,15 @@ export async function emitirPolizaAuto(
   const codColor = colorMap[colorUpper] || '06'; // Default: 06 si no se encuentra
   
   // Dirección: usar códigos del formulario si están disponibles, sino defaults Panamá
+  // IS DB: calle max ~50 chars, casaApto max ~30 chars
   const defaultDir = {
     codPais: 1,           // Panamá
     codProvincia: request.codProvincia || 8,
     codDistrito: request.codDistrito || 1,
     codCorregimiento: request.codCorregimiento || 1,
     codUrbanizacion: request.codUrbanizacion || 0,
-    calle: request.direccion || 'N/A',
-    casaApto: request.casaApto || '',
+    calle: safe(request.direccion, 50) || 'N/A',
+    casaApto: safe(request.casaApto, 30),
     aptoPostal: '',
   };
   
@@ -393,12 +398,12 @@ export async function emitirPolizaAuto(
     opcion: request.opcion || 1,
     cantcuotas: request.cantCuotas || 1,
     datosGenerales: {
-      nombre: request.nombre || '',
-      apellido1: request.apellido1 || '',
-      apellido2: request.apellido2 || '',
-      apeCasada: request.apeCasada || '',
+      nombre: safe(request.nombre, 30),
+      apellido1: safe(request.apellido1, 30),
+      apellido2: safe(request.apellido2, 30),
+      apeCasada: safe(request.apeCasada, 30),
       tipoDoc: Math.floor(Number(request.codTipoDoc)) || 1,
-      vNroDoc: request.nroDoc || '',
+      vNroDoc: safe(request.nroDoc, 20),
       vNroNit: '0',
       esExtranjero: 0,
       paisExtranjero: 0,
@@ -409,16 +414,16 @@ export async function emitirPolizaAuto(
       telRes: telefonoClean,
       telOfi: telefonoClean,
       celular: celularClean,
-      correo: request.correo || '',
+      correo: safe(request.correo, 60),
       adicional: '',
       codSocio: '',
       dirResidencial: defaultDir,
       dirOficina: defaultDir,
     },
     datosAuto: {
-      motor: request.motor || '',
-      chasis: request.chasis || '',
-      placa: request.placa || '',
+      motor: safe(request.motor, 20),
+      chasis: safe(request.chasis, 20),
+      placa: safe(request.placa, 10),
       codMarca: Math.floor(Number(request.codMarca)),
       codModelo: Math.floor(Number(request.codModelo)),
       aaaModelo: parseInt(String(request.anioAuto)) || new Date().getFullYear(),
