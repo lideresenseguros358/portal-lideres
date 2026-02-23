@@ -452,65 +452,92 @@ export async function emitirPolizaAuto(
   
   console.log('[IS Emission] POST /getemision FULL BODY:', JSON.stringify(body, null, 2));
   
-  const response = await isPost<{ Table: Array<{
-    Column1: number;       // Result code: >=1 = success, <0 = error
-    NroPol: number;        // Policy number (or 0/1 on error)
-    Descripcion: string;   // Message
-    Error: string;         // Error details
-    CodSucursal: number;   // Branch code
-    LinkDescarga: string;  // PDF download URL
-  }> }>(IS_ENDPOINTS.EMISION, body, env);
+  // IS a veces retorna Column1=-1 con "debe presionar el botón emitir nuevamente"
+  // Esto es comportamiento conocido — se resuelve con un retry automático
+  const MAX_EMISSION_RETRIES = 2;
   
-  // Extraer el mensaje de error real de la respuesta
-  const tableData = response.data?.Table?.[0] as any;
-  
-  if (!response.success) {
-    const rawData = response.data as any;
-    const validationErrors = rawData?.errors ? JSON.stringify(rawData.errors) : '';
-    const isMsg = tableData?.Descripcion || tableData?.Msg || tableData?.MSG || '';
-    const errorTitle = rawData?.title || '';
-    const rawStr = typeof rawData === 'string' ? rawData : '';
-    const bestError = validationErrors || isMsg || errorTitle || rawStr || response.error || 'Error al emitir poliza';
-    console.error('[IS Emission] Error. Status:', response.statusCode, 'Error:', bestError);
-    console.error('[IS Emission] Raw response:', JSON.stringify(rawData, null, 2));
-    return { success: false, error: bestError };
+  for (let attempt = 0; attempt <= MAX_EMISSION_RETRIES; attempt++) {
+    if (attempt > 0) {
+      console.log(`[IS Emission] Reintento ${attempt}/${MAX_EMISSION_RETRIES}...`);
+      await new Promise(r => setTimeout(r, 1500 * attempt)); // backoff: 1.5s, 3s
+    }
+    
+    const response = await isPost<{ Table: Array<{
+      Column1: number;       // Result code: >=1 = success, <0 = error
+      NroPol: number;        // Policy number (or 0/1 on error)
+      Descripcion: string;   // Message
+      Error: string;         // Error details
+      CodSucursal: number;   // Branch code
+      LinkDescarga: string;  // PDF download URL
+    }> }>(IS_ENDPOINTS.EMISION, body, env);
+    
+    // Extraer el mensaje de error real de la respuesta
+    const tableData = response.data?.Table?.[0] as any;
+    
+    if (!response.success) {
+      const rawData = response.data as any;
+      const validationErrors = rawData?.errors ? JSON.stringify(rawData.errors) : '';
+      const isMsg = tableData?.Descripcion || tableData?.Msg || tableData?.MSG || '';
+      const errorTitle = rawData?.title || '';
+      const rawStr = typeof rawData === 'string' ? rawData : '';
+      const bestError = validationErrors || isMsg || errorTitle || rawStr || response.error || 'Error al emitir poliza';
+      console.error('[IS Emission] Error. Status:', response.statusCode, 'Error:', bestError);
+      console.error('[IS Emission] Raw response:', JSON.stringify(rawData, null, 2));
+      // No reintentar errores HTTP (400, 401, etc.) — solo errores de negocio
+      return { success: false, error: bestError };
+    }
+    
+    if (!tableData) {
+      console.error('[IS Emission] Respuesta sin datos. Full response.data:', JSON.stringify(response.data, null, 2));
+      return { success: false, error: 'Respuesta IS sin datos: ' + JSON.stringify(response.data).substring(0, 300) };
+    }
+    
+    // IS getemision response fields:
+    // Column1: >=1 = success, <0 = error (-2 = polizas agotados, etc.)
+    // Descripcion: human-readable message
+    // NroPol: policy number on success
+    // LinkDescarga: PDF download URL on success
+    const resultCode = tableData.Column1;
+    const descripcion = tableData.Descripcion || '';
+    const errorDetail = tableData.Error || '';
+    
+    console.log(`[IS Emission] Attempt ${attempt + 1} — Column1: ${resultCode}, Descripcion: ${descripcion}, NroPol: ${tableData.NroPol}`);
+    
+    if (resultCode < 0 || resultCode === 0) {
+      // IS retorna -1 con "debe presionar el botón emitir nuevamente" — reintentar
+      const isRetryable = resultCode === -1 && (
+        descripcion.toLowerCase().includes('emitir nuevamente') ||
+        errorDetail.toLowerCase().includes('truncar') ||
+        errorDetail.toLowerCase().includes('trunca')
+      );
+      
+      if (isRetryable && attempt < MAX_EMISSION_RETRIES) {
+        console.warn(`[IS Emission] Error retryable (Column1=${resultCode}). Reintentando...`);
+        continue;
+      }
+      
+      console.error('[IS Emission] Error en emision. Column1:', resultCode, 'Desc:', descripcion, 'Error:', errorDetail);
+      return { success: false, error: descripcion || errorDetail || 'Error IS code=' + resultCode };
+    }
+    
+    const nroPoliza = String(tableData.NroPol || '');
+    if (!nroPoliza || nroPoliza === '0' || nroPoliza === '1') {
+      console.error('[IS Emission] Respuesta sin numero de poliza valido:', tableData);
+      return { success: false, error: descripcion || 'No se recibio numero de poliza' };
+    }
+    
+    const pdfUrl = tableData.LinkDescarga || '';
+    console.log('[IS Emission] ✅ Poliza emitida:', nroPoliza, 'PDF:', pdfUrl);
+    
+    return {
+      success: true,
+      nroPoliza,
+      pdfUrl: pdfUrl || undefined,
+    };
   }
   
-  if (!tableData) {
-    console.error('[IS Emission] Respuesta sin datos. Full response.data:', JSON.stringify(response.data, null, 2));
-    return { success: false, error: 'Respuesta IS sin datos: ' + JSON.stringify(response.data).substring(0, 300) };
-  }
-  
-  // IS getemision response fields:
-  // Column1: >=1 = success, <0 = error (-2 = polizas agotados, etc.)
-  // Descripcion: human-readable message
-  // NroPol: policy number on success
-  // LinkDescarga: PDF download URL on success
-  const resultCode = tableData.Column1;
-  const descripcion = tableData.Descripcion || '';
-  const errorDetail = tableData.Error || '';
-  
-  console.log('[IS Emission] Column1:', resultCode, 'Descripcion:', descripcion, 'NroPol:', tableData.NroPol);
-  
-  if (resultCode < 0 || resultCode === 0) {
-    console.error('[IS Emission] Error en emision. Column1:', resultCode, 'Desc:', descripcion, 'Error:', errorDetail);
-    return { success: false, error: descripcion || errorDetail || 'Error IS code=' + resultCode };
-  }
-  
-  const nroPoliza = String(tableData.NroPol || '');
-  if (!nroPoliza || nroPoliza === '0' || nroPoliza === '1') {
-    console.error('[IS Emission] Respuesta sin numero de poliza valido:', tableData);
-    return { success: false, error: descripcion || 'No se recibio numero de poliza' };
-  }
-  
-  const pdfUrl = tableData.LinkDescarga || '';
-  console.log('[IS Emission] Poliza emitida:', nroPoliza, 'PDF:', pdfUrl);
-  
-  return {
-    success: true,
-    nroPoliza,
-    pdfUrl: pdfUrl || undefined,
-  };
+  // Si llegamos aquí, todos los reintentos fallaron
+  return { success: false, error: 'No se pudo emitir la póliza después de varios intentos. Intente nuevamente.' };
 }
 
 /**

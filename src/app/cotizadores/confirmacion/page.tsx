@@ -216,13 +216,31 @@ export default function ConfirmacionPage() {
             </div>
           )}
 
-          {/* Botón Principal: Descargar Carátula */}
+          {/* Botón: Descargar PDF oficial de IS (si disponible) */}
+          {policyData?.pdfUrl && (
+            <>
+              <a
+                href={policyData.pdfUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-[#010139] to-[#020270] text-white rounded-xl font-bold text-lg hover:shadow-2xl transition-all transform hover:scale-105 flex items-center justify-center gap-3 mb-4 mx-auto"
+              >
+                <FaDownload className="text-white text-xl" />
+                Descargar Póliza Oficial (PDF)
+              </a>
+              <p className="text-xs text-gray-500 mb-4">
+                Documento oficial emitido por la aseguradora
+              </p>
+            </>
+          )}
+
+          {/* Botón: Descargar Carátula */}
           <button
             onClick={handleDownloadCaratula}
-            className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-xl font-bold text-lg hover:shadow-2xl transition-all transform hover:scale-105 flex items-center justify-center gap-3 mb-4 mx-auto"
+            className={`w-full sm:w-auto px-8 py-4 ${policyData?.pdfUrl ? 'bg-gradient-to-r from-gray-600 to-gray-700' : 'bg-gradient-to-r from-[#8AAA19] to-[#6d8814]'} text-white rounded-xl font-bold text-lg hover:shadow-2xl transition-all transform hover:scale-105 flex items-center justify-center gap-3 mb-4 mx-auto`}
           >
-            <FaDownload className="text-white text-xl" />
-            Descargar Carátula de Póliza
+            <FaPrint className="text-white text-xl" />
+            {policyData?.pdfUrl ? 'Imprimir Carátula Resumen' : 'Descargar Carátula de Póliza'}
           </button>
           
           <p className="text-xs text-gray-500 mb-6">

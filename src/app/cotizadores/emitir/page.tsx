@@ -460,13 +460,21 @@ export default function EmitirPage() {
           toast.warning('Póliza emitida pero hubo un error enviando el expediente por correo');
         }
         
-        // Guardar datos de la póliza para la confirmación
+        // Guardar datos completos de la póliza para la confirmación y carátula
         sessionStorage.setItem('emittedPolicy', JSON.stringify({
           nroPoliza: emisionResult.nroPoliza,
           pdfUrl: emisionResult.pdfUrl,
           insurer: 'INTERNACIONAL de Seguros',
           clientId: emisionResult.clientId,
           policyId: emisionResult.policyId,
+          asegurado: `${emissionData.primerNombre} ${emissionData.primerApellido}`,
+          cedula: emissionData.cedula,
+          vehiculo: `${quoteData.marca} ${quoteData.modelo} ${quoteData.anio || quoteData.anno || ''}`.trim(),
+          placa: vehicleData?.placa || '',
+          primaTotal: selectedPlan.annualPremium,
+          planType: selectedPlan.planType,
+          vigenciaDesde: new Date().toLocaleDateString('es-PA'),
+          vigenciaHasta: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toLocaleDateString('es-PA'),
         }));
         
         toast.success(`¡Póliza emitida! Nº ${emisionResult.nroPoliza}`);
