@@ -482,21 +482,26 @@ export default function EmitirPage() {
         router.push('/cotizadores/confirmacion');
         
       } else {
-        // Otras aseguradoras - Flujo simulado
-        console.log('[EMISION] Usando flujo simulado...');
-        console.log('Emitiendo p\u00f3liza:', {
-          selectedPlan,
-          quoteData,
-          installments,
-          monthlyPayment,
-          emissionData,
-          paymentToken,
-        });
-        
-        // Simular delay de API
+        // Otras aseguradoras - Flujo simulado (futuras integraciones)
+        console.log('[EMISION] Flujo simulado para:', selectedPlan?.insurerName);
         await new Promise(resolve => setTimeout(resolve, 2000));
         
-        toast.success('\u00a1P\u00f3liza emitida exitosamente!');
+        sessionStorage.setItem('emittedPolicy', JSON.stringify({
+          nroPoliza: `DEMO-${Date.now()}`,
+          insurer: selectedPlan?.insurerName || 'Demo',
+          asegurado: emissionData ? `${emissionData.primerNombre} ${emissionData.primerApellido}` : '',
+          cedula: emissionData?.cedula || '',
+          vehiculo: `${quoteData?.marca || ''} ${quoteData?.modelo || ''} ${quoteData?.anio || quoteData?.anno || ''}`.trim(),
+          placa: vehicleData?.placa || '',
+          primaTotal: selectedPlan?.annualPremium,
+          planType: selectedPlan?.planType,
+          vigenciaDesde: new Date().toLocaleDateString('es-PA'),
+          vigenciaHasta: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toLocaleDateString('es-PA'),
+          tipoCobertura: quoteData?.cobertura === 'COMPLETA' ? 'Cobertura Completa' : 'Daños a Terceros',
+          isDemo: true,
+        }));
+        
+        toast.success('¡Póliza emitida exitosamente! (Demo)');
         router.push('/cotizadores/confirmacion');
       }
       
