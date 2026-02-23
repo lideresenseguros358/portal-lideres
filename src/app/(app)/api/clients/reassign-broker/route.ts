@@ -83,22 +83,18 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 3. Obtener percent_default de ambos brokers (usar admin para bypassear RLS)
-    const { data: oldBroker } = await supabaseAdmin
-      .from('brokers')
-      .select('percent_default')
-      .eq('id', oldBrokerId)
-      .single();
-
-    const { data: newBroker } = await supabaseAdmin
-      .from('brokers')
-      .select('percent_default')
-      .eq('id', newBrokerId)
-      .single();
+    // 3. Obtener percent_default de ambos brokers y nombre del cliente (usar admin para bypassear RLS)
+    const [{ data: oldBroker }, { data: newBroker }, { data: clientInfo }] = await Promise.all([
+      supabaseAdmin.from('brokers').select('percent_default, name').eq('id', oldBrokerId).single(),
+      supabaseAdmin.from('brokers').select('percent_default, name').eq('id', newBrokerId).single(),
+      supabaseAdmin.from('clients').select('name').eq('id', clientId).single()
+    ]);
 
     if (!oldBroker || !newBroker) {
       throw new Error('No se pudieron obtener los datos de los brokers');
     }
+
+    const clientName = clientInfo?.name || 'Cliente';
 
     const percentOld = oldBroker.percent_default || 0;
     const percentNew = newBroker.percent_default || 0;
@@ -166,6 +162,25 @@ export async function POST(request: NextRequest) {
 
     console.log(`[REASSIGN] Items procesados: ${processedCommItems.length}. Deuda total: $${totalDebt.toFixed(2)}. Nuevas comisiones: $${totalNewCommissions.toFixed(2)}`);
 
+    // Recopilar info para notas legibles
+    const uniquePolicies = [...new Set(processedCommItems.map((i: any) => i.policy_number).filter(Boolean))];
+    const uniqueFortnights = [...new Set(commissionsData.map((f: any) => f.fortnight_id).filter(Boolean))];
+    const uniqueInsurerIds = [...new Set(pendingItemsToCreate.map((i: any) => i.insurer_id).filter(Boolean))];
+
+    // Obtener nombres de aseguradoras
+    let insurerNames: string[] = [];
+    if (uniqueInsurerIds.length > 0) {
+      const { data: insurers } = await supabaseAdmin
+        .from('insurers')
+        .select('name')
+        .in('id', uniqueInsurerIds);
+      insurerNames = (insurers || []).map((i: any) => i.name).filter(Boolean);
+    }
+
+    const policyText = uniquePolicies.length === 1 ? uniquePolicies[0] : `${uniquePolicies.length} pólizas`;
+    const insurerText = insurerNames.length === 1 ? insurerNames[0] : (insurerNames.length > 1 ? insurerNames.join(', ') : '');
+    const fortnightText = uniqueFortnights.length === 1 ? '1 quincena' : 'Varias quincenas';
+
     // 5. Crear pending_items (requerido por adjustment_report_items FK)
     const pendingInserts = pendingItemsToCreate.map(({ _broker_commission, ...rest }) => rest);
     
@@ -188,8 +203,8 @@ export async function POST(request: NextRequest) {
         broker_id: newBrokerId,
         status: 'approved',
         total_amount: totalNewCommissions,
-        broker_notes: `Reasignación automática de cliente desde otro broker. ${createdPendingItems.length} comisiones recalculadas.`,
-        admin_notes: `AUTO-APROBADO: Reasignación de broker. Cliente ID: ${clientId}. Broker anterior: ${oldBrokerId} (${percentOld}%). Total comisiones antiguas: $${totalDebt.toFixed(2)}. Broker nuevo: ${newBrokerId} (${percentNew}%). Total comisiones nuevas: $${totalNewCommissions.toFixed(2)}.`,
+        broker_notes: `Ajuste por reasignación de cliente.`,
+        admin_notes: `Reasignación de broker. Cliente: ${clientName}. Póliza: ${policyText}. ${insurerText ? `Aseguradora: ${insurerText}. ` : ''}${fortnightText}. Broker anterior: ${oldBroker.name || oldBrokerId}. Total deuda: $${totalDebt.toFixed(2)}. Total nuevas comisiones: $${totalNewCommissions.toFixed(2)}.`,
         reviewed_by: user.id,
         reviewed_at: new Date().toISOString()
       })
@@ -226,12 +241,20 @@ export async function POST(request: NextRequest) {
     console.log(`[REASSIGN] ${reportItemsToInsert.length} items vinculados al reporte`);
 
     // 8. Crear adelanto (deuda) para el broker antiguo
+    const advanceReason = [
+      `DEUDA por reasignación.`,
+      `Cliente: ${clientName}.`,
+      `Póliza: ${policyText}.`,
+      insurerText ? `Aseguradora: ${insurerText}.` : '',
+      `${fortnightText}.`,
+    ].filter(Boolean).join(' ');
+
     const { data: advance, error: advanceError } = await supabaseAdmin
       .from('advances')
       .insert({
         broker_id: oldBrokerId,
         amount: Math.abs(totalDebt), // Positivo = adelanto/deuda que debe devolver
-        reason: `DEUDA por reasignación de cliente. Cliente reasignado a otro corredor. Total comisiones a recuperar: $${totalDebt.toFixed(2)}. Esta deuda se irá descontando de futuras comisiones.`,
+        reason: advanceReason,
         status: 'PENDING',
         created_by: user.id,
         is_recurring: false
