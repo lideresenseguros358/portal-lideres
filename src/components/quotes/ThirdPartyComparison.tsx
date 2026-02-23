@@ -157,7 +157,8 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
         if (!quoteResult.success || !quoteResult.idCotizacion) throw new Error('No se obtuvo ID de cotización');
         sessionStorage.setItem('thirdPartyQuote', JSON.stringify({
           idCotizacion: quoteResult.idCotizacion, insurerId: insurer.id, insurerName: insurer.name,
-          planType: type, vcodplancobertura, vcodgrupotarifa: 20, annualPremium: plan.annualPremium, isRealAPI: true,
+          planType: type, vcodplancobertura, vcodgrupotarifa: 20, vcodmarca: 156, vcodmodelo: 2563,
+          annualPremium: plan.annualPremium, isRealAPI: true,
         }));
         toast.dismiss();
         toast.success('Cotización generada');

@@ -128,22 +128,25 @@ export default function EmitirDanosTercerosPage() {
     return dateStr;
   };
 
-  // Emission handler
+  // Emission handler — supports FEDPA, IS Internacional, and future insurers
   const handleConfirmEmission = async () => {
     if (isConfirming) return;
     setIsConfirming(true);
 
     try {
-      const isFedpaReal = selectedPlan?._isReal && selectedPlan?._isFEDPA;
+      const isFedpaReal = selectedPlan?._isReal && (selectedPlan?._isFEDPA || selectedPlan?.insurerName?.includes('FEDPA'));
+      const isInternacionalReal = selectedPlan?._isReal && selectedPlan?.insurerName?.includes('INTERNACIONAL');
 
+      if (!emissionData) throw new Error('Faltan datos del asegurado');
+
+      // ═══════════════════════════════════════════════════════
+      // EMISIÓN FEDPA — Daños a Terceros
+      // ═══════════════════════════════════════════════════════
       if (isFedpaReal) {
-        if (!emissionData) throw new Error('Faltan datos del asegurado');
-
         // Get idCotizacion from sessionStorage
         const tpQuoteRaw = sessionStorage.getItem('thirdPartyQuote');
         const tpQuote = tpQuoteRaw ? JSON.parse(tpQuoteRaw) : null;
 
-        // Datos comunes de emisión
         const emisionCommon = {
           IdCotizacion: tpQuote?.idCotizacion || '',
           Plan: selectedPlan._planCode || 426,
@@ -173,11 +176,9 @@ export default function EmitirDanosTercerosPage() {
           PrimaTotal: selectedPlan.annualPremium,
         };
 
-        // ── Intentar EmisorPlan (2024) primero; si token bloqueado → Emisor Externo (2021) ──
         let emisionResult: any = null;
         let usedMethod = 'emisor_plan';
 
-        // PASO 1: Intentar subir documentos con EmisorPlan (requiere Bearer token)
         toast.info('Subiendo documentos...');
         const docsFormData = new FormData();
         docsFormData.append('environment', 'DEV');
@@ -197,22 +198,14 @@ export default function EmitirDanosTercerosPage() {
         const isTokenBlocked = docsResponse.status === 424 || docsResponseData.code === 'TOKEN_NOT_AVAILABLE';
 
         if (docsResponse.ok && docsResponseData.success) {
-          // ── EmisorPlan path: docs uploaded OK → emit with idDoc ──
           console.log('[EMISIÓN DT FEDPA] Documentos subidos (EmisorPlan):', docsResponseData.idDoc);
-
           toast.info('Emitiendo póliza...');
           const emisionResponse = await fetch('/api/fedpa/emision', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              environment: 'DEV',
-              ...emisionCommon,
-              idDoc: docsResponseData.idDoc,
-            }),
+            body: JSON.stringify({ environment: 'DEV', ...emisionCommon, idDoc: docsResponseData.idDoc }),
           });
-
           const emisionResponseData = await emisionResponse.json();
-
           if (!emisionResponse.ok || !emisionResponseData.success) {
             if (emisionResponse.status === 424 || emisionResponseData.code === 'TOKEN_NOT_AVAILABLE') {
               console.warn('[EMISIÓN DT FEDPA] EmisorPlan emisión falló por token, usando fallback...');
@@ -229,37 +222,21 @@ export default function EmitirDanosTercerosPage() {
           throw new Error(docsResponseData.error || 'Error subiendo documentos');
         }
 
-        // ── FALLBACK: Emisor Externo (2021) — bundlea docs + emisión sin token ──
         if (!emisionResult) {
           toast.info('Usando método alternativo de emisión...');
           usedMethod = 'emisor_externo';
-
           const fallbackForm = new FormData();
           fallbackForm.append('environment', 'DEV');
           fallbackForm.append('emisionData', JSON.stringify(emisionCommon));
-          if (emissionData.cedulaFile) {
-            fallbackForm.append('documento_identidad', emissionData.cedulaFile, emissionData.cedulaFile.name || 'documento_identidad.pdf');
-          }
-          if (emissionData.licenciaFile) {
-            fallbackForm.append('licencia_conducir', emissionData.licenciaFile, emissionData.licenciaFile.name || 'licencia_conducir.pdf');
-          }
-
-          const fallbackResponse = await fetch('/api/fedpa/emision/fallback', {
-            method: 'POST',
-            body: fallbackForm,
-          });
-
+          if (emissionData.cedulaFile) fallbackForm.append('documento_identidad', emissionData.cedulaFile, emissionData.cedulaFile.name || 'documento_identidad.pdf');
+          if (emissionData.licenciaFile) fallbackForm.append('licencia_conducir', emissionData.licenciaFile, emissionData.licenciaFile.name || 'licencia_conducir.pdf');
+          const fallbackResponse = await fetch('/api/fedpa/emision/fallback', { method: 'POST', body: fallbackForm });
           const fallbackData = await fallbackResponse.json();
-
-          if (!fallbackResponse.ok || !fallbackData.success) {
-            throw new Error(fallbackData.error || 'Error emitiendo póliza (método alternativo)');
-          }
-
+          if (!fallbackResponse.ok || !fallbackData.success) throw new Error(fallbackData.error || 'Error emitiendo póliza (método alternativo)');
           emisionResult = fallbackData;
         }
 
         console.log(`[EMISIÓN DT FEDPA] Póliza emitida (${usedMethod}):`, emisionResult.nroPoliza || emisionResult.poliza);
-
         sessionStorage.setItem('emittedPolicy', JSON.stringify({
           nroPoliza: emisionResult.nroPoliza || emisionResult.poliza,
           insurer: 'FEDPA Seguros',
@@ -267,19 +244,127 @@ export default function EmitirDanosTercerosPage() {
           policyId: emisionResult.policyId,
           vigenciaDesde: emisionResult.desde || emisionResult.vigenciaDesde,
           vigenciaHasta: emisionResult.hasta || emisionResult.vigenciaHasta,
+          asegurado: `${emissionData.primerNombre} ${emissionData.primerApellido}`,
+          cedula: emissionData.cedula,
+          vehiculo: `${quoteData?.marca} ${quoteData?.modelo} ${quoteData?.anno || quoteData?.anio || ''}`.trim(),
+          placa: vehicleData?.placa || '',
+          primaTotal: selectedPlan.annualPremium,
+          tipoCobertura: 'Daños a Terceros',
           method: usedMethod,
+        }));
+        sessionStorage.removeItem('thirdPartyQuote');
+        sessionStorage.removeItem('selectedQuote');
+        toast.success(`¡Póliza emitida! Nº ${emisionResult.nroPoliza || emisionResult.poliza}`);
+        router.push('/cotizadores/confirmacion');
+
+      // ═══════════════════════════════════════════════════════
+      // EMISIÓN INTERNACIONAL — Daños a Terceros
+      // ═══════════════════════════════════════════════════════
+      } else if (isInternacionalReal) {
+        console.log('[EMISIÓN DT INTERNACIONAL] Iniciando emisión con API real...');
+        toast.info('Emitiendo póliza...');
+
+        const emisionResponse = await fetch('/api/is/auto/emitir', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            vIdPv: selectedPlan._idCotizacion,
+            vcodtipodoc: 1,
+            vnrodoc: emissionData.cedula,
+            vnombre: `${emissionData.primerNombre} ${emissionData.segundoNombre || ''}`.trim(),
+            vapellido1: emissionData.primerApellido,
+            vapellido2: emissionData.segundoApellido || '',
+            vtelefono: emissionData.telefono,
+            vcelular: emissionData.celular || emissionData.telefono,
+            vcorreo: emissionData.email,
+            vfecnacimiento: convertToFedpaDate(emissionData.fechaNacimiento),
+            vsexo: emissionData.sexo,
+            vdireccion: emissionData.direccion,
+            vestadocivil: emissionData.estadoCivil || 'soltero',
+            // Dirección estructurada IS
+            vcodprovincia: emissionData.codProvincia,
+            vcoddistrito: emissionData.codDistrito,
+            vcodcorregimiento: emissionData.codCorregimiento,
+            vcodurbanizacion: emissionData.codUrbanizacion || 0,
+            vcasaapto: emissionData.casaApto || '',
+            // Vehículo
+            vcodmarca: selectedPlan._vcodmarca,
+            vmarca_label: quoteData?.marca,
+            vcodmodelo: selectedPlan._vcodmodelo,
+            vmodelo_label: quoteData?.modelo,
+            vanioauto: quoteData?.anio || quoteData?.anno || new Date().getFullYear(),
+            vsumaaseg: 0, // DT no tiene suma asegurada
+            vcodplancobertura: selectedPlan._vcodplancobertura,
+            vcodgrupotarifa: selectedPlan._vcodgrupotarifa,
+            vplaca: vehicleData?.placa || '',
+            vmotor: vehicleData?.motor || '',
+            vchasis: vehicleData?.vinChasis || '',
+            vcolor: vehicleData?.color || '',
+            vtipotransmision: vehicleData?.tipoTransmision || 'AUTOMATICO',
+            vcantpasajeros: vehicleData?.pasajeros || 5,
+            vcantpuertas: vehicleData?.puertas || 4,
+            paymentToken,
+            formaPago: 1, // DT = contado
+            cantCuotas: 1,
+            tipo_cobertura: 'Daños a Terceros',
+            environment: 'development',
+          }),
+        });
+
+        if (!emisionResponse.ok) {
+          const errorData = await emisionResponse.json();
+          throw new Error(errorData.error || 'Error al emitir póliza');
+        }
+
+        const emisionResult = await emisionResponse.json();
+        if (!emisionResult.success) {
+          throw new Error(emisionResult.error || 'Error al emitir póliza');
+        }
+
+        console.log('[EMISIÓN DT INTERNACIONAL] Póliza emitida:', emisionResult.nroPoliza);
+
+        sessionStorage.setItem('emittedPolicy', JSON.stringify({
+          nroPoliza: emisionResult.nroPoliza,
+          pdfUrl: emisionResult.pdfUrl,
+          insurer: 'INTERNACIONAL de Seguros',
+          clientId: emisionResult.clientId,
+          policyId: emisionResult.policyId,
+          asegurado: `${emissionData.primerNombre} ${emissionData.primerApellido}`,
+          cedula: emissionData.cedula,
+          vehiculo: `${quoteData?.marca} ${quoteData?.modelo} ${quoteData?.anio || quoteData?.anno || ''}`.trim(),
+          placa: vehicleData?.placa || '',
+          primaTotal: selectedPlan.annualPremium,
+          planType: selectedPlan.planType,
+          vigenciaDesde: new Date().toLocaleDateString('es-PA'),
+          vigenciaHasta: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toLocaleDateString('es-PA'),
           tipoCobertura: 'Daños a Terceros',
         }));
 
-        sessionStorage.removeItem('thirdPartyQuote');
-        sessionStorage.removeItem('selectedQuote');
-
-        toast.success(`¡Póliza emitida! Nº ${emisionResult.nroPoliza || emisionResult.poliza}`);
+        toast.success(`¡Póliza emitida! Nº ${emisionResult.nroPoliza}`);
         router.push('/cotizadores/confirmacion');
+
+      // ═══════════════════════════════════════════════════════
+      // OTRAS ASEGURADORAS — Flujo simulado (futuras integraciones)
+      // ═══════════════════════════════════════════════════════
       } else {
-        // Simulated flow for other insurers
+        console.log('[EMISIÓN DT] Flujo simulado para:', selectedPlan?.insurerName);
         await new Promise(resolve => setTimeout(resolve, 2000));
-        toast.success('Póliza emitida exitosamente');
+
+        sessionStorage.setItem('emittedPolicy', JSON.stringify({
+          nroPoliza: `DEMO-${Date.now()}`,
+          insurer: selectedPlan?.insurerName || 'Demo',
+          asegurado: `${emissionData.primerNombre} ${emissionData.primerApellido}`,
+          cedula: emissionData.cedula,
+          vehiculo: `${quoteData?.marca} ${quoteData?.modelo} ${quoteData?.anio || quoteData?.anno || ''}`.trim(),
+          placa: vehicleData?.placa || '',
+          primaTotal: selectedPlan?.annualPremium,
+          vigenciaDesde: new Date().toLocaleDateString('es-PA'),
+          vigenciaHasta: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toLocaleDateString('es-PA'),
+          tipoCobertura: 'Daños a Terceros',
+          isDemo: true,
+        }));
+
+        toast.success('Póliza emitida exitosamente (Demo)');
         router.push('/cotizadores/confirmacion');
       }
     } catch (error: any) {
@@ -333,7 +418,7 @@ export default function EmitirDanosTercerosPage() {
             </button>
           </div>
           <EmissionDataForm
-            quoteData={quoteData}
+            quoteData={{ ...quoteData, insurerName: selectedPlan?.insurerName }}
             onContinue={handleEmissionDataComplete}
           />
         </div>
@@ -358,6 +443,7 @@ export default function EmitirDanosTercerosPage() {
           <VehicleDataForm
             quoteData={quoteData}
             onContinue={handleVehicleDataComplete}
+            isInternacional={!!(selectedPlan?._isReal && selectedPlan?.insurerName?.includes('INTERNACIONAL'))}
           />
         </div>
       </div>

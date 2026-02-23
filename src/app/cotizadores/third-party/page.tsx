@@ -35,8 +35,12 @@ export default function ThirdPartyPage() {
   const handleSelectPlan = (insurerId: string, planType: 'basic' | 'premium', plan: AutoThirdPartyPlan) => {
     setLoading(true);
     
+    // Leer datos de cotización generados por ThirdPartyComparison (IS, FEDPA, etc.)
+    const tpQuoteRaw = sessionStorage.getItem('thirdPartyQuote');
+    const tpQuote = tpQuoteRaw ? JSON.parse(tpQuoteRaw) : null;
+    
     if (insurerId === 'fedpa') {
-      // FEDPA: usar flujo completo con secciones (sin inspección ni banco acreedor)
+      // FEDPA: usar flujo completo con secciones
       sessionStorage.setItem('selectedQuote', JSON.stringify({
         insurerName: 'FEDPA Seguros',
         planType: planType === 'basic' ? 'Plan Básico' : 'Plan Premium',
@@ -56,8 +60,31 @@ export default function ThirdPartyPage() {
         },
       }));
       router.push('/cotizadores/emitir-danos-terceros');
+    } else if (insurerId === 'internacional' && tpQuote?.isRealAPI) {
+      // INTERNACIONAL: usar flujo completo con secciones (mismo wizard que FEDPA)
+      sessionStorage.setItem('selectedQuote', JSON.stringify({
+        insurerName: 'INTERNACIONAL de Seguros',
+        planType: planType === 'basic' ? 'Plan Básico' : 'Plan Premium',
+        annualPremium: plan.annualPremium,
+        _isReal: true,
+        _idCotizacion: tpQuote.idCotizacion,
+        _vcodmarca: tpQuote.vcodmarca || 156,
+        _vcodmodelo: tpQuote.vcodmodelo || 2563,
+        _vcodplancobertura: tpQuote.vcodplancobertura,
+        _vcodgrupotarifa: tpQuote.vcodgrupotarifa || 20,
+        _includedCoverages: plan.includedCoverages,
+        quoteData: {
+          cobertura: 'TERCEROS',
+          policyType: 'AUTO',
+          marca: '',
+          modelo: '',
+          ano: new Date().getFullYear(),
+          uso: '10',
+        },
+      }));
+      router.push('/cotizadores/emitir-danos-terceros');
     } else {
-      // Otras aseguradoras: flujo existente
+      // Otras aseguradoras: flujo existente (formulario simple)
       router.push(`/cotizadores/third-party/issue?insurer=${insurerId}&plan=${planType}`);
     }
   };
