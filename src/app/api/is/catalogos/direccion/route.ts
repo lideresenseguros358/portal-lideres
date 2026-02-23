@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { isGet } from '@/lib/is/http-client';
 import { IS_ENDPOINTS, type ISEnvironment } from '@/lib/is/config';
+import { URBANIZACIONES_FALLBACK } from '@/lib/is/urbanizaciones-fallback';
 
 export async function GET(request: NextRequest) {
   try {
@@ -54,16 +55,15 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'tipo inválido. Usar: provincias, distritos, corregimientos, urbanizaciones' }, { status: 400 });
     }
 
-    // Urbanizaciones siempre retorna 401 en IS — usar skipTokenRefresh para evitar
-    // que invalide el cache de token y cause race conditions con otros catálogos concurrentes
-    const requestOptions = tipo === 'urbanizaciones' ? { skipTokenRefresh: true } : undefined;
-    const response = await isGet<{ Table: any[] }>(endpoint, env, requestOptions);
+    console.log(`[IS Catálogos Dirección] tipo=${tipo} endpoint=${endpoint}`);
+    const response = await isGet<{ Table: any[] }>(endpoint, env);
 
     if (!response.success) {
-      // Urbanizaciones es opcional — si falla (ej: 401 persistente), retornar array vacío en vez de 500
+      // Urbanizaciones: IS endpoint retorna 401 (permiso no habilitado en API tester).
+      // Usar catálogo estático local como fallback.
       if (tipo === 'urbanizaciones') {
-        console.warn('[IS Catálogos Dirección] Urbanizaciones no disponible (IS retornó error). Retornando lista vacía.');
-        return NextResponse.json({ success: true, data: [], warning: 'Catálogo de urbanizaciones no disponible temporalmente' });
+        console.warn(`[IS Catálogos Dirección] Urbanizaciones IS retornó error (${response.statusCode}). Usando catálogo fallback local.`);
+        return NextResponse.json({ success: true, data: URBANIZACIONES_FALLBACK, source: 'fallback' });
       }
       return NextResponse.json({ error: response.error || 'Error consultando catálogo' }, { status: 500 });
     }
