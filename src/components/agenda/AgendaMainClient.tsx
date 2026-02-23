@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { FaChevronLeft, FaChevronRight, FaPlus, FaTimes } from 'react-icons/fa';
 import { supabaseClient } from '@/lib/supabase/client';
-import { actionGetEvents, type AgendaEvent } from '@/app/(app)/agenda/actions';
+import { actionGetEvents, actionRSVP, type AgendaEvent } from '@/app/(app)/agenda/actions';
 import { toast } from 'sonner';
 import CalendarGrid from './CalendarGrid';
 import EventDetailPanel from './EventDetailPanel';
@@ -74,6 +74,50 @@ export default function AgendaMainClient() {
     if (month) setCurrentMonth(parseInt(month));
     if (day) setSelectedDay(parseInt(day));
   }, [searchParams]);
+
+  // Handle RSVP from email redirect (?rsvp=eventId&response=yes|no)
+  useEffect(() => {
+    const rsvpEventId = searchParams?.get('rsvp');
+    const rsvpResponse = searchParams?.get('response');
+
+    if (!rsvpEventId || !rsvpResponse || !userId) return;
+
+    const processRsvp = async () => {
+      try {
+        const client = supabaseClient();
+        const { data: profile } = await client
+          .from('profiles')
+          .select('broker_id')
+          .eq('id', userId)
+          .single();
+
+        if (!profile?.broker_id) {
+          toast.error('No se pudo obtener tu perfil de corredor');
+          return;
+        }
+
+        const status = rsvpResponse === 'yes' ? 'going' : 'declined';
+        const result = await actionRSVP({
+          eventId: rsvpEventId,
+          brokerId: profile.broker_id,
+          status,
+        });
+
+        if (result.ok) {
+          toast.success(status === 'going' ? '✅ Asistencia confirmada' : '❌ Asistencia cancelada');
+        } else {
+          toast.error(result.error || 'Error al procesar RSVP');
+        }
+      } catch (error) {
+        toast.error('Error al procesar confirmación de asistencia');
+      }
+
+      // Limpiar query params del URL
+      router.replace('/agenda');
+    };
+
+    processRsvp();
+  }, [searchParams, userId, router]);
 
   // Load events when month/year changes
   useEffect(() => {

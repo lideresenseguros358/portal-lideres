@@ -34,7 +34,8 @@ export function getAgendaEventEmailContent(data: AgendaEventEmailData): { subjec
     weekday: 'long',
     year: 'numeric',
     month: 'long',
-    day: 'numeric'
+    day: 'numeric',
+    timeZone: 'America/Panama'
   });
 
   const isNewEvent = eventType === 'new';

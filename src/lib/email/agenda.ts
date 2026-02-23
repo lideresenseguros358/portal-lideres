@@ -95,16 +95,18 @@ export async function notifyEventCreated(eventId: string): Promise<void> {
   const rsvpYesUrl = event.allow_rsvp ? `${appUrl}/api/agenda/rsvp?eventId=${eventId}&response=yes` : undefined;
   const rsvpNoUrl = event.allow_rsvp ? `${appUrl}/api/agenda/rsvp?eventId=${eventId}&response=no` : undefined;
 
-  // Formatear fecha y hora
+  // Formatear fecha y hora — SIEMPRE en zona horaria de Panamá
   const eventDate = new Date(event.start_at).toLocaleDateString('es-PA', { 
     weekday: 'long', 
     year: 'numeric', 
     month: 'long', 
-    day: 'numeric' 
+    day: 'numeric',
+    timeZone: 'America/Panama'
   });
   const eventTime = new Date(event.start_at).toLocaleTimeString('es-PA', { 
     hour: '2-digit', 
-    minute: '2-digit' 
+    minute: '2-digit',
+    timeZone: 'America/Panama'
   });
 
   // Enviar a cada asistente
@@ -205,11 +207,13 @@ export async function notifyEventUpdated(eventId: string, changes: any[]): Promi
     weekday: 'long', 
     year: 'numeric', 
     month: 'long', 
-    day: 'numeric' 
+    day: 'numeric',
+    timeZone: 'America/Panama'
   });
   const eventTime = new Date(event.start_at).toLocaleTimeString('es-PA', { 
     hour: '2-digit', 
-    minute: '2-digit' 
+    minute: '2-digit',
+    timeZone: 'America/Panama'
   });
 
   const emails = attendees.map(attendee => ({
@@ -346,11 +350,13 @@ export async function sendEventReminders(): Promise<{ sent: number; failed: numb
       weekday: 'long', 
       year: 'numeric', 
       month: 'long', 
-      day: 'numeric' 
+      day: 'numeric',
+      timeZone: 'America/Panama'
     });
     const eventTime = new Date(event.start_at).toLocaleTimeString('es-PA', { 
       hour: '2-digit', 
-      minute: '2-digit' 
+      minute: '2-digit',
+      timeZone: 'America/Panama'
     });
 
     const emails = attendees.map(attendee => ({
