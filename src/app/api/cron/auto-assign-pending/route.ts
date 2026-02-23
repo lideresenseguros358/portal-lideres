@@ -87,49 +87,51 @@ export async function GET(request: NextRequest) {
       throw updateError;
     }
 
-    // 4. Migrar a comm_items
+    // 4. Migrar a comm_items (solo items que tienen import_id)
     let commItemsCreated = 0;
-    const createdCommItemIds: string[] = [];
-    const pendingItemToCommItem = new Map<string, string>();
+    let commItemsSkipped = 0;
 
     for (const item of oldItems) {
-      const grossAmount = item.commission_raw * lissaPercent;
+      // comm_items requiere import_id NOT NULL — si no tiene, solo marcar como migrado
+      if (!item.import_id) {
+        commItemsSkipped++;
+        console.log(`[CRON auto-assign] ${item.policy_number}: sin import_id, omitiendo comm_items`);
+      } else {
+        const grossAmount = item.commission_raw * lissaPercent;
 
-      const { data: newCommItem, error: insertError } = await supabase
-        .from('comm_items')
-        .insert({
-          import_id: item.import_id!,
-          insurer_id: item.insurer_id!,
-          policy_number: item.policy_number,
-          broker_id: lissaBroker.id,
-          gross_amount: grossAmount,
-          insured_name: item.insured_name,
-          raw_row: null,
-        })
-        .select('id')
-        .single();
+        const { data: newCommItem, error: insertError } = await supabase
+          .from('comm_items')
+          .insert({
+            import_id: item.import_id,
+            insurer_id: item.insurer_id!,
+            policy_number: item.policy_number,
+            broker_id: lissaBroker.id,
+            gross_amount: grossAmount,
+            insured_name: item.insured_name,
+            raw_row: null,
+          })
+          .select('id')
+          .single();
 
-      if (insertError || !newCommItem) {
-        console.error(`[CRON auto-assign] Error creando comm_item para ${item.policy_number}:`, insertError);
-        continue;
+        if (insertError || !newCommItem) {
+          console.error(`[CRON auto-assign] Error creando comm_item para ${item.policy_number}:`, insertError);
+        } else {
+          commItemsCreated++;
+        }
       }
 
-      createdCommItemIds.push(newCommItem.id);
-      pendingItemToCommItem.set(item.id, newCommItem.id);
-      commItemsCreated++;
-
-      // Marcar pending_item como migrado
+      // Marcar pending_item como migrado (siempre, ya fue asignado a LISSA)
       await supabase
         .from('pending_items')
         .update({ status: 'migrated' })
         .eq('id', item.id);
     }
 
-    console.log(`[CRON auto-assign] ${commItemsCreated} comm_items creados`);
+    console.log(`[CRON auto-assign] ${commItemsCreated} comm_items creados, ${commItemsSkipped} sin import_id omitidos`);
 
-    // 5. Crear adjustment_report pre-aprobado para LISSA
+    // 5. Crear adjustment_report pre-aprobado para LISSA (incluye TODOS los items)
     let reportId: string | null = null;
-    if (itemIds.length > 0) {
+    if (oldItems.length > 0) {
       const totalBrokerCommission = oldItems.reduce((sum, item) => {
         return sum + (item.commission_raw * lissaPercent);
       }, 0);
@@ -153,26 +155,22 @@ export async function GET(request: NextRequest) {
         reportId = report.id;
         console.log(`[CRON auto-assign] Adjustment report creado: ${reportId}`);
 
-        // Crear adjustment_report_items vinculando pending_items
-        const reportItems = oldItems
-          .filter(item => pendingItemToCommItem.has(item.id))
-          .map(item => ({
-            report_id: reportId!,
-            pending_item_id: item.id,
-            commission_raw: item.commission_raw,
-            broker_commission: item.commission_raw * lissaPercent,
-          }));
+        // Crear adjustment_report_items para TODOS los pending_items
+        const reportItems = oldItems.map(item => ({
+          report_id: reportId!,
+          pending_item_id: item.id,
+          commission_raw: item.commission_raw,
+          broker_commission: item.commission_raw * lissaPercent,
+        }));
 
-        if (reportItems.length > 0) {
-          const { error: itemsInsertError } = await supabase
-            .from('adjustment_report_items')
-            .insert(reportItems);
+        const { error: itemsInsertError } = await supabase
+          .from('adjustment_report_items')
+          .insert(reportItems);
 
-          if (itemsInsertError) {
-            console.error('[CRON auto-assign] Error creando adjustment_report_items:', itemsInsertError);
-          } else {
-            console.log(`[CRON auto-assign] ${reportItems.length} adjustment_report_items creados`);
-          }
+        if (itemsInsertError) {
+          console.error('[CRON auto-assign] Error creando adjustment_report_items:', itemsInsertError);
+        } else {
+          console.log(`[CRON auto-assign] ${reportItems.length} adjustment_report_items creados`);
         }
       }
     }
@@ -237,6 +235,7 @@ export async function GET(request: NextRequest) {
       success: true,
       assigned: oldItems.length,
       comm_items_created: commItemsCreated,
+      comm_items_skipped_no_import: commItemsSkipped,
       report_id: reportId,
       preliminar_created: preliminarCreated,
       skipped_existing: policyNumbers.length - preliminarCreated,
