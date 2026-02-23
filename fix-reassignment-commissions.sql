@@ -146,42 +146,52 @@ WHERE a.reason LIKE '%DEUDA por reasignación%';
 -- Las notas tenían información excesiva (IDs, porcentajes, etc.)
 -- ============================================================
 
--- 5a. Corregir notas del advance (deuda) — caso específico del 23/02/2026
--- Obtener nombre del cliente y póliza para construir nota limpia
+-- 5a. Corregir notas del advance (deuda)
+-- Primero obtener los datos necesarios, luego actualizar
 UPDATE advances a
-SET reason = 'DEUDA por reasignación. Cliente: ' || COALESCE(c.name, 'N/A') || '. Póliza: ' || COALESCE(pi2.policy_number, 'N/A') || '. Aseguradora: ' || COALESCE(ins.name, 'N/A') || '. 1 quincena.'
-FROM clients c
-CROSS JOIN LATERAL (
-  SELECT pi.policy_number, pi.insurer_id
-  FROM pending_items pi
-  INNER JOIN adjustment_report_items ari ON ari.pending_item_id = pi.id
-  INNER JOIN adjustment_reports ar ON ar.id = ari.report_id
-  WHERE ar.admin_notes LIKE '%Reasignación de broker%'
-    AND ar.admin_notes LIKE '%' || a.broker_id || '%'
+SET reason = 'DEUDA por reasignación. Cliente: ' || sub.client_name || '. Póliza: ' || sub.policy_number || '. Aseguradora: ' || sub.insurer_name || '. 1 quincena.'
+FROM (
+  SELECT 
+    c.name as client_name,
+    pi.policy_number,
+    COALESCE(ins.name, 'N/A') as insurer_name
+  FROM clients c,
+    adjustment_reports ar
+    INNER JOIN adjustment_report_items ari ON ari.report_id = ar.id
+    INNER JOIN pending_items pi ON pi.id = ari.pending_item_id
+    LEFT JOIN insurers ins ON ins.id = pi.insurer_id
+  WHERE c.id = '620b9248-87af-4bbb-8c1c-7c7841bdab01'
+    AND ar.admin_notes LIKE '%Reasignación de broker%'
+    AND ar.admin_notes LIKE '%620b9248%'
   LIMIT 1
-) pi2
-LEFT JOIN insurers ins ON ins.id = pi2.insurer_id
-WHERE c.id = '620b9248-87af-4bbb-8c1c-7c7841bdab01'
-  AND a.reason LIKE '%DEUDA por reasignación de cliente%'
+) sub
+WHERE a.reason LIKE '%DEUDA por reasignación de cliente%'
   AND a.broker_id = 'f681a123-0786-4d7e-89a6-a16be2a00f8d';
 
 -- 5b. Corregir notas del adjustment_report (broker_notes y admin_notes)
-UPDATE adjustment_reports ar
+UPDATE adjustment_reports
 SET broker_notes = 'Ajuste por reasignación de cliente.',
-    admin_notes = 'Reasignación de broker. Cliente: ' || COALESCE(c.name, 'N/A') || '. Póliza: ' || COALESCE(pi2.policy_number, 'N/A') || '. Aseguradora: ' || COALESCE(ins.name, 'N/A') || '. 1 quincena. Broker anterior: ' || COALESCE(b_old.name, 'N/A') || '. Total deuda: $' || ROUND(ar.total_amount, 2)::text || '. Total nuevas comisiones: $' || ROUND(ar.total_amount, 2)::text || '.'
-FROM clients c
-CROSS JOIN LATERAL (
-  SELECT pi.policy_number, pi.insurer_id
-  FROM pending_items pi
-  INNER JOIN adjustment_report_items ari ON ari.pending_item_id = pi.id
-  WHERE ari.report_id = ar.id
+    admin_notes = 'Reasignación de broker. Cliente: ' || sub.client_name || '. Póliza: ' || sub.policy_number || '. Aseguradora: ' || sub.insurer_name || '. 1 quincena. Broker anterior: ' || sub.old_broker_name || '. Total deuda: $' || ROUND(adjustment_reports.total_amount, 2)::text || '. Total nuevas comisiones: $' || ROUND(adjustment_reports.total_amount, 2)::text || '.'
+FROM (
+  SELECT 
+    ar2.id as report_id,
+    c.name as client_name,
+    pi.policy_number,
+    COALESCE(ins.name, 'N/A') as insurer_name,
+    COALESCE(b_old.name, 'N/A') as old_broker_name
+  FROM adjustment_reports ar2
+  INNER JOIN adjustment_report_items ari ON ari.report_id = ar2.id
+  INNER JOIN pending_items pi ON pi.id = ari.pending_item_id
+  LEFT JOIN insurers ins ON ins.id = pi.insurer_id
+  CROSS JOIN clients c
+  CROSS JOIN brokers b_old
+  WHERE ar2.admin_notes LIKE '%Reasignación de broker%Cliente ID: 620b9248%'
+    AND c.id = '620b9248-87af-4bbb-8c1c-7c7841bdab01'
+    AND b_old.id = 'f681a123-0786-4d7e-89a6-a16be2a00f8d'
   LIMIT 1
-) pi2
-LEFT JOIN insurers ins ON ins.id = pi2.insurer_id
-LEFT JOIN brokers b_old ON ar.admin_notes LIKE '%Broker anterior: ' || b_old.id || '%'
-WHERE c.id = '620b9248-87af-4bbb-8c1c-7c7841bdab01'
-  AND ar.admin_notes LIKE '%Reasignación de broker%Cliente ID: 620b9248%';
+) sub
+WHERE adjustment_reports.id = sub.report_id;
 
 -- 5c. Verificar notas corregidas
 SELECT 'NOTAS ADVANCE' as check, a.reason FROM advances a WHERE a.broker_id = 'f681a123-0786-4d7e-89a6-a16be2a00f8d' AND a.reason LIKE '%DEUDA por reasignación%';
-SELECT 'NOTAS REPORT' as check, ar.broker_notes, ar.admin_notes FROM adjustment_reports ar WHERE ar.admin_notes LIKE '%Reasignación de broker%Cliente: %';
+SELECT 'NOTAS REPORT' as check, ar.broker_notes, ar.admin_notes FROM adjustment_reports ar WHERE ar.admin_notes LIKE '%Reasignación de broker%';

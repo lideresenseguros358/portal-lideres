@@ -23,6 +23,7 @@ interface CommItem {
   gross_amount: number;
   insured_name: string | null;
   policy_number: string | null;
+  percent_override: number | null;
   brokers: { id: string; name: string | null; email: string | null; percent_default: number | null } | null;
   insurers: { id: string; name: string | null } | null;
 }
@@ -40,7 +41,7 @@ interface GroupedData {
       [insurerId: string]: {
         insurer_name: string;
         total_gross: number;
-        clients: { name: string; gross: number; policy_number: string }[];
+        clients: { name: string; gross: number; policy_number: string; percent_override: number | null }[];
       };
     };
   };
@@ -197,6 +198,7 @@ export default function BrokerTotals({ draftFortnightId, fortnightLabel = 'Quinc
         name: item.insured_name || 'N/A',
         gross: grossAmount,
         policy_number: item.policy_number || 'N/A',
+        percent_override: item.percent_override ?? null,
       });
 
       return acc;
@@ -302,7 +304,7 @@ export default function BrokerTotals({ draftFortnightId, fortnightLabel = 'Quinc
             policy_number: client.policy_number,
             insured_name: client.name,
             gross_amount: client.gross,
-            percentage: brokerData.percent_default,
+            percentage: client.percent_override ?? brokerData.percent_default,
             net_amount: client.gross,
           })),
         })),

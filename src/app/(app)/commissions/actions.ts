@@ -4190,17 +4190,38 @@ export async function actionGetDraftDetails(fortnightId: string) {
       .eq('email', OFICINA_EMAIL)
       .single();
 
+    // Obtener percent_override de policies para cada policy_number
+    const allPolicyNumbers = [...new Set((data || []).map((i: any) => i.policy_number).filter(Boolean))];
+    const policyOverrideMap = new Map<string, number>();
+    
+    if (allPolicyNumbers.length > 0) {
+      const { data: policiesWithOverride } = await supabase
+        .from('policies')
+        .select('policy_number, percent_override')
+        .in('policy_number', allPolicyNumbers)
+        .not('percent_override', 'is', null);
+      
+      (policiesWithOverride || []).forEach((p: any) => {
+        if (p.percent_override !== null && p.percent_override !== undefined) {
+          policyOverrideMap.set(p.policy_number, Number(p.percent_override));
+        }
+      });
+    }
+
     // Convert gross_amount from unknown to number
     // Y redirigir comisiones de brokers inactivos a LISSA
+    // Y agregar percent_override cuando exista
     const formattedData = (data || []).map((item: any) => {
       const broker = item.brokers;
       const isInactive = broker && broker.active === false;
+      const policyOverride = item.policy_number ? policyOverrideMap.get(item.policy_number) : undefined;
       
       // Si el broker está inactivo y existe LISSA, redirigir
       if (isInactive && lissaBroker) {
         return {
           ...item,
           gross_amount: Number(item.gross_amount) || 0,
+          percent_override: policyOverride ?? null,
           brokers: {
             id: lissaBroker.id,
             name: lissaBroker.name,
@@ -4212,7 +4233,8 @@ export async function actionGetDraftDetails(fortnightId: string) {
       
       return {
         ...item,
-        gross_amount: Number(item.gross_amount) || 0
+        gross_amount: Number(item.gross_amount) || 0,
+        percent_override: policyOverride ?? null,
       };
     });
 
@@ -5537,6 +5559,26 @@ export async function actionPayFortnight(fortnight_id: string) {
     }
     
     if (commItems && commItems.length > 0) {
+      // Obtener percent_override de policies para cada policy_number
+      const allPolicyNumbers = [...new Set(commItems.map((i: any) => i.policy_number).filter(Boolean))];
+      const policyOverrideMap = new Map<string, number>();
+      
+      if (allPolicyNumbers.length > 0) {
+        const { data: policiesWithOverride } = await supabase
+          .from('policies')
+          .select('policy_number, percent_override')
+          .in('policy_number', allPolicyNumbers)
+          .not('percent_override', 'is', null);
+        
+        (policiesWithOverride || []).forEach((p: any) => {
+          if (p.percent_override !== null && p.percent_override !== undefined) {
+            policyOverrideMap.set(p.policy_number, Number(p.percent_override));
+          }
+        });
+        
+        console.log(`[actionPayFortnight] Pólizas con percent_override: ${policyOverrideMap.size} de ${allPolicyNumbers.length}`);
+      }
+      
       // AGRUPAR por policy_number + broker_id para evitar duplicados
       // (puede haber múltiples comm_items con el mismo policy_number y broker)
       const groupedItems = new Map<string, any>();
@@ -5561,8 +5603,9 @@ export async function actionPayFortnight(fortnight_id: string) {
       console.log(`[actionPayFortnight] Items agrupados: ${commItems.length} → ${groupedItems.size}`);
       
       const detailsToInsert = Array.from(groupedItems.values()).map((item: any) => {
-        // Determinar porcentaje aplicado (solo usar broker percent_default)
-        const percentApplied = item.brokers?.percent_default ?? 1.0;
+        // Determinar porcentaje aplicado: prioridad percent_override > percent_default
+        const policyOverride = item.policy_number ? policyOverrideMap.get(item.policy_number) : undefined;
+        const percentApplied = policyOverride ?? item.brokers?.percent_default ?? 1.0;
         
         // Calcular commission_raw (reverso del cálculo)
         const commissionRaw = item.gross_amount / percentApplied;
