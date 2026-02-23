@@ -357,12 +357,27 @@ export default function EmitirPage() {
         
         if (!emisionResponse.ok) {
           const errorData = await emisionResponse.json();
-          throw new Error(errorData.error || 'Error al emitir póliza');
+          const errMsg = errorData.error || 'Error al emitir póliza';
+          // Detectar cotización ya emitida — limpiar datos stale y redirigir
+          if (errMsg.includes('ya fue emitida') || errMsg.includes('nueva cotización')) {
+            sessionStorage.removeItem('selectedQuote');
+            toast.error('Esta cotización ya fue emitida. Debe generar una nueva cotización.');
+            router.push('/cotizadores');
+            return;
+          }
+          throw new Error(errMsg);
         }
         
         const emisionResult = await emisionResponse.json();
         if (!emisionResult.success) {
-          throw new Error(emisionResult.error || 'Error al emitir póliza');
+          const errMsg = emisionResult.error || 'Error al emitir póliza';
+          if (errMsg.includes('ya fue emitida') || errMsg.includes('nueva cotización')) {
+            sessionStorage.removeItem('selectedQuote');
+            toast.error('Esta cotización ya fue emitida. Debe generar una nueva cotización.');
+            router.push('/cotizadores');
+            return;
+          }
+          throw new Error(errMsg);
         }
         
         console.log('[EMISION INTERNACIONAL] Póliza emitida:', emisionResult.nroPoliza);
@@ -477,6 +492,9 @@ export default function EmitirPage() {
           vigenciaDesde: new Date().toLocaleDateString('es-PA'),
           vigenciaHasta: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toLocaleDateString('es-PA'),
         }));
+        
+        // Limpiar cotización usada para evitar re-emisión con idPv stale
+        sessionStorage.removeItem('selectedQuote');
         
         toast.success(`¡Póliza emitida! Nº ${emisionResult.nroPoliza}`);
         router.push('/cotizadores/confirmacion');

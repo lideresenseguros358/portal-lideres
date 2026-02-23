@@ -313,12 +313,28 @@ export default function EmitirDanosTercerosPage() {
 
         if (!emisionResponse.ok) {
           const errorData = await emisionResponse.json();
-          throw new Error(errorData.error || 'Error al emitir póliza');
+          const errMsg = errorData.error || 'Error al emitir póliza';
+          if (errMsg.includes('ya fue emitida') || errMsg.includes('nueva cotización')) {
+            sessionStorage.removeItem('selectedQuote');
+            sessionStorage.removeItem('thirdPartyQuote');
+            toast.error('Esta cotización ya fue emitida. Debe generar una nueva cotización.');
+            router.push('/cotizadores');
+            return;
+          }
+          throw new Error(errMsg);
         }
 
         const emisionResult = await emisionResponse.json();
         if (!emisionResult.success) {
-          throw new Error(emisionResult.error || 'Error al emitir póliza');
+          const errMsg = emisionResult.error || 'Error al emitir póliza';
+          if (errMsg.includes('ya fue emitida') || errMsg.includes('nueva cotización')) {
+            sessionStorage.removeItem('selectedQuote');
+            sessionStorage.removeItem('thirdPartyQuote');
+            toast.error('Esta cotización ya fue emitida. Debe generar una nueva cotización.');
+            router.push('/cotizadores');
+            return;
+          }
+          throw new Error(errMsg);
         }
 
         console.log('[EMISIÓN DT INTERNACIONAL] Póliza emitida:', emisionResult.nroPoliza);
@@ -340,6 +356,10 @@ export default function EmitirDanosTercerosPage() {
           tipoCobertura: 'Daños a Terceros',
         }));
 
+        // Limpiar cotización usada para evitar re-emisión con idPv stale
+        sessionStorage.removeItem('selectedQuote');
+        sessionStorage.removeItem('thirdPartyQuote');
+        
         toast.success(`¡Póliza emitida! Nº ${emisionResult.nroPoliza}`);
         router.push('/cotizadores/confirmacion');
 

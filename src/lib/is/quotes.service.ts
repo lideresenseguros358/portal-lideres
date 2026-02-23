@@ -504,9 +504,23 @@ export async function emitirPolizaAuto(
     console.log(`[IS Emission] Attempt ${attempt + 1} — Column1: ${resultCode}, Descripcion: ${descripcion}, NroPol: ${tableData.NroPol}`);
     
     if (resultCode < 0 || resultCode === 0) {
+      // Detectar cotización ya convertida en póliza — NO reintentar
+      const descLower = descripcion.toLowerCase();
+      const isAlreadyEmitted = descLower.includes('convertida en póliza') || 
+        descLower.includes('convertida en poliza') ||
+        descLower.includes('ya fue emitida');
+      
+      if (isAlreadyEmitted) {
+        console.error('[IS Emission] ⚠️ Cotización ya fue convertida en póliza. idPv:', body.idPv);
+        return { 
+          success: false, 
+          error: 'Esta cotización ya fue emitida como póliza. Debe generar una nueva cotización antes de emitir.' 
+        };
+      }
+      
       // IS retorna -1 con "debe presionar el botón emitir nuevamente" — reintentar
       const isRetryable = resultCode === -1 && (
-        descripcion.toLowerCase().includes('emitir nuevamente') ||
+        descLower.includes('emitir nuevamente') ||
         errorDetail.toLowerCase().includes('truncar') ||
         errorDetail.toLowerCase().includes('trunca')
       );
