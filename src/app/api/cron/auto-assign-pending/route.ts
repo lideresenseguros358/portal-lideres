@@ -5,14 +5,16 @@ import { getSupabaseAdmin } from '@/lib/supabase/admin';
  * Cron Job: Auto-asignar pendientes antiguos
  * 
  * Pólizas sin identificar con más de 90 días se asignan automáticamente
- * al broker LISSA (contacto@lideresenseguros.com).
+ * al broker LISSA (contacto@lideresenseguros.com) y se registran
+ * directamente en la base de datos real (clients + policies).
  * 
- * Flujo:
+ * Flujo DIRECTO (sin ajustes, sin preliminar):
  * 1. Buscar pending_items con status='open' y created_at > 90 días
  * 2. Asignar assigned_broker_id = LISSA
- * 3. Migrar a comm_items (calcular gross_amount con percent_default de LISSA)
- * 4. Crear adjustment_report pre-aprobado para LISSA
- * 5. Crear registros en temp_client_import (preliminar) si no existen en policies ni en preliminar
+ * 3. Para cada póliza que NO exista en BD:
+ *    a. Crear o reutilizar cliente en tabla clients
+ *    b. Crear póliza en tabla policies
+ * 4. Marcar pending_items como 'migrated'
  * 
  * Schedule: Diario a las 6:00 AM
  */
@@ -47,7 +49,7 @@ export async function GET(request: NextRequest) {
 
     const { data: oldItems, error: itemsError } = await supabase
       .from('pending_items')
-      .select('id, policy_number, insured_name, insurer_id, commission_raw, import_id, created_at')
+      .select('id, policy_number, insured_name, insurer_id, commission_raw, created_at')
       .eq('status', 'open')
       .is('assigned_broker_id', null)
       .lt('created_at', ninetyDaysAgo.toISOString());
@@ -69,10 +71,9 @@ export async function GET(request: NextRequest) {
 
     console.log(`[CRON auto-assign] Encontrados ${oldItems.length} items con más de 90 días`);
 
-    const lissaPercent = lissaBroker.percent_default || 1.0;
     const itemIds = oldItems.map(item => item.id);
 
-    // 3. Asignar todos a LISSA
+    // 3. Asignar todos a LISSA en pending_items
     const { error: updateError } = await supabase
       .from('pending_items')
       .update({
@@ -87,158 +88,110 @@ export async function GET(request: NextRequest) {
       throw updateError;
     }
 
-    // 4. Migrar a comm_items (solo items que tienen import_id)
-    let commItemsCreated = 0;
-    let commItemsSkipped = 0;
-
+    // 4. Registrar directamente en BD real (clients + policies)
+    //    Agrupar por policy_number para evitar duplicados
+    const policyMap = new Map<string, typeof oldItems[0]>();
     for (const item of oldItems) {
-      // comm_items requiere import_id NOT NULL — si no tiene, solo marcar como migrado
-      if (!item.import_id) {
-        commItemsSkipped++;
-        console.log(`[CRON auto-assign] ${item.policy_number}: sin import_id, omitiendo comm_items`);
-      } else {
-        const grossAmount = item.commission_raw * lissaPercent;
+      if (!policyMap.has(item.policy_number)) {
+        policyMap.set(item.policy_number, item);
+      }
+    }
 
-        const { data: newCommItem, error: insertError } = await supabase
-          .from('comm_items')
+    // Verificar cuáles ya existen en policies
+    const policyNumbers = Array.from(policyMap.keys());
+    const { data: existingPolicies } = await supabase
+      .from('policies')
+      .select('policy_number')
+      .in('policy_number', policyNumbers);
+    const existingInPolicies = new Set((existingPolicies || []).map(p => p.policy_number));
+
+    let clientsCreated = 0;
+    let clientsReused = 0;
+    let policiesCreated = 0;
+    let policiesSkipped = 0;
+
+    for (const [policyNumber, item] of policyMap) {
+      // Si la póliza ya existe en BD, saltar
+      if (existingInPolicies.has(policyNumber)) {
+        policiesSkipped++;
+        console.log(`[CRON auto-assign] ${policyNumber}: ya existe en BD, omitiendo`);
+        continue;
+      }
+
+      const clientName = item.insured_name || 'POR COMPLETAR';
+
+      // 4a. Buscar o crear cliente
+      let clientId: string;
+
+      // Buscar cliente existente por nombre + broker LISSA
+      const { data: existingClient } = await supabase
+        .from('clients')
+        .select('id')
+        .eq('broker_id', lissaBroker.id)
+        .ilike('name', clientName)
+        .maybeSingle();
+
+      if (existingClient) {
+        clientId = existingClient.id;
+        clientsReused++;
+      } else {
+        // Crear nuevo cliente
+        const { data: newClient, error: clientError } = await supabase
+          .from('clients')
           .insert({
-            import_id: item.import_id,
-            insurer_id: item.insurer_id!,
-            policy_number: item.policy_number,
+            name: clientName,
             broker_id: lissaBroker.id,
-            gross_amount: grossAmount,
-            insured_name: item.insured_name,
-            raw_row: null,
           })
           .select('id')
           .single();
 
-        if (insertError || !newCommItem) {
-          console.error(`[CRON auto-assign] Error creando comm_item para ${item.policy_number}:`, insertError);
-        } else {
-          commItemsCreated++;
+        if (clientError || !newClient) {
+          console.error(`[CRON auto-assign] Error creando cliente para ${policyNumber}:`, clientError);
+          continue;
         }
+
+        clientId = newClient.id;
+        clientsCreated++;
       }
 
-      // Marcar pending_item como migrado (siempre, ya fue asignado a LISSA)
-      await supabase
-        .from('pending_items')
-        .update({ status: 'migrated' })
-        .eq('id', item.id);
-    }
-
-    console.log(`[CRON auto-assign] ${commItemsCreated} comm_items creados, ${commItemsSkipped} sin import_id omitidos`);
-
-    // 5. Crear adjustment_report pre-aprobado para LISSA (incluye TODOS los items)
-    let reportId: string | null = null;
-    if (oldItems.length > 0) {
-      const totalBrokerCommission = oldItems.reduce((sum, item) => {
-        return sum + (item.commission_raw * lissaPercent);
-      }, 0);
-
-      const { data: report, error: reportError } = await supabase
-        .from('adjustment_reports')
-        .insert({
-          broker_id: lissaBroker.id,
-          status: 'approved',
-          total_amount: totalBrokerCommission,
-          broker_notes: 'Auto-asignación por antigüedad (90+ días).',
-          admin_notes: `CRON: ${oldItems.length} pólizas sin identificar por más de 90 días asignadas automáticamente a ${lissaBroker.name}. Total: $${totalBrokerCommission.toFixed(2)}.`,
-          reviewed_at: new Date().toISOString(),
-        })
-        .select('id')
-        .single();
-
-      if (reportError) {
-        console.error('[CRON auto-assign] Error creando adjustment_report:', reportError);
-      } else if (report) {
-        reportId = report.id;
-        console.log(`[CRON auto-assign] Adjustment report creado: ${reportId}`);
-
-        // Crear adjustment_report_items para TODOS los pending_items
-        const reportItems = oldItems.map(item => ({
-          report_id: reportId!,
-          pending_item_id: item.id,
-          commission_raw: item.commission_raw,
-          broker_commission: item.commission_raw * lissaPercent,
-        }));
-
-        const { error: itemsInsertError } = await supabase
-          .from('adjustment_report_items')
-          .insert(reportItems);
-
-        if (itemsInsertError) {
-          console.error('[CRON auto-assign] Error creando adjustment_report_items:', itemsInsertError);
-        } else {
-          console.log(`[CRON auto-assign] ${reportItems.length} adjustment_report_items creados`);
-        }
-      }
-    }
-
-    // 6. Crear registros en temp_client_import (preliminar) para pólizas que no existen en BD
-    let preliminarCreated = 0;
-    const policyNumbers = oldItems.map(i => i.policy_number).filter(Boolean);
-
-    if (policyNumbers.length > 0) {
-      // Verificar cuáles ya existen en policies (BD real)
-      const { data: existingPolicies } = await supabase
+      // 4b. Crear póliza
+      const { error: policyError } = await supabase
         .from('policies')
-        .select('policy_number')
-        .in('policy_number', policyNumbers);
-      const existingInPolicies = new Set((existingPolicies || []).map(p => p.policy_number));
-
-      // Verificar cuáles ya existen en temp_client_import (preliminar)
-      const { data: existingPrelim } = await supabase
-        .from('temp_client_import')
-        .select('policy_number')
-        .in('policy_number', policyNumbers);
-      const existingInPrelim = new Set((existingPrelim || []).map((p: any) => p.policy_number));
-
-      const prelimRecords: any[] = [];
-      const seenPolicies = new Set<string>();
-
-      for (const item of oldItems) {
-        const pn = item.policy_number;
-        if (!pn) continue;
-        if (existingInPolicies.has(pn)) continue;
-        if (existingInPrelim.has(pn)) continue;
-        if (seenPolicies.has(pn)) continue;
-
-        seenPolicies.add(pn);
-        prelimRecords.push({
+        .insert({
+          policy_number: policyNumber,
+          client_id: clientId,
           broker_id: lissaBroker.id,
-          client_name: item.insured_name || 'POR COMPLETAR',
-          policy_number: pn,
-          insurer_id: item.insurer_id,
-          source: 'cron_auto_assign',
-          status: 'ACTIVA',
-          migrated: false,
-          notes: `Auto-asignado a oficina por antigüedad (90+ días). ${new Date().toLocaleDateString('es-PA')}.`,
+          insurer_id: item.insurer_id!,
+          notas: `Registrado automáticamente por antigüedad (90+ días sin identificar). ${new Date().toLocaleDateString('es-PA', { timeZone: 'America/Panama' })}.`,
         });
+
+      if (policyError) {
+        console.error(`[CRON auto-assign] Error creando póliza ${policyNumber}:`, policyError);
+        continue;
       }
 
-      if (prelimRecords.length > 0) {
-        const { error: prelimError } = await supabase
-          .from('temp_client_import')
-          .insert(prelimRecords);
+      policiesCreated++;
+      console.log(`[CRON auto-assign] ✅ ${policyNumber} → cliente: ${clientName}, póliza creada`);
+    }
 
-        if (prelimError) {
-          console.error('[CRON auto-assign] Error creando preliminar:', prelimError);
-        } else {
-          preliminarCreated = prelimRecords.length;
-          console.log(`[CRON auto-assign] ${preliminarCreated} registros preliminares creados`);
-        }
-      }
+    // 5. Marcar TODOS los pending_items como migrados
+    const { error: migrateError } = await supabase
+      .from('pending_items')
+      .update({ status: 'migrated' })
+      .in('id', itemIds);
+
+    if (migrateError) {
+      console.error('[CRON auto-assign] Error marcando como migrados:', migrateError);
     }
 
     const summary = {
       success: true,
-      assigned: oldItems.length,
-      comm_items_created: commItemsCreated,
-      comm_items_skipped_no_import: commItemsSkipped,
-      report_id: reportId,
-      preliminar_created: preliminarCreated,
-      skipped_existing: policyNumbers.length - preliminarCreated,
+      items_found: oldItems.length,
+      unique_policies: policyMap.size,
+      clients_created: clientsCreated,
+      clients_reused: clientsReused,
+      policies_created: policiesCreated,
+      policies_skipped_existing: policiesSkipped,
       timestamp: new Date().toISOString(),
     };
 
