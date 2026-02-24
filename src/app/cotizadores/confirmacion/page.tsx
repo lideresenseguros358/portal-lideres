@@ -7,7 +7,7 @@
 
 import { useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { FaCheckCircle, FaDownload, FaHome, FaShieldAlt, FaPrint } from 'react-icons/fa';
+import { FaCheckCircle, FaDownload, FaHome, FaShieldAlt } from 'react-icons/fa';
 import confetti from 'canvas-confetti';
 
 export default function ConfirmacionPage() {
@@ -216,36 +216,36 @@ export default function ConfirmacionPage() {
             </div>
           )}
 
-          {/* Botón: Descargar PDF oficial de IS (si disponible) */}
-          {policyData?.pdfUrl && (
+          {/* Botón: Descargar Póliza */}
+          {policyData?.pdfUrl ? (
             <>
               <a
-                href={policyData.pdfUrl}
+                href={`/api/is/auto/pdf?url=${encodeURIComponent(policyData.pdfUrl)}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-[#010139] to-[#020270] text-white rounded-xl font-bold text-lg hover:shadow-2xl transition-all transform hover:scale-105 flex items-center justify-center gap-3 mb-4 mx-auto"
+                className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-[#010139] to-[#020270] rounded-xl font-bold text-lg hover:shadow-2xl transition-all transform hover:scale-105 flex items-center justify-center gap-3 mb-4 mx-auto text-white"
               >
-                <FaDownload className="text-white text-xl" />
-                Descargar Póliza Oficial (PDF)
+                <FaDownload className="text-xl" />
+                Descargar Póliza
               </a>
-              <p className="text-xs text-gray-500 mb-4">
+              <p className="text-xs text-gray-500 mb-6">
                 Documento oficial emitido por la aseguradora
               </p>
             </>
+          ) : (
+            <>
+              <button
+                onClick={handleDownloadCaratula}
+                className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] rounded-xl font-bold text-lg hover:shadow-2xl transition-all transform hover:scale-105 flex items-center justify-center gap-3 mb-4 mx-auto text-white"
+              >
+                <FaDownload className="text-xl" />
+                Descargar Póliza
+              </button>
+              <p className="text-xs text-gray-500 mb-6">
+                Se abrirá una ventana para imprimir o guardar como PDF
+              </p>
+            </>
           )}
-
-          {/* Botón: Descargar Carátula */}
-          <button
-            onClick={handleDownloadCaratula}
-            className={`w-full sm:w-auto px-8 py-4 ${policyData?.pdfUrl ? 'bg-gradient-to-r from-gray-600 to-gray-700' : 'bg-gradient-to-r from-[#8AAA19] to-[#6d8814]'} text-white rounded-xl font-bold text-lg hover:shadow-2xl transition-all transform hover:scale-105 flex items-center justify-center gap-3 mb-4 mx-auto`}
-          >
-            <FaPrint className="text-white text-xl" />
-            {policyData?.pdfUrl ? 'Imprimir Carátula Resumen' : 'Descargar Carátula de Póliza'}
-          </button>
-          
-          <p className="text-xs text-gray-500 mb-6">
-            Se abrirá una ventana para imprimir o guardar como PDF
-          </p>
 
           <div className="my-6 border-t border-gray-200"></div>
 

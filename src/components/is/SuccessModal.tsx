@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FaCheckCircle, FaDownload, FaEnvelope, FaTimes } from 'react-icons/fa';
+import { FaCheckCircle, FaDownload, FaTimes } from 'react-icons/fa';
 import Confetti from 'react-confetti';
 
 interface SuccessModalProps {
@@ -45,18 +45,10 @@ export default function SuccessModal({
 
   const handleDownloadPDF = () => {
     if (pdfUrl) {
-      window.open(pdfUrl, '_blank');
+      window.open(`/api/is/auto/pdf?url=${encodeURIComponent(pdfUrl)}`, '_blank');
     } else {
-      // MOCK: Simular descarga
-      console.log('[MOCK] Descargando PDF de póliza:', nroPoliza);
-      alert('Función de descarga disponible en producción');
+      alert('El PDF de la póliza aún no está disponible.');
     }
-  };
-
-  const handleSendEmail = () => {
-    // MOCK: Simular envío de email
-    console.log('[MOCK] Enviando póliza por email');
-    alert('Póliza enviada a su correo electrónico');
   };
 
   if (!isOpen) return null;
@@ -187,27 +179,19 @@ export default function SuccessModal({
                 </div>
               </motion.div>
 
-              {/* Botones de acción */}
+              {/* Botón de acción */}
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.7 }}
-                className="grid grid-cols-1 md:grid-cols-2 gap-4"
+                className="flex justify-center"
               >
                 <button
                   onClick={handleDownloadPDF}
-                  className="flex items-center justify-center space-x-2 px-6 py-3 bg-[#010139] text-white rounded-lg hover:bg-[#010139]/90 transition-colors shadow-md"
+                  className="flex items-center justify-center space-x-2 px-8 py-4 bg-gradient-to-r from-[#010139] to-[#020270] text-white rounded-xl hover:shadow-2xl transition-all transform hover:scale-105 font-bold text-lg shadow-md"
                 >
-                  <FaDownload />
+                  <FaDownload className="text-white" />
                   <span>Descargar Póliza</span>
-                </button>
-
-                <button
-                  onClick={handleSendEmail}
-                  className="flex items-center justify-center space-x-2 px-6 py-3 bg-white border-2 border-[#010139] text-[#010139] rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  <FaEnvelope />
-                  <span>Enviar por Email</span>
                 </button>
               </motion.div>
 

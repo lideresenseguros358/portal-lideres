@@ -84,7 +84,7 @@ export default function PolizaEmitidaPage() {
 
   const handleDownloadPDF = () => {
     if (policy?.pdfUrl) {
-      window.open(policy.pdfUrl, '_blank');
+      window.open(`/api/is/auto/pdf?url=${encodeURIComponent(policy.pdfUrl)}`, '_blank');
     } else {
       alert('El PDF de la póliza aún no está disponible. Será enviado a tu correo.');
     }
@@ -301,10 +301,10 @@ export default function PolizaEmitidaPage() {
           {policy.pdfUrl && (
             <button
               onClick={handleDownloadPDF}
-              className="flex items-center justify-center gap-2 px-8 py-4 bg-[#8AAA19] text-white rounded-xl font-semibold hover:bg-opacity-90 transition-all shadow-lg"
+              className="flex items-center justify-center gap-2 px-8 py-4 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-xl font-bold text-lg hover:shadow-2xl transition-all transform hover:scale-105 shadow-lg"
             >
-              <FaDownload />
-              Descargar PDF
+              <FaDownload className="text-white" />
+              Descargar Póliza
             </button>
           )}
           
