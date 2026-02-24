@@ -45,7 +45,7 @@ export default function SuccessModal({
 
   const handleDownloadPDF = () => {
     if (pdfUrl) {
-      window.open(`/api/is/auto/pdf?url=${encodeURIComponent(pdfUrl)}`, '_blank');
+      window.open(pdfUrl, '_blank');
     } else {
       alert('El PDF de la póliza aún no está disponible.');
     }

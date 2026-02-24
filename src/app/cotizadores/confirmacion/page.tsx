@@ -220,13 +220,13 @@ export default function ConfirmacionPage() {
           {policyData?.pdfUrl ? (
             <>
               <a
-                href={`/api/is/auto/pdf?url=${encodeURIComponent(policyData.pdfUrl)}`}
+                href={policyData.pdfUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-[#010139] to-[#020270] rounded-xl font-bold text-lg hover:shadow-2xl transition-all transform hover:scale-105 flex items-center justify-center gap-3 mb-4 mx-auto text-white"
               >
-                <FaDownload className="text-xl" />
-                Descargar Póliza
+                <FaDownload className="text-xl text-white" />
+                <span className="text-white">Descargar Póliza</span>
               </a>
               <p className="text-xs text-gray-500 mb-6">
                 Documento oficial emitido por la aseguradora
@@ -238,8 +238,8 @@ export default function ConfirmacionPage() {
                 onClick={handleDownloadCaratula}
                 className="w-full sm:w-auto px-8 py-4 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] rounded-xl font-bold text-lg hover:shadow-2xl transition-all transform hover:scale-105 flex items-center justify-center gap-3 mb-4 mx-auto text-white"
               >
-                <FaDownload className="text-xl" />
-                Descargar Póliza
+                <FaDownload className="text-xl text-white" />
+                <span className="text-white">Descargar Póliza</span>
               </button>
               <p className="text-xs text-gray-500 mb-6">
                 Se abrirá una ventana para imprimir o guardar como PDF

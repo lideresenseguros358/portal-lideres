@@ -84,7 +84,7 @@ export default function PolizaEmitidaPage() {
 
   const handleDownloadPDF = () => {
     if (policy?.pdfUrl) {
-      window.open(`/api/is/auto/pdf?url=${encodeURIComponent(policy.pdfUrl)}`, '_blank');
+      window.open(policy.pdfUrl, '_blank');
     } else {
       alert('El PDF de la póliza aún no está disponible. Será enviado a tu correo.');
     }
