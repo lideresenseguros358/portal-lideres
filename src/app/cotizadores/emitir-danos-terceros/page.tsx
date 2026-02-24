@@ -237,6 +237,69 @@ export default function EmitirDanosTercerosPage() {
         }
 
         console.log(`[EMISIÓN DT FEDPA] Póliza emitida (${usedMethod}):`, emisionResult.nroPoliza || emisionResult.poliza);
+        
+        // ═══ ENVIAR BIENVENIDA AL CLIENTE POR CORREO ═══
+        toast.info('Enviando confirmación por correo...');
+        try {
+          const welcomeForm = new FormData();
+          welcomeForm.append('tipoCobertura', 'DT');
+          welcomeForm.append('environment', 'development');
+          welcomeForm.append('nroPoliza', emisionResult.nroPoliza || emisionResult.poliza || '');
+          welcomeForm.append('insurerName', 'FEDPA Seguros');
+          
+          welcomeForm.append('clientData', JSON.stringify({
+            primerNombre: emissionData.primerNombre,
+            segundoNombre: emissionData.segundoNombre,
+            primerApellido: emissionData.primerApellido,
+            segundoApellido: emissionData.segundoApellido,
+            cedula: emissionData.cedula,
+            email: emissionData.email,
+            telefono: emissionData.telefono,
+            celular: emissionData.celular,
+            direccion: emissionData.direccion,
+            fechaNacimiento: emissionData.fechaNacimiento,
+          }));
+          
+          welcomeForm.append('vehicleData', JSON.stringify({
+            placa: vehicleData?.placa,
+            vinChasis: vehicleData?.vinChasis,
+            motor: vehicleData?.motor,
+            color: vehicleData?.color,
+            pasajeros: vehicleData?.pasajeros,
+            puertas: vehicleData?.puertas,
+            tipoTransmision: vehicleData?.tipoTransmision,
+          }));
+          
+          welcomeForm.append('quoteData', JSON.stringify({
+            marca: quoteData?.marca,
+            modelo: quoteData?.modelo,
+            anio: quoteData?.anio || quoteData?.anno,
+            valorVehiculo: quoteData?.valorVehiculo || 0,
+            cobertura: 'Daños a Terceros',
+            primaTotal: selectedPlan.annualPremium || 0,
+          }));
+          
+          if (emissionData.cedulaFile) {
+            welcomeForm.append('cedulaFile', emissionData.cedulaFile);
+          }
+          if (emissionData.licenciaFile) {
+            welcomeForm.append('licenciaFile', emissionData.licenciaFile);
+          }
+          
+          const welcomeResponse = await fetch('/api/is/auto/send-expediente', {
+            method: 'POST',
+            body: welcomeForm,
+          });
+          const welcomeResult = await welcomeResponse.json();
+          if (welcomeResult.success) {
+            console.log('[FEDPA DT] ✅ Bienvenida enviada:', welcomeResult.messageId);
+          } else {
+            console.error('[FEDPA DT] Error bienvenida:', welcomeResult.error);
+          }
+        } catch (welcomeErr: any) {
+          console.error('[FEDPA DT] Error enviando bienvenida:', welcomeErr);
+        }
+
         sessionStorage.setItem('emittedPolicy', JSON.stringify({
           nroPoliza: emisionResult.nroPoliza || emisionResult.poliza,
           insurer: 'FEDPA Seguros',
@@ -339,7 +402,7 @@ export default function EmitirDanosTercerosPage() {
 
         console.log('[EMISIÓN DT INTERNACIONAL] Póliza emitida:', emisionResult.nroPoliza);
 
-        // ═══ ENVIAR EXPEDIENTE Y CONFIRMACIÓN POR CORREO ═══
+        // ═══ ENVIAR EXPEDIENTE Y BIENVENIDA POR CORREO ═══
         toast.info('Enviando expediente por correo...');
         try {
           const expedienteForm = new FormData();
@@ -347,6 +410,7 @@ export default function EmitirDanosTercerosPage() {
           expedienteForm.append('environment', 'development');
           expedienteForm.append('nroPoliza', emisionResult.nroPoliza || '');
           expedienteForm.append('pdfUrl', emisionResult.pdfUrl || '');
+          expedienteForm.append('insurerName', 'Internacional de Seguros');
           
           expedienteForm.append('clientData', JSON.stringify({
             primerNombre: emissionData.primerNombre,
@@ -368,7 +432,11 @@ export default function EmitirDanosTercerosPage() {
             color: vehicleData?.color,
             pasajeros: vehicleData?.pasajeros,
             puertas: vehicleData?.puertas,
+            kilometraje: vehicleData?.kilometraje,
+            tipoCombustible: vehicleData?.tipoCombustible,
             tipoTransmision: vehicleData?.tipoTransmision,
+            aseguradoAnteriormente: vehicleData?.aseguradoAnteriormente,
+            aseguradoraAnterior: vehicleData?.aseguradoraAnterior,
           }));
           
           expedienteForm.append('quoteData', JSON.stringify({
@@ -386,6 +454,9 @@ export default function EmitirDanosTercerosPage() {
           }
           if (emissionData.licenciaFile) {
             expedienteForm.append('licenciaFile', emissionData.licenciaFile);
+          }
+          if (vehicleData?.registroVehicular) {
+            expedienteForm.append('registroVehicularFile', vehicleData.registroVehicular);
           }
           
           const expedienteResponse = await fetch('/api/is/auto/send-expediente', {

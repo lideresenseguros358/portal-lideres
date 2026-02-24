@@ -280,6 +280,68 @@ export default function EmitirPage() {
         
         console.log(`[EMISIÓN FEDPA] Póliza emitida (${usedMethod}):`, emisionResult.nroPoliza || emisionResult.poliza);
         
+        // ═══ ENVIAR BIENVENIDA AL CLIENTE POR CORREO ═══
+        toast.info('Enviando confirmación por correo...');
+        try {
+          const welcomeForm = new FormData();
+          welcomeForm.append('tipoCobertura', 'CC');
+          welcomeForm.append('environment', 'development');
+          welcomeForm.append('nroPoliza', emisionResult.nroPoliza || emisionResult.poliza || '');
+          welcomeForm.append('insurerName', 'FEDPA Seguros');
+          
+          welcomeForm.append('clientData', JSON.stringify({
+            primerNombre: emissionData.primerNombre,
+            segundoNombre: emissionData.segundoNombre,
+            primerApellido: emissionData.primerApellido,
+            segundoApellido: emissionData.segundoApellido,
+            cedula: emissionData.cedula,
+            email: emissionData.email,
+            telefono: emissionData.telefono,
+            celular: emissionData.celular,
+            direccion: emissionData.direccion,
+            fechaNacimiento: emissionData.fechaNacimiento,
+          }));
+          
+          welcomeForm.append('vehicleData', JSON.stringify({
+            placa: vehicleData?.placa,
+            vinChasis: vehicleData?.vinChasis,
+            motor: vehicleData?.motor,
+            color: vehicleData?.color,
+            pasajeros: vehicleData?.pasajeros,
+            puertas: vehicleData?.puertas,
+            tipoTransmision: vehicleData?.tipoTransmision,
+          }));
+          
+          welcomeForm.append('quoteData', JSON.stringify({
+            marca: quoteData.marca,
+            modelo: quoteData.modelo,
+            anio: quoteData.anio || quoteData.anno,
+            valorVehiculo: quoteData.valorVehiculo || 0,
+            cobertura: 'Cobertura Completa',
+            primaTotal: selectedPlan?.annualPremium || 0,
+          }));
+          
+          if (emissionData.cedulaFile) {
+            welcomeForm.append('cedulaFile', emissionData.cedulaFile);
+          }
+          if (emissionData.licenciaFile) {
+            welcomeForm.append('licenciaFile', emissionData.licenciaFile);
+          }
+          
+          const welcomeResponse = await fetch('/api/is/auto/send-expediente', {
+            method: 'POST',
+            body: welcomeForm,
+          });
+          const welcomeResult = await welcomeResponse.json();
+          if (welcomeResult.success) {
+            console.log('[FEDPA CC] ✅ Bienvenida enviada:', welcomeResult.messageId);
+          } else {
+            console.error('[FEDPA CC] Error bienvenida:', welcomeResult.error);
+          }
+        } catch (welcomeErr: any) {
+          console.error('[FEDPA CC] Error enviando bienvenida:', welcomeErr);
+        }
+        
         sessionStorage.setItem('emittedPolicy', JSON.stringify({
           nroPoliza: emisionResult.nroPoliza || emisionResult.poliza,
           insurer: 'FEDPA Seguros',
@@ -287,6 +349,12 @@ export default function EmitirPage() {
           policyId: emisionResult.policyId,
           vigenciaDesde: emisionResult.desde || emisionResult.vigenciaDesde,
           vigenciaHasta: emisionResult.hasta || emisionResult.vigenciaHasta,
+          asegurado: `${emissionData.primerNombre} ${emissionData.primerApellido}`,
+          cedula: emissionData.cedula,
+          vehiculo: `${quoteData.marca} ${quoteData.modelo} ${quoteData.anio || quoteData.anno || ''}`.trim(),
+          placa: vehicleData?.placa || '',
+          primaTotal: selectedPlan?.annualPremium,
+          tipoCobertura: 'Cobertura Completa',
           method: usedMethod,
         }));
         
@@ -390,6 +458,7 @@ export default function EmitirPage() {
           expedienteForm.append('environment', 'development');
           expedienteForm.append('nroPoliza', emisionResult.nroPoliza || '');
           expedienteForm.append('pdfUrl', emisionResult.pdfUrl || '');
+          expedienteForm.append('insurerName', 'Internacional de Seguros');
           expedienteForm.append('firmaDataUrl', signatureDataUrl || '');
           
           // Client data
@@ -491,6 +560,7 @@ export default function EmitirPage() {
           placa: vehicleData?.placa || '',
           primaTotal: selectedPlan.annualPremium,
           planType: selectedPlan.planType,
+          tipoCobertura: tipoCobertura,
           vigenciaDesde: new Date().toLocaleDateString('es-PA'),
           vigenciaHasta: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toLocaleDateString('es-PA'),
         }));

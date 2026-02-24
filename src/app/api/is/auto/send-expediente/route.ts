@@ -8,10 +8,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getTransport, getFromAddress } from '@/server/email/mailer';
 import { generateInspectionPdf } from '@/lib/is/inspection-pdf';
 
-// Expediente recipients: office always gets a copy
+// Expediente recipients
 const OFFICE_EMAIL = 'contacto@lideresenseguros.com';
+// Dev: everything goes to office for testing
 const IS_RECIPIENTS_DEV = [OFFICE_EMAIL];
-const IS_RECIPIENTS_PROD = ['mprestan@iseguros.com', 'slopez@iseguros.com'];
+// Prod: IS contacts + office always gets a copy
+const IS_RECIPIENTS_PROD = [OFFICE_EMAIL, 'mprestan@iseguros.com', 'slopez@iseguros.com'];
 
 export async function POST(request: NextRequest) {
   try {
@@ -26,6 +28,8 @@ export async function POST(request: NextRequest) {
     const environment = formData.get('environment') as string || 'development';
     const firmaDataUrl = formData.get('firmaDataUrl') as string || '';
     const nroPoliza = formData.get('nroPoliza') as string || '';
+    const insurerName = formData.get('insurerName') as string || 'Internacional de Seguros';
+    const isDev = environment !== 'production';
     
     if (!clientDataStr || !vehicleDataStr) {
       return NextResponse.json({ error: 'Faltan datos del cliente o vehículo' }, { status: 400 });
@@ -176,49 +180,56 @@ export async function POST(request: NextRequest) {
     
     console.log('[IS EXPEDIENTE] ✅ Correo expediente enviado:', mailResult.messageId);
     
-    // === ENVIAR CONFIRMACIÓN AL CLIENTE Y OFICINA ===
+    // === ENVIAR RESUMEN Y BIENVENIDA AL CLIENTE ===
     const clientEmail = clientData.email;
     const primaTotal = quoteData.primaTotal || quoteData.valorVehiculo || 0;
     const vigenciaDesde = new Date().toLocaleDateString('es-PA');
     const vigenciaHasta = new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toLocaleDateString('es-PA');
     
-    if (clientEmail) {
-      try {
-        const caratulaHtml = buildCaratulaEmail({
-          nombreCompleto,
-          cedula: clientData.cedula,
-          marca: quoteData.marca,
-          modelo: quoteData.modelo,
-          anio: quoteData.anio || quoteData.anno,
-          placa: vehicleData.placa,
-          nroPoliza,
-          cobertura: coberturaLabel,
-          primaTotal,
-          vigenciaDesde,
-          vigenciaHasta,
-          pdfUrl: (formData.get('pdfUrl') as string) || '',
-        });
-        
-        // Send to client
-        const clientMailResult = await transport.sendMail({
-          from: fromAddress,
-          to: clientEmail,
-          subject: `Tu póliza ha sido emitida - ${coberturaLabel}${nroPoliza ? ` - Póliza ${nroPoliza}` : ''}`,
-          html: caratulaHtml,
-        });
-        console.log('[IS EXPEDIENTE] ✅ Confirmación enviada al cliente:', clientEmail, clientMailResult.messageId);
-        
-        // Send copy to office
+    // In dev: send welcome email to office for testing
+    // In prod: send to real client email
+    const welcomeRecipient = isDev ? OFFICE_EMAIL : (clientEmail || OFFICE_EMAIL);
+    
+    try {
+      const welcomeHtml = buildWelcomeEmail({
+        nombreCompleto,
+        cedula: clientData.cedula,
+        marca: quoteData.marca,
+        modelo: quoteData.modelo,
+        anio: quoteData.anio || quoteData.anno,
+        placa: vehicleData.placa,
+        nroPoliza,
+        cobertura: coberturaLabel,
+        primaTotal,
+        vigenciaDesde,
+        vigenciaHasta,
+        pdfUrl: (formData.get('pdfUrl') as string) || '',
+        insurerName,
+      });
+      
+      const welcomeSubject = `¡Bienvenido! Tu póliza ha sido emitida - ${coberturaLabel}${nroPoliza ? ` - Póliza ${nroPoliza}` : ''}`;
+      
+      // Send welcome email to client (or office in dev)
+      const welcomeResult = await transport.sendMail({
+        from: fromAddress,
+        to: welcomeRecipient,
+        subject: welcomeSubject,
+        html: welcomeHtml,
+      });
+      console.log('[IS EXPEDIENTE] ✅ Bienvenida enviada a:', welcomeRecipient, welcomeResult.messageId);
+      
+      // In prod, also send copy to office
+      if (!isDev && welcomeRecipient !== OFFICE_EMAIL) {
         await transport.sendMail({
           from: fromAddress,
           to: OFFICE_EMAIL,
           subject: `Confirmación de Emisión - ${nombreCompleto} - ${clientData.cedula}${nroPoliza ? ` - Póliza ${nroPoliza}` : ''}`,
-          html: caratulaHtml,
+          html: welcomeHtml,
         });
-        console.log('[IS EXPEDIENTE] ✅ Copia de confirmación enviada a oficina');
-      } catch (clientEmailError: any) {
-        console.error('[IS EXPEDIENTE] Error enviando confirmación al cliente:', clientEmailError.message);
+        console.log('[IS EXPEDIENTE] ✅ Copia de bienvenida enviada a oficina');
       }
+    } catch (welcomeError: any) {
+      console.error('[IS EXPEDIENTE] Error enviando bienvenida:', welcomeError.message);
     }
     
     return NextResponse.json({
@@ -237,7 +248,7 @@ export async function POST(request: NextRequest) {
   }
 }
 
-function buildCaratulaEmail(data: {
+function buildWelcomeEmail(data: {
   nombreCompleto: string;
   cedula: string;
   marca: string;
@@ -250,6 +261,7 @@ function buildCaratulaEmail(data: {
   vigenciaDesde: string;
   vigenciaHasta: string;
   pdfUrl: string;
+  insurerName: string;
 }): string {
   return `
 <!DOCTYPE html>
@@ -287,6 +299,11 @@ function buildCaratulaEmail(data: {
       <div class="success-badge">✓ Póliza Emitida Exitosamente</div>
     </div>
     
+    <div style="padding: 20px 24px 0; font-size: 15px; color: #333;">
+      <p>Estimado/a <strong>${data.nombreCompleto}</strong>,</p>
+      <p>Nos complace informarle que su póliza de seguro ha sido emitida exitosamente. A continuación encontrará los detalles de su cobertura.</p>
+    </div>
+    
     ${data.nroPoliza ? `
     <div class="poliza-box">
       <div class="label">Número de Póliza</div>
@@ -296,7 +313,7 @@ function buildCaratulaEmail(data: {
     <div class="content">
       <div class="section">
         <h3>Información General</h3>
-        <div class="row"><span class="label">Aseguradora:</span><span class="value">Internacional de Seguros</span></div>
+        <div class="row"><span class="label">Aseguradora:</span><span class="value">${data.insurerName}</span></div>
         <div class="row"><span class="label">Cobertura:</span><span class="value">${data.cobertura}</span></div>
         <div class="row"><span class="label">Vigencia:</span><span class="value">${data.vigenciaDesde} al ${data.vigenciaHasta}</span></div>
       </div>
@@ -328,7 +345,8 @@ function buildCaratulaEmail(data: {
     
     <div class="footer">
       <p>Documento generado por Líderes en Seguros, S.A. — ${new Date().toLocaleDateString('es-PA', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
-      <p style="margin-top:4px;">Este es un correo informativo. La póliza oficial es emitida por Internacional de Seguros.</p>
+      <p style="margin-top:4px;">Este es un correo informativo. La póliza oficial es emitida por ${data.insurerName}.</p>
+      <p style="margin-top:4px;">Si tiene alguna consulta, no dude en contactarnos.</p>
     </div>
   </div>
 </body>
