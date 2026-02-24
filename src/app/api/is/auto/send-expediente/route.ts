@@ -8,8 +8,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getTransport, getFromAddress } from '@/server/email/mailer';
 import { generateInspectionPdf } from '@/lib/is/inspection-pdf';
 
-// Test recipients for development, production recipients for prod
-const IS_RECIPIENTS_DEV = ['contacto@lideresenseguros.com'];
+// Expediente recipients: office always gets a copy
+const OFFICE_EMAIL = 'contacto@lideresenseguros.com';
+const IS_RECIPIENTS_DEV = [OFFICE_EMAIL];
 const IS_RECIPIENTS_PROD = ['mprestan@iseguros.com', 'slopez@iseguros.com'];
 
 export async function POST(request: NextRequest) {
@@ -173,13 +174,59 @@ export async function POST(request: NextRequest) {
       })),
     });
     
-    console.log('[IS EXPEDIENTE] ✅ Correo enviado:', mailResult.messageId);
+    console.log('[IS EXPEDIENTE] ✅ Correo expediente enviado:', mailResult.messageId);
+    
+    // === ENVIAR CONFIRMACIÓN AL CLIENTE Y OFICINA ===
+    const clientEmail = clientData.email;
+    const primaTotal = quoteData.primaTotal || quoteData.valorVehiculo || 0;
+    const vigenciaDesde = new Date().toLocaleDateString('es-PA');
+    const vigenciaHasta = new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toLocaleDateString('es-PA');
+    
+    if (clientEmail) {
+      try {
+        const caratulaHtml = buildCaratulaEmail({
+          nombreCompleto,
+          cedula: clientData.cedula,
+          marca: quoteData.marca,
+          modelo: quoteData.modelo,
+          anio: quoteData.anio || quoteData.anno,
+          placa: vehicleData.placa,
+          nroPoliza,
+          cobertura: coberturaLabel,
+          primaTotal,
+          vigenciaDesde,
+          vigenciaHasta,
+          pdfUrl: (formData.get('pdfUrl') as string) || '',
+        });
+        
+        // Send to client
+        const clientMailResult = await transport.sendMail({
+          from: fromAddress,
+          to: clientEmail,
+          subject: `Tu póliza ha sido emitida - ${coberturaLabel}${nroPoliza ? ` - Póliza ${nroPoliza}` : ''}`,
+          html: caratulaHtml,
+        });
+        console.log('[IS EXPEDIENTE] ✅ Confirmación enviada al cliente:', clientEmail, clientMailResult.messageId);
+        
+        // Send copy to office
+        await transport.sendMail({
+          from: fromAddress,
+          to: OFFICE_EMAIL,
+          subject: `Confirmación de Emisión - ${nombreCompleto} - ${clientData.cedula}${nroPoliza ? ` - Póliza ${nroPoliza}` : ''}`,
+          html: caratulaHtml,
+        });
+        console.log('[IS EXPEDIENTE] ✅ Copia de confirmación enviada a oficina');
+      } catch (clientEmailError: any) {
+        console.error('[IS EXPEDIENTE] Error enviando confirmación al cliente:', clientEmailError.message);
+      }
+    }
     
     return NextResponse.json({
       success: true,
       messageId: mailResult.messageId,
       recipients,
       attachmentCount: attachments.length,
+      clientEmailSent: !!clientEmail,
     });
     
   } catch (error: any) {
@@ -188,6 +235,104 @@ export async function POST(request: NextRequest) {
       error: error.message || 'Error al enviar expediente',
     }, { status: 500 });
   }
+}
+
+function buildCaratulaEmail(data: {
+  nombreCompleto: string;
+  cedula: string;
+  marca: string;
+  modelo: string;
+  anio: string | number;
+  placa: string;
+  nroPoliza: string;
+  cobertura: string;
+  primaTotal: number;
+  vigenciaDesde: string;
+  vigenciaHasta: string;
+  pdfUrl: string;
+}): string {
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body { font-family: 'Segoe UI', Arial, sans-serif; margin: 0; padding: 0; background: #f5f5f5; }
+    .container { max-width: 600px; margin: 20px auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+    .header { background: linear-gradient(135deg, #010139, #020270); color: white; padding: 30px 24px; text-align: center; }
+    .header h1 { margin: 0; font-size: 24px; }
+    .header p { margin: 8px 0 0; opacity: 0.85; font-size: 14px; }
+    .success-badge { display: inline-block; background: #8AAA19; color: white; padding: 6px 16px; border-radius: 20px; font-size: 13px; font-weight: bold; margin-top: 12px; }
+    .poliza-box { background: #f0f4e0; border: 2px solid #8AAA19; border-radius: 10px; padding: 16px; margin: 20px 24px; text-align: center; }
+    .poliza-box .label { font-size: 12px; color: #666; text-transform: uppercase; font-weight: bold; }
+    .poliza-box .number { font-size: 28px; font-weight: 800; color: #010139; margin-top: 4px; }
+    .content { padding: 0 24px 24px; }
+    .section { margin-bottom: 16px; }
+    .section h3 { color: #010139; font-size: 15px; border-bottom: 2px solid #8AAA19; padding-bottom: 6px; margin-bottom: 10px; }
+    .row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 14px; border-bottom: 1px solid #f0f0f0; }
+    .row .label { color: #666; }
+    .row .value { font-weight: 600; color: #333; }
+    .prima-box { background: #010139; color: white; padding: 16px; border-radius: 10px; text-align: center; margin: 16px 0; }
+    .prima-box .amount { font-size: 28px; font-weight: 800; color: #8AAA19; }
+    .prima-box .label { font-size: 12px; opacity: 0.8; }
+    .btn { display: inline-block; background: #8AAA19; color: white; padding: 12px 28px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 14px; margin-top: 16px; }
+    .footer { background: #f8f8f8; padding: 16px 24px; text-align: center; font-size: 11px; color: #999; border-top: 1px solid #eee; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>Líderes en Seguros</h1>
+      <p>Carátula de Póliza</p>
+      <div class="success-badge">✓ Póliza Emitida Exitosamente</div>
+    </div>
+    
+    ${data.nroPoliza ? `
+    <div class="poliza-box">
+      <div class="label">Número de Póliza</div>
+      <div class="number">${data.nroPoliza}</div>
+    </div>` : ''}
+    
+    <div class="content">
+      <div class="section">
+        <h3>Información General</h3>
+        <div class="row"><span class="label">Aseguradora:</span><span class="value">Internacional de Seguros</span></div>
+        <div class="row"><span class="label">Cobertura:</span><span class="value">${data.cobertura}</span></div>
+        <div class="row"><span class="label">Vigencia:</span><span class="value">${data.vigenciaDesde} al ${data.vigenciaHasta}</span></div>
+      </div>
+      
+      <div class="section">
+        <h3>Datos del Asegurado</h3>
+        <div class="row"><span class="label">Nombre:</span><span class="value">${data.nombreCompleto}</span></div>
+        <div class="row"><span class="label">Identificación:</span><span class="value">${data.cedula}</span></div>
+      </div>
+      
+      <div class="section">
+        <h3>Datos del Vehículo</h3>
+        <div class="row"><span class="label">Vehículo:</span><span class="value">${data.marca} ${data.modelo} ${data.anio}</span></div>
+        ${data.placa ? `<div class="row"><span class="label">Placa:</span><span class="value">${data.placa}</span></div>` : ''}
+      </div>
+      
+      ${data.primaTotal ? `
+      <div class="prima-box">
+        <div class="label">Prima Total Anual</div>
+        <div class="amount">$${Number(data.primaTotal).toLocaleString('en-US', { minimumFractionDigits: 2 })}</div>
+      </div>` : ''}
+      
+      ${data.pdfUrl ? `
+      <div style="text-align:center;margin-top:20px;">
+        <a href="${data.pdfUrl}" class="btn">Descargar Póliza Oficial</a>
+        <p style="font-size:11px;color:#999;margin-top:8px;">Enlace al documento oficial de la aseguradora</p>
+      </div>` : ''}
+    </div>
+    
+    <div class="footer">
+      <p>Documento generado por Líderes en Seguros, S.A. — ${new Date().toLocaleDateString('es-PA', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+      <p style="margin-top:4px;">Este es un correo informativo. La póliza oficial es emitida por Internacional de Seguros.</p>
+    </div>
+  </div>
+</body>
+</html>`;
 }
 
 function getExtension(filename: string): string {

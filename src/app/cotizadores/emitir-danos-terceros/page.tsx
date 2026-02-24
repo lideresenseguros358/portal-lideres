@@ -339,6 +339,73 @@ export default function EmitirDanosTercerosPage() {
 
         console.log('[EMISIÓN DT INTERNACIONAL] Póliza emitida:', emisionResult.nroPoliza);
 
+        // ═══ ENVIAR EXPEDIENTE Y CONFIRMACIÓN POR CORREO ═══
+        toast.info('Enviando expediente por correo...');
+        try {
+          const expedienteForm = new FormData();
+          expedienteForm.append('tipoCobertura', 'DT');
+          expedienteForm.append('environment', 'development');
+          expedienteForm.append('nroPoliza', emisionResult.nroPoliza || '');
+          expedienteForm.append('pdfUrl', emisionResult.pdfUrl || '');
+          
+          expedienteForm.append('clientData', JSON.stringify({
+            primerNombre: emissionData.primerNombre,
+            segundoNombre: emissionData.segundoNombre,
+            primerApellido: emissionData.primerApellido,
+            segundoApellido: emissionData.segundoApellido,
+            cedula: emissionData.cedula,
+            email: emissionData.email,
+            telefono: emissionData.telefono,
+            celular: emissionData.celular,
+            direccion: emissionData.direccion,
+            fechaNacimiento: emissionData.fechaNacimiento,
+          }));
+          
+          expedienteForm.append('vehicleData', JSON.stringify({
+            placa: vehicleData?.placa,
+            vinChasis: vehicleData?.vinChasis,
+            motor: vehicleData?.motor,
+            color: vehicleData?.color,
+            pasajeros: vehicleData?.pasajeros,
+            puertas: vehicleData?.puertas,
+            tipoTransmision: vehicleData?.tipoTransmision,
+          }));
+          
+          expedienteForm.append('quoteData', JSON.stringify({
+            marca: quoteData?.marca,
+            modelo: quoteData?.modelo,
+            anio: quoteData?.anio || quoteData?.anno,
+            valorVehiculo: quoteData?.valorVehiculo || 0,
+            tipoVehiculo: quoteData?.tipoVehiculo || 'SEDAN',
+            cobertura: 'Daños a Terceros',
+            primaTotal: selectedPlan.annualPremium || 0,
+          }));
+          
+          if (emissionData.cedulaFile) {
+            expedienteForm.append('cedulaFile', emissionData.cedulaFile);
+          }
+          if (emissionData.licenciaFile) {
+            expedienteForm.append('licenciaFile', emissionData.licenciaFile);
+          }
+          
+          const expedienteResponse = await fetch('/api/is/auto/send-expediente', {
+            method: 'POST',
+            body: expedienteForm,
+          });
+          
+          const expedienteResult = await expedienteResponse.json();
+          if (expedienteResult.success) {
+            console.log('[IS EXPEDIENTE DT] ✅ Correo enviado:', expedienteResult.messageId);
+            toast.success('Expediente y confirmación enviados por correo');
+          } else {
+            console.error('[IS EXPEDIENTE DT] Error:', expedienteResult.error);
+            toast.warning('Póliza emitida pero hubo un error enviando el expediente por correo');
+          }
+        } catch (expError: any) {
+          console.error('[IS EXPEDIENTE DT] Error enviando expediente:', expError);
+          toast.warning('Póliza emitida pero hubo un error enviando el expediente por correo');
+        }
+
         sessionStorage.setItem('emittedPolicy', JSON.stringify({
           nroPoliza: emisionResult.nroPoliza,
           pdfUrl: emisionResult.pdfUrl,

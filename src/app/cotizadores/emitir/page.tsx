@@ -389,6 +389,7 @@ export default function EmitirPage() {
           expedienteForm.append('tipoCobertura', isCC ? 'CC' : 'DT');
           expedienteForm.append('environment', 'development');
           expedienteForm.append('nroPoliza', emisionResult.nroPoliza || '');
+          expedienteForm.append('pdfUrl', emisionResult.pdfUrl || '');
           expedienteForm.append('firmaDataUrl', signatureDataUrl || '');
           
           // Client data
@@ -428,6 +429,7 @@ export default function EmitirPage() {
             valorVehiculo: quoteData.valorVehiculo,
             tipoVehiculo: quoteData.tipoVehiculo || 'SEDAN',
             cobertura: quoteData.cobertura,
+            primaTotal: selectedPlan?.annualPremium || 0,
           }));
           
           // IS inspection data (extras, physical condition) - only for CC
