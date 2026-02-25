@@ -88,7 +88,7 @@ export interface ClientInfo {
   cedula: string;
   phone: string | null;
   email: string | null;
-  region: string | null;
+  region: string | null; // not in DB, kept for interface compat
 }
 
 /**
@@ -99,13 +99,32 @@ export async function lookupClientByCedula(cedula: string): Promise<ClientInfo |
   const cleaned = cedula.replace(/[^0-9A-Za-z-]/g, '').trim();
   if (!cleaned) return null;
 
-  const { data } = await sb.from('clients')
-    .select('id, name, cedula, phone, email, region')
-    .eq('cedula', cleaned)
+  // DB column is 'national_id', not 'cedula'
+  // Try exact match first
+  const { data: exact } = await sb.from('clients')
+    .select('id, name, national_id, phone, email')
+    .eq('active', true)
+    .eq('national_id', cleaned)
     .limit(1)
     .maybeSingle();
 
-  return data || null;
+  if (exact) return { id: exact.id, name: exact.name, cedula: exact.national_id || cleaned, phone: exact.phone, email: exact.email, region: null };
+
+  // Try without dashes (e.g. "89321155" matches "8-932-1155")
+  const noDashes = cleaned.replace(/-/g, '');
+  const { data: fuzzy } = await sb.from('clients')
+    .select('id, name, national_id, phone, email')
+    .eq('active', true)
+    .ilike('national_id', `%${noDashes.slice(-6)}%`)
+    .limit(5);
+
+  if (fuzzy?.length) {
+    // Find the one whose national_id without dashes matches
+    const match = fuzzy.find(c => (c.national_id || '').replace(/-/g, '') === noDashes);
+    if (match) return { id: match.id, name: match.name, cedula: match.national_id || cleaned, phone: match.phone, email: match.email, region: null };
+  }
+
+  return null;
 }
 
 /**
@@ -117,24 +136,26 @@ export async function lookupClientByPhone(phone: string): Promise<ClientInfo | n
   const cleaned = phone.replace(/^whatsapp:/i, '').replace(/[^0-9+]/g, '').trim();
   if (!cleaned) return null;
 
-  // Try exact match first, then partial (last 8 digits)
+  // Try exact match first
   const { data: exact } = await sb.from('clients')
-    .select('id, name, cedula, phone, email, region')
+    .select('id, name, national_id, phone, email')
+    .eq('active', true)
     .eq('phone', cleaned)
     .limit(1)
     .maybeSingle();
 
-  if (exact) return exact;
+  if (exact) return { id: exact.id, name: exact.name, cedula: exact.national_id || '', phone: exact.phone, email: exact.email, region: null };
 
   // Try matching last 8 digits
   const last8 = cleaned.slice(-8);
   if (last8.length >= 7) {
     const { data: partial } = await sb.from('clients')
-      .select('id, name, cedula, phone, email, region')
+      .select('id, name, national_id, phone, email')
+      .eq('active', true)
       .ilike('phone', `%${last8}`)
       .limit(1)
       .maybeSingle();
-    return partial || null;
+    if (partial) return { id: partial.id, name: partial.name, cedula: partial.national_id || '', phone: partial.phone, email: partial.email, region: null };
   }
 
   return null;
@@ -150,7 +171,6 @@ export interface PolicyInfo {
   ramo: string | null;
   insurer_name: string | null;
   status: string | null;
-  premium: number | null;
   start_date: string | null;
   renewal_date: string | null;
 }
@@ -160,12 +180,17 @@ export interface PolicyInfo {
  */
 export async function lookupPoliciesByClientId(clientId: string): Promise<PolicyInfo[]> {
   const sb = getSb();
-  const { data } = await sb.from('policies')
-    .select('id, policy_number, ramo, status, premium, start_date, renewal_date, insurers(name)')
+  // policies.insurer_id FK -> insurers.id
+  const { data, error } = await sb.from('policies')
+    .select('id, policy_number, ramo, status, start_date, renewal_date, insurers(name)')
     .eq('client_id', clientId)
     .order('renewal_date', { ascending: false })
     .limit(10);
 
+  if (error) {
+    console.error('[LOOKUP] Error fetching policies:', error.message);
+    return [];
+  }
   if (!data) return [];
 
   return data.map((p: any) => ({
@@ -174,7 +199,6 @@ export async function lookupPoliciesByClientId(clientId: string): Promise<Policy
     ramo: p.ramo,
     insurer_name: p.insurers?.name || null,
     status: p.status,
-    premium: p.premium,
     start_date: p.start_date,
     renewal_date: p.renewal_date,
   }));
@@ -186,7 +210,7 @@ export async function lookupPoliciesByClientId(clientId: string): Promise<Policy
 export async function lookupPolicyByNumber(policyNumber: string): Promise<PolicyInfo | null> {
   const sb = getSb();
   const { data } = await sb.from('policies')
-    .select('id, policy_number, ramo, status, premium, start_date, renewal_date, insurers(name)')
+    .select('id, policy_number, ramo, status, start_date, renewal_date, insurers(name)')
     .eq('policy_number', policyNumber.trim())
     .limit(1)
     .maybeSingle();
@@ -199,7 +223,6 @@ export async function lookupPolicyByNumber(policyNumber: string): Promise<Policy
     ramo: data.ramo,
     insurer_name: (data as any).insurers?.name || null,
     status: data.status,
-    premium: data.premium,
     start_date: data.start_date,
     renewal_date: data.renewal_date,
   };

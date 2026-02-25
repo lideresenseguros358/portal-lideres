@@ -114,17 +114,12 @@ function detectInsurer(message: string): string | null {
 function preClassify(message: string): { intent: ChatIntent; insurer: string | null } | null {
   const lower = message.toLowerCase();
 
-  // ONLY fast-path safety-critical and simple intents.
-  // Everything else goes to AI for proper contextual handling.
+  // ONLY fast-path: EXTREMO (needs immediate escalation) and CEDULA (identity)
+  // EVERYTHING else goes to AI — even greetings and emergencies —
+  // so the AI can combine multiple topics in a single natural response.
 
-  // EXTREMO — check first (highest priority, needs immediate escalation)
+  // EXTREMO — highest priority, immediate escalation
   if (EXTREME_KEYWORDS.some(k => lower.includes(k))) return { intent: 'EXTREMO', insurer: null };
-
-  // EMERGENCIA — safety-critical, needs instant response
-  if (EMERGENCY_KEYWORDS.some(k => lower.includes(k))) return { intent: 'EMERGENCIA', insurer: null };
-
-  // SALUDO — very short greetings only (< 25 chars)
-  if (lower.length < 25 && GREETING_KEYWORDS.some(k => lower.includes(k))) return { intent: 'SALUDO', insurer: null };
 
   // CÉDULA pattern — user is providing identity verification
   const cedulaPattern = /^\s*\d{1,2}[-\s]?\d{2,4}[-\s]?\d{2,6}\s*$/;
@@ -133,7 +128,7 @@ function preClassify(message: string): { intent: ChatIntent; insurer: string | n
     return { intent: 'POLIZA_ESPECIFICA', insurer: null };
   }
 
-  // Everything else → AI classification for contextual understanding
+  // Everything else → AI classification
   return null;
 }
 

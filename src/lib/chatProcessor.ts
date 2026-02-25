@@ -1,13 +1,13 @@
 /**
  * CHAT PROCESSOR — Shared logic for WhatsApp and Portal channels
  * ================================================================
- * AI-first architecture:
- * 1. Classify intent (keyword fast-path only for SALUDO/EMERGENCIA/EXTREMO/CEDULA)
- * 2. Look up client/policy/insurer context
- * 3. MOST messages → Vertex AI for natural, contextual response
- * 4. Escalate EXTREMO cases
- * 5. Log interaction
- * 6. Maintain conversation history per phone
+ * FULLY AI-first architecture:
+ * 1. Classify intent (keyword fast-path ONLY for EXTREMO + CEDULA)
+ * 2. Enrich context: client, policies, insurer data, plan APIs
+ * 3. ALL messages → Vertex AI (even simple ones, so AI can combine topics)
+ * 4. Only EXTREMO triggers static escalation
+ * 5. Maintain conversation history per phone
+ * 6. Log interaction
  */
 
 import { classifyIntent, type ChatIntent } from '@/lib/intentClassifier';
@@ -71,6 +71,78 @@ function detectInsurerKeyword(message: string): string | null {
     if (lower.includes(keyword)) return name;
   }
   return null;
+}
+
+/**
+ * Fetch insurance plan data from FEDPA and IS APIs for AI context.
+ * Cached in memory for 1 hour to avoid repeated API calls.
+ */
+let planDataCache: { data: string; ts: number } | null = null;
+const PLAN_CACHE_TTL = 60 * 60 * 1000; // 1 hour
+
+async function fetchInsurancePlanData(): Promise<string | null> {
+  // Return cached if fresh
+  if (planDataCache && Date.now() - planDataCache.ts < PLAN_CACHE_TTL) {
+    return planDataCache.data;
+  }
+
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL
+    || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null)
+    || 'http://localhost:3000';
+
+  const parts: string[] = [];
+
+  // Fetch FEDPA plans (third-party / daños a terceros)
+  try {
+    const fedpaRes = await fetch(`${baseUrl}/api/fedpa/third-party`, { signal: AbortSignal.timeout(8000) });
+    if (fedpaRes.ok) {
+      const fedpa = await fedpaRes.json();
+      if (fedpa.success && fedpa.plans?.length) {
+        let fedpaText = 'PLANES DE FEDPA (Daños a Terceros):';
+        for (const plan of fedpa.plans) {
+          fedpaText += `\n- ${plan.name}: Prima anual $${plan.annualPremium}`;
+          if (plan.coverageList?.length) {
+            fedpaText += `. Coberturas: ${plan.coverageList.map((c: any) => `${c.name} (${c.limit})`).join(', ')}`;
+          }
+          if (plan.endosoBenefits?.length) {
+            fedpaText += `. Beneficios del endoso: ${plan.endosoBenefits.slice(0, 5).join(', ')}`;
+          }
+          if (plan.installments?.available) {
+            fedpaText += `. Se puede pagar en ${plan.installments.payments} cuotas de $${plan.installments.amount}`;
+          }
+        }
+        parts.push(fedpaText);
+      }
+    }
+  } catch (e) {
+    console.warn('[CHAT] FEDPA plan fetch failed:', e);
+  }
+
+  // Fetch IS (Internacional de Seguros) plans
+  try {
+    const isRes = await fetch(`${baseUrl}/api/is/third-party`, { signal: AbortSignal.timeout(8000) });
+    if (isRes.ok) {
+      const is = await isRes.json();
+      if (is.success && is.plans?.length) {
+        let isText = 'PLANES DE INTERNACIONAL DE SEGUROS (Daños a Terceros):';
+        for (const plan of is.plans) {
+          isText += `\n- ${plan.name}: Prima anual $${plan.annualPremium}`;
+          if (plan.coverageList?.length) {
+            isText += `. Coberturas: ${plan.coverageList.map((c: any) => `${c.name} (${c.limit})`).join(', ')}`;
+          }
+        }
+        parts.push(isText);
+      }
+    }
+  } catch (e) {
+    console.warn('[CHAT] IS plan fetch failed:', e);
+  }
+
+  if (parts.length === 0) return null;
+
+  const result = parts.join('\n\n');
+  planDataCache = { data: result, ts: Date.now() };
+  return result;
 }
 
 // ── In-memory conversation history per phone (last 10 messages, 30 min TTL) ──
@@ -158,107 +230,63 @@ export async function processMessage(input: ProcessMessageInput): Promise<Proces
     }
   }
 
-  switch (intent) {
-    // ── SALUDO: Static welcome (instant, no AI needed) ──
-    case 'SALUDO':
-      reply = '¡Hola! 👋 Mi nombre es *Lissa*, soy tu asistente virtual de *Líderes en Seguros* 💚\n\n¿En qué puedo ayudarte hoy? Puedes preguntarme lo que necesites sobre seguros, cotizaciones, pólizas, coberturas o lo que sea — ¡escríbeme con confianza!';
-      break;
+  // ── EXTREMO: Only static path — immediate escalation ──
+  if (intent === 'EXTREMO') {
+    escalated = true;
+    reply = 'Entiendo tu situación y la tomo muy en serio. Un supervisor se pondrá en contacto contigo a la brevedad. Tu caso ha sido escalado con máxima prioridad.\n\nSi necesitas atención inmediata:\n📧 contacto@lideresenseguros.com\n📞 223-2373\n\n— Lissa, Líderes en Seguros 💚';
 
-    // ── EMERGENCIA: Safety-critical, static + insurer lookup ──
-    case 'EMERGENCIA': {
-      let emergencyInfo = '';
-      if (policies.length > 0) {
-        const insurerName = policies[0]?.insurer_name;
-        if (insurerName) {
-          const insurer = await lookupInsurer(insurerName);
-          if (insurer?.emergency_phone) {
-            emergencyInfo = `\n\n📞 Emergencias ${insurer.name}: ${insurer.emergency_phone}`;
-          }
-        }
-      }
-      if (!emergencyInfo) {
-        emergencyInfo = '\n\nSi me dices cuál es tu aseguradora, te doy el número de emergencias directo.';
-      }
-      reply = `🚨 ¡Entendido! Esto es urgente.\n\nTe recomiendo:\n1. Mantén la calma y asegúrate de estar en un lugar seguro.\n2. Llama inmediatamente al número de emergencias de tu aseguradora.\n3. Reporta el siniestro lo antes posible.${emergencyInfo}\n\nEstoy aquí si necesitas algo más — Lissa 💚`;
-      break;
-    }
+    await sendEscalationAlert({
+      clientName: clientInfo?.name || null,
+      cedula: clientInfo?.cedula || input.cedula || null,
+      phone: input.phone || null,
+      channel: input.channel,
+      intent,
+      conversationHistory: [
+        ...(input.conversationHistory || []),
+        { role: 'user', content: message, timestamp: new Date().toISOString() },
+      ],
+      triggerMessage: message,
+      sessionId: input.sessionId || undefined,
+    });
 
-    // ── POLIZA_ESPECIFICA: Cédula verification flow ──
-    case 'POLIZA_ESPECIFICA': {
-      if (!clientInfo && !cedulaFromMessage) {
-        reply = '¡Claro que sí! Para revisar tu póliza necesito verificar tu identidad 🔐\n\n¿Me compartes tu número de cédula? Así te busco tus datos de forma segura 😊';
-      } else if (!clientInfo && cedulaFromMessage) {
-        reply = `Mmm, no encontré una cuenta con la cédula ${cedulaFromMessage} en nuestro sistema 🤔\n\nPuede ser que esté registrada con otro número. Escríbenos a contacto@lideresenseguros.com o llámanos al 223-2373 y lo verificamos juntos 😊\n\n— Lissa 💚`;
-      } else if (clientInfo && policies.length === 0) {
-        reply = `¡Hola ${clientInfo.name}! 👋 Te encontré, pero no veo pólizas activas. Escríbenos a contacto@lideresenseguros.com o llámanos al 223-2373 y lo revisamos 😊\n\n— Lissa 💚`;
-      } else if (clientInfo && policies.length > 0) {
-        // Use AI with policy context for natural response
-        try {
-          const aiResult = await generateResponse({
-            message,
-            clientContext: { name: clientInfo.name, cedula: clientInfo.cedula, region: clientInfo.region || undefined },
-            policyContext: { policies },
-            intent,
-            conversationHistory: history,
-          });
-          reply = aiResult.reply;
-        } catch {
-          // Fallback: warm policy summary
-          let summary = `¡Hola ${clientInfo.name}! 👋 `;
-          if (policies.length === 1) {
-            const p = policies[0]!;
-            summary += `Tienes una póliza de *${p.ramo || 'seguro'}* con *${p.insurer_name || 'tu aseguradora'}* (${p.policy_number || 'N/A'}).`;
-          } else {
-            summary += `Tienes ${policies.length} pólizas activas.`;
-          }
-          summary += '\n\n¿Qué necesitas saber? 😊\n\n— Lissa 💚';
-          reply = summary;
-        }
-      } else {
-        reply = LISSA_FALLBACK;
-      }
-      break;
-    }
+  // ── POLIZA_ESPECIFICA with cédula sub-flow (static only when no client found) ──
+  } else if (intent === 'POLIZA_ESPECIFICA' && !clientInfo && !cedulaFromMessage) {
+    reply = '¡Claro que sí! Para revisar tu póliza necesito verificar tu identidad 🔐\n\n¿Me compartes tu número de cédula? Así te busco tus datos de forma segura 😊';
+  } else if (intent === 'POLIZA_ESPECIFICA' && !clientInfo && cedulaFromMessage) {
+    reply = `Mmm, no encontré una cuenta con la cédula ${cedulaFromMessage} en nuestro sistema 🤔\n\nPuede ser que esté registrada con otro número. Escríbenos a contacto@lideresenseguros.com o llámanos al 223-2373 y lo verificamos juntos 😊\n\n— Lissa 💚`;
 
-    // ── EXTREMO: Escalation (static + email alert) ──
-    case 'EXTREMO': {
-      escalated = true;
-      reply = 'Entiendo tu situación y la tomo muy en serio. Un supervisor se pondrá en contacto contigo a la brevedad. Tu caso ha sido escalado con máxima prioridad.\n\nSi necesitas atención inmediata:\n📧 contacto@lideresenseguros.com\n📞 223-2373\n\n— Lissa, Líderes en Seguros 💚';
+  // ── EVERYTHING ELSE: Vertex AI ──
+  } else {
+    // Fetch insurance plan data if the message mentions plans/benefits/coverage
+    const lower = message.toLowerCase();
+    const wantsPlanInfo = lower.includes('plan') || lower.includes('beneficio') || lower.includes('cobertura completa')
+      || lower.includes('daños a terceros') || lower.includes('grua') || lower.includes('grúa')
+      || lower.includes('asistencia') || lower.includes('endoso');
 
-      await sendEscalationAlert({
-        clientName: clientInfo?.name || null,
-        cedula: clientInfo?.cedula || input.cedula || null,
-        phone: input.phone || null,
-        channel: input.channel,
-        intent,
-        conversationHistory: [
-          ...(input.conversationHistory || []),
-          { role: 'user', content: message, timestamp: new Date().toISOString() },
-        ],
-        triggerMessage: message,
-        sessionId: input.sessionId || undefined,
-      });
-      break;
-    }
-
-    // ── ALL OTHER INTENTS: Vertex AI generates the response ──
-    default: {
+    if (wantsPlanInfo) {
       try {
-        const aiResult = await generateResponse({
-          message: extraContext ? `${message}\n\n[Datos relevantes: ${extraContext}]` : message,
-          clientContext: clientInfo ? {
-            name: clientInfo.name,
-            region: clientInfo.region || undefined,
-          } : null,
-          policyContext: policies.length > 0 ? { policies } : null,
-          intent,
-          conversationHistory: history,
-        });
-        reply = aiResult.reply;
-      } catch {
-        reply = LISSA_FALLBACK;
+        const planData = await fetchInsurancePlanData();
+        if (planData) extraContext += `\n\n${planData}`;
+      } catch (e) {
+        console.warn('[CHAT] Error fetching plan data:', e);
       }
-      break;
+    }
+
+    try {
+      const aiResult = await generateResponse({
+        message: extraContext ? `${message}\n\n[Datos relevantes para responder: ${extraContext}]` : message,
+        clientContext: clientInfo ? {
+          name: clientInfo.name,
+          cedula: clientInfo.cedula,
+          region: clientInfo.region || undefined,
+        } : null,
+        policyContext: policies.length > 0 ? { policies } : null,
+        intent,
+        conversationHistory: history,
+      });
+      reply = aiResult.reply;
+    } catch {
+      reply = LISSA_FALLBACK;
     }
   }
 
