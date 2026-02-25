@@ -21,6 +21,7 @@ import {
   type ClientInfo,
   type PolicyInfo,
 } from '@/lib/insuranceLookup';
+import { detectRamo, RAMOS, OFFICE_HOURS } from '@/lib/ai/lissaKnowledge';
 import { sendEscalationAlert } from '@/lib/escalation';
 import { logChatInteraction } from '@/lib/logging';
 import { createClient } from '@supabase/supabase-js';
@@ -328,6 +329,92 @@ async function getConversationHistory(phone: string): Promise<{ role: string; co
 }
 
 /**
+ * Fetch upcoming agenda events (next 7 days) to give Lissa context about
+ * office hours, closures, and virtual days.
+ */
+async function fetchAgendaContext(): Promise<string | null> {
+  try {
+    const sb = getSupabase();
+    const now = new Date();
+    const inSevenDays = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+    const { data: events, error } = await sb
+      .from('events')
+      .select('title, details, start_at, end_at, is_all_day, event_type, modality, zoom_url')
+      .is('canceled_at', null)
+      .gte('start_at', now.toISOString())
+      .lte('start_at', inSevenDays.toISOString())
+      .order('start_at', { ascending: true })
+      .limit(10);
+
+    if (error || !events || events.length === 0) return null;
+
+    const panamaTZ = 'America/Panama';
+    const lines: string[] = ['AGENDA DE OFICINA (próximos 7 días):'];
+
+    for (const ev of events) {
+      const startDate = new Date(ev.start_at).toLocaleDateString('es-PA', { weekday: 'long', day: 'numeric', month: 'long', timeZone: panamaTZ });
+      const startTime = ev.is_all_day ? 'Todo el día' : new Date(ev.start_at).toLocaleTimeString('es-PA', { hour: '2-digit', minute: '2-digit', timeZone: panamaTZ });
+      const endTime = ev.is_all_day ? '' : ` – ${new Date(ev.end_at).toLocaleTimeString('es-PA', { hour: '2-digit', minute: '2-digit', timeZone: panamaTZ })}`;
+
+      let typeLabel = '';
+      if (ev.event_type === 'oficina_cerrada') typeLabel = ' 🔴 OFICINA CERRADA';
+      else if (ev.event_type === 'oficina_virtual') typeLabel = ' 💻 DÍA VIRTUAL';
+      else if (ev.modality === 'virtual') typeLabel = ' 💻 Virtual';
+      else if (ev.modality === 'hibrida') typeLabel = ' 🔀 Híbrido';
+
+      let line = `- ${startDate}, ${startTime}${endTime}${typeLabel}: ${ev.title}`;
+      if (ev.details) line += ` (${ev.details.slice(0, 80)})`;
+      if (ev.zoom_url && (ev.modality === 'virtual' || ev.modality === 'hibrida')) {
+        line += ` → Zoom: ${ev.zoom_url}`;
+      }
+      lines.push(line);
+    }
+
+    // Also check if TODAY is a closed or virtual day
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
+    const todaySpecial = events.find(ev => {
+      const evStart = new Date(ev.start_at);
+      return evStart >= todayStart && evStart < todayEnd &&
+        (ev.event_type === 'oficina_cerrada' || ev.event_type === 'oficina_virtual');
+    });
+
+    if (todaySpecial) {
+      const typeMsg = todaySpecial.event_type === 'oficina_cerrada'
+        ? '⚠️ HOY LA OFICINA ESTÁ CERRADA'
+        : '⚠️ HOY ES DÍA DE OFICINA VIRTUAL';
+      lines.unshift(`${typeMsg}: ${todaySpecial.title}`);
+    }
+
+    return lines.join('\n');
+  } catch (err: any) {
+    console.warn('[CHAT] Error fetching agenda context:', err.message);
+    return null;
+  }
+}
+
+/**
+ * Build ramo-routing context string for AI injection.
+ * Detects if the message is about a specific ramo and adds specialist info.
+ */
+function buildRamoContext(message: string, conversationHistory: { role: string; content: string }[]): string | null {
+  // Check current message + recent history for ramo hints
+  const allText = [message, ...conversationHistory.slice(-4).map(h => h.content)].join(' ');
+  const ramo = detectRamo(allText);
+  if (!ramo) return null;
+
+  const specialist = RAMOS[ramo];
+  const lines = [
+    `RAMO DETECTADO: ${specialist.label}`,
+    `Especialista: ${specialist.specialistName} — ${specialist.specialist}`,
+    `Horario de atención: ${OFFICE_HOURS.normal}`,
+    `INSTRUCCIÓN: Si el usuario quiere cotizar, hablar con alguien o recibir asesoría sobre ${specialist.label}, indica el email de ${specialist.specialistName} (${specialist.specialist}) y el horario de atención.`,
+  ];
+  return lines.join('\n');
+}
+
+/**
  * Process a chat message through the full pipeline
  */
 export async function processMessage(input: ProcessMessageInput): Promise<ProcessMessageResult> {
@@ -453,6 +540,33 @@ export async function processMessage(input: ProcessMessageInput): Promise<Proces
       } catch (e) {
         console.warn('[CHAT] Error fetching plan data:', e);
       }
+    }
+
+    // ── Agenda context: always fetch so Lissa knows about closures/virtual days ──
+    const lower2 = message.toLowerCase();
+    const wantsAgendaOrHours = lower2.includes('horario') || lower2.includes('abierto') || lower2.includes('cerrado')
+      || lower2.includes('oficina') || lower2.includes('disponible') || lower2.includes('atiend')
+      || lower2.includes('hoy') || lower2.includes('mañana') || lower2.includes('semana')
+      || lower2.includes('feriado') || lower2.includes('virtual') || lower2.includes('reunión')
+      || lower2.includes('reunion') || lower2.includes('evento') || lower2.includes('agenda');
+
+    if (wantsAgendaOrHours) {
+      try {
+        const agendaCtx = await fetchAgendaContext();
+        if (agendaCtx) {
+          extraContext += `\n\n${agendaCtx}`;
+          console.log('[CHAT] Agenda context added');
+        }
+      } catch (e) {
+        console.warn('[CHAT] Error fetching agenda context:', e);
+      }
+    }
+
+    // ── Ramo routing context ──
+    const ramoCtx = buildRamoContext(message, history);
+    if (ramoCtx) {
+      extraContext += `\n\n${ramoCtx}`;
+      console.log('[CHAT] Ramo routing context added');
     }
 
     // Build the message with context — include history summary in message body as fallback
