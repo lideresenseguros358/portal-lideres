@@ -727,20 +727,19 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
     try {
       // Si es un cliente existente, solo crear la póliza
       if (selectedExistingClient) {
-        // Obtener broker_id (p_id del broker seleccionado)
+        // Obtener broker_id (ID de la tabla brokers, NO el auth user ID)
         let broker_id: string | undefined;
         
         if (role === 'master') {
           const broker = brokers.find((b: any) => b.profiles?.email === formData.broker_email);
-          broker_id = broker?.p_id;
+          broker_id = broker?.id;
           if (!broker_id) {
             throw new Error('No se encontró el corredor seleccionado');
           }
         } else {
-          const { data: userData } = await supabaseClient().auth.getUser();
-          broker_id = userData.user?.id;
+          broker_id = userBrokerId || undefined;
           if (!broker_id) {
-            throw new Error('No se pudo obtener el ID del usuario');
+            throw new Error('No se pudo obtener el ID del corredor');
           }
         }
 
@@ -782,20 +781,19 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
         toast.success('Nueva póliza agregada al cliente existente');
       } else {
         // Crear nuevo cliente con póliza usando la API
-        // Obtener broker_id (p_id del broker seleccionado)
+        // Obtener broker_id (ID de la tabla brokers, NO el auth user ID)
         let broker_id: string | undefined;
         
         if (role === 'master') {
           const broker = brokers.find((b: any) => b.profiles?.email === formData.broker_email);
-          broker_id = broker?.p_id;
+          broker_id = broker?.id;
           if (!broker_id) {
             throw new Error('No se encontró el corredor seleccionado');
           }
         } else {
-          const { data: userData } = await supabaseClient().auth.getUser();
-          broker_id = userData.user?.id;
+          broker_id = userBrokerId || undefined;
           if (!broker_id) {
-            throw new Error('No se pudo obtener el ID del usuario');
+            throw new Error('No se pudo obtener el ID del corredor');
           }
         }
 

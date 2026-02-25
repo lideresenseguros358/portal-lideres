@@ -54,27 +54,60 @@ export async function POST(request: NextRequest) {
       notas: body.notas?.trim().toUpperCase() || null,
     };
 
-    // Si no se proporciona broker_id, buscar el broker del cliente
+    // Si no se proporciona broker_id, resolver desde el usuario autenticado
     if (!insertPayload.broker_id) {
-      const { data: clientData } = await supabase
-        .from('clients')
-        .select('id')
-        .eq('id', body.client_id)
+      // 1. Intentar obtener broker_id del perfil del usuario
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('broker_id, role')
+        .eq('id', user.id)
         .single();
 
-      if (clientData) {
-        // Buscar pólizas existentes del cliente para obtener el broker
-        const { data: existingPolicies } = await supabase
-          .from('policies')
-          .select('broker_id')
-          .eq('client_id', body.client_id)
-          .not('broker_id', 'is', null)
-          .limit(1);
+      if (profile?.broker_id) {
+        insertPayload.broker_id = profile.broker_id;
+      } else {
+        // 2. Buscar en la tabla brokers por p_id (auth user id)
+        const { data: broker } = await supabase
+          .from('brokers')
+          .select('id')
+          .eq('p_id', user.id)
+          .single();
 
-        if (existingPolicies && existingPolicies.length > 0 && existingPolicies[0]) {
-          insertPayload.broker_id = existingPolicies[0].broker_id;
+        if (broker?.id) {
+          insertPayload.broker_id = broker.id;
+        } else {
+          // 3. Fallback: buscar broker desde pólizas existentes del cliente
+          const { data: existingPolicies } = await supabase
+            .from('policies')
+            .select('broker_id')
+            .eq('client_id', body.client_id)
+            .not('broker_id', 'is', null)
+            .limit(1);
+
+          if (existingPolicies && existingPolicies.length > 0 && existingPolicies[0]) {
+            insertPayload.broker_id = existingPolicies[0].broker_id;
+          } else if (profile?.role === 'master') {
+            // 4. Si es master y el cliente tiene broker_id, usar ese
+            const { data: clientData } = await supabase
+              .from('clients')
+              .select('broker_id')
+              .eq('id', body.client_id)
+              .single();
+
+            if (clientData?.broker_id) {
+              insertPayload.broker_id = clientData.broker_id;
+            }
+          }
         }
       }
+    }
+
+    // Validar que broker_id no sea null antes de insertar
+    if (!insertPayload.broker_id) {
+      return NextResponse.json(
+        { error: 'No se pudo determinar el corredor para esta póliza. Por favor selecciona un corredor.' },
+        { status: 400 }
+      );
     }
 
     // Crear póliza
