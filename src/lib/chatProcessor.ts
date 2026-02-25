@@ -53,7 +53,7 @@ export async function processMessage(input: ProcessMessageInput): Promise<Proces
   const message = sanitizeInput(input.message);
   if (!message) {
     return {
-      reply: 'No recibí ningún mensaje. ¿En qué puedo ayudarle?',
+      reply: '¡Hola! Soy Lissa, tu asistente virtual de Líderes en Seguros 💚 No recibí ningún mensaje. ¿En qué puedo ayudarte?',
       intent: 'OTRO',
       escalated: false,
       clientIdentified: false,
@@ -87,12 +87,16 @@ export async function processMessage(input: ProcessMessageInput): Promise<Proces
   let escalated = false;
 
   switch (intent) {
+    case 'SALUDO':
+      reply = '¡Hola! 👋 Mi nombre es *Lissa*, soy tu asistente virtual de *Líderes en Seguros* 💚\n\n¿En qué puedo ayudarte hoy? Puedo asistirte con:\n\n📊 Cotizar un seguro\n📋 Consultar tu póliza\n🏥 Emergencias y siniestros\n📞 Contacto de aseguradoras\n❓ Cualquier otra consulta\n\n¡Escríbeme con confianza!';
+      break;
+
     case 'COTIZAR':
-      reply = '¡Hola! Puede cotizar su seguro directamente aquí:\n\n🔗 https://portal.lideresenseguros.com/cotizadores\n\nEl proceso es rápido y seguro. Si necesita ayuda adicional, no dude en escribirnos.';
+      reply = '¡Hola! Soy Lissa 💚 Puedes cotizar tu seguro directamente aquí:\n\n🔗 https://portal.lideresenseguros.com/cotizadores\n\nEl proceso es rápido y seguro. Si necesitas ayuda adicional, ¡escríbeme!';
       break;
 
     case 'PORTAL':
-      reply = 'Puede acceder a su portal de clientes en:\n\n🔗 https://portal.lideresenseguros.com\n\nAllí podrá consultar sus pólizas, pagos y más. Si tiene alguna dificultad para acceder, estamos aquí para ayudarle.';
+      reply = 'Puedes acceder a tu portal de clientes aquí:\n\n🔗 https://portal.lideresenseguros.com\n\nAllí podrás consultar tus pólizas, pagos y más. Si tienes alguna dificultad para acceder, ¡aquí estoy para ayudarte! — Lissa 💚';
       break;
 
     case 'EMERGENCIA': {
@@ -191,7 +195,7 @@ export async function processMessage(input: ProcessMessageInput): Promise<Proces
 
     case 'EXTREMO': {
       escalated = true;
-      reply = 'Entendemos su situación y la tomamos muy en serio. Un superior se pondrá en contacto con usted a la brevedad. Su caso ha sido escalado con máxima prioridad.\n\nSi necesita atención inmediata, puede comunicarse directamente con nosotros al portal: https://portal.lideresenseguros.com';
+      reply = 'Entiendo tu situación y la tomo muy en serio. Un supervisor se pondrá en contacto contigo a la brevedad. Tu caso ha sido escalado con máxima prioridad.\n\nSi necesitas atención inmediata, puedes comunicarte directamente al portal: https://portal.lideresenseguros.com\n\n— Lissa, Líderes en Seguros 💚';
 
       // Send escalation email
       await sendEscalationAlert({

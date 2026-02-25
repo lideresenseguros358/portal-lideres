@@ -8,6 +8,7 @@
 import { GoogleAuth } from 'google-auth-library';
 
 export type ChatIntent =
+  | 'SALUDO'
   | 'COTIZAR'
   | 'PORTAL'
   | 'COBERTURA_GENERAL'
@@ -37,6 +38,12 @@ const EMERGENCY_KEYWORDS = [
   'urgente', 'siniestro', 'grúa', 'ambulancia', 'hospital',
 ];
 
+const GREETING_KEYWORDS = [
+  'hola', 'buenos dias', 'buenos días', 'buenas tardes', 'buenas noches',
+  'buen dia', 'buen día', 'hey', 'hi', 'hello', 'saludos', 'qué tal',
+  'que tal', 'buenas',
+];
+
 function createAuthClient(): GoogleAuth {
   const credentialsJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
   if (!credentialsJson) throw new Error('GOOGLE_APPLICATION_CREDENTIALS_JSON not configured');
@@ -58,6 +65,9 @@ function preClassify(message: string): ChatIntent | null {
 
   // EMERGENCIA
   if (EMERGENCY_KEYWORDS.some(k => lower.includes(k))) return 'EMERGENCIA';
+
+  // SALUDO — short greetings (< 30 chars to avoid false positives)
+  if (lower.length < 30 && GREETING_KEYWORDS.some(k => lower.includes(k))) return 'SALUDO';
 
   return null; // needs AI classification
 }
@@ -84,6 +94,15 @@ export async function classifyIntent(message: string): Promise<ClassificationRes
       requiresIdentityVerification: false,
       detectedInsurer: null,
       reasoning: 'Detected emergency keyword',
+    };
+  }
+  if (fastResult === 'SALUDO') {
+    return {
+      intent: 'SALUDO',
+      confidence: 0.99,
+      requiresIdentityVerification: false,
+      detectedInsurer: null,
+      reasoning: 'Detected greeting keyword',
     };
   }
 
@@ -149,7 +168,7 @@ Reglas:
     const cleaned = textResponse.trim().replace(/```json\s*/gi, '').replace(/```\s*/g, '');
     const parsed = JSON.parse(cleaned);
 
-    const validIntents: ChatIntent[] = ['COTIZAR', 'PORTAL', 'COBERTURA_GENERAL', 'POLIZA_ESPECIFICA', 'EMERGENCIA', 'CONTACTO_ASEGURADORA', 'QUEJA', 'EXTREMO', 'OTRO'];
+    const validIntents: ChatIntent[] = ['SALUDO', 'COTIZAR', 'PORTAL', 'COBERTURA_GENERAL', 'POLIZA_ESPECIFICA', 'EMERGENCIA', 'CONTACTO_ASEGURADORA', 'QUEJA', 'EXTREMO', 'OTRO'];
     const intent: ChatIntent = validIntents.includes(parsed.intent) ? parsed.intent : 'OTRO';
 
     return {
