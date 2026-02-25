@@ -114,48 +114,27 @@ function detectInsurer(message: string): string | null {
 function preClassify(message: string): { intent: ChatIntent; insurer: string | null } | null {
   const lower = message.toLowerCase();
 
-  // EXTREMO — check first (highest priority)
+  // ONLY fast-path safety-critical and simple intents.
+  // Everything else goes to AI for proper contextual handling.
+
+  // EXTREMO — check first (highest priority, needs immediate escalation)
   if (EXTREME_KEYWORDS.some(k => lower.includes(k))) return { intent: 'EXTREMO', insurer: null };
 
-  // EMERGENCIA
+  // EMERGENCIA — safety-critical, needs instant response
   if (EMERGENCY_KEYWORDS.some(k => lower.includes(k))) return { intent: 'EMERGENCIA', insurer: null };
 
-  // COTIZAR
-  if (COTIZAR_KEYWORDS.some(k => lower.includes(k))) return { intent: 'COTIZAR', insurer: null };
+  // SALUDO — very short greetings only (< 25 chars)
+  if (lower.length < 25 && GREETING_KEYWORDS.some(k => lower.includes(k))) return { intent: 'SALUDO', insurer: null };
 
-  // QUEJA
-  if (QUEJA_KEYWORDS.some(k => lower.includes(k))) return { intent: 'QUEJA', insurer: null };
-
-  // POLIZA_ESPECIFICA
-  if (POLIZA_KEYWORDS.some(k => lower.includes(k))) return { intent: 'POLIZA_ESPECIFICA', insurer: null };
-
-  // CONTACTO_ASEGURADORA
-  if (CONTACTO_KEYWORDS.some(k => lower.includes(k))) {
-    return { intent: 'CONTACTO_ASEGURADORA', insurer: detectInsurer(message) };
-  }
-  // Also detect if they just mention an insurer name with a question
-  const insurer = detectInsurer(message);
-  if (insurer && (lower.includes('?') || lower.includes('tel') || lower.includes('contacto') || lower.includes('llamar') || lower.includes('número') || lower.includes('numero'))) {
-    return { intent: 'CONTACTO_ASEGURADORA', insurer };
-  }
-
-  // PORTAL
-  if (PORTAL_KEYWORDS.some(k => lower.includes(k))) return { intent: 'PORTAL', insurer: null };
-
-  // COBERTURA_GENERAL
-  if (COBERTURA_KEYWORDS.some(k => lower.includes(k))) return { intent: 'COBERTURA_GENERAL', insurer: null };
-
-  // SALUDO — short greetings (< 40 chars to avoid false positives)
-  if (lower.length < 40 && GREETING_KEYWORDS.some(k => lower.includes(k))) return { intent: 'SALUDO', insurer: null };
-
-  // CÉDULA pattern — user is providing identity (e.g. "8-932-1155", "PE-12-345", "8-0932-01155")
+  // CÉDULA pattern — user is providing identity verification
   const cedulaPattern = /^\s*\d{1,2}[-\s]?\d{2,4}[-\s]?\d{2,6}\s*$/;
   const cedulaPatternE = /^\s*(PE|E|N|[0-9]{1,2})[-\s]?\d{2,4}[-\s]?\d{2,6}\s*$/i;
   if (cedulaPattern.test(message.trim()) || cedulaPatternE.test(message.trim())) {
     return { intent: 'POLIZA_ESPECIFICA', insurer: null };
   }
 
-  return null; // needs AI classification
+  // Everything else → AI classification for contextual understanding
+  return null;
 }
 
 /**

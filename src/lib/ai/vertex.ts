@@ -55,29 +55,36 @@ const SYSTEM_PROMPT = `Eres Lissa, la asistente virtual de Líderes en Seguros, 
 
 Tu personalidad:
 - Eres genuinamente amable y te importa ayudar
-- Usas emojis de forma natural pero sin exagerar (💚 👋 � 📋)
-- Haces preguntas de seguimiento para entender mejor
-- Muestras interés real en lo que la persona necesita
-- Firmas con "— Lissa 💚" solo al final de respuestas largas o importantes
+- Usas emojis con moderación y naturalidad (💚 👋 😊 📋)
+- Haces preguntas de seguimiento para entender mejor lo que necesitan
+- Muestras interés real en la persona
 - NUNCA suenas como un robot ni repites plantillas
+- Tus respuestas son concisas y directas (2-4 oraciones máximo a menos que pidan más detalle)
+- Firmas "— Lissa 💚" solo en respuestas importantes o de cierre
 
-Reglas que siempre sigues:
+Conocimiento que tienes:
+- Sabes de seguros en general: tipos de cobertura, qué es un deducible, cómo funciona un reclamo, etc.
+- Puedes explicar conceptos de seguros de forma sencilla
+- Conoces las aseguradoras de Panamá: ASSA, FEDPA, Mapfre, General de Seguros, Banistmo Seguros, Pan American Life, etc.
+- Si te dan datos de contacto de una aseguradora en el contexto, úsalos en tu respuesta
+- Si te preguntan algo que NO está en el contexto (como horarios), di honestamente que no tienes esa información y sugiere contactar directamente
+
+Recursos que puedes mencionar:
+- Cotizar seguros: https://portal.lideresenseguros.com/cotizadores
+- Portal de clientes: https://portal.lideresenseguros.com
+- Email: contacto@lideresenseguros.com
+- Teléfono: 223-2373
+
+Reglas estrictas:
 1. Siempre en español
-2. No inventas coberturas ni detalles de pólizas
+2. No inventas coberturas, datos ni detalles de pólizas que no tengas
 3. No prometes cambios de póliza
 4. No das asesoría legal
-5. Si no sabes algo, lo dices con honestidad y ofreces alternativas
-6. Para cotizar, diriges a: https://portal.lideresenseguros.com/cotizadores
-7. No haces cotizaciones manuales
-8. Si no puedes resolver algo, ofreces: contacto@lideresenseguros.com o 223-2373
-
-Ejemplos de cómo hablas:
-- "¡Claro que sí! Déjame ver qué puedo encontrar para ti 😊"
-- "Entiendo perfectamente tu preocupación, es algo muy común..."
-- "¡Qué bueno que preguntas! Te explico..."
-- "Mmm, déjame pensarlo... Lo mejor sería que..."
-
-NUNCA respondas con listas largas de opciones a menos que te las pidan. Sé conversacional.`;
+5. Si no sabes algo, lo dices con honestidad
+6. No haces cotizaciones manuales — diriges al portal
+7. NUNCA respondas con listas largas a menos que te las pidan
+8. Lee el historial de conversación para dar respuestas coherentes con lo que ya se habló
+9. Si el usuario corrige o pide algo diferente, adapta tu respuesta en lugar de repetir lo anterior`;
 
 /**
  * Generate a chat response using Vertex AI (Gemini)
@@ -110,67 +117,57 @@ export async function generateResponse(ctx: ChatContext): Promise<VertexChatResp
     throw clientErr;
   }
 
-  // Build contextual info
+  // Build contextual info for systemInstruction
   let contextBlock = '';
   if (ctx.clientContext) {
     const c = ctx.clientContext;
-    contextBlock += `\nDatos del cliente: `;
     const parts: string[] = [];
     if (c.name) parts.push(`se llama ${c.name}`);
     if (c.region) parts.push(`es de ${c.region}`);
     if (c.isVip) parts.push(`es cliente VIP`);
-    contextBlock += parts.join(', ') + '.\n';
+    if (parts.length) contextBlock += `\nCliente: ${parts.join(', ')}.`;
   }
 
   if (ctx.policyContext?.policies?.length) {
-    contextBlock += `\nSus pólizas:\n`;
+    contextBlock += `\nPólizas del cliente:`;
     for (const p of ctx.policyContext.policies) {
-      contextBlock += `- ${p.policy_number}: ${p.ramo || 'N/A'} con ${p.insurer_name || 'N/A'} (Estado: ${p.status || 'N/A'}, Vence: ${p.renewal_date || 'N/A'})\n`;
+      contextBlock += `\n- ${p.policy_number}: ${p.ramo || 'N/A'} con ${p.insurer_name || 'N/A'} (Estado: ${p.status || 'N/A'}, Vence: ${p.renewal_date || 'N/A'})`;
     }
   }
 
-  if (ctx.intent) {
-    contextBlock += `\nIntención detectada: ${ctx.intent}\n`;
-  }
+  // Build full system instruction with context
+  const fullSystemPrompt = contextBlock
+    ? `${SYSTEM_PROMPT}\n\n--- CONTEXTO DE ESTA CONVERSACIÓN ---${contextBlock}`
+    : SYSTEM_PROMPT;
 
-  // Build conversation contents
+  // Build conversation contents — must alternate user/model
   const contents: any[] = [];
 
   if (ctx.conversationHistory?.length) {
-    // Include history: system context first, then alternating messages
-    contents.push({
-      role: 'user',
-      parts: [{ text: `[Contexto para ti, no repitas esto al usuario]\n${contextBlock}\n\nResponde al último mensaje de forma natural y conversacional.` }],
-    });
-    contents.push({
-      role: 'model',
-      parts: [{ text: '¡Claro! Estoy lista para ayudar 😊' }],
-    });
-
+    // Ensure proper alternation: Gemini requires user/model/user/model...
+    let lastRole = '';
     for (const msg of ctx.conversationHistory) {
-      contents.push({
-        role: msg.role === 'user' ? 'user' : 'model',
-        parts: [{ text: msg.content }],
-      });
+      const role = msg.role === 'user' ? 'user' : 'model';
+      // Skip if same role twice in a row (merge or skip)
+      if (role === lastRole) continue;
+      contents.push({ role, parts: [{ text: msg.content }] });
+      lastRole = role;
     }
-
-    contents.push({
-      role: 'user',
-      parts: [{ text: ctx.message }],
-    });
-  } else {
-    // Single message — include context in user turn
-    contents.push({
-      role: 'user',
-      parts: [{ text: `[Contexto: ${contextBlock}]\n\nCliente dice: ${ctx.message}` }],
-    });
+    // If last history entry was model, we can add user message directly
+    // If last was user, add a model placeholder first
+    if (lastRole === 'user') {
+      contents.push({ role: 'model', parts: [{ text: 'Entendido, ¿en qué más te ayudo?' }] });
+    }
   }
+
+  // Always end with the current user message
+  contents.push({ role: 'user', parts: [{ text: ctx.message }] });
 
   const endpoint = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:generateContent`;
 
   const requestBody = {
     systemInstruction: {
-      parts: [{ text: SYSTEM_PROMPT }],
+      parts: [{ text: fullSystemPrompt }],
     },
     contents,
     generationConfig: {
