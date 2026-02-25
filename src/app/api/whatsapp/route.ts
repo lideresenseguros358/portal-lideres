@@ -49,6 +49,13 @@ function checkRateLimit(phone: string): boolean {
  * Behind Vercel, req.url is internal — we MUST use the exact public webhook URL.
  */
 function validateTwilioSignature(req: NextRequest, body: string): boolean {
+  // Allow bypassing signature validation while token is being fixed
+  // Set SKIP_TWILIO_SIGNATURE=true in Vercel env vars to enable
+  if (process.env.SKIP_TWILIO_SIGNATURE === 'true') {
+    console.warn('[WHATSAPP] Signature validation SKIPPED (SKIP_TWILIO_SIGNATURE=true) — fix TWILIO_AUTH_TOKEN and remove this flag');
+    return true;
+  }
+
   if (!TWILIO_AUTH_TOKEN) {
     console.warn('[WHATSAPP] No TWILIO_AUTH_TOKEN — skipping signature validation');
     return true;
