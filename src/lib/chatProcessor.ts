@@ -75,7 +75,9 @@ function detectInsurerKeyword(message: string): string | null {
 }
 
 /**
- * Fetch FEDPA plan data directly from their API for AI context.
+ * Fetch insurance plan data for AI context.
+ * Uses AUTO_THIRD_PARTY_INSURERS constants as base (correct prices),
+ * enhanced with live API data from FEDPA and Internacional de Seguros.
  * Cached in memory for 2 hours to avoid repeated API calls.
  */
 let planDataCache: { data: string; ts: number } | null = null;
@@ -90,108 +92,184 @@ async function fetchInsurancePlanData(): Promise<string | null> {
     return planDataCache.data;
   }
 
-  const FEDPA_USER = process.env.USUARIO_FEDPA;
-  const FEDPA_CLAVE = process.env.CLAVE_FEDPA;
-  if (!FEDPA_USER || !FEDPA_CLAVE) {
-    console.warn('[CHAT] FEDPA credentials not configured');
-    return null;
-  }
+  // Import constants — these are the source of truth used by the cotizador
+  const { AUTO_THIRD_PARTY_INSURERS, COVERAGE_LABELS } = await import('@/lib/constants/auto-quotes');
 
   const parts: string[] = [];
 
-  // ── FEDPA Daños a Terceros: cotizar plan 426 (Opción A=Básico, Opción C=Premium) ──
-  try {
-    console.log('[CHAT] Fetching FEDPA cotización from API...');
-    const baseParams = {
-      Ano: new Date().getFullYear(),
-      Uso: '10', CantidadPasajeros: 5, SumaAsegurada: '0',
-      CodLimiteLesiones: '5', CodPlan: '426',
-      CodMarca: '5', CodModelo: '10',
-      Nombre: 'COTIZACION', Apellido: 'WEB',
-      Cedula: '0-0-0', Telefono: '00000000', Email: 'cotizacion@web.com',
-      Usuario: FEDPA_USER, Clave: FEDPA_CLAVE,
-    };
-
-    // Fetch both options in parallel
-    const [basicRes, premiumRes] = await Promise.all([
-      fetch(`${FEDPA_API}/Polizas/get_cotizacion`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...baseParams, CodLimitePropiedad: '13', CodLimiteGastosMedico: '0', EndosoIncluido: 'S' }),
-        signal: AbortSignal.timeout(10000),
-      }),
-      fetch(`${FEDPA_API}/Polizas/get_cotizacion`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...baseParams, CodLimitePropiedad: '8', CodLimiteGastosMedico: '23', EndosoIncluido: 'S' }),
-        signal: AbortSignal.timeout(10000),
-      }),
-    ]);
-
-    if (basicRes.ok && premiumRes.ok) {
-      const basicData = await basicRes.json();
-      const premiumData = await premiumRes.json();
-
-      if (Array.isArray(basicData) && Array.isArray(premiumData)) {
-        const basicAll = basicData.filter((c: any) => c.OPCION === 'A');
-        const premiumAll = premiumData.filter((c: any) => c.OPCION === 'A');
-
-        const OPCION_A_CODES = ['A', 'B', 'FAB', 'H-1', 'K6'];
-        const OPCION_C_CODES = ['A', 'B', 'C', 'FAV', 'H-1', 'K6'];
-
-        const formatCovs = (allCovs: any[], codes: string[]) =>
-          allCovs.filter((c: any) => codes.includes(c.COBERTURA)).map((c: any) =>
-            `${c.DESCCOBERTURA}: límite ${c.LIMITE}, prima $${c.PRIMA_IMPUESTO}`
-          );
-
-        const basicCovs = formatCovs(basicAll, OPCION_A_CODES);
-        const premiumCovs = formatCovs(premiumAll, OPCION_C_CODES);
-
-        const basicPrima = basicAll.filter((c: any) => OPCION_A_CODES.includes(c.COBERTURA))
-          .reduce((s: number, c: any) => s + (c.PRIMA_IMPUESTO || 0), 0);
-        const premiumPrima = premiumAll.filter((c: any) => OPCION_C_CODES.includes(c.COBERTURA))
-          .reduce((s: number, c: any) => s + (c.PRIMA_IMPUESTO || 0), 0);
-
-        let fedpaText = 'PLANES DE FEDPA - DAÑOS A TERCEROS (Plan 426, precios reales):';
-        fedpaText += `\n\nOPCIÓN A (BÁSICO) - Prima anual: $${Math.round(basicPrima)}`;
-        fedpaText += `\nCoberturas incluidas: ${basicCovs.join(' | ')}`;
-        fedpaText += `\nSe puede pagar en 2 cuotas con recargo.`;
-
-        fedpaText += `\n\nOPCIÓN C (PREMIUM) - Prima anual: $${Math.round(premiumPrima)}`;
-        fedpaText += `\nCoberturas incluidas: ${premiumCovs.join(' | ')}`;
-        fedpaText += `\nIncluye gastos médicos. Se puede pagar en 2 cuotas con recargo.`;
-
-        // Fetch endoso benefits (try both param styles)
-        try {
-          const benRes = await fetch(
-            `${FEDPA_API}/Polizas/consultar_beneficios_planes_externos?Usuario=${FEDPA_USER}&Clave=${FEDPA_CLAVE}&IdPlan=426`,
-            { signal: AbortSignal.timeout(5000) }
-          );
-          if (benRes.ok) {
-            const allBens = await benRes.json();
-            console.log(`[CHAT] FEDPA benefits raw: ${JSON.stringify(allBens).substring(0, 500)}`);
-            if (Array.isArray(allBens) && allBens.length > 0) {
-              const fabBens = allBens.filter((b: any) => b.ENDOSO === 'FAB' || b.PLAN === 426).map((b: any) => b.BENEFICIOS);
-              const favBens = allBens.filter((b: any) => b.ENDOSO === 'FAV').map((b: any) => b.BENEFICIOS);
-              // If no ENDOSO field, list all benefits
-              if (fabBens.length === 0 && favBens.length === 0) {
-                const allBenNames = allBens.map((b: any) => b.BENEFICIOS || b.DESCRIPCION || JSON.stringify(b)).filter(Boolean);
-                if (allBenNames.length) fedpaText += `\n\nBeneficios del plan: ${allBenNames.join(' | ')}`;
-              } else {
-                if (fabBens.length) fedpaText += `\n\nBeneficios Endoso Básico (FAB) - incluye: ${fabBens.join(' | ')}`;
-                if (favBens.length) fedpaText += `\nBeneficios Endoso VIP (FAV) - incluye: ${favBens.join(' | ')}`;
-              }
-            }
-          } else {
-            console.warn(`[CHAT] FEDPA benefits API returned ${benRes.status}`);
-          }
-        } catch (benErr) { console.warn('[CHAT] FEDPA benefits fetch error:', benErr); }
-
-        parts.push(fedpaText);
-        console.log(`[CHAT] FEDPA: plans loaded with tariffs (basic=$${Math.round(basicPrima)}, premium=$${Math.round(premiumPrima)})`);
+  // ── Helper: format coverage object to readable text ──
+  const formatCoverages = (coverages: Record<string, string>) => {
+    const lines: string[] = [];
+    for (const [key, value] of Object.entries(coverages)) {
+      if (key === 'fedpaAsist') continue; // skip internal field
+      const label = (COVERAGE_LABELS as Record<string, string>)[key] || key;
+      if (value && value !== 'no') {
+        lines.push(`${label}: ${value === 'sí' ? '✓ Incluido' : '$' + value}`);
       }
     }
-  } catch (e) {
-    console.warn('[CHAT] FEDPA cotización fetch failed:', e);
+    return lines;
+  };
+
+  // ── FEDPA SEGUROS ──
+  const fedpaInsurer = AUTO_THIRD_PARTY_INSURERS.find(i => i.id === 'fedpa');
+  if (fedpaInsurer) {
+    const bp = fedpaInsurer.basicPlan;
+    const pp = fedpaInsurer.premiumPlan;
+
+    let fedpaText = `PLANES DE FEDPA SEGUROS - DAÑOS A TERCEROS (precios actuales del portal):`;
+
+    // Plan Básico
+    fedpaText += `\n\nPLAN BÁSICO - Prima anual: $${bp.annualPremium}`;
+    if (bp.installments.available) {
+      fedpaText += `\nOpción de pago: ${bp.installments.payments} cuotas de $${bp.installments.amount} (total financiado: $${bp.installments.totalWithInstallments})`;
+    }
+    fedpaText += `\nCoberturas: ${formatCoverages(bp.coverages).join(' | ')}`;
+    if (bp.endosoBenefits?.length) {
+      fedpaText += `\nBeneficios del endoso (${bp.endoso}): ${bp.endosoBenefits.join(' | ')}`;
+    }
+
+    // Plan VIP/Premium
+    fedpaText += `\n\nPLAN VIP - Prima anual: $${pp.annualPremium}`;
+    if (pp.installments.available) {
+      fedpaText += `\nOpción de pago: ${pp.installments.payments} cuotas de $${pp.installments.amount} (total financiado: $${pp.installments.totalWithInstallments})`;
+    }
+    fedpaText += `\nCoberturas: ${formatCoverages(pp.coverages).join(' | ')}`;
+    if (pp.endosoBenefits?.length) {
+      fedpaText += `\nBeneficios del endoso (${pp.endoso}): ${pp.endosoBenefits.join(' | ')}`;
+    }
+
+    // Try to enhance with live API benefits
+    try {
+      const FEDPA_USER = process.env.USUARIO_FEDPA;
+      const FEDPA_CLAVE = process.env.CLAVE_FEDPA;
+      if (FEDPA_USER && FEDPA_CLAVE) {
+        const benRes = await fetch(
+          `${FEDPA_API}/Polizas/consultar_beneficios_planes_externos?Usuario=${FEDPA_USER}&Clave=${FEDPA_CLAVE}&plan=426`,
+          { signal: AbortSignal.timeout(5000) }
+        );
+        if (benRes.ok) {
+          const allBens = await benRes.json();
+          if (Array.isArray(allBens) && allBens.length > 0) {
+            const fabBens = allBens.filter((b: any) => b.ENDOSO === 'FAB').map((b: any) => b.BENEFICIOS).filter(Boolean);
+            const favBens = allBens.filter((b: any) => b.ENDOSO === 'FAV').map((b: any) => b.BENEFICIOS).filter(Boolean);
+            if (fabBens.length > 0) {
+              fedpaText += `\n\nBeneficios detallados Endoso Básico (FAB) desde API: ${fabBens.join(' | ')}`;
+            }
+            if (favBens.length > 0) {
+              fedpaText += `\nBeneficios detallados Endoso VIP (FAV) desde API: ${favBens.join(' | ')}`;
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[CHAT] FEDPA benefits API enhancement failed (using constants):', e);
+    }
+
+    // Try to get live prices from FEDPA API to update if they changed
+    try {
+      const FEDPA_USER = process.env.USUARIO_FEDPA;
+      const FEDPA_CLAVE = process.env.CLAVE_FEDPA;
+      if (FEDPA_USER && FEDPA_CLAVE) {
+        const baseParams = {
+          Ano: new Date().getFullYear(), Uso: '10', CantidadPasajeros: 5,
+          SumaAsegurada: '0', CodLimiteLesiones: '5', CodPlan: '426',
+          CodMarca: '5', CodModelo: '10',
+          Nombre: 'COTIZACION', Apellido: 'WEB',
+          Cedula: '0-0-0', Telefono: '00000000', Email: 'cotizacion@web.com',
+          Usuario: FEDPA_USER, Clave: FEDPA_CLAVE,
+        };
+        const [basicRes, premiumRes] = await Promise.all([
+          fetch(`${FEDPA_API}/Polizas/get_cotizacion`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...baseParams, CodLimitePropiedad: '13', CodLimiteGastosMedico: '0', EndosoIncluido: 'S' }),
+            signal: AbortSignal.timeout(10000),
+          }),
+          fetch(`${FEDPA_API}/Polizas/get_cotizacion`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...baseParams, CodLimitePropiedad: '8', CodLimiteGastosMedico: '23', EndosoIncluido: 'S' }),
+            signal: AbortSignal.timeout(10000),
+          }),
+        ]);
+        if (basicRes.ok && premiumRes.ok) {
+          const basicData = await basicRes.json();
+          const premiumData = await premiumRes.json();
+          if (Array.isArray(basicData) && Array.isArray(premiumData)) {
+            const OPCION_A_CODES = ['A', 'B', 'FAB', 'H-1', 'K6'];
+            const OPCION_C_CODES = ['A', 'B', 'C', 'FAV', 'H-1', 'K6'];
+            const basicAll = basicData.filter((c: any) => c.OPCION === 'A');
+            const premiumAll = premiumData.filter((c: any) => c.OPCION === 'A');
+            const basicPrima = basicAll.filter((c: any) => OPCION_A_CODES.includes(c.COBERTURA))
+              .reduce((s: number, c: any) => s + (c.PRIMA_IMPUESTO || 0), 0);
+            const premiumPrima = premiumAll.filter((c: any) => OPCION_C_CODES.includes(c.COBERTURA))
+              .reduce((s: number, c: any) => s + (c.PRIMA_IMPUESTO || 0), 0);
+            const liveBasic = Math.round(basicPrima);
+            const livePremium = Math.round(premiumPrima);
+            if (liveBasic > 0 && liveBasic !== bp.annualPremium) {
+              fedpaText += `\n\n⚠️ NOTA: La API de FEDPA reporta precio básico actualizado: $${liveBasic} (en portal: $${bp.annualPremium}). Usa el precio de la API si difiere.`;
+            }
+            if (livePremium > 0 && livePremium !== pp.annualPremium) {
+              fedpaText += `\n⚠️ NOTA: La API de FEDPA reporta precio VIP actualizado: $${livePremium} (en portal: $${pp.annualPremium}). Usa el precio de la API si difiere.`;
+            }
+            // Add detailed coverage breakdown from API
+            const formatApiCovs = (allCovs: any[], codes: string[]) =>
+              allCovs.filter((c: any) => codes.includes(c.COBERTURA)).map((c: any) =>
+                `${c.DESCCOBERTURA}: límite ${c.LIMITE}, prima $${c.PRIMA_IMPUESTO}`
+              );
+            const apiBasicCovs = formatApiCovs(basicAll, OPCION_A_CODES);
+            const apiPremiumCovs = formatApiCovs(premiumAll, OPCION_C_CODES);
+            if (apiBasicCovs.length > 0) {
+              fedpaText += `\n\nDesglose detallado Básico (desde API): ${apiBasicCovs.join(' | ')}`;
+            }
+            if (apiPremiumCovs.length > 0) {
+              fedpaText += `\nDesglose detallado VIP (desde API): ${apiPremiumCovs.join(' | ')}`;
+            }
+            console.log(`[CHAT] FEDPA live API prices: basic=$${liveBasic}, premium=$${livePremium}`);
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[CHAT] FEDPA live price fetch failed (using constants):', e);
+    }
+
+    parts.push(fedpaText);
+    console.log(`[CHAT] FEDPA plans loaded (basic=$${bp.annualPremium}, vip=$${pp.annualPremium})`);
   }
+
+  // ── INTERNACIONAL DE SEGUROS ──
+  const isInsurer = AUTO_THIRD_PARTY_INSURERS.find(i => i.id === 'internacional');
+  if (isInsurer) {
+    const bp = isInsurer.basicPlan;
+    const pp = isInsurer.premiumPlan;
+
+    let isText = `PLANES DE INTERNACIONAL DE SEGUROS - DAÑOS A TERCEROS (precios actuales del portal):`;
+
+    // Plan Básico (SOAT)
+    isText += `\n\nPLAN BÁSICO (SOAT) - Prima anual: $${bp.annualPremium}`;
+    isText += `\nPago: ${bp.installments.description || 'Solo al contado'}`;
+    isText += `\nCoberturas: ${formatCoverages(bp.coverages).join(' | ')}`;
+    if (bp.endosoBenefits?.length) {
+      isText += `\nBeneficios: ${bp.endosoBenefits.join(' | ')}`;
+    }
+
+    // Plan Intermedio
+    isText += `\n\nPLAN INTERMEDIO - Prima anual: $${pp.annualPremium}`;
+    isText += `\nPago: ${pp.installments.description || 'Solo al contado'}`;
+    isText += `\nCoberturas: ${formatCoverages(pp.coverages).join(' | ')}`;
+    if (pp.endosoBenefits?.length) {
+      isText += `\nBeneficios: ${pp.endosoBenefits.join(' | ')}`;
+    }
+
+    parts.push(isText);
+    console.log(`[CHAT] Internacional plans loaded (basic=$${bp.annualPremium}, intermedio=$${pp.annualPremium})`);
+  }
+
+  // ── Note about other insurers ──
+  const otherInsurers = AUTO_THIRD_PARTY_INSURERS.filter(i => i.id !== 'fedpa' && i.id !== 'internacional');
+  if (otherInsurers.length > 0) {
+    parts.push(`OTRAS ASEGURADORAS: ${otherInsurers.map(i => i.name).join(', ')}. Para información detallada de estas aseguradoras, contactar directamente.`);
+  }
+
+  parts.push(`NOTA: Estos son los planes de Daños a Terceros disponibles actualmente en nuestro portal. Los precios y coberturas se actualizan desde las APIs de las aseguradoras. Si el cliente necesita cotizar un plan diferente (cobertura completa, vida, etc.), dirigir a: https://portal.lideresenseguros.com/cotizadores`);
 
   if (parts.length === 0) return null;
 
@@ -352,11 +430,15 @@ export async function processMessage(input: ProcessMessageInput): Promise<Proces
     const wantsPlanInfo = lower.includes('plan') || lower.includes('beneficio') || lower.includes('cobertura completa')
       || lower.includes('daños a terceros') || lower.includes('grua') || lower.includes('grúa')
       || lower.includes('asistencia') || lower.includes('endoso') || lower.includes('fedpa')
+      || lower.includes('internacional') || lower.includes('seguro auto')
       || lower.includes('precio') || lower.includes('cotiz') || lower.includes('prima')
       || lower.includes('cuantas') || lower.includes('cuántas') || lower.includes('incluye')
+      || lower.includes('economico') || lower.includes('económico') || lower.includes('barato')
+      || lower.includes('comparar') || lower.includes('diferencia') || lower.includes('cuota')
       // Also trigger if recent conversation was about plans (follow-up questions)
-      || (historyText.includes('fedpa') && (lower.includes('terceros') || lower.includes('basico') || lower.includes('básico') || lower.includes('premium')))
-      || (historyText.includes('plan') && (lower.includes('terceros') || lower.includes('cuantas') || lower.includes('cuántas')));
+      || (historyText.includes('fedpa') && (lower.includes('terceros') || lower.includes('basico') || lower.includes('básico') || lower.includes('premium') || lower.includes('cuota')))
+      || (historyText.includes('internacional') && (lower.includes('terceros') || lower.includes('basico') || lower.includes('básico') || lower.includes('premium') || lower.includes('diferencia')))
+      || (historyText.includes('plan') && (lower.includes('terceros') || lower.includes('cuantas') || lower.includes('cuántas') || lower.includes('diferencia')));
 
     if (wantsPlanInfo) {
       try {
