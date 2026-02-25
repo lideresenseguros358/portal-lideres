@@ -45,6 +45,8 @@ export interface ProcessMessageResult {
 
 const MAX_MESSAGE_LENGTH = 2000;
 
+const LISSA_FALLBACK = '¡Hola! Soy Lissa de Líderes en Seguros 💚 En este momento no puedo procesar tu consulta, pero no te preocupes — puedes contactarnos directamente y te atendemos con gusto:\n\n📧 contacto@lideresenseguros.com\n📞 223-2373\n\n¡Estamos para ayudarte!';
+
 /**
  * Process a chat message through the full pipeline
  */
@@ -112,9 +114,9 @@ export async function processMessage(input: ProcessMessageInput): Promise<Proces
         }
       }
       if (!emergencyInfo) {
-        emergencyInfo = '\n\nSi conoce su aseguradora, dígame cuál es para darle el número de emergencias directo.';
+        emergencyInfo = '\n\nSi me dices cuál es tu aseguradora, te doy el número de emergencias directo.';
       }
-      reply = `🚨 ¡ATENCIÓN INMEDIATA!\n\nLe recomendamos:\n1. Mantenga la calma y asegúrese de estar en un lugar seguro.\n2. Llame inmediatamente al número de emergencias de su aseguradora.\n3. No demore en reportar el siniestro — mientras más rápido mejor.${emergencyInfo}\n\n⚠️ Recuerde: No mueva el vehículo hasta que llegue el ajustador (si es accidente de auto).`;
+      reply = `🚨 ¡Entendido! Esto es urgente.\n\nTe recomiendo:\n1. Mantén la calma y asegúrate de estar en un lugar seguro.\n2. Llama inmediatamente al número de emergencias de tu aseguradora.\n3. No demores en reportar el siniestro — mientras más rápido, mejor.${emergencyInfo}\n\n⚠️ Recuerda: No muevas el vehículo hasta que llegue el ajustador (si es accidente de auto).\n\nEstoy aquí si necesitas algo más — Lissa 💚`;
       break;
     }
 
@@ -123,79 +125,86 @@ export async function processMessage(input: ProcessMessageInput): Promise<Proces
       if (detectedName) {
         const insurer = await lookupInsurer(detectedName);
         if (insurer) {
-          reply = `Aquí tiene los datos de contacto:\n\n${formatInsurerContact(insurer)}`;
+          reply = `¡Claro! Aquí tienes los datos de contacto:\n\n${formatInsurerContact(insurer)}\n\n¿Necesitas algo más? — Lissa 💚`;
         } else {
-          reply = 'No encontré esa aseguradora en nuestro sistema. ¿Podría indicarme el nombre exacto de su aseguradora?';
+          reply = 'No encontré esa aseguradora en mi sistema 🤔 ¿Podrías decirme el nombre exacto? Así te busco los datos correctos.';
         }
       } else if (policies.length > 0 && policies[0]?.insurer_name) {
         const insurer = await lookupInsurer(policies[0]!.insurer_name!);
         if (insurer) {
-          reply = `Basado en su póliza, su aseguradora es:\n\n${formatInsurerContact(insurer)}`;
+          reply = `Según tu póliza, tu aseguradora es:\n\n${formatInsurerContact(insurer)}\n\n¿Te puedo ayudar en algo más? — Lissa 💚`;
         } else {
-          reply = '¿Podría indicarme el nombre de la aseguradora que necesita contactar?';
+          reply = '¿Podrías decirme el nombre de la aseguradora que necesitas contactar? Así te busco los datos correctos 😊';
         }
       } else {
-        reply = '¿Podría indicarme el nombre de la aseguradora que necesita contactar? Así le proporciono los datos correctos.';
+        reply = '¿Podrías decirme el nombre de la aseguradora que necesitas contactar? Así te busco los datos correctos 😊';
       }
       break;
     }
 
     case 'POLIZA_ESPECIFICA': {
       if (!clientInfo) {
-        if (classification.requiresIdentityVerification) {
-          reply = 'Para consultar información de su póliza necesito verificar su identidad. ¿Podría proporcionarme su número de cédula?';
-        } else {
-          reply = 'Para consultar los detalles de su póliza, necesito verificar su identidad. Por favor indíqueme su número de cédula.';
-        }
+        reply = 'Para consultar información de tu póliza necesito verificar tu identidad 🔐 ¿Podrías darme tu número de cédula? Así te busco tus datos de forma segura.';
       } else if (policies.length === 0) {
-        reply = `Hola ${clientInfo.name}. No encontré pólizas activas asociadas a su cuenta. Si cree que esto es un error, le sugiero contactar directamente a su aseguradora o escribirnos al portal para revisarlo.`;
+        reply = `Hola ${clientInfo.name} 👋 No encontré pólizas activas asociadas a tu cuenta. Si crees que es un error, puedes escribirnos a contacto@lideresenseguros.com o llamarnos al 223-2373 y lo revisamos juntos 😊 \u2014 Lissa 💚`;
       } else {
-        // Generate AI response with policy context
-        const aiResult = await generateResponse({
-          message,
-          clientContext: {
-            name: clientInfo.name,
-            cedula: clientInfo.cedula,
-            region: clientInfo.region || undefined,
-          },
-          policyContext: { policies },
-          intent,
-        });
-        reply = aiResult.reply;
+        try {
+          const aiResult = await generateResponse({
+            message,
+            clientContext: {
+              name: clientInfo.name,
+              cedula: clientInfo.cedula,
+              region: clientInfo.region || undefined,
+            },
+            policyContext: { policies },
+            intent,
+          });
+          reply = aiResult.reply;
+        } catch {
+          reply = LISSA_FALLBACK;
+        }
       }
       break;
     }
 
     case 'COBERTURA_GENERAL': {
-      const aiResult = await generateResponse({
-        message,
-        clientContext: clientInfo ? {
-          name: clientInfo.name,
-          region: clientInfo.region || undefined,
-        } : null,
-        policyContext: null,
-        intent,
-        conversationHistory: input.conversationHistory?.map(h => ({ role: h.role, content: h.content })),
-      });
-      reply = aiResult.reply;
+      try {
+        const aiResult = await generateResponse({
+          message,
+          clientContext: clientInfo ? {
+            name: clientInfo.name,
+            region: clientInfo.region || undefined,
+          } : null,
+          policyContext: null,
+          intent,
+          conversationHistory: input.conversationHistory?.map(h => ({ role: h.role, content: h.content })),
+        });
+        reply = aiResult.reply;
+      } catch {
+        reply = LISSA_FALLBACK;
+      }
       break;
     }
 
     case 'QUEJA': {
-      const aiResult = await generateResponse({
-        message,
-        clientContext: clientInfo ? { name: clientInfo.name } : null,
-        policyContext: null,
-        intent,
-        conversationHistory: input.conversationHistory?.map(h => ({ role: h.role, content: h.content })),
-      });
-      reply = aiResult.reply;
+      try {
+        const aiResult = await generateResponse({
+          message,
+          clientContext: clientInfo ? { name: clientInfo.name } : null,
+          policyContext: null,
+          intent,
+          conversationHistory: input.conversationHistory?.map(h => ({ role: h.role, content: h.content })),
+        });
+        reply = aiResult.reply;
+      } catch {
+        reply = 'Lamento mucho lo que estás pasando 😔 Tu caso es importante para nosotros. Te pido que nos escribas a contacto@lideresenseguros.com o nos llames al 223-2373 para darle seguimiento personalmente.\n\n\u2014 Lissa, Líderes en Seguros 💚';
+      }
       break;
     }
 
     case 'EXTREMO': {
       escalated = true;
-      reply = 'Entiendo tu situación y la tomo muy en serio. Un supervisor se pondrá en contacto contigo a la brevedad. Tu caso ha sido escalado con máxima prioridad.\n\nSi necesitas atención inmediata, puedes comunicarte directamente al portal: https://portal.lideresenseguros.com\n\n— Lissa, Líderes en Seguros 💚';
+      reply = 'Entiendo tu situación y la tomo muy en serio. Un supervisor se pondrá en contacto contigo a la brevedad. Tu caso ha sido escalado con máxima prioridad.\n\nSi necesitas atención inmediata:\n📧 contacto@lideresenseguros.com\n📞 223-2373\n\n\u2014 Lissa, Líderes en Seguros 💚';
 
       // Send escalation email
       await sendEscalationAlert({
@@ -215,18 +224,22 @@ export async function processMessage(input: ProcessMessageInput): Promise<Proces
     }
 
     default: {
-      // OTRO or PORTAL — use AI
-      const aiResult = await generateResponse({
-        message,
-        clientContext: clientInfo ? {
-          name: clientInfo.name,
-          region: clientInfo.region || undefined,
-        } : null,
-        policyContext: policies.length > 0 ? { policies } : null,
-        intent,
-        conversationHistory: input.conversationHistory?.map(h => ({ role: h.role, content: h.content })),
-      });
-      reply = aiResult.reply;
+      // OTRO — use AI with warm fallback
+      try {
+        const aiResult = await generateResponse({
+          message,
+          clientContext: clientInfo ? {
+            name: clientInfo.name,
+            region: clientInfo.region || undefined,
+          } : null,
+          policyContext: policies.length > 0 ? { policies } : null,
+          intent,
+          conversationHistory: input.conversationHistory?.map(h => ({ role: h.role, content: h.content })),
+        });
+        reply = aiResult.reply;
+      } catch {
+        reply = LISSA_FALLBACK;
+      }
       break;
     }
   }

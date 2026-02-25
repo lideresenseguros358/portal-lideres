@@ -181,7 +181,7 @@ export async function generateResponse(ctx: ChatContext): Promise<VertexChatResp
     });
 
     const data: any = response.data;
-    const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || 'Lo siento, no pude generar una respuesta en este momento.';
+    const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || '¡Hola! Soy Lissa 💚 No logré procesar tu mensaje, pero puedes escribirnos a contacto@lideresenseguros.com o llamarnos al 223-2373 y te atendemos con gusto.';
     const tokensUsed = data?.usageMetadata?.totalTokenCount || 0;
 
     console.log(`[VERTEX-CHAT] Reply generated (${tokensUsed} tokens)`);
@@ -190,7 +190,7 @@ export async function generateResponse(ctx: ChatContext): Promise<VertexChatResp
   } catch (err: any) {
     console.error('[VERTEX-CHAT] Error:', err.message);
     return {
-      reply: 'Disculpa, estoy experimentando dificultades técnicas en este momento. Por favor intenta de nuevo o comunícate con nosotros al portal: https://portal.lideresenseguros.com — Lissa 💚',
+      reply: '¡Hola! Soy Lissa de Líderes en Seguros 💚 En este momento no puedo procesar tu consulta, pero no te preocupes — puedes contactarnos directamente y te atendemos con gusto:\n\n📧 contacto@lideresenseguros.com\n📞 223-2373\n\n¡Estamos para ayudarte!',
       tokensUsed: 0,
     };
   }
