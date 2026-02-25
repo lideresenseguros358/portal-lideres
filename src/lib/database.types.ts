@@ -215,6 +215,603 @@ export type Database = {
           },
         ]
       }
+      adm_cot_bank_history: {
+        Row: {
+          amount: number
+          bank_reference: string
+          created_at: string
+          executed_at: string
+          executed_by: string | null
+          group_id: string | null
+          id: string
+          is_refund: boolean | null
+          notes: string | null
+          payments: Json | null
+          transfer_date: string | null
+        }
+        Insert: {
+          amount: number
+          bank_reference: string
+          created_at?: string
+          executed_at?: string
+          executed_by?: string | null
+          group_id?: string | null
+          id?: string
+          is_refund?: boolean | null
+          notes?: string | null
+          payments?: Json | null
+          transfer_date?: string | null
+        }
+        Update: {
+          amount?: number
+          bank_reference?: string
+          created_at?: string
+          executed_at?: string
+          executed_by?: string | null
+          group_id?: string | null
+          id?: string
+          is_refund?: boolean | null
+          notes?: string | null
+          payments?: Json | null
+          transfer_date?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "adm_cot_bank_history_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "adm_cot_payment_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      adm_cot_chats: {
+        Row: {
+          ai_summary: string | null
+          cedula: string | null
+          classification: string | null
+          closed_at: string | null
+          created_at: string
+          email: string | null
+          escalation_email_sent: boolean | null
+          escalation_reason: string | null
+          id: string
+          is_escalated: boolean | null
+          last_message_at: string | null
+          messages: Json | null
+          phone: string | null
+          region: string | null
+          session_id: string | null
+          started_at: string
+          status: string
+          task_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          ai_summary?: string | null
+          cedula?: string | null
+          classification?: string | null
+          closed_at?: string | null
+          created_at?: string
+          email?: string | null
+          escalation_email_sent?: boolean | null
+          escalation_reason?: string | null
+          id?: string
+          is_escalated?: boolean | null
+          last_message_at?: string | null
+          messages?: Json | null
+          phone?: string | null
+          region?: string | null
+          session_id?: string | null
+          started_at?: string
+          status?: string
+          task_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          ai_summary?: string | null
+          cedula?: string | null
+          classification?: string | null
+          closed_at?: string | null
+          created_at?: string
+          email?: string | null
+          escalation_email_sent?: boolean | null
+          escalation_reason?: string | null
+          id?: string
+          is_escalated?: boolean | null
+          last_message_at?: string | null
+          messages?: Json | null
+          phone?: string | null
+          region?: string | null
+          session_id?: string | null
+          started_at?: string
+          status?: string
+          task_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      adm_cot_expedientes: {
+        Row: {
+          annual_premium: number | null
+          asset_info: Json | null
+          audit_log: Json | null
+          cedula: string | null
+          client_name: string
+          coverage_type: string | null
+          created_at: string
+          documents: Json | null
+          email: string | null
+          emitted_at: string
+          id: string
+          installments: number | null
+          insurer: string
+          ip_address: string | null
+          nro_poliza: string | null
+          payment_method: string | null
+          phone: string | null
+          quote_id: string | null
+          ramo: string
+          region: string | null
+          signature_at: string | null
+          signature_url: string | null
+          updated_at: string
+          user_agent: string | null
+          veracidad_accepted: boolean | null
+          veracidad_at: string | null
+          veracidad_ip: string | null
+          veracidad_user_agent: string | null
+        }
+        Insert: {
+          annual_premium?: number | null
+          asset_info?: Json | null
+          audit_log?: Json | null
+          cedula?: string | null
+          client_name: string
+          coverage_type?: string | null
+          created_at?: string
+          documents?: Json | null
+          email?: string | null
+          emitted_at?: string
+          id?: string
+          installments?: number | null
+          insurer: string
+          ip_address?: string | null
+          nro_poliza?: string | null
+          payment_method?: string | null
+          phone?: string | null
+          quote_id?: string | null
+          ramo?: string
+          region?: string | null
+          signature_at?: string | null
+          signature_url?: string | null
+          updated_at?: string
+          user_agent?: string | null
+          veracidad_accepted?: boolean | null
+          veracidad_at?: string | null
+          veracidad_ip?: string | null
+          veracidad_user_agent?: string | null
+        }
+        Update: {
+          annual_premium?: number | null
+          asset_info?: Json | null
+          audit_log?: Json | null
+          cedula?: string | null
+          client_name?: string
+          coverage_type?: string | null
+          created_at?: string
+          documents?: Json | null
+          email?: string | null
+          emitted_at?: string
+          id?: string
+          installments?: number | null
+          insurer?: string
+          ip_address?: string | null
+          nro_poliza?: string | null
+          payment_method?: string | null
+          phone?: string | null
+          quote_id?: string | null
+          ramo?: string
+          region?: string | null
+          signature_at?: string | null
+          signature_url?: string | null
+          updated_at?: string
+          user_agent?: string | null
+          veracidad_accepted?: boolean | null
+          veracidad_at?: string | null
+          veracidad_ip?: string | null
+          veracidad_user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "adm_cot_expedientes_quote_id_fkey"
+            columns: ["quote_id"]
+            isOneToOne: false
+            referencedRelation: "adm_cot_quotes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      adm_cot_kpi_snapshots: {
+        Row: {
+          abandonment: Json | null
+          avg_time_to_emit: number | null
+          by_device: Json | null
+          by_insurer: Json | null
+          by_ramo: Json | null
+          by_region: Json | null
+          conversion_rate: number | null
+          created_at: string
+          emissions_month: number | null
+          emissions_today: number | null
+          emissions_week: number | null
+          endpoint_errors: Json | null
+          environment: string
+          hourly_heatmap: Json | null
+          id: string
+          payments_by_insurer: Json | null
+          pending_payments_total: number | null
+          quotes_month: number | null
+          quotes_today: number | null
+          quotes_week: number | null
+          refunds_total: number | null
+          snapshot_date: string
+        }
+        Insert: {
+          abandonment?: Json | null
+          avg_time_to_emit?: number | null
+          by_device?: Json | null
+          by_insurer?: Json | null
+          by_ramo?: Json | null
+          by_region?: Json | null
+          conversion_rate?: number | null
+          created_at?: string
+          emissions_month?: number | null
+          emissions_today?: number | null
+          emissions_week?: number | null
+          endpoint_errors?: Json | null
+          environment?: string
+          hourly_heatmap?: Json | null
+          id?: string
+          payments_by_insurer?: Json | null
+          pending_payments_total?: number | null
+          quotes_month?: number | null
+          quotes_today?: number | null
+          quotes_week?: number | null
+          refunds_total?: number | null
+          snapshot_date: string
+        }
+        Update: {
+          abandonment?: Json | null
+          avg_time_to_emit?: number | null
+          by_device?: Json | null
+          by_insurer?: Json | null
+          by_ramo?: Json | null
+          by_region?: Json | null
+          conversion_rate?: number | null
+          created_at?: string
+          emissions_month?: number | null
+          emissions_today?: number | null
+          emissions_week?: number | null
+          endpoint_errors?: Json | null
+          environment?: string
+          hourly_heatmap?: Json | null
+          id?: string
+          payments_by_insurer?: Json | null
+          pending_payments_total?: number | null
+          quotes_month?: number | null
+          quotes_today?: number | null
+          quotes_week?: number | null
+          refunds_total?: number | null
+          snapshot_date?: string
+        }
+        Relationships: []
+      }
+      adm_cot_payment_groups: {
+        Row: {
+          bank_reference: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          insurers: string[] | null
+          notes: string | null
+          paid_amount: number
+          payment_date: string | null
+          status: string
+          total_amount: number
+          updated_at: string
+        }
+        Insert: {
+          bank_reference?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          insurers?: string[] | null
+          notes?: string | null
+          paid_amount?: number
+          payment_date?: string | null
+          status?: string
+          total_amount?: number
+          updated_at?: string
+        }
+        Update: {
+          bank_reference?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          insurers?: string[] | null
+          notes?: string | null
+          paid_amount?: number
+          payment_date?: string | null
+          status?: string
+          total_amount?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      adm_cot_payments: {
+        Row: {
+          amount: number
+          cedula: string | null
+          client_name: string
+          created_at: string
+          created_by: string | null
+          currency: string
+          expediente_id: string | null
+          group_id: string | null
+          id: string
+          installment_num: number | null
+          insurer: string
+          is_recurring: boolean | null
+          is_refund: boolean | null
+          notes: Json | null
+          nro_poliza: string | null
+          payment_date: string | null
+          payment_ref: string | null
+          payment_source: string | null
+          quote_id: string | null
+          ramo: string
+          recurrence_id: string | null
+          refund_account: string | null
+          refund_account_type: string | null
+          refund_bank: string | null
+          refund_reason: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          amount: number
+          cedula?: string | null
+          client_name: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          expediente_id?: string | null
+          group_id?: string | null
+          id?: string
+          installment_num?: number | null
+          insurer: string
+          is_recurring?: boolean | null
+          is_refund?: boolean | null
+          notes?: Json | null
+          nro_poliza?: string | null
+          payment_date?: string | null
+          payment_ref?: string | null
+          payment_source?: string | null
+          quote_id?: string | null
+          ramo?: string
+          recurrence_id?: string | null
+          refund_account?: string | null
+          refund_account_type?: string | null
+          refund_bank?: string | null
+          refund_reason?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          cedula?: string | null
+          client_name?: string
+          created_at?: string
+          created_by?: string | null
+          currency?: string
+          expediente_id?: string | null
+          group_id?: string | null
+          id?: string
+          installment_num?: number | null
+          insurer?: string
+          is_recurring?: boolean | null
+          is_refund?: boolean | null
+          notes?: Json | null
+          nro_poliza?: string | null
+          payment_date?: string | null
+          payment_ref?: string | null
+          payment_source?: string | null
+          quote_id?: string | null
+          ramo?: string
+          recurrence_id?: string | null
+          refund_account?: string | null
+          refund_account_type?: string | null
+          refund_bank?: string | null
+          refund_reason?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "adm_cot_payments_expediente_id_fkey"
+            columns: ["expediente_id"]
+            isOneToOne: false
+            referencedRelation: "adm_cot_expedientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "adm_cot_payments_quote_id_fkey"
+            columns: ["quote_id"]
+            isOneToOne: false
+            referencedRelation: "adm_cot_quotes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      adm_cot_quotes: {
+        Row: {
+          annual_premium: number | null
+          cedula: string | null
+          client_name: string
+          coverage_type: string | null
+          created_at: string
+          device: string | null
+          email: string | null
+          emitted_at: string | null
+          id: string
+          insurer: string
+          ip_address: string | null
+          last_step: string | null
+          phone: string | null
+          plan_name: string | null
+          quote_payload: Json | null
+          quote_ref: string
+          quoted_at: string
+          ramo: string
+          region: string | null
+          status: string
+          steps_log: Json | null
+          updated_at: string
+          user_agent: string | null
+          vehicle_info: Json | null
+        }
+        Insert: {
+          annual_premium?: number | null
+          cedula?: string | null
+          client_name: string
+          coverage_type?: string | null
+          created_at?: string
+          device?: string | null
+          email?: string | null
+          emitted_at?: string | null
+          id?: string
+          insurer: string
+          ip_address?: string | null
+          last_step?: string | null
+          phone?: string | null
+          plan_name?: string | null
+          quote_payload?: Json | null
+          quote_ref: string
+          quoted_at?: string
+          ramo?: string
+          region?: string | null
+          status?: string
+          steps_log?: Json | null
+          updated_at?: string
+          user_agent?: string | null
+          vehicle_info?: Json | null
+        }
+        Update: {
+          annual_premium?: number | null
+          cedula?: string | null
+          client_name?: string
+          coverage_type?: string | null
+          created_at?: string
+          device?: string | null
+          email?: string | null
+          emitted_at?: string | null
+          id?: string
+          insurer?: string
+          ip_address?: string | null
+          last_step?: string | null
+          phone?: string | null
+          plan_name?: string | null
+          quote_payload?: Json | null
+          quote_ref?: string
+          quoted_at?: string
+          ramo?: string
+          region?: string | null
+          status?: string
+          steps_log?: Json | null
+          updated_at?: string
+          user_agent?: string | null
+          vehicle_info?: Json | null
+        }
+        Relationships: []
+      }
+      adm_cot_recurrences: {
+        Row: {
+          cancel_reason: string | null
+          cancelled_at: string | null
+          cancelled_by: string | null
+          cedula: string | null
+          client_name: string
+          created_at: string
+          created_by: string | null
+          end_date: string
+          expediente_id: string | null
+          frequency: string
+          id: string
+          installment_amount: number
+          insurer: string
+          next_due_date: string | null
+          nro_poliza: string | null
+          schedule: Json | null
+          start_date: string
+          status: string
+          total_installments: number
+          updated_at: string
+        }
+        Insert: {
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          cedula?: string | null
+          client_name: string
+          created_at?: string
+          created_by?: string | null
+          end_date: string
+          expediente_id?: string | null
+          frequency?: string
+          id?: string
+          installment_amount: number
+          insurer: string
+          next_due_date?: string | null
+          nro_poliza?: string | null
+          schedule?: Json | null
+          start_date: string
+          status?: string
+          total_installments?: number
+          updated_at?: string
+        }
+        Update: {
+          cancel_reason?: string | null
+          cancelled_at?: string | null
+          cancelled_by?: string | null
+          cedula?: string | null
+          client_name?: string
+          created_at?: string
+          created_by?: string | null
+          end_date?: string
+          expediente_id?: string | null
+          frequency?: string
+          id?: string
+          installment_amount?: number
+          insurer?: string
+          next_due_date?: string | null
+          nro_poliza?: string | null
+          schedule?: Json | null
+          start_date?: string
+          status?: string
+          total_installments?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "adm_cot_recurrences_expediente_id_fkey"
+            columns: ["expediente_id"]
+            isOneToOne: false
+            referencedRelation: "adm_cot_expedientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       advance_logs: {
         Row: {
           advance_id: string
@@ -1007,6 +1604,62 @@ export type Database = {
           },
         ]
       }
+      broker_metadata: {
+        Row: {
+          broker_id: string
+          canceladas_ytd: number | null
+          created_at: string | null
+          id: string
+          updated_at: string | null
+          year: number
+        }
+        Insert: {
+          broker_id: string
+          canceladas_ytd?: number | null
+          created_at?: string | null
+          id?: string
+          updated_at?: string | null
+          year: number
+        }
+        Update: {
+          broker_id?: string
+          canceladas_ytd?: number | null
+          created_at?: string | null
+          id?: string
+          updated_at?: string | null
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "broker_metadata_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "broker_metadata_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_ach_validation"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "broker_metadata_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_ach_info"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "broker_metadata_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "brokers_with_bank_info"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       brokers: {
         Row: {
           active: boolean | null
@@ -1017,7 +1670,7 @@ export type Database = {
           beneficiary_name: string | null
           birth_date: string | null
           broker_type: Database["public"]["Enums"]["broker_type_enum"] | null
-          canceladas_ytd: number
+          canceladas_ytd: number | null
           carnet_expiry_date: string | null
           created_at: string | null
           email: string | null
@@ -1041,7 +1694,7 @@ export type Database = {
           beneficiary_name?: string | null
           birth_date?: string | null
           broker_type?: Database["public"]["Enums"]["broker_type_enum"] | null
-          canceladas_ytd?: number
+          canceladas_ytd?: number | null
           carnet_expiry_date?: string | null
           created_at?: string | null
           email?: string | null
@@ -1065,7 +1718,7 @@ export type Database = {
           beneficiary_name?: string | null
           birth_date?: string | null
           broker_type?: Database["public"]["Enums"]["broker_type_enum"] | null
-          canceladas_ytd?: number
+          canceladas_ytd?: number | null
           carnet_expiry_date?: string | null
           created_at?: string | null
           email?: string | null
@@ -2459,6 +3112,63 @@ export type Database = {
           },
         ]
       }
+      diagnostic_runs: {
+        Row: {
+          case_id: string | null
+          created_at: string
+          created_by: string | null
+          errors: Json | null
+          finished_at: string | null
+          id: string
+          inbound_email_id: string | null
+          metadata: Json | null
+          started_at: string
+          status: string
+          steps: Json | null
+          summary: string | null
+          test_email_subject: string | null
+          test_type: string
+          ticket: string | null
+          updated_at: string
+        }
+        Insert: {
+          case_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          errors?: Json | null
+          finished_at?: string | null
+          id?: string
+          inbound_email_id?: string | null
+          metadata?: Json | null
+          started_at?: string
+          status?: string
+          steps?: Json | null
+          summary?: string | null
+          test_email_subject?: string | null
+          test_type: string
+          ticket?: string | null
+          updated_at?: string
+        }
+        Update: {
+          case_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          errors?: Json | null
+          finished_at?: string | null
+          id?: string
+          inbound_email_id?: string | null
+          metadata?: Json | null
+          started_at?: string
+          status?: string
+          steps?: Json | null
+          summary?: string | null
+          test_email_subject?: string | null
+          test_type?: string
+          ticket?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       doc_tags: {
         Row: {
           id: string
@@ -2930,6 +3640,7 @@ export type Database = {
           created_by: string | null
           details: string | null
           end_at: string
+          event_type: Database["public"]["Enums"]["event_type_enum"]
           id: string
           is_all_day: boolean
           location: string | null
@@ -2950,6 +3661,7 @@ export type Database = {
           created_by?: string | null
           details?: string | null
           end_at: string
+          event_type?: Database["public"]["Enums"]["event_type_enum"]
           id?: string
           is_all_day?: boolean
           location?: string | null
@@ -2970,6 +3682,7 @@ export type Database = {
           created_by?: string | null
           details?: string | null
           end_at?: string
+          event_type?: Database["public"]["Enums"]["event_type_enum"]
           id?: string
           is_all_day?: boolean
           location?: string | null
@@ -3057,6 +3770,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      fedpa_tokens: {
+        Row: {
+          amb: string
+          created_at: string
+          expires_at: string
+          last_ok_at: string | null
+          source: string | null
+          token: string
+        }
+        Insert: {
+          amb: string
+          created_at?: string
+          expires_at: string
+          last_ok_at?: string | null
+          source?: string | null
+          token: string
+        }
+        Update: {
+          amb?: string
+          created_at?: string
+          expires_at?: string
+          last_ok_at?: string | null
+          source?: string | null
+          token?: string
+        }
+        Relationships: []
       }
       fortnight_broker_totals: {
         Row: {
@@ -3469,6 +4209,54 @@ export type Database = {
           id?: string
           name?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      imap_debug_logs: {
+        Row: {
+          case_id: string | null
+          created_at: string | null
+          duration_ms: number | null
+          error_detail: string | null
+          id: string
+          inbound_email_id: string | null
+          message: string | null
+          message_id: string | null
+          payload: Json | null
+          stage: string
+          status: string
+          test_id: string | null
+          timestamp_ms: number | null
+        }
+        Insert: {
+          case_id?: string | null
+          created_at?: string | null
+          duration_ms?: number | null
+          error_detail?: string | null
+          id?: string
+          inbound_email_id?: string | null
+          message?: string | null
+          message_id?: string | null
+          payload?: Json | null
+          stage: string
+          status: string
+          test_id?: string | null
+          timestamp_ms?: number | null
+        }
+        Update: {
+          case_id?: string | null
+          created_at?: string | null
+          duration_ms?: number | null
+          error_detail?: string | null
+          id?: string
+          inbound_email_id?: string | null
+          message?: string | null
+          message_id?: string | null
+          payload?: Json | null
+          stage?: string
+          status?: string
+          test_id?: string | null
+          timestamp_ms?: number | null
         }
         Relationships: []
       }
@@ -3935,6 +4723,36 @@ export type Database = {
         }
         Relationships: []
       }
+      is_circuit: {
+        Row: {
+          environment: string
+          failure_count: number
+          id: string
+          is_open: boolean
+          last_failure_at: string | null
+          open_until: string | null
+          updated_at: string
+        }
+        Insert: {
+          environment: string
+          failure_count?: number
+          id?: string
+          is_open?: boolean
+          last_failure_at?: string | null
+          open_until?: string | null
+          updated_at?: string
+        }
+        Update: {
+          environment?: string
+          failure_count?: number
+          id?: string
+          is_open?: boolean
+          last_failure_at?: string | null
+          open_until?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       is_daily_tokens: {
         Row: {
           created_at: string
@@ -3959,6 +4777,69 @@ export type Database = {
           id?: string
           token?: string
           updated_at?: string
+        }
+        Relationships: []
+      }
+      is_requests: {
+        Row: {
+          created_at: string
+          endpoint: string
+          environment: string
+          id: string
+          idempotency_key: string
+          request_payload: Json | null
+          response_payload: Json | null
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          endpoint: string
+          environment: string
+          id?: string
+          idempotency_key: string
+          request_payload?: Json | null
+          response_payload?: Json | null
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          endpoint?: string
+          environment?: string
+          id?: string
+          idempotency_key?: string
+          request_payload?: Json | null
+          response_payload?: Json | null
+          status?: string
+        }
+        Relationships: []
+      }
+      is_tokens: {
+        Row: {
+          created_at: string
+          daily_token: string
+          environment: string
+          expires_at: string | null
+          fetched_at: string
+          id: string
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          daily_token: string
+          environment: string
+          expires_at?: string | null
+          fetched_at?: string
+          id?: string
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          daily_token?: string
+          environment?: string
+          expires_at?: string | null
+          fetched_at?: string
+          id?: string
+          updated_by?: string | null
         }
         Relationships: []
       }
@@ -4544,6 +5425,7 @@ export type Database = {
           bruto: number
           cancelaciones: number
           canceladas: number | null
+          canceladas_ytd: number
           created_at: string
           id: string
           month: number
@@ -4558,6 +5440,7 @@ export type Database = {
           bruto?: number
           cancelaciones?: number
           canceladas?: number | null
+          canceladas_ytd?: number
           created_at?: string
           id?: string
           month: number
@@ -4572,6 +5455,7 @@ export type Database = {
           bruto?: number
           cancelaciones?: number
           canceladas?: number | null
+          canceladas_ytd?: number
           created_at?: string
           id?: string
           month?: number
@@ -5098,6 +5982,66 @@ export type Database = {
         }
         Relationships: []
       }
+      test_runs: {
+        Row: {
+          created_at: string
+          id: string
+          results: Json | null
+          success: boolean
+          test_id: string
+          test_type: string
+          verifications: Json | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          results?: Json | null
+          success?: boolean
+          test_id: string
+          test_type: string
+          verifications?: Json | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          results?: Json | null
+          success?: boolean
+          test_id?: string
+          test_type?: string
+          verifications?: Json | null
+        }
+        Relationships: []
+      }
+      third_party_min_prices: {
+        Row: {
+          created_at: string | null
+          id: string
+          insurer_name: string
+          last_updated_at: string | null
+          min_price: number
+          policy_type: string | null
+          updated_by: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          insurer_name: string
+          last_updated_at?: string | null
+          min_price: number
+          policy_type?: string | null
+          updated_by?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          insurer_name?: string
+          last_updated_at?: string | null
+          min_price?: number
+          policy_type?: string | null
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       ticket_counters: {
         Row: {
           aamm: string
@@ -5409,6 +6353,87 @@ export type Database = {
           updated_at?: string | null
           vacation_end?: string | null
           vacation_start?: string | null
+        }
+        Relationships: []
+      }
+      vida_assa_files: {
+        Row: {
+          created_at: string | null
+          file_size: number | null
+          file_type: string | null
+          file_url: string
+          folder_id: string
+          id: string
+          is_new: boolean | null
+          marked_new_until: string | null
+          name: string
+          updated_at: string | null
+          uploaded_by: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          file_size?: number | null
+          file_type?: string | null
+          file_url: string
+          folder_id: string
+          id?: string
+          is_new?: boolean | null
+          marked_new_until?: string | null
+          name: string
+          updated_at?: string | null
+          uploaded_by?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          file_size?: number | null
+          file_type?: string | null
+          file_url?: string
+          folder_id?: string
+          id?: string
+          is_new?: boolean | null
+          marked_new_until?: string | null
+          name?: string
+          updated_at?: string | null
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vida_assa_files_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "vida_assa_folders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vida_assa_files_uploaded_by_fkey"
+            columns: ["uploaded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vida_assa_folders: {
+        Row: {
+          created_at: string | null
+          display_order: number
+          id: string
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          display_order?: number
+          id?: string
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          display_order?: number
+          id?: string
+          name?: string
+          updated_at?: string | null
         }
         Relationships: []
       }
@@ -6300,6 +7325,44 @@ export type Database = {
         Returns: string
       }
       resume_case_sla: { Args: { p_case_id: string }; Returns: undefined }
+      rpc_search_client_by_national_id: {
+        Args: { p_national_id: string }
+        Returns: {
+          birth_date: string
+          broker_email: string
+          broker_id: string
+          broker_name: string
+          email: string
+          id: string
+          name: string
+          national_id: string
+          phone: string
+        }[]
+      }
+      rpc_validate_policy_in_comm_items: {
+        Args: { p_policy_number: string }
+        Returns: {
+          broker_email: string
+          broker_id: string
+          broker_name: string
+          id: string
+          insured_name: string
+          policy_number: string
+        }[]
+      }
+      rpc_validate_policy_number: {
+        Args: { p_policy_number: string }
+        Returns: {
+          broker_email: string
+          broker_id: string
+          broker_name: string
+          client_active: boolean
+          client_id: string
+          client_name: string
+          id: string
+          policy_number: string
+        }[]
+      }
       set_user_role:
         | {
             Args: {
@@ -6315,6 +7378,14 @@ export type Database = {
           }
       toggle_case_sla_pause: {
         Args: { p_case_id: string; p_pause: boolean; p_reason?: string }
+        Returns: undefined
+      }
+      update_third_party_min_price: {
+        Args: {
+          p_insurer_name: string
+          p_new_price: number
+          p_user_id?: string
+        }
         Returns: undefined
       }
       validate_broker_for_ach: {
@@ -6380,6 +7451,7 @@ export type Database = {
         | "CAMBIO_CORREDOR"
         | "RECLAMO"
         | "EMISION_EXPRESS"
+      event_type_enum: "normal" | "oficina_cerrada" | "oficina_virtual"
       fortnight_status_enum: "DRAFT" | "READY" | "PAID"
       map_kind: "COMMISSIONS" | "DELINQUENCY"
       notification_type:
@@ -6589,6 +7661,7 @@ export const Constants = {
         "RECLAMO",
         "EMISION_EXPRESS",
       ],
+      event_type_enum: ["normal", "oficina_cerrada", "oficina_virtual"],
       fortnight_status_enum: ["DRAFT", "READY", "PAID"],
       map_kind: ["COMMISSIONS", "DELINQUENCY"],
       notification_type: [

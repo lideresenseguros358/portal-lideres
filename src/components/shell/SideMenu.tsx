@@ -26,6 +26,7 @@ import {
   FaExclamationTriangle,
   FaCalculator,
   FaSync,
+  FaShieldAlt,
 } from "react-icons/fa";
 
 type MenuRole = "MASTER" | "BROKER";
@@ -48,6 +49,7 @@ const menuItems: Record<MenuRole, MenuItem[]> = {
     { label: "Descargas", href: "/downloads", icon: <FaDownload /> },
     { label: "Guías", href: "/guides", icon: <FaBookOpen /> },
     { label: "Cotizadores", href: "/cotizadores", icon: <FaCalculator /> },
+    { label: "ADM COT", href: "/adm-cot", icon: <FaShieldAlt /> },
     { label: "Agenda", href: "/agenda", icon: <FaCalendarAlt /> },
     { label: "Producción", href: "/production", icon: <FaChartBar /> },
     { label: "Corredores", href: "/brokers", icon: <FaUserTie /> },
@@ -94,7 +96,7 @@ export default function SideMenu({ role }: SideMenuProps) {
         <nav className="side-menu__nav">
           <ul>
             {items.map((item) => {
-              const isActive = pathname === item.href;
+              const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href + '/'));
               
               return (
                 <li key={item.href} className={isActive ? "active" : ""}>

@@ -54,7 +54,7 @@ export async function POST(request: Request) {
       });
     }
 
-    // TODO: Enviar notificaciones por email (Resend)
+    // TODO: Enviar notificaciones por email (ZeptoMail SMTP via @/server/email/sendEmail)
     // Por ahora, solo registramos en logs
     const notifications = [];
     
@@ -80,7 +80,7 @@ export async function POST(request: Request) {
         console.error(`Error creating notification for case ${caseItem.id}:`, notifError);
       }
 
-      // TODO: Enviar email con Resend
+      // TODO: Enviar email con ZeptoMail SMTP
       // await sendAplazadoNotificationEmail({
       //   to: caseItem.profiles?.email,
       //   case: caseItem,

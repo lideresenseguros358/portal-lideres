@@ -2,7 +2,7 @@
  * Email Client - ZeptoMail SMTP
  * ==============================
  * Configuración centralizada para envío de emails vía ZeptoMail.
- * Reemplaza Resend API — todos los correos salen por portal@lideresenseguros.com
+ * Todos los correos salen por portal@lideresenseguros.com vía ZeptoMail SMTP
  */
 
 import { getTransport, getFromAddress } from '@/server/email/mailer';

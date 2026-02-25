@@ -43,6 +43,10 @@
     {
       "path": "/api/cron/auto-assign-pending",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/adm-cot-recurrencia",
+      "schedule": "0 8 * * *"
     }
   ]
 }

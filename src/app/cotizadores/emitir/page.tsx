@@ -17,6 +17,8 @@ import LoadingSkeleton from '@/components/cotizadores/LoadingSkeleton';
 import EmissionProgressBar from '@/components/cotizadores/EmissionProgressBar';
 import EmissionBreadcrumb, { type EmissionStep } from '@/components/cotizadores/EmissionBreadcrumb';
 import SignaturePad from '@/components/cotizadores/SignaturePad';
+import { trackQuoteEmitted, trackQuoteFailed, trackStepUpdate } from '@/lib/adm-cot/track-quote';
+import { createPaymentOnEmission } from '@/lib/adm-cot/create-payment-on-emission';
 
 export default function EmitirPage() {
   // A7: Scroll to top al montar
@@ -68,12 +70,27 @@ export default function EmitirPage() {
     loadData();
   }, [router]);
 
+  // ═══ ADM COT: Helper to get quote ref for step tracking ═══
+  const getTrackingInfo = () => {
+    const refId = selectedPlan?._idCotizacion;
+    if (!refId) return null;
+    const isFedpa = selectedPlan?.insurerName?.includes('FEDPA');
+    const prefix = isFedpa ? 'FEDPA' : 'IS';
+    const insurer = isFedpa ? 'FEDPA' : 'INTERNACIONAL';
+    const planSuffix = selectedPlan?.planType === 'premium' ? 'P' : 'B';
+    return { quoteRef: `${prefix}-${refId}-${planSuffix}`, insurer };
+  };
+
   const handlePaymentPlanSelected = (numInstallments: number, monthlyPaymentAmount: number) => {
     setInstallments(numInstallments);
     setMonthlyPayment(monthlyPaymentAmount);
     
     // Marcar paso completado
     setCompletedSteps(prev => [...prev, 'payment']);
+    
+    // ═══ ADM COT: Track step ═══
+    const t = getTrackingInfo();
+    if (t) trackStepUpdate({ ...t, step: 'payment' });
     
     // Ir a datos de emisión
     router.push('/cotizadores/emitir?step=emission-data');
@@ -85,6 +102,10 @@ export default function EmitirPage() {
     // Marcar paso completado
     setCompletedSteps(prev => [...prev, 'emission-data']);
     
+    // ═══ ADM COT: Track step ═══
+    const t = getTrackingInfo();
+    if (t) trackStepUpdate({ ...t, step: 'emission-data' });
+    
     // Ir a datos del vehículo
     router.push('/cotizadores/emitir?step=vehicle');
     toast.success('Datos guardados correctamente');
@@ -95,6 +116,10 @@ export default function EmitirPage() {
     
     // Marcar paso completado
     setCompletedSteps(prev => [...prev, 'vehicle']);
+    
+    // ═══ ADM COT: Track step ═══
+    const t = getTrackingInfo();
+    if (t) trackStepUpdate({ ...t, step: 'vehicle' });
     
     // Only CC (Cobertura Completa) needs inspection step
     // IS DT (Daños a Terceros) skips inspection and goes to payment
@@ -115,6 +140,10 @@ export default function EmitirPage() {
     // Marcar paso completado
     setCompletedSteps(prev => [...prev, 'inspection']);
     
+    // ═══ ADM COT: Track step ═══
+    const t = getTrackingInfo();
+    if (t) trackStepUpdate({ ...t, step: 'inspection' });
+    
     // Ir a información de pago
     router.push('/cotizadores/emitir?step=payment-info');
     toast.success('Inspección completada');
@@ -126,6 +155,10 @@ export default function EmitirPage() {
     
     // Marcar paso completado
     setCompletedSteps(prev => [...prev, 'payment-info']);
+    
+    // ═══ ADM COT: Track step ═══
+    const t = getTrackingInfo();
+    if (t) trackStepUpdate({ ...t, step: 'payment-info' });
     
     // Ir al resumen final
     router.push('/cotizadores/emitir?step=review');
@@ -279,6 +312,24 @@ export default function EmitirPage() {
         }
         
         console.log(`[EMISIÓN FEDPA] Póliza emitida (${usedMethod}):`, emisionResult.nroPoliza || emisionResult.poliza);
+        
+        // ═══ ADM COT: Track successful FEDPA emission ═══
+        const fedpaRef = selectedPlan?._idCotizacion;
+        if (fedpaRef) {
+          const planSuffix = selectedPlan?.planType === 'premium' ? 'P' : 'B';
+          trackQuoteEmitted({ quoteRef: `FEDPA-${fedpaRef}-${planSuffix}`, insurer: 'FEDPA', policyNumber: emisionResult.nroPoliza || emisionResult.poliza });
+        }
+        
+        // ═══ ADM COT: Auto-create pending payment + recurrence ═══
+        createPaymentOnEmission({
+          insurer: 'FEDPA',
+          policyNumber: emisionResult.nroPoliza || emisionResult.poliza || '',
+          insuredName: `${emissionData.primerNombre} ${emissionData.primerApellido}`,
+          cedula: emissionData.cedula,
+          totalPremium: selectedPlan?.annualPremium || 0,
+          installments,
+          ramo: 'AUTO',
+        });
         
         // ═══ ENVIAR BIENVENIDA AL CLIENTE POR CORREO ═══
         toast.info('Enviando confirmación por correo...');
@@ -450,6 +501,24 @@ export default function EmitirPage() {
         
         console.log('[EMISION INTERNACIONAL] Póliza emitida:', emisionResult.nroPoliza);
         
+        // ═══ ADM COT: Track successful IS emission ═══
+        const isRef = selectedPlan?._idCotizacion;
+        if (isRef) {
+          const planSuffix = selectedPlan?.planType === 'premium' ? 'P' : 'B';
+          trackQuoteEmitted({ quoteRef: `IS-${isRef}-${planSuffix}`, insurer: 'INTERNACIONAL', policyNumber: emisionResult.nroPoliza });
+        }
+        
+        // ═══ ADM COT: Auto-create pending payment + recurrence ═══
+        createPaymentOnEmission({
+          insurer: 'INTERNACIONAL',
+          policyNumber: emisionResult.nroPoliza || '',
+          insuredName: `${emissionData.primerNombre} ${emissionData.primerApellido}`,
+          cedula: emissionData.cedula,
+          totalPremium: selectedPlan?.annualPremium || 0,
+          installments,
+          ramo: 'AUTO',
+        });
+        
         // ═══ ENVIAR EXPEDIENTE POR CORREO ═══
         toast.info('Enviando expediente por correo...');
         try {
@@ -598,6 +667,15 @@ export default function EmitirPage() {
     } catch (error: any) {
       console.error('Error emitiendo p\u00f3liza:', error);
       toast.error(error.message || 'Error al emitir p\u00f3liza');
+      // ═══ ADM COT: Track emission failure ═══
+      const refId = selectedPlan?._idCotizacion;
+      if (refId) {
+        const isFedpa = selectedPlan?.insurerName?.includes('FEDPA');
+        const prefix = isFedpa ? 'FEDPA' : 'IS';
+        const insurer = isFedpa ? 'FEDPA' : 'INTERNACIONAL';
+        const planSuffix = selectedPlan?.planType === 'premium' ? 'P' : 'B';
+        trackQuoteFailed({ quoteRef: `${prefix}-${refId}-${planSuffix}`, insurer, errorMessage: error.message, lastStep: step });
+      }
       setIsConfirming(false);
     }
   };

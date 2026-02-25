@@ -1,10 +1,8 @@
 /**
- * EMAIL NOTIFICATIONS WITH RESEND
+ * EMAIL NOTIFICATIONS
  * 
- * Este módulo está preparado para integración futura con Resend
- * para envío de notificaciones por email.
- * 
- * TODO: Implementar con Resend API
+ * Placeholder module for ticket email notifications.
+ * When implemented, use ZeptoMail SMTP via @/server/email/sendEmail.
  */
 
 export interface EmailRecipient {
@@ -28,19 +26,7 @@ export async function sendTicketCreatedEmail(
   ticketData: TicketEmailData
 ): Promise<{ ok: boolean; error?: string }> {
   
-  // TODO: Implementar con Resend
-  // const resend = new Resend(process.env.RESEND_API_KEY);
-  
-  // await resend.emails.send({
-  //   from: 'Sistema de Tickets <noreply@lideresenseguros.com>',
-  //   to: [to.email],
-  //   subject: `Nuevo ticket creado: ${ticketData.ticket_ref}`,
-  //   html: `
-  //     <h1>Ticket ${ticketData.ticket_ref} creado</h1>
-  //     <p>Cliente: ${ticketData.client_name}</p>
-  //     <p><a href="${ticketData.link}">Ver detalles</a></p>
-  //   `,
-  // });
+  // TODO: Implementar con ZeptoMail SMTP via @/server/email/sendEmail
 
   console.log('[EMAIL] Ticket created notification (placeholder):', {
     to: to.email,

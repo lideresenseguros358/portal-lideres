@@ -19,6 +19,7 @@ import { FaCar, FaCompressArrowsAlt } from 'react-icons/fa';
 import LoadingSkeleton from '@/components/cotizadores/LoadingSkeleton';
 import QuoteComparison from '@/components/cotizadores/QuoteComparison';
 import Breadcrumb from '@/components/ui/Breadcrumb';
+import { trackQuoteCreated } from '@/lib/adm-cot/track-quote';
 
 // A7: Scroll to top al montar
 if (typeof window !== 'undefined') {
@@ -878,6 +879,25 @@ export default function ComparePage() {
             if (!isQuotes.basico && !isQuotes.premium) {
               console.warn('[IS] No se pudieron generar cotizaciones');
             }
+            // ═══ ADM COT: Track IS quotes ═══
+            const isRef = isQuotes.premium?._idCotizacion || isQuotes.basico?._idCotizacion;
+            if (isRef) {
+              const trackBase = {
+                clientName: input.nombreCompleto || 'Anónimo',
+                cedula: input.cedula,
+                email: input.email,
+                phone: input.telefono,
+                ramo: 'AUTO',
+                coverageType: input.cobertura === 'COMPLETA' ? 'Cobertura Completa' : 'Daños a Terceros',
+                vehicleInfo: { marca: input.marca, modelo: input.modelo, anio: input.anio, valor: input.valorVehiculo },
+              };
+              if (isQuotes.premium) {
+                trackQuoteCreated({ ...trackBase, quoteRef: `IS-${isRef}-P`, insurer: 'INTERNACIONAL', planName: 'Premium (Centenario)', annualPremium: isQuotes.premium.annualPremium });
+              }
+              if (isQuotes.basico) {
+                trackQuoteCreated({ ...trackBase, quoteRef: `IS-${isRef}-B`, insurer: 'INTERNACIONAL', planName: 'Básico (Plus)', annualPremium: isQuotes.basico.annualPremium });
+              }
+            }
           } catch (error) {
             console.error('Error obteniendo cotizaciones INTERNACIONAL:', error);
             toast.error('Error al obtener cotizaciones de INTERNACIONAL');
@@ -900,6 +920,25 @@ export default function ComparePage() {
             
             if (!fedpaQuotes.premium && !fedpaQuotes.basico) {
               console.warn('[FEDPA] ⚠️ No se pudieron generar cotizaciones');
+            }
+            // ═══ ADM COT: Track FEDPA quotes ═══
+            const fedpaRef = fedpaQuotes.premium?._idCotizacion || fedpaQuotes.basico?._idCotizacion;
+            if (fedpaRef) {
+              const trackBase = {
+                clientName: input.nombreCompleto || 'Anónimo',
+                cedula: input.cedula,
+                email: input.email,
+                phone: input.telefono,
+                ramo: 'AUTO',
+                coverageType: input.cobertura === 'COMPLETA' ? 'Cobertura Completa' : 'Daños a Terceros',
+                vehicleInfo: { marca: input.marca, modelo: input.modelo, anio: input.anio, valor: input.valorVehiculo },
+              };
+              if (fedpaQuotes.premium) {
+                trackQuoteCreated({ ...trackBase, quoteRef: `FEDPA-${fedpaRef}-P`, insurer: 'FEDPA', planName: 'Premium (Porcelana)', annualPremium: fedpaQuotes.premium.annualPremium });
+              }
+              if (fedpaQuotes.basico) {
+                trackQuoteCreated({ ...trackBase, quoteRef: `FEDPA-${fedpaRef}-B`, insurer: 'FEDPA', planName: 'Básico (Full Extras)', annualPremium: fedpaQuotes.basico.annualPremium });
+              }
             }
           } catch (error) {
             console.error('[FEDPA] Error obteniendo cotizaciones:', error);
