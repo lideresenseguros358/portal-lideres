@@ -44,6 +44,49 @@ const GREETING_KEYWORDS = [
   'que tal', 'buenas',
 ];
 
+const COTIZAR_KEYWORDS = [
+  'cotizar', 'cotización', 'cotizacion', 'precio', 'cuanto cuesta',
+  'cuánto cuesta', 'cuanto vale', 'cuánto vale', 'quiero un seguro',
+  'necesito un seguro', 'seguro de auto', 'seguro de vida', 'seguro de salud',
+  'seguro vehicular', 'póliza nueva', 'poliza nueva', 'asegurar mi',
+];
+
+const PORTAL_KEYWORDS = [
+  'portal', 'iniciar sesión', 'iniciar sesion', 'login', 'mi cuenta',
+  'acceder', 'contraseña', 'password', 'registrarme', 'registro',
+];
+
+const POLIZA_KEYWORDS = [
+  'mi póliza', 'mi poliza', 'número de póliza', 'numero de poliza',
+  'renovación', 'renovacion', 'vencimiento', 'mi seguro', 'mis pólizas',
+  'mis polizas', 'estado de mi', 'mi cobertura', 'prima', 'mi pago',
+];
+
+const QUEJA_KEYWORDS = [
+  'queja', 'reclamo', 'problema', 'inconveniente', 'mal servicio',
+  'no me atienden', 'insatisfecho', 'molesto', 'pésimo', 'pesimo',
+  'no responden', 'incumplimiento',
+];
+
+const CONTACTO_KEYWORDS = [
+  'teléfono de', 'telefono de', 'número de', 'numero de',
+  'contacto de', 'llamar a', 'whatsapp de', 'correo de',
+];
+
+const COBERTURA_KEYWORDS = [
+  'qué cubre', 'que cubre', 'cobertura', 'coberturas', 'incluye',
+  'deducible', 'exclusion', 'exclusión', 'beneficio', 'qué tipo de seguro',
+  'que tipo de seguro', 'diferencia entre',
+];
+
+const INSURER_NAMES: Record<string, string> = {
+  'assa': 'ASSA', 'mapfre': 'MAPFRE', 'sura': 'SURA',
+  'fedpa': 'FEDPA', 'general de seguros': 'General de Seguros',
+  'ancón': 'Ancón', 'ancon': 'Ancón', 'mundial': 'Mundial de Seguros',
+  'pan american': 'Pan American', 'internacional': 'Internacional de Seguros',
+  'sagicor': 'Sagicor',
+};
+
 function createAuthClient(): GoogleAuth {
   const credentialsJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON;
   if (!credentialsJson) throw new Error('GOOGLE_APPLICATION_CREDENTIALS_JSON not configured');
@@ -55,19 +98,55 @@ function createAuthClient(): GoogleAuth {
 }
 
 /**
+ * Detect insurer name from message
+ */
+function detectInsurer(message: string): string | null {
+  const lower = message.toLowerCase();
+  for (const [keyword, name] of Object.entries(INSURER_NAMES)) {
+    if (lower.includes(keyword)) return name;
+  }
+  return null;
+}
+
+/**
  * Fast keyword-based pre-check before AI call
  */
-function preClassify(message: string): ChatIntent | null {
+function preClassify(message: string): { intent: ChatIntent; insurer: string | null } | null {
   const lower = message.toLowerCase();
 
   // EXTREMO — check first (highest priority)
-  if (EXTREME_KEYWORDS.some(k => lower.includes(k))) return 'EXTREMO';
+  if (EXTREME_KEYWORDS.some(k => lower.includes(k))) return { intent: 'EXTREMO', insurer: null };
 
   // EMERGENCIA
-  if (EMERGENCY_KEYWORDS.some(k => lower.includes(k))) return 'EMERGENCIA';
+  if (EMERGENCY_KEYWORDS.some(k => lower.includes(k))) return { intent: 'EMERGENCIA', insurer: null };
 
-  // SALUDO — short greetings (< 30 chars to avoid false positives)
-  if (lower.length < 30 && GREETING_KEYWORDS.some(k => lower.includes(k))) return 'SALUDO';
+  // COTIZAR
+  if (COTIZAR_KEYWORDS.some(k => lower.includes(k))) return { intent: 'COTIZAR', insurer: null };
+
+  // QUEJA
+  if (QUEJA_KEYWORDS.some(k => lower.includes(k))) return { intent: 'QUEJA', insurer: null };
+
+  // POLIZA_ESPECIFICA
+  if (POLIZA_KEYWORDS.some(k => lower.includes(k))) return { intent: 'POLIZA_ESPECIFICA', insurer: null };
+
+  // CONTACTO_ASEGURADORA
+  if (CONTACTO_KEYWORDS.some(k => lower.includes(k))) {
+    return { intent: 'CONTACTO_ASEGURADORA', insurer: detectInsurer(message) };
+  }
+  // Also detect if they just mention an insurer name with a question
+  const insurer = detectInsurer(message);
+  if (insurer && (lower.includes('?') || lower.includes('tel') || lower.includes('contacto') || lower.includes('llamar') || lower.includes('número') || lower.includes('numero'))) {
+    return { intent: 'CONTACTO_ASEGURADORA', insurer };
+  }
+
+  // PORTAL
+  if (PORTAL_KEYWORDS.some(k => lower.includes(k))) return { intent: 'PORTAL', insurer: null };
+
+  // COBERTURA_GENERAL
+  if (COBERTURA_KEYWORDS.some(k => lower.includes(k))) return { intent: 'COBERTURA_GENERAL', insurer: null };
+
+  // SALUDO — short greetings (< 40 chars to avoid false positives)
+  if (lower.length < 40 && GREETING_KEYWORDS.some(k => lower.includes(k))) return { intent: 'SALUDO', insurer: null };
 
   return null; // needs AI classification
 }
@@ -76,33 +155,17 @@ function preClassify(message: string): ChatIntent | null {
  * Classify a message using Vertex AI
  */
 export async function classifyIntent(message: string): Promise<ClassificationResult> {
-  // 1. Fast keyword pre-check
+  // 1. Fast keyword pre-check — handles ~90% of messages without AI
   const fastResult = preClassify(message);
-  if (fastResult === 'EXTREMO') {
+  if (fastResult) {
+    console.log('[INTENT] Fast pre-classified:', fastResult.intent);
+    const needsVerification = fastResult.intent === 'POLIZA_ESPECIFICA';
     return {
-      intent: 'EXTREMO',
-      confidence: 0.99,
-      requiresIdentityVerification: false,
-      detectedInsurer: null,
-      reasoning: 'Detected critical keyword',
-    };
-  }
-  if (fastResult === 'EMERGENCIA') {
-    return {
-      intent: 'EMERGENCIA',
+      intent: fastResult.intent,
       confidence: 0.95,
-      requiresIdentityVerification: false,
-      detectedInsurer: null,
-      reasoning: 'Detected emergency keyword',
-    };
-  }
-  if (fastResult === 'SALUDO') {
-    return {
-      intent: 'SALUDO',
-      confidence: 0.99,
-      requiresIdentityVerification: false,
-      detectedInsurer: null,
-      reasoning: 'Detected greeting keyword',
+      requiresIdentityVerification: needsVerification,
+      detectedInsurer: fastResult.insurer,
+      reasoning: `Keyword pre-classification: ${fastResult.intent}`,
     };
   }
 
@@ -179,7 +242,7 @@ Reglas:
       reasoning: parsed.reasoning || '',
     };
   } catch (err: any) {
-    console.error('[INTENT] Vertex classification error:', err.message);
+    console.error('[INTENT] Vertex classification error:', err.message, err.response?.data || err.stack);
     return { intent: 'OTRO', confidence: 0, requiresIdentityVerification: false, detectedInsurer: null, reasoning: `AI error: ${err.message}` };
   }
 }

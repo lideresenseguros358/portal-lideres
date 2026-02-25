@@ -181,7 +181,7 @@ export async function processMessage(input: ProcessMessageInput): Promise<Proces
         });
         reply = aiResult.reply;
       } catch {
-        reply = LISSA_FALLBACK;
+        reply = 'Las coberturas varían según el tipo de seguro y la aseguradora 📋 Para darte información precisa, te invito a cotizar directamente en nuestro portal:\n\n🔗 https://portal.lideresenseguros.com/cotizadores\n\nO si prefieres, escríbenos a contacto@lideresenseguros.com y te asesoramos personalmente 😊\n\n\u2014 Lissa 💚';
       }
       break;
     }
@@ -197,7 +197,7 @@ export async function processMessage(input: ProcessMessageInput): Promise<Proces
         });
         reply = aiResult.reply;
       } catch {
-        reply = 'Lamento mucho lo que estás pasando 😔 Tu caso es importante para nosotros. Te pido que nos escribas a contacto@lideresenseguros.com o nos llames al 223-2373 para darle seguimiento personalmente.\n\n\u2014 Lissa, Líderes en Seguros 💚';
+        reply = 'Lamento mucho lo que estás pasando 😔 Tu caso es muy importante para nosotros y quiero asegurarme de que recibas la atención que mereces.\n\nPor favor escríbenos directamente para darle seguimiento:\n📧 contacto@lideresenseguros.com\n📞 223-2373\n\nNos comprometemos a revisar tu caso lo antes posible.\n\n\u2014 Lissa, Líderes en Seguros 💚';
       }
       break;
     }
@@ -238,7 +238,7 @@ export async function processMessage(input: ProcessMessageInput): Promise<Proces
         });
         reply = aiResult.reply;
       } catch {
-        reply = LISSA_FALLBACK;
+        reply = '¡Hola! Soy Lissa 💚 Gracias por escribirnos. Para poder ayudarte mejor, te invito a:\n\n📊 Cotizar tu seguro: https://portal.lideresenseguros.com/cotizadores\n💻 Acceder al portal: https://portal.lideresenseguros.com\n📧 Escribirnos: contacto@lideresenseguros.com\n📞 Llamarnos: 223-2373\n\n¡Estoy aquí para lo que necesites!';
       }
       break;
     }

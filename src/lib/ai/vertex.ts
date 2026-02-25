@@ -97,8 +97,11 @@ export async function generateResponse(ctx: ChatContext): Promise<VertexChatResp
   const model = process.env.VERTEX_MODEL_CHAT || 'gemini-1.5-flash';
 
   if (!projectId) {
+    console.error('[VERTEX-CHAT] GOOGLE_CLOUD_PROJECT_ID not configured');
     throw new Error('GOOGLE_CLOUD_PROJECT_ID not configured');
   }
+
+  console.log('[VERTEX-CHAT] Calling Vertex AI:', { projectId, location, model, intent: ctx.intent });
 
   const auth = createAuthClient();
   const client = await auth.getClient();
