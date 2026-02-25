@@ -44,13 +44,14 @@ function checkRateLimit(phone: string): boolean {
 /**
  * Validate Twilio request signature
  * 
- * CRITICAL: Behind Vercel, req.url is the internal URL, NOT the public URL
- * that Twilio signed. We MUST use the exact public webhook URL.
+ * Twilio signs: URL + sorted(key+value) pairs from the POST body.
+ * The values must be the fully decoded form values.
+ * Behind Vercel, req.url is internal — we MUST use the exact public webhook URL.
  */
 function validateTwilioSignature(req: NextRequest, body: string): boolean {
   if (!TWILIO_AUTH_TOKEN) {
     console.warn('[WHATSAPP] No TWILIO_AUTH_TOKEN — skipping signature validation');
-    return true; // Allow in dev
+    return true;
   }
 
   const twilioSignature = req.headers.get('x-twilio-signature');
@@ -59,17 +60,27 @@ function validateTwilioSignature(req: NextRequest, body: string): boolean {
     return false;
   }
 
-  // Use the PUBLIC webhook URL — not req.url (which is Vercel internal)
   const url = WEBHOOK_PUBLIC_URL;
 
-  // Parse form body into sorted params for signature
-  const params = new URLSearchParams(body);
-  const keys = Array.from(params.keys()).sort();
+  // Parse raw form body into a map of decoded key-value pairs
+  // Twilio spec: sort params by key, concatenate key+value (decoded)
+  const paramPairs: Record<string, string> = {};
+  if (body) {
+    const pairs = body.split('&');
+    for (const pair of pairs) {
+      const eqIdx = pair.indexOf('=');
+      if (eqIdx === -1) continue;
+      const key = decodeURIComponent(pair.substring(0, eqIdx).replace(/\+/g, ' '));
+      const val = decodeURIComponent(pair.substring(eqIdx + 1).replace(/\+/g, ' '));
+      paramPairs[key] = val;
+    }
+  }
 
-  // Build signature string: URL + sorted key=value pairs
+  // Build signature string: URL + sorted key+value
+  const sortedKeys = Object.keys(paramPairs).sort();
   let signatureString = url;
-  for (const key of keys) {
-    signatureString += key + (params.get(key) || '');
+  for (const key of sortedKeys) {
+    signatureString += key + paramPairs[key];
   }
 
   const expectedSignature = crypto
@@ -79,10 +90,40 @@ function validateTwilioSignature(req: NextRequest, body: string): boolean {
 
   const valid = twilioSignature === expectedSignature;
   if (!valid) {
-    console.warn('[WHATSAPP] Signature mismatch', {
+    // Try alternate URLs — Twilio might sign against a different variant
+    const forwardedHost = req.headers.get('x-forwarded-host');
+    const forwardedProto = req.headers.get('x-forwarded-proto') || 'https';
+    const altUrls = new Set([
+      url,
+      url + '/',
+      url.replace('https://', 'http://'),
+      req.url,                                          // Vercel internal URL
+      req.nextUrl.toString(),                            // Next.js resolved URL
+      ...(forwardedHost ? [
+        `${forwardedProto}://${forwardedHost}/api/whatsapp`,
+        `https://${forwardedHost}/api/whatsapp`,
+      ] : []),
+    ]);
+
+    for (const alt of altUrls) {
+      if (alt === url) continue; // already tried
+      let altSig = alt;
+      for (const key of sortedKeys) altSig += key + paramPairs[key];
+      const altExpected = crypto.createHmac('sha1', TWILIO_AUTH_TOKEN).update(altSig).digest('base64');
+      if (altExpected === twilioSignature) {
+        console.warn('[WHATSAPP] Signature matched with alternate URL:', alt, '— update WHATSAPP_WEBHOOK_URL env var to this value');
+        return true;
+      }
+    }
+
+    console.warn('[WHATSAPP] Signature mismatch — no URL variant matched', {
       received: twilioSignature,
       expected: expectedSignature,
-      url,
+      configuredUrl: url,
+      reqUrl: req.url,
+      forwardedHost,
+      tokenPrefix: TWILIO_AUTH_TOKEN.substring(0, 4) + '...',
+      paramKeys: sortedKeys,
     });
   }
   return valid;
