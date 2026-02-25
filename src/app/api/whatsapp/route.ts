@@ -19,6 +19,15 @@ import { processMessage } from '@/lib/chatProcessor';
 import crypto from 'crypto';
 
 const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || '';
+
+// Empty TwiML response — tells Twilio "don't send any additional message"
+const EMPTY_TWIML = '<?xml version="1.0" encoding="UTF-8"?><Response></Response>';
+function twimlResponse(status = 200) {
+  return new NextResponse(EMPTY_TWIML, {
+    status,
+    headers: { 'Content-Type': 'text/xml' },
+  });
+}
 const TWILIO_ACCOUNT_SID = process.env.TWILIO_ACCOUNT_SID || '';
 const TWILIO_WHATSAPP_NUMBER = process.env.TWILIO_WHATSAPP_NUMBER || '';
 // The public URL that Twilio signs against — MUST match webhook config exactly
@@ -190,7 +199,7 @@ export async function POST(request: NextRequest) {
     // Validate Twilio signature
     if (!validateTwilioSignature(request, rawBody)) {
       console.warn('[WHATSAPP] Invalid Twilio signature — rejecting');
-      return new NextResponse('Forbidden', { status: 403 });
+      return twimlResponse(403);
     }
     console.log('[WHATSAPP] Signature valid');
 
@@ -204,7 +213,7 @@ export async function POST(request: NextRequest) {
 
     if (!messageBody.trim() || !from) {
       console.log('[WHATSAPP] Empty message or no From — ignoring');
-      return new NextResponse('OK', { status: 200 });
+      return twimlResponse();
     }
 
     // Rate limit
@@ -212,7 +221,7 @@ export async function POST(request: NextRequest) {
     if (!checkRateLimit(phone)) {
       console.warn('[WHATSAPP] Rate limited:', phone);
       await sendTwilioReply(from, 'Ha enviado muchos mensajes en poco tiempo. Por favor espere un momento antes de intentar de nuevo.');
-      return new NextResponse('OK', { status: 200 });
+      return twimlResponse();
     }
 
     // Process message through pipeline
@@ -228,11 +237,11 @@ export async function POST(request: NextRequest) {
     const sent = await sendTwilioReply(from, result.reply);
     console.log('[WHATSAPP] Reply sent:', sent, '| Duration:', Date.now() - startTime, 'ms');
 
-    // Always return 200 to Twilio
-    return new NextResponse('OK', { status: 200 });
+    // Always return empty TwiML to Twilio
+    return twimlResponse();
   } catch (err: any) {
     console.error('[WHATSAPP] Webhook error:', err.message, err.stack);
-    // Always return 200 to Twilio to avoid retries
-    return new NextResponse('OK', { status: 200 });
+    // Always return empty TwiML to avoid retries
+    return twimlResponse();
   }
 }
