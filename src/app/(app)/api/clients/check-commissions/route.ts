@@ -154,7 +154,10 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // 7. Agrupar por quincena y calcular broker_commission
+    // 7. Agrupar por quincena
+    //    IMPORTANTE: comm_items.gross_amount YA ES la comisión del broker (= raw * percent).
+    //    Es decir, gross_amount es lo que realmente se le pagó al broker.
+    //    Para obtener el monto bruto original: gross_amount / percentOld
     const byFortnight = paidCommissions.reduce((acc: any, item: any) => {
       const fortnightId = item.comm_imports?.period_label;
       if (!fortnightId) return acc;
@@ -173,9 +176,9 @@ export async function POST(request: NextRequest) {
         };
       }
 
-      // broker_commission = gross_amount * percent_default (percent_default es DECIMAL: 0.80 = 80%)
-      const grossAmount = Math.abs(item.gross_amount || 0);
-      const brokerCommission = grossAmount * percentOld;
+      // gross_amount IS the broker commission (what was paid to the broker)
+      // DO NOT multiply by percentOld again — that would double-apply the percentage
+      const brokerCommission = Math.abs(item.gross_amount || 0);
 
       acc[fortnightId].total_commission += brokerCommission;
       acc[fortnightId].items.push({
@@ -183,7 +186,7 @@ export async function POST(request: NextRequest) {
         policy_number: item.policy_number,
         insured_name: item.insured_name || null,
         insurer_id: item.insurer_id || null,
-        gross_amount: grossAmount,
+        gross_amount: brokerCommission,
         broker_commission: brokerCommission
       });
 

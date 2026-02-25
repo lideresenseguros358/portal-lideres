@@ -107,11 +107,11 @@ export async function POST(request: NextRequest) {
 
     // 4. Procesar cada comm_item: calcular comisiones y preparar pending_items
     //    check-commissions envía:
-    //      - gross_amount: monto bruto del reporte (commission_raw)
-    //      - broker_commission: gross_amount * percentOld = lo que se le pagó al broker antiguo
-    //    Para el nuevo broker:
-    //      - commission_raw = gross_amount (el monto bruto original)
-    //      - broker_commission_new = gross_amount * percentNew
+    //      - broker_commission: lo que realmente se le pagó al broker antiguo (= comm_items.gross_amount)
+    //    Cálculo correcto:
+    //      - DEUDA broker antiguo = broker_commission (lo que cobró)
+    //      - commission_raw (bruto real) = broker_commission / percentOld (cálculo reverso)
+    //      - commission nuevo broker = commission_raw * percentNew
     //    NOTA: percent_default es DECIMAL (0.80 = 80%), NO dividir /100
     const pendingItemsToCreate: any[] = [];
     let totalDebt = 0;
@@ -120,16 +120,16 @@ export async function POST(request: NextRequest) {
 
     for (const fortnight of commissionsData) {
       for (const item of fortnight.items) {
-        // Lo que se le pagó al broker antiguo
+        // Lo que se le pagó al broker antiguo (= la deuda que debe devolver)
         const commissionPaid = item.broker_commission || 0;
         
-        // gross_amount es el monto bruto del reporte (= commission_raw)
-        // Si check-commissions envió gross_amount, usarlo directamente
-        // Si no, hacer cálculo reverso: commissionPaid / percentOld
-        // NOTA: percent_default es DECIMAL (0.80 = 80%), NO dividir /100
-        const commissionRaw = item.gross_amount || (commissionPaid / percentOld);
+        // Cálculo reverso: obtener el monto bruto original
+        // broker_commission / percentOld = commission_raw
+        // Ejemplo: 7.82 / 0.80 = 9.78
+        const commissionRaw = percentOld !== 0 ? (commissionPaid / percentOld) : commissionPaid;
         
         // Calcular nueva comisión: commission_raw * percentNew
+        // Ejemplo: 9.78 * 0.80 = 7.82
         const newCommission = commissionRaw * percentNew;
 
         totalDebt += commissionPaid;
