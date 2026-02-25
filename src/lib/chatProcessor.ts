@@ -74,74 +74,77 @@ function detectInsurerKeyword(message: string): string | null {
 }
 
 /**
- * Fetch insurance plan data from FEDPA and IS APIs for AI context.
- * Cached in memory for 1 hour to avoid repeated API calls.
+ * Fetch FEDPA plan data directly from their API for AI context.
+ * Cached in memory for 2 hours to avoid repeated API calls.
  */
 let planDataCache: { data: string; ts: number } | null = null;
-const PLAN_CACHE_TTL = 60 * 60 * 1000; // 1 hour
+const PLAN_CACHE_TTL = 2 * 60 * 60 * 1000; // 2 hours
+
+const FEDPA_API = 'https://wscanales.segfedpa.com/EmisorFedpa.Api/api';
 
 async function fetchInsurancePlanData(): Promise<string | null> {
   // Return cached if fresh
   if (planDataCache && Date.now() - planDataCache.ts < PLAN_CACHE_TTL) {
+    console.log('[CHAT] Using cached plan data');
     return planDataCache.data;
   }
 
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL
-    || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null)
-    || 'http://localhost:3000';
+  const FEDPA_USER = process.env.USUARIO_FEDPA;
+  const FEDPA_CLAVE = process.env.CLAVE_FEDPA;
+  if (!FEDPA_USER || !FEDPA_CLAVE) {
+    console.warn('[CHAT] FEDPA credentials not configured');
+    return null;
+  }
 
   const parts: string[] = [];
 
-  // Fetch FEDPA plans (third-party / daños a terceros)
+  // Fetch FEDPA plans and benefits directly from API
   try {
-    const fedpaRes = await fetch(`${baseUrl}/api/fedpa/third-party`, { signal: AbortSignal.timeout(8000) });
-    if (fedpaRes.ok) {
-      const fedpa = await fedpaRes.json();
-      if (fedpa.success && fedpa.plans?.length) {
-        let fedpaText = 'PLANES DE FEDPA (Daños a Terceros):';
-        for (const plan of fedpa.plans) {
-          fedpaText += `\n- ${plan.name}: Prima anual $${plan.annualPremium}`;
-          if (plan.coverageList?.length) {
-            fedpaText += `. Coberturas: ${plan.coverageList.map((c: any) => `${c.name} (${c.limit})`).join(', ')}`;
-          }
-          if (plan.endosoBenefits?.length) {
-            fedpaText += `. Beneficios del endoso: ${plan.endosoBenefits.slice(0, 5).join(', ')}`;
-          }
-          if (plan.installments?.available) {
-            fedpaText += `. Se puede pagar en ${plan.installments.payments} cuotas de $${plan.installments.amount}`;
+    console.log('[CHAT] Fetching FEDPA plans directly from API...');
+    // Get available plans
+    const planesRes = await fetch(
+      `${FEDPA_API}/Polizas/consultar_planes_cc_externos?Usuario=${FEDPA_USER}&Clave=${FEDPA_CLAVE}`,
+      { signal: AbortSignal.timeout(8000) }
+    );
+    if (planesRes.ok) {
+      const planes = await planesRes.json();
+      if (Array.isArray(planes) && planes.length > 0) {
+        let fedpaText = 'PLANES DISPONIBLES DE FEDPA (Cobertura Completa Auto):';
+        for (const plan of planes) {
+          fedpaText += `\n- Plan ${plan.NOMBREPLAN || plan.PLAN} (código: ${plan.PLAN}, uso: ${plan.USO})`;
+
+          // Fetch benefits for this plan
+          try {
+            const benRes = await fetch(
+              `${FEDPA_API}/Polizas/consultar_beneficios_planes_externos?Usuario=${FEDPA_USER}&Clave=${FEDPA_CLAVE}&IdPlan=${plan.PLAN}`,
+              { signal: AbortSignal.timeout(5000) }
+            );
+            if (benRes.ok) {
+              const beneficios = await benRes.json();
+              if (Array.isArray(beneficios) && beneficios.length > 0) {
+                const benList = beneficios.map((b: any) => b.BENEFICIOS).filter(Boolean);
+                if (benList.length > 0) {
+                  fedpaText += `. Beneficios incluidos: ${benList.join(' | ')}`;
+                }
+              }
+            }
+          } catch (benErr) {
+            console.warn(`[CHAT] Error fetching benefits for plan ${plan.PLAN}:`, benErr);
           }
         }
         parts.push(fedpaText);
+        console.log(`[CHAT] FEDPA: ${planes.length} planes loaded`);
       }
     }
   } catch (e) {
     console.warn('[CHAT] FEDPA plan fetch failed:', e);
   }
 
-  // Fetch IS (Internacional de Seguros) plans
-  try {
-    const isRes = await fetch(`${baseUrl}/api/is/third-party`, { signal: AbortSignal.timeout(8000) });
-    if (isRes.ok) {
-      const is = await isRes.json();
-      if (is.success && is.plans?.length) {
-        let isText = 'PLANES DE INTERNACIONAL DE SEGUROS (Daños a Terceros):';
-        for (const plan of is.plans) {
-          isText += `\n- ${plan.name}: Prima anual $${plan.annualPremium}`;
-          if (plan.coverageList?.length) {
-            isText += `. Coberturas: ${plan.coverageList.map((c: any) => `${c.name} (${c.limit})`).join(', ')}`;
-          }
-        }
-        parts.push(isText);
-      }
-    }
-  } catch (e) {
-    console.warn('[CHAT] IS plan fetch failed:', e);
-  }
-
   if (parts.length === 0) return null;
 
   const result = parts.join('\n\n');
   planDataCache = { data: result, ts: Date.now() };
+  console.log(`[CHAT] Plan data cached (${result.length} chars)`);
   return result;
 }
 
@@ -265,13 +268,20 @@ export async function processMessage(input: ProcessMessageInput): Promise<Proces
 
     if (wantsPlanInfo) {
       try {
+        console.log('[CHAT] Plan info requested, fetching...');
         const planData = await fetchInsurancePlanData();
-        if (planData) extraContext += `\n\n${planData}`;
+        if (planData) {
+          extraContext += `\n\n${planData}`;
+          console.log(`[CHAT] Plan data added to context (${planData.length} chars)`);
+        } else {
+          console.warn('[CHAT] No plan data returned');
+        }
       } catch (e) {
         console.warn('[CHAT] Error fetching plan data:', e);
       }
     }
 
+    console.log('[CHAT] Sending to AI:', { intent, hasExtraContext: extraContext.length > 0, extraContextLen: extraContext.length, historyLen: history.length });
     try {
       const aiResult = await generateResponse({
         message: extraContext ? `${message}\n\n[Datos relevantes para responder: ${extraContext}]` : message,
