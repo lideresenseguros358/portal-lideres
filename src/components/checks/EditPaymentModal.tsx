@@ -634,6 +634,14 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
                       } else {
                         setPaymentMethod('bank_transfer');
                         setIsBrokerDeduction(false);
+                        // Auto-limpiar referencias y notas al cambiar de método
+                        setReferences([{
+                          reference_number: '',
+                          date: new Date().toISOString().split('T')[0] as string,
+                          amount: '',
+                          amount_to_use: ''
+                        }]);
+                        setFormData(prev => ({ ...prev, notes: '' }));
                       }
                     }}
                     className="mt-1 w-4 h-4 sm:w-5 sm:h-5 text-[#8AAA19] focus:ring-[#8AAA19]"
@@ -666,6 +674,14 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
                     onChange={() => {
                       setPaymentMethod('broker_deduction');
                       setIsBrokerDeduction(true);
+                      // Auto-limpiar referencias y notas al cambiar a descuento
+                      setReferences([{
+                        reference_number: '',
+                        date: new Date().toISOString().split('T')[0] as string,
+                        amount: '',
+                        amount_to_use: ''
+                      }]);
+                      setFormData(prev => ({ ...prev, notes: '' }));
                     }}
                     className="mt-1 w-4 h-4 sm:w-5 sm:h-5 text-[#8AAA19] focus:ring-[#8AAA19]"
                   />
@@ -1227,7 +1243,14 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
                   setIsBrokerDeduction(false);
                   setShowConfirmModal(false);
                   setPendingDeductionChange(null);
-                  // Show the delete advance modal so user can add references and confirm
+                  // Auto-limpiar referencias y notas al confirmar cambio de método
+                  setReferences([{
+                    reference_number: '',
+                    date: new Date().toISOString().split('T')[0] as string,
+                    amount: '',
+                    amount_to_use: ''
+                  }]);
+                  setFormData(prev => ({ ...prev, notes: '' }));
                   toast.info('Ahora agrega una referencia bancaria y guarda para eliminar la deuda');
                 }}
                 className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-medium flex items-center justify-center gap-2"
