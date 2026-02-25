@@ -85,7 +85,7 @@ NUNCA respondas con listas largas de opciones a menos que te las pidan. Sé conv
 export async function generateResponse(ctx: ChatContext): Promise<VertexChatResponse> {
   const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
   const location = process.env.GOOGLE_CLOUD_LOCATION || 'us-central1';
-  const model = process.env.VERTEX_MODEL_CHAT || 'gemini-1.5-flash';
+  const model = process.env.VERTEX_MODEL_CHAT || 'gemini-2.0-flash';
 
   if (!projectId) {
     console.error('[VERTEX-CHAT] GOOGLE_CLOUD_PROJECT_ID not configured');

@@ -179,7 +179,7 @@ export async function classifyIntent(message: string): Promise<ClassificationRes
   // 2. AI classification via Vertex
   const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
   const location = process.env.GOOGLE_CLOUD_LOCATION || 'us-central1';
-  const model = process.env.VERTEX_MODEL_CHAT || 'gemini-1.5-flash';
+  const model = process.env.VERTEX_MODEL_CHAT || 'gemini-2.0-flash';
 
   if (!projectId) {
     console.warn('[INTENT] No GOOGLE_CLOUD_PROJECT_ID — falling back to OTRO');
