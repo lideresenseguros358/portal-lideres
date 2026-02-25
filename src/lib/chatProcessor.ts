@@ -23,6 +23,7 @@ import {
 } from '@/lib/insuranceLookup';
 import { sendEscalationAlert } from '@/lib/escalation';
 import { logChatInteraction } from '@/lib/logging';
+import { createClient } from '@supabase/supabase-js';
 
 export interface ProcessMessageInput {
   message: string;
@@ -98,46 +99,89 @@ async function fetchInsurancePlanData(): Promise<string | null> {
 
   const parts: string[] = [];
 
-  // Fetch FEDPA plans and benefits directly from API
+  // ── FEDPA Daños a Terceros: cotizar plan 426 (Opción A=Básico, Opción C=Premium) ──
   try {
-    console.log('[CHAT] Fetching FEDPA plans directly from API...');
-    // Get available plans
-    const planesRes = await fetch(
-      `${FEDPA_API}/Polizas/consultar_planes_cc_externos?Usuario=${FEDPA_USER}&Clave=${FEDPA_CLAVE}`,
-      { signal: AbortSignal.timeout(8000) }
-    );
-    if (planesRes.ok) {
-      const planes = await planesRes.json();
-      if (Array.isArray(planes) && planes.length > 0) {
-        let fedpaText = 'PLANES DISPONIBLES DE FEDPA (Cobertura Completa Auto):';
-        for (const plan of planes) {
-          fedpaText += `\n- Plan ${plan.NOMBREPLAN || plan.PLAN} (código: ${plan.PLAN}, uso: ${plan.USO})`;
+    console.log('[CHAT] Fetching FEDPA cotización from API...');
+    const baseParams = {
+      Ano: new Date().getFullYear(),
+      Uso: '10', CantidadPasajeros: 5, SumaAsegurada: '0',
+      CodLimiteLesiones: '5', CodPlan: '426',
+      CodMarca: '5', CodModelo: '10',
+      Nombre: 'COTIZACION', Apellido: 'WEB',
+      Cedula: '0-0-0', Telefono: '00000000', Email: 'cotizacion@web.com',
+      Usuario: FEDPA_USER, Clave: FEDPA_CLAVE,
+    };
 
-          // Fetch benefits for this plan
-          try {
-            const benRes = await fetch(
-              `${FEDPA_API}/Polizas/consultar_beneficios_planes_externos?Usuario=${FEDPA_USER}&Clave=${FEDPA_CLAVE}&IdPlan=${plan.PLAN}`,
-              { signal: AbortSignal.timeout(5000) }
-            );
-            if (benRes.ok) {
-              const beneficios = await benRes.json();
-              if (Array.isArray(beneficios) && beneficios.length > 0) {
-                const benList = beneficios.map((b: any) => b.BENEFICIOS).filter(Boolean);
-                if (benList.length > 0) {
-                  fedpaText += `. Beneficios incluidos: ${benList.join(' | ')}`;
-                }
-              }
+    // Fetch both options in parallel
+    const [basicRes, premiumRes] = await Promise.all([
+      fetch(`${FEDPA_API}/Polizas/get_cotizacion`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...baseParams, CodLimitePropiedad: '13', CodLimiteGastosMedico: '0', EndosoIncluido: 'S' }),
+        signal: AbortSignal.timeout(10000),
+      }),
+      fetch(`${FEDPA_API}/Polizas/get_cotizacion`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...baseParams, CodLimitePropiedad: '8', CodLimiteGastosMedico: '23', EndosoIncluido: 'S' }),
+        signal: AbortSignal.timeout(10000),
+      }),
+    ]);
+
+    if (basicRes.ok && premiumRes.ok) {
+      const basicData = await basicRes.json();
+      const premiumData = await premiumRes.json();
+
+      if (Array.isArray(basicData) && Array.isArray(premiumData)) {
+        const basicAll = basicData.filter((c: any) => c.OPCION === 'A');
+        const premiumAll = premiumData.filter((c: any) => c.OPCION === 'A');
+
+        const OPCION_A_CODES = ['A', 'B', 'FAB', 'H-1', 'K6'];
+        const OPCION_C_CODES = ['A', 'B', 'C', 'FAV', 'H-1', 'K6'];
+
+        const formatCovs = (allCovs: any[], codes: string[]) =>
+          allCovs.filter((c: any) => codes.includes(c.COBERTURA)).map((c: any) =>
+            `${c.DESCCOBERTURA}: límite ${c.LIMITE}, prima $${c.PRIMA_IMPUESTO}`
+          );
+
+        const basicCovs = formatCovs(basicAll, OPCION_A_CODES);
+        const premiumCovs = formatCovs(premiumAll, OPCION_C_CODES);
+
+        const basicPrima = basicAll.filter((c: any) => OPCION_A_CODES.includes(c.COBERTURA))
+          .reduce((s: number, c: any) => s + (c.PRIMA_IMPUESTO || 0), 0);
+        const premiumPrima = premiumAll.filter((c: any) => OPCION_C_CODES.includes(c.COBERTURA))
+          .reduce((s: number, c: any) => s + (c.PRIMA_IMPUESTO || 0), 0);
+
+        let fedpaText = 'PLANES DE FEDPA - DAÑOS A TERCEROS (Plan 426, precios reales):';
+        fedpaText += `\n\nOPCIÓN A (BÁSICO) - Prima anual: $${Math.round(basicPrima)}`;
+        fedpaText += `\nCoberturas incluidas: ${basicCovs.join(' | ')}`;
+        fedpaText += `\nSe puede pagar en 2 cuotas con recargo.`;
+
+        fedpaText += `\n\nOPCIÓN C (PREMIUM) - Prima anual: $${Math.round(premiumPrima)}`;
+        fedpaText += `\nCoberturas incluidas: ${premiumCovs.join(' | ')}`;
+        fedpaText += `\nIncluye gastos médicos. Se puede pagar en 2 cuotas con recargo.`;
+
+        // Fetch endoso benefits
+        try {
+          const benRes = await fetch(
+            `${FEDPA_API}/Polizas/consultar_beneficios_planes_externos?Usuario=${FEDPA_USER}&Clave=${FEDPA_CLAVE}&plan=426`,
+            { signal: AbortSignal.timeout(5000) }
+          );
+          if (benRes.ok) {
+            const allBens = await benRes.json();
+            if (Array.isArray(allBens)) {
+              const fabBens = allBens.filter((b: any) => b.ENDOSO === 'FAB').map((b: any) => b.BENEFICIOS);
+              const favBens = allBens.filter((b: any) => b.ENDOSO === 'FAV').map((b: any) => b.BENEFICIOS);
+              if (fabBens.length) fedpaText += `\n\nBeneficios Endoso Básico (FAB): ${fabBens.join(' | ')}`;
+              if (favBens.length) fedpaText += `\nBeneficios Endoso VIP (FAV): ${favBens.join(' | ')}`;
             }
-          } catch (benErr) {
-            console.warn(`[CHAT] Error fetching benefits for plan ${plan.PLAN}:`, benErr);
           }
-        }
+        } catch { /* non-critical */ }
+
         parts.push(fedpaText);
-        console.log(`[CHAT] FEDPA: ${planes.length} planes loaded`);
+        console.log(`[CHAT] FEDPA: plans loaded with tariffs (basic=$${Math.round(basicPrima)}, premium=$${Math.round(premiumPrima)})`);
       }
     }
   } catch (e) {
-    console.warn('[CHAT] FEDPA plan fetch failed:', e);
+    console.warn('[CHAT] FEDPA cotización fetch failed:', e);
   }
 
   if (parts.length === 0) return null;
@@ -148,28 +192,52 @@ async function fetchInsurancePlanData(): Promise<string | null> {
   return result;
 }
 
-// ── In-memory conversation history per phone (last 10 messages, 30 min TTL) ──
-interface ConvEntry { role: string; content: string; ts: number; }
-const conversationStore = new Map<string, ConvEntry[]>();
-const CONV_MAX_MESSAGES = 10;
-const CONV_TTL_MS = 30 * 60 * 1000; // 30 minutes
+// ── Conversation history from Supabase (persists across Vercel serverless invocations) ──
+const CONV_LOOKBACK_MS = 60 * 60 * 1000; // 1 hour
+const CONV_MAX_PAIRS = 8; // last 8 message/response pairs = 16 turns
 
-function getConversationHistory(key: string): { role: string; content: string }[] {
-  const entries = conversationStore.get(key);
-  if (!entries) return [];
-  const now = Date.now();
-  // Filter out stale entries
-  const fresh = entries.filter(e => now - e.ts < CONV_TTL_MS);
-  if (fresh.length !== entries.length) conversationStore.set(key, fresh);
-  return fresh.map(e => ({ role: e.role, content: e.content }));
+function getSupabase() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
 }
 
-function appendConversation(key: string, role: string, content: string) {
-  if (!conversationStore.has(key)) conversationStore.set(key, []);
-  const entries = conversationStore.get(key)!;
-  entries.push({ role, content, ts: Date.now() });
-  // Keep only last N messages
-  while (entries.length > CONV_MAX_MESSAGES) entries.shift();
+/**
+ * Load conversation history from chat_interactions table.
+ * Each row has message (user) + response (model) = 2 conversation turns.
+ */
+async function getConversationHistory(phone: string): Promise<{ role: string; content: string }[]> {
+  if (!phone) return [];
+  try {
+    const sb = getSupabase();
+    const since = new Date(Date.now() - CONV_LOOKBACK_MS).toISOString();
+    const { data, error } = await sb
+      .from('chat_interactions')
+      .select('message, response, created_at')
+      .eq('phone', phone)
+      .gte('created_at', since)
+      .order('created_at', { ascending: true })
+      .limit(CONV_MAX_PAIRS);
+
+    if (error) {
+      console.warn('[CHAT] Error loading history from DB:', error.message);
+      return [];
+    }
+    if (!data || data.length === 0) return [];
+
+    // Convert rows into alternating user/model turns
+    const history: { role: string; content: string }[] = [];
+    for (const row of data) {
+      if (row.message) history.push({ role: 'user', content: row.message });
+      if (row.response) history.push({ role: 'model', content: row.response });
+    }
+    console.log(`[CHAT] Loaded ${data.length} history rows (${history.length} turns) for ${phone}`);
+    return history;
+  } catch (err: any) {
+    console.warn('[CHAT] Exception loading history:', err.message);
+    return [];
+  }
 }
 
 /**
@@ -214,9 +282,14 @@ export async function processMessage(input: ProcessMessageInput): Promise<Proces
     policies = await lookupPoliciesByClientId(clientInfo.id);
   }
 
-  // 3. Build conversation history key
-  const convKey = input.phone || input.sessionId || 'anonymous';
-  const history = input.conversationHistory?.map(h => ({ role: h.role, content: h.content })) || getConversationHistory(convKey);
+  // 3. Load conversation history from Supabase (persists across serverless invocations)
+  const phone = input.phone || '';
+  let history: { role: string; content: string }[] = [];
+  if (input.conversationHistory?.length) {
+    history = input.conversationHistory.map(h => ({ role: h.role, content: h.content }));
+  } else if (phone) {
+    history = await getConversationHistory(phone);
+  }
 
   // 4. Handle intent-specific logic
   let reply: string;
@@ -300,11 +373,7 @@ export async function processMessage(input: ProcessMessageInput): Promise<Proces
     }
   }
 
-  // 5. Store conversation history
-  appendConversation(convKey, 'user', message);
-  appendConversation(convKey, 'model', reply);
-
-  // 6. Log interaction
+  // 5. Log interaction (this also serves as persistent conversation history)
   const logId = await logChatInteraction({
     channel: input.channel,
     clientId: clientInfo?.id || null,
