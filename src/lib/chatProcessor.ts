@@ -159,22 +159,31 @@ async function fetchInsurancePlanData(): Promise<string | null> {
         fedpaText += `\nCoberturas incluidas: ${premiumCovs.join(' | ')}`;
         fedpaText += `\nIncluye gastos médicos. Se puede pagar en 2 cuotas con recargo.`;
 
-        // Fetch endoso benefits
+        // Fetch endoso benefits (try both param styles)
         try {
           const benRes = await fetch(
-            `${FEDPA_API}/Polizas/consultar_beneficios_planes_externos?Usuario=${FEDPA_USER}&Clave=${FEDPA_CLAVE}&plan=426`,
+            `${FEDPA_API}/Polizas/consultar_beneficios_planes_externos?Usuario=${FEDPA_USER}&Clave=${FEDPA_CLAVE}&IdPlan=426`,
             { signal: AbortSignal.timeout(5000) }
           );
           if (benRes.ok) {
             const allBens = await benRes.json();
-            if (Array.isArray(allBens)) {
-              const fabBens = allBens.filter((b: any) => b.ENDOSO === 'FAB').map((b: any) => b.BENEFICIOS);
+            console.log(`[CHAT] FEDPA benefits raw: ${JSON.stringify(allBens).substring(0, 500)}`);
+            if (Array.isArray(allBens) && allBens.length > 0) {
+              const fabBens = allBens.filter((b: any) => b.ENDOSO === 'FAB' || b.PLAN === 426).map((b: any) => b.BENEFICIOS);
               const favBens = allBens.filter((b: any) => b.ENDOSO === 'FAV').map((b: any) => b.BENEFICIOS);
-              if (fabBens.length) fedpaText += `\n\nBeneficios Endoso Básico (FAB): ${fabBens.join(' | ')}`;
-              if (favBens.length) fedpaText += `\nBeneficios Endoso VIP (FAV): ${favBens.join(' | ')}`;
+              // If no ENDOSO field, list all benefits
+              if (fabBens.length === 0 && favBens.length === 0) {
+                const allBenNames = allBens.map((b: any) => b.BENEFICIOS || b.DESCRIPCION || JSON.stringify(b)).filter(Boolean);
+                if (allBenNames.length) fedpaText += `\n\nBeneficios del plan: ${allBenNames.join(' | ')}`;
+              } else {
+                if (fabBens.length) fedpaText += `\n\nBeneficios Endoso Básico (FAB) - incluye: ${fabBens.join(' | ')}`;
+                if (favBens.length) fedpaText += `\nBeneficios Endoso VIP (FAV) - incluye: ${favBens.join(' | ')}`;
+              }
             }
+          } else {
+            console.warn(`[CHAT] FEDPA benefits API returned ${benRes.status}`);
           }
-        } catch { /* non-critical */ }
+        } catch (benErr) { console.warn('[CHAT] FEDPA benefits fetch error:', benErr); }
 
         parts.push(fedpaText);
         console.log(`[CHAT] FEDPA: plans loaded with tariffs (basic=$${Math.round(basicPrima)}, premium=$${Math.round(premiumPrima)})`);
@@ -287,8 +296,12 @@ export async function processMessage(input: ProcessMessageInput): Promise<Proces
   let history: { role: string; content: string }[] = [];
   if (input.conversationHistory?.length) {
     history = input.conversationHistory.map(h => ({ role: h.role, content: h.content }));
+    console.log(`[CHAT] Using provided conversationHistory (${history.length} turns)`);
   } else if (phone) {
     history = await getConversationHistory(phone);
+    console.log(`[CHAT] Loaded DB history for ${phone}: ${history.length} turns`);
+  } else {
+    console.log('[CHAT] No phone/history — starting fresh conversation');
   }
 
   // 4. Handle intent-specific logic
@@ -333,11 +346,17 @@ export async function processMessage(input: ProcessMessageInput): Promise<Proces
 
   // ── EVERYTHING ELSE: Vertex AI ──
   } else {
-    // Fetch insurance plan data if the message mentions plans/benefits/coverage
+    // Fetch insurance plan data if the message OR recent history mentions plans/benefits/coverage
     const lower = message.toLowerCase();
+    const historyText = history.map(h => h.content).join(' ').toLowerCase();
     const wantsPlanInfo = lower.includes('plan') || lower.includes('beneficio') || lower.includes('cobertura completa')
       || lower.includes('daños a terceros') || lower.includes('grua') || lower.includes('grúa')
-      || lower.includes('asistencia') || lower.includes('endoso');
+      || lower.includes('asistencia') || lower.includes('endoso') || lower.includes('fedpa')
+      || lower.includes('precio') || lower.includes('cotiz') || lower.includes('prima')
+      || lower.includes('cuantas') || lower.includes('cuántas') || lower.includes('incluye')
+      // Also trigger if recent conversation was about plans (follow-up questions)
+      || (historyText.includes('fedpa') && (lower.includes('terceros') || lower.includes('basico') || lower.includes('básico') || lower.includes('premium')))
+      || (historyText.includes('plan') && (lower.includes('terceros') || lower.includes('cuantas') || lower.includes('cuántas')));
 
     if (wantsPlanInfo) {
       try {
@@ -354,10 +373,23 @@ export async function processMessage(input: ProcessMessageInput): Promise<Proces
       }
     }
 
-    console.log('[CHAT] Sending to AI:', { intent, hasExtraContext: extraContext.length > 0, extraContextLen: extraContext.length, historyLen: history.length });
+    // Build the message with context — include history summary in message body as fallback
+    let aiMessage = message;
+    if (history.length > 0) {
+      // Inject recent conversation summary directly into the message
+      // This ensures the AI sees it even if contents[] history has issues
+      const recentHistory = history.slice(-6); // last 3 exchanges
+      const historyBlock = recentHistory.map(h => `${h.role === 'user' ? 'Usuario' : 'Lissa'}: ${h.content}`).join('\n');
+      aiMessage = `[HISTORIAL RECIENTE de esta conversación — NO vuelvas a saludar, continúa naturalmente:]\n${historyBlock}\n\n[MENSAJE ACTUAL del usuario:]\n${message}`;
+    }
+    if (extraContext) {
+      aiMessage += `\n\n[Datos relevantes para responder: ${extraContext}]`;
+    }
+
+    console.log('[CHAT] Sending to AI:', { intent, hasExtraContext: extraContext.length > 0, extraContextLen: extraContext.length, historyLen: history.length, messageLen: aiMessage.length });
     try {
       const aiResult = await generateResponse({
-        message: extraContext ? `${message}\n\n[Datos relevantes para responder: ${extraContext}]` : message,
+        message: aiMessage,
         clientContext: clientInfo ? {
           name: clientInfo.name,
           cedula: clientInfo.cedula,
