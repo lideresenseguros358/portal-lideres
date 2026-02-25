@@ -148,6 +148,13 @@ function preClassify(message: string): { intent: ChatIntent; insurer: string | n
   // SALUDO — short greetings (< 40 chars to avoid false positives)
   if (lower.length < 40 && GREETING_KEYWORDS.some(k => lower.includes(k))) return { intent: 'SALUDO', insurer: null };
 
+  // CÉDULA pattern — user is providing identity (e.g. "8-932-1155", "PE-12-345", "8-0932-01155")
+  const cedulaPattern = /^\s*\d{1,2}[-\s]?\d{2,4}[-\s]?\d{2,6}\s*$/;
+  const cedulaPatternE = /^\s*(PE|E|N|[0-9]{1,2})[-\s]?\d{2,4}[-\s]?\d{2,6}\s*$/i;
+  if (cedulaPattern.test(message.trim()) || cedulaPatternE.test(message.trim())) {
+    return { intent: 'POLIZA_ESPECIFICA', insurer: null };
+  }
+
   return null; // needs AI classification
 }
 

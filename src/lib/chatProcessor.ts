@@ -45,6 +45,16 @@ export interface ProcessMessageResult {
 
 const MAX_MESSAGE_LENGTH = 2000;
 
+/**
+ * Extract a cédula number from message text (e.g. "8-932-1155", "PE-12-345")
+ */
+function extractCedula(message: string): string | null {
+  const trimmed = message.trim();
+  const pattern = /^(PE|E|N|\d{1,2})[-\s]?\d{2,4}[-\s]?\d{2,6}$/i;
+  if (pattern.test(trimmed)) return trimmed;
+  return null;
+}
+
 const LISSA_FALLBACK = '¡Hola! Soy Lissa de Líderes en Seguros 💚 En este momento no puedo procesar tu consulta, pero no te preocupes — puedes contactarnos directamente y te atendemos con gusto:\n\n📧 contacto@lideresenseguros.com\n📞 223-2373\n\n¡Estamos para ayudarte!';
 
 /**
@@ -72,12 +82,17 @@ export async function processMessage(input: ProcessMessageInput): Promise<Proces
   let clientInfo: ClientInfo | null = null;
   let policies: PolicyInfo[] = [];
 
-  // Try phone first, then cedula
+  // Try phone first, then cedula from input, then extract cedula from message
   if (input.phone) {
     clientInfo = await lookupClientByPhone(input.phone);
   }
   if (!clientInfo && input.cedula) {
     clientInfo = await lookupClientByCedula(input.cedula);
+  }
+  // If message looks like a cédula, try to look up by it
+  const cedulaFromMessage = extractCedula(message);
+  if (!clientInfo && cedulaFromMessage) {
+    clientInfo = await lookupClientByCedula(cedulaFromMessage);
   }
 
   if (clientInfo) {
@@ -143,11 +158,32 @@ export async function processMessage(input: ProcessMessageInput): Promise<Proces
     }
 
     case 'POLIZA_ESPECIFICA': {
-      if (!clientInfo) {
-        reply = 'Para consultar información de tu póliza necesito verificar tu identidad 🔐 ¿Podrías darme tu número de cédula? Así te busco tus datos de forma segura.';
-      } else if (policies.length === 0) {
-        reply = `Hola ${clientInfo.name} 👋 No encontré pólizas activas asociadas a tu cuenta. Si crees que es un error, puedes escribirnos a contacto@lideresenseguros.com o llamarnos al 223-2373 y lo revisamos juntos 😊 \u2014 Lissa 💚`;
-      } else {
+      if (!clientInfo && !cedulaFromMessage) {
+        // No client found and no cédula provided — ask for it
+        reply = '¡Claro que sí! Para poder revisar tu póliza necesito verificar tu identidad 🔐\n\n¿Me podrías compartir tu número de cédula? Así te busco tus datos de forma segura 😊';
+      } else if (!clientInfo && cedulaFromMessage) {
+        // Cédula provided but not found in system
+        reply = `Mmm, no encontré una cuenta con la cédula ${cedulaFromMessage} en nuestro sistema 🤔\n\nPuede ser que esté registrada con otro número o que aún no tengas póliza con nosotros. Si crees que es un error, escríbenos a contacto@lideresenseguros.com o llámanos al 223-2373 y lo verificamos juntos 😊\n\n\u2014 Lissa 💚`;
+      } else if (clientInfo && policies.length === 0) {
+        reply = `¡Hola ${clientInfo.name}! 👋 Te encontré en nuestro sistema, pero no veo pólizas activas asociadas a tu cuenta.\n\nSi crees que es un error, escríbenos a contacto@lideresenseguros.com o llámanos al 223-2373 y lo revisamos juntos 😊\n\n\u2014 Lissa 💚`;
+      } else if (clientInfo && policies.length > 0) {
+        // Build a warm, human summary of their policies
+        let policySummary = `¡Hola ${clientInfo.name}! 👋 Encontré tu información. `;
+        if (policies.length === 1) {
+          const p = policies[0]!;
+          policySummary += `Tienes una póliza de *${p.ramo || 'seguro'}* con *${p.insurer_name || 'tu aseguradora'}*.\n\n`;
+          policySummary += `📋 *Póliza:* ${p.policy_number || 'N/A'}\n`;
+          policySummary += `📅 *Estado:* ${p.status || 'N/A'}\n`;
+          if (p.renewal_date) policySummary += `🔄 *Vencimiento:* ${p.renewal_date}\n`;
+        } else {
+          policySummary += `Tienes ${policies.length} pólizas activas:\n\n`;
+          for (const p of policies) {
+            policySummary += `📋 *${p.ramo || 'Seguro'}* con ${p.insurer_name || 'N/A'} — Póliza: ${p.policy_number || 'N/A'} (${p.status || 'N/A'})\n`;
+          }
+        }
+        policySummary += `\n¿Qué necesitas saber sobre tu póliza? Puedo ayudarte con coberturas, vencimientos, pagos o cualquier duda que tengas 😊\n\n\u2014 Lissa 💚`;
+
+        // Try AI for a more contextual response, fall back to summary
         try {
           const aiResult = await generateResponse({
             message,
@@ -161,8 +197,10 @@ export async function processMessage(input: ProcessMessageInput): Promise<Proces
           });
           reply = aiResult.reply;
         } catch {
-          reply = LISSA_FALLBACK;
+          reply = policySummary;
         }
+      } else {
+        reply = LISSA_FALLBACK;
       }
       break;
     }

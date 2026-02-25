@@ -51,42 +51,33 @@ function createAuthClient(): GoogleAuth {
   });
 }
 
-const SYSTEM_PROMPT = `Tu nombre es Lissa. Eres la asistente virtual de Líderes en Seguros, una correduría de seguros en Panamá.
+const SYSTEM_PROMPT = `Eres Lissa, la asistente virtual de Líderes en Seguros, una correduría de seguros en Panamá. Hablas como una persona real: cálida, empática, cercana. Usas "tú" y un tono conversacional natural, como si fueras una amiga que sabe mucho de seguros.
 
-IDENTIDAD:
-- Tu nombre es Lissa. Siempre que te presentes o firmes, usa "Lissa".
-- Eres amigable, cálida y profesional. Usas "tú" (no "usted").
-- Puedes usar emojis con moderación para ser cercana (💚, 👋, 📋, etc.)
-- Al final de respuestas importantes, puedes firmar: "— Lissa 💚"
+Tu personalidad:
+- Eres genuinamente amable y te importa ayudar
+- Usas emojis de forma natural pero sin exagerar (💚 👋 � 📋)
+- Haces preguntas de seguimiento para entender mejor
+- Muestras interés real en lo que la persona necesita
+- Firmas con "— Lissa 💚" solo al final de respuestas largas o importantes
+- NUNCA suenas como un robot ni repites plantillas
 
-REGLAS ESTRICTAS:
-1. Responde siempre en español.
-2. Sé profesional, clara y concisa.
-3. NO inventes coberturas ni detalles de pólizas.
-4. NO prometas cambios de póliza.
-5. NO des asesoría legal.
-6. Si no estás segura de algo, recomienda contactar directamente a la aseguradora.
-7. Usa un tono empático y cercano.
-8. NO reveles datos sensibles del cliente sin verificación previa.
-9. Para cotizaciones, siempre dirige al portal: https://portal.lideresenseguros.com/cotizadores
-10. NO hagas cotizaciones manuales ni pidas datos para cotizar.
+Reglas que siempre sigues:
+1. Siempre en español
+2. No inventas coberturas ni detalles de pólizas
+3. No prometes cambios de póliza
+4. No das asesoría legal
+5. Si no sabes algo, lo dices con honestidad y ofreces alternativas
+6. Para cotizar, diriges a: https://portal.lideresenseguros.com/cotizadores
+7. No haces cotizaciones manuales
+8. Si no puedes resolver algo, ofreces: contacto@lideresenseguros.com o 223-2373
 
-INTENCIONES RECONOCIDAS:
-- SALUDO: Presentarte como Lissa y ofrecer ayuda
-- COTIZAR: Dirigir al portal de cotizaciones
-- PORTAL: Dar link del portal de clientes
-- COBERTURA_GENERAL: Explicar coberturas de forma general
-- POLIZA_ESPECIFICA: Dar info de póliza verificada
-- EMERGENCIA: Dar número de emergencia inmediatamente
-- CONTACTO_ASEGURADORA: Dar datos de contacto de la aseguradora
-- QUEJA: Responder con empatía, indicar que será revisado
-- EXTREMO: Caso crítico, indicar que un supervisor contactará
-- OTRO: Responder de forma general y útil
+Ejemplos de cómo hablas:
+- "¡Claro que sí! Déjame ver qué puedo encontrar para ti 😊"
+- "Entiendo perfectamente tu preocupación, es algo muy común..."
+- "¡Qué bueno que preguntas! Te explico..."
+- "Mmm, déjame pensarlo... Lo mejor sería que..."
 
-Ajusta tu tono según el tipo de cliente:
-- VIP/corporativo: cercana pero atenta
-- Regular: amable y directa
-- Nuevo: acogedora y explicativa`;
+NUNCA respondas con listas largas de opciones a menos que te las pidan. Sé conversacional.`;
 
 /**
  * Generate a chat response using Vertex AI (Gemini)
@@ -103,51 +94,57 @@ export async function generateResponse(ctx: ChatContext): Promise<VertexChatResp
 
   console.log('[VERTEX-CHAT] Calling Vertex AI:', { projectId, location, model, intent: ctx.intent });
 
-  const auth = createAuthClient();
-  const client = await auth.getClient();
+  let auth: GoogleAuth;
+  try {
+    auth = createAuthClient();
+  } catch (authErr: any) {
+    console.error('[VERTEX-CHAT] Auth creation failed:', authErr.message);
+    throw authErr;
+  }
 
-  // Build contextual prompt
+  let client: any;
+  try {
+    client = await auth.getClient();
+  } catch (clientErr: any) {
+    console.error('[VERTEX-CHAT] getClient() failed:', clientErr.message);
+    throw clientErr;
+  }
+
+  // Build contextual info
   let contextBlock = '';
   if (ctx.clientContext) {
     const c = ctx.clientContext;
-    contextBlock += `\nCONTEXTO DEL CLIENTE:\n`;
-    if (c.name) contextBlock += `- Nombre: ${c.name}\n`;
-    if (c.region) contextBlock += `- Región: ${c.region}\n`;
-    if (c.isVip) contextBlock += `- Tipo: VIP/Prioritario\n`;
-    if (c.clientType) contextBlock += `- Clasificación: ${c.clientType}\n`;
+    contextBlock += `\nDatos del cliente: `;
+    const parts: string[] = [];
+    if (c.name) parts.push(`se llama ${c.name}`);
+    if (c.region) parts.push(`es de ${c.region}`);
+    if (c.isVip) parts.push(`es cliente VIP`);
+    contextBlock += parts.join(', ') + '.\n';
   }
 
   if (ctx.policyContext?.policies?.length) {
-    contextBlock += `\nPÓLIZAS DEL CLIENTE:\n`;
+    contextBlock += `\nSus pólizas:\n`;
     for (const p of ctx.policyContext.policies) {
       contextBlock += `- ${p.policy_number}: ${p.ramo || 'N/A'} con ${p.insurer_name || 'N/A'} (Estado: ${p.status || 'N/A'}, Vence: ${p.renewal_date || 'N/A'})\n`;
     }
   }
 
-  contextBlock += `\nINTENCIÓN DETECTADA: ${ctx.intent}\n`;
+  if (ctx.intent) {
+    contextBlock += `\nIntención detectada: ${ctx.intent}\n`;
+  }
 
-  // Build conversation messages
+  // Build conversation contents
   const contents: any[] = [];
 
-  // System instruction via first user turn
-  contents.push({
-    role: 'user',
-    parts: [{ text: `${SYSTEM_PROMPT}\n${contextBlock}\n\nMensaje del cliente: ${ctx.message}` }],
-  });
-
-  // If we have conversation history, include it
   if (ctx.conversationHistory?.length) {
-    // Replace first message with system + history
-    contents.length = 0;
-
-    // System + context as first user turn
+    // Include history: system context first, then alternating messages
     contents.push({
       role: 'user',
-      parts: [{ text: `${SYSTEM_PROMPT}\n${contextBlock}\n\nA continuación el historial de la conversación. Responde al último mensaje.` }],
+      parts: [{ text: `[Contexto para ti, no repitas esto al usuario]\n${contextBlock}\n\nResponde al último mensaje de forma natural y conversacional.` }],
     });
     contents.push({
       role: 'model',
-      parts: [{ text: 'Entendido. Responderé siguiendo las reglas establecidas.' }],
+      parts: [{ text: '¡Claro! Estoy lista para ayudar 😊' }],
     });
 
     for (const msg of ctx.conversationHistory) {
@@ -157,21 +154,29 @@ export async function generateResponse(ctx: ChatContext): Promise<VertexChatResp
       });
     }
 
-    // Final user message
     contents.push({
       role: 'user',
       parts: [{ text: ctx.message }],
+    });
+  } else {
+    // Single message — include context in user turn
+    contents.push({
+      role: 'user',
+      parts: [{ text: `[Contexto: ${contextBlock}]\n\nCliente dice: ${ctx.message}` }],
     });
   }
 
   const endpoint = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:generateContent`;
 
   const requestBody = {
+    systemInstruction: {
+      parts: [{ text: SYSTEM_PROMPT }],
+    },
     contents,
     generationConfig: {
-      temperature: 0.25,
-      topP: 0.8,
-      topK: 10,
+      temperature: 0.7,
+      topP: 0.9,
+      topK: 40,
       maxOutputTokens: 1024,
     },
   };
@@ -191,10 +196,14 @@ export async function generateResponse(ctx: ChatContext): Promise<VertexChatResp
 
     return { reply: reply.trim(), tokensUsed };
   } catch (err: any) {
-    console.error('[VERTEX-CHAT] Error:', err.message);
-    return {
-      reply: '¡Hola! Soy Lissa de Líderes en Seguros 💚 En este momento no puedo procesar tu consulta, pero no te preocupes — puedes contactarnos directamente y te atendemos con gusto:\n\n📧 contacto@lideresenseguros.com\n📞 223-2373\n\n¡Estamos para ayudarte!',
-      tokensUsed: 0,
-    };
+    console.error('[VERTEX-CHAT] Error details:', {
+      message: err.message,
+      status: err.response?.status,
+      statusText: err.response?.statusText,
+      data: JSON.stringify(err.response?.data)?.substring(0, 500),
+      code: err.code,
+      stack: err.stack?.substring(0, 300),
+    });
+    throw err;
   }
 }
