@@ -712,6 +712,21 @@ export async function actionConfirmReportsPaid(reportIds: string[]) {
 
     const supabase = await getSupabaseServer();
 
+    // Obtener datos de los reportes ANTES de actualizarlos (para enviar emails)
+    const { data: reportsData } = await supabase
+      .from('adjustment_reports')
+      .select(`
+        id,
+        broker_id,
+        total_amount,
+        broker_notes,
+        admin_notes,
+        brokers!inner(name, email)
+      `)
+      .in('id', reportIds)
+      .eq('payment_mode', 'immediate')
+      .eq('status', 'approved');
+
     // Actualizar reportes a status='paid'
     const { error: updateError } = await supabase
       .from('adjustment_reports')
@@ -726,6 +741,27 @@ export async function actionConfirmReportsPaid(reportIds: string[]) {
     if (updateError) {
       console.error('Error confirming paid:', updateError);
       return { ok: false, error: 'Error al confirmar pagos' };
+    }
+
+    // Enviar correos SMTP a cada broker notificado
+    if (reportsData && reportsData.length > 0) {
+      console.log(`[actionConfirmReportsPaid] Enviando correos a ${reportsData.length} broker(s)...`);
+      for (const report of reportsData) {
+        try {
+          const { notifyAdjustmentPaid } = await import('@/lib/email/commissions');
+          await notifyAdjustmentPaid({
+            brokerId: report.broker_id,
+            amount: Math.abs(report.total_amount || 0),
+            type: 'Pago Inmediato',
+            concept: 'Reporte de Ajustes',
+            description: report.admin_notes || report.broker_notes || 'Ajuste de comisiones aprobado y pagado',
+          });
+          console.log(`[actionConfirmReportsPaid] ✅ Correo enviado a broker ${(report.brokers as any)?.name}`);
+        } catch (emailError) {
+          console.error(`[actionConfirmReportsPaid] ⚠️ Error enviando correo:`, emailError);
+          // No fallar la operación si el correo falla
+        }
+      }
     }
 
     revalidatePath('/commissions');

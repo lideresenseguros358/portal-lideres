@@ -5841,6 +5841,13 @@ export async function actionPayFortnight(fortnight_id: string) {
     
     if (adjustmentReports && adjustmentReports.length > 0) {
       const reportIds = adjustmentReports.map((r: any) => r.id);
+      
+      // Obtener datos completos para enviar emails
+      const { data: adjReportsData } = await supabase
+        .from('adjustment_reports')
+        .select('id, broker_id, total_amount, admin_notes, broker_notes, brokers!inner(name)')
+        .in('id', reportIds);
+      
       const { error: updateAdjError } = await supabase
         .from('adjustment_reports')
         .update({
@@ -5853,6 +5860,25 @@ export async function actionPayFortnight(fortnight_id: string) {
         console.error('[actionPayFortnight] Error actualizando adjustment_reports:', updateAdjError);
       } else {
         console.log(`[actionPayFortnight] ✅ ${reportIds.length} reportes de ajustes marcados como pagados`);
+        
+        // Enviar correos SMTP para cada reporte de ajuste pagado
+        if (adjReportsData && adjReportsData.length > 0) {
+          for (const adjReport of adjReportsData) {
+            try {
+              const { notifyAdjustmentPaid } = await import('@/lib/email/commissions');
+              await notifyAdjustmentPaid({
+                brokerId: adjReport.broker_id,
+                amount: Math.abs(adjReport.total_amount || 0),
+                type: 'Incluido en Quincena',
+                concept: 'Reporte de Ajustes pagado con quincena',
+                description: adjReport.admin_notes || adjReport.broker_notes || 'Ajuste incluido en pago de quincena',
+              });
+              console.log(`[actionPayFortnight] ✅ Correo de ajuste enviado a ${(adjReport.brokers as any)?.name}`);
+            } catch (emailError) {
+              console.error(`[actionPayFortnight] ⚠️ Error enviando correo de ajuste:`, emailError);
+            }
+          }
+        }
       }
     } else {
       console.log('[actionPayFortnight] ⚠️ No hay reportes de ajustes pendientes');
@@ -6215,6 +6241,8 @@ export async function actionPayFortnight(fortnight_id: string) {
         brokers (
           id,
           name,
+          email,
+          p_id,
           bank_account_no,
           beneficiary_name
         )
@@ -6260,17 +6288,13 @@ export async function actionPayFortnight(fortnight_id: string) {
           
           // Enviar email
           if (notifResult.success && !notifResult.isDuplicate) {
-            // Obtener email del broker
-            const { data: profile } = await supabase
-              .from('profiles')
-              .select('email')
-              .eq('id', (bt.brokers as any)?.p_id)
-              .single();
+            // Usar email del broker directamente (ya lo tenemos de la relación)
+            const brokerEmail = (bt.brokers as any)?.email;
             
-            if (profile?.email) {
+            if (brokerEmail) {
               await sendNotificationEmail({
                 type: 'commission',
-                to: profile.email,
+                to: brokerEmail,
                 data: {
                   brokerName: (bt.brokers as any)?.name || 'Broker',
                   periodLabel,
@@ -6281,6 +6305,33 @@ export async function actionPayFortnight(fortnight_id: string) {
                 },
                 notificationId: notifResult.notificationId,
               });
+              console.log(`[actionPayFortnight] ✅ Email enviado a ${brokerEmail} (${(bt.brokers as any)?.name})`);
+            } else {
+              // Fallback: buscar via p_id en profiles
+              const { data: profile } = await supabase
+                .from('profiles')
+                .select('email')
+                .eq('id', (bt.brokers as any)?.p_id)
+                .single();
+              
+              if (profile?.email) {
+                await sendNotificationEmail({
+                  type: 'commission',
+                  to: profile.email,
+                  data: {
+                    brokerName: (bt.brokers as any)?.name || 'Broker',
+                    periodLabel,
+                    grossAmount: bt.gross_amount,
+                    netAmount: bt.net_amount,
+                    discountAmount: bt.gross_amount - bt.net_amount,
+                    fortnightId: fortnight_id,
+                  },
+                  notificationId: notifResult.notificationId,
+                });
+                console.log(`[actionPayFortnight] ✅ Email enviado via profile a ${profile.email}`);
+              } else {
+                console.warn(`[actionPayFortnight] ⚠️ No se encontró email para broker ${(bt.brokers as any)?.name}`);
+              }
             }
           }
         } catch (notifError) {
@@ -6302,18 +6353,7 @@ export async function actionPayFortnight(fortnight_id: string) {
       throw updateError;
     }
     
-    // NUEVO: Enviar correos SMTP a brokers notificados
-    console.log('[actionPayFortnight] Enviando correos SMTP a brokers...');
-    for (const bt of brokersToNotify) {
-      try {
-        const { notifyFortnightPaid } = await import('@/lib/email/commissions');
-        await notifyFortnightPaid(fortnight_id);
-        console.log(`[actionPayFortnight] ✅ Correo SMTP enviado`);
-      } catch (emailError) {
-        console.error(`[actionPayFortnight] ⚠️ Error enviando correo SMTP:`, emailError);
-        // No fallar la operación si el correo falla
-      }
-    }
+    // Nota: Correos SMTP ya se envían arriba via sendNotificationEmail por cada broker
     
     // Verificar valores guardados en fortnight_broker_totals
     console.log('[actionPayFortnight] ========== VERIFICACIÓN FINAL ==========');
@@ -6907,14 +6947,15 @@ export async function actionConfirmAdjustmentsPaid(claimIds: string[]) {
         }
       }
 
-      // Crear notificaciones para los brokers
+      // Crear notificaciones y enviar correos SMTP a los brokers
       const brokerIds = Array.from(new Set(paidClaims.map((c: any) => c.broker_id)));
       
       for (const brokerId of brokerIds) {
         const brokerClaims = paidClaims.filter((c: any) => c.broker_id === brokerId);
         const clientCount = new Set(brokerClaims.map((c: any) => c.comm_items?.policy_number)).size;
+        const totalAmount = brokerClaims.reduce((sum: number, c: any) => sum + Math.abs(c.comm_items?.gross_amount || 0), 0);
 
-        // Crear notificación
+        // Crear notificación en DB
         await supabase.from('notifications').insert({
           broker_id: brokerId,
           notification_type: 'commission',
@@ -6923,6 +6964,21 @@ export async function actionConfirmAdjustmentsPaid(claimIds: string[]) {
           target: '/db?tab=preliminary',
           meta: { link: '/db?tab=preliminary', read: false }
         });
+
+        // Enviar correo SMTP
+        try {
+          const { notifyAdjustmentPaid } = await import('@/lib/email/commissions');
+          await notifyAdjustmentPaid({
+            brokerId,
+            amount: totalAmount,
+            type: 'Ajuste de Comisiones',
+            concept: `${brokerClaims.length} ajuste(s) con ${clientCount} cliente(s)`,
+            description: 'Por favor completa la información en Base de Datos Preliminar.',
+          });
+          console.log(`[actionConfirmAdjustmentsPaid] ✅ Correo SMTP enviado a broker ${brokerId}`);
+        } catch (emailError) {
+          console.error(`[actionConfirmAdjustmentsPaid] ⚠️ Error enviando correo SMTP:`, emailError);
+        }
       }
     }
 
