@@ -300,130 +300,155 @@ Reglas:
   }
 }
 
-// ── Test 6: Model discovery — try many model names to find which works ──
-async function testModelDiscovery() {
-  const modelsToTry = [
-    'gemini-1.5-flash',
-    'gemini-1.5-flash-001',
-    'gemini-1.5-flash-002',
-    'gemini-1.5-pro',
-    'gemini-1.5-pro-001',
-    'gemini-1.5-pro-002',
-    'gemini-1.0-pro',
-    'gemini-1.0-pro-001',
-    'gemini-1.0-pro-002',
-    'gemini-pro',
-    'gemini-2.0-flash',
-    'gemini-2.0-flash-001',
-    'gemini-2.0-flash-lite',
-    'gemini-2.0-pro',
-    'gemini-flash-2.0',
-    'gemini-2.5-flash',
-    'gemini-2.5-pro',
-  ];
+// ── Test: Model discovery via Vertex AI (service account) ──
+async function testVertexModels() {
+  const models = ['gemini-1.5-flash', 'gemini-1.5-flash-001', 'gemini-1.5-flash-002', 'gemini-1.5-pro', 'gemini-1.0-pro', 'gemini-pro', 'gemini-2.0-flash', 'gemini-2.0-flash-001'];
 
   const credentialsJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON!;
   const credentials = JSON.parse(credentialsJson);
-  const auth = new GoogleAuth({
-    credentials,
-    scopes: ['https://www.googleapis.com/auth/cloud-platform'],
-  });
+  const auth = new GoogleAuth({ credentials, scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
   const client = await auth.getClient();
-
   const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID!;
   const location = process.env.GOOGLE_CLOUD_LOCATION || 'us-central1';
 
-  const modelResults: any[] = [];
-
-  for (const model of modelsToTry) {
+  const results: any[] = [];
+  for (const model of models) {
     const endpoint = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:generateContent`;
     try {
       const start = Date.now();
-      const response = await client.request({
-        url: endpoint,
-        method: 'POST',
-        data: {
-          contents: [{ role: 'user', parts: [{ text: 'Responde solo: OK' }] }],
-          generationConfig: { temperature: 0, maxOutputTokens: 10 },
-        },
-      });
-      const elapsed = Date.now() - start;
-      const data: any = response.data;
-      const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
-      modelResults.push({ model, status: '✅ WORKS', reply: reply.trim(), elapsedMs: elapsed });
+      const res = await client.request({ url: endpoint, method: 'POST', data: { contents: [{ role: 'user', parts: [{ text: 'Di solo: OK' }] }], generationConfig: { temperature: 0, maxOutputTokens: 10 } } });
+      const reply = (res.data as any)?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      results.push({ model, api: 'vertex', status: '✅', reply: reply.trim(), ms: Date.now() - start });
     } catch (err: any) {
-      modelResults.push({ model, status: '❌ FAILED', error: err.response?.status || err.message });
+      results.push({ model, api: 'vertex', status: '❌', error: err.response?.status || err.message });
     }
   }
+  return results;
+}
 
-  const workingModels = modelResults.filter(r => r.status === '✅ WORKS');
-  return {
-    test: 'model_discovery',
-    pass: workingModels.length > 0,
-    workingModels: workingModels.map(r => r.model),
-    recommendedModel: workingModels[0]?.model || null,
-    details: modelResults,
-  };
+// ── Test: Model discovery via Gemini API (API key) ──
+async function testGeminiApiModels() {
+  const apiKey = process.env.VERTEX_API_KEY;
+  if (!apiKey) return [{ api: 'gemini_api', status: '❌', error: 'No VERTEX_API_KEY set' }];
+
+  const models = ['gemini-1.5-flash', 'gemini-1.5-flash-latest', 'gemini-1.5-pro', 'gemini-1.5-pro-latest', 'gemini-pro', 'gemini-2.0-flash', 'gemini-2.0-flash-exp', 'gemini-2.5-flash-preview-04-17', 'gemini-2.5-pro-preview-03-25'];
+
+  const results: any[] = [];
+  for (const model of models) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+    try {
+      const start = Date.now();
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{ text: 'Di solo: OK' }] }], generationConfig: { temperature: 0, maxOutputTokens: 10 } }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        results.push({ model, api: 'gemini_api', status: '❌', error: res.status, detail: (data as any)?.error?.message?.substring(0, 100) });
+      } else {
+        const reply = (data as any)?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        results.push({ model, api: 'gemini_api', status: '✅', reply: reply.trim(), ms: Date.now() - start });
+      }
+    } catch (err: any) {
+      results.push({ model, api: 'gemini_api', status: '❌', error: err.message });
+    }
+  }
+  return results;
+}
+
+// ── Full Lissa test using Gemini API with API key ──
+async function testLissaGeminiApi(userMessage: string, model: string) {
+  const apiKey = process.env.VERTEX_API_KEY;
+  if (!apiKey) return { test: 'lissa_gemini_api', pass: false, error: 'No API key' };
+
+  const systemPrompt = `Eres Lissa, la asistente virtual de Líderes en Seguros en Panamá. Hablas como una persona real: cálida, empática, cercana. Usas "tú" y un tono conversacional. Usas emojis moderados. Siempre en español. Para cotizar: https://portal.lideresenseguros.com/cotizadores. Contacto: contacto@lideresenseguros.com o 223-2373.`;
+
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  try {
+    const start = Date.now();
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: systemPrompt }] },
+        contents: [{ parts: [{ text: userMessage }] }],
+        generationConfig: { temperature: 0.7, topP: 0.9, maxOutputTokens: 1024 },
+      }),
+    });
+    const data: any = await res.json();
+    if (!res.ok) return { test: 'lissa_gemini_api', pass: false, model, userMessage, error: data?.error?.message };
+    const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || '(empty)';
+    return { test: 'lissa_gemini_api', pass: true, model, userMessage, reply, ms: Date.now() - start };
+  } catch (err: any) {
+    return { test: 'lissa_gemini_api', pass: false, model, userMessage, error: err.message };
+  }
 }
 
 // ── GET handler — run all tests ──
 export async function GET() {
   console.log('[VERTEX-TEST] Running diagnostic tests...');
-
   const results: any[] = [];
 
-  // Test 1: Env vars
+  // 1. Env vars
   results.push(testEnvVars());
 
-  // Test 2: Auth client
+  // 2. Auth client
   results.push(await testAuthClient());
 
-  // Test 3: Model discovery — find which models work
-  const discovery = await testModelDiscovery();
-  results.push(discovery);
+  // 3. Vertex AI models (service account)
+  const vertexModels = await testVertexModels();
+  results.push({ test: 'vertex_ai_models', details: vertexModels });
 
-  // If we found a working model, run the rest of the tests with it
-  const workingModel = discovery.recommendedModel;
-  if (workingModel) {
-    // Override env temporarily for the remaining tests
-    const originalModel = process.env.VERTEX_MODEL_CHAT;
-    process.env.VERTEX_MODEL_CHAT = workingModel;
+  // 4. Gemini API models (API key)
+  const geminiModels = await testGeminiApiModels();
+  results.push({ test: 'gemini_api_models', details: geminiModels });
 
-    // Test 4: Simple call
-    results.push(await testVertexSimple());
+  // Find best working approach
+  const workingVertex = vertexModels.find((r: any) => r.status === '✅');
+  const workingGemini = geminiModels.find((r: any) => r.status === '✅');
 
-    // Test 5: With systemInstruction
-    results.push(await testVertexWithSystemInstruction());
+  let bestApi = '';
+  let bestModel = '';
 
-    // Test 6-10: Full Lissa simulation
-    const testMessages = [
+  if (workingGemini) {
+    bestApi = 'gemini_api';
+    bestModel = workingGemini.model;
+  } else if (workingVertex) {
+    bestApi = 'vertex';
+    bestModel = workingVertex.model;
+  }
+
+  // 5. Full Lissa tests with the working model
+  if (bestModel) {
+    const testMsgs = [
       'Hola, buenos días',
       'Qué significa deducible?',
+      'Quiero cotizar un seguro de auto, cómo hago?',
       'Tengo una duda sobre mi cobertura de salud',
-      'Cuánto cuesta un seguro de auto?',
       'Tengo un problema con mi pago y nadie me ayuda',
     ];
 
-    for (const msg of testMessages) {
-      results.push(await testLissaChat(msg));
+    if (bestApi === 'gemini_api') {
+      for (const msg of testMsgs) {
+        results.push(await testLissaGeminiApi(msg, bestModel));
+      }
+    } else {
+      const orig = process.env.VERTEX_MODEL_CHAT;
+      process.env.VERTEX_MODEL_CHAT = bestModel;
+      for (const msg of testMsgs) {
+        results.push(await testLissaChat(msg));
+      }
+      process.env.VERTEX_MODEL_CHAT = orig;
     }
-
-    // Restore
-    process.env.VERTEX_MODEL_CHAT = originalModel;
   } else {
-    results.push({ test: 'remaining_tests', pass: false, error: 'No working model found — skipping chat tests' });
+    results.push({ test: 'lissa_tests', pass: false, error: 'No working model found via either API' });
   }
 
-  const allPass = results.every(r => r.pass);
-
   return json({
-    summary: allPass ? '✅ ALL TESTS PASSED' : '❌ SOME TESTS FAILED',
+    summary: bestModel ? `✅ FOUND WORKING MODEL: ${bestModel} via ${bestApi}` : '❌ NO WORKING MODEL FOUND',
     timestamp: new Date().toISOString(),
-    totalTests: results.length,
-    passed: results.filter(r => r.pass).length,
-    failed: results.filter(r => !r.pass).length,
-    recommendedModel: workingModel || 'NONE FOUND',
-    action: workingModel ? `Update VERTEX_MODEL_CHAT in Vercel to: ${workingModel}` : 'Enable Vertex AI API or check model access in GCP',
+    recommendation: bestModel ? { api: bestApi, model: bestModel, action: bestApi === 'gemini_api' ? 'Switch chat code to use Gemini API with VERTEX_API_KEY' : `Set VERTEX_MODEL_CHAT=${bestModel}` } : { action: 'Enable Vertex AI Generative AI API in GCP console, or get a valid Gemini API key' },
     results,
   });
 }
