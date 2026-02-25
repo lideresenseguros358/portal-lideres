@@ -68,22 +68,72 @@ export async function actionFindDuplicateByNationalId(nationalId: string, exclud
   }
 }
 
-// Fusionar clientes: mover todas las pólizas de sourceClientId a targetClientId
+// Fusionar clientes: mover todas las referencias de sourceClientId a targetClientId
 export async function actionMergeClients(sourceClientId: string, targetClientId: string) {
   try {
     const supabase = await getSupabaseServer();
     
     // 1. Mover todas las pólizas del cliente origen al cliente destino
-    const { error: updateError } = await supabase
+    const { error: policiesErr } = await supabase
       .from('policies')
       .update({ client_id: targetClientId })
       .eq('client_id', sourceClientId);
     
-    if (updateError) {
-      return { ok: false as const, error: `Error moviendo pólizas: ${updateError.message}` };
+    if (policiesErr) {
+      return { ok: false as const, error: `Error moviendo pólizas: ${policiesErr.message}` };
     }
     
-    // 2. Eliminar el cliente origen (ahora sin pólizas)
+    // 2. Reasignar fortnight_details (lo importante es la póliza, no el cliente)
+    const { error: fdErr } = await supabase
+      .from('fortnight_details')
+      .update({ client_id: targetClientId })
+      .eq('client_id', sourceClientId);
+    
+    if (fdErr) {
+      console.error('[actionMergeClients] Error reasignando fortnight_details:', fdErr);
+    }
+
+    // 3. Reasignar cases.client_id
+    const { error: casesErr } = await supabase
+      .from('cases')
+      .update({ client_id: targetClientId })
+      .eq('client_id', sourceClientId);
+    
+    if (casesErr) {
+      console.error('[actionMergeClients] Error reasignando cases:', casesErr);
+    }
+
+    // 4. Reasignar cases.created_client_id
+    const { error: casesCreatedErr } = await supabase
+      .from('cases')
+      .update({ created_client_id: targetClientId })
+      .eq('created_client_id', sourceClientId);
+    
+    if (casesCreatedErr) {
+      console.error('[actionMergeClients] Error reasignando cases.created_client_id:', casesCreatedErr);
+    }
+
+    // 5. Reasignar expediente_documents
+    const { error: expErr } = await supabase
+      .from('expediente_documents')
+      .update({ client_id: targetClientId })
+      .eq('client_id', sourceClientId);
+    
+    if (expErr) {
+      console.error('[actionMergeClients] Error reasignando expediente_documents:', expErr);
+    }
+
+    // 6. Reasignar temp_client_import
+    const { error: tempErr } = await supabase
+      .from('temp_client_import')
+      .update({ client_id: targetClientId })
+      .eq('client_id', sourceClientId);
+    
+    if (tempErr) {
+      console.error('[actionMergeClients] Error reasignando temp_client_import:', tempErr);
+    }
+    
+    // 7. Eliminar el cliente origen (ahora sin referencias)
     const { error: deleteError } = await supabase
       .from('clients')
       .delete()

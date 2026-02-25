@@ -253,6 +253,17 @@ export async function createClientWithPolicy(clientData: unknown, policyData: un
 export async function deleteClient(clientId: string) {
   const supabase = await getSupabaseServer()
 
+  // Limpiar referencias FK en tablas dependientes
+  // fortnight_details: nullificar client_id (la póliza es lo importante)
+  await supabase.from('fortnight_details').update({ client_id: null }).eq('client_id', clientId)
+  // cases: nullificar client_id y created_client_id
+  await supabase.from('cases').update({ client_id: null }).eq('client_id', clientId)
+  await supabase.from('cases').update({ created_client_id: null }).eq('created_client_id', clientId)
+  // expediente_documents: client_id NOT nullable, eliminar registros
+  await supabase.from('expediente_documents').delete().eq('client_id', clientId)
+  // temp_client_import: nullificar client_id
+  await supabase.from('temp_client_import').update({ client_id: null }).eq('client_id', clientId)
+
   // Borrar pólizas vinculadas (histórico de comisiones se mantiene por diseño)
   const { error: polErr } = await supabase.from('policies').delete().eq('client_id', clientId)
   if (polErr) throw new Error(`Error borrando pólizas: ${polErr.message}` )

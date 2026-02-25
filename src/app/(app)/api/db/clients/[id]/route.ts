@@ -169,6 +169,42 @@ export async function DELETE(
       );
     }
 
+    // Limpiar referencias FK en tablas dependientes antes de eliminar
+    // fortnight_details: set client_id = null (la póliza es lo importante, no el cliente)
+    const { error: fdErr } = await supabase
+      .from('fortnight_details')
+      .update({ client_id: null })
+      .eq('client_id', id);
+    if (fdErr) console.error('Error limpiando fortnight_details:', fdErr);
+
+    // cases: set client_id = null
+    const { error: casesErr } = await supabase
+      .from('cases')
+      .update({ client_id: null })
+      .eq('client_id', id);
+    if (casesErr) console.error('Error limpiando cases.client_id:', casesErr);
+
+    // cases: set created_client_id = null
+    const { error: casesCreatedErr } = await supabase
+      .from('cases')
+      .update({ created_client_id: null })
+      .eq('created_client_id', id);
+    if (casesCreatedErr) console.error('Error limpiando cases.created_client_id:', casesCreatedErr);
+
+    // expediente_documents: client_id is NOT nullable, delete records
+    const { error: expErr } = await supabase
+      .from('expediente_documents')
+      .delete()
+      .eq('client_id', id);
+    if (expErr) console.error('Error limpiando expediente_documents:', expErr);
+
+    // temp_client_import: set client_id = null
+    const { error: tempErr } = await supabase
+      .from('temp_client_import')
+      .update({ client_id: null })
+      .eq('client_id', id);
+    if (tempErr) console.error('Error limpiando temp_client_import:', tempErr);
+
     // Eliminar cliente
     const { error } = await supabase
       .from('clients')
