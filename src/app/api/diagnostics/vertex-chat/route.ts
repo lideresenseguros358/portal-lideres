@@ -300,6 +300,72 @@ Reglas:
   }
 }
 
+// ── Test 6: Model discovery — try many model names to find which works ──
+async function testModelDiscovery() {
+  const modelsToTry = [
+    'gemini-1.5-flash',
+    'gemini-1.5-flash-001',
+    'gemini-1.5-flash-002',
+    'gemini-1.5-pro',
+    'gemini-1.5-pro-001',
+    'gemini-1.5-pro-002',
+    'gemini-1.0-pro',
+    'gemini-1.0-pro-001',
+    'gemini-1.0-pro-002',
+    'gemini-pro',
+    'gemini-2.0-flash',
+    'gemini-2.0-flash-001',
+    'gemini-2.0-flash-lite',
+    'gemini-2.0-pro',
+    'gemini-flash-2.0',
+    'gemini-2.5-flash',
+    'gemini-2.5-pro',
+  ];
+
+  const credentialsJson = process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON!;
+  const credentials = JSON.parse(credentialsJson);
+  const auth = new GoogleAuth({
+    credentials,
+    scopes: ['https://www.googleapis.com/auth/cloud-platform'],
+  });
+  const client = await auth.getClient();
+
+  const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID!;
+  const location = process.env.GOOGLE_CLOUD_LOCATION || 'us-central1';
+
+  const modelResults: any[] = [];
+
+  for (const model of modelsToTry) {
+    const endpoint = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:generateContent`;
+    try {
+      const start = Date.now();
+      const response = await client.request({
+        url: endpoint,
+        method: 'POST',
+        data: {
+          contents: [{ role: 'user', parts: [{ text: 'Responde solo: OK' }] }],
+          generationConfig: { temperature: 0, maxOutputTokens: 10 },
+        },
+      });
+      const elapsed = Date.now() - start;
+      const data: any = response.data;
+      const reply = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      modelResults.push({ model, status: '✅ WORKS', reply: reply.trim(), elapsedMs: elapsed });
+    } catch (err: any) {
+      modelResults.push({ model, status: '❌ FAILED', error: err.response?.status || err.message });
+    }
+  }
+
+  const workingModels = modelResults.filter(r => r.status === '✅ WORKS');
+  return {
+    test: 'model_discovery',
+    pass: workingModels.length > 0,
+    workingModels: workingModels.map(r => r.model),
+    recommendedModel: workingModels[0]?.model || null,
+    details: modelResults,
+  };
+}
+
 // ── GET handler — run all tests ──
 export async function GET() {
   console.log('[VERTEX-TEST] Running diagnostic tests...');
@@ -312,23 +378,40 @@ export async function GET() {
   // Test 2: Auth client
   results.push(await testAuthClient());
 
-  // Test 3: Simple call (same as working email classifier)
-  results.push(await testVertexSimple());
+  // Test 3: Model discovery — find which models work
+  const discovery = await testModelDiscovery();
+  results.push(discovery);
 
-  // Test 4: With systemInstruction
-  results.push(await testVertexWithSystemInstruction());
+  // If we found a working model, run the rest of the tests with it
+  const workingModel = discovery.recommendedModel;
+  if (workingModel) {
+    // Override env temporarily for the remaining tests
+    const originalModel = process.env.VERTEX_MODEL_CHAT;
+    process.env.VERTEX_MODEL_CHAT = workingModel;
 
-  // Test 5: Full Lissa simulation with different messages
-  const testMessages = [
-    'Hola, buenos días',
-    'Quiero cotizar un seguro de auto',
-    'Tengo una duda sobre mi cobertura de salud',
-    'Necesito el teléfono de ASSA',
-    'Tengo un problema con mi pago y nadie me ayuda',
-  ];
+    // Test 4: Simple call
+    results.push(await testVertexSimple());
 
-  for (const msg of testMessages) {
-    results.push(await testLissaChat(msg));
+    // Test 5: With systemInstruction
+    results.push(await testVertexWithSystemInstruction());
+
+    // Test 6-10: Full Lissa simulation
+    const testMessages = [
+      'Hola, buenos días',
+      'Qué significa deducible?',
+      'Tengo una duda sobre mi cobertura de salud',
+      'Cuánto cuesta un seguro de auto?',
+      'Tengo un problema con mi pago y nadie me ayuda',
+    ];
+
+    for (const msg of testMessages) {
+      results.push(await testLissaChat(msg));
+    }
+
+    // Restore
+    process.env.VERTEX_MODEL_CHAT = originalModel;
+  } else {
+    results.push({ test: 'remaining_tests', pass: false, error: 'No working model found — skipping chat tests' });
   }
 
   const allPass = results.every(r => r.pass);
@@ -339,6 +422,8 @@ export async function GET() {
     totalTests: results.length,
     passed: results.filter(r => r.pass).length,
     failed: results.filter(r => !r.pass).length,
+    recommendedModel: workingModel || 'NONE FOUND',
+    action: workingModel ? `Update VERTEX_MODEL_CHAT in Vercel to: ${workingModel}` : 'Enable Vertex AI API or check model access in GCP',
     results,
   });
 }
