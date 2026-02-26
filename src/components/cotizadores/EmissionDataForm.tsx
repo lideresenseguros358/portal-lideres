@@ -9,6 +9,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { FaUser, FaCar, FaIdCard, FaUpload, FaCamera, FaCheckCircle } from 'react-icons/fa';
 import { toast } from 'sonner';
 import CedulaQRScanner from './CedulaQRScanner';
+import { ACREEDORES_PANAMA } from '@/lib/constants/acreedores';
 
 interface EmissionDataFormProps {
   quoteData: any;
@@ -700,13 +701,38 @@ export default function EmissionDataForm({ quoteData, onContinue }: EmissionData
               <label className="block text-sm font-semibold text-gray-700 mb-2">
                 Banco Acreedor <span className="text-gray-500 text-xs">(si el vehículo está financiado)</span>
               </label>
-              <input
-                type="text"
+              <select
                 value={formData.acreedor}
                 onChange={(e) => setFormData({ ...formData, acreedor: e.target.value })}
-                className="w-full px-3 py-2.5 md:px-4 md:py-3 text-base border-2 border-gray-300 focus:border-[#8AAA19] rounded-lg focus:outline-none"
-                placeholder="Ej: Banco General (opcional)"
-              />
+                className="w-full px-3 py-2.5 md:px-4 md:py-3 text-base border-2 border-gray-300 focus:border-[#8AAA19] rounded-lg focus:outline-none bg-white"
+              >
+                <option value="">Sin acreedor (no financiado)</option>
+                <optgroup label="Bancos">
+                  {ACREEDORES_PANAMA.filter(a => a.tipo === 'BANCO').map(a => (
+                    <option key={a.codConductoIS} value={a.codigoFEDPA}>{a.label}</option>
+                  ))}
+                </optgroup>
+                <optgroup label="Financieras">
+                  {ACREEDORES_PANAMA.filter(a => a.tipo === 'FINANCIERA').map(a => (
+                    <option key={a.codConductoIS} value={a.codigoFEDPA}>{a.label}</option>
+                  ))}
+                </optgroup>
+                <optgroup label="Cooperativas">
+                  {ACREEDORES_PANAMA.filter(a => a.tipo === 'COOPERATIVA').map(a => (
+                    <option key={a.codConductoIS} value={a.codigoFEDPA}>{a.label}</option>
+                  ))}
+                </optgroup>
+                <optgroup label="Leasing / Arrendamiento">
+                  {ACREEDORES_PANAMA.filter(a => a.tipo === 'LEASING').map(a => (
+                    <option key={a.codConductoIS} value={a.codigoFEDPA}>{a.label}</option>
+                  ))}
+                </optgroup>
+                <optgroup label="Otros">
+                  {ACREEDORES_PANAMA.filter(a => a.tipo === 'OTRO').map(a => (
+                    <option key={a.codConductoIS} value={a.codigoFEDPA}>{a.label}</option>
+                  ))}
+                </optgroup>
+              </select>
             </div>
 
             <div>

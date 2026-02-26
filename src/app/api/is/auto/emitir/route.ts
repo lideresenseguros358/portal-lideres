@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { emitirPolizaAuto, crearClienteYPolizaIS } from '@/lib/is/quotes.service';
 import { ISEnvironment } from '@/lib/is/config';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { findAcreedor } from '@/lib/constants/acreedores';
 
 export async function POST(request: NextRequest) {
   try {
@@ -54,6 +55,10 @@ export async function POST(request: NextRequest) {
       // Pago
       formaPago,
       cantCuotas,
+      // Opción de deducible (1=bajo, 2=medio, 3=alto)
+      opcion,
+      // Acreedor (banco)
+      vacreedor,
       environment = 'development',
     } = body;
     
@@ -94,6 +99,18 @@ export async function POST(request: NextRequest) {
       );
     }
     
+    // Resolver acreedor: buscar código IS de la institución seleccionada
+    let codTipoConducto = 0;
+    let codConducto = 0;
+    if (vacreedor && vacreedor.trim() !== '') {
+      const acreedor = findAcreedor(vacreedor);
+      if (acreedor) {
+        codTipoConducto = acreedor.codTipoConductoIS;
+        codConducto = acreedor.codConductoIS;
+        console.log('[API IS Auto Emitir] Acreedor:', acreedor.label, '→ tipo:', codTipoConducto, 'cod:', codConducto);
+      }
+    }
+    
     // Emitir póliza — estructura anidada para getemision
     const result = await emitirPolizaAuto(
       {
@@ -130,8 +147,11 @@ export async function POST(request: NextRequest) {
         cantPasajeros: parseInt(vcantpasajeros as string) || 5,
         cantPuertas: parseInt(vcantpuertas as string) || 4,
         paymentToken,
-        formaPago: parseInt(formaPago as string) || 2,
-        cantCuotas: parseInt(cantCuotas as string) || 10,
+        formaPago: parseInt(formaPago as string) || 1,
+        cantCuotas: parseInt(cantCuotas as string) || 1,
+        opcion: parseInt(opcion as string) || 1,
+        codTipoConducto,
+        codConducto,
       },
       environment as ISEnvironment
     );

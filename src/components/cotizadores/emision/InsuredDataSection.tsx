@@ -8,6 +8,7 @@
 import { useState } from 'react';
 import { FaUser, FaInfoCircle } from 'react-icons/fa';
 import { toast } from 'sonner';
+import { ACREEDORES_PANAMA, getAcreedoresGrouped } from '@/lib/constants/acreedores';
 
 export interface InsuredData {
   primerNombre: string;
@@ -374,13 +375,38 @@ export default function InsuredDataSection({
           <label className="block text-sm font-semibold text-gray-700 mb-2">
             Acreedor (Banco/Financiera)
           </label>
-          <input
-            type="text"
+          <select
             value={formData.acreedor}
             onChange={(e) => handleChange('acreedor', e.target.value)}
-            className={`${inputClass} ${normalInputClass}`}
-            placeholder="Ej: Banco General"
-          />
+            className={`${inputClass} ${normalInputClass} bg-white`}
+          >
+            <option value="">Sin acreedor (no financiado)</option>
+            <optgroup label="Bancos">
+              {ACREEDORES_PANAMA.filter(a => a.tipo === 'BANCO').map(a => (
+                <option key={a.codConductoIS} value={a.codigoFEDPA}>{a.label}</option>
+              ))}
+            </optgroup>
+            <optgroup label="Financieras">
+              {ACREEDORES_PANAMA.filter(a => a.tipo === 'FINANCIERA').map(a => (
+                <option key={a.codConductoIS} value={a.codigoFEDPA}>{a.label}</option>
+              ))}
+            </optgroup>
+            <optgroup label="Cooperativas">
+              {ACREEDORES_PANAMA.filter(a => a.tipo === 'COOPERATIVA').map(a => (
+                <option key={a.codConductoIS} value={a.codigoFEDPA}>{a.label}</option>
+              ))}
+            </optgroup>
+            <optgroup label="Leasing / Arrendamiento">
+              {ACREEDORES_PANAMA.filter(a => a.tipo === 'LEASING').map(a => (
+                <option key={a.codConductoIS} value={a.codigoFEDPA}>{a.label}</option>
+              ))}
+            </optgroup>
+            <optgroup label="Otros">
+              {ACREEDORES_PANAMA.filter(a => a.tipo === 'OTRO').map(a => (
+                <option key={a.codConductoIS} value={a.codigoFEDPA}>{a.label}</option>
+              ))}
+            </optgroup>
+          </select>
           <p className="text-xs text-gray-500 mt-1">
             Solo si el vehículo tiene financiamiento
           </p>
