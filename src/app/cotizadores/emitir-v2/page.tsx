@@ -312,6 +312,8 @@ export default function EmitirV2Page() {
           Uso: selectedPlan._uso || quoteData?.uso || '10',
           Marca: selectedPlan._marcaCodigo || quoteData?.marcaCodigo || quoteData?.marca,
           Modelo: selectedPlan._modeloCodigo || quoteData?.modeloCodigo || quoteData?.modelo,
+          MarcaNombre: selectedPlan._marcaNombre || quoteData?.marca || '',
+          ModeloNombre: selectedPlan._modeloNombre || quoteData?.modelo || '',
           Ano: (selectedPlan._anio || quoteData?.anio || quoteData?.anno || new Date().getFullYear()).toString(),
           Motor: vehicleData?.motor,
           Placa: vehicleData?.placa,

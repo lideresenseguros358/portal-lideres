@@ -19,6 +19,7 @@ import CreditCardInput from '@/components/is/CreditCardInput';
 import LoadingSkeleton from '@/components/cotizadores/LoadingSkeleton';
 import EmissionProgressBar from '@/components/cotizadores/EmissionProgressBar';
 import EmissionBreadcrumb, { type EmissionStep, type BreadcrumbStepDef } from '@/components/cotizadores/EmissionBreadcrumb';
+import SignaturePad from '@/components/cotizadores/SignaturePad';
 
 // 4 steps for DT (no inspection, no cuotas — payment modal handles contado vs cuotas)
 const DT_STEPS: BreadcrumbStepDef[] = [
@@ -52,6 +53,8 @@ export default function EmitirDanosTercerosPage() {
   const [completedSteps, setCompletedSteps] = useState<EmissionStep[]>([]);
   const [declarationAccepted, setDeclarationAccepted] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
+  const [signatureDataUrl, setSignatureDataUrl] = useState<string>('');
+  const [showSignaturePad, setShowSignaturePad] = useState(false);
 
   // Load initial data
   useEffect(() => {
@@ -166,6 +169,8 @@ export default function EmitirDanosTercerosPage() {
           Uso: '10',
           Marca: selectedPlan._marcaCodigo || quoteData?.marca || '',
           Modelo: selectedPlan._modeloCodigo || quoteData?.modelo || '',
+          MarcaNombre: selectedPlan._marcaNombre || quoteData?.marca || '',
+          ModeloNombre: selectedPlan._modeloNombre || quoteData?.modelo || '',
           Ano: (quoteData?.anno || quoteData?.anio || quoteData?.ano || new Date().getFullYear()).toString(),
           Motor: vehicleData?.motor || '',
           Placa: vehicleData?.placa || '',
@@ -369,6 +374,7 @@ export default function EmitirDanosTercerosPage() {
             paymentToken,
             formaPago: 1, // DT = contado
             cantCuotas: 1,
+            vacreedor: emissionData?.acreedor || '',
             tipo_cobertura: 'Daños a Terceros',
             environment: 'development',
           }),
@@ -411,6 +417,13 @@ export default function EmitirDanosTercerosPage() {
           expedienteForm.append('nroPoliza', emisionResult.nroPoliza || '');
           expedienteForm.append('pdfUrl', emisionResult.pdfUrl || '');
           expedienteForm.append('insurerName', 'Internacional de Seguros');
+          expedienteForm.append('firmaDataUrl', signatureDataUrl || '');
+          
+          // IS inspection data from sessionStorage (defaults for DT: no extras, buenEstadoFisico=true)
+          const isInspData = sessionStorage.getItem('isInspectionData');
+          if (isInspData) {
+            expedienteForm.append('inspectionData', isInspData);
+          }
           
           expedienteForm.append('clientData', JSON.stringify({
             primerNombre: emissionData.primerNombre,
@@ -692,6 +705,23 @@ export default function EmitirDanosTercerosPage() {
 
   // ─── STEP 4: RESUMEN Y CONFIRMACIÓN (con declaración de veracidad) ───
   if (step === 'review') {
+    const isInternacionalDT = !!(selectedPlan?._isReal && selectedPlan?.insurerName?.includes('INTERNACIONAL'));
+
+    const handleEmitClick = () => {
+      if (isInternacionalDT && !signatureDataUrl) {
+        setShowSignaturePad(true);
+        return;
+      }
+      handleConfirmEmission();
+    };
+
+    const handleSignatureComplete = (dataUrl: string) => {
+      setSignatureDataUrl(dataUrl);
+      setShowSignaturePad(false);
+      toast.success('Firma capturada correctamente');
+      setTimeout(() => handleConfirmEmission(), 300);
+    };
+
     return (
       <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
         <div className="pt-6">
@@ -816,10 +846,25 @@ export default function EmitirDanosTercerosPage() {
               </label>
             </div>
 
+            {/* Signature indicator for IS */}
+            {isInternacionalDT && signatureDataUrl && (
+              <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-3">
+                <span className="text-green-600 text-lg">✅</span>
+                <span className="text-sm text-green-800 font-semibold">Firma digital capturada</span>
+                <button
+                  onClick={() => setShowSignaturePad(true)}
+                  className="ml-auto text-xs text-blue-600 underline"
+                  type="button"
+                >
+                  Cambiar firma
+                </button>
+              </div>
+            )}
+
             {/* Emit Button */}
             <div className="mt-8">
               <button
-                onClick={handleConfirmEmission}
+                onClick={handleEmitClick}
                 disabled={isConfirming || !declarationAccepted}
                 className={`w-full py-5 px-6 rounded-xl font-bold text-xl
                   flex items-center justify-center gap-3 transition-all duration-200
@@ -845,9 +890,22 @@ export default function EmitirDanosTercerosPage() {
                   Debes aceptar la declaración de veracidad para continuar
                 </p>
               )}
+              {isInternacionalDT && declarationAccepted && !signatureDataUrl && (
+                <p className="text-xs text-blue-600 text-center mt-2">
+                  Al emitir se solicitará tu firma digital para el formulario de inspección
+                </p>
+              )}
             </div>
           </div>
         </div>
+
+        {/* Signature Pad Modal */}
+        {showSignaturePad && (
+          <SignaturePad
+            onSignatureComplete={handleSignatureComplete}
+            onCancel={() => setShowSignaturePad(false)}
+          />
+        )}
       </div>
     );
   }

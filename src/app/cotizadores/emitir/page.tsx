@@ -214,6 +214,8 @@ export default function EmitirPage() {
           Uso: quoteData.uso || '10',
           Marca: selectedPlan._marcaCodigo || quoteData.marca,
           Modelo: selectedPlan._modeloCodigo || quoteData.modelo,
+          MarcaNombre: selectedPlan._marcaNombre || quoteData.marca || '',
+          ModeloNombre: selectedPlan._modeloNombre || quoteData.modelo || '',
           Ano: quoteData.anno?.toString() || quoteData.anio?.toString() || new Date().getFullYear().toString(),
           Motor: vehicleData!.motor,
           Placa: vehicleData!.placa,
@@ -467,6 +469,8 @@ export default function EmitirPage() {
             paymentToken,
             formaPago: installments === 1 ? 1 : 2,
             cantCuotas: installments,
+            opcion: selectedPlan._vIdOpt || 1,
+            vacreedor: emissionData.acreedor || '',
             tipo_cobertura: tipoCobertura,
             vmarca_label: quoteData.marca,
             vmodelo_label: quoteData.modelo,
@@ -570,12 +574,10 @@ export default function EmitirPage() {
             primaTotal: selectedPlan?.annualPremium || 0,
           }));
           
-          // IS inspection data (extras, physical condition) - only for CC
-          if (isCC) {
-            const isInspData = sessionStorage.getItem('isInspectionData');
-            if (isInspData) {
-              expedienteForm.append('inspectionData', isInspData);
-            }
+          // IS inspection data (extras, physical condition) — send always, API handles defaults for DT
+          const isInspData = sessionStorage.getItem('isInspectionData');
+          if (isInspData) {
+            expedienteForm.append('inspectionData', isInspData);
           }
           
           // Document files

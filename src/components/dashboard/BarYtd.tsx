@@ -89,7 +89,7 @@ const BarYtd = ({ current, last, onClick }: BarYtdProps) => {
             <YAxis stroke="#8a8a8a" tickLine={false} axisLine={{ stroke: "#edf0f2" }} tickFormatter={(val) => val.toLocaleString("es-PA")} />
             <Tooltip
               cursor={{ fill: "rgba(1,1,57,0.04)" }}
-              formatter={(value: number) => value.toLocaleString("es-PA", { minimumFractionDigits: 2 })}
+              formatter={(value) => (Number(value) || 0).toLocaleString("es-PA", { minimumFractionDigits: 2 })}
             />
             <Legend wrapperStyle={{ paddingTop: 12 }} iconType="circle" />
             <Bar dataKey="actual" name="Año actual" fill="#010139" radius={[6, 6, 0, 0]} />
@@ -108,7 +108,7 @@ const BarYtd = ({ current, last, onClick }: BarYtdProps) => {
               <YAxis stroke="#8a8a8a" tickLine={false} axisLine={{ stroke: "#edf0f2" }} tickFormatter={(val) => val.toLocaleString("es-PA")} />
               <Tooltip
                 cursor={{ fill: "rgba(1,1,57,0.04)" }}
-                formatter={(value: number) => value.toLocaleString("es-PA", { minimumFractionDigits: 2 })}
+                formatter={(value) => (Number(value) || 0).toLocaleString("es-PA", { minimumFractionDigits: 2 })}
               />
               <Legend wrapperStyle={{ paddingTop: 12 }} iconType="circle" />
               <Bar dataKey="actual" name="Año actual" fill="#010139" radius={[6, 6, 0, 0]} />

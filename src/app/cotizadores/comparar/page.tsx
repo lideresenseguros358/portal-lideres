@@ -168,16 +168,19 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
       return { basico: null, premium: null };
     }
     
-    const apiCoberturas = coberturasResult.data?.Table || [];
+    // ============================================
+    // COBERTURAS: IS retorna 3 tablas (Table=opción 1, Table1=opción 2, Table2=opción 3)
+    // Seleccionar la tabla correcta según el deducible escogido por el usuario
+    // ============================================
+    const tableKey = vIdOpt === 1 ? 'Table' : vIdOpt === 2 ? 'Table1' : 'Table2';
+    const apiCoberturas = coberturasResult.data?.[tableKey] || coberturasResult.data?.Table || [];
+    console.log(`[IS] Usando coberturas de ${tableKey} (opción ${vIdOpt}, deducible: ${quoteData.deducible})`);
     
     // ============================================
     // PRECIO REAL: PTOTAL de generarcotizacion
-    // PTOTAL ya incluye el descuento de buena experiencia aplicado por IS
-    // PRIMA1 en coberturas son tarifas brutas SIN descuento (solo para display)
+    // PTOTAL ya incluye: primas base + BENEFICIO PLUS ($35) + descuento buena exp.
+    // IMPORTANTE: NO agregar endoso Plus de nuevo — ya está en COD_AMPARO 19
     // ============================================
-    // PTOTAL es la prima REAL cotizada por IS (ya incluye cualquier descuento interno)
-    // PRIMA1 en coberturas son tarifas de referencia, NO el precio real
-    // Fallback: si PTOTAL no disponible, usar suma de PRIMA1 como último recurso
     let primaSumBruta = 0;
     apiCoberturas.forEach((c: any) => { primaSumBruta += parseFloat(c.PRIMA1 || '0'); });
     const primaConDescuento = (apiPrimaTotal && apiPrimaTotal > 0) ? apiPrimaTotal : primaSumBruta;
@@ -206,18 +209,9 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
     }
     
     // ============================================
-    // DEDUCIBLES: API retorna Opción A (bajo). Opciones B/C se derivan
-    // con multiplicadores estándar IS verificados contra cotización directa.
-    // Bajo (A): base del API
-    // Medio (B): comp ×1.601, col ×1.28
-    // Alto (C):  comp ×2.15,  col ×1.72
+    // DEDUCIBLES: Ya leemos la tabla correcta (Table/Table1/Table2) según vIdOpt
+    // Los valores DEDUCIBLE1 ya corresponden a la opción seleccionada
     // ============================================
-    const IS_DED_MULTIPLIERS: Record<string, { comp: number; col: number }> = {
-      bajo:  { comp: 1.0,   col: 1.0   },
-      medio: { comp: 1.601, col: 1.28  },
-      alto:  { comp: 2.15,  col: 1.72  },
-    };
-    
     const coberturaComprensivo = apiCoberturas.find((c: any) => 
       c.COBERTURA?.toUpperCase().includes('COMPRENSIVO')
     );
@@ -226,17 +220,12 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
       c.COBERTURA?.toUpperCase().includes('VUELCO')
     );
     
-    const baseCompDed = parseFloat((coberturaComprensivo?.DEDUCIBLE1 || '0').replace(/,/g, ''));
-    const baseColDed = parseFloat((coberturaColision?.DEDUCIBLE1 || '0').replace(/,/g, ''));
+    const dedComprensivo = parseFloat((coberturaComprensivo?.DEDUCIBLE1 || '0').replace(/,/g, ''));
+    const dedColision = parseFloat((coberturaColision?.DEDUCIBLE1 || '0').replace(/,/g, ''));
     
     const deducibleSeleccion = quoteData.deducible || 'bajo';
-    const mult = IS_DED_MULTIPLIERS[deducibleSeleccion] ?? IS_DED_MULTIPLIERS.bajo!;
     
-    const dedComprensivo = Math.round(baseCompDed * mult.comp);
-    const dedColision = Math.round(baseColDed * mult.col);
-    
-    console.log(`[IS] Deducibles API (bajo): comp=${baseCompDed} col=${baseColDed}`);
-    console.log(`[IS] Deducibles ajustados (${deducibleSeleccion}): comp=${dedComprensivo} col=${dedColision} (mult: comp×${mult.comp} col×${mult.col})`);
+    console.log(`[IS] Deducibles reales de API (opción ${vIdOpt}): comp=$${dedComprensivo} col=$${dedColision}`);
     
     const deducibleInfo = {
       valor: dedColision,
@@ -248,25 +237,16 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
     // ============================================
     // COBERTURAS DETALLADAS
     // ============================================
-    const coberturasDetalladas = apiCoberturas.map((c: any) => {
-      let dedAjustado = c.DEDUCIBLE1 || '';
-      const cobName = (c.COBERTURA || '').toUpperCase();
-      if (cobName.includes('COMPRENSIVO') && dedComprensivo > 0) {
-        dedAjustado = dedComprensivo.toLocaleString('en-US', { minimumFractionDigits: 2 });
-      } else if ((cobName.includes('COLISION') || cobName.includes('VUELCO')) && dedColision > 0) {
-        dedAjustado = dedColision.toLocaleString('en-US', { minimumFractionDigits: 2 });
-      }
-      return {
-        codigo: c.COD_AMPARO,
-        nombre: c.COBERTURA,
-        descripcion: c.COBERTURA,
-        limite: c.LIMITES || 'Incluido',
-        prima: parseFloat(c.PRIMA1 || '0'),
-        deducible: dedAjustado,
-        incluida: true,
-        tieneDescuento: c.SN_DESCUENTO === 'S',
-      };
-    });
+    const coberturasDetalladas = apiCoberturas.map((c: any) => ({
+      codigo: c.COD_AMPARO,
+      nombre: c.COBERTURA,
+      descripcion: c.COBERTURA,
+      limite: c.LIMITES || c.LIMITES2 || 'Incluido',
+      prima: parseFloat(c.PRIMA1 || '0'),
+      deducible: c.DEDUCIBLE1 || '', // Ya correcto para la opción seleccionada
+      incluida: true,
+      tieneDescuento: c.SN_DESCUENTO === 'S',
+    }));
     
     // Límites de responsabilidad civil
     const limites: any[] = [];
@@ -335,14 +315,14 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
     
     // ============================================
     // IMPUESTOS IS: 5% impuesto sobre primas + 1% timbres = 6% total
-    // IS screenshot confirma: (PTOTAL + endoso) × 1.06 = total anual
     // ============================================
     const IS_TAX_RATE = 0.06; // 6% (5% impuesto + 1% timbres)
     
     // ============================================
-    // BÁSICO: Endoso Plus ($35/año)
+    // BÁSICO: Endoso Plus ya incluido en PTOTAL (COD_AMPARO 19 = $35)
+    // NO sumar $35 de nuevo — IS ya lo incluye en la cotización
     // ============================================
-    const subtotalBasico = primaConDescuento + IS_ENDOSOS.PLUS.costoAnual;
+    const subtotalBasico = primaConDescuento; // Plus ya incluido
     const impuestoBasico = Math.round(subtotalBasico * IS_TAX_RATE * 100) / 100;
     const primaBasico = Math.round((subtotalBasico + impuestoBasico) * 100) / 100;
     const basicoEndosos = [
@@ -350,7 +330,7 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
         codigo: IS_ENDOSOS.PLUS.codigo,
         nombre: IS_ENDOSOS.PLUS.nombre,
         incluido: true,
-        descripcion: `Costo anual: B/.${IS_ENDOSOS.PLUS.costoAnual.toFixed(2)} (no incluye impuestos)`,
+        descripcion: `Incluido en la prima (B/.${IS_ENDOSOS.PLUS.costoAnual.toFixed(2)})`,
         subBeneficios: IS_ENDOSOS.PLUS.beneficios,
       },
     ];
@@ -367,10 +347,10 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
         primaBase: primaConDescuento,
         descuentoBuenConductor: descuentoTotal,
         descuentoPorcentaje: descuentoPorcentaje,
-        costoEndoso: IS_ENDOSOS.PLUS.costoAnual,
+        costoEndoso: 0, // Plus ya incluido en PTOTAL
         impuesto: impuestoBasico,
         totalConTarjeta: primaBasico,
-        totalAlContado: Math.round(primaBasico * 0.95 * 100) / 100, // 5% descuento contado
+        totalAlContado: Math.round(primaBasico * 0.95 * 100) / 100,
         ahorroContado: Math.round(primaBasico * 0.05 * 100) / 100,
         descuentoProntoPago: Math.round(primaBasico * 0.05 * 100) / 100,
       },
@@ -380,9 +360,11 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
     };
     
     // ============================================
-    // PREMIUM: Endoso Plus Centenario ($60/año)
+    // PREMIUM: Centenario upgrade = $60 - $35 (Plus ya incluido) = $25 extra
+    // Solo sumar la diferencia del upgrade, no el costo completo
     // ============================================
-    const subtotalPremium = primaConDescuento + IS_ENDOSOS.CENTENARIO.costoAnual;
+    const centenarioUpgrade = IS_ENDOSOS.CENTENARIO.costoAnual - IS_ENDOSOS.PLUS.costoAnual; // $60 - $35 = $25
+    const subtotalPremium = primaConDescuento + centenarioUpgrade;
     const impuestoPremium = Math.round(subtotalPremium * IS_TAX_RATE * 100) / 100;
     const primaPremium = Math.round((subtotalPremium + impuestoPremium) * 100) / 100;
     const premiumEndosos = [
@@ -390,14 +372,14 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
         codigo: IS_ENDOSOS.CENTENARIO.codigo,
         nombre: IS_ENDOSOS.CENTENARIO.nombre,
         incluido: true,
-        descripcion: `Costo anual: B/.${IS_ENDOSOS.CENTENARIO.costoAnual.toFixed(2)} (no incluye impuestos)`,
+        descripcion: `Upgrade: +B/.${centenarioUpgrade.toFixed(2)} sobre Plus incluido`,
         subBeneficios: IS_ENDOSOS.CENTENARIO.beneficios,
       },
       {
         codigo: IS_ENDOSOS.PLUS.codigo,
         nombre: IS_ENDOSOS.PLUS.nombre,
         incluido: true,
-        descripcion: 'Incluido en Centenario (beneficios base)',
+        descripcion: 'Incluido en la prima base',
         subBeneficios: IS_ENDOSOS.PLUS.beneficios,
       },
     ];
@@ -417,7 +399,7 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
         primaBase: primaConDescuento,
         descuentoBuenConductor: descuentoTotal,
         descuentoPorcentaje: descuentoPorcentaje,
-        costoEndoso: IS_ENDOSOS.CENTENARIO.costoAnual,
+        costoEndoso: centenarioUpgrade, // Solo el delta $25 (Plus ya en PTOTAL)
         impuesto: impuestoPremium,
         totalConTarjeta: primaPremium,
         totalAlContado: Math.round(primaPremium * 0.95 * 100) / 100,
@@ -870,10 +852,21 @@ export default function ComparePage() {
         if (policyType === 'auto-completa') {
           const realQuotes: any[] = [];
           
-          // INTERNACIONAL: UNA sola llamada a la API, genera ambas tarjetas
-          // Básico = Endoso Plus ($35), Premium = Endoso Plus Centenario ($60)
-          try {
-            const isQuotes = await generateInternacionalQuotes(input);
+          // ── PARALELO: IS y FEDPA al mismo tiempo ──
+          // IS tarda ~28s y FEDPA ~1s. Antes era secuencial (29s+), ahora paralelo (~28s)
+          console.log('[Comparar] Generando cotizaciones en PARALELO (IS + FEDPA)...');
+          const t0 = Date.now();
+          
+          const [isResult, fedpaResult] = await Promise.allSettled([
+            generateInternacionalQuotes(input),
+            generateFedpaQuotes(input),
+          ]);
+          
+          console.log(`[Comparar] Cotizaciones completadas en ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+          
+          // Procesar resultado INTERNACIONAL
+          if (isResult.status === 'fulfilled') {
+            const isQuotes = isResult.value;
             if (isQuotes.premium) realQuotes.push(isQuotes.premium);
             if (isQuotes.basico) realQuotes.push(isQuotes.basico);
             if (!isQuotes.basico && !isQuotes.premium) {
@@ -898,17 +891,14 @@ export default function ComparePage() {
                 trackQuoteCreated({ ...trackBase, quoteRef: `IS-${isRef}-B`, insurer: 'INTERNACIONAL', planName: 'Básico (Plus)', annualPremium: isQuotes.basico.annualPremium });
               }
             }
-          } catch (error) {
-            console.error('Error obteniendo cotizaciones INTERNACIONAL:', error);
+          } else {
+            console.error('Error obteniendo cotizaciones INTERNACIONAL:', isResult.reason);
             toast.error('Error al obtener cotizaciones de INTERNACIONAL');
           }
           
-          // FEDPA: UNA sola llamada a la API, genera ambas tarjetas
-          // La API retorna el mismo precio para S y N, la diferencia es comercial (endoso)
-          try {
-            console.log('[FEDPA] Generando cotización (una sola llamada)...');
-            const fedpaQuotes = await generateFedpaQuotes(input);
-            
+          // Procesar resultado FEDPA
+          if (fedpaResult.status === 'fulfilled') {
+            const fedpaQuotes = fedpaResult.value;
             if (fedpaQuotes.premium) {
               realQuotes.push(fedpaQuotes.premium);
               console.log('[FEDPA] ✅ Premium (Endoso Porcelana): $', fedpaQuotes.premium.annualPremium);
@@ -917,7 +907,6 @@ export default function ComparePage() {
               realQuotes.push(fedpaQuotes.basico);
               console.log('[FEDPA] ✅ Básico (Full Extras): $', fedpaQuotes.basico.annualPremium);
             }
-            
             if (!fedpaQuotes.premium && !fedpaQuotes.basico) {
               console.warn('[FEDPA] ⚠️ No se pudieron generar cotizaciones');
             }
@@ -940,8 +929,8 @@ export default function ComparePage() {
                 trackQuoteCreated({ ...trackBase, quoteRef: `FEDPA-${fedpaRef}-B`, insurer: 'FEDPA', planName: 'Básico (Full Extras)', annualPremium: fedpaQuotes.basico.annualPremium });
               }
             }
-          } catch (error) {
-            console.error('[FEDPA] Error obteniendo cotizaciones:', error);
+          } else {
+            console.error('[FEDPA] Error obteniendo cotizaciones:', fedpaResult.reason);
             toast.error('Error al obtener cotizaciones de FEDPA');
           }
           

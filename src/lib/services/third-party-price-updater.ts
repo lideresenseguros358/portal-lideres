@@ -24,7 +24,7 @@ export async function updateThirdPartyMinPrice(data: PriceUpdateData): Promise<v
     const { error } = await supabase.rpc('update_third_party_min_price', {
       p_insurer_name: data.insurer,
       p_new_price: data.price,
-      p_user_id: data.userId || null,
+      p_user_id: data.userId || undefined,
     });
 
     if (error) {

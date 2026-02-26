@@ -14,6 +14,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { FEDPA_CONFIG, type FedpaEnvironment } from '@/lib/fedpa/config';
 import { crearClienteYPolizaFEDPA } from '@/lib/fedpa/emision.service';
+import { getFedpaMarcaFromIS, normalizarModeloFedpa } from '@/lib/cotizadores/fedpa-vehicle-mapper';
 
 const EMISOR_EXTERNO_BASE = 'https://wscanales.segfedpa.com/EmisorFedpa.Api/api';
 
@@ -142,18 +143,58 @@ export async function POST(request: NextRequest) {
     if (nroPolizaResponse.ok) {
       try {
         const nroPolizaData = await nroPolizaResponse.json();
-        nroPoliza = String(Array.isArray(nroPolizaData) ? nroPolizaData[0]?.NUMPOL : nroPolizaData?.NUMPOL || '');
+        console.log('[FEDPA Fallback] get_nropoliza raw:', JSON.stringify(nroPolizaData).substring(0, 300));
+        const raw = Array.isArray(nroPolizaData)
+          ? (nroPolizaData[0]?.NUMPOL ?? nroPolizaData[0]?.nroPoliza ?? '')
+          : (nroPolizaData?.NUMPOL ?? nroPolizaData?.nroPoliza ?? nroPolizaData?.NroPoliza ?? '');
+        nroPoliza = String(raw);
         console.log('[FEDPA Fallback] ✅ NroPoliza:', nroPoliza || '(vacío)');
       } catch (parseErr) {
         console.warn('[FEDPA Fallback] Error parseando NroPoliza:', parseErr);
       }
     } else {
-      console.warn('[FEDPA Fallback] get_nropoliza falló (HTTP', nroPolizaResponse.status, ')');
+      const errText = await nroPolizaResponse.text().catch(() => '');
+      console.warn('[FEDPA Fallback] get_nropoliza falló (HTTP', nroPolizaResponse.status, '):', errText.substring(0, 200));
+    }
+
+    if (!idCotizacion) {
+      return NextResponse.json(
+        { success: false, error: 'No se pudo obtener IdCotizacion de FEDPA. Intente nuevamente.' },
+        { status: 400 }
+      );
+    }
+
+    if (!nroPoliza) {
+      return NextResponse.json(
+        { success: false, error: 'No se pudo obtener NroPoliza de FEDPA. Intente nuevamente.' },
+        { status: 400 }
+      );
     }
 
     // ============================================
-    // PASO 3: Determinar tipo de documento
+    // PASO 3: Normalizar marca/modelo y tipo de documento
+    // FEDPA 2021 manual requires alpha codes (e.g. "AJAX", "AUD", "Q3")
+    // NOT numeric IS codes (e.g. "5", "10")
     // ============================================
+    const rawMarca = String(emisionData.Marca || '');
+    const rawModelo = String(emisionData.Modelo || '');
+    const isNumericMarca = /^\d+$/.test(rawMarca);
+    const isNumericModelo = /^\d+$/.test(rawModelo);
+
+    // Convert IS numeric codes to FEDPA alpha codes
+    const fedpaMarca = isNumericMarca
+      ? getFedpaMarcaFromIS(parseInt(rawMarca), emisionData.MarcaNombre || '')
+      : rawMarca;
+    const fedpaModelo = isNumericModelo
+      ? normalizarModeloFedpa(emisionData.ModeloNombre || emisionData.Modelo || '')
+      : normalizarModeloFedpa(rawModelo);
+
+    console.log('[FEDPA Fallback] Marca/Modelo normalizados:', {
+      original: { marca: rawMarca, modelo: rawModelo },
+      fedpa: { marca: fedpaMarca, modelo: fedpaModelo },
+      isNumeric: { marca: isNumericMarca, modelo: isNumericModelo },
+    });
+
     const identificacion = emisionData.Identificacion || '';
     let tipoDoc = 'CED';
     let cedula = identificacion;
@@ -229,8 +270,8 @@ export async function POST(request: NextRequest) {
         IdVinculo: '1',
       }],
       Auto: {
-        CodMarca: String(emisionData.Marca || ''),
-        CodModelo: String(emisionData.Modelo || ''),
+        CodMarca: fedpaMarca,
+        CodModelo: fedpaModelo,
         Ano: String(emisionData.Ano || ''),
         Placa: String(emisionData.Placa || ''),
         Chasis: String(emisionData.Vin || ''),

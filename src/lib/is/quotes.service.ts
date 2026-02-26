@@ -146,6 +146,9 @@ export interface EmisionAutoRequest {
   cantCuotas?: number;     // Número de cuotas
   // Documentos
   documentUrls?: string[]; // URLs de documentos adjuntos
+  // Acreedor (banco)
+  codTipoConducto?: number; // 1=Banco, 0=sin acreedor
+  codConducto?: number;     // Código IS del banco
 }
 
 export interface EmisionAutoResponse {
@@ -437,8 +440,8 @@ export async function emitirPolizaAuto(
       fecVigHasta: vigHasta,
       idPlanCobertura: Math.floor(Number(request.codPlanCobertura)),
       pjeBexp: 0,          // Porcentaje buena experiencia
-      codTipoConducto: 0,
-      codConducto: 0,
+      codTipoConducto: request.codTipoConducto || 0,
+      codConducto: request.codConducto || 0,
       idPlanCobAdic: Math.floor(Number(request.codPlanCoberturaAdic || 0)),
       snCargo: 0,
       codBenef: 0,

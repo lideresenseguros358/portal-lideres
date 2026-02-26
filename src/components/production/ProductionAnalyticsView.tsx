@@ -463,7 +463,7 @@ export default function ProductionAnalyticsView({ year, brokers }: ProductionAna
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="name" />
             <YAxis tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`} />
-            <Tooltip formatter={(value: number) => formatCurrency(value)} />
+            <Tooltip formatter={(value) => formatCurrency(Number(value) || 0)} />
             <Legend />
             <Area type="monotone" dataKey="actual" stroke="#010139" fill="#010139" fillOpacity={0.3} name={`${year}`} />
             <Area type="monotone" dataKey="anterior" stroke="#8AAA19" fill="#8AAA19" fillOpacity={0.2} name={`${year - 1}`} />
@@ -523,7 +523,7 @@ export default function ProductionAnalyticsView({ year, brokers }: ProductionAna
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="name" />
             <YAxis tickFormatter={(value) => `$${(value / 1000).toFixed(0)}k`} />
-            <Tooltip formatter={(value: number) => formatCurrency(value)} />
+            <Tooltip formatter={(value) => formatCurrency(Number(value) || 0)} />
             <Legend />
             <Line type="monotone" dataKey="actual" stroke="#010139" strokeWidth={2} dot={{ r: 4 }} name="Real" />
             <Line type="monotone" dataKey="tendencia" stroke="#8AAA19" strokeWidth={2} strokeDasharray="5 5" name="Tendencia" />

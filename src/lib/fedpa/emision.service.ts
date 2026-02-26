@@ -9,6 +9,7 @@ import { FEDPA_CONFIG, FedpaEnvironment, EMISOR_PLAN_ENDPOINTS, EMISOR_EXTERNO_E
 import type { EmitirPolizaRequest, EmitirPolizaResponse } from './types';
 import { normalizeText, formatFechaToFEDPA, booleanToNumber } from './utils';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
+import { getFedpaMarcaFromIS, normalizarModeloFedpa } from '@/lib/cotizadores/fedpa-vehicle-mapper';
 
 // ============================================
 // EMITIR PÓLIZA (PRINCIPAL - EmisorPlan)
@@ -112,6 +113,23 @@ export async function emitirPolizaFallback(
   // Normalizar datos
   const normalizedRequest = normalizarDatosEmision(request);
   
+  // Normalize IS numeric marca/modelo codes to FEDPA alpha codes
+  const rawMarca = String(normalizedRequest.Marca || '');
+  const rawModelo = String(normalizedRequest.Modelo || '');
+  const isNumericMarca = /^\d+$/.test(rawMarca);
+  const isNumericModelo = /^\d+$/.test(rawModelo);
+  const fedpaMarca = isNumericMarca
+    ? getFedpaMarcaFromIS(parseInt(rawMarca), (request as any).MarcaNombre || '')
+    : rawMarca;
+  const fedpaModelo = isNumericModelo
+    ? normalizarModeloFedpa((request as any).ModeloNombre || rawModelo)
+    : normalizarModeloFedpa(rawModelo);
+  
+  console.log('[FEDPA Emisión Externo] Marca/Modelo normalizados:', {
+    original: { marca: rawMarca, modelo: rawModelo },
+    fedpa: { marca: fedpaMarca, modelo: fedpaModelo },
+  });
+  
   // Construir payload según manual 2021 (crear_poliza_auto_cc_externos)
   const now = new Date();
   const fechaHora = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')} ${now.getHours() >= 12 ? 'PM' : 'AM'}`;
@@ -151,8 +169,8 @@ export async function emitirPolizaFallback(
       IdVinculo: '1',
     }],
     Auto: {
-      CodMarca: normalizedRequest.Marca,
-      CodModelo: normalizedRequest.Modelo,
+      CodMarca: fedpaMarca,
+      CodModelo: fedpaModelo,
       Ano: String(normalizedRequest.Ano),
       Placa: normalizedRequest.Placa,
       Chasis: normalizedRequest.Vin,
