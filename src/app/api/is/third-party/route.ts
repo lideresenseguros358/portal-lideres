@@ -93,7 +93,7 @@ async function fetchPlan(
           code: String(cob.COD_AMPARO ?? ''),
           name: cob.COBERTURA ?? '',
           limit: cob.LIMITES ?? '',
-          prima: parseFloat(cob.PRIMA1) || 0,
+          prima: parseFloat(String(cob.PRIMA1).replace(/,/g, '')) || 0,
         });
       }
     }

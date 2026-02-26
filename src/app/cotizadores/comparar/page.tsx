@@ -169,7 +169,19 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
     }
     
     // ============================================
+    // Helper: IS returns PRIMA1 as strings with comma thousands separator
+    // e.g. "1,259.58" — parseFloat would return 1, so we strip commas first
+    // ============================================
+    const parsePrima = (val: string | number | null | undefined): number => {
+      if (val === null || val === undefined || val === '') return 0;
+      const str = String(val).replace(/,/g, '');
+      return parseFloat(str) || 0;
+    };
+    
+    // ============================================
     // COBERTURAS: IS retorna 3 tablas (Table=opción 1, Table1=opción 2, Table2=opción 3)
+    // Opción 1 = deducible más bajo (prima más alta)
+    // Opción 3 = deducible más alto (prima más baja)
     // Seleccionar la tabla correcta según el deducible escogido por el usuario
     // ============================================
     const tableKey = vIdOpt === 1 ? 'Table' : vIdOpt === 2 ? 'Table1' : 'Table2';
@@ -177,35 +189,31 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
     console.log(`[IS] Usando coberturas de ${tableKey} (opción ${vIdOpt}, deducible: ${quoteData.deducible})`);
     
     // ============================================
-    // PRECIO REAL: PTOTAL de generarcotizacion
-    // PTOTAL ya incluye: primas base + BENEFICIO PLUS ($35) + descuento buena exp.
-    // IMPORTANTE: NO agregar endoso Plus de nuevo — ya está en COD_AMPARO 19
+    // PRECIO: Sumar PRIMA1 de la opción seleccionada
+    // IMPORTANTE: PTOTAL de generarcotizacion corresponde solo a UNA opción
+    // (generalmente la opción 3 / más barata). No usar para otras opciones.
+    // La prima correcta es la SUMA de PRIMA1 de la tabla seleccionada.
+    // Los valores PRIMA1 vienen con coma de miles (ej: "1,259.58")
     // ============================================
     let primaSumBruta = 0;
-    apiCoberturas.forEach((c: any) => { primaSumBruta += parseFloat(c.PRIMA1 || '0'); });
-    const primaConDescuento = (apiPrimaTotal && apiPrimaTotal > 0) ? apiPrimaTotal : primaSumBruta;
+    apiCoberturas.forEach((c: any) => { primaSumBruta += parsePrima(c.PRIMA1); });
     
-    // Solo mostrar descuento de buena experiencia si IS lo marca explícitamente
-    // SN_DESCUENTO='S' en coberturas = IS otorga descuento de buena experiencia
+    // Usar la suma de PRIMA1 de la opción seleccionada (NO PTOTAL)
+    const primaBase = primaSumBruta;
+    
+    // Descuento buena experiencia: IS indica con SN_DESCUENTO='S' qué coberturas
+    // son elegibles. La prima PRIMA1 ya viene CON el descuento aplicado por IS,
+    // así que no necesitamos restarlo — solo mostrarlo informativamente.
     const coberturasConDescuento = apiCoberturas.filter((c: any) => c.SN_DESCUENTO === 'S');
     const tieneDescuentoBuenaExp = coberturasConDescuento.length > 0;
-    
-    // Si hay descuento explícito, calcular el monto (15% máx por regla de negocio IS)
     let descuentoTotal = 0;
     let descuentoPorcentaje = 0;
-    if (tieneDescuentoBuenaExp) {
-      const MAX_DESC = 0.15;
-      coberturasConDescuento.forEach((c: any) => {
-        descuentoTotal += parseFloat(c.PRIMA1 || '0') * MAX_DESC;
-      });
-      descuentoPorcentaje = MAX_DESC * 100;
-    }
+    // Nota: IS ya aplica el descuento en PRIMA1, no necesitamos recalcularlo
     
-    console.log(`[IS] PTOTAL (prima real cotizada): $${primaConDescuento.toFixed(2)}`);
+    console.log(`[IS] Prima opción ${vIdOpt} (suma PRIMA1): $${primaBase.toFixed(2)}`);
+    console.log(`[IS] PTOTAL de generarcotizacion (referencia): $${apiPrimaTotal}`);
     if (tieneDescuentoBuenaExp) {
-      console.log(`[IS] ✅ Descuento buena experiencia: -$${descuentoTotal.toFixed(2)} (${descuentoPorcentaje}% sobre ${coberturasConDescuento.length} coberturas)`);
-    } else {
-      console.log(`[IS] ℹ️ Sin descuento buena experiencia explícito (SN_DESCUENTO vacío)`);
+      console.log(`[IS] ✅ Coberturas con descuento buena experiencia: ${coberturasConDescuento.length}`);
     }
     
     // ============================================
@@ -220,8 +228,8 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
       c.COBERTURA?.toUpperCase().includes('VUELCO')
     );
     
-    const dedComprensivo = parseFloat((coberturaComprensivo?.DEDUCIBLE1 || '0').replace(/,/g, ''));
-    const dedColision = parseFloat((coberturaColision?.DEDUCIBLE1 || '0').replace(/,/g, ''));
+    const dedComprensivo = parsePrima(coberturaComprensivo?.DEDUCIBLE1);
+    const dedColision = parsePrima(coberturaColision?.DEDUCIBLE1);
     
     const deducibleSeleccion = quoteData.deducible || 'bajo';
     
@@ -242,7 +250,7 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
       nombre: c.COBERTURA,
       descripcion: c.COBERTURA,
       limite: c.LIMITES || c.LIMITES2 || 'Incluido',
-      prima: parseFloat(c.PRIMA1 || '0'),
+      prima: parsePrima(c.PRIMA1),
       deducible: c.DEDUCIBLE1 || '', // Ya correcto para la opción seleccionada
       incluida: true,
       tieneDescuento: c.SN_DESCUENTO === 'S',
@@ -319,10 +327,10 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
     const IS_TAX_RATE = 0.06; // 6% (5% impuesto + 1% timbres)
     
     // ============================================
-    // BÁSICO: Endoso Plus ya incluido en PTOTAL (COD_AMPARO 19 = $35)
-    // NO sumar $35 de nuevo — IS ya lo incluye en la cotización
+    // BÁSICO: Endoso Plus ya incluido en coberturas (COD_AMPARO 19 / BENEFICIO PLUS)
+    // La suma de PRIMA1 ya incluye el endoso Plus $35
     // ============================================
-    const subtotalBasico = primaConDescuento; // Plus ya incluido
+    const subtotalBasico = primaBase; // Suma PRIMA1 de la opción seleccionada
     const impuestoBasico = Math.round(subtotalBasico * IS_TAX_RATE * 100) / 100;
     const primaBasico = Math.round((subtotalBasico + impuestoBasico) * 100) / 100;
     const basicoEndosos = [
@@ -344,10 +352,10 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
       deductible: deducibleInfo.valor,
       coverages: coberturasDetalladas.map((c: any) => ({ name: c.nombre, included: true })),
       _priceBreakdown: {
-        primaBase: primaConDescuento,
+        primaBase: primaBase,
         descuentoBuenConductor: descuentoTotal,
         descuentoPorcentaje: descuentoPorcentaje,
-        costoEndoso: 0, // Plus ya incluido en PTOTAL
+        costoEndoso: 0, // Plus ya incluido en coberturas
         impuesto: impuestoBasico,
         totalConTarjeta: primaBasico,
         totalAlContado: Math.round(primaBasico * 0.95 * 100) / 100,
@@ -364,7 +372,7 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
     // Solo sumar la diferencia del upgrade, no el costo completo
     // ============================================
     const centenarioUpgrade = IS_ENDOSOS.CENTENARIO.costoAnual - IS_ENDOSOS.PLUS.costoAnual; // $60 - $35 = $25
-    const subtotalPremium = primaConDescuento + centenarioUpgrade;
+    const subtotalPremium = primaBase + centenarioUpgrade;
     const impuestoPremium = Math.round(subtotalPremium * IS_TAX_RATE * 100) / 100;
     const primaPremium = Math.round((subtotalPremium + impuestoPremium) * 100) / 100;
     const premiumEndosos = [
@@ -396,10 +404,10 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
         { name: 'ENDOSO PLUS CENTENARIO (beneficios mejorados)', included: true },
       ],
       _priceBreakdown: {
-        primaBase: primaConDescuento,
+        primaBase: primaBase,
         descuentoBuenConductor: descuentoTotal,
         descuentoPorcentaje: descuentoPorcentaje,
-        costoEndoso: centenarioUpgrade, // Solo el delta $25 (Plus ya en PTOTAL)
+        costoEndoso: centenarioUpgrade, // Solo el delta $25 (Plus ya en coberturas)
         impuesto: impuestoPremium,
         totalConTarjeta: primaPremium,
         totalAlContado: Math.round(primaPremium * 0.95 * 100) / 100,

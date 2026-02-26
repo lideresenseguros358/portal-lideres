@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
     if (isDanosTerceros && result.data?.Table?.length) {
       // Sumar primas de todas las coberturas
       const primaTotal = result.data.Table.reduce(
-        (sum, cob) => sum + (parseFloat(cob.PRIMA1) || 0), 0
+        (sum, cob) => sum + (parseFloat(String(cob.PRIMA1).replace(/,/g, '')) || 0), 0
       );
       if (primaTotal > 0) {
         updateThirdPartyMinPrice({

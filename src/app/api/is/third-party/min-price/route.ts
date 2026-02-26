@@ -39,7 +39,7 @@ export async function GET() {
       if (coberturasResult.success && coberturasResult.data?.Table?.length) {
         // Sumar todas las primas de las coberturas
         const precio = coberturasResult.data.Table.reduce(
-          (sum, cob) => sum + (parseFloat(cob.PRIMA1) || 0), 0
+          (sum, cob) => sum + (parseFloat(String(cob.PRIMA1).replace(/,/g, '')) || 0), 0
         );
         
         return NextResponse.json({
