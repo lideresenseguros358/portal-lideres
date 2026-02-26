@@ -154,6 +154,14 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
       return { basico: null, premium: null };
     }
     
+    // DEBUG: Ver qué tablas llegaron del backend
+    const coberturasKeys = Object.keys(coberturasResult.data || {});
+    console.log(`[IS] DEBUG coberturas keys: [${coberturasKeys.join(', ')}]`);
+    coberturasKeys.forEach(k => {
+      const arr = (coberturasResult.data as any)?.[k];
+      console.log(`[IS] DEBUG ${k}: ${Array.isArray(arr) ? arr.length + ' items' : typeof arr} ${Array.isArray(arr) && arr[0] ? '(first PRIMA1=' + arr[0].PRIMA1 + ' DED=' + arr[0].DEDUCIBLE1 + ')' : ''}`);
+    });
+    
     // ============================================
     // Helper: IS returns PRIMA1 as strings with comma thousands separator
     // e.g. "1,259.58" — parseFloat would return 1, so we strip commas first

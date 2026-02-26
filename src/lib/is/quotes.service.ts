@@ -100,6 +100,9 @@ export interface CoberturaItem {
 
 export interface CoberturasResponse {
   Table?: CoberturaItem[];
+  Table1?: CoberturaItem[];
+  Table2?: CoberturaItem[];
+  [key: string]: CoberturaItem[] | undefined; // Allow dynamic table keys
 }
 
 export interface EmisionAutoRequest {
@@ -319,7 +322,14 @@ export async function obtenerCoberturasCotizacion(
     };
   }
   
-  console.log('[IS Quotes] Coberturas obtenidas');
+  const cobKeys = response.data ? Object.keys(response.data) : [];
+  console.log(`[IS Quotes] Coberturas obtenidas — keys: [${cobKeys.join(', ')}]`);
+  cobKeys.forEach(k => {
+    const arr = (response.data as any)?.[k];
+    if (Array.isArray(arr) && arr.length > 0) {
+      console.log(`[IS Quotes]   ${k}: ${arr.length} items, first COBERTURA=${arr[0]?.COBERTURA} DED1=${arr[0]?.DEDUCIBLE1} PRIMA1=${arr[0]?.PRIMA1}`);
+    }
+  });
   
   return {
     success: true,

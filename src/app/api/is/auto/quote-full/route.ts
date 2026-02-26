@@ -87,13 +87,22 @@ export async function POST(request: NextRequest) {
     );
     
     const tCob = Date.now();
+    const cobData = cobResult.success ? cobResult.data : null;
+    const cobKeys = cobData ? Object.keys(cobData) : [];
     console.log(`[IS QuoteFull] Coberturas en ${tCob - tQuote}ms. Total: ${tCob - t0}ms`);
+    console.log(`[IS QuoteFull] Coberturas keys: [${cobKeys.join(', ')}]`);
+    cobKeys.forEach(k => {
+      const arr = (cobData as any)?.[k];
+      if (Array.isArray(arr)) {
+        console.log(`[IS QuoteFull]   ${k}: ${arr.length} items, first DED=${arr[0]?.DEDUCIBLE1}`);
+      }
+    });
     
     return NextResponse.json({
       success: true,
       idCotizacion: quoteResult.idCotizacion,
       primaTotal: quoteResult.primaTotal,
-      coberturas: cobResult.success ? cobResult.data : null,
+      coberturas: cobData,
       coberturasError: cobResult.success ? undefined : cobResult.error,
       _timing: {
         quoteMs: tQuote - t0,
