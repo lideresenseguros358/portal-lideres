@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getISBaseUrl, getISPrimaryToken } from '@/lib/is/config';
+import { isGet } from '@/lib/is/http-client';
+import { invalidateToken, getDailyTokenWithRetry } from '@/lib/is/token-manager';
 import type { ISEnvironment } from '@/lib/is/config';
 
 export const dynamic = 'force-dynamic';
@@ -7,35 +8,28 @@ export const maxDuration = 60;
 
 export async function GET() {
   const env: ISEnvironment = 'development';
-  const baseUrl = getISBaseUrl(env).replace(/\/+$/, '');
-  const primaryToken = getISPrimaryToken(env);
 
-  // Get daily token
-  let dailyToken: string | null = null;
-  for (const method of ['POST', 'GET'] as const) {
-    try {
-      const r = await fetch(`${baseUrl}/tokens`, {
-        method,
-        headers: { Authorization: `Bearer ${primaryToken}`, Accept: 'application/json' },
-        signal: AbortSignal.timeout(12000),
-      });
-      const text = await r.text();
-      const clean = text.trim().replace(/^"|"$/g, '');
-      if (clean.startsWith('eyJ') && clean.split('.').length === 3 && clean !== primaryToken) {
-        dailyToken = clean;
-        break;
-      }
-    } catch {}
+  // Step 1: Force fresh daily token
+  invalidateToken(env);
+  let tokenStatus = 'unknown';
+  try {
+    const token = await getDailyTokenWithRetry(env);
+    tokenStatus = token ? `OK (${token.substring(0, 30)}...)` : 'FAILED';
+  } catch (e: any) {
+    tokenStatus = `ERROR: ${e.message}`;
   }
 
-  const token = dailyToken || primaryToken;
+  // Step 2: Use isGet which handles token automatically
+  const bancosResult = await isGet('/catalogos/bancos', env);
 
-  // Fetch /catalogos/bancos
-  const r = await fetch(`${baseUrl}/catalogos/bancos`, {
-    headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
-    signal: AbortSignal.timeout(15000),
+  return NextResponse.json({
+    tokenStatus,
+    bancos: {
+      success: bancosResult.success,
+      statusCode: bancosResult.statusCode,
+      count: Array.isArray(bancosResult.data) ? bancosResult.data.length : 0,
+      data: bancosResult.data,
+      error: bancosResult.error,
+    },
   });
-  const data = await r.json();
-
-  return NextResponse.json({ status: r.status, count: Array.isArray(data) ? data.length : 0, data });
 }
