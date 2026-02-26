@@ -28,15 +28,16 @@ if (typeof window !== 'undefined') {
 
 /**
  * Mapeo de deducibles del formulario a vIdOpt de INTERNACIONAL
- * Bajo = 500 (básico) -> vIdOpt: 1
- * Medio = 250 (medio) -> vIdOpt: 2  
- * Alto = 100 (premium) -> vIdOpt: 3
+ * IS retorna 3 opciones en Table/Table1/Table2:
+ *   Option 1 (Table)  = deducible más bajo  → prima más alta
+ *   Option 2 (Table1) = deducible medio     → prima media
+ *   Option 3 (Table2) = deducible más alto  → prima más baja
  */
 const mapDeductibleToVIdOpt = (deductible: string): 1 | 2 | 3 => {
   switch (deductible) {
-    case 'bajo': return 1;  // Deducible alto = cobertura básica
-    case 'medio': return 2; // Deducible medio = cobertura media
-    case 'alto': return 3;  // Deducible bajo = cobertura premium
+    case 'bajo': return 1;  // Deducible bajo (montos bajos) → prima alta
+    case 'medio': return 2; // Deducible medio → prima media
+    case 'alto': return 3;  // Deducible alto (montos altos) → prima baja
     default: return 1;
   }
 };
