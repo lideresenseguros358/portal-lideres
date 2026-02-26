@@ -712,18 +712,8 @@ export default function EmissionDataForm({ quoteData, onContinue }: EmissionData
                     <option key={a.codConductoIS} value={a.codigoFEDPA}>{a.label}</option>
                   ))}
                 </optgroup>
-                <optgroup label="Financieras">
-                  {ACREEDORES_PANAMA.filter(a => a.tipo === 'FINANCIERA').map(a => (
-                    <option key={a.codConductoIS} value={a.codigoFEDPA}>{a.label}</option>
-                  ))}
-                </optgroup>
                 <optgroup label="Cooperativas">
                   {ACREEDORES_PANAMA.filter(a => a.tipo === 'COOPERATIVA').map(a => (
-                    <option key={a.codConductoIS} value={a.codigoFEDPA}>{a.label}</option>
-                  ))}
-                </optgroup>
-                <optgroup label="Leasing / Arrendamiento">
-                  {ACREEDORES_PANAMA.filter(a => a.tipo === 'LEASING').map(a => (
                     <option key={a.codConductoIS} value={a.codigoFEDPA}>{a.label}</option>
                   ))}
                 </optgroup>
