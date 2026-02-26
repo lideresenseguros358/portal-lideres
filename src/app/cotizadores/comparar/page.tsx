@@ -97,29 +97,16 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
     const vcodmodelo = quoteData.modeloCodigo || 1234;
     const vIdOpt = mapDeductibleToVIdOpt(quoteData.deducible || 'bajo');
     
-    // Obtener parámetros de plan
-    console.log('[IS] Obteniendo parámetros de plan dinámicamente...');
-    const planParamsRes = await fetch('/api/is/auto/plan-params?tipo=CC&env=development');
+    // Plan params: CC Particular defaults (cached 24h server-side, rarely change)
+    const vcodplancobertura = quoteData.vcodplancobertura || 29;  // CC 5/10
+    const vcodgrupotarifa = quoteData.vcodgrupotarifa || 20;      // PARTICULAR
     
-    let vcodplancobertura: number;
-    let vcodgrupotarifa: number;
+    // ── UNA SOLA llamada: quote + coberturas combinados en el backend ──
+    // Elimina 2 round-trips cliente→servidor (plan-params + coberturas separado)
+    console.log('[IS] Cotización completa (quote+coberturas) en una llamada...');
+    const t0 = performance.now();
     
-    if (planParamsRes.ok) {
-      const planParams = await planParamsRes.json();
-      if (planParams.success) {
-        vcodplancobertura = planParams.vcodplancobertura;
-        vcodgrupotarifa = planParams.vcodgrupotarifa;
-      } else {
-        console.error('[IS] Error obteniendo parámetros:', planParams.error);
-        return { basico: null, premium: null };
-      }
-    } else {
-      console.error('[IS] Error HTTP obteniendo parámetros de plan');
-      return { basico: null, premium: null };
-    }
-    
-    // UNA sola llamada a la API de cotización
-    const quoteResponse = await fetch('/api/is/auto/quote', {
+    const quoteResponse = await fetch('/api/is/auto/quote-full', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -139,33 +126,31 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
       }),
     });
     
+    const elapsed = ((performance.now() - t0) / 1000).toFixed(1);
+    
     if (!quoteResponse.ok) {
       const errorBody = await quoteResponse.json().catch(() => null);
-      console.error('[IS] Error en cotización:', errorBody?.error || `HTTP ${quoteResponse.status}`);
+      console.error(`[IS] Error en cotización (${elapsed}s):`, errorBody?.error || `HTTP ${quoteResponse.status}`);
       return { basico: null, premium: null };
     }
     
-    const quoteResult = await quoteResponse.json();
-    if (!quoteResult.success || !quoteResult.idCotizacion) {
-      console.error('[IS] No se obtuvo cotización:', quoteResult.error || 'Sin ID');
+    const result = await quoteResponse.json();
+    if (!result.success || !result.idCotizacion) {
+      console.error(`[IS] No se obtuvo cotización (${elapsed}s):`, result.error || 'Sin ID');
       return { basico: null, premium: null };
     }
     
-    const idCotizacion = quoteResult.idCotizacion;
-    const apiPrimaTotal = quoteResult.primaTotal; // PTOTAL from generarcotizacion — REAL discounted price
-    console.log('[INTERNACIONAL] ID Cotización:', idCotizacion, '| PTOTAL (prima real):', apiPrimaTotal);
-    
-    // Obtener coberturas
-    const coberturasResponse = await fetch(`/api/is/auto/coberturas?vIdPv=${idCotizacion}&vIdOpt=${vIdOpt}&env=development`);
-    
-    if (!coberturasResponse.ok) {
-      console.error('Error en API coberturas:', await coberturasResponse.text());
-      return { basico: null, premium: null };
+    const idCotizacion = result.idCotizacion;
+    const apiPrimaTotal = result.primaTotal;
+    console.log(`[IS] ✅ Cotización completa en ${elapsed}s | ID: ${idCotizacion} | PTOTAL: ${apiPrimaTotal}`);
+    if (result._timing) {
+      console.log(`[IS] Timing: quote=${result._timing.quoteMs}ms coberturas=${result._timing.coberturasMs}ms total=${result._timing.totalMs}ms`);
     }
     
-    const coberturasResult = await coberturasResponse.json();
+    // Coberturas come in the same response — no extra round-trip needed
+    const coberturasResult = { success: !!result.coberturas, data: result.coberturas };
     if (!coberturasResult.success) {
-      console.error('No se obtuvieron coberturas');
+      console.error('[IS] No se obtuvieron coberturas:', result.coberturasError);
       return { basico: null, premium: null };
     }
     
@@ -447,10 +432,14 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
  * Se hace UNA sola llamada a la API y se generan ambas tarjetas.
  */
 const generateFedpaQuotes = async (quoteData: any): Promise<{ premium: any | null; basico: any | null }> => {
-  const { calcularPrecioContado } = await import('@/lib/cotizadores/fedpa-premium-features');
-  
   const environment = 'DEV';
-  const planInfo = await obtenerPlanPorTipo(quoteData.planType || 'basico', environment);
+  
+  // Parallelizar import dinámico + resolución de plan
+  const [premiumModule, planInfo] = await Promise.all([
+    import('@/lib/cotizadores/fedpa-premium-features'),
+    obtenerPlanPorTipo(quoteData.planType || 'basico', environment),
+  ]);
+  const { calcularPrecioContado } = premiumModule;
   
   if (!planInfo) {
     console.error('[FEDPA] No se pudo obtener plan');
@@ -470,8 +459,8 @@ const generateFedpaQuotes = async (quoteData: any): Promise<{ premium: any | nul
     
     console.log('[FEDPA] Deducible:', quoteData.deducible, '→ Opción:', opcionSeleccionada);
     
-    // UNA SOLA llamada a la API (S y N retornan lo mismo)
-    const cotizacionResponse = await fetch('/api/fedpa/cotizacion', {
+    // ── PARALELO: Cotización + Beneficios al mismo tiempo ──
+    const cotizacionPromise = fetch('/api/fedpa/cotizacion', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -499,6 +488,13 @@ const generateFedpaQuotes = async (quoteData: any): Promise<{ premium: any | nul
         environment: 'DEV',
       }),
     });
+    
+    const beneficiosPromise = fetch(`/api/fedpa/planes/beneficios?plan=${planInfo.planId}&environment=${environment}`)
+      .then(res => res.ok ? res.json() : null)
+      .catch(() => null);
+    
+    // Esperar ambas en paralelo
+    const [cotizacionResponse, beneficiosData] = await Promise.all([cotizacionPromise, beneficiosPromise]);
     
     if (!cotizacionResponse.ok) {
       console.error('[FEDPA] Error en API:', await cotizacionResponse.text());
@@ -606,27 +602,18 @@ const generateFedpaQuotes = async (quoteData: any): Promise<{ premium: any | nul
     }
     
     // ============================================
-    // BENEFICIOS Y ASISTENCIAS
+    // BENEFICIOS Y ASISTENCIAS (ya obtenidos en paralelo arriba)
     // ============================================
     let asistenciasNormalizadas: any[] = [];
-    let beneficiosRawTexts: string[] = []; // Raw text from API for endoso parsing
+    let beneficiosRawTexts: string[] = [];
     const deduciblesReales = normalizeDeductibles([], apiCoberturas, quoteData.deducible as 'bajo' | 'medio' | 'alto');
     
-    try {
-      const beneficiosResponse = await fetch(`/api/fedpa/planes/beneficios?plan=${planInfo.planId}&environment=${environment}`);
-      if (beneficiosResponse.ok) {
-        const beneficiosData = await beneficiosResponse.json();
-        const beneficiosRaw = beneficiosData.data || [];
-        
-        // Store raw texts for endoso parsing
-        beneficiosRawTexts = beneficiosRaw.map((b: any) => b.beneficio || b.BENEFICIOS || b.BENEFICIO || '').filter((t: string) => t.trim() !== '');
-        console.log(`[FEDPA] Beneficios RAW texts (${beneficiosRawTexts.length}):`, JSON.stringify(beneficiosRawTexts));
-        
-        asistenciasNormalizadas = normalizeAssistanceBenefits(beneficiosRaw);
-        console.log(`[FEDPA] Asistencias normalizadas:`, asistenciasNormalizadas.length);
-      }
-    } catch (error) {
-      console.error('[FEDPA] Error obteniendo beneficios:', error);
+    if (beneficiosData) {
+      const beneficiosRaw = beneficiosData.data || [];
+      beneficiosRawTexts = beneficiosRaw.map((b: any) => b.beneficio || b.BENEFICIOS || b.BENEFICIO || '').filter((t: string) => t.trim() !== '');
+      console.log(`[FEDPA] Beneficios RAW texts (${beneficiosRawTexts.length}):`, JSON.stringify(beneficiosRawTexts));
+      asistenciasNormalizadas = normalizeAssistanceBenefits(beneficiosRaw);
+      console.log(`[FEDPA] Asistencias normalizadas:`, asistenciasNormalizadas.length);
     }
     
     const allBeneficios = asistenciasNormalizadas.length > 0

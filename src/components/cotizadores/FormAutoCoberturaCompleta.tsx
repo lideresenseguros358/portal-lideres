@@ -243,6 +243,9 @@ export default function FormAutoCoberturaCompleta() {
       deducible: formData.deducible,
     }));
     
+    // Pre-warm IS token cache (fire-and-forget) — saves ~1-3s on compare page
+    fetch('/api/is/auto/plan-params?tipo=CC&env=development').catch(() => {});
+    
     toast.success('Generando cotización...');
     router.push('/cotizadores/comparar');
   };
