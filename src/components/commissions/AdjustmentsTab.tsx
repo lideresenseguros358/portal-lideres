@@ -29,6 +29,8 @@ import {
   FaDownload,
   FaFilePdf,
   FaFileExcel,
+  FaQuestionCircle,
+  FaTrophy,
 } from 'react-icons/fa';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -514,6 +516,9 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
   const [submitting, setSubmitting] = useState(false);
   const [brokerPercent, setBrokerPercent] = useState<number>(0);
   const [selectedBrokerName, setSelectedBrokerName] = useState<string>('');
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showHelpTooltip, setShowHelpTooltip] = useState(false);
+  const helpTooltipRef = useRef<HTMLDivElement>(null);
 
   const loadPendingItems = useCallback(async (silentRefresh = false) => {
     if (silentRefresh) {
@@ -694,16 +699,19 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setShowFilterDropdown(false);
       }
+      if (helpTooltipRef.current && !helpTooltipRef.current.contains(event.target as Node)) {
+        setShowHelpTooltip(false);
+      }
     };
 
-    if (showFilterDropdown) {
+    if (showFilterDropdown || showHelpTooltip) {
       document.addEventListener('mousedown', handleClickOutside);
     }
 
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [showFilterDropdown]);
+  }, [showFilterDropdown, showHelpTooltip]);
 
   useEffect(() => {
     loadPendingItems(false); // Carga inicial con spinner
@@ -760,11 +768,8 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
       console.log('[handleSubmitReport] Result.ok:', result?.ok);
       
       if (result && result.ok) {
-        toast.success(
-          role === 'broker' 
-            ? 'Reporte de ajustes enviado exitosamente' 
-            : 'Reporte de ajustes creado exitosamente para ' + selectedBrokerName
-        );
+        // Mostrar modal de felicitaciones en vez de toast
+        setShowSuccessModal(true);
         // Limpiar selección
         setSelectionMode(false);
         setSelectedItems(new Set());
@@ -1016,6 +1021,42 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-2">
               <h2 className="text-lg sm:text-xl font-semibold text-[#010139]">Comisiones Sin Identificar</h2>
+              {/* Tooltip de ayuda */}
+              <div className="relative" ref={helpTooltipRef}>
+                <button
+                  onClick={() => setShowHelpTooltip(!showHelpTooltip)}
+                  className="p-1 text-gray-400 hover:text-[#8AAA19] transition-colors rounded-full hover:bg-gray-100"
+                  title="Instrucciones"
+                >
+                  <FaQuestionCircle size={16} />
+                </button>
+                {showHelpTooltip && (
+                  <div className="absolute left-0 top-full mt-2 w-[320px] sm:w-[380px] bg-white border-2 border-[#8AAA19] rounded-xl shadow-2xl z-50 p-4">
+                    <div className="flex items-start gap-3">
+                      <FaInfoCircle className="text-[#8AAA19] flex-shrink-0 mt-0.5" size={18} />
+                      <div>
+                        <h4 className="font-bold text-[#010139] mb-2 text-sm">¿Cómo marcar los sin identificar como míos?</h4>
+                        <ol className="text-sm text-gray-700 space-y-2 list-decimal list-inside">
+                          <li>Revisa la lista y presiona <span className="font-semibold text-[#8AAA19]">"Marcar Mío"</span> en cada cliente que te pertenezca.</li>
+                          <li>Al marcar el primero, se activará el modo de selección con checkboxes para que puedas seleccionar más clientes.</li>
+                          <li>Una vez completes la selección de todos tus clientes, presiona <span className="font-semibold text-[#8AAA19]">"Enviar Reporte"</span>.</li>
+                        </ol>
+                        <div className="mt-3 p-2 bg-blue-50 border border-blue-200 rounded-lg">
+                          <p className="text-xs text-blue-800">
+                            <strong>Nota:</strong> Los pagos de ajustes se realizan los días <strong>10</strong> y <strong>25</strong> de cada mes (o el día hábil más cercano). Tu reporte será procesado para la siguiente fecha de pago.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setShowHelpTooltip(false)}
+                      className="absolute top-2 right-2 p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
+                    >
+                      <FaTimes size={12} />
+                    </button>
+                  </div>
+                )}
+              </div>
               {loading && (
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#010139]"></div>
               )}
@@ -1299,6 +1340,45 @@ const PendingItemsView = ({ role, brokerId, brokers, onActionSuccess, onPendingC
           ));
         })()}
       </div>
+      {/* Modal de Felicitaciones — Reporte enviado exitosamente */}
+      {showSuccessModal && (
+        <div className="fixed inset-0 flex items-center justify-center z-50" style={{ backgroundColor: 'rgba(0, 0, 0, 0.7)' }}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden">
+            {/* Header verde */}
+            <div className="bg-gradient-to-r from-[#8AAA19] to-[#7a9617] p-6 text-center">
+              <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mx-auto mb-3">
+                <FaTrophy className="text-white text-3xl" />
+              </div>
+              <h3 className="text-2xl font-bold text-white">¡Felicidades!</h3>
+            </div>
+            {/* Cuerpo */}
+            <div className="p-6 text-center">
+              <p className="text-lg font-semibold text-[#010139] mb-3">
+                Tu reporte ha sido enviado con éxito
+              </p>
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-left mb-4">
+                <div className="flex items-start gap-3">
+                  <FaInfoCircle className="text-blue-600 flex-shrink-0 mt-0.5" size={16} />
+                  <div className="text-sm text-blue-800">
+                    <p className="mb-2">
+                      El cuerpo administrativo estará trabajando tu reporte.
+                    </p>
+                    <p className="font-semibold">
+                      Los pagos de ajustes se realizan los días <span className="text-blue-900 font-bold">10</span> y <span className="text-blue-900 font-bold">25</span> de cada mes, o el día hábil más cercano a estas fechas.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <Button
+                onClick={() => setShowSuccessModal(false)}
+                className="w-full bg-gradient-to-r from-[#010139] to-[#020270] text-white font-semibold py-3 text-base"
+              >
+                Entendido
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
