@@ -84,7 +84,7 @@ async function getTokens(baseUrl: string, primaryToken: string): Promise<string[
 }
 
 export async function GET() {
-  const env: ISEnvironment = 'production';
+  const env: ISEnvironment = 'development';
   let baseUrl: string;
   let primaryToken: string;
 
