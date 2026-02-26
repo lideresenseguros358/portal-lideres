@@ -30,6 +30,7 @@ export interface Acreedor {
 export const ACREEDORES_PANAMA: Acreedor[] = [
 
   // ── BANCOS (codTipoConductoIS = 1) ──────────────────────────
+  { label: 'BAC Credomatic',              tipo: 'BANCO',       codTipoConductoIS: 1, codConductoIS: 3,  codigoFEDPA: 'BAC' },
   { label: 'Banco Aliado',                tipo: 'BANCO',       codTipoConductoIS: 1, codConductoIS: 9,  codigoFEDPA: 'BANCO ALIADO' },
   { label: 'Banco Delta (St. Georges)',   tipo: 'BANCO',       codTipoConductoIS: 1, codConductoIS: 11, codigoFEDPA: 'BANCO DELTA' },
   { label: 'Banco Ficohsa',               tipo: 'BANCO',       codTipoConductoIS: 1, codConductoIS: 12, codigoFEDPA: 'FICOHSA' },
@@ -37,7 +38,6 @@ export const ACREEDORES_PANAMA: Acreedor[] = [
   { label: 'Banco La Hipotecaria',        tipo: 'BANCO',       codTipoConductoIS: 1, codConductoIS: 13, codigoFEDPA: 'LA HIPOTECARIA' },
   { label: 'Banco Nacional de Panamá',    tipo: 'BANCO',       codTipoConductoIS: 1, codConductoIS: 4,  codigoFEDPA: 'BANCO NACIONAL' },
   { label: 'Banco Promerica',             tipo: 'BANCO',       codTipoConductoIS: 1, codConductoIS: 16, codigoFEDPA: 'PROMERICA' },
-  { label: 'BAC Credomatic',              tipo: 'BANCO',       codTipoConductoIS: 1, codConductoIS: 3,  codigoFEDPA: 'BAC' },
   { label: 'Banesco',                     tipo: 'BANCO',       codTipoConductoIS: 1, codConductoIS: 10, codigoFEDPA: 'BANESCO' },
   { label: 'Banistmo',                    tipo: 'BANCO',       codTipoConductoIS: 1, codConductoIS: 2,  codigoFEDPA: 'BANISTMO' },
   { label: 'Caja de Ahorros',             tipo: 'BANCO',       codTipoConductoIS: 1, codConductoIS: 5,  codigoFEDPA: 'CAJA DE AHORROS' },
@@ -49,13 +49,16 @@ export const ACREEDORES_PANAMA: Acreedor[] = [
   { label: 'Towerbank',                   tipo: 'BANCO',       codTipoConductoIS: 1, codConductoIS: 15, codigoFEDPA: 'TOWERBANK' },
 
   // ── FINANCIERAS (codTipoConductoIS = 2) ─────────────────────
-  { label: 'AFP Crecer',                  tipo: 'FINANCIERA',  codTipoConductoIS: 2, codConductoIS: 30, codigoFEDPA: 'AFP CRECER' },
-  { label: 'Financiera Cambiamos',        tipo: 'FINANCIERA',  codTipoConductoIS: 2, codConductoIS: 31, codigoFEDPA: 'CAMBIAMOS' },
-  { label: 'Financiera Dina',             tipo: 'FINANCIERA',  codTipoConductoIS: 2, codConductoIS: 32, codigoFEDPA: 'DINA' },
-  { label: 'Financiera General',          tipo: 'FINANCIERA',  codTipoConductoIS: 2, codConductoIS: 33, codigoFEDPA: 'FINANCIERA GENERAL' },
-  { label: 'Financorp',                   tipo: 'FINANCIERA',  codTipoConductoIS: 2, codConductoIS: 34, codigoFEDPA: 'FINANCORP' },
-  { label: 'LAFISE Financiera',           tipo: 'FINANCIERA',  codTipoConductoIS: 2, codConductoIS: 35, codigoFEDPA: 'LAFISE' },
-  { label: 'Prival Securities',           tipo: 'FINANCIERA',  codTipoConductoIS: 2, codConductoIS: 36, codigoFEDPA: 'PRIVAL' },
+  { label: 'Cambiamos',                   tipo: 'FINANCIERA',  codTipoConductoIS: 2, codConductoIS: 30, codigoFEDPA: 'CAMBIAMOS' },
+  { label: 'Confisa',                     tipo: 'FINANCIERA',  codTipoConductoIS: 2, codConductoIS: 31, codigoFEDPA: 'CONFISA' },
+  { label: 'Dina',                        tipo: 'FINANCIERA',  codTipoConductoIS: 2, codConductoIS: 32, codigoFEDPA: 'DINA' },
+  { label: 'Financial Warehousing',       tipo: 'FINANCIERA',  codTipoConductoIS: 2, codConductoIS: 33, codigoFEDPA: 'FINANCIAL WAREHOUSING' },
+  { label: 'Financiera General',          tipo: 'FINANCIERA',  codTipoConductoIS: 2, codConductoIS: 34, codigoFEDPA: 'FINANCIERA GENERAL' },
+  { label: 'Financorp',                   tipo: 'FINANCIERA',  codTipoConductoIS: 2, codConductoIS: 35, codigoFEDPA: 'FINANCORP' },
+  { label: 'LAFISE Financiera',           tipo: 'FINANCIERA',  codTipoConductoIS: 2, codConductoIS: 36, codigoFEDPA: 'LAFISE' },
+  { label: 'Multibank Credit',            tipo: 'FINANCIERA',  codTipoConductoIS: 2, codConductoIS: 37, codigoFEDPA: 'MULTIBANK CREDIT' },
+  { label: 'Prival Bank',                 tipo: 'FINANCIERA',  codTipoConductoIS: 2, codConductoIS: 38, codigoFEDPA: 'PRIVAL' },
+  { label: 'Telered',                     tipo: 'FINANCIERA',  codTipoConductoIS: 2, codConductoIS: 39, codigoFEDPA: 'TELERED' },
 
   // ── COOPERATIVAS (codTipoConductoIS = 3) ────────────────────
   { label: 'Acacoop',                     tipo: 'COOPERATIVA', codTipoConductoIS: 3, codConductoIS: 50, codigoFEDPA: 'ACACOOP' },
@@ -64,12 +67,15 @@ export const ACREEDORES_PANAMA: Acreedor[] = [
   { label: 'Coopegas',                    tipo: 'COOPERATIVA', codTipoConductoIS: 3, codConductoIS: 53, codigoFEDPA: 'COOPEGAS' },
   { label: 'Coopemep',                    tipo: 'COOPERATIVA', codTipoConductoIS: 3, codConductoIS: 54, codigoFEDPA: 'COOPEMEP' },
   { label: 'Cooperativa San José',        tipo: 'COOPERATIVA', codTipoConductoIS: 3, codConductoIS: 55, codigoFEDPA: 'SAN JOSE' },
+  { label: 'Cuna Mutual (CUNA)',          tipo: 'COOPERATIVA', codTipoConductoIS: 3, codConductoIS: 56, codigoFEDPA: 'CUNA MUTUAL' },
+  { label: 'Fedpa Coop',                  tipo: 'COOPERATIVA', codTipoConductoIS: 3, codConductoIS: 57, codigoFEDPA: 'FEDPA COOP' },
 
-  // ── LEASING / OTROS (codTipoConductoIS = 4) ─────────────────
+  // ── LEASING / ARRENDAMIENTO (codTipoConductoIS = 4) ─────────
   { label: 'Arrendadora General',         tipo: 'LEASING',     codTipoConductoIS: 4, codConductoIS: 70, codigoFEDPA: 'ARRENDADORA GENERAL' },
   { label: 'BG Leasing',                  tipo: 'LEASING',     codTipoConductoIS: 4, codConductoIS: 71, codigoFEDPA: 'BG LEASING' },
-  { label: 'Istmo Leasing',               tipo: 'LEASING',     codTipoConductoIS: 4, codConductoIS: 72, codigoFEDPA: 'ISTMO LEASING' },
-  { label: 'Multibank Leasing',           tipo: 'LEASING',     codTipoConductoIS: 4, codConductoIS: 73, codigoFEDPA: 'MULTIBANK LEASING' },
+  { label: 'Banistmo Leasing',            tipo: 'LEASING',     codTipoConductoIS: 4, codConductoIS: 72, codigoFEDPA: 'BANISTMO LEASING' },
+  { label: 'Istmo Leasing',               tipo: 'LEASING',     codTipoConductoIS: 4, codConductoIS: 73, codigoFEDPA: 'ISTMO LEASING' },
+  { label: 'Multibank Leasing',           tipo: 'LEASING',     codTipoConductoIS: 4, codConductoIS: 74, codigoFEDPA: 'MULTIBANK LEASING' },
   { label: 'Otro acreedor',               tipo: 'OTRO',        codTipoConductoIS: 4, codConductoIS: 99, codigoFEDPA: 'OTRO' },
 ];
 
