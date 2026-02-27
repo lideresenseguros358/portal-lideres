@@ -299,7 +299,7 @@ export default function CreditCardInput({ onTokenReceived, onError, environment 
       </div>
 
       {/* Formulario */}
-      <form onSubmit={(e) => e.preventDefault()} className="space-y-4">
+      <form onSubmit={(e) => e.preventDefault()} className="space-y-4" autoComplete="off">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">
             Número de tarjeta
@@ -311,6 +311,7 @@ export default function CreditCardInput({ onTokenReceived, onError, environment 
             placeholder="1234 5678 9012 3456"
             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#010139] focus:border-transparent"
             maxLength={cardBrand === 'amex' ? 17 : 19}
+            autoComplete="off"
           />
         </div>
 
@@ -324,6 +325,7 @@ export default function CreditCardInput({ onTokenReceived, onError, environment 
             onChange={(e) => setCardName(e.target.value.toUpperCase())}
             placeholder="NOMBRE APELLIDO"
             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#010139] focus:border-transparent uppercase"
+            autoComplete="off"
           />
         </div>
 
@@ -337,6 +339,7 @@ export default function CreditCardInput({ onTokenReceived, onError, environment 
             onChange={(e) => setBankName(e.target.value.toUpperCase())}
             placeholder="Ej: BANCO GENERAL"
             className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#010139] focus:border-transparent uppercase"
+            autoComplete="off"
           />
         </div>
 
@@ -352,6 +355,7 @@ export default function CreditCardInput({ onTokenReceived, onError, environment 
               placeholder="MM/AA"
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#010139] focus:border-transparent"
               maxLength={5}
+              autoComplete="off"
             />
           </div>
 
@@ -368,6 +372,7 @@ export default function CreditCardInput({ onTokenReceived, onError, environment 
               placeholder="***"
               className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#010139] focus:border-transparent"
               maxLength={cardBrand === 'amex' ? 4 : 3}
+              autoComplete="off"
             />
           </div>
         </div>

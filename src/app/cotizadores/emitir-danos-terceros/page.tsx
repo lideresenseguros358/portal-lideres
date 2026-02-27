@@ -20,6 +20,7 @@ import LoadingSkeleton from '@/components/cotizadores/LoadingSkeleton';
 import EmissionProgressBar from '@/components/cotizadores/EmissionProgressBar';
 import EmissionBreadcrumb, { type EmissionStep, type BreadcrumbStepDef } from '@/components/cotizadores/EmissionBreadcrumb';
 import SignaturePad from '@/components/cotizadores/SignaturePad';
+import Image from 'next/image';
 import { buscarOcupacion } from '@/lib/fedpa/catalogos-complementarios';
 
 // 4 steps for DT (no inspection, no cuotas — payment modal handles contado vs cuotas)
@@ -762,6 +763,10 @@ export default function EmitirDanosTercerosPage() {
                   Ingresa los datos de tu tarjeta para continuar
                 </p>
               )}
+              <div className="flex items-center justify-center gap-3 mt-3">
+                <span className="text-xs text-gray-500 font-medium">🔒 100% Secure Check out</span>
+                <Image src="/paguelo_facil_logo.svg" alt="Paguelo Fácil" width={80} height={20} className="object-contain opacity-70" />
+              </div>
             </div>
           </div>
         </div>
