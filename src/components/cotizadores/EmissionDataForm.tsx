@@ -142,6 +142,34 @@ export default function EmissionDataForm({ quoteData, onContinue, showAcreedor =
       .finally(() => setLoadingAddr(''));
   }, []);
 
+  // Auto-populate direccion from structured address fields (IS only)
+  useEffect(() => {
+    if (!isInternacional) return;
+    const parts: string[] = [];
+    if (formData.codProvincia) {
+      const prov = provincias.find(p => p.DATO === formData.codProvincia);
+      if (prov) parts.push(prov.TEXTO);
+    }
+    if (formData.codDistrito) {
+      const dist = distritos.find(d => d.DATO === formData.codDistrito);
+      if (dist) parts.push(dist.TEXTO);
+    }
+    if (formData.codCorregimiento) {
+      const corr = corregimientos.find(c => c.DATO === formData.codCorregimiento);
+      if (corr) parts.push(corr.TEXTO);
+    }
+    if (formData.codUrbanizacion) {
+      const urb = urbanizaciones.find(u => u.DATO === formData.codUrbanizacion);
+      if (urb) parts.push(urb.TEXTO);
+    }
+    if (formData.casaApto?.trim()) {
+      parts.push(formData.casaApto.trim());
+    }
+    if (parts.length > 0) {
+      setFormData(prev => ({ ...prev, direccion: parts.join(', ') }));
+    }
+  }, [isInternacional, formData.codProvincia, formData.codDistrito, formData.codCorregimiento, formData.codUrbanizacion, formData.casaApto, provincias, distritos, corregimientos, urbanizaciones]);
+
   // Cargar datos desde FormAutoCoberturaCompleta al montar
   useEffect(() => {
     const savedQuoteInput = sessionStorage.getItem('quoteInput');
@@ -568,22 +596,24 @@ export default function EmissionDataForm({ quoteData, onContinue, showAcreedor =
               </div>
             </div>
 
-            {/* Dirección */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Dirección Completa <span className="text-red-500">*</span>
-              </label>
-              <textarea
-                value={formData.direccion}
-                onChange={(e) => setFormData({ ...formData, direccion: e.target.value })}
-                className={`w-full px-3 py-2.5 md:px-4 md:py-3 text-base border-2 rounded-lg focus:outline-none transition-colors resize-none ${
-                  errors.direccion ? 'border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
-                }`}
-                rows={2}
-                placeholder="Calle, número, barrio, ciudad"
-              />
-              {errors.direccion && <p className="text-xs text-red-500 mt-1">{errors.direccion}</p>}
-            </div>
+            {/* Dirección — only for non-IS (IS uses structured address below) */}
+            {!isInternacional && (
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Dirección Completa <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={formData.direccion}
+                  onChange={(e) => setFormData({ ...formData, direccion: e.target.value })}
+                  className={`w-full px-3 py-2.5 md:px-4 md:py-3 text-base border-2 rounded-lg focus:outline-none transition-colors resize-none ${
+                    errors.direccion ? 'border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
+                  }`}
+                  rows={2}
+                  placeholder="Calle, número, barrio, ciudad"
+                />
+                {errors.direccion && <p className="text-xs text-red-500 mt-1">{errors.direccion}</p>}
+              </div>
+            )}
 
             {/* Información económica */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -644,7 +674,7 @@ export default function EmissionDataForm({ quoteData, onContinue, showAcreedor =
             {/* IS Address Dropdowns — solo para Internacional */}
             {isInternacional && (
               <div className="bg-gray-50 border-2 border-gray-200 rounded-xl p-4 space-y-4">
-                <p className="text-sm font-semibold text-gray-700 mb-1">Dirección Estructurada (requerido por Internacional)</p>
+                <p className="text-sm font-bold text-[#010139] mb-1">Dirección residencial</p>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* Provincia */}
@@ -754,6 +784,24 @@ export default function EmissionDataForm({ quoteData, onContinue, showAcreedor =
                     className="w-full px-3 py-2.5 text-base border-2 border-gray-300 focus:border-[#8AAA19] rounded-lg focus:outline-none"
                     placeholder="Ej: Casa 12-B, Apto 3C"
                   />
+                </div>
+
+                {/* Dirección Completa — auto-populated from above fields */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">
+                    Dirección Completa <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    value={formData.direccion}
+                    onChange={(e) => setFormData({ ...formData, direccion: e.target.value })}
+                    className={`w-full px-3 py-2.5 text-base border-2 rounded-lg focus:outline-none transition-colors resize-none ${
+                      errors.direccion ? 'border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
+                    }`}
+                    rows={2}
+                    placeholder="Se completa automáticamente con los campos anteriores"
+                  />
+                  {errors.direccion && <p className="text-xs text-red-500 mt-1">{errors.direccion}</p>}
+                  <p className="text-xs text-gray-500 mt-1">Se autocompleta al seleccionar provincia, distrito, etc. Puedes editarla manualmente.</p>
                 </div>
               </div>
             )}
