@@ -12,7 +12,7 @@
 import { useState, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { FaCheckCircle, FaUser, FaCar, FaCreditCard, FaClipboardCheck } from 'react-icons/fa';
+import { FaCheckCircle, FaUser, FaCar, FaCreditCard, FaClipboardCheck, FaTimes } from 'react-icons/fa';
 import EmissionDataForm, { type EmissionData } from '@/components/cotizadores/EmissionDataForm';
 import VehicleDataForm, { type VehicleData } from '@/components/cotizadores/VehicleDataForm';
 import CreditCardInput from '@/components/is/CreditCardInput';
@@ -20,6 +20,7 @@ import LoadingSkeleton from '@/components/cotizadores/LoadingSkeleton';
 import EmissionProgressBar from '@/components/cotizadores/EmissionProgressBar';
 import EmissionBreadcrumb, { type EmissionStep, type BreadcrumbStepDef } from '@/components/cotizadores/EmissionBreadcrumb';
 import SignaturePad from '@/components/cotizadores/SignaturePad';
+import { buscarOcupacion } from '@/lib/fedpa/catalogos-complementarios';
 
 // 4 steps for DT (no inspection, no cuotas — payment modal handles contado vs cuotas)
 const DT_STEPS: BreadcrumbStepDef[] = [
@@ -44,17 +45,17 @@ export default function EmitirDanosTercerosPage() {
   const [loading, setLoading] = useState(true);
   const [selectedPlan, setSelectedPlan] = useState<any>(null);
   const [quoteData, setQuoteData] = useState<any>(null);
-  const [installments] = useState(1);
-  const [monthlyPayment] = useState(0);
   const [emissionData, setEmissionData] = useState<EmissionData | null>(null);
   const [vehicleData, setVehicleData] = useState<VehicleData | null>(null);
   const [paymentToken, setPaymentToken] = useState('');
   const [cardData, setCardData] = useState<{ last4: string; brand: string } | null>(null);
+  const [paymentMode, setPaymentMode] = useState<'contado' | 'cuotas'>('contado');
   const [completedSteps, setCompletedSteps] = useState<EmissionStep[]>([]);
   const [declarationAccepted, setDeclarationAccepted] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
   const [signatureDataUrl, setSignatureDataUrl] = useState<string>('');
   const [showSignaturePad, setShowSignaturePad] = useState(false);
+  const [showTermsModal, setShowTermsModal] = useState(false);
 
   // Load initial data
   useEffect(() => {
@@ -67,6 +68,7 @@ export default function EmitirDanosTercerosPage() {
       }
       const data = JSON.parse(storedQuote);
       setSelectedPlan(data);
+      setPaymentMode(data?._paymentMode === 'cuotas' ? 'cuotas' : 'contado');
       setQuoteData(data.quoteData || {
         cobertura: 'TERCEROS',
         policyType: 'AUTO',
@@ -82,6 +84,31 @@ export default function EmitirDanosTercerosPage() {
       setLoading(false);
     }
   }, [router]);
+
+  const selectedPaymentMode: 'contado' | 'cuotas' = paymentMode;
+  const installmentCount = selectedPlan?._installmentsCount || selectedPlan?.installments?.payments || 1;
+  const installmentAmount = selectedPlan?._installmentAmount || selectedPlan?.installments?.amount || selectedPlan?.annualPremium || 0;
+  const installmentsTotal = selectedPlan?._totalWithInstallments || selectedPlan?.installments?.totalWithInstallments || (installmentAmount * installmentCount);
+  const selectedInstallmentsCount = selectedPaymentMode === 'cuotas' ? installmentCount : 1;
+  const selectedInstallmentAmount = selectedPaymentMode === 'cuotas' ? installmentAmount : (selectedPlan?.annualPremium || 0);
+  const selectedInstallmentsTotal = selectedPaymentMode === 'cuotas' ? installmentsTotal : (selectedPlan?.annualPremium || 0);
+  const hasFedpaInstallments = !!(selectedPlan?._isFEDPA && selectedPlan?.installments?.available);
+
+  const handlePaymentModeChange = (mode: 'contado' | 'cuotas') => {
+    if (mode === 'cuotas' && !hasFedpaInstallments) return;
+    setPaymentMode(mode);
+    setSelectedPlan((prev: any) => (prev ? { ...prev, _paymentMode: mode } : prev));
+
+    const storedQuote = sessionStorage.getItem('selectedQuote');
+    if (!storedQuote) return;
+
+    try {
+      const parsed = JSON.parse(storedQuote);
+      sessionStorage.setItem('selectedQuote', JSON.stringify({ ...parsed, _paymentMode: mode }));
+    } catch (err) {
+      console.error('Error actualizando forma de pago en sesión:', err);
+    }
+  };
 
   // Step number for progress bar
   const getStepNumber = (s: EmissionStep): number => {
@@ -113,8 +140,7 @@ export default function EmitirDanosTercerosPage() {
     setPaymentToken(token);
     setCardData({ last4, brand });
     setCompletedSteps(prev => [...prev.filter(s => s !== 'payment-info'), 'payment-info']);
-    goToStep('review');
-    toast.success('Información de pago guardada');
+    toast.success('Tarjeta registrada. Presiona "Continuar al Resumen" para seguir.');
   };
 
   const handlePaymentError = (error: string) => {
@@ -165,13 +191,14 @@ export default function EmitirDanosTercerosPage() {
           Celular: parseInt((emissionData.celular || '0').replace(/\D/g, '')) || 0,
           Direccion: emissionData.direccion || 'Panama',
           esPEP: emissionData.esPEP ? 1 : 0,
+          Ocupacion: buscarOcupacion(emissionData.actividadEconomica).codigo,
           sumaAsegurada: 0,
           Uso: '10',
-          Marca: selectedPlan._marcaCodigo || quoteData?.marca || '',
-          Modelo: selectedPlan._modeloCodigo || quoteData?.modelo || '',
-          MarcaNombre: selectedPlan._marcaNombre || quoteData?.marca || '',
-          ModeloNombre: selectedPlan._modeloNombre || quoteData?.modelo || '',
-          Ano: (quoteData?.anno || quoteData?.anio || quoteData?.ano || new Date().getFullYear()).toString(),
+          Marca: vehicleData?.marcaCodigo || selectedPlan._marcaCodigo || quoteData?.marcaCodigo || quoteData?.marca || '',
+          Modelo: vehicleData?.modeloCodigo || selectedPlan._modeloCodigo || quoteData?.modeloCodigo || quoteData?.modelo || '',
+          MarcaNombre: vehicleData?.marca || selectedPlan._marcaNombre || quoteData?.marca || '',
+          ModeloNombre: vehicleData?.modelo || selectedPlan._modeloNombre || quoteData?.modelo || '',
+          Ano: (vehicleData?.anio || quoteData?.anno || quoteData?.anio || quoteData?.ano || new Date().getFullYear()).toString(),
           Motor: vehicleData?.motor || '',
           Placa: vehicleData?.placa || '',
           Vin: vehicleData?.vinChasis || '',
@@ -182,8 +209,12 @@ export default function EmitirDanosTercerosPage() {
         };
 
         let emisionResult: any = null;
-        let usedMethod = 'emisor_plan';
+        const usedMethod = 'emisor_plan';
 
+        // ── EmisorPlan (2024): upload docs → emitirpoliza ──
+        // Note: Emisor Externo (2021) crear_poliza_auto_cc_externos is
+        // broken on FEDPA's server (ORA-01400 even with manual example data).
+        // EmisorPlan is the ONLY working emission path.
         toast.info('Subiendo documentos...');
         const docsFormData = new FormData();
         docsFormData.append('environment', 'DEV');
@@ -202,44 +233,38 @@ export default function EmitirDanosTercerosPage() {
         const docsResponseData = await docsResponse.json();
         const isTokenBlocked = docsResponse.status === 424 || docsResponseData.code === 'TOKEN_NOT_AVAILABLE';
 
-        if (docsResponse.ok && docsResponseData.success) {
-          console.log('[EMISIÓN DT FEDPA] Documentos subidos (EmisorPlan):', docsResponseData.idDoc);
-          toast.info('Emitiendo póliza...');
-          const emisionResponse = await fetch('/api/fedpa/emision', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ environment: 'DEV', ...emisionCommon, idDoc: docsResponseData.idDoc }),
-          });
-          const emisionResponseData = await emisionResponse.json();
-          if (!emisionResponse.ok || !emisionResponseData.success) {
-            if (emisionResponse.status === 424 || emisionResponseData.code === 'TOKEN_NOT_AVAILABLE') {
-              console.warn('[EMISIÓN DT FEDPA] EmisorPlan emisión falló por token, usando fallback...');
-            } else {
-              throw new Error(emisionResponseData.error || 'Error emitiendo póliza');
-            }
-          } else {
-            emisionResult = emisionResponseData;
-            usedMethod = 'emisor_plan';
-          }
-        } else if (isTokenBlocked) {
-          console.warn('[EMISIÓN DT FEDPA] Token bloqueado, usando Emisor Externo (2021)...');
-        } else {
+        if (isTokenBlocked) {
+          throw new Error(
+            'El token de FEDPA está bloqueado temporalmente (~50 min). ' +
+            'Por favor intente nuevamente en unos minutos. ' +
+            'Si el problema persiste, contacte a soporte.'
+          );
+        }
+
+        if (!docsResponse.ok || !docsResponseData.success) {
           throw new Error(docsResponseData.error || 'Error subiendo documentos');
         }
 
-        if (!emisionResult) {
-          toast.info('Usando método alternativo de emisión...');
-          usedMethod = 'emisor_externo';
-          const fallbackForm = new FormData();
-          fallbackForm.append('environment', 'DEV');
-          fallbackForm.append('emisionData', JSON.stringify(emisionCommon));
-          if (emissionData.cedulaFile) fallbackForm.append('documento_identidad', emissionData.cedulaFile, emissionData.cedulaFile.name || 'documento_identidad.pdf');
-          if (emissionData.licenciaFile) fallbackForm.append('licencia_conducir', emissionData.licenciaFile, emissionData.licenciaFile.name || 'licencia_conducir.pdf');
-          const fallbackResponse = await fetch('/api/fedpa/emision/fallback', { method: 'POST', body: fallbackForm });
-          const fallbackData = await fallbackResponse.json();
-          if (!fallbackResponse.ok || !fallbackData.success) throw new Error(fallbackData.error || 'Error emitiendo póliza (método alternativo)');
-          emisionResult = fallbackData;
+        console.log('[EMISIÓN DT FEDPA] Documentos subidos (EmisorPlan):', docsResponseData.idDoc);
+        toast.info('Emitiendo póliza...');
+        const emisionResponse = await fetch('/api/fedpa/emision', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ environment: 'DEV', ...emisionCommon, idDoc: docsResponseData.idDoc }),
+        });
+        const emisionResponseData = await emisionResponse.json();
+
+        if (!emisionResponse.ok || !emisionResponseData.success) {
+          if (emisionResponse.status === 424 || emisionResponseData.code === 'TOKEN_NOT_AVAILABLE') {
+            throw new Error(
+              'El token de FEDPA expiró durante la emisión. ' +
+              'Por favor intente nuevamente en unos minutos.'
+            );
+          }
+          throw new Error(emisionResponseData.error || 'Error emitiendo póliza');
         }
+
+        emisionResult = emisionResponseData;
 
         console.log(`[EMISIÓN DT FEDPA] Póliza emitida (${usedMethod}):`, emisionResult.nroPoliza || emisionResult.poliza);
         
@@ -251,6 +276,8 @@ export default function EmitirDanosTercerosPage() {
           welcomeForm.append('environment', 'development');
           welcomeForm.append('nroPoliza', emisionResult.nroPoliza || emisionResult.poliza || '');
           welcomeForm.append('insurerName', 'FEDPA Seguros');
+          if (emisionResult.clientId) welcomeForm.append('clientId', emisionResult.clientId);
+          if (emisionResult.policyId) welcomeForm.append('policyId', emisionResult.policyId);
           
           welcomeForm.append('clientData', JSON.stringify({
             primerNombre: emissionData.primerNombre,
@@ -263,6 +290,12 @@ export default function EmitirDanosTercerosPage() {
             celular: emissionData.celular,
             direccion: emissionData.direccion,
             fechaNacimiento: emissionData.fechaNacimiento,
+            sexo: emissionData.sexo,
+            estadoCivil: emissionData.estadoCivil,
+            esPEP: emissionData.esPEP,
+            actividadEconomica: emissionData.actividadEconomica,
+            dondeTrabaja: emissionData.dondeTrabaja,
+            nivelIngresos: emissionData.nivelIngresos,
           }));
           
           welcomeForm.append('vehicleData', JSON.stringify({
@@ -289,6 +322,9 @@ export default function EmitirDanosTercerosPage() {
           }
           if (emissionData.licenciaFile) {
             welcomeForm.append('licenciaFile', emissionData.licenciaFile);
+          }
+          if (signatureDataUrl) {
+            welcomeForm.append('firmaDataUrl', signatureDataUrl);
           }
           
           const welcomeResponse = await fetch('/api/is/auto/send-expediente', {
@@ -418,6 +454,8 @@ export default function EmitirDanosTercerosPage() {
           expedienteForm.append('pdfUrl', emisionResult.pdfUrl || '');
           expedienteForm.append('insurerName', 'Internacional de Seguros');
           expedienteForm.append('firmaDataUrl', signatureDataUrl || '');
+          if (emisionResult.clientId) expedienteForm.append('clientId', emisionResult.clientId);
+          if (emisionResult.policyId) expedienteForm.append('policyId', emisionResult.policyId);
           
           // IS inspection data from sessionStorage (defaults for DT: no extras, buenEstadoFisico=true)
           const isInspData = sessionStorage.getItem('isInspectionData');
@@ -436,6 +474,12 @@ export default function EmitirDanosTercerosPage() {
             celular: emissionData.celular,
             direccion: emissionData.direccion,
             fechaNacimiento: emissionData.fechaNacimiento,
+            sexo: emissionData.sexo,
+            estadoCivil: emissionData.estadoCivil,
+            esPEP: emissionData.esPEP,
+            actividadEconomica: emissionData.actividadEconomica,
+            dondeTrabaja: emissionData.dondeTrabaja,
+            nivelIngresos: emissionData.nivelIngresos,
           }));
           
           expedienteForm.append('vehicleData', JSON.stringify({
@@ -591,6 +635,7 @@ export default function EmitirDanosTercerosPage() {
           <EmissionDataForm
             quoteData={{ ...quoteData, insurerName: selectedPlan?.insurerName }}
             onContinue={handleEmissionDataComplete}
+            showAcreedor={false}
           />
         </div>
       </div>
@@ -615,6 +660,7 @@ export default function EmitirDanosTercerosPage() {
             quoteData={quoteData}
             onContinue={handleVehicleDataComplete}
             isInternacional={!!(selectedPlan?._isReal && selectedPlan?.insurerName?.includes('INTERNACIONAL'))}
+            isThirdPartyMode
           />
         </div>
       </div>
@@ -623,7 +669,7 @@ export default function EmitirDanosTercerosPage() {
 
   // ─── STEP 3: INFORMACIÓN DE PAGO ───
   if (step === 'payment-info') {
-    const amount = installments === 1 ? selectedPlan.annualPremium : monthlyPayment;
+    const amount = selectedPaymentMode === 'cuotas' ? selectedInstallmentAmount : selectedPlan.annualPremium;
 
     return (
       <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100">
@@ -650,14 +696,14 @@ export default function EmitirDanosTercerosPage() {
             <div className="bg-gradient-to-r from-[#010139] to-[#020270] rounded-2xl p-6 mb-6 text-white shadow-2xl">
               <div className="text-center">
                 <div className="text-sm opacity-80 mb-1">
-                  {installments === 1 ? 'Pago Único' : `${installments} Cuotas de:`}
+                  {selectedPaymentMode === 'cuotas' ? `${selectedInstallmentsCount} Cuotas de:` : 'Pago Único'}
                 </div>
                 <div className="text-4xl sm:text-5xl font-bold mb-2">
                   ${amount.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                 </div>
-                {installments > 1 && (
+                {selectedPaymentMode === 'cuotas' && (
                   <div className="text-xs opacity-70">
-                    Total: ${(amount * installments).toLocaleString('en-US', { minimumFractionDigits: 2 })}
+                    Total: ${selectedInstallmentsTotal.toLocaleString('en-US', { minimumFractionDigits: 2 })}
                   </div>
                 )}
               </div>
@@ -708,7 +754,7 @@ export default function EmitirDanosTercerosPage() {
     const isInternacionalDT = !!(selectedPlan?._isReal && selectedPlan?.insurerName?.includes('INTERNACIONAL'));
 
     const handleEmitClick = () => {
-      if (isInternacionalDT && !signatureDataUrl) {
+      if (!signatureDataUrl) {
         setShowSignaturePad(true);
         return;
       }
@@ -762,12 +808,51 @@ export default function EmitirDanosTercerosPage() {
                   <div>
                     <p className="text-gray-500">Forma de Pago</p>
                     <p className="font-bold">
-                      {installments === 1 ? 'Contado' : `${installments} cuotas de B/.${monthlyPayment.toFixed(2)}`}
+                      {selectedPaymentMode === 'cuotas'
+                        ? `${selectedInstallmentsCount} cuotas de B/.${selectedInstallmentAmount.toFixed(2)} (Total B/.${selectedInstallmentsTotal.toFixed(2)})`
+                        : `Contado B/.${selectedPlan.annualPremium?.toFixed(2)}`}
                       {cardData && ` • ${cardData.brand} ****${cardData.last4}`}
                     </p>
                   </div>
                 </div>
               </div>
+
+              {hasFedpaInstallments && (
+                <div className="bg-white rounded-lg p-4 shadow-sm border-2 border-[#8AAA19]">
+                  <h6 className="font-bold text-[#010139] mb-3 text-sm uppercase tracking-wide">Forma de Pago Seleccionada</h6>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => handlePaymentModeChange('contado')}
+                      className={`text-left p-4 rounded-xl border-2 transition-all ${
+                        selectedPaymentMode === 'contado'
+                          ? 'border-[#8AAA19] bg-[#f6fbe8] shadow-md'
+                          : 'border-gray-300 bg-gray-50 hover:border-[#8AAA19]'
+                      }`}
+                    >
+                      <p className="text-xs uppercase tracking-wide text-gray-500 font-semibold">Al contado</p>
+                      <p className="text-2xl font-black text-[#010139]">B/.{selectedPlan.annualPremium?.toFixed(2)}</p>
+                      <p className="text-xs text-gray-600">Pago único</p>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => handlePaymentModeChange('cuotas')}
+                      className={`text-left p-4 rounded-xl border-2 transition-all ${
+                        selectedPaymentMode === 'cuotas'
+                          ? 'border-[#8AAA19] bg-[#f6fbe8] shadow-md'
+                          : 'border-gray-300 bg-gray-50 hover:border-[#8AAA19]'
+                      }`}
+                    >
+                      <p className="text-xs uppercase tracking-wide text-gray-500 font-semibold">En cuotas</p>
+                      <p className="text-xl font-black text-[#010139]">
+                        {installmentCount} x B/.{installmentAmount.toFixed(2)}
+                      </p>
+                      <p className="text-xs text-gray-600">Total: B/.{installmentsTotal.toFixed(2)}</p>
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Client Data */}
               {emissionData && (
@@ -820,19 +905,14 @@ export default function EmitirDanosTercerosPage() {
               )}
             </div>
 
-            {/* Declaration of Veracity */}
+            {/* Términos y Condiciones */}
             <div className="mt-6 bg-yellow-50 border-2 border-yellow-300 rounded-xl p-6">
               <h5 className="font-bold text-[#010139] mb-3 flex items-center gap-2">
                 <FaClipboardCheck className="text-yellow-600" />
-                Declaración de Veracidad
+                Términos y Condiciones
               </h5>
-              <p className="text-sm text-gray-700 mb-4 leading-relaxed">
-                Declaro que toda la información proporcionada en esta solicitud es verídica y completa. 
-                Entiendo que cualquier omisión o falsedad en los datos suministrados puede resultar en la 
-                anulación de la póliza y/o la denegación de cualquier reclamo. Autorizo a la aseguradora 
-                a verificar la información proporcionada.
-              </p>
-              <label className="flex items-start gap-3 cursor-pointer group">
+
+              <label className="flex items-start gap-3 cursor-pointer group mb-3">
                 <input
                   type="checkbox"
                   checked={declarationAccepted}
@@ -840,14 +920,25 @@ export default function EmitirDanosTercerosPage() {
                   className="mt-1 w-5 h-5 rounded border-2 border-gray-300 text-[#8AAA19] 
                     focus:ring-[#8AAA19] cursor-pointer accent-[#8AAA19]"
                 />
-                <span className="text-sm font-semibold text-gray-800 group-hover:text-[#010139]">
-                  Acepto la declaración de veracidad y autorizo el procesamiento de mis datos
+                <span className="text-sm text-gray-700 group-hover:text-[#010139] transition-colors">
+                  He leído y acepto los{' '}
+                  <button
+                    type="button"
+                    onClick={(e) => { e.preventDefault(); setShowTermsModal(true); }}
+                    className="text-[#8AAA19] font-semibold underline hover:text-[#6d8814]"
+                  >
+                    Términos y Condiciones completos
+                  </button>
                 </span>
               </label>
+
+              <p className="text-xs text-gray-500 italic">
+                La aceptación es requisito obligatorio para la emisión de la póliza.
+              </p>
             </div>
 
             {/* Signature indicator for IS */}
-            {isInternacionalDT && signatureDataUrl && (
+            {signatureDataUrl && (
               <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-3">
                 <span className="text-green-600 text-lg">✅</span>
                 <span className="text-sm text-green-800 font-semibold">Firma digital capturada</span>
@@ -887,17 +978,99 @@ export default function EmitirDanosTercerosPage() {
               </button>
               {!declarationAccepted && (
                 <p className="text-xs text-gray-500 text-center mt-2">
-                  Debes aceptar la declaración de veracidad para continuar
+                  Debes aceptar los Términos y Condiciones para continuar
                 </p>
               )}
-              {isInternacionalDT && declarationAccepted && !signatureDataUrl && (
+              {declarationAccepted && !signatureDataUrl && (
                 <p className="text-xs text-blue-600 text-center mt-2">
-                  Al emitir se solicitará tu firma digital para el formulario de inspección
+                  Al emitir se solicitará tu firma digital para la carta de autorización
                 </p>
               )}
             </div>
           </div>
         </div>
+
+        {/* Modal Términos y Condiciones */}
+        {showTermsModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col my-4 sm:my-8">
+              <div className="flex items-center justify-between p-6 border-b border-gray-200 flex-shrink-0">
+                <h3 className="text-xl font-bold text-[#010139] flex items-center gap-2">
+                  <span>📋</span> Términos y Condiciones
+                </h3>
+                <button onClick={() => setShowTermsModal(false)} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
+                  <FaTimes className="text-gray-500" />
+                </button>
+              </div>
+              <div className="p-6 overflow-y-auto flex-1 text-sm text-gray-700 leading-relaxed space-y-5">
+                <p className="text-xs font-bold text-[#010139] text-center uppercase tracking-wide">
+                  Autorización, Declaración de Veracidad, Tratamiento de Datos Personales y Relevo de Responsabilidad
+                </p>
+                <div className="space-y-2">
+                  <p className="font-bold text-[#010139]">PRIMERA: AUTORIZACIÓN PARA TRATAMIENTO DE DATOS PERSONALES</p>
+                  <p>De conformidad con lo establecido en la Ley 81 de 26 de marzo de 2019 sobre Protección de Datos Personales de la República de Panamá, autorizo a <strong>LÍDERES EN SEGUROS, S.A.</strong> para recopilar, almacenar, utilizar y transferir mis datos personales a aseguradoras, reaseguradoras, ajustadores y terceros necesarios para la gestión del contrato de seguro.</p>
+                </div>
+                <div className="space-y-2">
+                  <p className="font-bold text-[#010139]">SEGUNDA: NATURALEZA DE LA INTERMEDIACIÓN</p>
+                  <p>Reconozco que LÍDERES EN SEGUROS, S.A. actúa exclusivamente como corredor e intermediario de seguros conforme al Decreto Ley 12 de 2012. El contrato de seguro se celebra entre el cliente y la aseguradora; el corredor no es parte aseguradora del contrato.</p>
+                </div>
+                <div className="space-y-2">
+                  <p className="font-bold text-[#010139]">TERCERA: COMUNICACIONES OFICIALES</p>
+                  <p>El correo electrónico suministrado será el medio oficial de comunicación. Es mi responsabilidad suministrar un correo correcto y revisarlo periódicamente, incluyendo carpetas de spam.</p>
+                </div>
+                <div className="space-y-2">
+                  <p className="font-bold text-[#010139]">CUARTA: RESPONSABILIDAD SOBRE PAGOS Y MOROSIDAD</p>
+                  <p>La prima del seguro es una obligación contractual directa con la aseguradora. La falta de pago oportuno puede generar cancelación automática de la póliza, suspensión de coberturas y rechazo de reclamos. La responsabilidad por morosidad es exclusivamente mía.</p>
+                </div>
+                <div className="space-y-2">
+                  <p className="font-bold text-[#010139]">QUINTA: DEVOLUCIONES Y CARGOS ADMINISTRATIVOS</p>
+                  <p>Toda solicitud de reverso o devolución podrá generar cargos administrativos, bancarios y operativos, los cuales serán descontados del monto a devolver. El corredor no será responsable por demoras propias del banco, pasarela de pago o aseguradora.</p>
+                </div>
+                <div className="space-y-2">
+                  <p className="font-bold text-[#010139]">SEXTA: RELEVO DE RESPONSABILIDAD</p>
+                  <p>Libero y exonero a LÍDERES EN SEGUROS, S.A., sus directores, agentes y colaboradores de cualquier reclamación derivada de decisiones de suscripción, rechazos de cobertura, exclusiones contractuales, cancelaciones por morosidad o errores en información suministrada por el cliente.</p>
+                </div>
+                <div className="space-y-2">
+                  <p className="font-bold text-[#010139]">SÉPTIMA: DECLARACIÓN DE VERACIDAD (INTEGRAL)</p>
+                  <p>Declaro y certifico, bajo la gravedad de juramento, que toda la información suministrada es <strong>real, exacta, completa y veraz</strong>. No he omitido, alterado ni falseado información alguna. La presentación de información falsa constituye <strong>riesgo moral</strong> y puede dar lugar a la nulidad del contrato, cancelación de la póliza, pérdida de coberturas y rechazo de reclamaciones.</p>
+                </div>
+                <div className="space-y-2">
+                  <p className="font-bold text-[#010139]">OCTAVA: DECLARACIÓN DE ORIGEN LÍCITO DE FONDOS Y CUMPLIMIENTO EN MATERIA DE PREVENCIÓN DE BLANQUEO DE CAPITALES</p>
+                  <p>Declaro bajo la gravedad de juramento que:</p>
+                  <p>Los fondos utilizados para el pago de primas, cargos recurrentes, financiamientos o cualquier otra obligación derivada de la contratación del seguro tienen origen lícito, provienen de actividades legales y no guardan relación directa o indirecta con actividades ilícitas.</p>
+                  <p>No mantengo vinculación alguna, directa o indirecta, con actividades de blanqueo de capitales, financiamiento del terrorismo, proliferación de armas de destrucción masiva, narcotráfico, delitos financieros, corrupción, fraude, trata de personas, delincuencia organizada, ni cualquier otro delito tipificado en la legislación penal de la República de Panamá o en tratados internacionales ratificados por el Estado Panameño.</p>
+                  <p>No me encuentro incluido en listas restrictivas nacionales o internacionales, incluyendo pero no limitándose a: listas de la ONU, OFAC, la Unión Europea, la Superintendencia de Seguros y Reaseguros de Panamá, ni cualquier otra lista de control aplicable en materia de prevención de blanqueo de capitales.</p>
+                  <p>No actúo como testaferro, intermediario oculto o representante de terceros cuyos fondos tengan origen ilícito.</p>
+                  <p>En caso de actuar en representación de una persona jurídica, declaro que la entidad está debidamente constituida, sus beneficiarios finales no están vinculados a actividades ilícitas y los fondos provienen de operaciones comerciales legítimas.</p>
+                </div>
+                <div className="space-y-2">
+                  <p className="font-bold text-[#010139]">NOVENA: FACULTAD DE VERIFICACIÓN, DEBIDA DILIGENCIA Y CONSECUENCIAS</p>
+                  <p>Acepto que, en cumplimiento de la Ley 23 de 27 de abril de 2015 y sus reglamentaciones, LÍDERES EN SEGUROS, S.A. podrá: solicitar documentación adicional de identificación, requerir información sobre actividad económica, verificar identidad mediante validaciones biométricas o documentales, consultar bases de datos públicas o privadas, suspender temporalmente procesos de emisión si se detectan inconsistencias, y negarse a intermediar operaciones cuando existan alertas razonables.</p>
+                  <p>Reconozco que el suministro de información falsa o la omisión de información relevante en materia de origen de fondos podrá dar lugar a: cancelación inmediata del trámite o póliza, reporte a las autoridades competentes conforme a la normativa vigente, terminación de la relación comercial sin responsabilidad para el corredor, y conservación de registros como respaldo ante requerimientos regulatorios.</p>
+                  <p>Me comprometo a notificar cualquier cambio en mi condición financiera, actividad económica o situación legal que pueda impactar el análisis de debida diligencia.</p>
+                </div>
+                <div className="space-y-2">
+                  <p className="font-bold text-[#010139]">DÉCIMA: ACEPTACIÓN DIGITAL</p>
+                  <p>Acepto que la firma digital incorporada en el portal mediante validación electrónica constituye aceptación plena, válida y vinculante del presente documento, conforme a la legislación vigente sobre comercio electrónico en la República de Panamá.</p>
+                </div>
+              </div>
+              <div className="p-6 border-t border-gray-200 flex flex-col sm:flex-row gap-3 flex-shrink-0">
+                <button
+                  onClick={() => { setDeclarationAccepted(true); setShowTermsModal(false); }}
+                  className="flex-1 py-3 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-xl font-bold text-sm hover:shadow-lg transition-all"
+                >
+                  Acepto los Términos y Condiciones
+                </button>
+                <button
+                  onClick={() => setShowTermsModal(false)}
+                  className="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl font-semibold text-sm hover:bg-gray-200 transition-all"
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Signature Pad Modal */}
         {showSignaturePad && (

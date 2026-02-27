@@ -15,6 +15,7 @@ interface PremiumUpgradeModalProps {
   onUpgrade: () => void;
   onContinueBasic: () => void;
   insurerName: string;
+  paymentMode?: 'contado' | 'tarjeta';
   basicPlan: {
     premium: number;
     deductible: number;
@@ -39,6 +40,7 @@ export default function PremiumUpgradeModal({
   onUpgrade,
   onContinueBasic,
   insurerName,
+  paymentMode = 'contado',
   basicPlan,
   premiumPlan,
 }: PremiumUpgradeModalProps) {
@@ -61,14 +63,16 @@ export default function PremiumUpgradeModal({
   
   const hasBreakdown = premiumPlan._priceBreakdown && basicPlan._priceBreakdown;
   
-  const precioBasicoTarjeta = hasBreakdown ? basicPlan._priceBreakdown.totalConTarjeta : basicPlan.premium;
-  const precioBasicoContado = hasBreakdown ? basicPlan._priceBreakdown.totalAlContado : basicPlan.premium;
+  const precioBasico = hasBreakdown
+    ? (paymentMode === 'contado' ? basicPlan._priceBreakdown.totalAlContado : basicPlan._priceBreakdown.totalConTarjeta)
+    : basicPlan.premium;
   
-  const precioPremiumTarjeta = hasBreakdown ? premiumPlan._priceBreakdown.totalConTarjeta : premiumPlan.premium;
-  const precioPremiumContado = hasBreakdown ? premiumPlan._priceBreakdown.totalAlContado : premiumPlan.premium;
+  const precioPremium = hasBreakdown
+    ? (paymentMode === 'contado' ? premiumPlan._priceBreakdown.totalAlContado : premiumPlan._priceBreakdown.totalConTarjeta)
+    : premiumPlan.premium;
   
-  const diferenciaTarjeta = precioPremiumTarjeta - precioBasicoTarjeta;
-  const diferenciaContado = precioPremiumContado - precioBasicoContado;
+  const diferencia = precioPremium - precioBasico;
+  const modoLabel = paymentMode === 'contado' ? 'al contado' : 'en cuotas';
   
   const endososPremium = premiumPlan.endosos || [];
   const endososBasico = basicPlan.endosos || [];
@@ -158,22 +162,10 @@ export default function PremiumUpgradeModal({
                 </span>
               </div>
               <div className="text-center mb-3">
-                {hasBreakdown ? (
-                  <>
-                    <p className="text-[10px] text-gray-500 mb-0.5">Con Tarjeta</p>
-                    <p className="text-xl font-bold text-[#8AAA19]">
-                      ${precioPremiumTarjeta.toFixed(2)}
-                    </p>
-                    <div className="text-[10px] text-gray-400 my-0.5">o al contado</div>
-                    <p className="text-base font-semibold text-green-700">
-                      ${precioPremiumContado.toFixed(2)}
-                    </p>
-                  </>
-                ) : (
-                  <p className="text-2xl font-bold text-[#8AAA19]">
-                    ${premiumPlan.premium.toFixed(2)}<span className="text-xs font-normal text-gray-500">/año</span>
-                  </p>
-                )}
+                <p className="text-[10px] text-gray-500 mb-0.5 capitalize">{modoLabel}</p>
+                <p className="text-2xl font-bold text-[#8AAA19]">
+                  ${precioPremium.toFixed(2)}<span className="text-xs font-normal text-gray-500">/año</span>
+                </p>
               </div>
               <div className="text-center space-y-1">
                 <p className="text-[11px] font-bold text-[#8AAA19]">{endososPremium.length} endosos incluidos</p>
@@ -189,22 +181,10 @@ export default function PremiumUpgradeModal({
                 </span>
               </div>
               <div className="text-center mb-3">
-                {hasBreakdown ? (
-                  <>
-                    <p className="text-[10px] text-gray-500 mb-0.5">Con Tarjeta</p>
-                    <p className="text-xl font-bold text-gray-600">
-                      ${precioBasicoTarjeta.toFixed(2)}
-                    </p>
-                    <div className="text-[10px] text-gray-400 my-0.5">o al contado</div>
-                    <p className="text-base font-semibold text-gray-500">
-                      ${precioBasicoContado.toFixed(2)}
-                    </p>
-                  </>
-                ) : (
-                  <p className="text-2xl font-bold text-gray-600">
-                    ${basicPlan.premium.toFixed(2)}<span className="text-xs font-normal text-gray-500">/año</span>
-                  </p>
-                )}
+                <p className="text-[10px] text-gray-500 mb-0.5 capitalize">{modoLabel}</p>
+                <p className="text-2xl font-bold text-gray-600">
+                  ${precioBasico.toFixed(2)}<span className="text-xs font-normal text-gray-500">/año</span>
+                </p>
               </div>
               <div className="text-center space-y-1">
                 <p className="text-[11px] text-gray-500">{endososBasico.length} endosos incluidos</p>
@@ -216,13 +196,9 @@ export default function PremiumUpgradeModal({
           {/* Diferencia de precio destacada */}
           <div className="bg-gradient-to-r from-[#8AAA19]/10 to-green-50 border border-[#8AAA19]/30 rounded-lg p-3 text-center">
             <p className="text-sm font-bold text-[#010139]">
-              Diferencia: solo <span className="text-[#8AAA19] text-lg">${hasBreakdown ? diferenciaTarjeta.toFixed(2) : (premiumPlan.premium - basicPlan.premium).toFixed(2)}</span> más al año
+              Diferencia: solo <span className="text-[#8AAA19] text-lg">${diferencia.toFixed(2)}</span> más al año
             </p>
-            {hasBreakdown && (
-              <p className="text-[11px] text-gray-500 mt-0.5">
-                (${diferenciaContado.toFixed(2)} al contado)
-              </p>
-            )}
+            <p className="text-[11px] text-gray-500 mt-0.5 capitalize">({modoLabel})</p>
           </div>
 
           {/* Tabla comparativa de endosos */}

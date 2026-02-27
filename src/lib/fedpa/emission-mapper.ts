@@ -6,6 +6,7 @@
 import type { EmissionData } from '@/components/cotizadores/EmissionDataForm';
 import type { VehicleData } from '@/components/cotizadores/VehicleDataForm';
 import type { EmitirPolizaRequest } from './types';
+import { buscarOcupacion } from './catalogos-complementarios';
 
 /**
  * Convierte EmissionData + VehicleData a formato FEDPA EmitirPolizaRequest
@@ -45,7 +46,9 @@ export function mapEmissionDataToFedpa(
     // Cliente - Opcionales
     SegundoNombre: emissionData.segundoNombre,
     SegundoApellido: emissionData.segundoApellido,
-    Ocupacion: undefined, // No lo solicitamos en el form
+    Ocupacion: emissionData.actividadEconomica
+      ? buscarOcupacion(emissionData.actividadEconomica).codigo
+      : undefined,
     Acreedor: emissionData.acreedor || undefined,
 
     // Vehículo - De quoteData (ya validados en cotización)

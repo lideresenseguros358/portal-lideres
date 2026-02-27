@@ -437,7 +437,8 @@ export async function isGet<T = any>(
 export async function isPost<T = any>(
   endpoint: string,
   body: any,
-  env: ISEnvironment = 'development'
+  env: ISEnvironment = 'development',
+  options?: { timeout?: number }
 ): Promise<ISResponse<T>> {
-  return isRequest<T>(endpoint, { method: 'POST', body }, env);
+  return isRequest<T>(endpoint, { method: 'POST', body, timeout: options?.timeout }, env);
 }

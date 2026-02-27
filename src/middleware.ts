@@ -2,6 +2,25 @@ import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import type { Database } from './lib/database.types';
 
+// ============================================
+// SECURITY HEADERS — se aplican a toda respuesta del middleware
+// ============================================
+const securityHeaders: Record<string, string> = {
+  'Strict-Transport-Security': 'max-age=63072000; includeSubDomains; preload',
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'X-XSS-Protection': '1; mode=block',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), interest-cohort=()',
+};
+
+function applySecurityHeaders(response: NextResponse): NextResponse {
+  for (const [key, value] of Object.entries(securityHeaders)) {
+    response.headers.set(key, value);
+  }
+  return response;
+}
+
 export async function middleware(request: NextRequest) {
   // Si hay errores de Supabase en la URL (token expirado, etc), redirigir a login con el error
   const error_code = request.nextUrl.searchParams.get('error_code');
@@ -10,7 +29,7 @@ export async function middleware(request: NextRequest) {
   if (error_code || error_description) {
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('error', error_description || error_code || 'authentication_failed');
-    return NextResponse.redirect(loginUrl);
+    return applySecurityHeaders(NextResponse.redirect(loginUrl));
   }
 
   let supabaseResponse = NextResponse.next({
@@ -54,7 +73,7 @@ export async function middleware(request: NextRequest) {
       const url = request.nextUrl.clone();
       url.pathname = '/account';
       url.searchParams.set('forcePassword', '1');
-      return NextResponse.redirect(url);
+      return applySecurityHeaders(NextResponse.redirect(url));
     }
 
     // Si es broker, verificar que esté activo
@@ -70,12 +89,12 @@ export async function middleware(request: NextRequest) {
         await supabase.auth.signOut();
         const loginUrl = new URL('/login', request.url);
         loginUrl.searchParams.set('error', 'Tu cuenta ha sido desactivada. Contacta al administrador.');
-        return NextResponse.redirect(loginUrl);
+        return applySecurityHeaders(NextResponse.redirect(loginUrl));
       }
     }
   }
 
-  return supabaseResponse;
+  return applySecurityHeaders(supabaseResponse);
 }
 
 export const config = {

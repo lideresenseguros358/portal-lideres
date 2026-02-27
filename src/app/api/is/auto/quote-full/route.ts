@@ -94,6 +94,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       idCotizacion: quoteResult.idCotizacion,
+      nroCotizacion: quoteResult.nroCotizacion,
       primaTotal: quoteResult.primaTotal,
       coberturas: cobData,
       coberturasError: cobResult.success ? undefined : cobResult.error,

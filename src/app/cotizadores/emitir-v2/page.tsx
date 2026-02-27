@@ -100,8 +100,8 @@ export default function EmitirV2Page() {
     },
     {
       id: 'declaration',
-      title: 'Declaración de Veracidad',
-      subtitle: 'Acepta los términos y condiciones',
+      title: 'Términos y Condiciones',
+      subtitle: 'Lee y acepta los términos, condiciones y declaración de veracidad',
       icon: <FaCheckCircle />,
       status: 'locked',
       canAccess: false,
@@ -735,7 +735,7 @@ export default function EmitirV2Page() {
                       </p>
                     </div>
                     <div>
-                      <p className="text-gray-500">Declaración de Veracidad</p>
+                      <p className="text-gray-500">Términos y Condiciones</p>
                       <p className="font-bold text-[#8AAA19] flex items-center gap-2">
                         <FaCheckCircle /> Aceptada
                       </p>

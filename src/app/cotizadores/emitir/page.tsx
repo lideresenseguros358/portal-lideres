@@ -19,6 +19,7 @@ import EmissionBreadcrumb, { type EmissionStep } from '@/components/cotizadores/
 import SignaturePad from '@/components/cotizadores/SignaturePad';
 import { trackQuoteEmitted, trackQuoteFailed, trackStepUpdate } from '@/lib/adm-cot/track-quote';
 import { createPaymentOnEmission } from '@/lib/adm-cot/create-payment-on-emission';
+import { buscarOcupacion } from '@/lib/fedpa/catalogos-complementarios';
 
 export default function EmitirPage() {
   // A7: Scroll to top al montar
@@ -209,6 +210,7 @@ export default function EmitirPage() {
           Celular: parseInt(emissionData.celular.replace(/\D/g, '') || '0'),
           Direccion: emissionData.direccion,
           esPEP: emissionData.esPEP ? 1 : 0,
+          Ocupacion: buscarOcupacion(emissionData.actividadEconomica).codigo,
           Acreedor: emissionData.acreedor || '',
           sumaAsegurada: quoteData.valorVehiculo || 0,
           Uso: quoteData.uso || '10',
@@ -341,6 +343,9 @@ export default function EmitirPage() {
           welcomeForm.append('environment', 'development');
           welcomeForm.append('nroPoliza', emisionResult.nroPoliza || emisionResult.poliza || '');
           welcomeForm.append('insurerName', 'FEDPA Seguros');
+          welcomeForm.append('firmaDataUrl', signatureDataUrl || '');
+          if (emisionResult.clientId) welcomeForm.append('clientId', emisionResult.clientId);
+          if (emisionResult.policyId) welcomeForm.append('policyId', emisionResult.policyId);
           
           welcomeForm.append('clientData', JSON.stringify({
             primerNombre: emissionData.primerNombre,
@@ -353,6 +358,12 @@ export default function EmitirPage() {
             celular: emissionData.celular,
             direccion: emissionData.direccion,
             fechaNacimiento: emissionData.fechaNacimiento,
+            sexo: emissionData.sexo,
+            estadoCivil: emissionData.estadoCivil,
+            esPEP: emissionData.esPEP,
+            actividadEconomica: emissionData.actividadEconomica,
+            dondeTrabaja: emissionData.dondeTrabaja,
+            nivelIngresos: emissionData.nivelIngresos,
           }));
           
           welcomeForm.append('vehicleData', JSON.stringify({
@@ -470,7 +481,9 @@ export default function EmitirPage() {
             formaPago: installments === 1 ? 1 : 2,
             cantCuotas: installments,
             opcion: selectedPlan._vIdOpt || 1,
+            pjeBexp: selectedPlan._descuentoPorcentaje || 0,
             vacreedor: emissionData.acreedor || '',
+            vendosoTexto: selectedPlan._endosoTexto || '',
             tipo_cobertura: tipoCobertura,
             vmarca_label: quoteData.marca,
             vmodelo_label: quoteData.modelo,
@@ -481,10 +494,10 @@ export default function EmitirPage() {
         if (!emisionResponse.ok) {
           const errorData = await emisionResponse.json();
           const errMsg = errorData.error || 'Error al emitir póliza';
-          // Detectar cotización ya emitida — limpiar datos stale y redirigir
-          if (errMsg.includes('ya fue emitida') || errMsg.includes('nueva cotización')) {
+          // Si la regeneración automática también falló, redirigir al usuario
+          if (errMsg.includes('no se pudo regenerar')) {
             sessionStorage.removeItem('selectedQuote');
-            toast.error('Esta cotización ya fue emitida. Debe generar una nueva cotización.');
+            toast.error('No se pudo generar la cotización. Intente nuevamente.');
             router.push('/cotizadores');
             return;
           }
@@ -494,9 +507,9 @@ export default function EmitirPage() {
         const emisionResult = await emisionResponse.json();
         if (!emisionResult.success) {
           const errMsg = emisionResult.error || 'Error al emitir póliza';
-          if (errMsg.includes('ya fue emitida') || errMsg.includes('nueva cotización')) {
+          if (errMsg.includes('no se pudo regenerar')) {
             sessionStorage.removeItem('selectedQuote');
-            toast.error('Esta cotización ya fue emitida. Debe generar una nueva cotización.');
+            toast.error('No se pudo generar la cotización. Intente nuevamente.');
             router.push('/cotizadores');
             return;
           }
@@ -533,6 +546,8 @@ export default function EmitirPage() {
           expedienteForm.append('pdfUrl', emisionResult.pdfUrl || '');
           expedienteForm.append('insurerName', 'Internacional de Seguros');
           expedienteForm.append('firmaDataUrl', signatureDataUrl || '');
+          if (emisionResult.clientId) expedienteForm.append('clientId', emisionResult.clientId);
+          if (emisionResult.policyId) expedienteForm.append('policyId', emisionResult.policyId);
           
           // Client data
           expedienteForm.append('clientData', JSON.stringify({
@@ -546,6 +561,12 @@ export default function EmitirPage() {
             celular: emissionData.celular,
             direccion: emissionData.direccion,
             fechaNacimiento: emissionData.fechaNacimiento,
+            sexo: emissionData.sexo,
+            estadoCivil: emissionData.estadoCivil,
+            esPEP: emissionData.esPEP,
+            actividadEconomica: emissionData.actividadEconomica,
+            dondeTrabaja: emissionData.dondeTrabaja,
+            nivelIngresos: emissionData.nivelIngresos,
           }));
           
           // Vehicle data
@@ -572,6 +593,19 @@ export default function EmitirPage() {
             tipoVehiculo: quoteData.tipoVehiculo || 'SEDAN',
             cobertura: quoteData.cobertura,
             primaTotal: selectedPlan?.annualPremium || 0,
+            // IS-specific for quotation PDF
+            _idCotizacion: selectedPlan?._idCotizacion,
+            _nroCotizacion: selectedPlan?._nroCotizacion,
+            _vIdOpt: selectedPlan?._vIdOpt,
+            _deducibleOriginal: selectedPlan?._deducibleOriginal,
+            _allCoberturas: selectedPlan?._allCoberturas,
+            _apiPrimaTotal: selectedPlan?._apiPrimaTotal,
+            _descuentoFactor: selectedPlan?._descuentoFactor,
+            _descuentoPorcentaje: selectedPlan?._descuentoPorcentaje,
+            _descuentoBuenaExp: selectedPlan?._descuentoBuenaExp,
+            _endosoTexto: selectedPlan?._endosoTexto,
+            _planType: selectedPlan?.planType,
+            _priceBreakdown: selectedPlan?._priceBreakdown,
           }));
           
           // IS inspection data (extras, physical condition) — send always, API handles defaults for DT
@@ -930,7 +964,7 @@ export default function EmitirPage() {
   if (currentStep === 'review') {
     // For IS Internacional: require signature before emitting
     const handleEmitClick = () => {
-      if (isInternacional && !signatureDataUrl) {
+      if (!signatureDataUrl) {
         setShowSignaturePad(true);
         return;
       }
@@ -972,7 +1006,7 @@ export default function EmitirPage() {
           />
 
           {/* Signature indicator for IS */}
-          {isInternacional && signatureDataUrl && (
+          {signatureDataUrl && (
             <div className="max-w-2xl mx-auto mt-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-3">
               <span className="text-green-600 text-lg">✅</span>
               <span className="text-sm text-green-800 font-semibold">Firma digital capturada</span>

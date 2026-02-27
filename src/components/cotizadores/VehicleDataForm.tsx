@@ -6,15 +6,19 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { FaCar, FaCamera, FaArrowRight, FaArrowLeft } from 'react-icons/fa';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
+import Image from 'next/image';
+import Autocomplete, { type AutocompleteOption } from '@/components/ui/Autocomplete';
+import { useISCatalogs } from '@/hooks/useISCatalogs';
 
 interface VehicleDataFormProps {
   quoteData: any;
   onContinue: (vehicleData: VehicleData) => void;
   isInternacional?: boolean;
+  isThirdPartyMode?: boolean;
 }
 
 export interface VehicleData {
@@ -25,6 +29,11 @@ export interface VehicleData {
   color: string;
   pasajeros: number;
   puertas: number;
+  marca?: string;
+  marcaCodigo?: number;
+  modelo?: string;
+  modeloCodigo?: number;
+  anio?: number;
   kilometraje?: string;
   tipoCombustible?: 'GASOLINA' | 'DIESEL';
   tipoTransmision?: 'AUTOMATICO' | 'MANUAL';
@@ -35,9 +44,43 @@ export interface VehicleData {
   notas?: string;
 }
 
-export default function VehicleDataForm({ quoteData, onContinue, isInternacional = false }: VehicleDataFormProps) {
+const COMMON_BRANDS = [
+  { name: 'TOYOTA', logo: '/logos auto/TOYOTA.png', width: 80 },
+  { name: 'KIA', logo: '/logos auto/KIA.png', width: 150 },
+  { name: 'HYUNDAI', logo: '/logos auto/HYUNDAI.png', width: 80 },
+  { name: 'SUZUKI', logo: '/logos auto/SUZUKI.png', width: 150 },
+  { name: 'NISSAN', logo: '/logos auto/NISSAN.png', width: 80 },
+  { name: 'GEELY', logo: '/logos auto/GEELY.png', width: 150 },
+];
+
+export default function VehicleDataForm({ quoteData, onContinue, isInternacional = false, isThirdPartyMode = false }: VehicleDataFormProps) {
   const router = useRouter();
+  const { marcas, modelos, selectedMarca, setSelectedMarca, loading: catalogsLoading } = useISCatalogs();
+  const [showSearch, setShowSearch] = useState(false);
+
+  const marcasOptions = useMemo<AutocompleteOption[]>(
+    () => marcas.map(m => ({ value: m.COD_MARCA, label: m.TXT_MARCA })),
+    [marcas]
+  );
+
+  const modelosOptions = useMemo<AutocompleteOption[]>(
+    () => modelos.map(m => ({ value: m.COD_MODELO, label: m.TXT_MODELO })),
+    [modelos]
+  );
+
+  const currentYear = new Date().getFullYear();
+  const yearOptions = useMemo(() => {
+    const years: number[] = [];
+    for (let year = currentYear + 1; year >= 1960; year--) years.push(year);
+    return years;
+  }, [currentYear]);
+
   const [formData, setFormData] = useState({
+    marca: quoteData?.marca || '',
+    marcaCodigo: 0,
+    modelo: quoteData?.modelo || '',
+    modeloCodigo: 0,
+    anio: Number(quoteData?.anno || quoteData?.anio || currentYear),
     placa: '',
     vinChasis: '',
     motor: '',
@@ -57,6 +100,20 @@ export default function VehicleDataForm({ quoteData, onContinue, isInternacional
   const [registroFileName, setRegistroFileName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const handleCommonBrandSelect = (brandName: string) => {
+    const marca = marcas.find(m => m.TXT_MARCA.toUpperCase() === brandName.toUpperCase());
+    if (marca) {
+      setSelectedMarca(marca.COD_MARCA);
+      setFormData(prev => ({
+        ...prev,
+        marca: marca.TXT_MARCA,
+        marcaCodigo: marca.COD_MARCA,
+        modelo: '',
+        modeloCodigo: 0,
+      }));
+    }
+  };
+
   // Restaurar datos cacheados al montar
   useEffect(() => {
     const savedData = sessionStorage.getItem('vehicleFormData');
@@ -64,6 +121,9 @@ export default function VehicleDataForm({ quoteData, onContinue, isInternacional
       try {
         const parsed = JSON.parse(savedData);
         setFormData(prev => ({ ...prev, ...parsed }));
+        if (parsed.marcaCodigo) {
+          setSelectedMarca(parsed.marcaCodigo);
+        }
         if (parsed.notas) setNotas(parsed.notas);
       } catch (e) { console.error('Error restaurando datos vehículo:', e); }
     }
@@ -84,7 +144,7 @@ export default function VehicleDataForm({ quoteData, onContinue, isInternacional
         }
       } catch (e) { console.error('Error restaurando registro vehicular:', e); }
     }
-  }, []);
+  }, [setSelectedMarca]);
 
   // Guardar datos del formulario cuando cambian
   useEffect(() => {
@@ -150,7 +210,16 @@ export default function VehicleDataForm({ quoteData, onContinue, isInternacional
     if (!formData.motor) newErrors.motor = 'Requerido';
     if (!formData.color) newErrors.color = 'Requerido';
     if (!registroVehicular) newErrors.registroVehicular = 'Requerido';
-    if (isInternacional && !formData.kilometraje) newErrors.kilometraje = 'Requerido para Internacional';
+
+    if (isThirdPartyMode) {
+      if (!formData.marca) newErrors.marca = 'Requerido';
+      if (!formData.modelo) newErrors.modelo = 'Requerido';
+      if (!formData.anio) newErrors.anio = 'Requerido';
+    }
+
+    if (!isThirdPartyMode && isInternacional && !formData.kilometraje) {
+      newErrors.kilometraje = 'Requerido para Internacional';
+    }
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -186,7 +255,7 @@ export default function VehicleDataForm({ quoteData, onContinue, isInternacional
   };
 
   const handleBack = () => {
-    router.push('/cotizadores/emitir?step=emission-data');
+    router.push(isThirdPartyMode ? '/cotizadores/emitir-danos-terceros?step=emission-data' : '/cotizadores/emitir?step=emission-data');
   };
 
   return (
@@ -204,36 +273,166 @@ export default function VehicleDataForm({ quoteData, onContinue, isInternacional
         </p>
       </div>
 
-      {/* Datos Precargados del Vehículo */}
-      <div className="bg-white rounded-xl shadow-md border-2 border-gray-200 p-6 mb-6">
-        <h3 className="text-lg font-bold text-gray-800 mb-4">Información del Vehículo</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="text-xs font-semibold text-gray-600 block mb-1">Marca</label>
-            <div className="text-base font-medium text-gray-800">{quoteData.marca || 'N/A'}</div>
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-gray-600 block mb-1">Modelo</label>
-            <div className="text-base font-medium text-gray-800">{quoteData.modelo || 'N/A'}</div>
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-gray-600 block mb-1">Año</label>
-            <div className="text-base font-medium text-gray-800">{quoteData.anno || quoteData.anio || 'N/A'}</div>
-          </div>
-          <div>
-            <label className="text-xs font-semibold text-gray-600 block mb-1">Valor Asegurado</label>
-            <div className="text-base font-medium text-gray-800">
-              ${quoteData.valorVehiculo?.toLocaleString('en-US') || 'N/A'}
+      {/* Datos Precargados del Vehículo (solo no-DT) */}
+      {!isThirdPartyMode && (
+        <div className="bg-white rounded-xl shadow-md border-2 border-gray-200 p-6 mb-6">
+          <h3 className="text-lg font-bold text-gray-800 mb-4">Información del Vehículo</h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs font-semibold text-gray-600 block mb-1">Marca</label>
+              <div className="text-base font-medium text-gray-800">{quoteData.marca || 'N/A'}</div>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-gray-600 block mb-1">Modelo</label>
+              <div className="text-base font-medium text-gray-800">{quoteData.modelo || 'N/A'}</div>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-gray-600 block mb-1">Año</label>
+              <div className="text-base font-medium text-gray-800">{quoteData.anno || quoteData.anio || 'N/A'}</div>
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-gray-600 block mb-1">Valor Asegurado</label>
+              <div className="text-base font-medium text-gray-800">
+                ${quoteData.valorVehiculo?.toLocaleString('en-US') || 'N/A'}
+              </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Formulario */}
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Campos del Vehículo */}
         <div className="bg-white rounded-xl shadow-md border-2 border-gray-200 p-6">
           <h3 className="text-lg font-bold text-gray-800 mb-4">Datos del Vehículo</h3>
+
+          {isThirdPartyMode && (
+            <div className="space-y-4 mb-6">
+              <p className="text-sm text-gray-600">
+                Primero seleccione la marca y luego el modelo del vehículo
+              </p>
+
+              {!showSearch && (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    {COMMON_BRANDS.map((brand) => (
+                      <button
+                        key={brand.name}
+                        type="button"
+                        onClick={() => handleCommonBrandSelect(brand.name)}
+                        disabled={catalogsLoading}
+                        className={`p-4 rounded-xl border-2 transition-all cursor-pointer ${
+                          formData.marca.toUpperCase() === brand.name
+                            ? 'border-[#8AAA19] bg-[#8AAA19] shadow-lg'
+                            : 'border-[#010139] bg-[#010139] hover:opacity-90 shadow-md'
+                        }`}
+                      >
+                        <div className="flex items-center justify-center h-10">
+                          <Image
+                            src={brand.logo}
+                            alt={brand.name}
+                            width={brand.width}
+                            height={36}
+                            className="object-contain max-h-full"
+                          />
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowSearch(true)}
+                    className="w-full px-6 py-3 bg-[#8AAA19] text-white rounded-lg font-semibold hover:bg-[#6d8814] transition-colors shadow-md cursor-pointer"
+                  >
+                    Otras Marcas
+                  </button>
+                </div>
+              )}
+
+              {showSearch && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-sm font-semibold text-gray-700">
+                      Marca <span className="text-red-500">*</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setShowSearch(false)}
+                      className="text-sm text-[#8AAA19] hover:text-[#6d8814] font-semibold"
+                    >
+                      ← Ver marcas comunes
+                    </button>
+                  </div>
+                  <Autocomplete
+                    options={marcasOptions}
+                    value={selectedMarca || ''}
+                    onChange={(_, option) => {
+                      if (option) {
+                        const codMarca = option.value as number;
+                        setSelectedMarca(codMarca);
+                        setFormData(prev => ({
+                          ...prev,
+                          marca: option.label,
+                          marcaCodigo: codMarca,
+                          modelo: '',
+                          modeloCodigo: 0,
+                        }));
+                      } else {
+                        setSelectedMarca(null);
+                        setFormData(prev => ({ ...prev, marca: '', marcaCodigo: 0, modelo: '', modeloCodigo: 0 }));
+                      }
+                    }}
+                    placeholder="Buscar marca..."
+                    disabled={catalogsLoading}
+                    loading={catalogsLoading}
+                    emptyMessage="No hay marcas disponibles"
+                  />
+                  {errors.marca && <p className="text-xs text-red-500 mt-1">{errors.marca}</p>}
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Modelo <span className="text-red-500">*</span>
+                  </label>
+                  <Autocomplete
+                    options={modelosOptions}
+                    value={formData.modeloCodigo || ''}
+                    onChange={(_, option) => {
+                      if (option) {
+                        setFormData(prev => ({ ...prev, modelo: option.label, modeloCodigo: option.value as number }));
+                      } else {
+                        setFormData(prev => ({ ...prev, modelo: '', modeloCodigo: 0 }));
+                      }
+                    }}
+                    placeholder={!selectedMarca ? 'Primero selecciona una marca' : 'Buscar modelo...'}
+                    disabled={!selectedMarca || catalogsLoading}
+                    loading={catalogsLoading && !!selectedMarca}
+                    emptyMessage={!selectedMarca ? 'Selecciona una marca primero' : 'No hay modelos disponibles'}
+                  />
+                  {errors.modelo && <p className="text-xs text-red-500 mt-1">{errors.modelo}</p>}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Año <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={formData.anio}
+                    onChange={(e) => setFormData({ ...formData, anio: parseInt(e.target.value) || currentYear })}
+                    className="w-full px-3 py-2.5 md:px-4 md:py-3 text-base border-2 border-gray-300 focus:border-[#8AAA19] rounded-lg focus:outline-none bg-white"
+                  >
+                    {yearOptions.map((year) => (
+                      <option key={year} value={year}>{year}</option>
+                    ))}
+                  </select>
+                  {errors.anio && <p className="text-xs text-red-500 mt-1">{errors.anio}</p>}
+                </div>
+              </div>
+            </div>
+          )}
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -339,90 +538,94 @@ export default function VehicleDataForm({ quoteData, onContinue, isInternacional
               </select>
             </div>
 
-            {/* Kilometraje - siempre visible */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Kilometraje {isInternacional && <span className="text-red-500">*</span>}
-              </label>
-              <input
-                type="text"
-                value={formData.kilometraje}
-                onChange={(e) => setFormData({ ...formData, kilometraje: e.target.value.replace(/[^0-9]/g, '') })}
-                className={`w-full px-3 py-2.5 md:px-4 md:py-3 text-base border-2 rounded-lg focus:outline-none transition-colors ${
-                  errors.kilometraje ? 'border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
-                }`}
-                placeholder="EJ: 45000"
-              />
-              {errors.kilometraje && <p className="text-xs text-red-500 mt-1">{errors.kilometraje}</p>}
-            </div>
-
-            {/* Tipo de Combustible */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Tipo de Combustible {isInternacional && <span className="text-red-500">*</span>}
-              </label>
-              <select
-                value={formData.tipoCombustible}
-                onChange={(e) => setFormData({ ...formData, tipoCombustible: e.target.value as 'GASOLINA' | 'DIESEL' })}
-                className="w-full px-3 py-2.5 md:px-4 md:py-3 text-base border-2 border-gray-300 focus:border-[#8AAA19] rounded-lg focus:outline-none bg-white"
-              >
-                <option value="GASOLINA">Gasolina</option>
-                <option value="DIESEL">Diesel</option>
-              </select>
-            </div>
-
-            {/* Tipo de Transmisión */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Tipo de Transmisión {isInternacional && <span className="text-red-500">*</span>}
-              </label>
-              <select
-                value={formData.tipoTransmision}
-                onChange={(e) => setFormData({ ...formData, tipoTransmision: e.target.value as 'AUTOMATICO' | 'MANUAL' })}
-                className="w-full px-3 py-2.5 md:px-4 md:py-3 text-base border-2 border-gray-300 focus:border-[#8AAA19] rounded-lg focus:outline-none bg-white"
-              >
-                <option value="AUTOMATICO">Automático</option>
-                <option value="MANUAL">Manual</option>
-              </select>
-            </div>
-
-            {/* Asegurado Anteriormente */}
-            <div className="md:col-span-2">
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                ¿Estuvo asegurado anteriormente?
-              </label>
-              <div className="flex items-center gap-4 mb-2">
-                <label className="flex items-center gap-2 cursor-pointer">
+            {!isThirdPartyMode && (
+              <>
+                {/* Kilometraje - siempre visible */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Kilometraje {isInternacional && <span className="text-red-500">*</span>}
+                  </label>
                   <input
-                    type="radio"
-                    name="aseguradoAnteriormente"
-                    checked={formData.aseguradoAnteriormente === true}
-                    onChange={() => setFormData({ ...formData, aseguradoAnteriormente: true })}
-                    className="w-4 h-4 text-[#8AAA19]"
+                    type="text"
+                    value={formData.kilometraje}
+                    onChange={(e) => setFormData({ ...formData, kilometraje: e.target.value.replace(/[^0-9]/g, '') })}
+                    className={`w-full px-3 py-2.5 md:px-4 md:py-3 text-base border-2 rounded-lg focus:outline-none transition-colors ${
+                      errors.kilometraje ? 'border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
+                    }`}
+                    placeholder="EJ: 45000"
                   />
-                  <span className="text-sm text-gray-700">Sí</span>
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="aseguradoAnteriormente"
-                    checked={formData.aseguradoAnteriormente === false}
-                    onChange={() => setFormData({ ...formData, aseguradoAnteriormente: false, aseguradoraAnterior: '' })}
-                    className="w-4 h-4 text-[#8AAA19]"
-                  />
-                  <span className="text-sm text-gray-700">No</span>
-                </label>
-              </div>
-              {formData.aseguradoAnteriormente && (
-                <input
-                  type="text"
-                  value={formData.aseguradoraAnterior}
-                  onChange={(e) => setFormData({ ...formData, aseguradoraAnterior: e.target.value.toUpperCase() })}
-                  className="w-full px-3 py-2.5 md:px-4 md:py-3 text-base border-2 border-gray-300 focus:border-[#8AAA19] rounded-lg focus:outline-none transition-colors"
-                  placeholder="Nombre de la aseguradora anterior"
-                />
-              )}
-            </div>
+                  {errors.kilometraje && <p className="text-xs text-red-500 mt-1">{errors.kilometraje}</p>}
+                </div>
+
+                {/* Tipo de Combustible */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Tipo de Combustible {isInternacional && <span className="text-red-500">*</span>}
+                  </label>
+                  <select
+                    value={formData.tipoCombustible}
+                    onChange={(e) => setFormData({ ...formData, tipoCombustible: e.target.value as 'GASOLINA' | 'DIESEL' })}
+                    className="w-full px-3 py-2.5 md:px-4 md:py-3 text-base border-2 border-gray-300 focus:border-[#8AAA19] rounded-lg focus:outline-none bg-white"
+                  >
+                    <option value="GASOLINA">Gasolina</option>
+                    <option value="DIESEL">Diesel</option>
+                  </select>
+                </div>
+
+                {/* Tipo de Transmisión */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Tipo de Transmisión {isInternacional && <span className="text-red-500">*</span>}
+                  </label>
+                  <select
+                    value={formData.tipoTransmision}
+                    onChange={(e) => setFormData({ ...formData, tipoTransmision: e.target.value as 'AUTOMATICO' | 'MANUAL' })}
+                    className="w-full px-3 py-2.5 md:px-4 md:py-3 text-base border-2 border-gray-300 focus:border-[#8AAA19] rounded-lg focus:outline-none bg-white"
+                  >
+                    <option value="AUTOMATICO">Automático</option>
+                    <option value="MANUAL">Manual</option>
+                  </select>
+                </div>
+
+                {/* Asegurado Anteriormente */}
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    ¿Estuvo asegurado anteriormente?
+                  </label>
+                  <div className="flex items-center gap-4 mb-2">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="aseguradoAnteriormente"
+                        checked={formData.aseguradoAnteriormente === true}
+                        onChange={() => setFormData({ ...formData, aseguradoAnteriormente: true })}
+                        className="w-4 h-4 text-[#8AAA19]"
+                      />
+                      <span className="text-sm text-gray-700">Sí</span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="aseguradoAnteriormente"
+                        checked={formData.aseguradoAnteriormente === false}
+                        onChange={() => setFormData({ ...formData, aseguradoAnteriormente: false, aseguradoraAnterior: '' })}
+                        className="w-4 h-4 text-[#8AAA19]"
+                      />
+                      <span className="text-sm text-gray-700">No</span>
+                    </label>
+                  </div>
+                  {formData.aseguradoAnteriormente && (
+                    <input
+                      type="text"
+                      value={formData.aseguradoraAnterior}
+                      onChange={(e) => setFormData({ ...formData, aseguradoraAnterior: e.target.value.toUpperCase() })}
+                      className="w-full px-3 py-2.5 md:px-4 md:py-3 text-base border-2 border-gray-300 focus:border-[#8AAA19] rounded-lg focus:outline-none transition-colors"
+                      placeholder="Nombre de la aseguradora anterior"
+                    />
+                  )}
+                </div>
+              </>
+            )}
           </div>
         </div>
 

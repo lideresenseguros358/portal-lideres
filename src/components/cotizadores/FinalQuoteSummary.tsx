@@ -93,7 +93,7 @@ export default function FinalQuoteSummary({
 
   const handleConfirm = async () => {
     if (!declaracionAceptada) {
-      toast.error('Debes aceptar la Declaración de Veracidad para continuar');
+      toast.error('Debes aceptar los Términos y Condiciones para continuar');
       return;
     }
     setIsConfirming(true);
@@ -359,15 +359,15 @@ export default function FinalQuoteSummary({
             </div>
           </div>
 
-          {/* Declaración de Veracidad */}
+          {/* Términos y Condiciones */}
           <div className="bg-white rounded-xl shadow-lg border-2 border-amber-200 p-5 sm:p-6">
             <h3 className="flex items-center gap-2 text-lg font-bold text-[#010139] mb-4">
               <span className="text-xl">📋</span>
-              Declaración de Veracidad
+              Términos y Condiciones
             </h3>
             
             <p className="text-sm text-gray-700 mb-4">
-              Declaro que la información suministrada es veraz, completa y correcta.
+              Lee y acepta los Términos y Condiciones, la Declaración de Veracidad, la Autorización de Tratamiento de Datos Personales y el Relevo de Responsabilidad.
             </p>
 
             <label className="flex items-start gap-3 cursor-pointer group mb-3">
@@ -378,19 +378,19 @@ export default function FinalQuoteSummary({
                 className="mt-1 w-5 h-5 rounded border-2 border-gray-300 text-[#8AAA19] focus:ring-[#8AAA19] cursor-pointer accent-[#8AAA19]"
               />
               <span className="text-sm text-gray-700 group-hover:text-[#010139] transition-colors">
-                He leído y acepto la{' '}
+                He leído y acepto los{' '}
                 <button
                   type="button"
                   onClick={(e) => { e.preventDefault(); setShowDeclaracionModal(true); }}
                   className="text-[#8AAA19] font-semibold underline hover:text-[#6d8814]"
                 >
-                  Declaración de Veracidad completa
+                  Términos y Condiciones completos
                 </button>
               </span>
             </label>
 
             <p className="text-xs text-gray-500 italic">
-              Esta declaración es requisito obligatorio para la emisión de la póliza.
+              La aceptación es requisito obligatorio para la emisión de la póliza.
             </p>
           </div>
         </div>
@@ -482,7 +482,7 @@ export default function FinalQuoteSummary({
 
             {!declaracionAceptada && (
               <p className="text-xs text-center mt-3 text-amber-300">
-                Acepta la Declaración de Veracidad para continuar
+                Acepta los Términos y Condiciones para continuar
               </p>
             )}
           </div>
@@ -498,14 +498,14 @@ export default function FinalQuoteSummary({
         </div>
       </div>
 
-      {/* Modal Declaración de Veracidad */}
+      {/* Modal Términos y Condiciones */}
       {showDeclaracionModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[85vh] flex flex-col">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col my-4 sm:my-8">
             {/* Header */}
-            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+            <div className="flex items-center justify-between p-6 border-b border-gray-200 flex-shrink-0">
               <h3 className="text-xl font-bold text-[#010139] flex items-center gap-2">
-                <span>📋</span> Declaración de Veracidad
+                <span>📋</span> Términos y Condiciones
               </h3>
               <button
                 onClick={() => setShowDeclaracionModal(false)}
@@ -516,37 +516,71 @@ export default function FinalQuoteSummary({
             </div>
 
             {/* Body */}
-            <div className="p-6 overflow-y-auto flex-1 text-sm text-gray-700 leading-relaxed space-y-4">
-              <p>
-                Declaro y certifico, bajo la gravedad de juramento, que toda la información suministrada durante este proceso, incluyendo pero no limitándose a: datos personales del asegurado y/o contratante, información del vehículo, fotografías, documentos adjuntos, inspección visual, condiciones del bien asegurado y cualquier otro dato proporcionado de forma escrita, digital o gráfica, es <strong>real, exacta, completa y veraz</strong>.
+            <div className="p-6 overflow-y-auto flex-1 text-sm text-gray-700 leading-relaxed space-y-5">
+              <p className="text-xs font-bold text-[#010139] text-center uppercase tracking-wide">
+                Autorización, Declaración de Veracidad, Tratamiento de Datos Personales y Relevo de Responsabilidad
               </p>
 
-              <p>
-                Manifiesto expresamente que <strong>no he omitido, alterado ni falseado</strong> información alguna que pueda influir directa o indirectamente en la evaluación del riesgo, la aceptación del seguro, la determinación de primas, deducibles, coberturas o condiciones contractuales.
-              </p>
+              <div className="space-y-2">
+                <p className="font-bold text-[#010139]">PRIMERA: AUTORIZACIÓN PARA TRATAMIENTO DE DATOS PERSONALES</p>
+                <p>De conformidad con lo establecido en la Ley 81 de 26 de marzo de 2019 sobre Protección de Datos Personales de la República de Panamá, autorizo a <strong>LÍDERES EN SEGUROS, S.A.</strong> para recopilar, almacenar, utilizar y transferir mis datos personales a aseguradoras, reaseguradoras, ajustadores y terceros necesarios para la gestión del contrato de seguro.</p>
+              </div>
 
-              <p>
-                Reconozco que la presentación de información falsa, inexacta, incompleta u omisiones relevantes constituye <strong>riesgo moral</strong>, y puede dar lugar, conforme a la legislación vigente de la República de Panamá y a las condiciones generales y particulares de la póliza:
-              </p>
+              <div className="space-y-2">
+                <p className="font-bold text-[#010139]">SEGUNDA: NATURALEZA DE LA INTERMEDIACIÓN</p>
+                <p>Reconozco que LÍDERES EN SEGUROS, S.A. actúa exclusivamente como corredor e intermediario de seguros conforme al Decreto Ley 12 de 2012. El contrato de seguro se celebra entre el cliente y la aseguradora; el corredor no es parte aseguradora del contrato.</p>
+              </div>
 
-              <ul className="list-disc pl-6 space-y-1">
-                <li>A la <strong>nulidad</strong> del contrato de seguro</li>
-                <li>A la <strong>cancelación</strong> de la póliza</li>
-                <li>A la <strong>pérdida total o parcial</strong> de coberturas</li>
-                <li>Al <strong>rechazo de reclamaciones</strong> derivadas de siniestros</li>
-              </ul>
+              <div className="space-y-2">
+                <p className="font-bold text-[#010139]">TERCERA: COMUNICACIONES OFICIALES</p>
+                <p>El correo electrónico suministrado será el medio oficial de comunicación. Es mi responsabilidad suministrar un correo correcto y revisarlo periódicamente, incluyendo carpetas de spam.</p>
+              </div>
 
-              <p>
-                Acepto que la aseguradora y/o el corredor de seguros podrán <strong>verificar, auditar y contrastar</strong> la información suministrada en cualquier momento, antes o después de la emisión de la póliza.
-              </p>
+              <div className="space-y-2">
+                <p className="font-bold text-[#010139]">CUARTA: RESPONSABILIDAD SOBRE PAGOS Y MOROSIDAD</p>
+                <p>La prima del seguro es una obligación contractual directa con la aseguradora. La falta de pago oportuno puede generar cancelación automática de la póliza, suspensión de coberturas y rechazo de reclamos. La responsabilidad por morosidad es exclusivamente mía.</p>
+              </div>
 
-              <p>
-                Declaro que he leído, comprendido y aceptado plenamente el contenido de esta declaración, la cual forma parte integral del proceso de emisión del seguro.
-              </p>
+              <div className="space-y-2">
+                <p className="font-bold text-[#010139]">QUINTA: DEVOLUCIONES Y CARGOS ADMINISTRATIVOS</p>
+                <p>Toda solicitud de reverso o devolución podrá generar cargos administrativos, bancarios y operativos, los cuales serán descontados del monto a devolver. El corredor no será responsable por demoras propias del banco, pasarela de pago o aseguradora.</p>
+              </div>
+
+              <div className="space-y-2">
+                <p className="font-bold text-[#010139]">SEXTA: RELEVO DE RESPONSABILIDAD</p>
+                <p>Libero y exonero a LÍDERES EN SEGUROS, S.A., sus directores, agentes y colaboradores de cualquier reclamación derivada de decisiones de suscripción, rechazos de cobertura, exclusiones contractuales, cancelaciones por morosidad o errores en información suministrada por el cliente.</p>
+              </div>
+
+              <div className="space-y-2">
+                <p className="font-bold text-[#010139]">SÉPTIMA: DECLARACIÓN DE VERACIDAD (INTEGRAL)</p>
+                <p>Declaro y certifico, bajo la gravedad de juramento, que toda la información suministrada es <strong>real, exacta, completa y veraz</strong>. No he omitido, alterado ni falseado información alguna. La presentación de información falsa constituye <strong>riesgo moral</strong> y puede dar lugar a la nulidad del contrato, cancelación de la póliza, pérdida de coberturas y rechazo de reclamaciones.</p>
+              </div>
+
+              <div className="space-y-2">
+                <p className="font-bold text-[#010139]">OCTAVA: DECLARACIÓN DE ORIGEN LÍCITO DE FONDOS Y CUMPLIMIENTO EN MATERIA DE PREVENCIÓN DE BLANQUEO DE CAPITALES</p>
+                <p>Declaro bajo la gravedad de juramento que:</p>
+                <p>Los fondos utilizados para el pago de primas, cargos recurrentes, financiamientos o cualquier otra obligación derivada de la contratación del seguro tienen origen lícito, provienen de actividades legales y no guardan relación directa o indirecta con actividades ilícitas.</p>
+                <p>No mantengo vinculación alguna, directa o indirecta, con actividades de blanqueo de capitales, financiamiento del terrorismo, proliferación de armas de destrucción masiva, narcotráfico, delitos financieros, corrupción, fraude, trata de personas, delincuencia organizada, ni cualquier otro delito tipificado en la legislación penal de la República de Panamá o en tratados internacionales ratificados por el Estado Panameño.</p>
+                <p>No me encuentro incluido en listas restrictivas nacionales o internacionales, incluyendo pero no limitándose a: listas de la ONU, OFAC, la Unión Europea, la Superintendencia de Seguros y Reaseguros de Panamá, ni cualquier otra lista de control aplicable en materia de prevención de blanqueo de capitales.</p>
+                <p>No actúo como testaferro, intermediario oculto o representante de terceros cuyos fondos tengan origen ilícito.</p>
+                <p>En caso de actuar en representación de una persona jurídica, declaro que la entidad está debidamente constituida, sus beneficiarios finales no están vinculados a actividades ilícitas y los fondos provienen de operaciones comerciales legítimas.</p>
+              </div>
+
+              <div className="space-y-2">
+                <p className="font-bold text-[#010139]">NOVENA: FACULTAD DE VERIFICACIÓN, DEBIDA DILIGENCIA Y CONSECUENCIAS</p>
+                <p>Acepto que, en cumplimiento de la Ley 23 de 27 de abril de 2015 y sus reglamentaciones, LÍDERES EN SEGUROS, S.A. podrá: solicitar documentación adicional de identificación, requerir información sobre actividad económica, verificar identidad mediante validaciones biométricas o documentales, consultar bases de datos públicas o privadas, suspender temporalmente procesos de emisión si se detectan inconsistencias, y negarse a intermediar operaciones cuando existan alertas razonables.</p>
+                <p>Reconozco que el suministro de información falsa o la omisión de información relevante en materia de origen de fondos podrá dar lugar a: cancelación inmediata del trámite o póliza, reporte a las autoridades competentes conforme a la normativa vigente, terminación de la relación comercial sin responsabilidad para el corredor, y conservación de registros como respaldo ante requerimientos regulatorios.</p>
+                <p>Me comprometo a notificar cualquier cambio en mi condición financiera, actividad económica o situación legal que pueda impactar el análisis de debida diligencia.</p>
+              </div>
+
+              <div className="space-y-2">
+                <p className="font-bold text-[#010139]">DÉCIMA: ACEPTACIÓN DIGITAL</p>
+                <p>Acepto que la firma digital incorporada en el portal mediante validación electrónica constituye aceptación plena, válida y vinculante del presente documento, conforme a la legislación vigente sobre comercio electrónico en la República de Panamá.</p>
+              </div>
             </div>
 
             {/* Footer */}
-            <div className="p-6 border-t border-gray-200 flex flex-col sm:flex-row gap-3">
+            <div className="p-6 border-t border-gray-200 flex flex-col sm:flex-row gap-3 flex-shrink-0">
               <button
                 onClick={() => {
                   setDeclaracionAceptada(true);
@@ -554,7 +588,7 @@ export default function FinalQuoteSummary({
                 }}
                 className="flex-1 py-3 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white rounded-xl font-bold text-sm hover:shadow-lg transition-all"
               >
-                Acepto la Declaración
+                Acepto los Términos y Condiciones
               </button>
               <button
                 onClick={() => setShowDeclaracionModal(false)}

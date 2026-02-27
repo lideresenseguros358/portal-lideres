@@ -5,7 +5,7 @@
 
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { FaUser, FaCar, FaIdCard, FaUpload, FaCamera, FaCheckCircle } from 'react-icons/fa';
 import { toast } from 'sonner';
 import CedulaQRScanner from './CedulaQRScanner';
@@ -14,6 +14,7 @@ import { ACREEDORES_PANAMA } from '@/lib/constants/acreedores';
 interface EmissionDataFormProps {
   quoteData: any;
   onContinue: (data: EmissionData) => void;
+  showAcreedor?: boolean;
 }
 
 export interface EmissionData {
@@ -30,6 +31,9 @@ export interface EmissionData {
   telefono: string;
   celular: string;
   direccion: string;
+  actividadEconomica: string;
+  dondeTrabaja: string;
+  nivelIngresos: '' | 'menos de 10mil' | '10mil a 30mil' | '30mil a 50mil' | 'mas de 50mil';
   // Dirección estructurada (IS)
   codProvincia?: number;
   codDistrito?: number;
@@ -42,7 +46,7 @@ export interface EmissionData {
   licenciaFile?: File;
 }
 
-export default function EmissionDataForm({ quoteData, onContinue }: EmissionDataFormProps) {
+export default function EmissionDataForm({ quoteData, onContinue, showAcreedor = true }: EmissionDataFormProps) {
   const [showQRScanner, setShowQRScanner] = useState(false);
   const [formData, setFormData] = useState<EmissionData>({
     primerNombre: '',
@@ -57,6 +61,9 @@ export default function EmissionDataForm({ quoteData, onContinue }: EmissionData
     telefono: '',
     celular: '',
     direccion: '',
+    actividadEconomica: '',
+    dondeTrabaja: '',
+    nivelIngresos: '',
     esPEP: false,
     acreedor: '',
   });
@@ -71,16 +78,20 @@ export default function EmissionDataForm({ quoteData, onContinue }: EmissionData
   const [corregimientos, setCorregimientos] = useState<{ DATO: number; TEXTO: string }[]>([]);
   const [urbanizaciones, setUrbanizaciones] = useState<{ DATO: number; TEXTO: string }[]>([]);
   const [loadingAddr, setLoadingAddr] = useState<string>('');
+  const catalogsFetched = useRef(false);
 
-  // Fetch provincias on mount (only for IS)
+  // Fetch provincias + urbanizaciones on mount (only for IS) — guarded against StrictMode double-mount
   useEffect(() => {
-    if (!isInternacional) return;
+    if (!isInternacional || catalogsFetched.current) return;
+    catalogsFetched.current = true;
     setLoadingAddr('provincias');
-    fetch('/api/is/catalogos/direccion?tipo=provincias&codpais=1')
-      .then(r => r.json())
-      .then(d => { if (d.data) setProvincias(d.data); })
-      .catch(() => {})
-      .finally(() => setLoadingAddr(''));
+    Promise.all([
+      fetch('/api/is/catalogos/direccion?tipo=provincias&codpais=1').then(r => r.json()),
+      fetch('/api/is/catalogos/direccion?tipo=urbanizaciones&page=1&size=5000').then(r => r.json()),
+    ]).then(([provData, urbData]) => {
+      if (provData.data) setProvincias(provData.data);
+      if (urbData.data) setUrbanizaciones(urbData.data);
+    }).catch(() => {}).finally(() => setLoadingAddr(''));
   }, [isInternacional]);
 
   // Fetch distritos when provincia changes
@@ -109,15 +120,6 @@ export default function EmissionDataForm({ quoteData, onContinue }: EmissionData
       .catch(() => {})
       .finally(() => setLoadingAddr(''));
   }, []);
-
-  // Fetch urbanizaciones once (large catalog, fetch on mount for IS)
-  useEffect(() => {
-    if (!isInternacional) return;
-    fetch('/api/is/catalogos/direccion?tipo=urbanizaciones&page=1&size=5000')
-      .then(r => r.json())
-      .then(d => { if (d.data) setUrbanizaciones(d.data); })
-      .catch(() => {});
-  }, [isInternacional]);
 
   // Cargar datos desde FormAutoCoberturaCompleta al montar
   useEffect(() => {
@@ -229,6 +231,9 @@ export default function EmissionDataForm({ quoteData, onContinue }: EmissionData
     if (!formData.telefono) newErrors.telefono = 'Requerido';
     if (!formData.celular) newErrors.celular = 'Requerido';
     if (!formData.direccion) newErrors.direccion = 'Requerido';
+    if (!formData.actividadEconomica) newErrors.actividadEconomica = 'Requerido';
+    if (!formData.dondeTrabaja) newErrors.dondeTrabaja = 'Requerido';
+    if (!formData.nivelIngresos) newErrors.nivelIngresos = 'Requerido';
     
     // Dirección estructurada (IS)
     if (isInternacional) {
@@ -425,7 +430,7 @@ export default function EmissionDataForm({ quoteData, onContinue }: EmissionData
                 {errors.cedula && <p className="text-xs text-red-500 mt-1">{errors.cedula}</p>}
               </div>
 
-              <div>
+              <div className="w-full max-w-full overflow-hidden">
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
                   Fecha de Nacimiento <span className="text-red-500">*</span>
                 </label>
@@ -436,7 +441,7 @@ export default function EmissionDataForm({ quoteData, onContinue }: EmissionData
                   className={`w-full max-w-full px-3 py-2.5 md:px-4 md:py-3 text-sm md:text-base border-2 rounded-lg focus:outline-none transition-colors ${
                     errors.fechaNacimiento ? 'border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
                   }`}
-                  style={{ minHeight: '50px' }}
+                  style={{ minHeight: '50px', WebkitAppearance: 'none' }}
                 />
                 {errors.fechaNacimiento && <p className="text-xs text-red-500 mt-1">{errors.fechaNacimiento}</p>}
               </div>
@@ -557,6 +562,62 @@ export default function EmissionDataForm({ quoteData, onContinue }: EmissionData
                 placeholder="Calle, número, barrio, ciudad"
               />
               {errors.direccion && <p className="text-xs text-red-500 mt-1">{errors.direccion}</p>}
+            </div>
+
+            {/* Información económica */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Actividad económica <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={formData.actividadEconomica}
+                  onChange={(e) => setFormData({ ...formData, actividadEconomica: e.target.value })}
+                  className={`w-full px-3 py-2.5 md:px-4 md:py-3 text-base border-2 rounded-lg focus:outline-none transition-colors ${
+                    errors.actividadEconomica ? 'border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
+                  }`}
+                  placeholder="Ej: Ingeniero, Oficinista, Administrador"
+                />
+                {errors.actividadEconomica && <p className="text-xs text-red-500 mt-1">{errors.actividadEconomica}</p>}
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Dónde trabaja <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={formData.dondeTrabaja}
+                  onChange={(e) => setFormData({ ...formData, dondeTrabaja: e.target.value })}
+                  className={`w-full px-3 py-2.5 md:px-4 md:py-3 text-base border-2 rounded-lg focus:outline-none transition-colors ${
+                    errors.dondeTrabaja ? 'border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
+                  }`}
+                  placeholder="Ej: Empresa XYZ, Ministerio, Negocio propio"
+                />
+                {errors.dondeTrabaja && <p className="text-xs text-red-500 mt-1">{errors.dondeTrabaja}</p>}
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">
+                Nivel de ingresos <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={formData.nivelIngresos}
+                onChange={(e) => setFormData({ ...formData, nivelIngresos: e.target.value as EmissionData['nivelIngresos'] })}
+                className={`w-full px-3 py-2.5 md:px-4 md:py-3 text-base border-2 rounded-lg focus:outline-none bg-white ${
+                  errors.nivelIngresos ? 'border-red-500' : 'border-gray-300 focus:border-[#8AAA19]'
+                }`}
+                style={{ minHeight: '50px' }}
+              >
+                <option value="">Seleccionar nivel de ingresos</option>
+                <option value="menos de 10mil">menos de 10mil</option>
+                <option value="10mil a 30mil">10mil a 30mil</option>
+                <option value="30mil a 50mil">30mil a 50mil</option>
+                <option value="mas de 50mil">mas de 50mil</option>
+              </select>
+              {errors.nivelIngresos && <p className="text-xs text-red-500 mt-1">{errors.nivelIngresos}</p>}
             </div>
 
             {/* IS Address Dropdowns — solo para Internacional */}
@@ -697,33 +758,35 @@ export default function EmissionDataForm({ quoteData, onContinue }: EmissionData
             </div>
 
             {/* Acreedor (condicional) */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Banco Acreedor <span className="text-gray-500 text-xs">(si el vehículo está financiado)</span>
-              </label>
-              <select
-                value={formData.acreedor}
-                onChange={(e) => setFormData({ ...formData, acreedor: e.target.value })}
-                className="w-full px-3 py-2.5 md:px-4 md:py-3 text-base border-2 border-gray-300 focus:border-[#8AAA19] rounded-lg focus:outline-none bg-white"
-              >
-                <option value="">Sin acreedor (no financiado)</option>
-                <optgroup label="Bancos">
-                  {ACREEDORES_PANAMA.filter(a => a.tipo === 'BANCO').map(a => (
-                    <option key={a.codConductoIS} value={a.codigoFEDPA}>{a.label}</option>
-                  ))}
-                </optgroup>
-                <optgroup label="Cooperativas">
-                  {ACREEDORES_PANAMA.filter(a => a.tipo === 'COOPERATIVA').map(a => (
-                    <option key={a.codConductoIS} value={a.codigoFEDPA}>{a.label}</option>
-                  ))}
-                </optgroup>
-                <optgroup label="Otros">
-                  {ACREEDORES_PANAMA.filter(a => a.tipo === 'OTRO').map(a => (
-                    <option key={a.codConductoIS} value={a.codigoFEDPA}>{a.label}</option>
-                  ))}
-                </optgroup>
-              </select>
-            </div>
+            {showAcreedor && (
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Banco Acreedor <span className="text-gray-500 text-xs">(si el vehículo está financiado)</span>
+                </label>
+                <select
+                  value={formData.acreedor}
+                  onChange={(e) => setFormData({ ...formData, acreedor: e.target.value })}
+                  className="w-full px-3 py-2.5 md:px-4 md:py-3 text-base border-2 border-gray-300 focus:border-[#8AAA19] rounded-lg focus:outline-none bg-white"
+                >
+                  <option value="">Sin acreedor (no financiado)</option>
+                  <optgroup label="Bancos">
+                    {ACREEDORES_PANAMA.filter(a => a.tipo === 'BANCO').map(a => (
+                      <option key={a.codConductoIS} value={a.codigoFEDPA}>{a.label}</option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Cooperativas">
+                    {ACREEDORES_PANAMA.filter(a => a.tipo === 'COOPERATIVA').map(a => (
+                      <option key={a.codConductoIS} value={a.codigoFEDPA}>{a.label}</option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Otros">
+                    {ACREEDORES_PANAMA.filter(a => a.tipo === 'OTRO').map(a => (
+                      <option key={a.codConductoIS} value={a.codigoFEDPA}>{a.label}</option>
+                    ))}
+                  </optgroup>
+                </select>
+              </div>
+            )}
 
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">

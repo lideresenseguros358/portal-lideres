@@ -142,7 +142,8 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
     
     const idCotizacion = result.idCotizacion;
     const apiPrimaTotal = result.primaTotal;
-    console.log(`[IS] ✅ Cotización completa en ${elapsed}s | ID: ${idCotizacion} | PTOTAL: ${apiPrimaTotal}`);
+    const nroCotizacion = result.nroCotizacion;
+    console.log(`[IS] ✅ Cotización completa en ${elapsed}s | ID: ${idCotizacion} | NroCot: ${nroCotizacion} | PTOTAL: ${apiPrimaTotal}`);
     if (result._timing) {
       console.log(`[IS] Timing: quote=${result._timing.quoteMs}ms coberturas=${result._timing.coberturasMs}ms total=${result._timing.totalMs}ms`);
     }
@@ -176,32 +177,49 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
     console.log(`[IS] Usando coberturas de ${tableKey} (opción ${vIdOpt}, deducible: ${quoteData.deducible})`);
     
     // ============================================
-    // PRECIO: Sumar PRIMA1 de la opción seleccionada
-    // IMPORTANTE: PTOTAL de generarcotizacion corresponde solo a UNA opción
-    // (generalmente la opción 3 / más barata). No usar para otras opciones.
-    // La prima correcta es la SUMA de PRIMA1 de la tabla seleccionada.
+    // PRECIO: Sumar PRIMA1 de la opción seleccionada (prima bruta)
     // Los valores PRIMA1 vienen con coma de miles (ej: "1,259.58")
     // ============================================
     let primaSumBruta = 0;
     apiCoberturas.forEach((c: any) => { primaSumBruta += parsePrima(c.PRIMA1); });
     
-    // Usar la suma de PRIMA1 de la opción seleccionada (NO PTOTAL)
-    const primaBase = primaSumBruta;
+    // ============================================
+    // DESCUENTO BUENA EXPERIENCIA:
+    // PTOTAL de generarcotizacion = Prima Neta de Opción 1 (post-descuento + 6% impuesto).
+    // IS aplica un descuento por buena experiencia que varía por cliente/vehículo.
+    // Derivamos el factor de descuento comparando PTOTAL con la suma PRIMA1 de Table (Opt1).
+    // Luego aplicamos ese mismo factor proporcionalmente a la opción seleccionada.
+    // ============================================
+    const tableSumOpt1 = (coberturasResult.data?.Table || []).reduce(
+      (sum: number, c: any) => sum + parsePrima(c.PRIMA1), 0
+    );
     
-    // Descuento buena experiencia: IS indica con SN_DESCUENTO='S' qué coberturas
-    // son elegibles. La prima PRIMA1 ya viene CON el descuento aplicado por IS,
-    // así que no necesitamos restarlo — solo mostrarlo informativamente.
-    const coberturasConDescuento = apiCoberturas.filter((c: any) => c.SN_DESCUENTO === 'S');
-    const tieneDescuentoBuenaExp = coberturasConDescuento.length > 0;
-    let descuentoTotal = 0;
+    let descuentoFactor = 1; // 1 = sin descuento, <1 = hay descuento
     let descuentoPorcentaje = 0;
-    // Nota: IS ya aplica el descuento en PRIMA1, no necesitamos recalcularlo
+    let descuentoTotal = 0;
     
-    console.log(`[IS] Prima opción ${vIdOpt} (suma PRIMA1): $${primaBase.toFixed(2)}`);
-    console.log(`[IS] PTOTAL de generarcotizacion (referencia): $${apiPrimaTotal}`);
-    if (tieneDescuentoBuenaExp) {
-      console.log(`[IS] ✅ Coberturas con descuento buena experiencia: ${coberturasConDescuento.length}`);
+    if (apiPrimaTotal && apiPrimaTotal > 0 && tableSumOpt1 > 0) {
+      const preTaxPTOTAL = apiPrimaTotal / 1.06; // Quitar 6% impuesto
+      descuentoFactor = preTaxPTOTAL / tableSumOpt1;
+      
+      // Solo aplicar si hay descuento real (factor < 0.99 para evitar errores de redondeo)
+      if (descuentoFactor < 0.99) {
+        descuentoPorcentaje = Math.round((1 - descuentoFactor) * 10000) / 100; // ej: 47.50%
+        const primaBrutaSelectedOpt = primaSumBruta;
+        const primaDescontada = primaBrutaSelectedOpt * descuentoFactor;
+        descuentoTotal = Math.round((primaBrutaSelectedOpt - primaDescontada) * 100) / 100;
+        console.log(`[IS] ✅ Descuento buena experiencia detectado: ${descuentoPorcentaje}% (factor ${descuentoFactor.toFixed(4)})`);
+        console.log(`[IS]   Prima bruta Opt${vIdOpt}: $${primaBrutaSelectedOpt.toFixed(2)} → descontada: $${primaDescontada.toFixed(2)} (ahorro: $${descuentoTotal.toFixed(2)})`);
+      } else {
+        descuentoFactor = 1; // No hay descuento significativo
+      }
     }
+    
+    // primaBase = suma PRIMA1 de la opción seleccionada × factor de descuento
+    const primaBase = Math.round(primaSumBruta * descuentoFactor * 100) / 100;
+    
+    console.log(`[IS] Prima opción ${vIdOpt}: bruta=$${primaSumBruta.toFixed(2)} neta=$${primaBase.toFixed(2)} (PTOTAL=${apiPrimaTotal})`);
+    console.log(`[IS] Opt1 sum=$${tableSumOpt1.toFixed(2)} factor=${descuentoFactor.toFixed(4)} descuento=${descuentoPorcentaje}%`);
     
     // ============================================
     // DEDUCIBLES: Ya leemos la tabla correcta (Table/Table1/Table2) según vIdOpt
@@ -296,6 +314,10 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
       _sumaAsegurada: quoteData.valorVehiculo || 0,
       _isReal: true,
       _idCotizacion: idCotizacion,
+      _nroCotizacion: nroCotizacion,
+      _allCoberturas: coberturasResult.data, // All 3 tables: Table (opt1), Table1 (opt2), Table2 (opt3)
+      _apiPrimaTotal: apiPrimaTotal, // PTOTAL from generarcotizacion (Opt1 post-discount + 6% tax)
+      _descuentoFactor: descuentoFactor,
       _vcodmarca: vcodmarca,
       _vcodmodelo: vcodmodelo,
       _vcodplancobertura: vcodplancobertura,
@@ -339,6 +361,7 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
       deductible: deducibleInfo.valor,
       coverages: coberturasDetalladas.map((c: any) => ({ name: c.nombre, included: true })),
       _priceBreakdown: {
+        primaBruta: primaSumBruta,
         primaBase: primaBase,
         descuentoBuenConductor: descuentoTotal,
         descuentoPorcentaje: descuentoPorcentaje,
@@ -352,6 +375,7 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
       _beneficios: IS_ENDOSOS.BENEFICIOS_GENERALES.map(b => ({ nombre: b, descripcion: b, incluido: true })),
       _endosos: basicoEndosos,
       _endosoIncluido: 'Endoso Plus',
+      _endosoTexto: 'ENDOSO PLUS'
     };
     
     // ============================================
@@ -391,6 +415,7 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
         { name: 'ENDOSO PLUS CENTENARIO (beneficios mejorados)', included: true },
       ],
       _priceBreakdown: {
+        primaBruta: primaSumBruta,
         primaBase: primaBase,
         descuentoBuenConductor: descuentoTotal,
         descuentoPorcentaje: descuentoPorcentaje,
@@ -404,6 +429,7 @@ const generateInternacionalQuotes = async (quoteData: any): Promise<{ basico: an
       _beneficios: IS_ENDOSOS.BENEFICIOS_GENERALES.map(b => ({ nombre: b, descripcion: b, incluido: true })),
       _endosos: premiumEndosos,
       _endosoIncluido: 'Endoso Plus Centenario',
+      _endosoTexto: 'ENDOSO PLUS CENTENARIO'
     };
     
     console.log(`[IS] ✅ Básico: $${primaBasico.toFixed(2)} (Endoso Plus $${IS_ENDOSOS.PLUS.costoAnual})`);
@@ -717,18 +743,6 @@ const generateFedpaQuotes = async (quoteData: any): Promise<{ premium: any | nul
         descripcion: 'Beneficios incluidos en el plan',
         subBeneficios: fullExtrasBeneficiosAPI,
       },
-      { 
-        codigo: 'H', nombre: 'Muerte Accidental', incluido: true,
-        descripcion: muerteAccidentalLimite 
-          ? `Límite: ${muerteAccidentalLimite}` 
-          : 'Conductor y pasajeros',
-        subBeneficios: [],
-      },
-      { 
-        codigo: 'KC', nombre: 'Asistencia Vial 24/7', incluido: true,
-        descripcion: asistenciaCob?.LIMITE || asistenciaCob?.limite || 'Incluido',
-        subBeneficios: [],
-      },
     ];
     
     const premium = {
@@ -762,18 +776,6 @@ const generateFedpaQuotes = async (quoteData: any): Promise<{ premium: any | nul
         codigo: 'K1', nombre: 'Endoso Full Extras', incluido: true,
         descripcion: 'Beneficios incluidos en el plan',
         subBeneficios: fullExtrasBeneficiosAPI,
-      },
-      { 
-        codigo: 'H', nombre: 'Muerte Accidental', incluido: true,
-        descripcion: muerteAccidentalLimite 
-          ? `Límite: ${muerteAccidentalLimite}` 
-          : 'Conductor y pasajeros',
-        subBeneficios: [],
-      },
-      { 
-        codigo: 'KC', nombre: 'Asistencia Vial', incluido: true,
-        descripcion: asistenciaCob?.LIMITE || asistenciaCob?.limite || 'Incluido',
-        subBeneficios: [],
       },
     ];
     

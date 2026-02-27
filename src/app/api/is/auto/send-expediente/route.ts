@@ -5,8 +5,12 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { createHash } from 'crypto';
 import { getTransport, getFromAddress } from '@/server/email/mailer';
 import { generateInspectionPdf } from '@/lib/is/inspection-pdf';
+import { generateISQuotePdf } from '@/lib/is/quote-pdf';
+import { generateAuthorizationPdf } from '@/lib/authorization-pdf';
+import { guardarDocumentosExpediente } from '@/lib/storage/expediente-server';
 
 // Expediente recipients
 const OFFICE_EMAIL = 'contacto@lideresenseguros.com';
@@ -29,6 +33,8 @@ export async function POST(request: NextRequest) {
     const firmaDataUrl = formData.get('firmaDataUrl') as string || '';
     const nroPoliza = formData.get('nroPoliza') as string || '';
     const insurerName = formData.get('insurerName') as string || 'Internacional de Seguros';
+    const clientId = formData.get('clientId') as string || '';
+    const policyId = formData.get('policyId') as string || '';
     const isDev = environment !== 'production';
     
     if (!clientDataStr || !vehicleDataStr) {
@@ -41,33 +47,38 @@ export async function POST(request: NextRequest) {
     const quoteData = quoteDataStr ? JSON.parse(quoteDataStr) : {};
     
     const isCC = tipoCobertura === 'CC';
-    const recipients = environment === 'production' ? IS_RECIPIENTS_PROD : IS_RECIPIENTS_DEV;
+    const isIS = (insurerName || '').toUpperCase().includes('INTERNACIONAL');
+    const isRecipients = environment === 'production' ? IS_RECIPIENTS_PROD : IS_RECIPIENTS_DEV;
     
-    console.log(`[IS EXPEDIENTE] Tipo: ${tipoCobertura}, Env: ${environment}, Recipients:`, recipients);
+    console.log(`[IS EXPEDIENTE] Tipo: ${tipoCobertura}, Aseguradora: ${insurerName}, IS: ${isIS}, Env: ${environment}`);
     
     // Collect file attachments
     const attachments: Array<{ filename: string; content: Buffer; contentType: string }> = [];
     
-    // Document files
+    // Document files — read buffers once, reuse for email + expediente
     const cedulaFile = formData.get('cedulaFile') as File | null;
     const licenciaFile = formData.get('licenciaFile') as File | null;
     const registroVehicularFile = formData.get('registroVehicularFile') as File | null;
     
+    let cedulaBuffer: Buffer | null = null;
+    let licenciaBuffer: Buffer | null = null;
+    let registroBuffer: Buffer | null = null;
+    
     if (cedulaFile) {
-      const buffer = Buffer.from(await cedulaFile.arrayBuffer());
-      attachments.push({ filename: `cedula_${clientData.cedula}.${getExtension(cedulaFile.name)}`, content: buffer, contentType: cedulaFile.type });
+      cedulaBuffer = Buffer.from(await cedulaFile.arrayBuffer());
+      attachments.push({ filename: `cedula_${clientData.cedula}.${getExtension(cedulaFile.name)}`, content: cedulaBuffer, contentType: cedulaFile.type });
       console.log('[IS EXPEDIENTE] Adjuntando cédula:', cedulaFile.name);
     }
     
     if (licenciaFile) {
-      const buffer = Buffer.from(await licenciaFile.arrayBuffer());
-      attachments.push({ filename: `licencia_${clientData.cedula}.${getExtension(licenciaFile.name)}`, content: buffer, contentType: licenciaFile.type });
+      licenciaBuffer = Buffer.from(await licenciaFile.arrayBuffer());
+      attachments.push({ filename: `licencia_${clientData.cedula}.${getExtension(licenciaFile.name)}`, content: licenciaBuffer, contentType: licenciaFile.type });
       console.log('[IS EXPEDIENTE] Adjuntando licencia:', licenciaFile.name);
     }
     
     if (registroVehicularFile) {
-      const buffer = Buffer.from(await registroVehicularFile.arrayBuffer());
-      attachments.push({ filename: `registro_vehicular.${getExtension(registroVehicularFile.name)}`, content: buffer, contentType: registroVehicularFile.type });
+      registroBuffer = Buffer.from(await registroVehicularFile.arrayBuffer());
+      attachments.push({ filename: `registro_vehicular.${getExtension(registroVehicularFile.name)}`, content: registroBuffer, contentType: registroVehicularFile.type });
       console.log('[IS EXPEDIENTE] Adjuntando registro vehicular:', registroVehicularFile.name);
     }
     
@@ -88,9 +99,8 @@ export async function POST(request: NextRequest) {
       console.log(`[IS EXPEDIENTE] ${attachments.length - 3} fotos de inspección adjuntadas`);
     }
     
-    // Generate inspection PDF for ALL IS emissions (CC and DT)
-    // IS requires the inspection form regardless of coverage type
-    try {
+    // Generate inspection PDF — ONLY for IS + CC (Internacional requires it for Cobertura Completa only)
+    if (isIS && isCC) try {
       const nombreCompleto = `${clientData.primerNombre || ''} ${clientData.segundoNombre || ''} ${clientData.primerApellido || ''} ${clientData.segundoApellido || ''}`.trim();
       
       const pdfData = {
@@ -121,6 +131,7 @@ export async function POST(request: NextRequest) {
         valorVehiculo: quoteData.valorVehiculo?.toString() || '',
         aseguradoAnteriormente: vehicleData.aseguradoAnteriormente ?? false,
         aseguradoraAnterior: vehicleData.aseguradoraAnterior || '',
+        observaciones: inspectionData.observaciones || inspectionData.notas || '',
         firmaDataUrl: firmaDataUrl || '',
         fecha: new Date().toLocaleDateString('es-PA', { day: '2-digit', month: '2-digit', year: 'numeric' }),
       };
@@ -135,11 +146,96 @@ export async function POST(request: NextRequest) {
       console.log('[IS EXPEDIENTE] Formulario de inspección generado:', pdfBuffer.length, 'bytes');
     } catch (pdfError: any) {
       console.error('[IS EXPEDIENTE] Error generando formulario de inspección:', pdfError);
-      // Continue without PDF - don't block the email
     }
-    
-    // Build email HTML
+
+    // Generate IS Quotation PDF — ONLY for IS + CC with real-API quote data
+    if (
+      isIS && isCC &&
+      quoteData._allCoberturas &&
+      quoteData._idCotizacion &&
+      typeof quoteData._descuentoFactor === 'number' &&
+      typeof quoteData._vIdOpt === 'number'
+    ) {
+      try {
+        const nombreCompleto = `${clientData.primerNombre || ''} ${clientData.segundoNombre || ''} ${clientData.primerApellido || ''} ${clientData.segundoApellido || ''}`.trim();
+        const quotePdfData = {
+          clientName: nombreCompleto,
+          cedula: clientData.cedula || '',
+          email: clientData.email || '',
+          telefono: clientData.telefono || clientData.celular || '',
+          marca: quoteData.marca || '',
+          modelo: quoteData.modelo || '',
+          anio: quoteData.anio || quoteData.anno || '',
+          valorVehiculo: Number(quoteData.valorVehiculo) || 0,
+          tipoCobertura: (tipoCobertura as 'CC' | 'DT') || 'CC',
+          idCotizacion: String(quoteData._idCotizacion),
+          nroCotizacion: quoteData._nroCotizacion ? Number(quoteData._nroCotizacion) : undefined,
+          fecha: new Date().toLocaleDateString('es-PA', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+          opcionSeleccionada: Number(quoteData._vIdOpt) as 1 | 2 | 3,
+          endosoTexto: quoteData._endosoTexto || '',
+          planType: quoteData._planType || '',
+          allCoberturas: quoteData._allCoberturas,
+          apiPrimaTotal: Number(quoteData._apiPrimaTotal) || 0,
+          descuentoFactor: Number(quoteData._descuentoFactor),
+          descuentoPorcentaje: Number(quoteData._descuentoPorcentaje) || 0,
+        };
+        console.log('[IS EXPEDIENTE] Generando cotización PDF (opción seleccionada:', quotePdfData.opcionSeleccionada, ')...');
+        const quotePdfBuffer = await generateISQuotePdf(quotePdfData);
+        attachments.push({
+          filename: `cotizacion_IS_${quoteData._nroCotizacion || quoteData._idCotizacion}_${clientData.cedula}.pdf`,
+          content: quotePdfBuffer,
+          contentType: 'application/pdf',
+        });
+        console.log('[IS EXPEDIENTE] Cotización PDF generada:', quotePdfBuffer.length, 'bytes');
+      } catch (quotePdfError: any) {
+        console.error('[IS EXPEDIENTE] Error generando cotización PDF:', quotePdfError);
+        // Non-blocking
+      }
+    }
+
+    // Generate Authorization PDF (for portal@ expediente, NOT for IS expediente)
     const nombreCompleto = `${clientData.primerNombre || ''} ${clientData.segundoNombre || ''} ${clientData.primerApellido || ''} ${clientData.segundoApellido || ''}`.trim();
+    let authPdfBuffer: Buffer | null = null;
+    let authPdfFilename = `debida_diligencia_y_autorizacion_${clientData.cedula}${nroPoliza ? `_poliza_${nroPoliza}` : ''}.pdf`;
+    try {
+      const authPdfData = {
+        nombreCompleto,
+        cedula: clientData.cedula || '',
+        email: clientData.email || '',
+        direccion: clientData.direccion || 'Panamá',
+        nroPoliza: nroPoliza || '',
+        marca: quoteData.marca || vehicleData.marca || '',
+        modelo: quoteData.modelo || vehicleData.modelo || '',
+        anio: quoteData.anio || quoteData.anno || vehicleData.anio || '',
+        placa: vehicleData.placa || '',
+        chasis: vehicleData.vinChasis || vehicleData.chasis || '',
+        motor: vehicleData.motor || '',
+        color: vehicleData.color || '',
+        firmaDataUrl: firmaDataUrl || '',
+        fecha: new Date().toLocaleDateString('es-PA', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+        // KYC fields for Section 0
+        fechaNacimiento: clientData.fechaNacimiento || '',
+        sexo: clientData.sexo || '',
+        estadoCivil: clientData.estadoCivil || '',
+        telefono: clientData.telefono || '',
+        celular: clientData.celular || '',
+        actividadEconomica: clientData.actividadEconomica || '',
+        nivelIngresos: clientData.nivelIngresos || '',
+        dondeTrabaja: clientData.dondeTrabaja || '',
+        esPEP: clientData.esPEP === true || clientData.esPEP === 'true',
+        tipoCobertura: isCC ? 'CC' : 'DT',
+        insurerName: insurerName || '',
+        valorAsegurado: quoteData.valorVehiculo ? `$${Number(quoteData.valorVehiculo).toLocaleString('en-US')}` : '',
+      };
+      console.log('[IS EXPEDIENTE] Generando PDF de autorización... firmaDataUrl:', firmaDataUrl ? `${firmaDataUrl.substring(0, 30)}... (${firmaDataUrl.length} chars)` : 'VACÍO');
+      authPdfBuffer = await generateAuthorizationPdf(authPdfData);
+      // NOTE: Do NOT attach to IS expediente email — carta autorización goes to portal@ only
+      console.log('[IS EXPEDIENTE] PDF de autorización generado:', authPdfBuffer.length, 'bytes');
+    } catch (authPdfError: any) {
+      console.error('[IS EXPEDIENTE] Error generando PDF de autorización:', authPdfError);
+    }
+
+    // Build email HTML
     const coberturaLabel = isCC ? 'Cobertura Completa' : 'Daños a Terceros';
     
     const htmlBody = buildExpedienteEmail({
@@ -161,27 +257,100 @@ export async function POST(request: NextRequest) {
       cobertura: coberturaLabel,
       nroPoliza,
       attachmentCount: attachments.length,
+      pdfUrl: (formData.get('pdfUrl') as string) || '',
+      insurerName,
     });
     
-    // Send email via PORTAL SMTP
-    console.log('[IS EXPEDIENTE] Enviando correo...');
+    // Send emails via PORTAL SMTP
     const transport = getTransport('PORTAL');
     const fromAddress = getFromAddress('PORTAL');
-    
-    const mailResult = await transport.sendMail({
-      from: fromAddress,
-      to: recipients.join(', '),
-      subject: `Expediente de Emisión - ${coberturaLabel} - ${nombreCompleto} - ${clientData.cedula}${nroPoliza ? ` - Póliza ${nroPoliza}` : ''}`,
-      html: htmlBody,
-      attachments: attachments.map(att => ({
-        filename: att.filename,
-        content: att.content,
-        contentType: att.contentType,
-      })),
-    });
-    
-    console.log('[IS EXPEDIENTE] ✅ Correo expediente enviado:', mailResult.messageId);
-    
+    let isMailMessageId = '';
+
+    // ═══ EMAIL 1: EXPEDIENTE PARA ASEGURADORA (solo Internacional) ═══
+    // Incluye: docs del cliente + formulario inspección (CC) + cotización (CC)
+    // NO incluye: carta de autorización (eso es nuestro)
+    if (isIS) {
+      try {
+        console.log('[IS EXPEDIENTE] Enviando expediente a Internacional...', isRecipients);
+        const isMailResult = await transport.sendMail({
+          from: fromAddress,
+          to: isRecipients.join(', '),
+          subject: `Expediente de Emisión - ${coberturaLabel} - ${nombreCompleto} - ${clientData.cedula}${nroPoliza ? ` - Póliza ${nroPoliza}` : ''}`,
+          html: htmlBody,
+          attachments: attachments.map(att => ({
+            filename: att.filename,
+            content: att.content,
+            contentType: att.contentType,
+          })),
+        });
+        isMailMessageId = isMailResult.messageId;
+        console.log('[IS EXPEDIENTE] ✅ Correo expediente IS enviado:', isMailMessageId);
+      } catch (isMailError: any) {
+        console.error('[IS EXPEDIENTE] Error enviando expediente a IS:', isMailError.message);
+      }
+    }
+
+    // ═══ EMAIL 2: EXPEDIENTE PORTAL (para TODAS las aseguradoras) ═══
+    // Incluye: todos los docs del cliente + carta de autorización + enlace carátula
+    // NO incluye: formulario inspección ni cotización (exclusivos IS)
+    // Destino: portal@lideresenseguros.com (en dev → contacto@)
+    const PORTAL_RECIPIENT = isDev ? OFFICE_EMAIL : 'portal@lideresenseguros.com';
+    try {
+      // Build portal attachments: client docs + carta autorización (no inspection/cotización)
+      const portalAttachments: Array<{ filename: string; content: Buffer; contentType: string }> = [];
+      if (cedulaBuffer && cedulaFile) {
+        portalAttachments.push({ filename: `cedula_${clientData.cedula}.${getExtension(cedulaFile.name)}`, content: cedulaBuffer, contentType: cedulaFile.type });
+      }
+      if (licenciaBuffer && licenciaFile) {
+        portalAttachments.push({ filename: `licencia_${clientData.cedula}.${getExtension(licenciaFile.name)}`, content: licenciaBuffer, contentType: licenciaFile.type });
+      }
+      if (registroBuffer && registroVehicularFile) {
+        portalAttachments.push({ filename: `registro_vehicular.${getExtension(registroVehicularFile.name)}`, content: registroBuffer, contentType: registroVehicularFile.type });
+      }
+      if (authPdfBuffer) {
+        portalAttachments.push({ filename: authPdfFilename, content: authPdfBuffer, contentType: 'application/pdf' });
+      }
+
+      const portalHtml = buildExpedienteEmail({
+        nombreCompleto,
+        cedula: clientData.cedula,
+        email: clientData.email,
+        telefono: clientData.telefono,
+        celular: clientData.celular,
+        direccion: clientData.direccion,
+        fechaNacimiento: clientData.fechaNacimiento,
+        marca: quoteData.marca,
+        modelo: quoteData.modelo,
+        anio: quoteData.anio || quoteData.anno,
+        placa: vehicleData.placa,
+        color: vehicleData.color,
+        motor: vehicleData.motor,
+        chasis: vehicleData.vinChasis,
+        valorVehiculo: quoteData.valorVehiculo,
+        cobertura: coberturaLabel,
+        nroPoliza,
+        attachmentCount: portalAttachments.length,
+        pdfUrl: (formData.get('pdfUrl') as string) || '',
+        insurerName,
+      });
+
+      console.log('[IS EXPEDIENTE] Enviando expediente portal a:', PORTAL_RECIPIENT);
+      await transport.sendMail({
+        from: fromAddress,
+        to: PORTAL_RECIPIENT,
+        subject: `Expediente Portal - ${insurerName} - ${coberturaLabel} - ${nombreCompleto} - ${clientData.cedula}${nroPoliza ? ` - Póliza ${nroPoliza}` : ''}`,
+        html: portalHtml,
+        attachments: portalAttachments.map(att => ({
+          filename: att.filename,
+          content: att.content,
+          contentType: att.contentType,
+        })),
+      });
+      console.log('[IS EXPEDIENTE] ✅ Expediente portal enviado a:', PORTAL_RECIPIENT);
+    } catch (portalMailError: any) {
+      console.error('[IS EXPEDIENTE] Error enviando expediente portal:', portalMailError.message);
+    }
+
     // === ENVIAR RESUMEN Y BIENVENIDA AL CLIENTE ===
     const clientEmail = clientData.email;
     const primaTotal = quoteData.primaTotal || quoteData.valorVehiculo || 0;
@@ -234,12 +403,52 @@ export async function POST(request: NextRequest) {
       console.error('[IS EXPEDIENTE] Error enviando bienvenida:', welcomeError.message);
     }
     
+    // ═══ GUARDAR DOCUMENTOS EN EXPEDIENTE (Supabase Storage) ═══
+    let expedienteSaved: string[] = [];
+    let expedienteErrors: string[] = [];
+    if (clientId && policyId) {
+      try {
+        const expedienteResult = await guardarDocumentosExpediente({
+          clientId,
+          policyId,
+          cedula: cedulaBuffer && cedulaFile ? { buffer: cedulaBuffer, fileName: cedulaFile.name, mimeType: cedulaFile.type } : undefined,
+          licencia: licenciaBuffer && licenciaFile ? { buffer: licenciaBuffer, fileName: licenciaFile.name, mimeType: licenciaFile.type } : undefined,
+          registroVehicular: registroBuffer && registroVehicularFile ? { buffer: registroBuffer, fileName: registroVehicularFile.name, mimeType: registroVehicularFile.type } : undefined,
+          cartaAutorizacion: authPdfBuffer ? { buffer: authPdfBuffer, fileName: authPdfFilename, mimeType: 'application/pdf' } : undefined,
+          nroPoliza,
+        });
+        expedienteSaved = expedienteResult.saved;
+        expedienteErrors = expedienteResult.errors;
+        if (expedienteResult.ok) {
+          console.log('[IS EXPEDIENTE] ✅ Documentos guardados en expediente:', expedienteSaved);
+        } else {
+          console.warn('[IS EXPEDIENTE] ⚠️ Algunos documentos no se guardaron:', expedienteErrors);
+        }
+      } catch (expError: any) {
+        console.error('[IS EXPEDIENTE] Error guardando documentos en expediente:', expError.message);
+      }
+    } else {
+      console.warn('[IS EXPEDIENTE] ⚠️ Sin clientId/policyId, no se guardan documentos en expediente');
+    }
+
+    // Audit metadata for the due diligence PDF
+    const authPdfHash = authPdfBuffer
+      ? createHash('sha256').update(authPdfBuffer).digest('hex')
+      : null;
+
     return NextResponse.json({
       success: true,
-      messageId: mailResult.messageId,
-      recipients,
+      messageId: isMailMessageId || 'portal-only',
+      recipients: isIS ? isRecipients : [PORTAL_RECIPIENT],
       attachmentCount: attachments.length,
       clientEmailSent: !!clientEmail,
+      expediente: { saved: expedienteSaved, errors: expedienteErrors },
+      audit: {
+        consent_version: '1.0',
+        pdf_hash_sha256: authPdfHash,
+        wizard_type: isCC ? 'full_coverage' : 'third_party',
+        generated_at: new Date().toISOString(),
+      },
     });
     
   } catch (error: any) {
@@ -317,21 +526,19 @@ function buildWelcomeEmail(data: {
     /* Emergency card */
     .emergency-card { background: #fff3cd; border: 2px solid #f0ad4e; border-radius: 12px; padding: 18px 20px; margin: 20px 0; }
     .emergency-card h4 { margin: 0 0 10px; color: #7d4e00; font-size: 15px; }
-    .emergency-card .phone { font-size: 26px; font-weight: 900; color: #010139; letter-spacing: 1px; }
+    .emergency-card .phone { font-size: 26px; font-weight: 900; color: #010139; letter-spacing: 1px; text-align: center; display: block; }
     .emergency-card p { margin: 6px 0 0; font-size: 12px; color: #7d4e00; }
 
     /* WhatsApp card */
-    .wa-card { background: #e8f5e9; border: 2px solid #43a047; border-radius: 12px; padding: 18px 20px; margin: 20px 0; display: flex; align-items: center; gap: 16px; }
-    .wa-icon { flex-shrink: 0; width: 48px; height: 48px; background: #25D366; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
-    .wa-text h4 { margin: 0 0 4px; color: #1b5e20; font-size: 15px; }
-    .wa-text p { margin: 0; font-size: 13px; color: #2e7d32; line-height: 1.5; }
-    .wa-text a { color: #1b5e20; font-weight: 700; }
+    .wa-card { background: #e8f5e9; border: 2px solid #43a047; border-radius: 12px; padding: 22px 20px; margin: 20px 0; text-align: center; }
+    .wa-card h4 { margin: 0 0 8px; color: #1b5e20; font-size: 16px; font-weight: 700; }
+    .wa-card p { margin: 0 0 16px; font-size: 13px; color: #2e7d32; line-height: 1.5; }
+    .wa-btn { display: inline-block; background: #25D366; color: white !important; text-decoration: none; font-weight: 700; font-size: 15px; padding: 13px 28px; border-radius: 50px; letter-spacing: 0.3px; }
 
     /* Services card */
     .services-card { background: linear-gradient(135deg, #f8faff, #eef2ff); border: 1px solid #c5cae9; border-radius: 12px; padding: 20px; margin: 20px 0; }
     .services-card h4 { margin: 0 0 12px; color: #010139; font-size: 15px; font-weight: 700; }
-    .services-grid { display: flex; flex-wrap: wrap; gap: 8px; }
-    .service-tag { background: #010139; color: white; padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+    .service-tag { display: inline-block; background: #010139; color: white; padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; margin: 3px 3px; }
 
     /* Contact card */
     .contact-card { background: #f5f5f5; border-radius: 10px; padding: 16px 20px; margin: 20px 0; text-align: center; }
@@ -401,35 +608,29 @@ function buildWelcomeEmail(data: {
 
       <!-- WHATSAPP LISSA -->
       <div class="wa-card">
-        <div class="wa-icon">
-          <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="white">
-            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
-          </svg>
-        </div>
-        <div class="wa-text">
-          <h4>Chatea con LISSA — Nuestra Asistente Virtual</h4>
-          <p>¿Tiene dudas sobre su póliza, desea renovar, agregar coberturas o simplemente consultar algo? <strong>LISSA</strong> está disponible para asistirle en cualquier momento.<br>
-          <a href="${whatsappUrl}" target="_blank">💬 Escribir por WhatsApp: ${whatsappNumber}</a></p>
-        </div>
+        <h4>💬 Chatea con LISSA — Nuestra Asistente Virtual</h4>
+        <p>¿Tiene dudas sobre su póliza, desea renovar, agregar coberturas o simplemente consultar algo?<br><strong>LISSA</strong> está disponible para asistirle en cualquier momento.</p>
+        <a href="${whatsappUrl}" target="_blank" class="wa-btn">&#x1F4F1; Escribir por WhatsApp</a>
+        <p style="margin:10px 0 0;font-size:11px;color:#2e7d32;">${whatsappNumber}</p>
       </div>
 
       <!-- SERVICES -->
       <div class="services-card">
-        <h4>🌟 En Líderes en Seguros le cubrimos en todo</h4>
+        <h4>&#x1F31F; En Líderes en Seguros le cubrimos en todo</h4>
         <p style="font-size:13px;color:#444;margin:0 0 14px;line-height:1.6;">
           Somos corredores de seguros con experiencia en <strong>todos los ramos</strong>. Estamos aquí para asesorarle, comparar opciones y encontrar la mejor cobertura para cada etapa de su vida y su negocio. ¡No espere a necesitarlo para contactarnos!
         </p>
-        <div class="services-grid">
-          <span class="service-tag">🚗 Auto</span>
-          <span class="service-tag">❤️ Vida</span>
-          <span class="service-tag">🏠 Incendio</span>
-          <span class="service-tag">📦 Contenido</span>
-          <span class="service-tag">⚖️ Responsabilidad Civil</span>
-          <span class="service-tag">🏢 Empresas</span>
-          <span class="service-tag">🏥 Salud</span>
-          <span class="service-tag">✈️ Viajes</span>
-          <span class="service-tag">⛵ Embarcaciones</span>
-          <span class="service-tag">Y mucho más...</span>
+        <div style="line-height:2;">
+          <span class="service-tag">&#x1F697; Auto</span>
+          <span class="service-tag">&#x2764;&#xFE0F; Vida</span>
+          <span class="service-tag">&#x1F3E0; Incendio</span>
+          <span class="service-tag">&#x1F4E6; Contenido</span>
+          <span class="service-tag">&#x2696;&#xFE0F; Responsabilidad Civil</span>
+          <span class="service-tag">&#x1F3E2; Empresas</span>
+          <span class="service-tag">&#x1F3E5; Salud</span>
+          <span class="service-tag">&#x2708;&#xFE0F; Viajes</span>
+          <span class="service-tag">&#x26F5; Embarcaciones</span>
+          <span class="service-tag">Y mucho m&#225;s...</span>
         </div>
       </div>
 
@@ -482,6 +683,8 @@ function buildExpedienteEmail(data: {
   cobertura: string;
   nroPoliza: string;
   attachmentCount: number;
+  pdfUrl?: string;
+  insurerName?: string;
 }): string {
   return `
 <!DOCTYPE html>
@@ -512,6 +715,7 @@ function buildExpedienteEmail(data: {
       <h1>📋 Expediente de Emisión</h1>
       <p>Líderes en Seguros, S.A.</p>
       <div class="badge">${data.cobertura}</div>
+      ${data.insurerName ? `<div class="badge" style="background:#020270;margin-left:8px;">${data.insurerName}</div>` : ''}
       ${data.nroPoliza ? `<div class="badge" style="background:#010139;margin-left:8px;">Póliza: ${data.nroPoliza}</div>` : ''}
     </div>
     
@@ -588,6 +792,12 @@ function buildExpedienteEmail(data: {
         </div>
       </div>
       
+      ${data.pdfUrl ? `
+      <div style="text-align:center;margin:16px 0;">
+        <a href="${data.pdfUrl}" style="display:inline-block;background:#010139;color:white;padding:10px 24px;border-radius:8px;text-decoration:none;font-weight:700;font-size:14px;">📄 Descargar Carátula de Póliza</a>
+        <p style="font-size:11px;color:#999;margin-top:6px;">Documento oficial emitido por Internacional de Seguros</p>
+      </div>` : ''}
+
       <div class="attachment-note">
         <strong>📎 ${data.attachmentCount} archivo(s) adjunto(s)</strong>
         <p style="margin:4px 0 0;font-size:12px;color:#555;">

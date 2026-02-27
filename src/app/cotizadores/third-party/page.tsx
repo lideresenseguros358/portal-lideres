@@ -12,6 +12,8 @@ export default function ThirdPartyPage() {
   const [loading, setLoading] = useState(false);
   const [minPriceDT, setMinPriceDT] = useState<number | null>(null);
   const [loadingPrice, setLoadingPrice] = useState(true);
+  const [fedpaSelection, setFedpaSelection] = useState<{ planType: 'basic' | 'premium'; plan: AutoThirdPartyPlan } | null>(null);
+  const [fedpaPaymentMode, setFedpaPaymentMode] = useState<'contado' | 'cuotas'>('contado');
 
   // Cargar precio mínimo dinámico de Daños a Terceros
   useEffect(() => {
@@ -32,7 +34,12 @@ export default function ThirdPartyPage() {
     fetchMinPrice();
   }, []);
 
-  const handleSelectPlan = (insurerId: string, planType: 'basic' | 'premium', plan: AutoThirdPartyPlan) => {
+  const proceedToEmission = (
+    insurerId: string,
+    planType: 'basic' | 'premium',
+    plan: AutoThirdPartyPlan,
+    paymentMode: 'contado' | 'cuotas' = 'contado'
+  ) => {
     setLoading(true);
     
     // Leer datos de cotización generados por ThirdPartyComparison (IS, FEDPA, etc.)
@@ -40,6 +47,13 @@ export default function ThirdPartyPage() {
     const tpQuote = tpQuoteRaw ? JSON.parse(tpQuoteRaw) : null;
     
     if (insurerId === 'fedpa') {
+      const cuotasDisponibles = !!plan.installments?.available;
+      const cuotas = cuotasDisponibles ? (plan.installments?.payments || 1) : 1;
+      const montoCuota = cuotasDisponibles ? (plan.installments?.amount || 0) : 0;
+      const totalCuotas = cuotasDisponibles
+        ? (plan.installments?.totalWithInstallments || (montoCuota * cuotas))
+        : plan.annualPremium;
+
       // FEDPA: usar flujo completo con secciones
       sessionStorage.setItem('selectedQuote', JSON.stringify({
         insurerName: 'FEDPA Seguros',
@@ -50,6 +64,11 @@ export default function ThirdPartyPage() {
         _planCode: plan.planCode || 426,
         _includedCoverages: plan.includedCoverages,
         _endosoPdf: plan.endosoPdf,
+        _paymentMode: paymentMode,
+        _installmentsCount: cuotas,
+        _installmentAmount: montoCuota,
+        _totalWithInstallments: totalCuotas,
+        installments: plan.installments,
         quoteData: {
           cobertura: 'TERCEROS',
           policyType: 'AUTO',
@@ -87,6 +106,22 @@ export default function ThirdPartyPage() {
       // Otras aseguradoras: flujo existente (formulario simple)
       router.push(`/cotizadores/third-party/issue?insurer=${insurerId}&plan=${planType}`);
     }
+  };
+
+  const handleSelectPlan = (insurerId: string, planType: 'basic' | 'premium', plan: AutoThirdPartyPlan) => {
+    if (insurerId === 'fedpa') {
+      setFedpaSelection({ planType, plan });
+      setFedpaPaymentMode('contado');
+      return;
+    }
+
+    proceedToEmission(insurerId, planType, plan);
+  };
+
+  const handleConfirmFedpaPaymentMode = () => {
+    if (!fedpaSelection) return;
+    proceedToEmission('fedpa', fedpaSelection.planType, fedpaSelection.plan, fedpaPaymentMode);
+    setFedpaSelection(null);
   };
 
   return (
@@ -221,6 +256,74 @@ export default function ThirdPartyPage() {
           </div>
         </div>
       </div>
+
+      {fedpaSelection && (
+        <div className="fixed inset-0 z-50 bg-[#010139]/50 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+          <div className="w-full max-w-2xl bg-gradient-to-b from-white to-[#f7f9ff] rounded-3xl shadow-2xl border border-white/70 overflow-hidden">
+            <div className="bg-gradient-to-r from-[#010139] to-[#020270] px-5 py-5 sm:px-7 sm:py-6 text-white">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#b9d95a] mb-2">FEDPA Seguros</p>
+              <h3 className="text-2xl sm:text-3xl font-black leading-tight">¿Cómo desea pagar su póliza?</h3>
+              <p className="text-sm text-white/85 mt-2 max-w-lg">
+                Elija una opción para continuar. La mantendremos durante todo el proceso de emisión.
+              </p>
+            </div>
+
+            <div className="p-4 sm:p-6">
+              <div className="grid grid-cols-2 gap-3 sm:gap-4 mb-6">
+              <button
+                type="button"
+                onClick={() => setFedpaPaymentMode('contado')}
+                className={`p-4 rounded-xl border-2 text-left transition-all ${
+                  fedpaPaymentMode === 'contado'
+                    ? 'border-[#8AAA19] bg-gradient-to-br from-[#f4f9e4] to-[#e9f3c8] shadow-lg scale-[1.01]'
+                    : 'border-gray-300 bg-white hover:border-[#8AAA19]'
+                }`}
+              >
+                <p className="text-[11px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wide">Al contado</p>
+                <p className="text-3xl sm:text-4xl font-black text-[#010139] leading-none mt-2">B/.{fedpaSelection.plan.annualPremium.toFixed(2)}</p>
+                <p className="text-xs text-gray-600 mt-2">Pago único</p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setFedpaPaymentMode('cuotas')}
+                disabled={!fedpaSelection.plan.installments?.available}
+                className={`p-4 rounded-xl border-2 text-left transition-all ${
+                  fedpaPaymentMode === 'cuotas'
+                    ? 'border-[#8AAA19] bg-gradient-to-br from-[#f4f9e4] to-[#e9f3c8] shadow-lg scale-[1.01]'
+                    : 'border-gray-300 bg-white hover:border-[#8AAA19]'
+                } ${!fedpaSelection.plan.installments?.available ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                <p className="text-[11px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wide">En cuotas</p>
+                <p className="text-2xl sm:text-3xl font-black text-[#010139] leading-none mt-2">
+                  {fedpaSelection.plan.installments?.payments || 0} x B/.{(fedpaSelection.plan.installments?.amount || 0).toFixed(2)}
+                </p>
+                <p className="text-xs text-gray-600 mt-2">
+                  Total: B/.{(fedpaSelection.plan.installments?.totalWithInstallments || 0).toFixed(2)}
+                </p>
+              </button>
+              </div>
+
+              <div className="flex flex-col-reverse sm:flex-row gap-3 sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() => setFedpaSelection(null)}
+                  className="px-5 py-3 rounded-xl border-2 border-gray-300 text-gray-700 font-semibold hover:bg-gray-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmFedpaPaymentMode}
+                  className="px-6 py-3 rounded-xl bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white font-bold hover:shadow-xl"
+                >
+                  Continuar a emisión
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

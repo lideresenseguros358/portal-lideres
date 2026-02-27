@@ -7,7 +7,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FaStar, FaShieldAlt, FaCheckCircle, FaCog, FaArrowUp, FaEdit, FaInfoCircle, FaQuestionCircle } from 'react-icons/fa';
+import { FaStar, FaShieldAlt, FaCheckCircle, FaCog, FaArrowUp, FaEdit, FaQuestionCircle } from 'react-icons/fa';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import InsurerLogo from '@/components/shared/InsurerLogo';
@@ -72,16 +72,11 @@ export default function QuoteComparison({ policyType, quotes, quoteData }: Quote
   const [selectedBasicPlan, setSelectedBasicPlan] = useState<QuotePlan | null>(null);
   const [correspondingPremiumPlan, setCorrespondingPremiumPlan] = useState<QuotePlan | null>(null);
   
-  // UI Cuotas: Estado para selector - DEFAULT 'contado'
-  const [paymentMode, setPaymentMode] = useState<Record<string, 'contado' | 'tarjeta'>>(
-    quotes.reduce((acc, q) => ({ ...acc, [q.id]: 'contado' }), {})
-  );
+  // UI Cuotas: Estado global — cambiar uno cambia todos
+  const [paymentMode, setPaymentMode] = useState<'contado' | 'tarjeta'>('contado');
   
-  const togglePaymentMode = (quoteId: string) => {
-    setPaymentMode(prev => ({
-      ...prev,
-      [quoteId]: prev[quoteId] === 'contado' ? 'tarjeta' : 'contado'
-    }));
+  const togglePaymentMode = () => {
+    setPaymentMode(prev => prev === 'contado' ? 'tarjeta' : 'contado');
   };
 
   useEffect(() => {
@@ -413,9 +408,9 @@ export default function QuoteComparison({ policyType, quotes, quoteData }: Quote
                       <div className="flex gap-2 mb-4">
                         <div className="flex-1">
                           <button
-                            onClick={() => setPaymentMode(prev => ({ ...prev, [quote.id]: 'contado' }))}
+                            onClick={() => setPaymentMode('contado')}
                             className={`w-full py-2 px-3 rounded-lg text-xs font-semibold transition-all ${
-                              paymentMode[quote.id] === 'contado'
+                              paymentMode === 'contado'
                                 ? 'bg-[#8AAA19] text-white shadow-md'
                                 : 'bg-white text-gray-600 border border-gray-300 hover:border-[#8AAA19]'
                             }`}
@@ -426,9 +421,9 @@ export default function QuoteComparison({ policyType, quotes, quoteData }: Quote
                         </div>
                         <div className="flex-1">
                           <button
-                            onClick={() => setPaymentMode(prev => ({ ...prev, [quote.id]: 'tarjeta' }))}
+                            onClick={() => setPaymentMode('tarjeta')}
                             className={`w-full py-2 px-3 rounded-lg text-xs font-semibold transition-all ${
-                              paymentMode[quote.id] === 'tarjeta'
+                              paymentMode === 'tarjeta'
                                 ? 'bg-[#010139] text-white shadow-md'
                                 : 'bg-white text-gray-600 border border-gray-300 hover:border-[#010139]'
                             }`}
@@ -443,23 +438,23 @@ export default function QuoteComparison({ policyType, quotes, quoteData }: Quote
                       <div className="text-center">
                         <div className="flex items-center justify-center gap-2 mb-1">
                           <span className="text-xs text-gray-600 font-medium">
-                            {paymentMode[quote.id] === 'contado' ? 'Pago al Contado' : 'Pago en Cuotas'}
+                            {paymentMode === 'contado' ? 'Pago al Contado' : 'Pago en Cuotas'}
                           </span>
                           <AutoCloseTooltip 
-                            content={paymentMode[quote.id] === 'contado' ? preciosTooltips.contado : preciosTooltips.tarjeta}
+                            content={paymentMode === 'contado' ? preciosTooltips.contado : preciosTooltips.tarjeta}
                           />
                         </div>
                         <div className={`text-3xl md:text-4xl font-bold mb-2 ${
-                          paymentMode[quote.id] === 'contado' ? 'text-[#8AAA19]' : 'text-[#010139]'
+                          paymentMode === 'contado' ? 'text-[#8AAA19]' : 'text-[#010139]'
                         }`}>
-                          ${(paymentMode[quote.id] === 'contado' 
+                          ${(paymentMode === 'contado' 
                             ? quote._priceBreakdown.totalAlContado 
                             : quote._priceBreakdown.totalConTarjeta
                           ).toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                         </div>
                         
                         {/* Info adicional según modo */}
-                        {paymentMode[quote.id] === 'contado' ? (
+                        {paymentMode === 'contado' ? (
                           quote._priceBreakdown.descuentoProntoPago && quote._priceBreakdown.descuentoProntoPago > 0 && (
                             <div className="text-xs text-[#8AAA19] font-semibold">
                               ✓ Ahorro: ${quote._priceBreakdown.descuentoProntoPago.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
@@ -468,15 +463,6 @@ export default function QuoteComparison({ policyType, quotes, quoteData }: Quote
                         ) : (
                           <div className="text-xs text-gray-500">
                             Elige de 2 a 10 cuotas en el proceso de emisión
-                          </div>
-                        )}
-                        
-                        {/* Descuento buena experiencia (IS) */}
-                        {quote._descuentoBuenaExp > 0 && (
-                          <div className="mt-2 px-2 py-1 bg-green-100 rounded-lg text-center">
-                            <span className="text-[10px] text-green-700 font-semibold">
-                              ✓ Desc. buena experiencia: -${quote._descuentoBuenaExp.toLocaleString('en-US', {minimumFractionDigits: 2})} ({quote._descuentoPorcentaje}%)
-                            </span>
                           </div>
                         )}
                       </div>
@@ -544,7 +530,7 @@ export default function QuoteComparison({ policyType, quotes, quoteData }: Quote
                     </div>
                     <div className="flex flex-wrap gap-1.5">
                       {(quote._endosos || []).map((endoso: any, eIdx: number) => {
-                        const isExclusive = endoso.codigo === 'PORCELANA' || endoso.codigo === 'VA';
+                        const isExclusive = endoso.codigo === 'PORCELANA' || endoso.codigo === 'VA' || endoso.codigo === 'CENTENARIO';
                         return (
                           <span 
                             key={eIdx}
@@ -559,45 +545,8 @@ export default function QuoteComparison({ policyType, quotes, quoteData }: Quote
                         );
                       })}
                     </div>
-                    {quote.planType === 'premium' && (
-                      <p className="text-[10px] text-[#8AAA19] font-medium mt-2">
-                        Incluye cobertura de vidrios, faros, espejos, luces, molduras y pintura
-                      </p>
-                    )}
                   </div>
                 )}
-
-                {/* Coverages Summary */}
-                <div className="mb-5 flex-1 overflow-hidden">
-                  <div className="flex items-center gap-2 mb-3">
-                    <FaShieldAlt className="text-[#8AAA19] flex-shrink-0 text-base" />
-                    <span className="text-sm font-bold text-gray-700">Protecciones Incluidas</span>
-                  </div>
-                  <div className="space-y-2.5 max-h-[180px] overflow-y-auto pr-2 custom-scrollbar">
-                    {quote.coverages.slice(0, 5).map((coverage, idx) => (
-                      <div 
-                        key={idx} 
-                        className={`benefit-item flex items-start gap-2 text-sm leading-snug ${
-                          coverage.included ? 'text-gray-700' : 'text-gray-400 line-through'
-                        }`}
-                        style={{ animationDelay: `${idx * 0.05}s`, opacity: 0 }}
-                      >
-                        <FaCheckCircle 
-                          className={`flex-shrink-0 mt-0.5 text-sm ${
-                            coverage.included ? 'text-[#8AAA19]' : 'text-gray-300'
-                          }`} 
-                        />
-                        <span className="break-words">{coverage.name}</span>
-                      </div>
-                    ))}
-                    {quote.coverages.length > 5 && (
-                      <p className="text-xs text-[#8AAA19] font-semibold flex items-center gap-1.5 mt-2">
-                        <FaInfoCircle />
-                        +{quote.coverages.length - 5} protecciones adicionales
-                      </p>
-                    )}
-                  </div>
-                </div>
 
                 {/* Detalle Completo */}
                 {quote._isReal && (quote._coberturasDetalladas || quote._limites || quote._beneficios || quote._endosos) && (
@@ -644,12 +593,14 @@ export default function QuoteComparison({ policyType, quotes, quoteData }: Quote
             onUpgrade={handleUpgradeToPremium}
             onContinueBasic={handleContinueBasic}
             insurerName={selectedBasicPlan.insurerName}
+            paymentMode={paymentMode}
             basicPlan={{
               premium: selectedBasicPlan.annualPremium,
               deductible: selectedBasicPlan.deductible,
               coverages: selectedBasicPlan.coverages.map(c => c.name),
               beneficios: selectedBasicPlan._beneficios || [],
               endosos: selectedBasicPlan._endosos || [],
+              _priceBreakdown: selectedBasicPlan._priceBreakdown,
             }}
             premiumPlan={{
               premium: correspondingPremiumPlan.annualPremium,
@@ -657,6 +608,7 @@ export default function QuoteComparison({ policyType, quotes, quoteData }: Quote
               coverages: correspondingPremiumPlan.coverages.map(c => c.name),
               beneficios: correspondingPremiumPlan._beneficios || [],
               endosos: correspondingPremiumPlan._endosos || [],
+              _priceBreakdown: correspondingPremiumPlan._priceBreakdown,
             }}
           />
         )}

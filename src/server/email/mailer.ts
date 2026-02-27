@@ -55,8 +55,8 @@ function createZeptoTransport(): Transporter {
     tls: {
       minVersion: 'TLSv1.2',
     },
-    logger: process.env.NODE_ENV === 'development',
-    debug: process.env.NODE_ENV === 'development',
+    logger: false,
+    debug: false,
   });
 
   console.log('[SMTP-ZEPTO] ✓ Transporte creado exitosamente');

@@ -12,6 +12,10 @@ import { isGet } from '@/lib/is/http-client';
 import { IS_ENDPOINTS, type ISEnvironment } from '@/lib/is/config';
 import { URBANIZACIONES_FALLBACK } from '@/lib/is/urbanizaciones-fallback';
 
+// In-memory cache for address catalogs (24h TTL — these rarely change)
+const addressCache = new Map<string, { data: any; exp: number }>();
+const CACHE_TTL = 24 * 60 * 60 * 1000;
+
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -46,25 +50,26 @@ export async function GET(request: NextRequest) {
         break;
       }
       case 'urbanizaciones': {
-        const page = searchParams.get('page') || '1';
-        const size = searchParams.get('size') || '5000';
-        endpoint = `${IS_ENDPOINTS.URBANIZACIONES}/${page}/${size}`;
-        break;
+        // IS tester API siempre retorna 401 para urbanizaciones.
+        // Usar fallback local directamente para evitar ciclos de token innecesarios.
+        return NextResponse.json({ success: true, data: URBANIZACIONES_FALLBACK, source: 'fallback' });
       }
       default:
         return NextResponse.json({ error: 'tipo inválido. Usar: provincias, distritos, corregimientos, urbanizaciones' }, { status: 400 });
+    }
+
+    // Check in-memory cache first
+    const cacheKey = `${env}:${endpoint}`;
+    const cached = addressCache.get(cacheKey);
+    if (cached && cached.exp > Date.now()) {
+      console.log(`[IS Catálogos Dirección] ⚡ Cache hit: tipo=${tipo}`);
+      return NextResponse.json({ success: true, data: cached.data, source: 'cache' });
     }
 
     console.log(`[IS Catálogos Dirección] tipo=${tipo} endpoint=${endpoint}`);
     const response = await isGet<{ Table: any[] }>(endpoint, env);
 
     if (!response.success) {
-      // Urbanizaciones: IS endpoint retorna 401 (permiso no habilitado en API tester).
-      // Usar catálogo estático local como fallback.
-      if (tipo === 'urbanizaciones') {
-        console.warn(`[IS Catálogos Dirección] Urbanizaciones IS retornó error (${response.statusCode}). Usando catálogo fallback local.`);
-        return NextResponse.json({ success: true, data: URBANIZACIONES_FALLBACK, source: 'fallback' });
-      }
       return NextResponse.json({ error: response.error || 'Error consultando catálogo' }, { status: 500 });
     }
 
@@ -85,12 +90,12 @@ export async function GET(request: NextRequest) {
       case 'corregimientos':
         normalized = rawData.map((r: any) => ({ DATO: r.codigoCorregimiento, TEXTO: r.nombreCorregimiento }));
         break;
-      case 'urbanizaciones':
-        normalized = rawData.map((r: any) => ({ DATO: r.codigoUrbanizacion || r.DATO || 0, TEXTO: r.nombreUrbanizacion || r.TEXTO || '' }));
-        break;
       default:
         normalized = rawData;
     }
+
+    // Store in cache for subsequent requests
+    addressCache.set(cacheKey, { data: normalized, exp: Date.now() + CACHE_TTL });
 
     return NextResponse.json({
       success: true,

@@ -403,6 +403,39 @@ export async function obtenerToken(
 }
 
 // ============================================
+// FAST TOKEN CHECK (no generation, no retries)
+// ============================================
+
+/**
+ * Quick check if a token is available in cache or DB.
+ * Does NOT generate a new token, does NOT retry.
+ * Returns in <100ms typically.
+ */
+export async function checkTokenDisponible(
+  env: FedpaEnvironment = 'PROD'
+): Promise<{ hasToken: boolean; token?: string }> {
+  const cacheKey = `fedpa_token_${env}`;
+  const now = Date.now();
+
+  // 1. Memory cache
+  const cached = tokenCache.get(cacheKey);
+  if (cached && cached.exp > now + 60_000) {
+    return { hasToken: true, token: cached.token };
+  }
+
+  // 2. DB
+  try {
+    const dbToken = await obtenerTokenDeDB(env);
+    if (dbToken) {
+      tokenCache.set(cacheKey, { token: dbToken, exp: now + TOKEN_TTL_MS });
+      return { hasToken: true, token: dbToken };
+    }
+  } catch { /* ignore */ }
+
+  return { hasToken: false };
+}
+
+// ============================================
 // RENOVAR TOKEN
 // ============================================
 

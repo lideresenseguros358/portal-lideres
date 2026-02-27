@@ -114,7 +114,7 @@ export function generateCasePDF(
     yPos += 5;
 
     const checklistData = caseData.checklist.map(item => [
-      item.completed ? '✓' : '○',
+      item.completed ? 'Si' : '-',
       item.label,
       item.required ? 'Obligatorio' : 'Opcional',
       item.completed ? 'Completado' : 'Pendiente',
@@ -122,7 +122,7 @@ export function generateCasePDF(
 
     doc.autoTable({
       startY: yPos,
-      head: [['✓', 'Documento', 'Tipo', 'Estado']],
+      head: [['OK', 'Documento', 'Tipo', 'Estado']],
       body: checklistData,
       theme: 'grid',
       styles: { fontSize: 9 },

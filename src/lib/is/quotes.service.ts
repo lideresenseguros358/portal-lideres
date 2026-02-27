@@ -143,6 +143,8 @@ export interface EmisionAutoRequest {
   tipoTransmision?: string; // AUTOMATICO o MANUAL
   cantPasajeros?: number;
   cantPuertas?: number;
+  // Descuento buena experiencia
+  pjeBexp?: number;          // Porcentaje descuento buena experiencia (ej: 47.50)
   // Pago
   paymentToken?: string;
   formaPago?: number;      // 1=Contado, 2=Financiado
@@ -152,6 +154,8 @@ export interface EmisionAutoRequest {
   // Acreedor (banco)
   codTipoConducto?: number; // 1=Banco, 0=sin acreedor
   codConducto?: number;     // Código IS del banco
+  // Endoso texto para condiciones especiales
+  endosoTexto?: string;     // Ej: 'ENDOSO PLUS' o 'ENDOSO PLUS CENTENARIO'
 }
 
 export interface EmisionAutoResponse {
@@ -260,7 +264,12 @@ async function _callGenerarCotizacion(
     };
   }
   
-  const tableData = response.data?.Table?.[0];
+  const tableData = response.data?.Table?.[0] as any;
+  
+  // DEBUG: Log ALL fields from generarcotizacion response to find discount info
+  if (tableData) {
+    console.log('[IS Quotes] generarcotizacion ALL fields:', JSON.stringify(tableData));
+  }
   
   if (!tableData) {
     console.error('[IS Quotes] Respuesta sin datos:', response.data);
@@ -443,14 +452,14 @@ export async function emitirPolizaAuto(
       fecVigDesde: vigDesde,
       fecVigHasta: vigHasta,
       idPlanCobertura: Math.floor(Number(request.codPlanCobertura)),
-      pjeBexp: 0,          // Porcentaje buena experiencia
+      pjeBexp: request.pjeBexp || 0, // Porcentaje buena experiencia (ej: 47.50)
       codTipoConducto: request.codTipoConducto || 0,
       codConducto: request.codConducto || 0,
       idPlanCobAdic: Math.floor(Number(request.codPlanCoberturaAdic || 0)),
       snCargo: 0,
       codBenef: 0,
       txtBenef: '',
-      txtComentarios: '',
+      txtComentarios: request.endosoTexto || '',
       cntTermino: 0,
       idPlanCobAdicAsiento: 0,
     },
@@ -476,7 +485,7 @@ export async function emitirPolizaAuto(
       Error: string;         // Error details
       CodSucursal: number;   // Branch code
       LinkDescarga: string;  // PDF download URL
-    }> }>(IS_ENDPOINTS.EMISION, body, env);
+    }> }>(IS_ENDPOINTS.EMISION, body, env, { timeout: 60000 });
     
     // Extraer el mensaje de error real de la respuesta
     const tableData = response.data?.Table?.[0] as any;
@@ -587,12 +596,12 @@ export async function crearClienteYPolizaIS(data: {
     // 1. Buscar o crear cliente
     let clientId: string;
     
-    // Buscar cliente por documento
+    // Buscar cliente por documento (sin filtrar por broker_id, ya que
+    // el unique constraint clients_national_id_unique_idx es solo en national_id)
     const { data: existingClient } = await supabase
       .from('clients')
       .select('id')
       .eq('national_id', data.cliente_documento)
-      .eq('broker_id', data.broker_id)
       .single();
     
     if (existingClient) {
@@ -613,16 +622,30 @@ export async function crearClienteYPolizaIS(data: {
         .select('id')
         .single();
       
-      if (clientError || !newClient) {
-        console.error('[IS] Error creando cliente:', clientError);
-        return {
-          success: false,
-          error: clientError?.message || 'Error creando cliente',
-        };
+      if (clientError) {
+        // Handle race condition: another request may have created the client
+        if (clientError.code === '23505') {
+          const { data: raceClient } = await supabase
+            .from('clients')
+            .select('id')
+            .eq('national_id', data.cliente_documento)
+            .single();
+          if (raceClient) {
+            clientId = raceClient.id;
+            console.log('[IS] Cliente encontrado después de race condition:', clientId);
+          } else {
+            return { success: false, error: 'Error creando cliente (duplicado)' };
+          }
+        } else {
+          console.error('[IS] Error creando cliente:', clientError);
+          return { success: false, error: clientError.message || 'Error creando cliente' };
+        }
+      } else if (!newClient) {
+        return { success: false, error: 'Error creando cliente' };
+      } else {
+        clientId = newClient.id;
+        console.log('[IS] Cliente creado:', clientId);
       }
-      
-      clientId = newClient.id;
-      console.log('[IS] Cliente creado:', clientId);
     }
     
     // 2. Crear póliza

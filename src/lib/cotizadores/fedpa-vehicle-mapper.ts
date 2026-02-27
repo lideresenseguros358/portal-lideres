@@ -20,6 +20,7 @@ export const IS_TO_FEDPA_MARCA: Record<number, string> = {
   73: 'HON',
   
   // Nissan
+  113: 'NIS',
   127: 'NIS',
   
   // Mazda
