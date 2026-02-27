@@ -41,6 +41,17 @@ export interface EmissionData {
   codUrbanizacion?: number;
   casaApto?: string;
   esPEP: boolean;
+  // PEP detail fields (shown when esPEP = true)
+  pepEsUsted: boolean;
+  pepCargoUsted: string;
+  pepEsFamiliar: boolean;
+  pepNombreFamiliar: string;
+  pepCargoFamiliar: string;
+  pepRelacionFamiliar: string;
+  pepEsColaborador: boolean;
+  pepNombreColaborador: string;
+  pepCargoColaborador: string;
+  pepRelacionColaborador: string;
   acreedor?: string;
   cedulaFile?: File;
   licenciaFile?: File;
@@ -65,6 +76,16 @@ export default function EmissionDataForm({ quoteData, onContinue, showAcreedor =
     dondeTrabaja: '',
     nivelIngresos: '',
     esPEP: false,
+    pepEsUsted: false,
+    pepCargoUsted: '',
+    pepEsFamiliar: false,
+    pepNombreFamiliar: '',
+    pepCargoFamiliar: '',
+    pepRelacionFamiliar: '',
+    pepEsColaborador: false,
+    pepNombreColaborador: '',
+    pepCargoColaborador: '',
+    pepRelacionColaborador: '',
     acreedor: '',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -737,24 +758,165 @@ export default function EmissionDataForm({ quoteData, onContinue, showAcreedor =
               </div>
             )}
 
-            {/* PEP Checkbox */}
-            <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
-              <label className="flex items-start gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={formData.esPEP}
-                  onChange={(e) => setFormData({ ...formData, esPEP: e.target.checked })}
-                  className="w-5 h-5 mt-0.5 text-[#8AAA19] focus:ring-[#8AAA19] rounded"
-                />
-                <div className="flex-1">
-                  <span className="text-base font-semibold text-blue-900">
-                    Es Persona Expuesta Políticamente (PEP)
-                  </span>
-                  <p className="text-xs text-blue-700 mt-1">
-                    Marca esta casilla si desempeñas o has desempeñado funciones públicas importantes
-                  </p>
+            {/* PEP Section */}
+            <div className="bg-blue-50 border-2 border-blue-200 rounded-xl p-4 space-y-4">
+              <div>
+                <h4 className="text-base font-bold text-[#010139] mb-1">Persona Expuesta Políticamente (PEP)</h4>
+                <p className="text-xs text-blue-700">¿Usted, un familiar cercano o un estrecho colaborador desempeña o ha desempeñado funciones públicas destacadas?</p>
+              </div>
+
+              {/* Main PEP toggle */}
+              <div className="flex gap-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="pepToggle"
+                    checked={!formData.esPEP}
+                    onChange={() => setFormData({ ...formData, esPEP: false, pepEsUsted: false, pepCargoUsted: '', pepEsFamiliar: false, pepNombreFamiliar: '', pepCargoFamiliar: '', pepRelacionFamiliar: '', pepEsColaborador: false, pepNombreColaborador: '', pepCargoColaborador: '', pepRelacionColaborador: '' })}
+                    className="w-5 h-5 text-[#8AAA19] focus:ring-[#8AAA19]"
+                  />
+                  <span className="text-base font-semibold">No</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="pepToggle"
+                    checked={formData.esPEP}
+                    onChange={() => setFormData({ ...formData, esPEP: true })}
+                    className="w-5 h-5 text-[#8AAA19] focus:ring-[#8AAA19]"
+                  />
+                  <span className="text-base font-semibold">Sí</span>
+                </label>
+              </div>
+
+              {/* PEP Detail Questions — shown when esPEP = true */}
+              {formData.esPEP && (
+                <div className="space-y-4 border-t border-blue-200 pt-4">
+
+                  {/* Q1: ¿Es usted PEP? */}
+                  <div className="space-y-2">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formData.pepEsUsted}
+                        onChange={(e) => setFormData({ ...formData, pepEsUsted: e.target.checked, ...(!e.target.checked && { pepCargoUsted: '' }) })}
+                        className="w-5 h-5 text-[#8AAA19] focus:ring-[#8AAA19] rounded"
+                      />
+                      <span className="text-sm font-semibold text-blue-900">1. ¿Es usted una Persona Expuesta Políticamente?</span>
+                    </label>
+                    {formData.pepEsUsted && (
+                      <div className="ml-7">
+                        <label className="block text-xs font-semibold text-gray-700 mb-1">Cargo actual o anterior</label>
+                        <input
+                          type="text"
+                          value={formData.pepCargoUsted}
+                          onChange={(e) => setFormData({ ...formData, pepCargoUsted: e.target.value })}
+                          className="w-full px-3 py-2 text-sm border-2 border-gray-300 focus:border-[#8AAA19] rounded-lg focus:outline-none"
+                          placeholder="Ej: Diputado, Ministro, Magistrado"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Q2: ¿Es usted un Familiar PEP? */}
+                  <div className="space-y-2">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formData.pepEsFamiliar}
+                        onChange={(e) => setFormData({ ...formData, pepEsFamiliar: e.target.checked, ...(!e.target.checked && { pepNombreFamiliar: '', pepCargoFamiliar: '', pepRelacionFamiliar: '' }) })}
+                        className="w-5 h-5 text-[#8AAA19] focus:ring-[#8AAA19] rounded"
+                      />
+                      <span className="text-sm font-semibold text-blue-900">2. ¿Es usted un Familiar PEP?</span>
+                    </label>
+                    {formData.pepEsFamiliar && (
+                      <div className="ml-7 space-y-2">
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-700 mb-1">Nombre del PEP</label>
+                          <input
+                            type="text"
+                            value={formData.pepNombreFamiliar}
+                            onChange={(e) => setFormData({ ...formData, pepNombreFamiliar: e.target.value })}
+                            className="w-full px-3 py-2 text-sm border-2 border-gray-300 focus:border-[#8AAA19] rounded-lg focus:outline-none"
+                            placeholder="Nombre completo del familiar PEP"
+                          />
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-xs font-semibold text-gray-700 mb-1">Cargo del PEP</label>
+                            <input
+                              type="text"
+                              value={formData.pepCargoFamiliar}
+                              onChange={(e) => setFormData({ ...formData, pepCargoFamiliar: e.target.value })}
+                              className="w-full px-3 py-2 text-sm border-2 border-gray-300 focus:border-[#8AAA19] rounded-lg focus:outline-none"
+                              placeholder="Cargo del familiar"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-gray-700 mb-1">Relación con el PEP</label>
+                            <input
+                              type="text"
+                              value={formData.pepRelacionFamiliar}
+                              onChange={(e) => setFormData({ ...formData, pepRelacionFamiliar: e.target.value })}
+                              className="w-full px-3 py-2 text-sm border-2 border-gray-300 focus:border-[#8AAA19] rounded-lg focus:outline-none"
+                              placeholder="Ej: Cónyuge, Hijo, Padre"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Q3: ¿Es usted un Estrecho Colaborador de un PEP? */}
+                  <div className="space-y-2">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={formData.pepEsColaborador}
+                        onChange={(e) => setFormData({ ...formData, pepEsColaborador: e.target.checked, ...(!e.target.checked && { pepNombreColaborador: '', pepCargoColaborador: '', pepRelacionColaborador: '' }) })}
+                        className="w-5 h-5 text-[#8AAA19] focus:ring-[#8AAA19] rounded"
+                      />
+                      <span className="text-sm font-semibold text-blue-900">3. ¿Es usted un Estrecho Colaborador de un PEP?</span>
+                    </label>
+                    {formData.pepEsColaborador && (
+                      <div className="ml-7 space-y-2">
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-700 mb-1">Nombre del PEP</label>
+                          <input
+                            type="text"
+                            value={formData.pepNombreColaborador}
+                            onChange={(e) => setFormData({ ...formData, pepNombreColaborador: e.target.value })}
+                            className="w-full px-3 py-2 text-sm border-2 border-gray-300 focus:border-[#8AAA19] rounded-lg focus:outline-none"
+                            placeholder="Nombre completo del PEP"
+                          />
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-xs font-semibold text-gray-700 mb-1">Cargo del PEP</label>
+                            <input
+                              type="text"
+                              value={formData.pepCargoColaborador}
+                              onChange={(e) => setFormData({ ...formData, pepCargoColaborador: e.target.value })}
+                              className="w-full px-3 py-2 text-sm border-2 border-gray-300 focus:border-[#8AAA19] rounded-lg focus:outline-none"
+                              placeholder="Cargo del PEP"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold text-gray-700 mb-1">Relación con el PEP</label>
+                            <input
+                              type="text"
+                              value={formData.pepRelacionColaborador}
+                              onChange={(e) => setFormData({ ...formData, pepRelacionColaborador: e.target.value })}
+                              className="w-full px-3 py-2 text-sm border-2 border-gray-300 focus:border-[#8AAA19] rounded-lg focus:outline-none"
+                              placeholder="Ej: Socio, Asesor, Asistente"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </label>
+              )}
             </div>
 
             {/* Acreedor (condicional) */}

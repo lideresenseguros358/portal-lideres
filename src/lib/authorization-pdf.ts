@@ -37,6 +37,16 @@ export interface AuthorizationPdfData {
   nivelIngresos?: string;
   dondeTrabaja?: string;
   esPEP?: boolean;
+  pepEsUsted?: boolean;
+  pepCargoUsted?: string;
+  pepEsFamiliar?: boolean;
+  pepNombreFamiliar?: string;
+  pepCargoFamiliar?: string;
+  pepRelacionFamiliar?: string;
+  pepEsColaborador?: boolean;
+  pepNombreColaborador?: string;
+  pepCargoColaborador?: string;
+  pepRelacionColaborador?: string;
   tipoCobertura?: string;
   insurerName?: string;
   valorAsegurado?: string;
@@ -249,11 +259,36 @@ export async function generateAuthorizationPdf(data: AuthorizationPdfData): Prom
   // (3) Persona Expuesta Políticamente (PEP)
   pm.drawWrapped('(3) Persona Expuesta Políticamente (PEP)', MARGIN_L, 9, CONTENT_W, GREEN, true, 13);
   pm.moveDown(2);
-  const pepLabel = '¿Usted, o un familiar cercano, desempeña o ha desempeñado funciones públicas destacadas en los últimos años?';
+  const pepLabel = '¿Usted, un familiar cercano o un estrecho colaborador desempeña o ha desempeñado funciones públicas destacadas en los últimos años?';
   pm.drawWrapped(pepLabel, MARGIN_L, 8, CONTENT_W, BLACK, false, 12);
   pm.moveDown(6);
   const pepValue = data.esPEP ? 'SÍ' : 'NO';
-  pm.drawTableRow('Respuesta', pepValue);
+  pm.drawTableRow('Respuesta general', pepValue);
+
+  if (data.esPEP) {
+    pm.moveDown(6);
+    // Q1: ¿Es usted PEP?
+    pm.drawTableRow('1. ¿Es usted una PEP?', data.pepEsUsted ? 'SÍ' : 'NO');
+    if (data.pepEsUsted && data.pepCargoUsted) {
+      pm.drawTableRow('   Cargo actual o anterior', data.pepCargoUsted);
+    }
+    pm.moveDown(4);
+    // Q2: ¿Es usted un Familiar PEP?
+    pm.drawTableRow('2. ¿Es usted un Familiar PEP?', data.pepEsFamiliar ? 'SÍ' : 'NO');
+    if (data.pepEsFamiliar) {
+      if (data.pepNombreFamiliar) pm.drawTableRow('   Nombre del PEP', data.pepNombreFamiliar);
+      if (data.pepCargoFamiliar) pm.drawTableRow('   Cargo del PEP', data.pepCargoFamiliar);
+      if (data.pepRelacionFamiliar) pm.drawTableRow('   Relación con el PEP', data.pepRelacionFamiliar);
+    }
+    pm.moveDown(4);
+    // Q3: ¿Es usted un Estrecho Colaborador de un PEP?
+    pm.drawTableRow('3. ¿Estrecho Colaborador de un PEP?', data.pepEsColaborador ? 'SÍ' : 'NO');
+    if (data.pepEsColaborador) {
+      if (data.pepNombreColaborador) pm.drawTableRow('   Nombre del PEP', data.pepNombreColaborador);
+      if (data.pepCargoColaborador) pm.drawTableRow('   Cargo del PEP', data.pepCargoColaborador);
+      if (data.pepRelacionColaborador) pm.drawTableRow('   Relación con el PEP', data.pepRelacionColaborador);
+    }
+  }
   pm.moveDown(8);
 
   // (4) Datos del Vehículo
