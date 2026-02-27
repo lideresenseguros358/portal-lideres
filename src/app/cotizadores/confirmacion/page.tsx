@@ -157,13 +157,13 @@ export default function ConfirmacionPage() {
                   </div>
                 )}
                 {policyData.insurer && (
-                  <div className="flex justify-between items-center py-2 px-3">
+                  <div className="flex justify-between items-center py-2 px-3 bg-white rounded-lg">
                     <span className="text-sm text-gray-600">Aseguradora</span>
                     <span className="text-sm font-semibold text-gray-800">{policyData.insurer}</span>
                   </div>
                 )}
                 {(policyData.tipoCobertura || policyData.planType) && (
-                  <div className="flex justify-between items-center py-2 px-3">
+                  <div className="flex justify-between items-center py-2 px-3 bg-white rounded-lg">
                     <span className="text-sm text-gray-600">Plan</span>
                     <span className="text-sm font-semibold text-[#8AAA19]">
                       {policyData.tipoCobertura || (policyData.planType === 'premium' ? 'Premium (Porcelana)' : 'Básico (Full Extras)')}
@@ -171,25 +171,25 @@ export default function ConfirmacionPage() {
                   </div>
                 )}
                 {policyData.asegurado && (
-                  <div className="flex justify-between items-center py-2 px-3">
+                  <div className="flex justify-between items-center py-2 px-3 bg-white rounded-lg">
                     <span className="text-sm text-gray-600">Asegurado</span>
                     <span className="text-sm font-semibold">{policyData.asegurado}</span>
                   </div>
                 )}
                 {policyData.vehiculo && (
-                  <div className="flex justify-between items-center py-2 px-3">
+                  <div className="flex justify-between items-center py-2 px-3 bg-white rounded-lg">
                     <span className="text-sm text-gray-600">Vehículo</span>
                     <span className="text-sm font-semibold">{policyData.vehiculo}</span>
                   </div>
                 )}
                 {policyData.placa && (
-                  <div className="flex justify-between items-center py-2 px-3">
+                  <div className="flex justify-between items-center py-2 px-3 bg-white rounded-lg">
                     <span className="text-sm text-gray-600">Placa</span>
                     <span className="text-sm font-semibold">{policyData.placa}</span>
                   </div>
                 )}
                 {policyData.vigenciaDesde && (
-                  <div className="flex justify-between items-center py-2 px-3">
+                  <div className="flex justify-between items-center py-2 px-3 bg-white rounded-lg">
                     <span className="text-sm text-gray-600">Vigencia</span>
                     <span className="text-sm font-medium text-gray-700">
                       {policyData.vigenciaDesde} — {policyData.vigenciaHasta}
