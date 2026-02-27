@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { emitirPoliza, crearClienteYPolizaFEDPA } from '@/lib/fedpa/emision.service';
 import type { EmitirPolizaRequest } from '@/lib/fedpa/types';
 import type { FedpaEnvironment } from '@/lib/fedpa/config';
+import { getFedpaMarcaFromIS, normalizarModeloFedpa } from '@/lib/cotizadores/fedpa-vehicle-mapper';
 
 export async function POST(request: NextRequest) {
   const requestId = `emi-${Date.now().toString(36)}`;
@@ -55,12 +56,16 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    console.log(`[API FEDPA Emisión] ${requestId} Iniciando emisión:`, {
-      plan: emisionData.Plan,
-      idDoc: emisionData.idDoc,
-      cliente: `${emisionData.PrimerNombre} ${emisionData.PrimerApellido}`,
-      vehiculo: `${emisionData.Marca} ${emisionData.Modelo} ${emisionData.Ano}`,
-    });
+    // ── Normalizar marca/modelo: IS numeric codes → FEDPA alpha codes ──
+    const rawMarca = String(emisionData.Marca || '');
+    const rawModelo = String(emisionData.Modelo || '');
+    const marcaNombre = emisionData.MarcaNombre || '';
+    const modeloNombre = emisionData.ModeloNombre || rawModelo;
+    const isNumericMarca = /^\d+$/.test(rawMarca);
+    const fedpaMarca = isNumericMarca
+      ? getFedpaMarcaFromIS(parseInt(rawMarca), marcaNombre)
+      : rawMarca;
+    const fedpaModelo = normalizarModeloFedpa(modeloNombre || rawModelo);
     
     const env = environment as FedpaEnvironment;
     const emisionRequest: EmitirPolizaRequest = {
@@ -83,11 +88,11 @@ export async function POST(request: NextRequest) {
       esPEP: emisionData.esPEP,
       Acreedor: emisionData.Acreedor,
       
-      // Vehículo
+      // Vehículo — marca/modelo normalizados a formato FEDPA
       sumaAsegurada: emisionData.sumaAsegurada || 0,
       Uso: emisionData.Uso,
-      Marca: emisionData.Marca,
-      Modelo: emisionData.Modelo,
+      Marca: fedpaMarca,
+      Modelo: fedpaModelo,
       Ano: emisionData.Ano,
       Motor: emisionData.Motor,
       Placa: emisionData.Placa,
@@ -100,6 +105,12 @@ export async function POST(request: NextRequest) {
       // Opcional
       PrimaTotal: emisionData.PrimaTotal,
     };
+    
+    // ═══ LOG: JSON completo que se envía a FEDPA ═══
+    console.log(`\n[FEDPA EMISIÓN] ${requestId} ═══ PAYLOAD JSON ═══`);
+    console.log(JSON.stringify(emisionRequest, null, 2));
+    console.log(`[FEDPA EMISIÓN] ${requestId} Marca: ${rawMarca} → ${fedpaMarca} | Modelo: ${rawModelo} → ${fedpaModelo}`);
+    console.log(`[FEDPA EMISIÓN] ${requestId} ═════════════════════════\n`);
     
     // Emitir con FEDPA — NO reintentar automáticamente (operación crítica)
     const result = await emitirPoliza(emisionRequest, env);
