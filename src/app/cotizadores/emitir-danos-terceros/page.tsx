@@ -887,9 +887,9 @@ export default function EmitirDanosTercerosPage() {
                       <p className="text-gray-500">Cédula</p>
                       <p className="font-bold">{emissionData.cedula}</p>
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <p className="text-gray-500">Email</p>
-                      <p className="font-bold">{emissionData.email}</p>
+                      <p className="font-bold truncate" title={emissionData.email}>{emissionData.email}</p>
                     </div>
                     <div>
                       <p className="text-gray-500">Teléfono</p>
