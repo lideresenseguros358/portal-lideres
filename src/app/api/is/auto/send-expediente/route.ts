@@ -304,8 +304,8 @@ export async function POST(request: NextRequest) {
     // ═══ EMAIL 2: EXPEDIENTE PORTAL (para TODAS las aseguradoras) ═══
     // Incluye: todos los docs del cliente + carta de autorización + enlace carátula
     // NO incluye: formulario inspección ni cotización (exclusivos IS)
-    // Destino: portal@lideresenseguros.com (en dev → contacto@)
-    const PORTAL_RECIPIENT = isDev ? OFFICE_EMAIL : 'portal@lideresenseguros.com';
+    // Destino: SIEMPRE portal@lideresenseguros.com (expediente interno)
+    const PORTAL_RECIPIENT = 'portal@lideresenseguros.com';
     try {
       // Build portal attachments: client docs + carta autorización (no inspection/cotización)
       const portalAttachments: Array<{ filename: string; content: Buffer; contentType: string }> = [];
@@ -368,9 +368,8 @@ export async function POST(request: NextRequest) {
     const vigenciaDesde = new Date().toLocaleDateString('es-PA');
     const vigenciaHasta = new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toLocaleDateString('es-PA');
     
-    // In dev: send welcome email to office for testing
-    // In prod: send to real client email
-    const welcomeRecipient = isDev ? OFFICE_EMAIL : (clientEmail || OFFICE_EMAIL);
+    // Bienvenida SIEMPRE al correo real del cliente ingresado en el formulario de emisión
+    const welcomeRecipient = clientEmail || OFFICE_EMAIL;
     
     try {
       const welcomeHtml = buildWelcomeEmail({
@@ -391,7 +390,7 @@ export async function POST(request: NextRequest) {
       
       const welcomeSubject = `¡Bienvenido! Tu póliza ha sido emitida - ${coberturaLabel}${nroPoliza ? ` - Póliza ${nroPoliza}` : ''}`;
       
-      // Send welcome email to client (or office in dev)
+      // Send welcome email to client's real email (fallback to office if no email)
       const welcomeResult = await transport.sendMail({
         from: fromAddress,
         to: welcomeRecipient,
@@ -400,8 +399,8 @@ export async function POST(request: NextRequest) {
       });
       console.log('[IS EXPEDIENTE] ✅ Bienvenida enviada a:', welcomeRecipient, welcomeResult.messageId);
       
-      // In prod, also send copy to office
-      if (!isDev && welcomeRecipient !== OFFICE_EMAIL) {
+      // Siempre enviar copia a oficina para registro
+      if (welcomeRecipient !== OFFICE_EMAIL) {
         await transport.sendMail({
           from: fromAddress,
           to: OFFICE_EMAIL,
