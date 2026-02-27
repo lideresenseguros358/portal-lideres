@@ -23,10 +23,18 @@ export interface CedulaQRData {
 
 /**
  * Parsea el texto del QR de cédula panameña
+ *
+ * Formato real del QR (pipe-delimited):
+ *
+ * SIN segundo nombre (campo vacío en [3], sexo en [4]):
+ *   [0] cédula | [1] primerNombre | [2] "primerApellido segundoApellido" | [3] (vacío) | [4] sexo(M/F) | [5] provincia | [6] fechaNac(yyyymmdd) | [7] nacionalidad | ...
+ *
+ * CON segundo nombre (campo vacío en [4], sexo en [5]):
+ *   [0] cédula | [1] primerNombre | [2] segundoNombre | [3] "primerApellido segundoApellido" | [4] (vacío) | [5] sexo(M/F) | [6] provincia | [7] fechaNac(yyyymmdd) | [8] nacionalidad | ...
  */
 export function parseCedulaQR(qrText: string): CedulaQRData | null {
   try {
-    // Split por pipe — NO trim, para preservar campos vacíos
+    // Split por pipe — NO trim general, para preservar campos vacíos
     const parts = qrText.split('|');
 
     if (parts.length < 7) {
@@ -42,42 +50,54 @@ export function parseCedulaQR(qrText: string): CedulaQRData | null {
       return null;
     }
 
-    // Determinar si hay segundo nombre:
-    // Sin 2do nombre: cedula|nombre|apellido1|apellido2||sexo|prov|fecha|nac|...  (parts[4] vacío, parts[5] es M/F)
-    // Con 2do nombre: cedula|nombre|nombre2|apellido1|apellido2|sexo|prov|fecha|nac|...  (parts[5] es M/F)
     let primerNombre = '';
     let segundoNombre = '';
-    let primerApellido = '';
-    let segundoApellido = '';
+    let apellidosRaw = '';
     let sexo = '';
     let provincia = '';
     let fechaRaw = '';
     let nacionalidad = '';
 
-    const field4 = parts[4]?.trim() || '';
-    const field5 = parts[5]?.trim() || '';
+    // Detectar formato:
+    // Sin 2do nombre → parts[3] vacío, parts[4] es M/F
+    // Con 2do nombre → parts[4] vacío, parts[5] es M/F
+    const f3 = parts[3]?.trim() || '';
+    const f4 = parts[4]?.trim() || '';
+    const f5 = parts[5]?.trim() || '';
 
-    if (field4 === '' && (field5 === 'M' || field5 === 'F')) {
-      // Sin segundo nombre: idx 1=nombre, 2=apellido1, 3=apellido2, 4=vacío, 5=sexo
+    if (f3 === '' && (f4 === 'M' || f4 === 'F')) {
+      // SIN segundo nombre
       primerNombre = parts[1]?.trim() || '';
       segundoNombre = '';
-      primerApellido = parts[2]?.trim() || '';
-      segundoApellido = parts[3]?.trim() || '';
-      sexo = field5;
+      apellidosRaw = parts[2]?.trim() || '';
+      sexo = f4;
+      provincia = parts[5]?.trim() || '';
+      fechaRaw = parts[6]?.trim() || '';
+      nacionalidad = parts[7]?.trim() || '';
+    } else if (f4 === '' && (f5 === 'M' || f5 === 'F')) {
+      // CON segundo nombre
+      primerNombre = parts[1]?.trim() || '';
+      segundoNombre = parts[2]?.trim() || '';
+      apellidosRaw = parts[3]?.trim() || '';
+      sexo = f5;
       provincia = parts[6]?.trim() || '';
       fechaRaw = parts[7]?.trim() || '';
       nacionalidad = parts[8]?.trim() || '';
     } else {
-      // Con segundo nombre: idx 1=nombre, 2=nombre2, 3=apellido1, 4=apellido2, 5=sexo
+      // Fallback: intentar sin segundo nombre con offset simple
       primerNombre = parts[1]?.trim() || '';
-      segundoNombre = parts[2]?.trim() || '';
-      primerApellido = parts[3]?.trim() || '';
-      segundoApellido = parts[4]?.trim() || '';
-      sexo = parts[5]?.trim() || '';
-      provincia = parts[6]?.trim() || '';
-      fechaRaw = parts[7]?.trim() || '';
-      nacionalidad = parts[8]?.trim() || '';
+      segundoNombre = '';
+      apellidosRaw = parts[2]?.trim() || '';
+      sexo = f4 || f5 || '';
+      provincia = parts[5]?.trim() || parts[6]?.trim() || '';
+      fechaRaw = parts[6]?.trim() || parts[7]?.trim() || '';
+      nacionalidad = parts[7]?.trim() || parts[8]?.trim() || '';
     }
+
+    // Separar apellidos (vienen juntos en un campo separados por espacio)
+    const apellidoParts = apellidosRaw.split(/\s+/).filter(Boolean);
+    const primerApellido = apellidoParts[0] || '';
+    const segundoApellido = apellidoParts.slice(1).join(' ') || '';
 
     // Convertir fecha de yyyymmdd → yyyy-mm-dd
     let fechaNacimiento: string | undefined;
@@ -85,13 +105,19 @@ export function parseCedulaQR(qrText: string): CedulaQRData | null {
       fechaNacimiento = `${fechaRaw.slice(0, 4)}-${fechaRaw.slice(4, 6)}-${fechaRaw.slice(6, 8)}`;
     }
 
+    // Aplicar formato título a nombres
+    primerNombre = formatNombre(primerNombre);
+    segundoNombre = segundoNombre ? formatNombre(segundoNombre) : '';
+    const fmtPrimerApellido = formatNombre(primerApellido);
+    const fmtSegundoApellido = segundoApellido ? formatNombre(segundoApellido) : '';
+
     // Construir nombres y apellidos completos
     const nombreCompleto = [primerNombre, segundoNombre]
       .filter(Boolean)
       .join(' ')
       .trim();
 
-    const apellidoCompleto = [primerApellido, segundoApellido]
+    const apellidoCompleto = [fmtPrimerApellido, fmtSegundoApellido]
       .filter(Boolean)
       .join(' ')
       .trim();
@@ -102,8 +128,8 @@ export function parseCedulaQR(qrText: string): CedulaQRData | null {
       primerNombre,
       segundoNombre,
       apellidoCompleto,
-      primerApellido,
-      segundoApellido,
+      primerApellido: fmtPrimerApellido,
+      segundoApellido: fmtSegundoApellido,
       sexo,
       fechaNacimiento,
       provinciaNacimiento: provincia || undefined,

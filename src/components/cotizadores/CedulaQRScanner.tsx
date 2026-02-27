@@ -8,7 +8,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { FaCamera, FaTimes, FaIdCard } from 'react-icons/fa';
-import { parseCedulaQR, formatNombre, type CedulaQRData } from '@/lib/utils/cedula-qr-parser';
+import { parseCedulaQR, type CedulaQRData } from '@/lib/utils/cedula-qr-parser';
 import { toast } from 'sonner';
 
 interface CedulaQRScannerProps {
@@ -38,15 +38,8 @@ export default function CedulaQRScanner({ onScanSuccess, onClose }: CedulaQRScan
         return;
       }
 
-      // Formatear nombres
-      const formattedData: CedulaQRData = {
-        ...cedulaData,
-        nombreCompleto: formatNombre(cedulaData.nombreCompleto),
-        apellidoCompleto: formatNombre(cedulaData.apellidoCompleto),
-      };
-
       toast.success('¡Cédula escaneada correctamente!');
-      onScanSuccess(formattedData);
+      onScanSuccess(cedulaData);
       onClose();
     } catch (err) {
       console.error('Error procesando QR:', err);
