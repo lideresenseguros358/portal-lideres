@@ -226,6 +226,7 @@ export async function POST(request: NextRequest) {
         tipoCobertura: isCC ? 'CC' : 'DT',
         insurerName: insurerName || '',
         valorAsegurado: quoteData.valorVehiculo ? `$${Number(quoteData.valorVehiculo).toLocaleString('en-US')}` : '',
+        primaAnual: quoteData.primaTotal ? `B/.${Number(quoteData.primaTotal).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '',
       };
       console.log('[IS EXPEDIENTE] Generando PDF de autorización... firmaDataUrl:', firmaDataUrl ? `${firmaDataUrl.substring(0, 30)}... (${firmaDataUrl.length} chars)` : 'VACÍO');
       authPdfBuffer = await generateAuthorizationPdf(authPdfData);

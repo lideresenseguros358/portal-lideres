@@ -41,6 +41,7 @@ export interface AuthorizationPdfData {
   insurerName?: string;
   valorAsegurado?: string;
   color?: string;
+  primaAnual?: string;
 }
 
 // ─── Layout constants ────────────────────────────────────────────────────────
@@ -250,7 +251,7 @@ export async function generateAuthorizationPdf(data: AuthorizationPdfData): Prom
   pm.moveDown(2);
   const pepLabel = '¿Usted, o un familiar cercano, desempeña o ha desempeñado funciones públicas destacadas en los últimos años?';
   pm.drawWrapped(pepLabel, MARGIN_L, 8, CONTENT_W, BLACK, false, 12);
-  pm.moveDown(2);
+  pm.moveDown(6);
   const pepValue = data.esPEP ? 'SÍ' : 'NO';
   pm.drawTableRow('Respuesta', pepValue);
   pm.moveDown(8);
@@ -269,14 +270,16 @@ export async function generateAuthorizationPdf(data: AuthorizationPdfData): Prom
   if (data.tipoCobertura) pm.drawTableRow('Tipo de cobertura', data.tipoCobertura === 'CC' ? 'Cobertura Completa' : data.tipoCobertura === 'DT' ? 'Daños a Terceros' : data.tipoCobertura);
   if (data.insurerName) pm.drawTableRow('Aseguradora', data.insurerName);
   if (data.nroPoliza) pm.drawTableRow('Póliza No.', data.nroPoliza);
+  if (data.primaAnual) pm.drawTableRow('Prima anual', data.primaAnual);
   pm.moveDown(10);
 
   pm.drawLine(MARGIN_L, pm.getY(), PAGE_W - MARGIN_R);
   pm.moveDown(14);
 
   // ══════════════════════════════════════════════════════════════════════════
-  // SECCIONES 1-10: CLÁUSULAS LEGALES
+  // SECCIONES 1-10: CLÁUSULAS LEGALES — Always start on a new page
   // ══════════════════════════════════════════════════════════════════════════
+  pm.addPage();
   pm.drawWrapped('AUTORIZACIÓN, DECLARACIÓN DE VERACIDAD, TRATAMIENTO DE DATOS PERSONALES Y RELEVO DE RESPONSABILIDAD', MARGIN_L, FONT_CLAUSE, CONTENT_W, NAVY, true, 15);
   pm.moveDown(8);
 
