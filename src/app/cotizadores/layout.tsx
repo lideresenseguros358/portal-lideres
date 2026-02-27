@@ -9,6 +9,7 @@ import { ReactNode, useState, useRef, useEffect } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { FaSignOutAlt } from 'react-icons/fa';
+import MobileBottomNav from '@/components/cotizadores/mobile/MobileBottomNav';
 
 export default function CotizadoresLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -95,12 +96,12 @@ export default function CotizadoresLayout({ children }: { children: ReactNode })
       </header>
 
       {/* Content */}
-      <main>
+      <main className="pb-4 md:pb-0">
         {children}
       </main>
 
-      {/* Footer */}
-      <footer className="bg-gradient-to-br from-[#010139] via-[#020270] to-[#010139] text-white py-8 sm:py-12 mt-16 sm:mt-20">
+      {/* Footer — hidden on mobile, Info panel replaces it */}
+      <footer className="hidden md:block bg-gradient-to-br from-[#010139] via-[#020270] to-[#010139] text-white py-8 sm:py-12 mt-16 sm:mt-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* Logo y descripción */}
           <div className="text-center mb-6 sm:mb-8">
@@ -132,6 +133,9 @@ export default function CotizadoresLayout({ children }: { children: ReactNode })
           </div>
         </div>
       </footer>
+
+      {/* Mobile Bottom Navigation */}
+      <MobileBottomNav />
     </div>
   );
 }
