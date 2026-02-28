@@ -505,17 +505,28 @@ export default function AdmCotDashboard() {
 
         <ChartCard title="Dispositivos" height={300}>
           {dashData?.byDevice && dashData.byDevice.length > 0 ? (
-            <ResponsiveContainer width="100%" height={240}>
-              <PieChart>
-                <Pie data={dashData.byDevice} dataKey="count" nameKey="device" cx="50%" cy="50%" outerRadius={85}
-                  label={(props: any) => `${props.device ?? props.name ?? ''} ${props.pct ?? ''}%`} labelLine={false}>
-                  {dashData.byDevice.map((_, idx) => (
-                    <Cell key={idx} fill={PIE_COLORS[idx % PIE_COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
+            <div className="flex flex-col items-center gap-2">
+              <ResponsiveContainer width="100%" height={160}>
+                <PieChart>
+                  <Pie data={dashData.byDevice} dataKey="count" nameKey="device" cx="50%" cy="50%" outerRadius={65}
+                    label={false} labelLine={false}>
+                    {dashData.byDevice.map((_, idx) => (
+                      <Cell key={idx} fill={PIE_COLORS[idx % PIE_COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="flex flex-wrap justify-center gap-x-4 gap-y-1 w-full px-2">
+                {dashData.byDevice.map((d: any, idx: number) => (
+                  <div key={idx} className="flex items-center gap-1.5 text-xs text-gray-600">
+                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: PIE_COLORS[idx % PIE_COLORS.length] }} />
+                    <span className="truncate max-w-[90px]">{d.device}</span>
+                    <span className="font-semibold text-[#010139]">{d.pct}%</span>
+                  </div>
+                ))}
+              </div>
+            </div>
           ) : (
             <div className="flex items-center justify-center h-[240px] text-gray-400 text-sm">Sin datos</div>
           )}
@@ -567,16 +578,49 @@ export default function AdmCotDashboard() {
       {/* ── Summary Table ── */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-4 py-3 border-b border-gray-200">
-          <h3 className="text-sm font-bold text-[#010139]">Tabla Resumen por Aseguradora</h3>
+          <h3 className="text-sm font-bold text-[#010139]">Resumen por Aseguradora</h3>
         </div>
-        <div className="overflow-x-auto">
+
+        {/* Mobile: card layout */}
+        <div className="sm:hidden divide-y divide-gray-100">
+          {(dashData?.byInsurer ?? []).map((ins) => (
+            <div key={ins.insurer} className="p-3 space-y-1.5">
+              <p className="text-sm font-bold text-[#010139]">{ins.insurer}</p>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                <div className="flex justify-between"><span className="text-gray-500">Cotiz.</span><span className="font-medium text-gray-700">{ins.quotes}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">Emis.</span><span className="font-medium text-gray-700">{ins.emissions}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">Conv.</span>
+                  <span className={`font-semibold ${ins.conversionRate >= 15 ? 'text-green-600' : ins.conversionRate >= 8 ? 'text-yellow-600' : 'text-red-600'}`}>{ins.conversionRate}%</span>
+                </div>
+                <div className="flex justify-between"><span className="text-gray-500">Revenue</span><span className="font-medium text-gray-700">{fmt$(ins.revenue)}</span></div>
+              </div>
+            </div>
+          ))}
+          {dashData?.byInsurer && dashData.byInsurer.length > 0 && (
+            <div className="p-3 bg-gray-50">
+              <p className="text-sm font-bold text-[#010139] mb-1.5">TOTAL</p>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                <div className="flex justify-between"><span className="text-gray-500">Cotiz.</span><span className="font-bold">{dashData.byInsurer.reduce((s, i) => s + i.quotes, 0)}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">Emis.</span><span className="font-bold">{dashData.byInsurer.reduce((s, i) => s + i.emissions, 0)}</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">Conv.</span><span className="font-bold">{ov?.conversionRateGlobal ?? 0}%</span></div>
+                <div className="flex justify-between"><span className="text-gray-500">Revenue</span><span className="font-bold">{fmt$(dashData.byInsurer.reduce((s, i) => s + i.revenue, 0))}</span></div>
+              </div>
+            </div>
+          )}
+          {(!dashData?.byInsurer || dashData.byInsurer.length === 0) && (
+            <div className="py-8 text-center text-gray-400 text-sm">Sin datos de aseguradoras</div>
+          )}
+        </div>
+
+        {/* Desktop: classic table */}
+        <div className="hidden sm:block">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-200 text-left">
                 <th className="py-2 px-3 text-xs font-semibold text-gray-500 uppercase">Aseguradora</th>
-                <th className="py-2 px-3 text-xs font-semibold text-gray-500 uppercase text-right">Cotizaciones</th>
-                <th className="py-2 px-3 text-xs font-semibold text-gray-500 uppercase text-right">Emisiones</th>
-                <th className="py-2 px-3 text-xs font-semibold text-gray-500 uppercase text-right">Conversión</th>
+                <th className="py-2 px-3 text-xs font-semibold text-gray-500 uppercase text-right">Cotiz.</th>
+                <th className="py-2 px-3 text-xs font-semibold text-gray-500 uppercase text-right">Emis.</th>
+                <th className="py-2 px-3 text-xs font-semibold text-gray-500 uppercase text-right">Conv.</th>
                 <th className="py-2 px-3 text-xs font-semibold text-gray-500 uppercase text-right">Revenue</th>
               </tr>
             </thead>
