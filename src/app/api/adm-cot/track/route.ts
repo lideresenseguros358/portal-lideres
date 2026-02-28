@@ -96,7 +96,29 @@ setInterval(() => {
 }, 120_000);
 
 // ═══════════════════════════════════════
-// D. PAYLOAD VALIDATION
+// D. IP GEOLOCATION (region from IP)
+// ═══════════════════════════════════════
+
+async function resolveRegionFromIp(ip: string): Promise<string | null> {
+  if (!ip || ip === 'unknown' || ip === '127.0.0.1' || ip === '::1') return null;
+  try {
+    const res = await fetch(`http://ip-api.com/json/${ip}?fields=status,country,regionName,city`, {
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!res.ok) return null;
+    const geo = await res.json();
+    if (geo.status === 'success') {
+      // e.g. "Panamá, Panamá" or "Chiriquí, David"
+      return [geo.regionName, geo.city].filter(Boolean).join(', ') || geo.country || null;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+// ═══════════════════════════════════════
+// E. PAYLOAD VALIDATION
 // ═══════════════════════════════════════
 
 const VALID_ACTIONS = ['quote_created', 'quote_emitted', 'quote_failed', 'step_update'] as const;
@@ -208,9 +230,13 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: validation.error }, { status: 400 });
         }
 
+        // Resolve region from IP (non-blocking, best-effort)
+        const region = validation.cleaned.region || await resolveRegionFromIp(clientIp);
+
         const { error } = await supabase.from('adm_cot_quotes').insert({
           ...validation.cleaned,
           ip_address: clientIp,
+          region,
           user_agent: sanitizeString(request.headers.get('user-agent'), 1000),
           status: 'COTIZADA',
           quoted_at: new Date().toISOString(),
@@ -230,14 +256,37 @@ export async function POST(request: NextRequest) {
         const v = validateUpdatePayload(data);
         if (!v.valid) return NextResponse.json({ error: v.error }, { status: 400 });
 
+        // Fetch existing record to merge quote_payload
+        const { data: existingRow } = await supabase
+          .from('adm_cot_quotes')
+          .select('quote_payload, region')
+          .eq('quote_ref', data.quote_ref)
+          .eq('insurer', data.insurer)
+          .order('quoted_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
         const updates: Record<string, any> = {
           status: 'EMITIDA',
           emitted_at: new Date().toISOString(),
           last_step: 'confirmacion',
         };
+
+        // Update cedula/email/phone if provided (may have been entered during emission)
+        if (data.cedula) updates.cedula = sanitizeString(data.cedula, 30);
+        if (data.email) updates.email = sanitizeString(data.email, 200);
+        if (data.phone) updates.phone = sanitizeString(data.phone, 30);
+
+        // Resolve region if not already set
+        if (!existingRow?.region) {
+          const region = await resolveRegionFromIp(clientIp);
+          if (region) updates.region = region;
+        }
+
         if (data.policy_number) {
+          const existingPayload = typeof existingRow?.quote_payload === 'object' ? existingRow.quote_payload : {};
           updates.quote_payload = {
-            ...(typeof data.existing_payload === 'object' ? data.existing_payload : {}),
+            ...existingPayload,
             nro_poliza: sanitizeString(data.policy_number, 100),
             payment_confirmed: true,
           };

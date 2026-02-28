@@ -109,6 +109,6 @@ export const config = {
      * - login, forgot, new-user, update-password pages
      * - cotizadores (public quotation forms)
      */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$|api|login|forgot|new-user|update-password|auth|cotizadores).*)',
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$|api|login|forgot|new-user|update-password|auth|cotizadores|test-emission-modal).*)',
   ],
 };

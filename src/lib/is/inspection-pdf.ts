@@ -72,35 +72,29 @@ export async function generateInspectionPdf(data: InspectionPdfData): Promise<Bu
   const FSS = 7;  // small font size
 
   /*
-   * ─── Coordinate reference (from PDF content-stream analysis) ──────────────
+   * ─── Coordinate reference (from PDF content-stream extraction) ─────────────
    * PDF page: 612 × 792 pts (origin = bottom-left)
    *
-   * KEY HORIZONTAL LINES (underlines / row borders):
-   *   y=706.6  Agente input top       x:108-309
-   *   y=692.3  Agente input bottom    x:108-309
-   *   y=678.3  GREEN BORDER TOP       x:21-596  (full width)
-   *   y=672.8  PROPIETARIO underline  x:108-354  |  DIRECCION x:419-587
-   *   y=656.5  CEDULA underline       x:108-354  |  TELEFONOS x:419-587
-   *   y=651.0  COLOR underline (left) x:108-239
-   *   y=632.7  MARCA underline (left) x:108-239
-   *   y=621.9  KM area               x:108-...; right sub-cells x:505-587
-   *   y=611.1  GASOLINA row           x:505-587 (right sub-cells)
-   *   y=600.4  extras checkbox area top
-   *   y=448.5  GREEN BORDER BOTTOM    x:21-596
-   *
-   * KEY VERTICAL SEPARATORS:
-   *   x=107.4  Left edge of input fields
-   *   x=238.4  PLACA/MODELO column divider
-   *   x=280.9  AÑO start
-   *   x=308.9  AÑO/MOTOR column divider (right edge of left-third)
-   *   x=353.6  D.V. divider
-   *   x=418.3  DIRECCION / TELEFONOS / TIPO / CHASIS column start
-   *   x=504.8  Right sub-divider (PARTICULAR, CILINDROS)
-   *   x=555.2  Agente right-side divider
-   *   x=586.8  Right edge of input fields
-   *   x=594.7  GREEN BORDER RIGHT
-   *
-   * Text baselines sit ~2-3pts above the underline.
+   * TEXT LABEL POSITIONS (from content stream Tm operators):
+   *   y=695.5  Agente / Fecha labels
+   *   y=664.7  PROPIETARIO / DIRECCION input blanks  (x:109.4, x:420.5)
+   *   y=642.8  CEDULA / D.V. / TELEFONOS blanks     (x:109.4, x:283.0, x:420.5)
+   *   y=613.6  COLOR / PLACA / AÑO / TIPO blanks    (x:109.4, x:240.5, x:394.4, x:506.9)
+   *   y=592.2  MARCA / MODELO / MOTOR / CHASIS      (x:109.4, x:240.5, x:377.9, x:506.9)
+   *   y=570.4  KM / PASAJEROS / COMERCIAL / PART.    (x:109.4, x:259.2, x:355.7, x:472.2, x:568.7)
+   *   y=549.0  GAS / DIESEL / AUTO / MANUAL / CIL    (x:109.4, x:171.4, x:276.5, x:377.9, x:472.2, x:568.7)
+   *   y=521.3→456.5  Extras checkbox grid (7 rows, step≈10.8pts)
+   *             Columns: x:109.4, x:240.5, x:355.7, x:488.0, x:568.7
+   *   y=420.0  EXTRAS label;  y=409.3→398.9 extras detail blanks
+   *   y=371.4  B(BUENO)-R(REGULAR)... header
+   *   y=357.5  B/R/A/RA column headers (left: 151,183,218,250 | right: 465,500,535,565)
+   *   y=345.4  First condition row (TAPA DE MOTOR)
+   *   y=175.3  SUMA SOLICITADA / SUMA RECOMENDADA labels
+   *   y=154.6  OBSERVACIONES header
+   *   y=138.6  (Apreciación del Inspector) sub-label
+   *   y=91.9   Estuvo asegurado? Si(x:170.9) NO(x:216.6) Compañía(x:294)
+   *   y=69.0   INSPECTOR label
+   *   y=58.1   ASEGURADO(x:362.3) / CEDULA(x:534.1) labels
    */
 
   // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -116,102 +110,100 @@ export async function generateInspectionPdf(data: InspectionPdfData): Promise<Bu
 
   // ─── HEADER / AGENTE ──────────────────────────────────────────────────────
   // Template already prints "LIDERES EN SEGUROS, S.A." in Agente field — do NOT overlay.
-  // Only add the date in the Fecha field.
-  T(data.fecha, 500, 696, FSS);
+  // Fecha label at y=695.5 x=377.8; input blank at x≈411+
+  T(data.fecha, 420, 695, FSS);
 
   // ─── ROW 1: PROPIETARIO | DIRECCION ────────────────────────────────────────
-  // Input area between underlines 672.8→656.5.  Text baseline ≈ 659.
-  T(fit(data.propietario, 28), 110, 659);
-  T(fit(data.direccion, 22),   420, 659);
+  // Input blanks at y=664.7 (x:109.4, x:420.5)
+  T(fit(data.propietario, 28), 110, 665);
+  T(fit(data.direccion, 22),   421, 665);
 
   // ─── ROW 2: CEDULA/RUC | D.V. | TELEFONOS ─────────────────────────────────
-  // Tall row y=656.5→632.7 split by sub-line at 651.0
-  // Upper sub-row (CEDULA+TEL): baseline ≈ 641
-  T(fit(data.cedula, 18),       110, 641);
-  if (data.dv) T(fit(data.dv, 4), 358, 641);
-  T(fit(data.telefonos, 22),    420, 641);
+  // Input blanks at y=642.8 (x:109.4, x:283.0 for D.V., x:420.5)
+  T(fit(data.cedula, 18),       110, 643);
+  if (data.dv) T(fit(data.dv, 4), 284, 643);
+  T(fit(data.telefonos, 22),    421, 643);
 
   // ─── ROW 3: COLOR | PLACA | AÑO | TIPO ────────────────────────────────────
-  // Lower sub-row of tall row (below 651.0 sub-line): baseline ≈ 613
-  T(fit(data.color, 12),  110, 613);
-  T(fit(data.placa, 8),   242, 613);
-  T(fit(data.anio, 4),    285, 613);
-  T(fit(data.tipo, 12),   420, 613);
+  // Input blanks at y=613.6 (x:109.4, x:240.5, x:394.4, x:506.9)
+  T(fit(data.color, 12),  110, 614);
+  T(fit(data.placa, 8),   241, 614);
+  T(fit(data.anio, 4),    395, 614);
+  T(fit(data.tipo, 12),   507, 614);
 
   // ─── ROW 4: MARCA | MODELO | MOTOR | CHASIS ───────────────────────────────
-  // Row y=632.7→621.9 (10.8pts). Baseline ≈ 592.
+  // Input blanks at y=592.2 (x:109.4, x:240.5, x:377.9, x:506.9)
   T(fit(data.marca, 14),   110, 592);
-  T(fit(data.modelo, 12),  242, 592);
-  T(fit(data.motor, 12),   420, 592);
-  T(fit(data.chasis, 14),  508, 592);
+  T(fit(data.modelo, 12),  241, 592);
+  T(fit(data.motor, 12),   378, 592);
+  T(fit(data.chasis, 14),  507, 592);
 
   // ─── ROW 5: KILOMETRAJE | PASAJEROS | COMERCIAL | PARTICULAR | TRACCION ───
-  // Row y=621.9→611.1 (10.8pts). Baseline ≈ 569.
-  T(fit(data.kilometraje, 10), 110, 569);
-  if (data.pasajeros) T(fit(data.pasajeros, 3), 242, 569);
-  X(508, 569);  // PARTICULAR always checked
+  // Input blanks at y=570.4 (x:109.4, x:259.2, x:355.7, x:472.2, x:568.7)
+  T(fit(data.kilometraje, 10), 110, 570);
+  if (data.pasajeros) T(fit(data.pasajeros, 3), 260, 570);
+  // PARTICULAR checkbox NOT drawn — template already has it pre-checked
 
   // ─── ROW 6: GASOLINA | DIESEL | AUTOMATICO | MANUAL | CILINDROS | TONELADAS
-  // Row y=611.1→600.4 (10.7pts). Baseline ≈ 571.
+  // Input blanks at y=549.0 (x:109.4, x:171.4, x:276.5, x:377.9, x:472.2, x:568.7)
   if (data.tipoCombustible === 'GASOLINA') {
-    X(110, 571);
+    X(110, 549);
   } else {
-    X(172, 571);
+    X(172, 549);
   }
 
   // AUTOMATICO / MANUAL
   if (data.tipoTransmision === 'AUTOMATICO') {
-    X(242, 571);
+    X(277, 549);
   } else {
-    X(314, 571);
+    X(378, 549);
   }
 
   // ─── EXTRAS CHECKBOXES ──────────────────────────────────────────────────────
-  // Grid: 5 columns × 7 rows
-  // Vertical separators from stream: x≈123, 169/187, 238/257, 354/376, 470/486, 567
-  // Row top lines from stream: y≈600, 589, 578, 567, 557, 546, (530 area)
-  // Row step ≈ 11pts,  Checkbox X positions inside each cell
+  // Grid: 5 columns × 7 rows (from content stream blanks)
+  // Row Y positions: 521.3, 510.5, 499.7, 488.9, 478.1, 467.3, 456.5
+  // Column X positions: 109.4, 240.5, 355.7, 488.0, 568.7
   const extrasPositions: Record<string, { x: number; y: number }> = {
     // Column 1 (x≈110)
-    'Alarma de Fca.':           { x: 110, y: 575 },
-    'Otra Alarma':              { x: 110, y: 564 },
-    'Inmobilizer':              { x: 110, y: 553 },
-    'GPS':                      { x: 110, y: 542 },
-    'Copas de Lujo':            { x: 110, y: 532 },
-    'Rines Magnesio':           { x: 110, y: 521 },
-    'Halógenos':                { x: 110, y: 510 },
-    // Column 2 (x≈190)
-    'Deflector de aire':        { x: 190, y: 575 },
-    'Ventana de Techo':         { x: 190, y: 564 },
-    'Bola de Trailer':          { x: 190, y: 553 },
-    'Retrovisores':             { x: 190, y: 542 },
-    'Retrovisores c/señal/luz': { x: 190, y: 532 },
-    'Antena Eléctrica':         { x: 190, y: 521 },
-    'Mataburro':                { x: 190, y: 510 },
-    // Column 3 (x≈278)
-    'Estribos':                 { x: 278, y: 575 },
-    'Spoiler':                  { x: 278, y: 564 },
-    'Ext. Guardafango':         { x: 278, y: 553 },
-    'Ventanas Eléctricas':      { x: 278, y: 542 },
-    'Papel Ahumado':            { x: 278, y: 532 },
-    'Air Bags':                 { x: 278, y: 521 },
-    'Aire Acondicionado':       { x: 278, y: 510 },
-    // Column 4 (x≈378)
-    'Cierre de ptas. Elect.':   { x: 378, y: 575 },
-    'Tapicería de Tela':        { x: 378, y: 564 },
-    'Tapicería de Cuero':       { x: 378, y: 553 },
-    'Timón de posiciones':      { x: 378, y: 542 },
-    'Timón Hidráulico':         { x: 378, y: 532 },
-    'Viceras con espejos':      { x: 378, y: 521 },
-    'Asiento del. Entero':      { x: 378, y: 510 },
-    // Column 5 (x≈472)
-    'Cd Player':                { x: 472, y: 575 },
-    'R/Cassette':               { x: 472, y: 564 },
-    'Bocinas':                  { x: 472, y: 553 },
-    'Amplificador':             { x: 472, y: 542 },
-    'Ecualizador':              { x: 472, y: 532 },
-    'Teléfono':                 { x: 472, y: 521 },
-    'DVD':                      { x: 472, y: 510 },
+    'Alarma de Fca.':           { x: 110, y: 521 },
+    'Otra Alarma':              { x: 110, y: 511 },
+    'Inmobilizer':              { x: 110, y: 500 },
+    'GPS':                      { x: 110, y: 489 },
+    'Copas de Lujo':            { x: 110, y: 478 },
+    'Rines Magnesio':           { x: 110, y: 467 },
+    'Halógenos':                { x: 110, y: 457 },
+    // Column 2 (x≈241)
+    'Deflector de aire':        { x: 241, y: 521 },
+    'Ventana de Techo':         { x: 241, y: 511 },
+    'Bola de Trailer':          { x: 241, y: 500 },
+    'Retrovisores':             { x: 241, y: 489 },
+    'Retrovisores c/señal/luz': { x: 241, y: 478 },
+    'Antena Eléctrica':         { x: 241, y: 467 },
+    'Mataburro':                { x: 241, y: 457 },
+    // Column 3 (x≈356)
+    'Estribos':                 { x: 356, y: 521 },
+    'Spoiler':                  { x: 356, y: 511 },
+    'Ext. Guardafango':         { x: 356, y: 500 },
+    'Ventanas Eléctricas':      { x: 356, y: 489 },
+    'Papel Ahumado':            { x: 356, y: 478 },
+    'Air Bags':                 { x: 356, y: 467 },
+    'Aire Acondicionado':       { x: 356, y: 457 },
+    // Column 4 (x≈488)
+    'Cierre de ptas. Elect.':   { x: 488, y: 521 },
+    'Tapicería de Tela':        { x: 488, y: 511 },
+    'Tapicería de Cuero':       { x: 488, y: 500 },
+    'Timón de posiciones':      { x: 488, y: 489 },
+    'Timón Hidráulico':         { x: 488, y: 478 },
+    'Viceras con espejos':      { x: 488, y: 467 },
+    'Asiento del. Entero':      { x: 488, y: 457 },
+    // Column 5 (x≈569)
+    'Cd Player':                { x: 569, y: 521 },
+    'R/Cassette':               { x: 569, y: 511 },
+    'Bocinas':                  { x: 569, y: 500 },
+    'Amplificador':             { x: 569, y: 489 },
+    'Ecualizador':              { x: 569, y: 478 },
+    'Teléfono':                 { x: 569, y: 467 },
+    'DVD':                      { x: 569, y: 457 },
   };
 
   if (data.tieneExtras) {
@@ -222,69 +214,68 @@ export async function generateInspectionPdf(data: InspectionPdfData): Promise<Bu
   }
 
   // EXTRAS detail text (box below the checkbox grid)
+  // EXTRAS label at y=420, detail blanks at y≈432/420/409
   if (data.tieneExtras && data.extrasDetalle) {
-    T(fit(data.extrasDetalle, 95), 145, 434, FSS);
+    T(fit(data.extrasDetalle, 80), 110, 432, FSS);
+    if (data.extrasDetalle.length > 80) {
+      T(fit(data.extrasDetalle.substring(80), 80), 110, 421, FSS);
+    }
   }
 
   // ─── PHYSICAL CONDITION TABLE ───────────────────────────────────────
-  // From stream: vertical cols left B x=138-169 (center 153), right B x=449-486 (center 467)
-  // Row bottom lines: 354.8,342.7,332.4,320.2,310,297.7,285.5,273.2,261,248.8,236.5,224.3,212
-  // Text baseline ≈ 3pts above lower line of each row
+  // Exact checkbox positions from PDF content stream (non-uniform spacing)
+  // Left B column x=140.4, Right B column x=451.4
   if (data.buenEstadoFisico) {
-    const rowBottoms = [342.7,332.4,320.2,310,297.7,285.5,273.2,261,248.8,236.5,224.3,212];
-    const leftBx = 153;
-    const rightBx = 467;
-    for (const yb of rowBottoms) {
-      X(leftBx, yb + 2);
-      X(rightBx, yb + 2);
+    const rowYs = [346.7, 334.7, 324.2, 312.2, 301.8, 289.6, 277.3, 265.1, 252.8, 240.6, 228.4, 216.1];
+    const leftBx = 141;
+    const rightBx = 452;
+    for (const y of rowYs) {
+      X(leftBx, y);
+      X(rightBx, y);
     }
   }
 
   // ─── INSURANCE VALUES ─────────────────────────────────────────────
-  // The condition table rows (x:138-274 and x:449-587) double as INSURANCE VALUE rows
-  // SUMA SOLICITADA is in the row between y=212 and y=203.9 (leftBx area)
-  // SUMA RECOMENDADA is in the same Y range (rightBx area)
-  // From stream: y=203.9 is the line BELOW the last value row
-  // Baseline for SUMA ≈ 174
-  T(`$${data.sumaAsegurada}`, 142, 174);
-  T(`$${data.sumaAsegurada}`, 452, 174);
+  // SUMA SOLICITADA label at y=175.3 x=26.9; SUMA RECOMENDADA at y=175.3 x=294
+  // Input fields are to the right of each label
+  T(`$${data.sumaAsegurada}`, 142, 175);
+  T(`$${data.sumaAsegurada}`, 420, 175);
 
   // ─── PREVIOUSLY INSURED ─────────────────────────────────────────────
-  // Visual row near bottom section: baseline ≈ 91.
-  // SI checkbox after "Si" label (x≈215), NO after "NO" label (x≈340)
-  // Compania field starts at x≈440
+  // y=91.9: "Estuvo asegurado anteriormente?" Si(x:170.9) → blank(x≈185)
+  //         NO(x:216.6) → blank(x≈235)  Compañía(x:294) → blank(x≈340)
   if (data.aseguradoAnteriormente) {
-    X(232, 91);  // SI checkbox (right after "Si" text)
+    X(192, 92);  // SI checkbox (blank after "Si" text at x=170.9)
     if (data.aseguradoraAnterior) {
-      T(fit(data.aseguradoraAnterior, 16), 450, 91);  // Compania
+      T(fit(data.aseguradoraAnterior, 22), 370, 92);  // Compania
     }
   } else {
-    X(305, 91);  // NO checkbox (right after "NO" text)
+    X(240, 92);  // NO checkbox (blank after "NO" text at x=216.6)
   }
 
   // ─── OBSERVACIONES ─────────────────────────────────────────────
-  // OBSERVACIONES green box
-  // Two text lines available inside the box
+  // OBSERVACIONES header at y=154.6, sub-label "(Apreciación del Inspector)" at y=138.6
+  // Text on the 2 underlines inside the green OBSERVACIONES box
+  // First underline ~y=140, second underline ~y=129 (11pt line spacing)
   if (data.observaciones) {
-    T(fit(data.observaciones, 80), 110, 142, FSS);
+    T(fit(data.observaciones, 80), 140, 140, FSS);
     if (data.observaciones.length > 80) {
-      T(fit(data.observaciones.substring(80), 80), 110, 134, FSS);
+      T(fit(data.observaciones.substring(80), 80), 140, 129, FSS);
     }
   }
 
   // ─── SIGNATURE & CEDULA (bottom ASEGURADO / CEDULA columns) ─────────
-  // From stream: ASEGURADO column x:354-505, CEDULA column x:505-587
-  // Bottom label row at y=66.3-79.8 (INSPECTOR | ASEGURADO | CEDULA)
-  // Signature goes ABOVE the ASEGURADO label, in the box between y=79.8 and y=89.3/102.8
-  // CEDULA text goes in the CEDULA column at same height
-  T(data.cedula, 520, 71, FSS);
+  // ASEGURADO label at y=58.1 x=362.3; CEDULA label at y=58.1 x=534.1
+  // Signature area above ASEGURADO label (y≈65-80)
+  // CEDULA text above CEDULA label (y≈65-80)
+  T(data.cedula, 530, 68, FSS);
 
   if (data.firmaDataUrl) {
     try {
       const base64Data = data.firmaDataUrl
-        .replace(/^data:image\/png;base64,/, '')
-        .replace(/^data:image\/jpeg;base64,/, '');
+        .replace(/^data:image\/(png|jpeg|jpg);base64,/, '');
       const sigBytes = Buffer.from(base64Data, 'base64');
+      console.log('[IS PDF] Signature bytes:', sigBytes.length, 'header:', sigBytes.slice(0, 4).toString('hex'));
 
       let sigImage;
       if (data.firmaDataUrl.includes('image/jpeg')) {
@@ -293,16 +284,19 @@ export async function generateInspectionPdf(data: InspectionPdfData): Promise<Bu
         sigImage = await pdfDoc.embedPng(sigBytes);
       }
 
-      // Fit signature into ASEGURADO column area (x:354-505)
+      // Fit signature into ASEGURADO column area (x:362-530)
+      // ASEGURADO label at y=58.1 — signature should sit above it (y≈62-82)
       const maxW = 140;
-      const maxH = 16;
+      const maxH = 18;
       const dims = sigImage.scaleToFit(maxW, maxH);
 
-      // Center in ASEGURADO column
-      const asgCenterX = 354 + (151 - dims.width) / 2;
+      // Center in ASEGURADO column (x:280→500)
+      const colStart = 280;
+      const colEnd = 500;
+      const asgCenterX = colStart + (colEnd - colStart - dims.width) / 2;
       page.drawImage(sigImage, {
         x: asgCenterX,
-        y: 71,
+        y: 62,
         width: dims.width,
         height: dims.height,
       });

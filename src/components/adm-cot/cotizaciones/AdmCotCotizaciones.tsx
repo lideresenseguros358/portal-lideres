@@ -47,6 +47,42 @@ function StatusBadge({ status }: { status: QuoteStatus }) {
 }
 
 // ════════════════════════════════════════════
+// DOWNLOAD FORMAT MODAL
+// ════════════════════════════════════════════
+
+function DownloadModal({ onClose, onPdf, onExcel, exporting }: { onClose: () => void; onPdf: () => void; onExcel: () => void; exporting: boolean }) {
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-2xl max-w-xs w-full p-5 space-y-4" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-bold text-[#010139]">Descargar Reporte</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 cursor-pointer"><FaTimes /></button>
+        </div>
+        <div className="space-y-2">
+          <button onClick={onPdf} disabled={exporting}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg border border-gray-200 hover:bg-red-50 hover:border-red-200 transition-colors cursor-pointer disabled:opacity-50">
+            <FaFilePdf className="text-red-600 text-lg" />
+            <div className="text-left">
+              <p className="text-sm font-medium text-gray-800">PDF Ejecutivo</p>
+              <p className="text-[10px] text-gray-500">Reporte con tabla resumida</p>
+            </div>
+          </button>
+          <button onClick={onExcel} disabled={exporting}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg border border-gray-200 hover:bg-green-50 hover:border-green-200 transition-colors cursor-pointer disabled:opacity-50">
+            <FaFileExcel className="text-green-600 text-lg" />
+            <div className="text-left">
+              <p className="text-sm font-medium text-gray-800">Excel Multi-hoja</p>
+              <p className="text-[10px] text-gray-500">Datos completos + funnel + por aseguradora</p>
+            </div>
+          </button>
+        </div>
+        {exporting && <p className="text-xs text-center text-gray-500">Generando archivo...</p>}
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════
 // INDIVIDUAL QUOTE PDF DOWNLOAD
 // ════════════════════════════════════════════
 
@@ -293,12 +329,141 @@ async function exportMultiSheetExcel(rows: AdmCotQuote[]) {
 // EXPANDABLE AUDIT ROW
 // ════════════════════════════════════════════
 
+// ════════════════════════════════════════════
+// EXPANDABLE DETAIL (shared between mobile card & desktop row)
+// ════════════════════════════════════════════
+
+function QuoteDetail({ quote }: { quote: AdmCotQuote }) {
+  const fmtFull = (d: string) => new Date(d).toLocaleString('es-PA');
+  return (
+    <div className="p-3 sm:p-4 space-y-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="bg-white rounded-lg border border-gray-200 p-3">
+          <h4 className="text-[10px] font-bold text-[#010139] uppercase tracking-wider mb-2">Datos Completos</h4>
+          <div className="space-y-1.5 text-xs text-gray-700">
+            <p><span className="font-medium text-gray-500">Nombre:</span> {quote.client_name}</p>
+            <p><span className="font-medium text-gray-500">Cédula:</span> {quote.cedula || '—'}</p>
+            <p><span className="font-medium text-gray-500">Email:</span> {quote.email || '—'}</p>
+            <p><span className="font-medium text-gray-500">Teléfono:</span> {quote.phone || '—'}</p>
+            <p><span className="font-medium text-gray-500">IP:</span> <span className="font-mono">{quote.ip_address || '—'}</span></p>
+            <p><span className="font-medium text-gray-500">Región:</span> {quote.region || '—'}</p>
+            <p><span className="font-medium text-gray-500">Timestamp:</span> {fmtFull(quote.quoted_at)}</p>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg border border-gray-200 p-3">
+          <h4 className="text-[10px] font-bold text-[#010139] uppercase tracking-wider mb-2">Emisión</h4>
+          <div className="space-y-1.5 text-xs text-gray-700">
+            {quote.status === 'EMITIDA' ? (
+              <>
+                <p><span className="font-medium text-gray-500">Nro. Póliza:</span> {(quote.quote_payload as any)?.nro_poliza || '—'}</p>
+                <p><span className="font-medium text-gray-500">Fecha:</span> {quote.emitted_at ? fmtFull(quote.emitted_at) : '—'}</p>
+                {quote.quoted_at && quote.emitted_at && (
+                  <p><span className="font-medium text-gray-500">Tiempo:</span> {Math.round((new Date(quote.emitted_at).getTime() - new Date(quote.quoted_at).getTime()) / 60000)} min</p>
+                )}
+              </>
+            ) : quote.status === 'FALLIDA' ? (
+              <>
+                <p className="text-red-600 font-medium">Emisión Fallida</p>
+                <p><span className="font-medium text-gray-500">Error:</span> {(quote.quote_payload as any)?.error_message || '—'}</p>
+              </>
+            ) : (
+              <p className="text-gray-400 italic">Sin emisión</p>
+            )}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg border border-gray-200 p-3">
+          <h4 className="text-[10px] font-bold text-[#010139] uppercase tracking-wider mb-2">Cotización</h4>
+          <div className="space-y-1.5 text-xs text-gray-700">
+            <p><span className="font-medium text-gray-500">Cobertura:</span> {quote.coverage_type || '—'}</p>
+            <p><span className="font-medium text-gray-500">Plan:</span> {quote.plan_name || '—'}</p>
+            <p><span className="font-medium text-gray-500">Prima:</span> {quote.annual_premium ? `$${Number(quote.annual_premium).toFixed(2)}` : '—'}</p>
+            {quote.vehicle_info && Object.entries(quote.vehicle_info).map(([k, v]) => (
+              <p key={k}><span className="font-medium text-gray-500 capitalize">{k}:</span> {String(v)}</p>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-lg border border-gray-200 p-3">
+          <h4 className="text-[10px] font-bold text-[#010139] uppercase tracking-wider mb-2">Funnel</h4>
+          {quote.steps_log && quote.steps_log.length > 0 ? (
+            <div className="space-y-1">
+              {quote.steps_log.map((s, i) => (
+                <div key={i} className="flex items-center gap-2 text-xs">
+                  <div className="w-1.5 h-1.5 rounded-full bg-[#010139] flex-shrink-0" />
+                  <span className="font-medium text-gray-700">{s.step}</span>
+                  <span className="text-gray-400 text-[10px]">{new Date(s.ts).toLocaleTimeString('es-PA', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+                </div>
+              ))}
+              {quote.status === 'ABANDONADA' && (
+                <p className="text-red-500 text-[10px] font-medium mt-1">Abandonado en: {quote.last_step}</p>
+              )}
+            </div>
+          ) : (
+            <p className="text-gray-400 text-xs italic">Sin historial</p>
+          )}
+        </div>
+      </div>
+
+      <div className="flex justify-end">
+        <button
+          onClick={(e) => { e.stopPropagation(); downloadQuotePdf(quote); }}
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-[#010139] text-white text-xs font-medium rounded-lg hover:bg-[#020270] transition-colors cursor-pointer"
+        >
+          <FaDownload className="text-white" /> <span className="text-white">Descargar PDF</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════
+// MOBILE CARD
+// ════════════════════════════════════════════
+
+function MobileQuoteCard({ quote }: { quote: AdmCotQuote }) {
+  const [expanded, setExpanded] = useState(false);
+  const fmtDate = (d: string) => new Date(d).toLocaleDateString('es-PA', { day: '2-digit', month: '2-digit', year: '2-digit' });
+  const fmtTime = (d: string) => new Date(d).toLocaleTimeString('es-PA', { hour: '2-digit', minute: '2-digit' });
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      <div className="p-3 cursor-pointer" onClick={() => setExpanded(!expanded)}>
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-[#010139] truncate">{maskName(quote.client_name)}</p>
+            <p className="text-[11px] text-gray-500 mt-0.5">{quote.insurer} · {quote.ramo}</p>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <StatusBadge status={quote.status} />
+            {expanded ? <FaChevronUp className="text-[10px] text-[#010139]" /> : <FaChevronDown className="text-[10px] text-gray-400" />}
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-[11px] text-gray-500">
+          <span>{fmtDate(quote.quoted_at)} {fmtTime(quote.quoted_at)}</span>
+          {quote.cedula && <span>· {maskCedula(quote.cedula)}</span>}
+          {quote.annual_premium && <span className="font-semibold text-[#8AAA19]">${Number(quote.annual_premium).toFixed(2)}</span>}
+        </div>
+      </div>
+      {expanded && (
+        <div className="border-t border-gray-100 bg-gray-50/50">
+          <QuoteDetail quote={quote} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════
+// DESKTOP TABLE ROW
+// ════════════════════════════════════════════
+
 function AuditRow({ quote }: { quote: AdmCotQuote }) {
   const [expanded, setExpanded] = useState(false);
 
   const fmtDate = (d: string) => new Date(d).toLocaleDateString('es-PA', { day: '2-digit', month: '2-digit', year: '2-digit' });
   const fmtTime = (d: string) => new Date(d).toLocaleTimeString('es-PA', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-  const fmtFull = (d: string) => new Date(d).toLocaleString('es-PA');
 
   return (
     <>
@@ -326,98 +491,7 @@ function AuditRow({ quote }: { quote: AdmCotQuote }) {
       {expanded && (
         <tr className="bg-gradient-to-b from-blue-50/50 to-white">
           <td colSpan={12} className="p-0">
-            <div className="p-4 space-y-4">
-              {/* ─── A. FULL UNMASKED DATA ─── */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="bg-white rounded-lg border border-gray-200 p-3">
-                  <h4 className="text-[10px] font-bold text-[#010139] uppercase tracking-wider mb-2">Datos Completos</h4>
-                  <div className="space-y-1.5 text-xs text-gray-700">
-                    <p><span className="font-medium text-gray-500">Nombre:</span> {quote.client_name}</p>
-                    <p><span className="font-medium text-gray-500">Cédula:</span> {quote.cedula || '—'}</p>
-                    <p><span className="font-medium text-gray-500">Email:</span> {quote.email || '—'}</p>
-                    <p><span className="font-medium text-gray-500">Teléfono:</span> {quote.phone || '—'}</p>
-                    <p><span className="font-medium text-gray-500">IP:</span> <span className="font-mono">{quote.ip_address || '—'}</span></p>
-                    <p><span className="font-medium text-gray-500">User Agent:</span> <span className="text-[10px] break-all">{quote.user_agent || '—'}</span></p>
-                    <p><span className="font-medium text-gray-500">Región:</span> {quote.region || '—'}</p>
-                    <p><span className="font-medium text-gray-500">Timestamp:</span> {fmtFull(quote.quoted_at)}</p>
-                    <p><span className="font-medium text-gray-500">Ambiente:</span>
-                      <span className={`ml-1 px-1.5 py-0.5 rounded text-[9px] font-bold ${process.env.NODE_ENV === 'production' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
-                        {process.env.NODE_ENV === 'production' ? 'PROD' : 'DEV'}
-                      </span>
-                    </p>
-                  </div>
-                </div>
-
-                {/* ─── B. EMISSION INFO ─── */}
-                <div className="bg-white rounded-lg border border-gray-200 p-3">
-                  <h4 className="text-[10px] font-bold text-[#010139] uppercase tracking-wider mb-2">Emisión</h4>
-                  <div className="space-y-1.5 text-xs text-gray-700">
-                    {quote.status === 'EMITIDA' ? (
-                      <>
-                        <p><span className="font-medium text-gray-500">Nro. Póliza:</span> {(quote.quote_payload as any)?.nro_poliza || '—'}</p>
-                        <p><span className="font-medium text-gray-500">Fecha Emisión:</span> {quote.emitted_at ? fmtFull(quote.emitted_at) : '—'}</p>
-                        {quote.quoted_at && quote.emitted_at && (
-                          <p><span className="font-medium text-gray-500">Tiempo:</span> {Math.round((new Date(quote.emitted_at).getTime() - new Date(quote.quoted_at).getTime()) / 60000)} min</p>
-                        )}
-                        <p><span className="font-medium text-gray-500">Pago:</span> {(quote.quote_payload as any)?.payment_confirmed ? 'Confirmado' : 'Pendiente'}</p>
-                      </>
-                    ) : quote.status === 'FALLIDA' ? (
-                      <>
-                        <p className="text-red-600 font-medium">Emisión Fallida</p>
-                        <p><span className="font-medium text-gray-500">Error:</span> {(quote.quote_payload as any)?.error_message || '—'}</p>
-                        <p><span className="font-medium text-gray-500">Endpoint:</span> {(quote.quote_payload as any)?.error_endpoint || '—'}</p>
-                      </>
-                    ) : (
-                      <p className="text-gray-400 italic">Sin emisión</p>
-                    )}
-                  </div>
-                </div>
-
-                {/* ─── COTIZACIÓN DETAIL ─── */}
-                <div className="bg-white rounded-lg border border-gray-200 p-3">
-                  <h4 className="text-[10px] font-bold text-[#010139] uppercase tracking-wider mb-2">Cotización</h4>
-                  <div className="space-y-1.5 text-xs text-gray-700">
-                    <p><span className="font-medium text-gray-500">Cobertura:</span> {quote.coverage_type || '—'}</p>
-                    <p><span className="font-medium text-gray-500">Plan:</span> {quote.plan_name || '—'}</p>
-                    <p><span className="font-medium text-gray-500">Prima:</span> {quote.annual_premium ? `$${Number(quote.annual_premium).toFixed(2)}` : '—'}</p>
-                    {quote.vehicle_info && Object.entries(quote.vehicle_info).map(([k, v]) => (
-                      <p key={k}><span className="font-medium text-gray-500 capitalize">{k}:</span> {String(v)}</p>
-                    ))}
-                  </div>
-                </div>
-
-                {/* ─── C. FUNNEL ─── */}
-                <div className="bg-white rounded-lg border border-gray-200 p-3">
-                  <h4 className="text-[10px] font-bold text-[#010139] uppercase tracking-wider mb-2">Funnel</h4>
-                  {quote.steps_log && quote.steps_log.length > 0 ? (
-                    <div className="space-y-1">
-                      {quote.steps_log.map((s, i) => (
-                        <div key={i} className="flex items-center gap-2 text-xs">
-                          <div className="w-1.5 h-1.5 rounded-full bg-[#010139] flex-shrink-0" />
-                          <span className="font-medium text-gray-700">{s.step}</span>
-                          <span className="text-gray-400 text-[10px]">{new Date(s.ts).toLocaleTimeString('es-PA', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
-                        </div>
-                      ))}
-                      {quote.status === 'ABANDONADA' && (
-                        <p className="text-red-500 text-[10px] font-medium mt-1">Abandonado en: {quote.last_step}</p>
-                      )}
-                    </div>
-                  ) : (
-                    <p className="text-gray-400 text-xs italic">Sin historial de pasos</p>
-                  )}
-                </div>
-              </div>
-
-              {/* ─── D. DOWNLOAD BUTTON ─── */}
-              <div className="flex justify-end">
-                <button
-                  onClick={(e) => { e.stopPropagation(); downloadQuotePdf(quote); }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-[#010139] text-white text-xs font-medium rounded-lg hover:bg-[#020270] transition-colors cursor-pointer"
-                >
-                  <FaDownload className="text-white" /> Descargar Cotización Original (PDF)
-                </button>
-              </div>
-            </div>
+            <QuoteDetail quote={quote} />
           </td>
         </tr>
       )}
@@ -553,119 +627,124 @@ export default function AdmCotCotizaciones() {
     applyPreset('month');
   };
 
+  const [showDownloadModal, setShowDownloadModal] = useState(false);
+
   return (
     <div className="space-y-4">
       {/* ── Header ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-bold text-[#010139]">Log General de Cotizaciones</h2>
-          <p className="text-xs text-gray-500">Fuente oficial de auditoría — Retención mínima: 3 años — {total.toLocaleString()} registros</p>
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-base sm:text-lg font-bold text-[#010139]">Log de Cotizaciones</h2>
+          <p className="text-[11px] sm:text-xs text-gray-500 truncate">{total.toLocaleString()} registros</p>
         </div>
-        <div className="flex gap-2">
-          <button onClick={handleExportPdf} disabled={exporting}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 text-white text-xs font-medium rounded-lg hover:bg-red-700 transition-colors cursor-pointer disabled:opacity-50">
-            <FaFilePdf className="text-white" /> <span className="text-white">PDF Ejecutivo</span>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button onClick={() => fetchQuotes(1)} disabled={loading}
+            className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors cursor-pointer" title="Refrescar">
+            <FaSync className={`text-sm ${loading ? 'animate-spin' : ''}`} />
           </button>
-          <button onClick={handleExportExcel} disabled={exporting}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700 transition-colors cursor-pointer disabled:opacity-50">
-            <FaFileExcel className="text-white" /> <span className="text-white">Excel Multi-hoja</span>
+          <button onClick={() => setShowDownloadModal(true)}
+            className="p-2 rounded-lg bg-[#010139] text-white hover:bg-[#020270] transition-colors cursor-pointer" title="Descargar reporte">
+            <FaDownload className="text-sm text-white" />
           </button>
         </div>
       </div>
 
       {/* ── Filters ── */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 space-y-3">
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Global search */}
-          <div className="relative flex-1 min-w-[200px]">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-3 sm:p-4 space-y-3">
+        {/* Row 1: Search + Actions */}
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1 min-w-0">
             <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs" />
-            <input type="text" placeholder="Buscar nombre, cédula, email, referencia, IP..."
+            <input type="text" placeholder="Buscar nombre, cédula, email..."
               value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && fetchQuotes(1)}
-              className="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#010139]/20 focus:border-[#010139] outline-none" />
+              className="w-full pl-8 pr-3 py-2 text-sm sm:text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#010139]/20 focus:border-[#010139] outline-none" />
           </div>
-
-          {/* Date presets */}
-          <div className="flex gap-1">
-            {(['today', 'week', 'month', '3months', 'year'] as const).map((p) => (
-              <button key={p} onClick={() => applyPreset(p)}
-                className={`px-2.5 py-1.5 text-[10px] rounded-lg font-medium transition-colors cursor-pointer ${
-                  preset === p ? 'bg-[#010139] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}>
-                {p === 'today' ? 'Hoy' : p === 'week' ? '7d' : p === 'month' ? '30d' : p === '3months' ? '90d' : 'Año'}
-              </button>
-            ))}
-          </div>
-
-          {/* Custom dates */}
-          <input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); applyPreset('custom'); }}
-            className="text-xs border border-gray-300 rounded-lg px-2 py-1.5" />
-          <input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); applyPreset('custom'); }}
-            className="text-xs border border-gray-300 rounded-lg px-2 py-1.5" />
-
-          <select value={insurer} onChange={(e) => setInsurer(e.target.value)} className="text-xs border border-gray-300 rounded-lg px-2 py-1.5">
-            <option value="">Aseguradora</option>
-            <option value="INTERNACIONAL">Internacional</option>
-            <option value="FEDPA">FEDPA</option>
-          </select>
-
-          <select value={ramo} onChange={(e) => setRamo(e.target.value)} className="text-xs border border-gray-300 rounded-lg px-2 py-1.5">
-            <option value="">Ramo</option>
-            <option value="AUTO">Auto</option>
-            <option value="SALUD">Salud</option>
-            <option value="VIDA">Vida</option>
-          </select>
-
-          <select value={status} onChange={(e) => setStatus(e.target.value)} className="text-xs border border-gray-300 rounded-lg px-2 py-1.5">
-            <option value="">Estado</option>
-            <option value="COTIZADA">Cotizada</option>
-            <option value="EMITIDA">Emitida</option>
-            <option value="FALLIDA">Fallida</option>
-            <option value="ABANDONADA">Abandonada</option>
-          </select>
-
           <button onClick={() => setShowAdvanced(!showAdvanced)}
-            className="text-xs text-gray-500 hover:text-[#010139] flex items-center gap-1 cursor-pointer">
-            <FaFilter className="text-[10px]" /> {showAdvanced ? 'Menos' : 'Más'}
+            className={`p-2 rounded-lg transition-colors cursor-pointer flex-shrink-0 ${showAdvanced ? 'bg-[#010139] text-white' : 'text-gray-500 hover:bg-gray-100'}`} title="Filtros">
+            <FaFilter className="text-sm" />
           </button>
-
-          <button onClick={resetFilters} className="text-xs text-gray-400 hover:text-red-500 cursor-pointer"><FaTimes /></button>
-
-          <button onClick={() => fetchQuotes(1)} disabled={loading}
-            className="px-3 py-1.5 bg-[#010139] text-white text-xs font-medium rounded-lg hover:bg-[#020270] transition-colors flex items-center gap-1.5 cursor-pointer">
-            <FaSync className={`text-white ${loading ? 'animate-spin' : ''}`} /> <span className="text-white">Buscar</span>
-          </button>
+          {(searchTerm || insurer || ramo || status || region || device || quoteRef || policyNumber) && (
+            <button onClick={resetFilters} className="p-2 text-gray-400 hover:text-red-500 cursor-pointer flex-shrink-0" title="Limpiar filtros">
+              <FaTimes className="text-sm" />
+            </button>
+          )}
         </div>
 
-        {/* Advanced filters */}
+        {/* Row 2: Date presets (always visible) */}
+        <div className="flex gap-1 overflow-x-auto pb-0.5">
+          {(['today', 'week', 'month', '3months', 'year'] as const).map((p) => (
+            <button key={p} onClick={() => applyPreset(p)}
+              className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors cursor-pointer whitespace-nowrap ${
+                preset === p ? 'bg-[#010139] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}>
+              {p === 'today' ? 'Hoy' : p === 'week' ? '7d' : p === 'month' ? '30d' : p === '3months' ? '90d' : 'Año'}
+            </button>
+          ))}
+        </div>
+
+        {/* Advanced filters (collapsible) */}
         {showAdvanced && (
-          <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-gray-100">
-            <select value={region} onChange={(e) => setRegion(e.target.value)} className="text-xs border border-gray-300 rounded-lg px-2 py-1.5">
-              <option value="">Región</option>
-              <option value="Panamá">Panamá</option>
-              <option value="Panamá Oeste">Panamá Oeste</option>
-              <option value="Colón">Colón</option>
-              <option value="Chiriquí">Chiriquí</option>
-              <option value="Coclé">Coclé</option>
-              <option value="Veraguas">Veraguas</option>
-            </select>
-
-            <select value={device} onChange={(e) => setDevice(e.target.value)} className="text-xs border border-gray-300 rounded-lg px-2 py-1.5">
-              <option value="">Dispositivo</option>
-              <option value="Windows">Windows</option>
-              <option value="macOS">macOS</option>
-              <option value="iOS">iOS</option>
-              <option value="Android">Android</option>
-              <option value="Linux">Linux</option>
-            </select>
-
-            <input type="text" placeholder="ID Cotización" value={quoteRef} onChange={(e) => setQuoteRef(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && fetchQuotes(1)}
-              className="text-xs border border-gray-300 rounded-lg px-2 py-1.5 w-36" />
-
-            <input type="text" placeholder="Nro. Póliza" value={policyNumber} onChange={(e) => setPolicyNumber(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && fetchQuotes(1)}
-              className="text-xs border border-gray-300 rounded-lg px-2 py-1.5 w-36" />
+          <div className="pt-2 border-t border-gray-100 space-y-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+              <div className="w-full max-w-full overflow-hidden">
+                <input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); applyPreset('custom'); }}
+                  className="w-full max-w-full text-sm sm:text-xs border border-gray-300 rounded-lg px-2 py-2 sm:py-1.5" style={{ WebkitAppearance: 'none' }} />
+              </div>
+              <div className="w-full max-w-full overflow-hidden">
+                <input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); applyPreset('custom'); }}
+                  className="w-full max-w-full text-sm sm:text-xs border border-gray-300 rounded-lg px-2 py-2 sm:py-1.5" style={{ WebkitAppearance: 'none' }} />
+              </div>
+              <select value={insurer} onChange={(e) => setInsurer(e.target.value)} className="w-full text-sm sm:text-xs border border-gray-300 rounded-lg px-2 py-2 sm:py-1.5">
+                <option value="">Aseguradora</option>
+                <option value="INTERNACIONAL">Internacional</option>
+                <option value="FEDPA">FEDPA</option>
+              </select>
+              <select value={ramo} onChange={(e) => setRamo(e.target.value)} className="w-full text-sm sm:text-xs border border-gray-300 rounded-lg px-2 py-2 sm:py-1.5">
+                <option value="">Ramo</option>
+                <option value="AUTO">Auto</option>
+                <option value="SALUD">Salud</option>
+                <option value="VIDA">Vida</option>
+              </select>
+              <select value={status} onChange={(e) => setStatus(e.target.value)} className="w-full text-sm sm:text-xs border border-gray-300 rounded-lg px-2 py-2 sm:py-1.5">
+                <option value="">Estado</option>
+                <option value="COTIZADA">Cotizada</option>
+                <option value="EMITIDA">Emitida</option>
+                <option value="FALLIDA">Fallida</option>
+                <option value="ABANDONADA">Abandonada</option>
+              </select>
+              <select value={region} onChange={(e) => setRegion(e.target.value)} className="w-full text-sm sm:text-xs border border-gray-300 rounded-lg px-2 py-2 sm:py-1.5">
+                <option value="">Región</option>
+                <option value="Panamá">Panamá</option>
+                <option value="Panamá Oeste">Panamá Oeste</option>
+                <option value="Colón">Colón</option>
+                <option value="Chiriquí">Chiriquí</option>
+                <option value="Coclé">Coclé</option>
+                <option value="Veraguas">Veraguas</option>
+              </select>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+              <select value={device} onChange={(e) => setDevice(e.target.value)} className="w-full text-sm sm:text-xs border border-gray-300 rounded-lg px-2 py-2 sm:py-1.5">
+                <option value="">Dispositivo</option>
+                <option value="Windows">Windows</option>
+                <option value="macOS">macOS</option>
+                <option value="iOS">iOS</option>
+                <option value="Android">Android</option>
+                <option value="Linux">Linux</option>
+              </select>
+              <input type="text" placeholder="ID Cotización" value={quoteRef} onChange={(e) => setQuoteRef(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && fetchQuotes(1)}
+                className="w-full text-sm sm:text-xs border border-gray-300 rounded-lg px-2 py-2 sm:py-1.5" />
+              <input type="text" placeholder="Nro. Póliza" value={policyNumber} onChange={(e) => setPolicyNumber(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && fetchQuotes(1)}
+                className="w-full text-sm sm:text-xs border border-gray-300 rounded-lg px-2 py-2 sm:py-1.5" />
+            </div>
+            <div className="flex justify-end">
+              <button onClick={() => fetchQuotes(1)} disabled={loading}
+                className="px-4 py-2 sm:py-1.5 bg-[#010139] text-white text-sm sm:text-xs font-medium rounded-lg hover:bg-[#020270] transition-colors flex items-center gap-1.5 cursor-pointer">
+                <FaSync className={`text-white ${loading ? 'animate-spin' : ''}`} /> <span className="text-white">Aplicar Filtros</span>
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -676,65 +755,83 @@ export default function AdmCotCotizaciones() {
         </div>
       )}
 
-      {/* ── Table ── */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead>
-              <tr className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
-                <th className="py-2 px-2 w-7"></th>
-                <th className="py-2 px-2 text-[10px] font-semibold text-gray-500 uppercase">ID Cotización</th>
-                <th className="py-2 px-2 text-[10px] font-semibold text-gray-500 uppercase">Fecha</th>
-                <th className="py-2 px-2 text-[10px] font-semibold text-gray-500 uppercase">Hora</th>
-                <th className="py-2 px-2 text-[10px] font-semibold text-gray-500 uppercase">Nombre</th>
-                <th className="py-2 px-2 text-[10px] font-semibold text-gray-500 uppercase">Cédula</th>
-                <th className="py-2 px-2 text-[10px] font-semibold text-gray-500 uppercase">Aseg.</th>
-                <th className="py-2 px-2 text-[10px] font-semibold text-gray-500 uppercase">Ramo</th>
-                <th className="py-2 px-2 text-[10px] font-semibold text-gray-500 uppercase">Estado</th>
-                <th className="py-2 px-2 text-[10px] font-semibold text-gray-500 uppercase">Región</th>
-                <th className="py-2 px-2 text-[10px] font-semibold text-gray-500 uppercase">Disp.</th>
-                <th className="py-2 px-2 text-[10px] font-semibold text-gray-500 uppercase">IP</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading && quotes.length === 0 ? (
-                <tr><td colSpan={12} className="py-16 text-center text-gray-400">
-                  <FaSync className="animate-spin text-2xl mx-auto mb-2" />
-                  <p className="text-sm">Cargando cotizaciones...</p>
-                </td></tr>
-              ) : quotes.length === 0 ? (
-                <tr><td colSpan={12} className="py-16 text-center">
-                  <FaSearch className="text-3xl text-gray-300 mx-auto mb-3" />
-                  <p className="text-sm text-gray-500 font-medium">No se encontraron cotizaciones</p>
-                  <p className="text-xs text-gray-400 mt-1">Ajusta los filtros o espera nuevas cotizaciones</p>
-                </td></tr>
-              ) : (
-                quotes.map((q) => <AuditRow key={q.id} quote={q} />)
-              )}
-            </tbody>
-          </table>
+      {/* ── Loading / Empty ── */}
+      {loading && quotes.length === 0 ? (
+        <div className="py-16 text-center text-gray-400">
+          <FaSync className="animate-spin text-2xl mx-auto mb-2" />
+          <p className="text-sm">Cargando cotizaciones...</p>
         </div>
+      ) : quotes.length === 0 ? (
+        <div className="py-16 text-center">
+          <FaSearch className="text-3xl text-gray-300 mx-auto mb-3" />
+          <p className="text-sm text-gray-500 font-medium">No se encontraron cotizaciones</p>
+          <p className="text-xs text-gray-400 mt-1">Ajusta los filtros o espera nuevas cotizaciones</p>
+        </div>
+      ) : (
+        <>
+          {/* ── Mobile Card List (< md) ── */}
+          <div className="md:hidden space-y-2">
+            {quotes.map((q) => <MobileQuoteCard key={q.id} quote={q} />)}
+          </div>
 
-        {/* Pagination */}
-        {total > 0 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-gray-200 bg-gray-50">
-            <p className="text-xs text-gray-500">
-              {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, total)} de {total.toLocaleString()}
-            </p>
-            <div className="flex items-center gap-1">
-              <button onClick={() => fetchQuotes(1)} disabled={page === 1 || loading}
-                className="px-2 py-1 text-xs border border-gray-300 rounded-lg disabled:opacity-40 hover:bg-gray-100 cursor-pointer">«</button>
-              <button onClick={() => fetchQuotes(page - 1)} disabled={page === 1 || loading}
-                className="px-2.5 py-1 text-xs border border-gray-300 rounded-lg disabled:opacity-40 hover:bg-gray-100 cursor-pointer">Anterior</button>
-              <span className="px-3 py-1 text-xs text-gray-600 font-medium">{page} / {totalPages}</span>
-              <button onClick={() => fetchQuotes(page + 1)} disabled={page === totalPages || loading}
-                className="px-2.5 py-1 text-xs border border-gray-300 rounded-lg disabled:opacity-40 hover:bg-gray-100 cursor-pointer">Siguiente</button>
-              <button onClick={() => fetchQuotes(totalPages)} disabled={page === totalPages || loading}
-                className="px-2 py-1 text-xs border border-gray-300 rounded-lg disabled:opacity-40 hover:bg-gray-100 cursor-pointer">»</button>
+          {/* ── Desktop Table (>= md) ── */}
+          <div className="hidden md:block bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
+                    <th className="py-2 px-2 w-7"></th>
+                    <th className="py-2 px-2 text-[10px] font-semibold text-gray-500 uppercase">ID Cotización</th>
+                    <th className="py-2 px-2 text-[10px] font-semibold text-gray-500 uppercase">Fecha</th>
+                    <th className="py-2 px-2 text-[10px] font-semibold text-gray-500 uppercase">Hora</th>
+                    <th className="py-2 px-2 text-[10px] font-semibold text-gray-500 uppercase">Nombre</th>
+                    <th className="py-2 px-2 text-[10px] font-semibold text-gray-500 uppercase">Cédula</th>
+                    <th className="py-2 px-2 text-[10px] font-semibold text-gray-500 uppercase">Aseg.</th>
+                    <th className="py-2 px-2 text-[10px] font-semibold text-gray-500 uppercase">Ramo</th>
+                    <th className="py-2 px-2 text-[10px] font-semibold text-gray-500 uppercase">Estado</th>
+                    <th className="py-2 px-2 text-[10px] font-semibold text-gray-500 uppercase">Región</th>
+                    <th className="py-2 px-2 text-[10px] font-semibold text-gray-500 uppercase">Disp.</th>
+                    <th className="py-2 px-2 text-[10px] font-semibold text-gray-500 uppercase">IP</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {quotes.map((q) => <AuditRow key={q.id} quote={q} />)}
+                </tbody>
+              </table>
             </div>
           </div>
-        )}
-      </div>
+
+          {/* Pagination */}
+          {total > 0 && (
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-2 px-1">
+              <p className="text-xs text-gray-500">
+                {((page - 1) * PAGE_SIZE) + 1}–{Math.min(page * PAGE_SIZE, total)} de {total.toLocaleString()}
+              </p>
+              <div className="flex items-center gap-1">
+                <button onClick={() => fetchQuotes(1)} disabled={page === 1 || loading}
+                  className="px-2 py-1 text-xs border border-gray-300 rounded-lg disabled:opacity-40 hover:bg-gray-100 cursor-pointer">«</button>
+                <button onClick={() => fetchQuotes(page - 1)} disabled={page === 1 || loading}
+                  className="px-2.5 py-1 text-xs border border-gray-300 rounded-lg disabled:opacity-40 hover:bg-gray-100 cursor-pointer">Ant.</button>
+                <span className="px-3 py-1 text-xs text-gray-600 font-medium">{page} / {totalPages}</span>
+                <button onClick={() => fetchQuotes(page + 1)} disabled={page === totalPages || loading}
+                  className="px-2.5 py-1 text-xs border border-gray-300 rounded-lg disabled:opacity-40 hover:bg-gray-100 cursor-pointer">Sig.</button>
+                <button onClick={() => fetchQuotes(totalPages)} disabled={page === totalPages || loading}
+                  className="px-2 py-1 text-xs border border-gray-300 rounded-lg disabled:opacity-40 hover:bg-gray-100 cursor-pointer">»</button>
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* Download Format Modal */}
+      {showDownloadModal && (
+        <DownloadModal
+          onClose={() => setShowDownloadModal(false)}
+          onPdf={() => { handleExportPdf(); setShowDownloadModal(false); }}
+          onExcel={() => { handleExportExcel(); setShowDownloadModal(false); }}
+          exporting={exporting}
+        />
+      )}
     </div>
   );
 }

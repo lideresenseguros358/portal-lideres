@@ -159,7 +159,7 @@ export default function ConfirmacionPage() {
                 {policyData.insurer && (
                   <div className="flex justify-between items-center py-2 px-3 bg-white rounded-lg">
                     <span className="text-sm text-gray-600">Aseguradora</span>
-                    <span className="text-sm font-semibold text-gray-800">{policyData.insurer}</span>
+                    <span className="text-sm font-semibold text-gray-800 text-right">{policyData.insurer}</span>
                   </div>
                 )}
                 {(policyData.tipoCobertura || policyData.planType) && (

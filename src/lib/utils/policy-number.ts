@@ -428,6 +428,21 @@ export function getPolicyFormatConfig(insurerSlug: InsurerSlug): PolicyFormatCon
 }
 
 /**
+ * Format an Internacional de Seguros policy number with the full prefix.
+ * The IS API returns only the bare number (e.g. "0000012345").
+ * The complete format used in documents and DB is "1-30-{number}".
+ * This function is idempotent — if the number already has the prefix it is returned as-is.
+ */
+export function formatISPolicyNumber(rawNumber: string | null | undefined): string {
+  if (!rawNumber) return '';
+  const n = rawNumber.trim();
+  if (!n) return '';
+  // Already has the prefix
+  if (n.startsWith('1-30-')) return n;
+  return `1-30-${n}`;
+}
+
+/**
  * Detectar slug de aseguradora por nombre
  */
 export function getInsurerSlug(insurerName: string): InsurerSlug | null {

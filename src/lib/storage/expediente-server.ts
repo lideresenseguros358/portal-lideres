@@ -96,6 +96,7 @@ export async function guardarDocumentosExpediente(params: {
   licencia?: { buffer: Buffer; fileName: string; mimeType: string };
   registroVehicular?: { buffer: Buffer; fileName: string; mimeType: string };
   cartaAutorizacion?: { buffer: Buffer; fileName: string; mimeType: string };
+  polizaPdf?: { buffer: Buffer; fileName: string; mimeType: string };
   nroPoliza?: string;
 }): Promise<{ ok: boolean; saved: string[]; errors: string[] }> {
   const saved: string[] = [];
@@ -170,6 +171,25 @@ export async function guardarDocumentosExpediente(params: {
       saved.push('carta_autorizacion');
     } else {
       errors.push(`carta_autorizacion: ${result.error}`);
+    }
+  }
+
+  // Save póliza PDF / carátula (policy-level)
+  if (params.polizaPdf) {
+    const result = await saveDocument({
+      clientId: params.clientId,
+      policyId: params.policyId,
+      documentType: 'otros',
+      documentName: `Carátula de Póliza${params.nroPoliza ? ` - ${params.nroPoliza}` : ''}`,
+      fileName: params.polizaPdf.fileName,
+      fileBuffer: params.polizaPdf.buffer,
+      mimeType: params.polizaPdf.mimeType,
+      notes: 'Documento oficial de póliza emitido por la aseguradora.',
+    });
+    if (result.ok) {
+      saved.push('poliza_pdf');
+    } else {
+      errors.push(`poliza_pdf: ${result.error}`);
     }
   }
 

@@ -4,7 +4,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import PaymentPlanSelector from '@/components/cotizadores/PaymentPlanSelector';
@@ -21,6 +21,7 @@ import Image from 'next/image';
 import { trackQuoteEmitted, trackQuoteFailed, trackStepUpdate } from '@/lib/adm-cot/track-quote';
 import { createPaymentOnEmission } from '@/lib/adm-cot/create-payment-on-emission';
 import { buscarOcupacion } from '@/lib/fedpa/catalogos-complementarios';
+import { formatISPolicyNumber } from '@/lib/utils/policy-number';
 
 export default function EmitirPage() {
   // A7: Scroll to top al montar
@@ -43,7 +44,9 @@ export default function EmitirPage() {
   const [cardData, setCardData] = useState<{ last4: string; brand: string } | null>(null);
   const [completedSteps, setCompletedSteps] = useState<EmissionStep[]>([]);
   const [signatureDataUrl, setSignatureDataUrl] = useState<string>('');
+  const signatureRef = useRef<string>('');
   const [showSignaturePad, setShowSignaturePad] = useState(false);
+  const [isConfirming, setIsConfirming] = useState(false);
 
   useEffect(() => {
     const loadData = () => {
@@ -82,6 +85,26 @@ export default function EmitirPage() {
     const planSuffix = selectedPlan?.planType === 'premium' ? 'P' : 'B';
     return { quoteRef: `${prefix}-${refId}-${planSuffix}`, insurer };
   };
+
+  // ═══ ADM COT: Detect abandonment — if user entered data and leaves page ═══
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (emissionData && !isConfirming) {
+        const t = getTrackingInfo();
+        if (t) {
+          trackQuoteFailed({
+            quoteRef: t.quoteRef,
+            insurer: t.insurer,
+            errorMessage: 'Proceso abandonado por el usuario',
+            lastStep: step,
+          });
+        }
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [emissionData, isConfirming, step]);
 
   const handlePaymentPlanSelected = (numInstallments: number, monthlyPaymentAmount: number) => {
     setInstallments(numInstallments);
@@ -322,7 +345,7 @@ export default function EmitirPage() {
         const fedpaRef = selectedPlan?._idCotizacion;
         if (fedpaRef) {
           const planSuffix = selectedPlan?.planType === 'premium' ? 'P' : 'B';
-          trackQuoteEmitted({ quoteRef: `FEDPA-${fedpaRef}-${planSuffix}`, insurer: 'FEDPA', policyNumber: emisionResult.nroPoliza || emisionResult.poliza });
+          trackQuoteEmitted({ quoteRef: `FEDPA-${fedpaRef}-${planSuffix}`, insurer: 'FEDPA', policyNumber: emisionResult.nroPoliza || emisionResult.poliza, cedula: emissionData.cedula, email: emissionData.email, phone: emissionData.telefono || emissionData.celular });
         }
         
         // ═══ ADM COT: Auto-create pending payment + recurrence ═══
@@ -344,7 +367,7 @@ export default function EmitirPage() {
           welcomeForm.append('environment', 'development');
           welcomeForm.append('nroPoliza', emisionResult.nroPoliza || emisionResult.poliza || '');
           welcomeForm.append('insurerName', 'FEDPA Seguros');
-          welcomeForm.append('firmaDataUrl', signatureDataUrl || '');
+          welcomeForm.append('firmaDataUrl', signatureRef.current || '');
           if (emisionResult.clientId) welcomeForm.append('clientId', emisionResult.clientId);
           if (emisionResult.policyId) welcomeForm.append('policyId', emisionResult.policyId);
           
@@ -402,6 +425,9 @@ export default function EmitirPage() {
           }
           if (emissionData.licenciaFile) {
             welcomeForm.append('licenciaFile', emissionData.licenciaFile);
+          }
+          if (vehicleData?.registroVehicular) {
+            welcomeForm.append('registroVehicularFile', vehicleData.registroVehicular);
           }
           
           const welcomeResponse = await fetch('/api/is/auto/send-expediente', {
@@ -528,13 +554,15 @@ export default function EmitirPage() {
           throw new Error(errMsg);
         }
         
+        // ═══ Prefix IS policy number with 1-30- ═══
+        emisionResult.nroPoliza = formatISPolicyNumber(emisionResult.nroPoliza);
         console.log('[EMISION INTERNACIONAL] Póliza emitida:', emisionResult.nroPoliza);
         
         // ═══ ADM COT: Track successful IS emission ═══
         const isRef = selectedPlan?._idCotizacion;
         if (isRef) {
           const planSuffix = selectedPlan?.planType === 'premium' ? 'P' : 'B';
-          trackQuoteEmitted({ quoteRef: `IS-${isRef}-${planSuffix}`, insurer: 'INTERNACIONAL', policyNumber: emisionResult.nroPoliza });
+          trackQuoteEmitted({ quoteRef: `IS-${isRef}-${planSuffix}`, insurer: 'INTERNACIONAL', policyNumber: emisionResult.nroPoliza, cedula: emissionData.cedula, email: emissionData.email, phone: emissionData.telefono || emissionData.celular });
         }
         
         // ═══ ADM COT: Auto-create pending payment + recurrence ═══
@@ -557,7 +585,7 @@ export default function EmitirPage() {
           expedienteForm.append('nroPoliza', emisionResult.nroPoliza || '');
           expedienteForm.append('pdfUrl', emisionResult.pdfUrl || '');
           expedienteForm.append('insurerName', 'Internacional de Seguros');
-          expedienteForm.append('firmaDataUrl', signatureDataUrl || '');
+          expedienteForm.append('firmaDataUrl', signatureRef.current || '');
           if (emisionResult.clientId) expedienteForm.append('clientId', emisionResult.clientId);
           if (emisionResult.policyId) expedienteForm.append('policyId', emisionResult.policyId);
           
@@ -738,8 +766,6 @@ export default function EmitirPage() {
       setIsConfirming(false);
     }
   };
-  
-  const [isConfirming, setIsConfirming] = useState(false);
 
   if (loading) return <LoadingSkeleton />;
   
@@ -999,6 +1025,7 @@ export default function EmitirPage() {
     };
 
     const handleSignatureComplete = (dataUrl: string) => {
+      signatureRef.current = dataUrl;
       setSignatureDataUrl(dataUrl);
       setShowSignaturePad(false);
       toast.success('Firma capturada correctamente');

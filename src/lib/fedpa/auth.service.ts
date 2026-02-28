@@ -30,13 +30,13 @@ const tokenCache = new Map<string, { token: string; exp: number }>();
 // PERSISTENCIA EN SUPABASE (fedpa_tokens)
 // ============================================
 
-async function guardarTokenEnDB(amb: string, token: string, source: string = 'generartoken'): Promise<void> {
+async function guardarTokenEnDB(amb: string, token: string, source: string = 'generartoken'): Promise<boolean> {
   try {
     const supabase = getSupabaseAdmin();
     const now = new Date().toISOString();
     const expiresAt = new Date(Date.now() + TOKEN_TTL_MS).toISOString();
     
-    await (supabase as any)
+    const { error } = await (supabase as any)
       .from('fedpa_tokens')
       .upsert({
         amb,
@@ -47,20 +47,16 @@ async function guardarTokenEnDB(amb: string, token: string, source: string = 'ge
         source,
       }, { onConflict: 'amb' });
     
-    console.log(`[FEDPA Auth] Token guardado en DB (amb=${amb}, source=${source}, ...${token.slice(-6)})`);
+    if (error) {
+      console.error(`[FEDPA Auth] ERROR guardando token en DB (amb=${amb}):`, error.message || error);
+      return false;
+    }
+    
+    console.log(`[FEDPA Auth] ✅ Token GUARDADO en DB (amb=${amb}, source=${source}, ...${token.slice(-6)})`);
+    return true;
   } catch (err) {
-    console.warn('[FEDPA Auth] No se pudo guardar token en DB:', (err as any)?.message);
-    // Fallback: intentar system_config (tabla legacy)
-    try {
-      const supabase = getSupabaseAdmin();
-      await (supabase as any)
-        .from('system_config')
-        .upsert({
-          key: `fedpa_token_${amb}`,
-          value: JSON.stringify({ token, created_at: Date.now() }),
-          updated_at: new Date().toISOString(),
-        }, { onConflict: 'key' });
-    } catch { /* silenciar */ }
+    console.error('[FEDPA Auth] EXCEPCIÓN guardando token en DB:', (err as any)?.message);
+    return false;
   }
 }
 
@@ -68,78 +64,65 @@ async function obtenerTokenDeDB(amb: string): Promise<string | null> {
   try {
     const supabase = getSupabaseAdmin();
     
-    // Intentar fedpa_tokens primero
-    const { data } = await (supabase as any)
+    const { data, error } = await (supabase as any)
       .from('fedpa_tokens')
       .select('token, expires_at, last_ok_at')
       .eq('amb', amb)
       .single();
     
+    if (error) {
+      console.warn(`[FEDPA Auth] DB read error (amb=${amb}):`, error.message || error.code);
+      return null;
+    }
+    
     if (data?.token) {
       const expiresAt = new Date(data.expires_at).getTime();
-      const age = Date.now() - new Date(data.last_ok_at || data.expires_at).getTime() + TOKEN_TTL_MS;
       if (expiresAt > Date.now()) {
         const minLeft = Math.round((expiresAt - Date.now()) / 60000);
         console.log(`[FEDPA Auth] Token de DB válido (amb=${amb}, ${minLeft}min restantes, ...${data.token.slice(-6)})`);
         return data.token;
       }
-      // Token expirado pero lo tenemos — puede servir para probe
       console.log(`[FEDPA Auth] Token de DB expirado (amb=${amb}), intentando probe...`);
-      return data.token; // Devolver para que el caller haga probe
+      return data.token;
     }
-  } catch {
-    // Tabla puede no existir aún
+  } catch (err) {
+    console.error(`[FEDPA Auth] Excepción leyendo token de DB (amb=${amb}):`, (err as any)?.message);
   }
   
-  // Fallback: system_config (legacy)
-  try {
-    const supabase = getSupabaseAdmin();
-    const { data } = await (supabase as any)
-      .from('system_config')
-      .select('value')
-      .eq('key', `fedpa_token_${amb}`)
-      .single();
-    
-    if (data?.value) {
-      const parsed = JSON.parse(data.value);
-      if (parsed.token) {
-        console.log(`[FEDPA Auth] Token de system_config (legacy, amb=${amb})`);
-        return parsed.token;
-      }
-    }
-  } catch { /* silenciar */ }
-  
+  console.log(`[FEDPA Auth] No hay token en DB para amb=${amb}`);
   return null;
 }
 
 async function limpiarTokenDeDB(amb: string): Promise<void> {
   try {
     const supabase = getSupabaseAdmin();
-    await (supabase as any)
+    const { error } = await (supabase as any)
       .from('fedpa_tokens')
       .delete()
       .eq('amb', amb);
-    console.log(`[FEDPA Auth] Token expirado eliminado de DB (amb=${amb})`);
-  } catch {
-    // Intentar system_config
-    try {
-      const supabase = getSupabaseAdmin();
-      await (supabase as any)
-        .from('system_config')
-        .delete()
-        .eq('key', `fedpa_token_${amb}`);
-    } catch { /* silenciar */ }
+    if (error) {
+      console.warn(`[FEDPA Auth] Error limpiando token de DB (amb=${amb}):`, error.message);
+    } else {
+      console.log(`[FEDPA Auth] Token eliminado de DB (amb=${amb})`);
+    }
+  } catch (err) {
+    console.warn(`[FEDPA Auth] Excepción limpiando token de DB:`, (err as any)?.message);
   }
 }
 
 async function actualizarLastOk(amb: string): Promise<void> {
   try {
     const supabase = getSupabaseAdmin();
-    await (supabase as any)
+    const { error } = await (supabase as any)
       .from('fedpa_tokens')
       .update({ last_ok_at: new Date().toISOString(), expires_at: new Date(Date.now() + TOKEN_TTL_MS).toISOString() })
       .eq('amb', amb);
-  } catch { /* silenciar */ }
+    if (error) {
+      console.warn(`[FEDPA Auth] Error actualizando last_ok (amb=${amb}):`, error.message);
+    }
+  } catch (err) {
+    console.warn(`[FEDPA Auth] Excepción actualizando last_ok:`, (err as any)?.message);
+  }
 }
 
 // ============================================
@@ -232,7 +215,11 @@ export async function generarToken(
   if (token && typeof token === 'string' && token.length > 10) {
     console.log(`[FEDPA Auth] ✅ Token generado (amb=${env}, ...${token.slice(-6)})`);
     tokenCache.set(cacheKey, { token, exp: Date.now() + TOKEN_TTL_MS });
-    guardarTokenEnDB(env, token, 'generartoken').catch(() => {});
+    // CRITICAL: await DB save — do NOT fire-and-forget
+    const saved = await guardarTokenEnDB(env, token, 'generartoken');
+    if (!saved) {
+      console.error(`[FEDPA Auth] ⚠️ Token generado pero NO se guardó en DB (amb=${env}). Si el server reinicia, se perderá.`);
+    }
     return { success: true, token };
   }
   
@@ -284,7 +271,7 @@ export async function generarToken(
           // Parece un JWT
           console.log(`[FEDPA Auth] 🔍 Posible token encontrado en campo "${key}" (${val.length} chars)`);
           tokenCache.set(cacheKey, { token: val, exp: Date.now() + TOKEN_TTL_MS });
-          guardarTokenEnDB(env, val, 'extracted_from_response').catch(() => {});
+          await guardarTokenEnDB(env, val, 'extracted_from_response');
           return { success: true, token: val };
         }
       }

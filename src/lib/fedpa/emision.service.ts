@@ -130,9 +130,59 @@ export async function emitirPolizaFallback(
     fedpa: { marca: fedpaMarca, modelo: fedpaModelo },
   });
   
-  // Construir payload según manual 2021 (crear_poliza_auto_cc_externos)
+  // ── PASO 2: Reservar NroPoliza via get_nropoliza ──
+  const baseUrl = config.emisorExternoUrl;
+  let nroPoliza = '';
+  
+  console.log('[FEDPA Emisión Externo] PASO 2: Obteniendo NroPoliza...');
+  try {
+    const nroResp = await fetch(
+      `${baseUrl}/api/Polizas/get_nropoliza`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ Usuario: config.usuario, Clave: config.clave }),
+      }
+    );
+    if (nroResp.ok) {
+      const nroData = await nroResp.json();
+      console.log('[FEDPA Emisión Externo] get_nropoliza raw:', JSON.stringify(nroData).substring(0, 300));
+      const firstItem = Array.isArray(nroData) ? nroData[0] : nroData;
+      nroPoliza = String(firstItem?.NUMPOL ?? firstItem?.NroPoliza ?? firstItem?.nroPoliza ?? '');
+      console.log('[FEDPA Emisión Externo] ✅ NroPoliza:', nroPoliza);
+    } else {
+      const errText = await nroResp.text().catch(() => '');
+      console.error('[FEDPA Emisión Externo] get_nropoliza falló:', nroResp.status, errText.substring(0, 200));
+    }
+  } catch (nroErr) {
+    console.error('[FEDPA Emisión Externo] Error obteniendo NroPoliza:', (nroErr as any)?.message);
+  }
+  
+  if (!nroPoliza) {
+    return {
+      success: false,
+      error: 'No se pudo reservar número de póliza (get_nropoliza). Intente nuevamente.',
+    };
+  }
+  
+  // ── PASO 3: Construir payload según manual 2021 (crear_poliza_auto_cc_externos) ──
   const now = new Date();
-  const fechaHora = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')} ${now.getHours() >= 12 ? 'PM' : 'AM'}`;
+  const dd = String(now.getDate()).padStart(2, '0');
+  const mm = String(now.getMonth() + 1).padStart(2, '0');
+  const yyyy = now.getFullYear();
+  const ampm = now.getHours() >= 12 ? 'PM' : 'AM';
+  const fechaHora = `${yyyy}-${mm}-${dd} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}:${String(now.getSeconds()).padStart(2,'0')} ${ampm}`;
+  const fechaDesde = `${yyyy}-${mm}-${dd}`;
+  const fechaHasta = `${yyyy + 1}-${mm}-${dd}`;
+
+  // Convertir FechaNacimiento de DD/MM/YYYY a YYYY-MM-DD si necesario
+  let fechaNac = normalizedRequest.FechaNacimiento || '';
+  if (fechaNac.includes('/')) {
+    const parts = fechaNac.split('/');
+    if (parts.length === 3 && parts[2].length === 4) {
+      fechaNac = `${parts[2]}-${parts[1]}-${parts[0]}`;
+    }
+  }
   
   const dataPayload = {
     FechaHora: fechaHora,
@@ -142,59 +192,54 @@ export async function emitirPolizaFallback(
     FechaAprobada: fechaHora,
     Ramo: '04',
     SubRamo: '07',
-    FechaDesde: '',
-    FechaHasta: '',
+    FechaDesde: fechaDesde,
+    FechaHasta: fechaHasta,
     Opcion: 'A',
     Usuario: config.usuario,
     Clave: config.clave,
     Entidad: [{
       Juridico: 'N',
       NombreEmpresa: '',
-      PrimerNombre: normalizedRequest.PrimerNombre,
-      SegundoNombre: normalizedRequest.SegundoNombre || '',
-      PrimerApellido: normalizedRequest.PrimerApellido,
-      SegundoApellido: normalizedRequest.SegundoApellido || '',
+      PrimerNombre: String(normalizedRequest.PrimerNombre || ''),
+      SegundoNombre: String(normalizedRequest.SegundoNombre || ''),
+      PrimerApellido: String(normalizedRequest.PrimerApellido || ''),
+      SegundoApellido: String(normalizedRequest.SegundoApellido || ''),
       DocumentoIdentificacion: 'CED',
-      Cedula: normalizedRequest.Identificacion,
+      Cedula: String(normalizedRequest.Identificacion || ''),
       Ruc: '',
-      FechaNacimiento: normalizedRequest.FechaNacimiento,
-      Sexo: normalizedRequest.Sexo,
+      FechaNacimiento: fechaNac,
+      Sexo: String(normalizedRequest.Sexo || 'M'),
       CodPais: '999',
       CodProvincia: '999',
       CodCorregimiento: '999',
-      Email: normalizedRequest.Email,
-      TelefonoOficina: '',
+      Email: String(normalizedRequest.Email || ''),
+      TelefonoOficina: String(normalizedRequest.Telefono || ''),
       Celular: String(normalizedRequest.Celular || ''),
-      Direccion: normalizedRequest.Direccion || 'PANAMA',
+      Direccion: String(normalizedRequest.Direccion || 'PANAMA'),
       IdVinculo: '1',
     }],
     Auto: {
       CodMarca: fedpaMarca,
       CodModelo: fedpaModelo,
-      Ano: String(normalizedRequest.Ano),
-      Placa: normalizedRequest.Placa,
-      Chasis: normalizedRequest.Vin,
-      Motor: normalizedRequest.Motor,
-      Color: normalizedRequest.Color,
+      Ano: String(normalizedRequest.Ano || ''),
+      Placa: String(normalizedRequest.Placa || ''),
+      Chasis: String(normalizedRequest.Vin || ''),
+      Motor: String(normalizedRequest.Motor || ''),
+      Color: String(normalizedRequest.Color || ''),
     },
-    // Campos adicionales del plan
-    IdCotizacion: '',
-    NroPoliza: '',
-    CodPlan: String(normalizedRequest.Plan),
-    SumaAsegurada: String(normalizedRequest.sumaAsegurada || 0),
-    CantidadPasajeros: normalizedRequest.Pasajero || 5,
-    Puerta: normalizedRequest.Puerta || 4,
-    Uso: normalizedRequest.Uso || '10',
-    esPEP: normalizedRequest.esPEP || 0,
+    IdCotizacion: String((request as any).IdCotizacion || ''),
+    NroPoliza: nroPoliza,
   };
   
-  console.log('[FEDPA Emisión Externo] Payload:', JSON.stringify(dataPayload).substring(0, 500));
+  console.log('[FEDPA Emisión Externo] Payload COMPLETO:', JSON.stringify(dataPayload, null, 2));
   
-  // Construir FormData multipart
+  // Construir FormData multipart (match working fallback route field names)
+  const dataJsonString = JSON.stringify(dataPayload);
   const formData = new FormData();
-  formData.append('data', JSON.stringify(dataPayload));
+  // Send data as a plain text Blob (no filename) to mimic RestSharp AddParameter
+  formData.append('data', new Blob([dataJsonString], { type: 'text/plain' }));
   
-  // Agregar documentos si están disponibles
+  // Agregar documentos con nombres File1, File2, File3 (según manual FEDPA)
   if (documentos) {
     const MIME_TO_EXT: Record<string, string> = {
       'application/pdf': 'pdf', 'image/jpeg': 'jpg', 'image/jpg': 'jpg',
@@ -202,22 +247,24 @@ export async function emitirPolizaFallback(
       'image/webp': 'webp', 'image/tiff': 'tiff',
     };
     
-    for (const file of (documentos.documento_identidad || [])) {
-      const ext = MIME_TO_EXT[file.type] || 'pdf';
-      formData.append('file', file, `documento_identidad.${ext}`);
+    const file1 = (documentos.documento_identidad || [])[0];
+    if (file1) {
+      const ext = MIME_TO_EXT[file1.type] || 'jpg';
+      formData.append('File1', file1, `documento_identidad.${ext}`);
     }
-    for (const file of (documentos.licencia_conducir || [])) {
-      const ext = MIME_TO_EXT[file.type] || 'pdf';
-      formData.append('file', file, `licencia_conducir.${ext}`);
+    const file2 = (documentos.licencia_conducir || [])[0];
+    if (file2) {
+      const ext = MIME_TO_EXT[file2.type] || 'jpg';
+      formData.append('File2', file2, `licencia_conducir.${ext}`);
     }
-    for (const file of (documentos.registro_vehicular || [])) {
-      const ext = MIME_TO_EXT[file.type] || 'pdf';
-      formData.append('file', file, `registro_vehicular.${ext}`);
+    const file3 = (documentos.registro_vehicular || [])[0];
+    if (file3) {
+      const ext = MIME_TO_EXT[file3.type] || 'pdf';
+      formData.append('File3', file3, `registro_vehicular.${ext}`);
     }
   }
   
   // POST multipart a Emisor Externo (no necesita Bearer token)
-  const baseUrl = config.emisorExternoUrl;
   const url = `${baseUrl}${EMISOR_EXTERNO_ENDPOINTS.CREAR_POLIZA}`;
   
   console.log('[FEDPA Emisión Externo] POST', url);
@@ -230,7 +277,7 @@ export async function emitirPolizaFallback(
     });
     
     const responseText = await response.text();
-    console.log('[FEDPA Emisión Externo] Status:', response.status, 'Body:', responseText.substring(0, 500));
+    console.log('[FEDPA Emisión Externo] Status:', response.status, 'Body COMPLETO:', responseText);
     
     let data: any;
     try {
@@ -243,17 +290,21 @@ export async function emitirPolizaFallback(
     }
     
     if (!response.ok) {
+      const errMsg = data.error || data.msg || data.message || JSON.stringify(data);
+      console.error('[FEDPA Emisión Externo] Error HTTP:', response.status, errMsg);
       return {
         success: false,
-        error: data.msg || data.message || `HTTP ${response.status}`,
+        error: `HTTP ${response.status}: ${errMsg}`,
       };
     }
     
     // Verificar respuesta exitosa
     if (data.success === false) {
+      const errMsg = data.error || data.msg || data.message || 'Error en emisión FEDPA';
+      console.error('[FEDPA Emisión Externo] Respuesta no exitosa:', errMsg);
       return {
         success: false,
-        error: data.msg || data.message || 'Error en emisión FEDPA',
+        error: errMsg,
       };
     }
     
@@ -420,8 +471,15 @@ export async function crearClienteYPolizaFEDPA(
     let clientId = existingClient?.id;
     
     if (!clientId) {
-      // Crear nuevo cliente
+      // Crear nuevo cliente (phone = celular preferido sobre teléfono fijo)
       const clientName = `${request.PrimerNombre} ${request.SegundoNombre || ''} ${request.PrimerApellido} ${request.SegundoApellido || ''}`.trim();
+      
+      // Convertir FechaNacimiento de dd/mm/yyyy a yyyy-mm-dd para BD
+      let birthDate: string | undefined;
+      if (request.FechaNacimiento) {
+        const [dd, mm, yyyy] = request.FechaNacimiento.split('/');
+        if (dd && mm && yyyy) birthDate = `${yyyy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`;
+      }
       
       const { data: newClient, error: clientError } = await supabase
         .from('clients')
@@ -430,8 +488,9 @@ export async function crearClienteYPolizaFEDPA(
           name: clientName,
           national_id: request.Identificacion,
           email: request.Email,
-          phone: String(request.Telefono || request.Celular),
+          phone: String(request.Celular || request.Telefono),
           active: true,
+          ...(birthDate ? { birth_date: birthDate } : {}),
         })
         .select('id')
         .single();
@@ -468,33 +527,11 @@ export async function crearClienteYPolizaFEDPA(
         status: 'ACTIVA',
         start_date,
         renewal_date,
-        notas: JSON.stringify({
-          plan: request.Plan,
-          id_doc: request.idDoc,
-          cotizacion: response.cotizacion,
-          uso: request.Uso,
-          vehiculo: {
-            marca: request.Marca,
-            modelo: request.Modelo,
-            ano: request.Ano,
-            placa: request.Placa,
-            vin: request.Vin,
-            motor: request.Motor,
-            color: request.Color,
-            pasajeros: request.Pasajero,
-            puertas: request.Puerta,
-          },
-          cliente: {
-            primerNombre: request.PrimerNombre,
-            segundoNombre: request.SegundoNombre,
-            primerApellido: request.PrimerApellido,
-            segundoApellido: request.SegundoApellido,
-            sexo: request.Sexo,
-            fechaNacimiento: request.FechaNacimiento,
-            direccion: request.Direccion,
-            esPEP: request.esPEP,
-          },
-        }),
+        notas: [
+          request.Marca && request.Modelo ? `Vehículo: ${request.Marca} ${request.Modelo} ${request.Ano || ''}` : null,
+          request.Placa ? `Placa: ${request.Placa}` : null,
+          `Cobertura: ${request.PrimaTotal && request.PrimaTotal > 150 ? 'Cobertura Completa' : 'Daños a Terceros'}`,
+        ].filter(Boolean).join('\n'),
       })
       .select('id')
       .single();

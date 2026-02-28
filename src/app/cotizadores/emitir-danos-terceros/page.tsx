@@ -9,7 +9,7 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { FaCheckCircle, FaUser, FaCar, FaCreditCard, FaClipboardCheck, FaTimes } from 'react-icons/fa';
@@ -22,6 +22,8 @@ import EmissionBreadcrumb, { type EmissionStep, type BreadcrumbStepDef } from '@
 import SignaturePad from '@/components/cotizadores/SignaturePad';
 import Image from 'next/image';
 import { buscarOcupacion } from '@/lib/fedpa/catalogos-complementarios';
+import { trackQuoteEmitted, trackQuoteFailed, trackStepUpdate } from '@/lib/adm-cot/track-quote';
+import { formatISPolicyNumber } from '@/lib/utils/policy-number';
 
 // 4 steps for DT (no inspection, no cuotas — payment modal handles contado vs cuotas)
 const DT_STEPS: BreadcrumbStepDef[] = [
@@ -55,8 +57,21 @@ export default function EmitirDanosTercerosPage() {
   const [declarationAccepted, setDeclarationAccepted] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
   const [signatureDataUrl, setSignatureDataUrl] = useState<string>('');
+  const signatureRef = useRef<string>('');
   const [showSignaturePad, setShowSignaturePad] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
+
+  // ═══ ADM COT: Helper to get quote ref for step tracking ═══
+  const getTrackingInfo = () => {
+    const isFedpa = selectedPlan?._isFEDPA || selectedPlan?.insurerName?.includes('FEDPA');
+    const prefix = isFedpa ? 'FEDPA' : 'IS';
+    const insurer = isFedpa ? 'FEDPA' : 'INTERNACIONAL';
+    const tpQuoteRaw = typeof window !== 'undefined' ? sessionStorage.getItem('thirdPartyQuote') : null;
+    const tpQuote = tpQuoteRaw ? JSON.parse(tpQuoteRaw) : null;
+    const refId = selectedPlan?._idCotizacion || tpQuote?.idCotizacion || 'DT';
+    const planSuffix = selectedPlan?.planType?.includes('Premium') || selectedPlan?.planType?.includes('VIP') ? 'P' : 'B';
+    return { quoteRef: `${prefix}-${refId}-DT-${planSuffix}`, insurer };
+  };
 
   // Load initial data
   useEffect(() => {
@@ -85,6 +100,25 @@ export default function EmitirDanosTercerosPage() {
       setLoading(false);
     }
   }, [router]);
+
+  // ═══ ADM COT: Detect abandonment — if user entered data and leaves page ═══
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (emissionData && !isConfirming) {
+        // User entered client data but is leaving without completing emission
+        const t = getTrackingInfo();
+        trackQuoteFailed({
+          quoteRef: t.quoteRef,
+          insurer: t.insurer,
+          errorMessage: 'Proceso abandonado por el usuario',
+          lastStep: step,
+        });
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [emissionData, isConfirming, step]);
 
   const selectedPaymentMode: 'contado' | 'cuotas' = paymentMode;
   const installmentCount = selectedPlan?._installmentsCount || selectedPlan?.installments?.payments || 1;
@@ -126,6 +160,9 @@ export default function EmitirDanosTercerosPage() {
   const handleEmissionDataComplete = (data: EmissionData) => {
     setEmissionData(data);
     setCompletedSteps(prev => [...prev.filter(s => s !== 'emission-data'), 'emission-data']);
+    // ═══ ADM COT: Track step ═══
+    const t = getTrackingInfo();
+    trackStepUpdate({ ...t, step: 'emission-data' });
     goToStep('vehicle');
     toast.success('Datos guardados correctamente');
   };
@@ -133,6 +170,9 @@ export default function EmitirDanosTercerosPage() {
   const handleVehicleDataComplete = (data: VehicleData) => {
     setVehicleData(data);
     setCompletedSteps(prev => [...prev.filter(s => s !== 'vehicle'), 'vehicle']);
+    // ═══ ADM COT: Track step ═══
+    const t = getTrackingInfo();
+    trackStepUpdate({ ...t, step: 'vehicle' });
     goToStep('payment-info');
     toast.success('Datos del vehículo guardados');
   };
@@ -141,6 +181,9 @@ export default function EmitirDanosTercerosPage() {
     setPaymentToken(token);
     setCardData({ last4, brand });
     setCompletedSteps(prev => [...prev.filter(s => s !== 'payment-info'), 'payment-info']);
+    // ═══ ADM COT: Track step ═══
+    const t = getTrackingInfo();
+    trackStepUpdate({ ...t, step: 'payment-info' });
     toast.success('Tarjeta registrada. Presiona "Continuar al Resumen" para seguir.');
   };
 
@@ -268,6 +311,17 @@ export default function EmitirDanosTercerosPage() {
         emisionResult = emisionResponseData;
 
         console.log(`[EMISIÓN DT FEDPA] Póliza emitida (${usedMethod}):`, emisionResult.nroPoliza || emisionResult.poliza);
+
+        // ═══ ADM COT: Track successful FEDPA DT emission ═══
+        const tFedpa = getTrackingInfo();
+        trackQuoteEmitted({
+          quoteRef: tFedpa.quoteRef,
+          insurer: 'FEDPA',
+          policyNumber: emisionResult.nroPoliza || emisionResult.poliza,
+          cedula: emissionData.cedula,
+          email: emissionData.email,
+          phone: emissionData.telefono || emissionData.celular,
+        });
         
         // ═══ ENVIAR BIENVENIDA AL CLIENTE POR CORREO ═══
         toast.info('Enviando confirmación por correo...');
@@ -335,8 +389,11 @@ export default function EmitirDanosTercerosPage() {
           if (emissionData.licenciaFile) {
             welcomeForm.append('licenciaFile', emissionData.licenciaFile);
           }
-          if (signatureDataUrl) {
-            welcomeForm.append('firmaDataUrl', signatureDataUrl);
+          if (vehicleData?.registroVehicular) {
+            welcomeForm.append('registroVehicularFile', vehicleData.registroVehicular);
+          }
+          if (signatureRef.current) {
+            welcomeForm.append('firmaDataUrl', signatureRef.current);
           }
           
           const welcomeResponse = await fetch('/api/is/auto/send-expediente', {
@@ -404,11 +461,11 @@ export default function EmitirDanosTercerosPage() {
             vcodurbanizacion: emissionData.codUrbanizacion || 0,
             vcasaapto: emissionData.casaApto || '',
             // Vehículo
-            vcodmarca: selectedPlan._vcodmarca,
-            vmarca_label: quoteData?.marca,
-            vcodmodelo: selectedPlan._vcodmodelo,
-            vmodelo_label: quoteData?.modelo,
-            vanioauto: quoteData?.anio || quoteData?.anno || new Date().getFullYear(),
+            vcodmarca: vehicleData?.marcaCodigo || selectedPlan._vcodmarca,
+            vmarca_label: vehicleData?.marca || quoteData?.marca,
+            vcodmodelo: vehicleData?.modeloCodigo || selectedPlan._vcodmodelo,
+            vmodelo_label: vehicleData?.modelo || quoteData?.modelo,
+            vanioauto: vehicleData?.anio || quoteData?.anio || quoteData?.anno || new Date().getFullYear(),
             vsumaaseg: 0, // DT no tiene suma asegurada
             vcodplancobertura: selectedPlan._vcodplancobertura,
             vcodgrupotarifa: selectedPlan._vcodgrupotarifa,
@@ -454,7 +511,20 @@ export default function EmitirDanosTercerosPage() {
           throw new Error(errMsg);
         }
 
+        // ═══ Prefix IS policy number with 1-30- ═══
+        emisionResult.nroPoliza = formatISPolicyNumber(emisionResult.nroPoliza);
         console.log('[EMISIÓN DT INTERNACIONAL] Póliza emitida:', emisionResult.nroPoliza);
+
+        // ═══ ADM COT: Track successful IS DT emission ═══
+        const tIs = getTrackingInfo();
+        trackQuoteEmitted({
+          quoteRef: tIs.quoteRef,
+          insurer: 'INTERNACIONAL',
+          policyNumber: emisionResult.nroPoliza,
+          cedula: emissionData.cedula,
+          email: emissionData.email,
+          phone: emissionData.telefono || emissionData.celular,
+        });
 
         // ═══ ENVIAR EXPEDIENTE Y BIENVENIDA POR CORREO ═══
         toast.info('Enviando expediente por correo...');
@@ -465,7 +535,7 @@ export default function EmitirDanosTercerosPage() {
           expedienteForm.append('nroPoliza', emisionResult.nroPoliza || '');
           expedienteForm.append('pdfUrl', emisionResult.pdfUrl || '');
           expedienteForm.append('insurerName', 'Internacional de Seguros');
-          expedienteForm.append('firmaDataUrl', signatureDataUrl || '');
+          expedienteForm.append('firmaDataUrl', signatureRef.current || '');
           if (emisionResult.clientId) expedienteForm.append('clientId', emisionResult.clientId);
           if (emisionResult.policyId) expedienteForm.append('policyId', emisionResult.policyId);
           
@@ -608,6 +678,14 @@ export default function EmitirDanosTercerosPage() {
     } catch (error: any) {
       console.error('Error emitiendo:', error);
       toast.error(error.message || 'Error al emitir la póliza');
+      // ═══ ADM COT: Track DT emission failure ═══
+      const tFail = getTrackingInfo();
+      trackQuoteFailed({
+        quoteRef: tFail.quoteRef,
+        insurer: tFail.insurer,
+        errorMessage: error.message,
+        lastStep: step,
+      });
       setIsConfirming(false);
     }
   };
@@ -789,6 +867,7 @@ export default function EmitirDanosTercerosPage() {
     };
 
     const handleSignatureComplete = (dataUrl: string) => {
+      signatureRef.current = dataUrl;
       setSignatureDataUrl(dataUrl);
       setShowSignaturePad(false);
       toast.success('Firma capturada correctamente');
@@ -912,8 +991,16 @@ export default function EmitirDanosTercerosPage() {
                   <h6 className="font-bold text-[#010139] mb-3 text-sm uppercase tracking-wide">Datos del Vehículo</h6>
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <div>
-                      <p className="text-gray-500">Vehículo</p>
-                      <p className="font-bold">{quoteData?.marca} {quoteData?.modelo} {quoteData?.anno || quoteData?.anio || quoteData?.ano}</p>
+                      <p className="text-gray-500">Marca</p>
+                      <p className="font-bold">{vehicleData.marca || quoteData?.marca}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500">Modelo</p>
+                      <p className="font-bold">{vehicleData.modelo || quoteData?.modelo}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500">Año</p>
+                      <p className="font-bold">{vehicleData.anio || quoteData?.anno || quoteData?.anio || quoteData?.ano}</p>
                     </div>
                     <div>
                       <p className="text-gray-500">Placa</p>
@@ -922,6 +1009,10 @@ export default function EmitirDanosTercerosPage() {
                     <div>
                       <p className="text-gray-500">VIN/Chasis</p>
                       <p className="font-bold">{vehicleData.vinChasis}</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500">Motor</p>
+                      <p className="font-bold">{vehicleData.motor}</p>
                     </div>
                     <div>
                       <p className="text-gray-500">Color</p>

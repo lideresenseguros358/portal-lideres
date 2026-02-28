@@ -398,17 +398,6 @@ export async function POST(request: NextRequest) {
         html: welcomeHtml,
       });
       console.log('[IS EXPEDIENTE] ✅ Bienvenida enviada a:', welcomeRecipient, welcomeResult.messageId);
-      
-      // Siempre enviar copia a oficina para registro
-      if (welcomeRecipient !== OFFICE_EMAIL) {
-        await transport.sendMail({
-          from: fromAddress,
-          to: OFFICE_EMAIL,
-          subject: `Confirmación de Emisión - ${nombreCompleto} - ${clientData.cedula}${nroPoliza ? ` - Póliza ${nroPoliza}` : ''}`,
-          html: welcomeHtml,
-        });
-        console.log('[IS EXPEDIENTE] ✅ Copia de bienvenida enviada a oficina');
-      }
     } catch (welcomeError: any) {
       console.error('[IS EXPEDIENTE] Error enviando bienvenida:', welcomeError.message);
     }
@@ -418,6 +407,35 @@ export async function POST(request: NextRequest) {
     let expedienteErrors: string[] = [];
     if (clientId && policyId) {
       try {
+        // Download policy PDF from pdfUrl if available
+        let polizaPdfBuffer: Buffer | null = null;
+        const pdfUrl = (formData.get('pdfUrl') as string) || '';
+        if (pdfUrl) {
+          try {
+            console.log('[IS EXPEDIENTE] Descargando carátula de póliza desde:', pdfUrl.substring(0, 80) + '...');
+            const pdfResponse = await fetch(pdfUrl, { signal: AbortSignal.timeout(15000) });
+            if (pdfResponse.ok) {
+              const pdfArrayBuffer = await pdfResponse.arrayBuffer();
+              polizaPdfBuffer = Buffer.from(pdfArrayBuffer);
+              console.log('[IS EXPEDIENTE] Carátula descargada:', polizaPdfBuffer.length, 'bytes');
+            } else {
+              console.warn('[IS EXPEDIENTE] Error descargando carátula:', pdfResponse.status, pdfResponse.statusText);
+            }
+          } catch (pdfDownErr: any) {
+            console.warn('[IS EXPEDIENTE] No se pudo descargar carátula:', pdfDownErr.message);
+          }
+        }
+
+        console.log('[IS EXPEDIENTE] Docs disponibles para expediente:', {
+          cedula: !!(cedulaBuffer && cedulaFile),
+          licencia: !!(licenciaBuffer && licenciaFile),
+          registroVehicular: !!(registroBuffer && registroVehicularFile),
+          cartaAutorizacion: !!authPdfBuffer,
+          polizaPdf: !!polizaPdfBuffer,
+        });
+
+        const polizaPdfFilename = `caratula_poliza_${clientData.cedula}${nroPoliza ? `_${nroPoliza}` : ''}.pdf`;
+
         const expedienteResult = await guardarDocumentosExpediente({
           clientId,
           policyId,
@@ -425,6 +443,7 @@ export async function POST(request: NextRequest) {
           licencia: licenciaBuffer && licenciaFile ? { buffer: licenciaBuffer, fileName: licenciaFile.name, mimeType: licenciaFile.type } : undefined,
           registroVehicular: registroBuffer && registroVehicularFile ? { buffer: registroBuffer, fileName: registroVehicularFile.name, mimeType: registroVehicularFile.type } : undefined,
           cartaAutorizacion: authPdfBuffer ? { buffer: authPdfBuffer, fileName: authPdfFilename, mimeType: 'application/pdf' } : undefined,
+          polizaPdf: polizaPdfBuffer ? { buffer: polizaPdfBuffer, fileName: polizaPdfFilename, mimeType: 'application/pdf' } : undefined,
           nroPoliza,
         });
         expedienteSaved = expedienteResult.saved;

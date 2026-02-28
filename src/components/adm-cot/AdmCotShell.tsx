@@ -5,17 +5,15 @@ import { usePathname } from 'next/navigation';
 import {
   FaTachometerAlt,
   FaListAlt,
-  FaFolderOpen,
   FaMoneyBillWave,
   FaComments,
 } from 'react-icons/fa';
 
 const NAV_ITEMS = [
-  { label: 'Dashboard', href: '/adm-cot', icon: <FaTachometerAlt /> },
-  { label: 'Cotizaciones', href: '/adm-cot/cotizaciones', icon: <FaListAlt /> },
-  { label: 'Expedientes', href: '/adm-cot/expedientes', icon: <FaFolderOpen /> },
-  { label: 'Pagos', href: '/adm-cot/pagos', icon: <FaMoneyBillWave /> },
-  { label: 'Chats', href: '/adm-cot/chats', icon: <FaComments /> },
+  { label: 'Dashboard', shortLabel: 'Dashboard', href: '/adm-cot', icon: FaTachometerAlt },
+  { label: 'Cotizaciones', shortLabel: 'Cotiz.', href: '/adm-cot/cotizaciones', icon: FaListAlt },
+  { label: 'Pagos', shortLabel: 'Pagos', href: '/adm-cot/pagos', icon: FaMoneyBillWave },
+  { label: 'Chats', shortLabel: 'Chats', href: '/adm-cot/chats', icon: FaComments },
 ];
 
 interface Props {
@@ -28,15 +26,19 @@ export default function AdmCotShell({ children }: Props) {
   const isDev = env !== 'production';
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-[#010139]">ADM COT</h1>
-          <p className="text-sm text-gray-500">Módulo administrativo de cotizadores</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-[#010139] flex items-center gap-3 flex-wrap">
+            📊 ADM COT
+          </h1>
+          <p className="text-sm sm:text-base text-gray-600">
+            Módulo administrativo de cotizadores
+          </p>
         </div>
         <span
-          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold tracking-wide ${
+          className={`self-start sm:self-auto inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold tracking-wide ${
             isDev
               ? 'bg-amber-100 text-amber-800 border border-amber-300'
               : 'bg-green-100 text-green-800 border border-green-300'
@@ -47,9 +49,10 @@ export default function AdmCotShell({ children }: Props) {
         </span>
       </div>
 
-      {/* Internal Navigation Tabs */}
-      <nav className="flex gap-1 overflow-x-auto pb-1 border-b border-gray-200">
+      {/* Tab Navigation — Comisiones style blue card */}
+      <div className="bg-white rounded-2xl shadow-lg p-1.5 sm:p-2 flex gap-1.5 sm:gap-2 overflow-x-auto">
         {NAV_ITEMS.map((item) => {
+          const Icon = item.icon;
           const isActive =
             item.href === '/adm-cot'
               ? pathname === '/adm-cot'
@@ -59,18 +62,20 @@ export default function AdmCotShell({ children }: Props) {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-t-lg whitespace-nowrap transition-colors ${
+              className={`flex-1 min-w-[80px] sm:min-w-[140px] flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2 sm:py-3 rounded-xl font-semibold transition-all whitespace-nowrap text-xs sm:text-sm ${
                 isActive
-                  ? 'bg-white text-[#010139] border border-b-0 border-gray-200 shadow-sm -mb-px'
-                  : 'text-gray-500 hover:text-[#010139] hover:bg-gray-50'
+                  ? 'bg-gradient-to-r from-[#010139] to-[#020270] text-white shadow-lg'
+                  : 'text-gray-600 hover:bg-gray-100'
               }`}
             >
-              <span className="text-base">{item.icon}</span>
-              {item.label}
+              <Icon size={14} className="sm:hidden flex-shrink-0" />
+              <Icon size={16} className="hidden sm:block flex-shrink-0" />
+              <span className="hidden sm:inline">{item.label}</span>
+              <span className="sm:hidden">{item.shortLabel}</span>
             </Link>
           );
         })}
-      </nav>
+      </div>
 
       {/* Page Content */}
       <div>{children}</div>

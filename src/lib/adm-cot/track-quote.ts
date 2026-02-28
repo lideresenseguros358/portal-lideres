@@ -3,6 +3,7 @@
  * 
  * Fire-and-forget calls to /api/adm-cot/track
  * These never block the UI or throw errors to the user.
+ * Includes retry + sendBeacon fallback to minimize lost events.
  */
 
 function detectDevice(): string {
@@ -16,21 +17,41 @@ function detectDevice(): string {
   return 'other';
 }
 
-function detectRegion(): string | null {
-  // Region is determined server-side from IP; placeholder for now
-  return null;
-}
+const MAX_RETRIES = 2;
+const RETRY_DELAY_MS = 1500;
 
 async function trackCall(action: string, data: Record<string, any>) {
-  try {
-    await fetch('/api/adm-cot/track', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action, data }),
-    });
-  } catch (err) {
-    // Silent fail — tracking should never break the main flow
-    console.warn('[ADM-COT] Track call failed:', err);
+  const payload = JSON.stringify({ action, data });
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const res = await fetch('/api/adm-cot/track', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: payload,
+        keepalive: true, // survives page navigation
+      });
+      if (res.ok) return; // success
+      // 401/403 — session issue, retry won't help
+      if (res.status === 401 || res.status === 403) {
+        console.warn(`[ADM-COT] Track ${action} auth error (${res.status}), using sendBeacon`);
+        break;
+      }
+      // 5xx or other — retry
+      console.warn(`[ADM-COT] Track ${action} attempt ${attempt + 1} failed (${res.status})`);
+    } catch (err) {
+      console.warn(`[ADM-COT] Track ${action} attempt ${attempt + 1} network error:`, err);
+    }
+    if (attempt < MAX_RETRIES) {
+      await new Promise(r => setTimeout(r, RETRY_DELAY_MS * (attempt + 1)));
+    }
+  }
+
+  // Final fallback: sendBeacon (works even during page unload)
+  if (typeof navigator !== 'undefined' && navigator.sendBeacon) {
+    try {
+      navigator.sendBeacon('/api/adm-cot/track', new Blob([payload], { type: 'application/json' }));
+    } catch { /* silent */ }
   }
 }
 
@@ -58,7 +79,7 @@ export function trackQuoteCreated(params: {
     email: params.email || null,
     phone: params.phone || null,
     device: detectDevice(),
-    region: detectRegion(),
+    region: null, // resolved server-side from IP
     insurer: params.insurer,
     ramo: params.ramo || 'AUTO',
     coverage_type: params.coverageType || null,
@@ -73,16 +94,24 @@ export function trackQuoteCreated(params: {
 
 /**
  * Track when emission succeeds
+ * Passes cedula/email/phone so the DB record gets updated with data
+ * entered during emission (which may not have been available at quote time)
  */
 export function trackQuoteEmitted(params: {
   quoteRef: string;
   insurer: string;
   policyNumber?: string;
+  cedula?: string;
+  email?: string;
+  phone?: string;
 }) {
   trackCall('quote_emitted', {
     quote_ref: params.quoteRef,
     insurer: params.insurer,
     policy_number: params.policyNumber || null,
+    cedula: params.cedula || null,
+    email: params.email || null,
+    phone: params.phone || null,
   });
 }
 

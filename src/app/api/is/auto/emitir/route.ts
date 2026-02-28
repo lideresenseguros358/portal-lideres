@@ -11,6 +11,7 @@ import { emitirPolizaAuto, generarCotizacionAuto, crearClienteYPolizaIS } from '
 import { ISEnvironment } from '@/lib/is/config';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { findAcreedor } from '@/lib/constants/acreedores';
+import { formatISPolicyNumber } from '@/lib/utils/policy-number';
 
 export const maxDuration = 120; // Vercel: permitir hasta 2 min (regenerar + emitir)
 
@@ -236,6 +237,9 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
     }
+
+    // ═══ Prefix IS policy number with full code 1-30-{nro} ═══
+    result.nroPoliza = formatISPolicyNumber(result.nroPoliza);
     
     // Crear cliente y póliza en BD
     const clientePolicyResult = await crearClienteYPolizaIS({
@@ -246,11 +250,14 @@ export async function POST(request: NextRequest) {
       cliente_apellido: `${vapellido1} ${vapellido2 || ''}`.trim(),
       cliente_documento: vnrodoc,
       cliente_telefono: vtelefono,
+      cliente_celular: vcelular || vtelefono,
       cliente_correo: vcorreo,
+      cliente_fecha_nacimiento: vfecnacimiento || '',
       tipo_cobertura: tipo_cobertura || 'Daños a terceros',
       marca: vmarca_label,
       modelo: vmodelo_label,
       anio_auto: parseInt(vanioauto),
+      placa: vplaca || '',
     });
     
     if (!clientePolicyResult.success) {

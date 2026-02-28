@@ -17,6 +17,7 @@ import {
   FaSync,
   FaChevronDown,
   FaChevronUp,
+  FaFilter,
 } from 'react-icons/fa';
 
 // ════════════════════════════════════════════
@@ -95,6 +96,7 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
   const [insurer, setInsurer] = useState('');
   const [status, setStatus] = useState('');
   const [type, setType] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [showRefundModal, setShowRefundModal] = useState<string | null>(null);
@@ -138,63 +140,118 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
 
   const selectedPayments = payments.filter(p => selected.has(p.id));
   const selectedTotal = selectedPayments.reduce((s, p) => s + Number(p.amount), 0);
+  const hasActiveFilters = search || insurer || status || type;
 
   return (
     <div className="space-y-4">
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
         {[
           { label: 'Pendientes', count: summary.pending || 0, amt: summary.pendingAmt || 0, bg: 'bg-amber-50', border: 'border-amber-200', color: 'text-amber-600' },
           { label: 'Agrupados', count: summary.grouped || 0, amt: summary.groupedAmt || 0, bg: 'bg-blue-50', border: 'border-blue-200', color: 'text-blue-600' },
           { label: 'Pagados', count: summary.paid || 0, amt: summary.paidAmt || 0, bg: 'bg-green-50', border: 'border-green-200', color: 'text-green-600' },
           { label: 'Devoluciones', count: summary.refunds || 0, amt: summary.refundsAmt || 0, bg: 'bg-red-50', border: 'border-red-200', color: 'text-red-600' },
         ].map(c => (
-          <div key={c.label} className={`${c.bg} border ${c.border} rounded-xl p-3`}>
+          <div key={c.label} className={`${c.bg} border ${c.border} rounded-xl p-2.5 sm:p-3`}>
             <p className={`text-[10px] ${c.color} font-semibold uppercase`}>{c.label}</p>
-            <p className="text-xl font-bold text-[#010139]">{c.count}</p>
-            <p className="text-xs text-gray-500">{fmtMoney(c.amt)}</p>
+            <p className="text-lg sm:text-xl font-bold text-[#010139]">{c.count}</p>
+            <p className="text-[11px] sm:text-xs text-gray-500">{fmtMoney(c.amt)}</p>
           </div>
         ))}
       </div>
 
-      {/* Filters + Actions */}
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative flex-1 min-w-[200px]">
-          <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs" />
-          <input type="text" placeholder="Buscar cliente, póliza..." value={search}
-            onChange={e => setSearch(e.target.value)} onKeyDown={e => e.key === 'Enter' && fetchPayments()}
-            className="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-[#010139]/20" />
+      {/* Search + Filter toggle */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-3 space-y-2">
+        <div className="flex items-center gap-2">
+          <div className="relative flex-1 min-w-0">
+            <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs" />
+            <input type="text" placeholder="Buscar cliente, póliza..." value={search}
+              onChange={e => setSearch(e.target.value)} onKeyDown={e => e.key === 'Enter' && fetchPayments()}
+              className="w-full pl-8 pr-3 py-2 text-sm sm:text-xs border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-[#010139]/20" />
+          </div>
+          <button onClick={() => setShowFilters(!showFilters)}
+            className={`p-2 rounded-lg transition-colors cursor-pointer flex-shrink-0 ${showFilters ? 'bg-[#010139] text-white' : 'text-gray-500 hover:bg-gray-100'}`} title="Filtros">
+            <FaFilter className="text-sm" />
+          </button>
+          <button onClick={fetchPayments} disabled={loading}
+            className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors cursor-pointer flex-shrink-0" title="Refrescar">
+            <FaSync className={`text-sm ${loading ? 'animate-spin' : ''}`} />
+          </button>
+          {hasActiveFilters && (
+            <button onClick={() => { setSearch(''); setInsurer(''); setStatus(''); setType(''); }} className="p-2 text-gray-400 hover:text-red-500 cursor-pointer flex-shrink-0" title="Limpiar">
+              <FaTimes className="text-sm" />
+            </button>
+          )}
         </div>
-        <select value={insurer} onChange={e => setInsurer(e.target.value)} className="text-xs border border-gray-300 rounded-lg px-2 py-1.5">
-          <option value="">Aseguradora</option><option value="INTERNACIONAL">Internacional</option><option value="FEDPA">FEDPA</option>
-        </select>
-        <select value={status} onChange={e => setStatus(e.target.value)} className="text-xs border border-gray-300 rounded-lg px-2 py-1.5">
-          <option value="">Estado</option><option value="PENDIENTE">Pendiente</option><option value="AGRUPADO">Agrupado</option><option value="PAGADO">Pagado</option>
-        </select>
-        <select value={type} onChange={e => setType(e.target.value)} className="text-xs border border-gray-300 rounded-lg px-2 py-1.5">
-          <option value="">Tipo</option><option value="PAY">Pago Aseg.</option><option value="REFUND">Devolución</option>
-        </select>
-        <button onClick={() => { setSearch(''); setInsurer(''); setStatus(''); setType(''); }} className="text-xs text-gray-400 hover:text-red-500 cursor-pointer"><FaTimes /></button>
-        <button onClick={fetchPayments} className="px-3 py-1.5 bg-[#010139] text-white text-xs font-medium rounded-lg flex items-center gap-1 cursor-pointer">
-          <FaSync className={`text-white ${loading ? 'animate-spin' : ''}`} /> <span className="text-white">Buscar</span>
-        </button>
+        {showFilters && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-2 border-t border-gray-100">
+            <select value={insurer} onChange={e => setInsurer(e.target.value)} className="w-full text-sm sm:text-xs border border-gray-300 rounded-lg px-2 py-2 sm:py-1.5">
+              <option value="">Aseguradora</option><option value="INTERNACIONAL">Internacional</option><option value="FEDPA">FEDPA</option>
+            </select>
+            <select value={status} onChange={e => setStatus(e.target.value)} className="w-full text-sm sm:text-xs border border-gray-300 rounded-lg px-2 py-2 sm:py-1.5">
+              <option value="">Estado</option><option value="PENDIENTE">Pendiente</option><option value="AGRUPADO">Agrupado</option><option value="PAGADO">Pagado</option>
+            </select>
+            <select value={type} onChange={e => setType(e.target.value)} className="w-full text-sm sm:text-xs border border-gray-300 rounded-lg px-2 py-2 sm:py-1.5">
+              <option value="">Tipo</option><option value="PAY">Pago Aseg.</option><option value="REFUND">Devolución</option>
+            </select>
+          </div>
+        )}
       </div>
 
       {/* Selection bar */}
       {selected.size > 0 && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex items-center justify-between">
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
           <span className="text-xs text-blue-800 font-medium">{selected.size} seleccionados — Total: {fmtMoney(selectedTotal)}</span>
-          <div className="flex gap-2">
-            <button onClick={() => setShowGroupModal(true)}
-              className="px-3 py-1.5 bg-[#010139] text-white text-xs font-medium rounded-lg flex items-center gap-1 cursor-pointer">
-              <FaLayerGroup className="text-white" /> <span className="text-white">Agrupar y Pagar</span>
-            </button>
-          </div>
+          <button onClick={() => setShowGroupModal(true)}
+            className="px-3 py-1.5 bg-[#010139] text-white text-xs font-medium rounded-lg flex items-center gap-1 cursor-pointer">
+            <FaLayerGroup className="text-white" /> <span className="text-white">Agrupar y Pagar</span>
+          </button>
         </div>
       )}
 
-      {/* Table */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      {/* ── Mobile Card List ── */}
+      <div className="md:hidden space-y-2">
+        {payments.length === 0 ? (
+          <div className="py-12 text-center">
+            <FaMoneyBillWave className="text-3xl text-gray-300 mx-auto mb-3" />
+            <p className="text-sm text-gray-500 font-medium">No hay pagos registrados</p>
+            <p className="text-xs text-gray-400 mt-1">Se crean automáticamente al confirmar emisión</p>
+          </div>
+        ) : payments.map(p => (
+          <div key={p.id} className={`bg-white rounded-xl border border-gray-200 shadow-sm p-3 ${p.is_refund ? 'border-l-4 border-l-red-300' : ''}`}>
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                {p.status === 'PENDIENTE' && (
+                  <input type="checkbox" checked={selected.has(p.id)} onChange={() => toggleSelect(p.id)} className="cursor-pointer flex-shrink-0 mt-0.5" />
+                )}
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-[#010139] truncate">{p.client_name}</p>
+                  <p className="text-[11px] text-gray-500">{p.insurer} · {p.nro_poliza || '—'}</p>
+                </div>
+              </div>
+              <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                <p className="text-sm font-bold text-[#8AAA19]">{fmtMoney(p.amount)}</p>
+                <StatusBadge status={p.status} />
+              </div>
+            </div>
+            <div className="flex items-center justify-between mt-2 text-[11px] text-gray-500">
+              <div className="flex items-center gap-2">
+                <span>{fmtDate(p.payment_date)}</span>
+                {p.is_refund
+                  ? <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-bold">DEV</span>
+                  : <span className="text-[10px] bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded font-bold">ASEG</span>}
+                {p.installment_num && <span>Cuota {p.installment_num}</span>}
+              </div>
+              {p.status === 'PENDIENTE' && !p.is_refund && (
+                <button onClick={() => setShowRefundModal(p.id)} className="p-1.5 text-red-400 hover:text-red-600 cursor-pointer" title="Marcar devolución"><FaUndoAlt /></button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Desktop Table ── */}
+      <div className="hidden md:block bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead>
@@ -237,7 +294,7 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
                   <td className="py-2 px-2 text-[11px] text-gray-500">{p.installment_num || '—'}</td>
                   <td className="py-2 px-2">
                     {p.status === 'PENDIENTE' && !p.is_refund && (
-                      <button onClick={() => setShowRefundModal(p.id)} className="text-[10px] text-red-500 hover:text-red-700 cursor-pointer" title="Marcar devolución"><FaUndoAlt /></button>
+                      <button onClick={() => setShowRefundModal(p.id)} className="p-1 text-red-400 hover:text-red-600 cursor-pointer" title="Marcar devolución"><FaUndoAlt /></button>
                     )}
                   </td>
                 </tr>
@@ -250,8 +307,11 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
       {/* Refund Modal */}
       {showRefundModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 space-y-4">
-            <h3 className="text-sm font-bold text-[#010139]">Marcar como Devolución</h3>
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-5 sm:p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-[#010139]">Marcar como Devolución</h3>
+              <button onClick={() => setShowRefundModal(null)} className="text-gray-400 hover:text-gray-600 cursor-pointer"><FaTimes /></button>
+            </div>
             <div className="space-y-3">
               <div><label className="text-xs text-gray-500">Banco *</label>
                 <input type="text" value={refundForm.bank} onChange={e => setRefundForm(p => ({ ...p, bank: e.target.value }))}
@@ -462,14 +522,65 @@ function HistorialBancoTab() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-gray-500">Transferencias bancarias importadas. Disponibles para asignar a grupos.</p>
-        <button onClick={() => setShowImport(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-[#010139] text-white text-xs font-medium rounded-lg cursor-pointer">
-          <FaPlus className="text-white" /> <span className="text-white">Importar Transferencia</span></button>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[11px] sm:text-xs text-gray-500 min-w-0">Transferencias bancarias disponibles para asignar a grupos.</p>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button onClick={fetch_} disabled={loading}
+            className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors cursor-pointer" title="Refrescar">
+            <FaSync className={`text-sm ${loading ? 'animate-spin' : ''}`} />
+          </button>
+          <button onClick={() => setShowImport(true)}
+            className="p-2 rounded-lg bg-[#010139] text-white hover:bg-[#020270] transition-colors cursor-pointer" title="Importar transferencia">
+            <FaPlus className="text-sm text-white" />
+          </button>
+        </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      {/* ── Mobile Card List ── */}
+      <div className="md:hidden space-y-2">
+        {transfers.length === 0 ? (
+          <div className="py-12 text-center">
+            <FaHistory className="text-3xl text-gray-300 mx-auto mb-3" />
+            <p className="text-sm text-gray-500 font-medium">Sin transferencias</p>
+          </div>
+        ) : transfers.map(t => (
+          <div key={t.id} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <button onClick={() => setExpanded(expanded === t.id ? null : t.id)}
+              className="w-full p-3 text-left cursor-pointer">
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-mono font-bold text-[#010139]">{t.reference_number}</p>
+                  <p className="text-[11px] text-gray-500">{t.bank_name} · {fmtDate(t.transfer_date)}</p>
+                </div>
+                <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                  <p className="text-sm font-bold text-[#8AAA19]">{fmtMoney(t.remaining_amount)}</p>
+                  <StatusBadge status={t.status} />
+                </div>
+              </div>
+              <div className="flex items-center justify-between mt-1.5">
+                <p className="text-[11px] text-gray-400">Total: {fmtMoney(t.transfer_amount)}</p>
+                {expanded === t.id ? <FaChevronUp className="text-[10px] text-gray-400" /> : <FaChevronDown className="text-[10px] text-gray-400" />}
+              </div>
+            </button>
+            {expanded === t.id && (
+              <div className="px-3 pb-3 text-xs border-t border-gray-100 pt-2">
+                {t.usages && t.usages.length > 0 ? (
+                  <div className="space-y-1">
+                    <p className="font-semibold text-gray-600">Usos:</p>
+                    {t.usages.map((u: any, i: number) => (
+                      <p key={i} className="text-gray-500">Grupo {u.group_id?.slice(0, 8)}... — {fmtMoney(u.amount_used)}</p>
+                    ))}
+                  </div>
+                ) : <p className="text-gray-400 italic">Sin usos aún</p>}
+                {t.notes && <p className="mt-1 text-gray-500">Notas: {t.notes}</p>}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {/* ── Desktop Table ── */}
+      <div className="hidden md:block bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead>
@@ -522,8 +633,11 @@ function HistorialBancoTab() {
       {/* Import Modal */}
       {showImport && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6 space-y-4">
-            <h3 className="text-sm font-bold text-[#010139]">Importar Transferencia Bancaria</h3>
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-5 sm:p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-[#010139]">Importar Transferencia Bancaria</h3>
+              <button onClick={() => setShowImport(false)} className="text-gray-400 hover:text-gray-600 cursor-pointer"><FaTimes /></button>
+            </div>
             <div className="space-y-3">
               <div><label className="text-xs text-gray-500">Banco *</label>
                 <input type="text" value={importForm.bank_name} onChange={e => setImportForm(p => ({ ...p, bank_name: e.target.value }))}
@@ -592,11 +706,54 @@ function RecurrenciaTab() {
 
   return (
     <div className="space-y-4">
-      <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-800">
-        <strong>Reglas:</strong> No supera 1 año. Frecuencia según cuotas. Editar siguiente fecha (solo esta / todas futuras). Cancelar = desactiva futuras.
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[11px] sm:text-xs text-gray-500">Se crean al emitir con cuotas. Frecuencia según plan.</p>
+        <button onClick={fetch_} disabled={loading}
+          className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors cursor-pointer flex-shrink-0" title="Refrescar">
+          <FaSync className={`text-sm ${loading ? 'animate-spin' : ''}`} />
+        </button>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+      {/* ── Mobile Card List ── */}
+      <div className="md:hidden space-y-2">
+        {recurrences.length === 0 ? (
+          <div className="py-12 text-center">
+            <FaRecurrence className="text-3xl text-gray-300 mx-auto mb-3" />
+            <p className="text-sm text-gray-500 font-medium">No hay recurrencias</p>
+            <p className="text-xs text-gray-400 mt-1">Se crean al emitir con cuotas</p>
+          </div>
+        ) : recurrences.map(r => (
+          <div key={r.id} className="bg-white rounded-xl border border-gray-200 shadow-sm p-3">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-[#010139] truncate">{r.client_name}</p>
+                <p className="text-[11px] text-gray-500">{r.insurer} · {r.nro_poliza || '—'}</p>
+              </div>
+              <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                <p className="text-sm font-bold text-[#8AAA19]">{fmtMoney(r.installment_amount)}</p>
+                <StatusBadge status={r.status} />
+              </div>
+            </div>
+            <div className="flex items-center justify-between mt-2">
+              <div className="flex items-center gap-2 text-[11px] text-gray-500">
+                <span>{r.total_installments} cuotas · {r.frequency}</span>
+                <span>Próx: {fmtDate(r.next_due_date)}</span>
+              </div>
+              {r.status === 'ACTIVA' && (
+                <div className="flex gap-1">
+                  <button onClick={() => { setEditModal({ id: r.id, currentDate: r.next_due_date || '' }); setNewDate(r.next_due_date || ''); }}
+                    className="p-1.5 text-gray-400 hover:text-[#010139] cursor-pointer" title="Editar fecha"><FaEdit /></button>
+                  <button onClick={() => setCancelModal(r.id)}
+                    className="p-1.5 text-gray-400 hover:text-red-600 cursor-pointer" title="Cancelar"><FaBan /></button>
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Desktop Table ── */}
+      <div className="hidden md:block bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead>
@@ -649,8 +806,11 @@ function RecurrenciaTab() {
       {/* Edit Modal */}
       {editModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full p-6 space-y-4">
-            <h3 className="text-sm font-bold text-[#010139]">Editar Próxima Fecha</h3>
+          <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full p-5 sm:p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-[#010139]">Editar Próxima Fecha</h3>
+              <button onClick={() => setEditModal(null)} className="text-gray-400 hover:text-gray-600 cursor-pointer"><FaTimes /></button>
+            </div>
             <div><label className="text-xs text-gray-500">Nueva fecha</label>
               <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)}
                 className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg" /></div>
@@ -675,8 +835,11 @@ function RecurrenciaTab() {
       {/* Cancel Modal */}
       {cancelModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full p-6 space-y-4">
-            <h3 className="text-sm font-bold text-red-600">Cancelar Recurrencia</h3>
+          <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full p-5 sm:p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-red-600">Cancelar Recurrencia</h3>
+              <button onClick={() => setCancelModal(null)} className="text-gray-400 hover:text-gray-600 cursor-pointer"><FaTimes /></button>
+            </div>
             <p className="text-xs text-gray-600">Esta acción desactivará todas las cuotas futuras. Las ya pagadas NO se modifican.</p>
             <div><label className="text-xs text-gray-500">Motivo *</label>
               <input type="text" value={cancelReason} onChange={e => setCancelReason(e.target.value)}
@@ -700,10 +863,10 @@ function RecurrenciaTab() {
 
 type PagosTab = 'pendientes' | 'historial' | 'recurrencia';
 
-const TABS: { key: PagosTab; label: string; icon: React.ReactNode }[] = [
-  { key: 'pendientes', label: 'Pagos Pendientes', icon: <FaClock /> },
-  { key: 'historial', label: 'Historial Banco', icon: <FaHistory /> },
-  { key: 'recurrencia', label: 'Recurrencia', icon: <FaRecurrence /> },
+const TABS: { key: PagosTab; label: string; shortLabel: string; icon: React.ReactNode }[] = [
+  { key: 'pendientes', label: 'Pendientes', shortLabel: 'Pend.', icon: <FaClock /> },
+  { key: 'historial', label: 'Historial Banco', shortLabel: 'Banco', icon: <FaHistory /> },
+  { key: 'recurrencia', label: 'Recurrencia', shortLabel: 'Recur.', icon: <FaRecurrence /> },
 ];
 
 export default function AdmCotPagos() {
@@ -712,16 +875,18 @@ export default function AdmCotPagos() {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-lg font-bold text-[#010139]">Pagos</h2>
-
-      <div className="flex gap-1 overflow-x-auto pb-1">
+      {/* Sub-tabs */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-1.5 flex gap-1 overflow-x-auto">
         {TABS.map(tab => (
           <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-            className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium rounded-lg whitespace-nowrap transition-colors cursor-pointer ${
-              activeTab === tab.key ? 'bg-[#010139] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 text-xs font-medium rounded-lg whitespace-nowrap transition-all cursor-pointer flex-1 justify-center ${
+              activeTab === tab.key
+                ? 'bg-gradient-to-r from-[#010139] to-[#020270] text-white shadow-md'
+                : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'
             }`}>
             <span className={activeTab === tab.key ? 'text-white' : ''}>{tab.icon}</span>
-            <span className={activeTab === tab.key ? 'text-white' : ''}>{tab.label}</span>
+            <span className={`hidden sm:inline ${activeTab === tab.key ? 'text-white' : ''}`}>{tab.label}</span>
+            <span className={`sm:hidden ${activeTab === tab.key ? 'text-white' : ''}`}>{tab.shortLabel}</span>
           </button>
         ))}
       </div>

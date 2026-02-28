@@ -7,6 +7,7 @@ import { FaArrowLeft, FaCheckCircle } from 'react-icons/fa';
 import { toast } from 'sonner';
 import ThirdPartyIssuanceForm from '@/components/quotes/ThirdPartyIssuanceForm';
 import { AUTO_THIRD_PARTY_INSURERS } from '@/lib/constants/auto-quotes';
+import { formatISPolicyNumber } from '@/lib/utils/policy-number';
 
 export default function ThirdPartyIssuePage() {
   const router = useRouter();
@@ -92,6 +93,9 @@ export default function ThirdPartyIssuePage() {
           throw new Error(emisionResult.error || 'Error al emitir póliza');
         }
         
+        // ═══ Prefix IS policy number with 1-30- ═══
+        emisionResult.nroPoliza = formatISPolicyNumber(emisionResult.nroPoliza);
+
         toast.dismiss();
         toast.success(`¡Póliza emitida! Nº ${emisionResult.nroPoliza}`);
         

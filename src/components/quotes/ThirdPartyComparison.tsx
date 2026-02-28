@@ -5,6 +5,7 @@ import { FaCheck, FaTimes, FaStar, FaArrowRight, FaSpinner, FaChevronDown, FaChe
 import { toast } from 'sonner';
 import { AUTO_THIRD_PARTY_INSURERS, COVERAGE_LABELS, AutoThirdPartyPlan, AutoInsurer, CoverageItem } from '@/lib/constants/auto-quotes';
 import InsurerLogo from '@/components/shared/InsurerLogo';
+import { trackQuoteCreated } from '@/lib/adm-cot/track-quote';
 
 interface ThirdPartyComparisonProps {
   onSelectPlan: (insurerId: string, planType: 'basic' | 'premium', plan: AutoThirdPartyPlan) => void;
@@ -162,6 +163,17 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
         }));
         toast.dismiss();
         toast.success('Cotización generada');
+
+        // ═══ ADM COT: Track IS DT quote ═══
+        trackQuoteCreated({
+          quoteRef: `IS-${quoteResult.idCotizacion}-DT-${type === 'premium' ? 'P' : 'B'}`,
+          insurer: 'INTERNACIONAL',
+          clientName: 'Anónimo',
+          ramo: 'AUTO',
+          coverageType: 'Daños a Terceros',
+          planName: type === 'premium' ? 'Intermedio DT' : 'SOAT DT',
+          annualPremium: plan.annualPremium,
+        });
       } catch (error) {
         console.error('[INTERNACIONAL] Error:', error);
         toast.dismiss();
@@ -182,6 +194,17 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
         includedCoverages: plan.includedCoverages, endosoPdf: plan.endosoPdf,
         installments: plan.installments, opcion: plan.opcion,
       }));
+
+      // ═══ ADM COT: Track FEDPA DT quote ═══
+      trackQuoteCreated({
+        quoteRef: `FEDPA-${plan.idCotizacion || 'DT'}-DT-${type === 'premium' ? 'P' : 'B'}`,
+        insurer: 'FEDPA',
+        clientName: 'Anónimo',
+        ramo: 'AUTO',
+        coverageType: 'Daños a Terceros',
+        planName: type === 'premium' ? 'Plan VIP DT' : 'Plan Básico DT',
+        annualPremium: plan.annualPremium,
+      });
     }
     
     // Go directly to emission — payment modal in emission flow handles contado vs cuotas

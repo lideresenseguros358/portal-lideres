@@ -582,11 +582,14 @@ export async function crearClienteYPolizaIS(data: {
   cliente_apellido: string;
   cliente_documento: string;
   cliente_telefono: string;
+  cliente_celular?: string;
   cliente_correo: string;
+  cliente_fecha_nacimiento?: string;
   tipo_cobertura: string;
   marca?: string;
   modelo?: string;
   anio_auto?: number;
+  placa?: string;
 }): Promise<{ success: boolean; clientId?: string; policyId?: string; error?: string }> {
   const supabase = getSupabaseAdmin();
   
@@ -608,16 +611,31 @@ export async function crearClienteYPolizaIS(data: {
       clientId = existingClient.id;
       console.log('[IS] Cliente existente encontrado:', clientId);
     } else {
-      // Crear nuevo cliente
+      // Crear nuevo cliente (phone = celular preferido sobre teléfono fijo)
+      const clientPhone = data.cliente_celular || data.cliente_telefono;
+      
+      // Convertir fecha nacimiento: dd/mm/yyyy o yyyy-mm-dd → yyyy-mm-dd
+      let birthDateISO: string | undefined;
+      if (data.cliente_fecha_nacimiento) {
+        const raw = data.cliente_fecha_nacimiento;
+        if (/^\d{2}\/\d{2}\/\d{4}$/.test(raw)) {
+          const [dd, mm, yyyy] = raw.split('/');
+          birthDateISO = `${yyyy}-${mm}-${dd}`;
+        } else if (/^\d{4}-\d{2}-\d{2}/.test(raw)) {
+          birthDateISO = raw.substring(0, 10);
+        }
+      }
+      
       const { data: newClient, error: clientError } = await supabase
         .from('clients')
         .insert({
           name: nombreCompleto,
           national_id: data.cliente_documento,
           email: data.cliente_correo,
-          phone: data.cliente_telefono,
+          phone: clientPhone,
           broker_id: data.broker_id,
           active: true,
+          ...(birthDateISO ? { birth_date: birthDateISO } : {}),
         })
         .select('id')
         .single();
@@ -649,9 +667,23 @@ export async function crearClienteYPolizaIS(data: {
     }
     
     // 2. Crear póliza
-    const notasVehiculo = data.marca && data.modelo 
-      ? `Vehículo: ${data.marca} ${data.modelo} ${data.anio_auto || ''}\nCobertura: ${data.tipo_cobertura}`
-      : `Cobertura: ${data.tipo_cobertura}`;
+    const notasParts = [];
+    if (data.marca && data.modelo) {
+      notasParts.push(`Vehículo: ${data.marca} ${data.modelo} ${data.anio_auto || ''}`);
+    }
+    if (data.placa) {
+      notasParts.push(`Placa: ${data.placa}`);
+    }
+    notasParts.push(`Cobertura: ${data.tipo_cobertura}`);
+    const notasVehiculo = notasParts.join('\n');
+    
+    const todayDate = getTodayLocalDate();
+    // renewal_date = 1 year from start
+    const renewalDate = (() => {
+      const d = new Date(todayDate);
+      d.setFullYear(d.getFullYear() + 1);
+      return d.toISOString().split('T')[0];
+    })();
     
     const { data: newPolicy, error: policyError } = await supabase
       .from('policies')
@@ -662,7 +694,8 @@ export async function crearClienteYPolizaIS(data: {
         policy_number: data.nro_poliza,
         ramo: 'AUTO',
         status: 'ACTIVA',
-        start_date: getTodayLocalDate(),
+        start_date: todayDate,
+        renewal_date: renewalDate,
         notas: notasVehiculo,
       })
       .select('id')
