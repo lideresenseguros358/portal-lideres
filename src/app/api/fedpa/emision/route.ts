@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
     const { environment = 'PROD', ...emisionData } = body;
     
     // Validar campos requeridos
-    const required = ['Plan', 'idDoc', 'PrimerNombre', 'PrimerApellido', 'Identificacion', 
+    const required = ['Plan', 'idDoc', 'PrimaTotal', 'PrimerNombre', 'PrimerApellido', 'Identificacion', 
                      'FechaNacimiento', 'Sexo', 'Email', 'Telefono', 'Celular', 'Direccion',
                      'esPEP', 'Uso', 'Marca', 'Modelo', 'Ano', 'Motor', 'Placa', 'Vin', 
                      'Color', 'Pasajero', 'Puerta'];

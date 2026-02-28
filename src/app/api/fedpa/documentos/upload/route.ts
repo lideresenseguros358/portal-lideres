@@ -24,7 +24,7 @@ async function obtenerTokenRapido(
   const result = await generarToken(env);
   if (result.success) return { success: true };
   if (result.needsReset) {
-    return { success: false, error: 'Token FEDPA bloqueado. Usando método alternativo.' };
+    return { success: false, error: 'Token FEDPA bloqueado. Espere ~50 min o contacte a FEDPA para reset.' };
   }
   return { success: false, error: result.error || 'No se pudo obtener token' };
 }
@@ -75,15 +75,14 @@ export async function POST(request: NextRequest) {
     
     // ── FAST TOKEN CHECK: evitar esperar ~57s de reintentos ──
     // Intentar obtener token UNA sola vez sin reintentos largos.
-    // Si no hay token disponible, retornar 424 inmediatamente para que
-    // el frontend use el fallback Emisor Externo.
+    // Si no hay token disponible, retornar 424 inmediatamente.
     const quickTokenCheck = await obtenerTokenRapido(env);
     if (!quickTokenCheck.success) {
-      console.warn(`[API FEDPA Documentos] ${requestId} Token no disponible (fast check). Retornando 424 para fallback.`);
+      console.warn(`[API FEDPA Documentos] ${requestId} Token no disponible (fast check). Retornando 424.`);
       return NextResponse.json(
         {
           success: false,
-          error: quickTokenCheck.error || 'Token FEDPA no disponible. Usando método alternativo.',
+          error: quickTokenCheck.error || 'Token FEDPA no disponible. Intente nuevamente en unos minutos.',
           code: 'TOKEN_NOT_AVAILABLE',
           requestId,
         },

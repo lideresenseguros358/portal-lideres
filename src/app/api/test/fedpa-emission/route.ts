@@ -2,8 +2,8 @@
  * Test Route: FEDPA Emission End-to-End via EmisorPlan (2024)
  * GET /api/test/fedpa-emission?type=DT|CC|both&wait=N
  *
- * EmisorPlan es el ÚNICO path funcional de emisión.
- * Emisor Externo (2021) tiene bug ORA-01400 en servidor FEDPA.
+ * EmisorPlan es el ÚNICO path de emisión.
+ * Emisor Externo (2021) ha sido eliminado del flujo de emisión.
  *
  * Flujo: generartoken → subirdocumentos → emitirpoliza
  * Nro Póliza formato: "04-05-NNNNN-0" (DT) / "04-07-NNNNN-0" (CC)
@@ -15,7 +15,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { generarToken, limpiarCacheTokens } from '@/lib/fedpa/auth.service';
+import { obtenerToken } from '@/lib/fedpa/auth.service';
 import { subirDocumentos } from '@/lib/fedpa/documentos.service';
 import { emitirPoliza } from '@/lib/fedpa/emision.service';
 import type { EmitirPolizaRequest } from '@/lib/fedpa/types';
@@ -112,6 +112,8 @@ function buildCCPayload(idDoc: string): EmitirPolizaRequest {
 export async function GET(request: NextRequest) {
   const type = request.nextUrl.searchParams.get('type') || 'DT';
   const waitAttempts = parseInt(request.nextUrl.searchParams.get('wait') || '0');
+  const dtPlanOverride = parseInt(request.nextUrl.searchParams.get('dtPlan') || '0') || 0;
+  const ccPlanOverride = parseInt(request.nextUrl.searchParams.get('ccPlan') || '0') || 0;
   const env = 'DEV' as const;
   const results: any = { timestamp: new Date().toISOString(), environment: env, steps: [] };
 
@@ -123,16 +125,14 @@ export async function GET(request: NextRequest) {
     console.log('[TEST FEDPA] STEP 1: Obtener token EmisorPlan');
     console.log('══════════════════════════════════════════════');
 
-    limpiarCacheTokens();
-    let tokenResult = await generarToken(env);
+    let tokenResult = await obtenerToken(env);
 
     if (!tokenResult.success && waitAttempts > 0) {
       console.log(`[TEST FEDPA] Token bloqueado. Reintentando hasta ${waitAttempts} veces (30s intervalo)...`);
       for (let i = 1; i <= waitAttempts && !tokenResult.success; i++) {
         console.log(`[TEST FEDPA] Esperando 30s... (intento ${i}/${waitAttempts})`);
         await new Promise(r => setTimeout(r, 30_000));
-        limpiarCacheTokens();
-        tokenResult = await generarToken(env);
+        tokenResult = await obtenerToken(env);
       }
     }
 
@@ -190,6 +190,7 @@ export async function GET(request: NextRequest) {
       console.log('══════════════════════════════════════════════');
 
       const dtPayload = buildDTPayload(idDoc);
+      if (dtPlanOverride) dtPayload.Plan = dtPlanOverride;
       console.log('[TEST FEDPA] DT Payload:', JSON.stringify(dtPayload, null, 2));
 
       const dtResult = await emitirPoliza(dtPayload, env);
@@ -225,6 +226,7 @@ export async function GET(request: NextRequest) {
       console.log('══════════════════════════════════════════════');
 
       const ccPayload = buildCCPayload(ccIdDoc);
+      if (ccPlanOverride) ccPayload.Plan = ccPlanOverride;
       console.log('[TEST FEDPA] CC Payload:', JSON.stringify(ccPayload, null, 2));
 
       const ccResult = await emitirPoliza(ccPayload, env);

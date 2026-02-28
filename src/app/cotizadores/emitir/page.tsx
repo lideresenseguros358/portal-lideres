@@ -252,13 +252,10 @@ export default function EmitirPage() {
           PrimaTotal: selectedPlan.annualPremium,
         };
 
-        // ── Intentar EmisorPlan (2024) primero; si token bloqueado → Emisor Externo (2021) ──
+        // ── EmisorPlan (2024): upload docs → emitirpoliza ──
         let emisionResult: any = null;
-        let usedMethod = 'emisor_plan';
-        
-        // PASO 1: Intentar subir documentos con EmisorPlan (requiere Bearer token)
+
         toast.info('Subiendo documentos...');
-        
         const docsFormData = new FormData();
         docsFormData.append('environment', 'DEV');
         docsFormData.append('documento_identidad', emissionData.cedulaFile!, emissionData.cedulaFile!.name || 'documento_identidad.pdf');
@@ -266,80 +263,49 @@ export default function EmitirPage() {
         if (vehicleData?.registroVehicular) {
           docsFormData.append('registro_vehicular', vehicleData.registroVehicular, vehicleData.registroVehicular.name || 'registro_vehicular.pdf');
         }
-        
+
         const docsResponse = await fetch('/api/fedpa/documentos/upload', {
           method: 'POST',
           body: docsFormData,
         });
-        
+
         const docsResponseData = await docsResponse.json();
         const isTokenBlocked = docsResponse.status === 424 || docsResponseData.code === 'TOKEN_NOT_AVAILABLE';
-        
-        if (docsResponse.ok && docsResponseData.success) {
-          // ── EmisorPlan path: docs uploaded OK → emit with idDoc ──
-          console.log('[EMISIÓN FEDPA] Documentos subidos (EmisorPlan):', docsResponseData.idDoc);
-          
-          toast.info('Emitiendo póliza...');
-          const emisionResponse = await fetch('/api/fedpa/emision', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              environment: 'DEV',
-              ...emisionCommon,
-              idDoc: docsResponseData.idDoc,
-            }),
-          });
-          
-          const emisionResponseData = await emisionResponse.json();
-          
-          if (!emisionResponse.ok || !emisionResponseData.success) {
-            // Si emisión falla por token también, intentar fallback
-            if (emisionResponse.status === 424 || emisionResponseData.code === 'TOKEN_NOT_AVAILABLE') {
-              console.warn('[EMISIÓN FEDPA] EmisorPlan emisión falló por token, usando fallback...');
-              // Fall through to Emisor Externo below
-            } else {
-              throw new Error(emisionResponseData.error || 'Error emitiendo póliza');
-            }
-          } else {
-            emisionResult = emisionResponseData;
-            usedMethod = 'emisor_plan';
-          }
-        } else if (isTokenBlocked) {
-          console.warn('[EMISIÓN FEDPA] Token bloqueado, usando Emisor Externo (2021)...');
-        } else {
-          // Doc upload failed for non-token reason
+
+        if (isTokenBlocked) {
+          throw new Error(
+            'El token de FEDPA está bloqueado temporalmente (~50 min). ' +
+            'Por favor intente nuevamente en unos minutos. ' +
+            'Si el problema persiste, contacte a soporte.'
+          );
+        }
+
+        if (!docsResponse.ok || !docsResponseData.success) {
           throw new Error(docsResponseData.error || 'Error subiendo documentos');
         }
-        
-        // ── FALLBACK: Emisor Externo (2021) — bundlea docs + emisión sin token ──
-        if (!emisionResult) {
-          toast.info('Usando método alternativo de emisión...');
-          usedMethod = 'emisor_externo';
-          
-          const fallbackForm = new FormData();
-          fallbackForm.append('environment', 'DEV');
-          fallbackForm.append('emisionData', JSON.stringify(emisionCommon));
-          fallbackForm.append('documento_identidad', emissionData.cedulaFile!, emissionData.cedulaFile!.name || 'documento_identidad.pdf');
-          fallbackForm.append('licencia_conducir', emissionData.licenciaFile!, emissionData.licenciaFile!.name || 'licencia_conducir.pdf');
-          if (vehicleData?.registroVehicular) {
-            fallbackForm.append('registro_vehicular', vehicleData.registroVehicular, vehicleData.registroVehicular.name || 'registro_vehicular.pdf');
+
+        console.log('[EMISIÓN CC FEDPA] Documentos subidos (EmisorPlan):', docsResponseData.idDoc);
+        toast.info('Emitiendo póliza...');
+        const emisionResponse = await fetch('/api/fedpa/emision', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ environment: 'DEV', ...emisionCommon, idDoc: docsResponseData.idDoc }),
+        });
+        const emisionResponseData = await emisionResponse.json();
+
+        if (!emisionResponse.ok || !emisionResponseData.success) {
+          if (emisionResponse.status === 424 || emisionResponseData.code === 'TOKEN_NOT_AVAILABLE') {
+            throw new Error(
+              'El token de FEDPA expiró durante la emisión. ' +
+              'Por favor intente nuevamente en unos minutos.'
+            );
           }
-          
-          const fallbackResponse = await fetch('/api/fedpa/emision/fallback', {
-            method: 'POST',
-            body: fallbackForm,
-          });
-          
-          const fallbackData = await fallbackResponse.json();
-          
-          if (!fallbackResponse.ok || !fallbackData.success) {
-            throw new Error(fallbackData.error || 'Error emitiendo póliza (método alternativo)');
-          }
-          
-          emisionResult = fallbackData;
+          throw new Error(emisionResponseData.error || 'Error emitiendo póliza');
         }
-        
-        console.log(`[EMISIÓN FEDPA] Póliza emitida (${usedMethod}):`, emisionResult.nroPoliza || emisionResult.poliza);
+
+        emisionResult = emisionResponseData;
+
+        console.log('[EMISIÓN CC FEDPA] Póliza emitida:', emisionResult.nroPoliza || emisionResult.poliza);
         
         // ═══ ADM COT: Track successful FEDPA emission ═══
         const fedpaRef = selectedPlan?._idCotizacion;
@@ -457,7 +423,7 @@ export default function EmitirPage() {
           placa: vehicleData?.placa || '',
           primaTotal: selectedPlan?.annualPremium,
           tipoCobertura: 'Cobertura Completa',
-          method: usedMethod,
+          method: 'emisor_plan',
         }));
         
         toast.success(`¡Póliza FEDPA emitida! Nº ${emisionResult.nroPoliza || emisionResult.poliza}`);

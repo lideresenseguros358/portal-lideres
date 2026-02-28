@@ -247,18 +247,6 @@ export interface EmitirPolizaResponse {
 }
 
 // ============================================
-// EMISIÓN FALLBACK (Emisor Externo)
-// ============================================
-
-export interface CrearPolizaExternoRequest {
-  // Estructura más compleja según manual 2021
-  // Implementar cuando se necesite fallback
-  Usuario: string;
-  Clave: string;
-  // ... más campos
-}
-
-// ============================================
 // DATOS DEL FORMULARIO (UI)
 // ============================================
 
