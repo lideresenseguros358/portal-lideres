@@ -128,38 +128,47 @@ function ThreadList({
             className="w-full pl-7 pr-2 py-1.5 text-xs border border-gray-200 rounded-lg outline-none focus:ring-1 focus:ring-[#010139]/30" />
         </div>
 
-        {/* Quick filters */}
-        <div className="flex gap-1 overflow-x-auto">
+        {/* Status + Category filters */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
+          {/* Status filters */}
           {[
-            { label: 'Todos', value: '' },
-            { label: `🔴 Urgente${summary.urgent ? ` (${summary.urgent})` : ''}`, value: 'urgent' },
-            { label: `Abierto${summary.open ? ` (${summary.open})` : ''}`, value: 'open' },
-            { label: 'Cerrado', value: 'closed' },
+            { label: 'Todos', value: '', icon: null, activeClass: 'bg-[#010139] text-white shadow-md', count: summary.total },
+            { label: 'Urgente', value: 'urgent', icon: <FaExclamationTriangle className="text-[9px]" />, activeClass: 'bg-red-600 text-white shadow-md shadow-red-200', count: summary.urgent },
+            { label: 'Abierto', value: 'open', icon: <span className="w-1.5 h-1.5 rounded-full bg-current" />, activeClass: 'bg-emerald-600 text-white shadow-md shadow-emerald-200', count: summary.open },
+            { label: 'Cerrado', value: 'closed', icon: <FaCheck className="text-[8px]" />, activeClass: 'bg-gray-600 text-white shadow-md', count: null },
           ].map(f => (
-            <button key={f.value}
+            <button key={`s-${f.value}`}
               onClick={() => setFilterStatus(filterStatus === f.value ? '' : f.value)}
-              className={`whitespace-nowrap px-2 py-1 text-[10px] font-medium rounded-full cursor-pointer transition-colors ${
+              className={`whitespace-nowrap inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold rounded-full cursor-pointer transition-all duration-150 ${
                 filterStatus === f.value
-                  ? 'bg-[#010139] text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  ? f.activeClass
+                  : 'bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700'
               }`}>
+              {f.icon}
               {f.label}
+              {f.count ? <span className={`ml-0.5 text-[9px] font-bold ${
+                filterStatus === f.value ? 'opacity-80' : 'text-gray-400'
+              }`}>({f.count})</span> : null}
             </button>
           ))}
-        </div>
-        <div className="flex gap-1">
+
+          {/* Divider */}
+          <div className="w-px h-4 bg-gray-200 mx-0.5 flex-shrink-0" />
+
+          {/* Category filters */}
           {[
-            { label: 'Simple', value: 'simple' },
-            { label: 'Lead', value: 'lead' },
-            { label: 'Urgente', value: 'urgent' },
+            { label: 'Simple', value: 'simple', icon: <FaComments className="text-[9px]" />, activeClass: 'bg-blue-600 text-white shadow-md shadow-blue-200', inactiveClass: 'bg-blue-50 text-blue-600 hover:bg-blue-100' },
+            { label: 'Lead', value: 'lead', icon: <FaBolt className="text-[9px]" />, activeClass: 'bg-amber-500 text-white shadow-md shadow-amber-200', inactiveClass: 'bg-amber-50 text-amber-600 hover:bg-amber-100' },
+            { label: 'Urgente', value: 'urgent', icon: <FaExclamationTriangle className="text-[8px]" />, activeClass: 'bg-red-600 text-white shadow-md shadow-red-200', inactiveClass: 'bg-red-50 text-red-600 hover:bg-red-100' },
           ].map(f => (
-            <button key={f.value}
+            <button key={`c-${f.value}`}
               onClick={() => setFilterCategory(filterCategory === f.value ? '' : f.value)}
-              className={`whitespace-nowrap px-2 py-1 text-[10px] font-medium rounded-full cursor-pointer transition-colors ${
+              className={`whitespace-nowrap inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold rounded-full cursor-pointer transition-all duration-150 ${
                 filterCategory === f.value
-                  ? 'bg-[#8AAA19] text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                  ? f.activeClass
+                  : f.inactiveClass
               }`}>
+              {f.icon}
               {f.label}
             </button>
           ))}
@@ -167,12 +176,19 @@ function ThreadList({
       </div>
 
       {/* Summary bar */}
-      <div className="flex gap-1 px-3 py-2 border-b border-gray-100 bg-gray-50 text-[10px]">
-        <span className="text-gray-400">No leídos: <strong className="text-[#010139]">{summary.unread || 0}</strong></span>
-        <span className="text-gray-300">|</span>
-        <span className="text-gray-400">AI: <strong>{summary.ai || 0}</strong></span>
-        <span className="text-gray-300">|</span>
-        <span className="text-gray-400">Master: <strong>{summary.master || 0}</strong></span>
+      <div className="flex items-center gap-3 px-3 py-1.5 border-b border-gray-100 bg-gray-50/80 text-[10px]">
+        <span className="inline-flex items-center gap-1 text-gray-500">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#010139] animate-pulse" />
+          No leídos: <strong className="text-[#010139]">{summary.unread || 0}</strong>
+        </span>
+        <span className="inline-flex items-center gap-1 text-gray-400">
+          <FaRobot className="text-[9px] text-purple-400" />
+          AI: <strong className="text-purple-600">{summary.ai || 0}</strong>
+        </span>
+        <span className="inline-flex items-center gap-1 text-gray-400">
+          <FaUserTie className="text-[9px] text-blue-400" />
+          Master: <strong className="text-blue-600">{summary.master || 0}</strong>
+        </span>
       </div>
 
       {/* Thread list */}
