@@ -27,6 +27,7 @@ import {
   FaCalculator,
   FaSync,
   FaShieldAlt,
+  FaHeadset,
 } from "react-icons/fa";
 
 type MenuRole = "MASTER" | "BROKER";
@@ -50,6 +51,7 @@ const menuItems: Record<MenuRole, MenuItem[]> = {
     { label: "Guías", href: "/guides", icon: <FaBookOpen /> },
     { label: "Cotizadores", href: "/cotizadores", icon: <FaCalculator /> },
     { label: "ADM COT", href: "/adm-cot", icon: <FaShieldAlt /> },
+    { label: "Operaciones", href: "/operaciones", icon: <FaHeadset /> },
     { label: "Agenda", href: "/agenda", icon: <FaCalendarAlt /> },
     { label: "Producción", href: "/production", icon: <FaChartBar /> },
     { label: "Corredores", href: "/brokers", icon: <FaUserTie /> },
