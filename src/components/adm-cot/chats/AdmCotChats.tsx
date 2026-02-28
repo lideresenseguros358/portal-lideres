@@ -128,50 +128,68 @@ function ThreadList({
             className="w-full pl-7 pr-2 py-1.5 text-xs border border-gray-200 rounded-lg outline-none focus:ring-1 focus:ring-[#010139]/30" />
         </div>
 
-        {/* Status + Category filters */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5">
-          {/* Status filters */}
-          {[
-            { label: 'Todos', value: '', icon: null, activeClass: 'bg-[#010139] text-white shadow-md', count: summary.total },
-            { label: 'Urgente', value: 'urgent', icon: <FaExclamationTriangle className="text-[9px]" />, activeClass: 'bg-red-600 text-white shadow-md shadow-red-200', count: summary.urgent },
-            { label: 'Abierto', value: 'open', icon: <span className="w-1.5 h-1.5 rounded-full bg-current" />, activeClass: 'bg-emerald-600 text-white shadow-md shadow-emerald-200', count: summary.open },
-            { label: 'Cerrado', value: 'closed', icon: <FaCheck className="text-[8px]" />, activeClass: 'bg-gray-600 text-white shadow-md', count: null },
-          ].map(f => (
-            <button key={`s-${f.value}`}
-              onClick={() => setFilterStatus(filterStatus === f.value ? '' : f.value)}
-              className={`whitespace-nowrap inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold rounded-full cursor-pointer transition-all duration-150 ${
-                filterStatus === f.value
-                  ? f.activeClass
-                  : 'bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-gray-700'
-              }`}>
-              {f.icon}
-              {f.label}
-              {f.count ? <span className={`ml-0.5 text-[9px] font-bold ${
-                filterStatus === f.value ? 'opacity-80' : 'text-gray-400'
-              }`}>({f.count})</span> : null}
-            </button>
-          ))}
+        {/* Filters: Todos + Urgente pill + dropdown */}
+        <div className="flex items-center gap-1.5">
+          {/* Todos */}
+          <button
+            onClick={() => { setFilterStatus(''); setFilterCategory(''); }}
+            className={`inline-flex items-center gap-1 px-3 py-1 text-[11px] font-semibold rounded-full cursor-pointer transition-all duration-150 ${
+              !filterStatus && !filterCategory
+                ? 'bg-[#010139] text-white shadow-sm'
+                : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+            }`}>
+            Todos
+            {summary.total ? <span className="text-[9px] opacity-70">({summary.total})</span> : null}
+          </button>
 
-          {/* Divider */}
-          <div className="w-px h-4 bg-gray-200 mx-0.5 flex-shrink-0" />
+          {/* Urgente — always visible, highlighted red */}
+          <button
+            onClick={() => {
+              const isActive = filterStatus === 'urgent';
+              setFilterStatus(isActive ? '' : 'urgent');
+              if (!isActive) setFilterCategory('');
+            }}
+            className={`inline-flex items-center gap-1 px-3 py-1 text-[11px] font-semibold rounded-full cursor-pointer transition-all duration-150 ${
+              filterStatus === 'urgent'
+                ? 'bg-red-600 text-white shadow-sm shadow-red-200'
+                : 'bg-red-50 text-red-600 hover:bg-red-100'
+            }`}>
+            <FaExclamationTriangle className="text-[9px]" />
+            Urgente
+            {summary.urgent ? <span className="text-[9px] opacity-70">({summary.urgent})</span> : null}
+          </button>
 
-          {/* Category filters */}
-          {[
-            { label: 'Simple', value: 'simple', icon: <FaComments className="text-[9px]" />, activeClass: 'bg-blue-600 text-white shadow-md shadow-blue-200', inactiveClass: 'bg-blue-50 text-blue-600 hover:bg-blue-100' },
-            { label: 'Lead', value: 'lead', icon: <FaBolt className="text-[9px]" />, activeClass: 'bg-amber-500 text-white shadow-md shadow-amber-200', inactiveClass: 'bg-amber-50 text-amber-600 hover:bg-amber-100' },
-            { label: 'Urgente', value: 'urgent', icon: <FaExclamationTriangle className="text-[8px]" />, activeClass: 'bg-red-600 text-white shadow-md shadow-red-200', inactiveClass: 'bg-red-50 text-red-600 hover:bg-red-100' },
-          ].map(f => (
-            <button key={`c-${f.value}`}
-              onClick={() => setFilterCategory(filterCategory === f.value ? '' : f.value)}
-              className={`whitespace-nowrap inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-semibold rounded-full cursor-pointer transition-all duration-150 ${
-                filterCategory === f.value
-                  ? f.activeClass
-                  : f.inactiveClass
+          {/* Dropdown for remaining filters */}
+          <div className="relative">
+            <select
+              value={
+                filterStatus === 'urgent' ? '' :
+                filterStatus ? `s:${filterStatus}` :
+                filterCategory ? `c:${filterCategory}` : ''
+              }
+              onChange={e => {
+                const v = e.target.value;
+                if (!v) { setFilterStatus(''); setFilterCategory(''); return; }
+                if (v.startsWith('s:')) { setFilterStatus(v.slice(2)); setFilterCategory(''); }
+                else if (v.startsWith('c:')) { setFilterCategory(v.slice(2)); setFilterStatus(''); }
+              }}
+              className={`appearance-none pl-2.5 pr-6 py-1 text-[11px] font-medium rounded-full border cursor-pointer transition-all outline-none ${
+                (filterStatus && filterStatus !== 'urgent') || filterCategory
+                  ? 'bg-[#8AAA19] text-white border-[#8AAA19] shadow-sm'
+                  : 'bg-white text-gray-600 border-gray-200 hover:border-gray-300'
               }`}>
-              {f.icon}
-              {f.label}
-            </button>
-          ))}
+              <option value="">Filtrar...</option>
+              <optgroup label="Estado">
+                <option value="s:open">🟢 Abierto{summary.open ? ` (${summary.open})` : ''}</option>
+                <option value="s:closed">⚫ Cerrado</option>
+              </optgroup>
+              <optgroup label="Categoría">
+                <option value="c:simple">💬 Simple</option>
+                <option value="c:lead">⚡ Lead</option>
+              </optgroup>
+            </select>
+            <FaTag className="absolute right-2 top-1/2 -translate-y-1/2 text-[8px] pointer-events-none opacity-50" />
+          </div>
         </div>
       </div>
 
