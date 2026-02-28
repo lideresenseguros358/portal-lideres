@@ -86,7 +86,7 @@ export async function GET(request: NextRequest) {
         let paymentId = existing?.id;
 
         if (!paymentId) {
-          // Create pending payment
+          // Create payment as PENDIENTE_CONFIRMACION — requires manual confirm before grouping
           const { data: newPayment, error: insertErr } = await sb.from('adm_cot_payments').insert({
             client_name: rec.client_name,
             cedula: rec.cedula || null,
@@ -94,7 +94,7 @@ export async function GET(request: NextRequest) {
             amount: rec.installment_amount,
             insurer: rec.insurer,
             ramo: 'AUTO',
-            status: 'PENDIENTE',
+            status: 'PENDIENTE_CONFIRMACION',
             payment_date: paymentDate,
             is_recurring: true,
             recurrence_id: rec.id,

@@ -74,10 +74,11 @@ export async function GET(request: NextRequest) {
 
         // Summary counts
         const { data: summaryData } = await sb.from('adm_cot_payments').select('status, amount, is_refund');
-        const summary = { pending: 0, pendingAmt: 0, grouped: 0, groupedAmt: 0, paid: 0, paidAmt: 0, refunds: 0, refundsAmt: 0 };
+        const summary = { pending: 0, pendingAmt: 0, pendingConfirm: 0, pendingConfirmAmt: 0, grouped: 0, groupedAmt: 0, paid: 0, paidAmt: 0, refunds: 0, refundsAmt: 0 };
         (summaryData ?? []).forEach((r: any) => {
           const amt = Number(r.amount) || 0;
           if (r.is_refund) { summary.refunds++; summary.refundsAmt += amt; }
+          else if (r.status === 'PENDIENTE_CONFIRMACION') { summary.pendingConfirm++; summary.pendingConfirmAmt += amt; }
           else if (r.status === 'PENDIENTE') { summary.pending++; summary.pendingAmt += amt; }
           else if (r.status === 'AGRUPADO') { summary.grouped++; summary.groupedAmt += amt; }
           else if (r.status === 'PAGADO') { summary.paid++; summary.paidAmt += amt; }
@@ -335,6 +336,26 @@ export async function POST(request: NextRequest) {
           user_id: userId, detail: { reason },
         });
         return NextResponse.json({ success: true });
+      }
+
+      // ── Confirm recurring payment (PENDIENTE_CONFIRMACION → PENDIENTE) ──
+      case 'confirm_recurring_payment': {
+        const { payment_ids } = data;
+        if (!payment_ids || !Array.isArray(payment_ids) || payment_ids.length === 0) {
+          return NextResponse.json({ error: 'Missing payment_ids array' }, { status: 400 });
+        }
+
+        const { error } = await sb.from('adm_cot_payments')
+          .update({ status: 'PENDIENTE' })
+          .in('id', payment_ids)
+          .eq('status', 'PENDIENTE_CONFIRMACION');
+        if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+        await sb.from('adm_cot_audit_log').insert({
+          event_type: 'recurring_payment_confirmed', entity_type: 'payment', entity_id: payment_ids[0],
+          user_id: userId, detail: { payment_ids, count: payment_ids.length },
+        });
+        return NextResponse.json({ success: true, data: { confirmed: payment_ids.length } });
       }
 
       // ── Create recurrence (from emission with installments) ──

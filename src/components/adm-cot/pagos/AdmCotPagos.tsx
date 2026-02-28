@@ -9,6 +9,7 @@ import {
   FaUndoAlt,
   FaSync as FaRecurrence,
   FaCheckCircle,
+  FaCheck,
   FaClock,
   FaPlus,
   FaEdit,
@@ -18,6 +19,7 @@ import {
   FaChevronDown,
   FaChevronUp,
   FaFilter,
+  FaHourglassHalf,
 } from 'react-icons/fa';
 
 // ════════════════════════════════════════════
@@ -41,6 +43,7 @@ const fmtDate = (d: string | null) => d ? new Date(d + 'T12:00:00').toLocaleDate
 
 function StatusBadge({ status }: { status: string }) {
   const m: Record<string, { bg: string; text: string }> = {
+    PENDIENTE_CONFIRMACION: { bg: 'bg-orange-100', text: 'text-orange-800' },
     PENDIENTE: { bg: 'bg-amber-100', text: 'text-amber-800' },
     AGRUPADO: { bg: 'bg-blue-100', text: 'text-blue-800' },
     PAGADO: { bg: 'bg-green-100', text: 'text-green-800' },
@@ -98,6 +101,8 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
   const [type, setType] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selectedConfirm, setSelectedConfirm] = useState<Set<string>>(new Set());
+  const [confirmingIds, setConfirmingIds] = useState(false);
   const [showGroupModal, setShowGroupModal] = useState(false);
   const [showRefundModal, setShowRefundModal] = useState<string | null>(null);
   const [refundForm, setRefundForm] = useState({ bank: '', account: '', accountType: 'Ahorro', reason: '' });
@@ -123,6 +128,21 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
     const pending = payments.filter(p => p.status === 'PENDIENTE');
     setSelected(prev => prev.size === pending.length ? new Set() : new Set(pending.map(p => p.id)));
   };
+  const toggleSelectConfirm = (id: string) => {
+    setSelectedConfirm(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  };
+  const selectAllConfirm = () => {
+    const unconfirmed = payments.filter(p => p.status === 'PENDIENTE_CONFIRMACION');
+    setSelectedConfirm(prev => prev.size === unconfirmed.length ? new Set() : new Set(unconfirmed.map(p => p.id)));
+  };
+
+  const handleConfirmRecurring = async () => {
+    if (selectedConfirm.size === 0) return;
+    setConfirmingIds(true);
+    const res = await apiPost('confirm_recurring_payment', { payment_ids: Array.from(selectedConfirm) });
+    if (res.success) { setSelectedConfirm(new Set()); fetchPayments(); }
+    setConfirmingIds(false);
+  };
 
   const handleMarkRefund = async () => {
     if (!showRefundModal) return;
@@ -138,6 +158,10 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
     fetchPayments();
   };
 
+  // Split payments into unconfirmed recurring vs rest (groupable)
+  const unconfirmedPayments = payments.filter(p => p.status === 'PENDIENTE_CONFIRMACION');
+  const groupablePayments = payments.filter(p => p.status !== 'PENDIENTE_CONFIRMACION');
+
   const selectedPayments = payments.filter(p => selected.has(p.id));
   const selectedTotal = selectedPayments.reduce((s, p) => s + Number(p.amount), 0);
   const hasActiveFilters = search || insurer || status || type;
@@ -145,8 +169,9 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
   return (
     <div className="space-y-4">
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-3">
         {[
+          { label: 'Por Confirmar', count: summary.pendingConfirm || 0, amt: summary.pendingConfirmAmt || 0, bg: 'bg-orange-50', border: 'border-orange-200', color: 'text-orange-600' },
           { label: 'Pendientes', count: summary.pending || 0, amt: summary.pendingAmt || 0, bg: 'bg-amber-50', border: 'border-amber-200', color: 'text-amber-600' },
           { label: 'Agrupados', count: summary.grouped || 0, amt: summary.groupedAmt || 0, bg: 'bg-blue-50', border: 'border-blue-200', color: 'text-blue-600' },
           { label: 'Pagados', count: summary.paid || 0, amt: summary.paidAmt || 0, bg: 'bg-green-50', border: 'border-green-200', color: 'text-green-600' },
@@ -189,7 +214,7 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
               <option value="">Aseguradora</option><option value="INTERNACIONAL">Internacional</option><option value="FEDPA">FEDPA</option>
             </select>
             <select value={status} onChange={e => setStatus(e.target.value)} className="w-full text-sm sm:text-xs border border-gray-300 rounded-lg px-2 py-2 sm:py-1.5">
-              <option value="">Estado</option><option value="PENDIENTE">Pendiente</option><option value="AGRUPADO">Agrupado</option><option value="PAGADO">Pagado</option>
+              <option value="">Estado</option><option value="PENDIENTE_CONFIRMACION">Por Confirmar</option><option value="PENDIENTE">Pendiente</option><option value="AGRUPADO">Agrupado</option><option value="PAGADO">Pagado</option>
             </select>
             <select value={type} onChange={e => setType(e.target.value)} className="w-full text-sm sm:text-xs border border-gray-300 rounded-lg px-2 py-2 sm:py-1.5">
               <option value="">Tipo</option><option value="PAY">Pago Aseg.</option><option value="REFUND">Devolución</option>
@@ -197,6 +222,66 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
           </div>
         )}
       </div>
+
+      {/* ════════════════════════════════════════════ */}
+      {/* POR CONFIRMAR — Recurring payments awaiting receipt confirmation */}
+      {/* ════════════════════════════════════════════ */}
+      {unconfirmedPayments.length > 0 && (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <FaHourglassHalf className="text-orange-500 text-sm" />
+              <h4 className="text-xs font-bold text-orange-700 uppercase tracking-wide">Por Confirmar Recibo ({unconfirmedPayments.length})</h4>
+            </div>
+            <div className="flex items-center gap-2">
+              {selectedConfirm.size > 0 && (
+                <button onClick={handleConfirmRecurring} disabled={confirmingIds}
+                  className="px-3 py-1.5 bg-green-600 text-white text-xs font-medium rounded-lg flex items-center gap-1 cursor-pointer disabled:opacity-50">
+                  <FaCheck className="text-white text-[10px]" /> <span className="text-white">{confirmingIds ? 'Confirmando...' : `Confirmar (${selectedConfirm.size})`}</span>
+                </button>
+              )}
+              <button onClick={selectAllConfirm}
+                className="px-2 py-1 text-[10px] text-orange-600 hover:bg-orange-50 rounded cursor-pointer font-medium">
+                {selectedConfirm.size === unconfirmedPayments.length ? 'Deseleccionar' : 'Seleccionar todos'}
+              </button>
+            </div>
+          </div>
+
+          <div className="bg-orange-50/50 border border-orange-200 rounded-xl p-2 space-y-1.5">
+            {unconfirmedPayments.map(p => (
+              <div key={p.id} className="bg-white rounded-lg border border-orange-100 p-2.5 flex items-center gap-2.5">
+                <input type="checkbox" checked={selectedConfirm.has(p.id)} onChange={() => toggleSelectConfirm(p.id)} className="cursor-pointer flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-xs font-semibold text-[#010139] truncate">{p.client_name}</p>
+                    <p className="text-xs font-bold text-[#8AAA19] flex-shrink-0">{fmtMoney(p.amount)}</p>
+                  </div>
+                  <div className="flex items-center gap-2 mt-0.5 text-[10px] text-gray-500">
+                    <span>{p.insurer}</span>
+                    <span>·</span>
+                    <span>{p.nro_poliza || '—'}</span>
+                    <span>·</span>
+                    <span>Cuota {p.installment_num || '—'}</span>
+                    <span>·</span>
+                    <span>{fmtDate(p.payment_date)}</span>
+                  </div>
+                </div>
+                <button onClick={async () => {
+                  await apiPost('confirm_recurring_payment', { payment_ids: [p.id] });
+                  fetchPayments();
+                }} className="p-1.5 text-green-500 hover:text-green-700 hover:bg-green-50 rounded cursor-pointer flex-shrink-0" title="Confirmar recibo">
+                  <FaCheck className="text-xs" />
+                </button>
+              </div>
+            ))}
+          </div>
+          <p className="text-[10px] text-orange-500 italic">Estos pagos recurrentes requieren confirmación de recibo antes de ser agrupados.</p>
+        </div>
+      )}
+
+      {/* ════════════════════════════════════════════ */}
+      {/* PAGOS LISTOS — Confirmed payments ready for grouping */}
+      {/* ════════════════════════════════════════════ */}
 
       {/* Selection bar */}
       {selected.size > 0 && (
@@ -211,13 +296,18 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
 
       {/* ── Mobile Card List ── */}
       <div className="md:hidden space-y-2">
-        {payments.length === 0 ? (
+        {groupablePayments.length === 0 && unconfirmedPayments.length === 0 ? (
           <div className="py-12 text-center">
             <FaMoneyBillWave className="text-3xl text-gray-300 mx-auto mb-3" />
             <p className="text-sm text-gray-500 font-medium">No hay pagos registrados</p>
             <p className="text-xs text-gray-400 mt-1">Se crean automáticamente al confirmar emisión</p>
           </div>
-        ) : payments.map(p => (
+        ) : groupablePayments.length === 0 ? (
+          <div className="py-8 text-center">
+            <FaCheckCircle className="text-2xl text-gray-300 mx-auto mb-2" />
+            <p className="text-xs text-gray-400">No hay pagos listos para agrupar</p>
+          </div>
+        ) : groupablePayments.map(p => (
           <div key={p.id} className={`bg-white rounded-xl border border-gray-200 shadow-sm p-3 ${p.is_refund ? 'border-l-4 border-l-red-300' : ''}`}>
             <div className="flex items-start justify-between gap-2">
               <div className="flex items-center gap-2 min-w-0">
@@ -256,7 +346,7 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
           <table className="w-full text-left">
             <thead>
               <tr className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
-                <th className="py-2 px-2 w-8"><input type="checkbox" onChange={selectAll} checked={selected.size > 0 && selected.size === payments.filter(p => p.status === 'PENDIENTE').length} className="cursor-pointer" /></th>
+                <th className="py-2 px-2 w-8"><input type="checkbox" onChange={selectAll} checked={selected.size > 0 && selected.size === groupablePayments.filter(p => p.status === 'PENDIENTE').length} className="cursor-pointer" /></th>
                 <th className="py-2 px-2 text-[10px] font-semibold text-gray-500 uppercase">Cliente</th>
                 <th className="py-2 px-2 text-[10px] font-semibold text-gray-500 uppercase">Póliza</th>
                 <th className="py-2 px-2 text-[10px] font-semibold text-gray-500 uppercase">Monto</th>
@@ -269,13 +359,15 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
               </tr>
             </thead>
             <tbody>
-              {payments.length === 0 ? (
+              {groupablePayments.length === 0 && unconfirmedPayments.length === 0 ? (
                 <tr><td colSpan={10} className="py-16 text-center">
                   <FaMoneyBillWave className="text-3xl text-gray-300 mx-auto mb-3" />
                   <p className="text-sm text-gray-500 font-medium">No hay pagos registrados</p>
                   <p className="text-xs text-gray-400 mt-1">Se crean automáticamente al confirmar emisión</p>
                 </td></tr>
-              ) : payments.map(p => (
+              ) : groupablePayments.length === 0 ? (
+                <tr><td colSpan={10} className="py-8 text-center text-gray-400 text-xs">No hay pagos listos para agrupar</td></tr>
+              ) : groupablePayments.map(p => (
                 <tr key={p.id} className={`border-b border-gray-100 hover:bg-gray-50 transition-colors ${p.is_refund ? 'bg-red-50/30' : ''}`}>
                   <td className="py-2 px-2">
                     {p.status === 'PENDIENTE' && <input type="checkbox" checked={selected.has(p.id)} onChange={() => toggleSelect(p.id)} className="cursor-pointer" />}
