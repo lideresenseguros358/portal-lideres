@@ -470,9 +470,10 @@ function ChatView({
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-              placeholder={thread.assigned_type === 'ai' ? 'AI activa — escribe para enviar manualmente...' : 'Escribe un mensaje...'}
+              placeholder={thread.assigned_type === 'ai' ? '🤖 AI activa · Escribe para enviar' : 'Escribe un mensaje...'}
               rows={1}
-              className="flex-1 resize-none border border-gray-200 rounded-xl px-3 py-2 text-xs outline-none focus:ring-1 focus:ring-[#010139]/30 max-h-24"
+              data-no-uppercase
+              className="flex-1 resize-none border border-gray-200 rounded-xl px-3 py-2 text-xs outline-none focus:ring-1 focus:ring-[#010139]/30 max-h-24 normal-case"
             />
             <button
               onClick={handleSend}
