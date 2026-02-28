@@ -13,6 +13,8 @@ import {
   FaSync,
   FaFilePdf,
   FaFileExcel,
+  FaDownload,
+  FaTimes,
   FaArrowUp,
   FaArrowDown,
   FaMinus,
@@ -245,6 +247,41 @@ async function exportToExcel(data: DashboardData) {
 }
 
 // ════════════════════════════════════════════
+// DOWNLOAD FORMAT MODAL
+// ════════════════════════════════════════════
+
+function DashboardDownloadModal({ onClose, onPdf, onExcel }: { onClose: () => void; onPdf: () => void; onExcel: () => void }) {
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-2xl max-w-xs w-full p-5 space-y-4" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-bold text-[#010139]">Descargar Dashboard</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 cursor-pointer"><FaTimes /></button>
+        </div>
+        <div className="space-y-2">
+          <button onClick={onPdf}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg border border-gray-200 hover:bg-red-50 hover:border-red-200 transition-colors cursor-pointer">
+            <FaFilePdf className="text-red-600 text-lg" />
+            <div className="text-left">
+              <p className="text-sm font-medium text-gray-800">PDF Ejecutivo</p>
+              <p className="text-[10px] text-gray-500">KPIs y métricas resumidas</p>
+            </div>
+          </button>
+          <button onClick={onExcel}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg border border-gray-200 hover:bg-green-50 hover:border-green-200 transition-colors cursor-pointer">
+            <FaFileExcel className="text-green-600 text-lg" />
+            <div className="text-left">
+              <p className="text-sm font-medium text-gray-800">Excel Multi-hoja</p>
+              <p className="text-[10px] text-gray-500">Datos completos por sección</p>
+            </div>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════
 // DASHBOARD MAIN
 // ════════════════════════════════════════════
 
@@ -257,6 +294,8 @@ export default function AdmCotDashboard() {
   const [isLoading, setIsLoading] = useState(false);
   const [dashData, setDashData] = useState<DashboardData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showDownloadModal, setShowDownloadModal] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
   const loadingRef = useRef(false);
 
   const fetchDashboard = useCallback(async () => {
@@ -298,64 +337,74 @@ export default function AdmCotDashboard() {
   return (
     <div className="space-y-6">
       {/* ── Filters Bar ── */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
-        <div className="flex flex-wrap items-center gap-3">
-          <FaFilter className="text-gray-400" />
-
-          <div className="flex gap-1">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-3 sm:p-4 space-y-3">
+        {/* Row 1: Date presets + Action icons */}
+        <div className="flex items-center gap-2">
+          <div className="flex gap-1 overflow-x-auto flex-1 pb-0.5">
             {(['today', 'week', 'month', '3months', 'year'] as const).map((p) => (
               <button
                 key={p}
                 onClick={() => applyPreset(p)}
-                className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors cursor-pointer ${
+                className={`px-3 py-1.5 text-xs rounded-lg font-medium transition-colors cursor-pointer whitespace-nowrap ${
                   preset === p ? 'bg-[#010139] text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                 }`}
               >
-                {p === 'today' ? 'Hoy' : p === 'week' ? 'Semana' : p === 'month' ? 'Mes' : p === '3months' ? '3 Meses' : 'Año'}
+                {p === 'today' ? 'Hoy' : p === 'week' ? '7d' : p === 'month' ? '30d' : p === '3months' ? '90d' : 'Año'}
               </button>
             ))}
           </div>
-
-          <div className="flex items-center gap-1.5">
-            <input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); applyPreset('custom'); }}
-              className="text-xs border border-gray-300 rounded-lg px-2 py-1.5" />
-            <span className="text-gray-400 text-xs">—</span>
-            <input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); applyPreset('custom'); }}
-              className="text-xs border border-gray-300 rounded-lg px-2 py-1.5" />
-          </div>
-
-          <select value={selectedInsurer} onChange={(e) => setSelectedInsurer(e.target.value)}
-            className="text-xs border border-gray-300 rounded-lg px-2 py-1.5">
-            <option value="">Todas las aseguradoras</option>
-            <option value="INTERNACIONAL">Internacional</option>
-            <option value="FEDPA">FEDPA</option>
-          </select>
-
-          <select value={selectedRamo} onChange={(e) => setSelectedRamo(e.target.value)}
-            className="text-xs border border-gray-300 rounded-lg px-2 py-1.5">
-            <option value="">Todos los ramos</option>
-            <option value="AUTO">Auto</option>
-            <option value="SALUD">Salud</option>
-            <option value="VIDA">Vida</option>
-          </select>
-
-          <div className="ml-auto flex gap-2">
-            {dashData && (
-              <>
-                <button onClick={() => exportToPdf(dashData)} className="px-3 py-1.5 bg-red-600 text-white text-xs font-medium rounded-lg hover:bg-red-700 transition-colors flex items-center gap-1.5 cursor-pointer">
-                  <FaFilePdf /> PDF
-                </button>
-                <button onClick={() => exportToExcel(dashData)} className="px-3 py-1.5 bg-green-600 text-white text-xs font-medium rounded-lg hover:bg-green-700 transition-colors flex items-center gap-1.5 cursor-pointer">
-                  <FaFileExcel /> Excel
-                </button>
-              </>
-            )}
-            <button onClick={fetchDashboard} disabled={isLoading}
-              className="px-3 py-1.5 bg-[#010139] text-white text-xs font-medium rounded-lg hover:bg-[#020270] transition-colors flex items-center gap-1.5 cursor-pointer">
-              <FaSync className={isLoading ? 'animate-spin' : ''} /> Actualizar
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <button onClick={() => setShowFilters(!showFilters)}
+              className={`p-2 rounded-lg transition-colors cursor-pointer ${showFilters ? 'bg-[#010139] text-white' : 'text-gray-500 hover:bg-gray-100'}`} title="Filtros">
+              <FaFilter className={`text-sm ${showFilters ? 'text-white' : ''}`} />
             </button>
+            <button onClick={fetchDashboard} disabled={isLoading}
+              className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors cursor-pointer" title="Refrescar">
+              <FaSync className={`text-sm ${isLoading ? 'animate-spin' : ''}`} />
+            </button>
+            {dashData && (
+              <button onClick={() => setShowDownloadModal(true)}
+                className="p-2 rounded-lg bg-[#010139] text-white hover:bg-[#020270] transition-colors cursor-pointer" title="Descargar reporte">
+                <FaDownload className="text-sm text-white" />
+              </button>
+            )}
+            {(selectedInsurer || selectedRamo) && (
+              <button onClick={() => { setSelectedInsurer(''); setSelectedRamo(''); }}
+                className="p-2 text-gray-400 hover:text-red-500 cursor-pointer" title="Limpiar filtros">
+                <FaTimes className="text-sm" />
+              </button>
+            )}
           </div>
         </div>
+
+        {/* Advanced filters (collapsible) */}
+        {showFilters && (
+          <div className="pt-2 border-t border-gray-100 space-y-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <div className="w-full max-w-full overflow-hidden">
+                <input type="date" value={dateFrom} onChange={(e) => { setDateFrom(e.target.value); applyPreset('custom'); }}
+                  className="w-full max-w-full text-sm sm:text-xs border border-gray-300 rounded-lg px-2 py-2 sm:py-1.5" />
+              </div>
+              <div className="w-full max-w-full overflow-hidden">
+                <input type="date" value={dateTo} onChange={(e) => { setDateTo(e.target.value); applyPreset('custom'); }}
+                  className="w-full max-w-full text-sm sm:text-xs border border-gray-300 rounded-lg px-2 py-2 sm:py-1.5" />
+              </div>
+              <select value={selectedInsurer} onChange={(e) => setSelectedInsurer(e.target.value)}
+                className="w-full text-sm sm:text-xs border border-gray-300 rounded-lg px-2 py-2 sm:py-1.5">
+                <option value="">Aseguradora</option>
+                <option value="INTERNACIONAL">Internacional</option>
+                <option value="FEDPA">FEDPA</option>
+              </select>
+              <select value={selectedRamo} onChange={(e) => setSelectedRamo(e.target.value)}
+                className="w-full text-sm sm:text-xs border border-gray-300 rounded-lg px-2 py-2 sm:py-1.5">
+                <option value="">Ramo</option>
+                <option value="AUTO">Auto</option>
+                <option value="SALUD">Salud</option>
+                <option value="VIDA">Vida</option>
+              </select>
+            </div>
+          </div>
+        )}
       </div>
 
       {error && (
@@ -569,6 +618,15 @@ export default function AdmCotDashboard() {
         <p className="text-xs text-gray-400 text-right">
           Última actualización: {new Date(dashData.generatedAt).toLocaleString('es-PA')}
         </p>
+      )}
+
+      {/* Download Format Modal */}
+      {showDownloadModal && dashData && (
+        <DashboardDownloadModal
+          onClose={() => setShowDownloadModal(false)}
+          onPdf={() => { exportToPdf(dashData); setShowDownloadModal(false); }}
+          onExcel={() => { exportToExcel(dashData); setShowDownloadModal(false); }}
+        />
       )}
     </div>
   );

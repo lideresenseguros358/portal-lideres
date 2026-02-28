@@ -884,7 +884,7 @@ export default function AdmCotPagos() {
                 ? 'bg-gradient-to-r from-[#010139] to-[#020270] text-white shadow-md'
                 : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'
             }`}>
-            <span className={activeTab === tab.key ? 'text-white' : ''}>{tab.icon}</span>
+            <span className={activeTab === tab.key ? 'text-white' : 'text-gray-400'}>{tab.icon}</span>
             <span className={`hidden sm:inline ${activeTab === tab.key ? 'text-white' : ''}`}>{tab.label}</span>
             <span className={`sm:hidden ${activeTab === tab.key ? 'text-white' : ''}`}>{tab.shortLabel}</span>
           </button>

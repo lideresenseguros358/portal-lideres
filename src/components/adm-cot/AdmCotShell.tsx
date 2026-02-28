@@ -68,8 +68,8 @@ export default function AdmCotShell({ children }: Props) {
                   : 'text-gray-600 hover:bg-gray-100'
               }`}
             >
-              <Icon size={14} className="sm:hidden flex-shrink-0" />
-              <Icon size={16} className="hidden sm:block flex-shrink-0" />
+              <Icon size={14} className={`sm:hidden flex-shrink-0 ${isActive ? 'text-white' : ''}`} />
+              <Icon size={16} className={`hidden sm:block flex-shrink-0 ${isActive ? 'text-white' : ''}`} />
               <span className="hidden sm:inline">{item.label}</span>
               <span className="sm:hidden">{item.shortLabel}</span>
             </Link>
