@@ -83,104 +83,291 @@ function DownloadModal({ onClose, onPdf, onExcel, exporting }: { onClose: () => 
 }
 
 // ════════════════════════════════════════════
-// INDIVIDUAL QUOTE PDF DOWNLOAD
+// FETCH RELATED QUOTES FOR A CLIENT
 // ════════════════════════════════════════════
 
-async function downloadQuotePdf(q: AdmCotQuote) {
+async function fetchRelatedQuotes(q: AdmCotQuote): Promise<AdmCotQuote[]> {
+  // Find all quotes for same client (by cedula) on the same day
+  if (!q.cedula) return [q]; // No cedula? just return this one
+  const quotedDate = q.quoted_at.slice(0, 10); // YYYY-MM-DD
+  try {
+    const params = new URLSearchParams();
+    params.set('page', '1');
+    params.set('pageSize', '50');
+    params.set('dateFrom', quotedDate);
+    params.set('dateTo', quotedDate);
+    const res = await fetch(`/api/adm-cot/cotizaciones?${params.toString()}`);
+    const json = await res.json();
+    if (!json.success) return [q];
+    // Filter by same cedula
+    const all: AdmCotQuote[] = json.data.rows;
+    const related = all.filter(r => r.cedula === q.cedula);
+    return related.length > 0 ? related : [q];
+  } catch { return [q]; }
+}
+
+// ════════════════════════════════════════════
+// COMPREHENSIVE CLIENT SUMMARY PDF
+// ════════════════════════════════════════════
+
+async function downloadClientSummaryPdf(q: AdmCotQuote) {
   const { jsPDF } = await import('jspdf');
+  const autoTable = (await import('jspdf-autotable')).default;
+
+  // Fetch all related quotes for this client
+  const allQuotes = await fetchRelatedQuotes(q);
+
   const doc = new jsPDF('portrait', 'mm', 'a4');
   const w = doc.internal.pageSize.getWidth();
+  const h = doc.internal.pageSize.getHeight();
+  const margin = 14;
+  const fmtMoney = (n: number) => `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const fmtDate = (d: string) => new Date(d).toLocaleDateString('es-PA', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const fmtDateTime = (d: string) => new Date(d).toLocaleString('es-PA');
 
-  // Header
+  // ── HEADER BAR ──
   doc.setFillColor(1, 1, 57);
-  doc.rect(0, 0, w, 30, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(18);
-  doc.text('COTIZACIÓN', 14, 15);
-  doc.setFontSize(10);
-  doc.text(q.quote_ref, 14, 23);
-  doc.text(q.insurer + ' — ' + q.ramo, w - 14, 15, { align: 'right' });
-  doc.text(new Date(q.quoted_at).toLocaleString('es-PA'), w - 14, 23, { align: 'right' });
-
-  // Body
-  doc.setTextColor(0, 0, 0);
-  let y = 42;
-
-  const addField = (label: string, value: string) => {
-    doc.setFontSize(8);
-    doc.setTextColor(120, 120, 120);
-    doc.text(label, 14, y);
-    doc.setFontSize(10);
-    doc.setTextColor(0, 0, 0);
-    doc.text(value || '—', 70, y);
-    y += 7;
-  };
-
-  doc.setFontSize(12);
-  doc.setTextColor(1, 1, 57);
-  doc.text('Datos del Cliente', 14, y); y += 8;
-
-  addField('Nombre:', q.client_name);
-  addField('Cédula:', q.cedula || '—');
-  addField('Email:', q.email || '—');
-  addField('Teléfono:', q.phone || '—');
-  y += 4;
-
-  doc.setFontSize(12);
-  doc.setTextColor(1, 1, 57);
-  doc.text('Detalle de Cotización', 14, y); y += 8;
-
-  addField('Estado:', q.status);
-  addField('Aseguradora:', q.insurer);
-  addField('Ramo:', q.ramo);
-  addField('Cobertura:', q.coverage_type || '—');
-  addField('Plan:', q.plan_name || '—');
-  addField('Prima Anual:', q.annual_premium ? `$${Number(q.annual_premium).toFixed(2)}` : '—');
-  y += 4;
-
-  if (q.vehicle_info) {
-    doc.setFontSize(12);
-    doc.setTextColor(1, 1, 57);
-    doc.text('Vehículo', 14, y); y += 8;
-    Object.entries(q.vehicle_info).forEach(([k, v]) => { addField(k + ':', String(v)); });
-    y += 4;
-  }
-
-  if (q.status === 'EMITIDA' && q.quote_payload) {
-    doc.setFontSize(12);
-    doc.setTextColor(1, 1, 57);
-    doc.text('Información de Emisión', 14, y); y += 8;
-    addField('Nro. Póliza:', (q.quote_payload as any).nro_poliza || '—');
-    addField('Fecha Emisión:', q.emitted_at ? new Date(q.emitted_at).toLocaleString('es-PA') : '—');
-    if (q.quoted_at && q.emitted_at) {
-      const diffMs = new Date(q.emitted_at).getTime() - new Date(q.quoted_at).getTime();
-      const diffMin = Math.round(diffMs / 60000);
-      addField('Tiempo:', diffMin + ' minutos');
-    }
-    y += 4;
-  }
-
-  if (q.steps_log && q.steps_log.length > 0) {
-    doc.setFontSize(12);
-    doc.setTextColor(1, 1, 57);
-    doc.text('Funnel de Pasos', 14, y); y += 8;
-    q.steps_log.forEach((s) => {
-      addField(s.step + ':', new Date(s.ts).toLocaleString('es-PA'));
-    });
-    y += 4;
-  }
-
-  // Footer
-  const fh = doc.internal.pageSize.getHeight();
+  doc.rect(0, 0, w, 28, 'F');
   doc.setDrawColor(138, 170, 25);
-  doc.line(14, fh - 25, w - 14, fh - 25);
-  doc.setFontSize(7);
-  doc.setTextColor(120, 120, 120);
-  doc.text(`IP: ${q.ip_address || '—'} | Región: ${q.region || '—'} | Dispositivo: ${q.device || '—'}`, 14, fh - 19);
-  doc.text(`Timestamp: ${new Date(q.quoted_at).toISOString()} | Ambiente: ${process.env.NODE_ENV === 'production' ? 'PROD' : 'DEV'}`, 14, fh - 14);
-  doc.text(`ID: ${q.id} | Ref: ${q.quote_ref}`, 14, fh - 9);
+  doc.setLineWidth(1.5);
+  doc.line(0, 28, w, 28);
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(16);
+  doc.text('RESUMEN DE COTIZACIONES', margin, 12);
+  doc.setFontSize(8);
+  doc.text(`Generado: ${new Date().toLocaleString('es-PA')} | Líderes en Seguros, S.A.`, margin, 22);
+  doc.text(`${allQuotes.length} cotización(es) encontrada(s)`, w - margin, 22, { align: 'right' });
 
-  doc.save(`cotizacion-${q.quote_ref}.pdf`);
+  let y = 36;
+
+  // ── SECTION: CLIENT INFO ──
+  doc.setFillColor(245, 245, 245);
+  doc.rect(margin, y, w - margin * 2, 32, 'F');
+  doc.setDrawColor(1, 1, 57);
+  doc.setLineWidth(0.3);
+  doc.rect(margin, y, w - margin * 2, 32, 'S');
+
+  doc.setFontSize(9);
+  doc.setTextColor(1, 1, 57);
+  doc.text('DATOS DEL CLIENTE', margin + 4, y + 7);
+
+  doc.setFontSize(8);
+  doc.setTextColor(60, 60, 60);
+  const col2 = margin + (w - margin * 2) * 0.5;
+  doc.text(`Nombre: ${q.client_name}`, margin + 4, y + 15);
+  doc.text(`Cédula: ${q.cedula || '—'}`, margin + 4, y + 22);
+  doc.text(`Email: ${q.email || '—'}`, col2, y + 15);
+  doc.text(`Teléfono: ${q.phone || '—'}`, col2, y + 22);
+  doc.text(`Fecha: ${fmtDate(q.quoted_at)}`, margin + 4, y + 29);
+  doc.text(`Región: ${q.region || '—'} | Dispositivo: ${q.device || '—'}`, col2, y + 29);
+
+  y += 38;
+
+  // ── SECTION: VEHICLE INFO (if available) ──
+  const vehicleQuote = allQuotes.find(r => r.vehicle_info && Object.keys(r.vehicle_info).length > 0);
+  if (vehicleQuote?.vehicle_info) {
+    doc.setFillColor(245, 245, 245);
+    doc.rect(margin, y, w - margin * 2, 18, 'F');
+    doc.setDrawColor(1, 1, 57);
+    doc.rect(margin, y, w - margin * 2, 18, 'S');
+
+    doc.setFontSize(9);
+    doc.setTextColor(1, 1, 57);
+    doc.text('VEHÍCULO', margin + 4, y + 7);
+
+    doc.setFontSize(8);
+    doc.setTextColor(60, 60, 60);
+    const vi = vehicleQuote.vehicle_info;
+    const vehicleStr = [vi.marca, vi.modelo, vi.anio].filter(Boolean).join(' ');
+    const valorStr = vi.valor ? ` — Valor: ${fmtMoney(Number(vi.valor))}` : '';
+    doc.text(`${vehicleStr}${valorStr}`, margin + 4, y + 14);
+
+    y += 24;
+  }
+
+  // ── SECTION: ALL QUOTES TABLE ──
+  doc.setFontSize(11);
+  doc.setTextColor(1, 1, 57);
+  doc.text('COTIZACIONES REALIZADAS', margin, y + 4);
+  y += 8;
+
+  // Group by insurer
+  const byInsurer: Record<string, AdmCotQuote[]> = {};
+  allQuotes.forEach(r => {
+    if (!byInsurer[r.insurer]) byInsurer[r.insurer] = [];
+    byInsurer[r.insurer]!.push(r);
+  });
+
+  // Sort each group: emitted first, then by premium descending
+  Object.values(byInsurer).forEach(arr => arr.sort((a, b) => {
+    if (a.status === 'EMITIDA' && b.status !== 'EMITIDA') return -1;
+    if (b.status === 'EMITIDA' && a.status !== 'EMITIDA') return 1;
+    return (Number(b.annual_premium) || 0) - (Number(a.annual_premium) || 0);
+  }));
+
+  // Build table data
+  const tableBody: any[][] = [];
+  for (const [insurerName, quotes] of Object.entries(byInsurer)) {
+    quotes.forEach(r => {
+      const isEmitted = r.status === 'EMITIDA';
+      const selectedMark = isEmitted ? '✓ SELECCIONADO' : '';
+      tableBody.push([
+        insurerName,
+        r.plan_name || '—',
+        r.coverage_type || r.ramo || '—',
+        r.annual_premium ? fmtMoney(Number(r.annual_premium)) : '—',
+        r.status,
+        selectedMark,
+      ]);
+    });
+  }
+
+  autoTable(doc, {
+    startY: y,
+    margin: { left: margin, right: margin },
+    head: [['Aseguradora', 'Plan', 'Cobertura', 'Prima Anual', 'Estado', '']],
+    body: tableBody,
+    styles: { fontSize: 7.5, cellPadding: 2.5 },
+    headStyles: { fillColor: [1, 1, 57], textColor: 255, fontSize: 8 },
+    alternateRowStyles: { fillColor: [248, 248, 248] },
+    columnStyles: {
+      0: { fontStyle: 'bold', cellWidth: 32 },
+      3: { halign: 'right', fontStyle: 'bold' },
+      5: { textColor: [138, 170, 25], fontStyle: 'bold', cellWidth: 30 },
+    },
+    didParseCell: (data: any) => {
+      // Highlight emitted row with green background
+      if (data.section === 'body' && data.row.raw) {
+        const statusCell = data.row.raw[4];
+        if (statusCell === 'EMITIDA') {
+          data.cell.styles.fillColor = [232, 245, 215]; // light green
+        }
+      }
+    },
+    didDrawPage: (data: any) => {
+      // Footer on every page
+      doc.setFontSize(6.5);
+      doc.setTextColor(150, 150, 150);
+      doc.text(`Página ${data.pageNumber}`, w - margin, h - 8, { align: 'right' });
+      doc.text('Líderes en Seguros, S.A. — Documento generado automáticamente', margin, h - 8);
+    },
+  });
+
+  y = (doc as any).lastAutoTable?.finalY || y + 40;
+  y += 6;
+
+  // ── SECTION: EMISSION DETAIL (if any emitted) ──
+  const emittedQuote = allQuotes.find(r => r.status === 'EMITIDA');
+  if (emittedQuote) {
+    if (y > h - 60) { doc.addPage(); y = 20; }
+
+    doc.setFillColor(232, 245, 215);
+    doc.rect(margin, y, w - margin * 2, 28, 'F');
+    doc.setDrawColor(138, 170, 25);
+    doc.setLineWidth(0.5);
+    doc.rect(margin, y, w - margin * 2, 28, 'S');
+
+    doc.setFontSize(9);
+    doc.setTextColor(1, 1, 57);
+    doc.text('PLAN SELECCIONADO — EMISIÓN EXITOSA', margin + 4, y + 7);
+
+    doc.setFontSize(8);
+    doc.setTextColor(60, 60, 60);
+    const nroPol = (emittedQuote.quote_payload as any)?.nro_poliza || '—';
+    doc.text(`Aseguradora: ${emittedQuote.insurer} — Plan: ${emittedQuote.plan_name || '—'}`, margin + 4, y + 15);
+    doc.text(`Nro. Póliza: ${nroPol}`, margin + 4, y + 22);
+
+    const primaStr = emittedQuote.annual_premium ? fmtMoney(Number(emittedQuote.annual_premium)) : '—';
+    doc.setFontSize(10);
+    doc.setTextColor(138, 170, 25);
+    doc.text(primaStr, w - margin - 4, y + 15, { align: 'right' });
+
+    doc.setFontSize(7);
+    doc.setTextColor(100, 100, 100);
+    if (emittedQuote.emitted_at) {
+      doc.text(`Emitida: ${fmtDateTime(emittedQuote.emitted_at)}`, w - margin - 4, y + 22, { align: 'right' });
+    }
+    if (emittedQuote.quoted_at && emittedQuote.emitted_at) {
+      const diffMin = Math.round((new Date(emittedQuote.emitted_at).getTime() - new Date(emittedQuote.quoted_at).getTime()) / 60000);
+      doc.text(`Tiempo cotización → emisión: ${diffMin} min`, w - margin - 4, y + 27, { align: 'right' });
+    }
+
+    y += 34;
+  }
+
+  // ── SECTION: QUOTE DETAIL PER INSURER (individual details) ──
+  if (y > h - 50) { doc.addPage(); y = 20; }
+
+  doc.setFontSize(10);
+  doc.setTextColor(1, 1, 57);
+  doc.text('DETALLE POR COTIZACIÓN', margin, y + 4);
+  y += 10;
+
+  for (const r of allQuotes) {
+    if (y > h - 45) { doc.addPage(); y = 20; }
+
+    const isEmitted = r.status === 'EMITIDA';
+    // Card outline
+    doc.setFillColor(isEmitted ? 232 : 255, isEmitted ? 245 : 255, isEmitted ? 215 : 255);
+    doc.setDrawColor(isEmitted ? 138 : 200, isEmitted ? 170 : 200, isEmitted ? 25 : 200);
+    doc.setLineWidth(isEmitted ? 0.5 : 0.3);
+    doc.rect(margin, y, w - margin * 2, 28, 'FD');
+
+    // Ref + insurer
+    doc.setFontSize(8);
+    doc.setTextColor(1, 1, 57);
+    doc.text(`${r.insurer} — ${r.plan_name || '—'}`, margin + 4, y + 7);
+    doc.setFontSize(6.5);
+    doc.setTextColor(120, 120, 120);
+    doc.text(`Ref: ${r.quote_ref}`, margin + 4, y + 13);
+
+    // Status badge
+    const statusColors: Record<string, number[]> = {
+      COTIZADA: [59, 130, 246],   // blue
+      EMITIDA: [34, 197, 94],    // green
+      FALLIDA: [239, 68, 68],    // red
+      ABANDONADA: [156, 163, 175], // gray
+    };
+    const sc = statusColors[r.status] || [100, 100, 100];
+    doc.setTextColor(sc[0]!, sc[1]!, sc[2]!);
+    doc.setFontSize(7);
+    doc.text(r.status, w - margin - 4, y + 7, { align: 'right' });
+
+    if (isEmitted) {
+      doc.setTextColor(138, 170, 25);
+      doc.setFontSize(7);
+      doc.text('✓ SELECCIONADO', w - margin - 4, y + 13, { align: 'right' });
+    }
+
+    // Prima + details
+    doc.setFontSize(8);
+    doc.setTextColor(60, 60, 60);
+    const prima = r.annual_premium ? fmtMoney(Number(r.annual_premium)) : '—';
+    doc.text(`Prima: ${prima}`, margin + 4, y + 20);
+    doc.text(`Cobertura: ${r.coverage_type || r.ramo || '—'}`, margin + (w - margin * 2) * 0.4, y + 20);
+    doc.text(`Fecha: ${fmtDateTime(r.quoted_at)}`, margin + 4, y + 26);
+
+    // Steps
+    if (r.steps_log && r.steps_log.length > 0) {
+      const stepsStr = r.steps_log.map(s => s.step).join(' → ');
+      doc.setFontSize(6);
+      doc.setTextColor(150, 150, 150);
+      doc.text(`Pasos: ${stepsStr}`, margin + (w - margin * 2) * 0.4, y + 26);
+    }
+
+    y += 32;
+  }
+
+  // ── FOOTER ON LAST PAGE ──
+  doc.setDrawColor(138, 170, 25);
+  doc.line(margin, h - 20, w - margin, h - 20);
+  doc.setFontSize(6);
+  doc.setTextColor(150, 150, 150);
+  doc.text('Este documento es un resumen generado por Líderes en Seguros, S.A. La prima final puede variar al momento de la emisión.', margin, h - 15);
+  doc.text('Regulado por la Superintendencia de Seguros y Reaseguros de Panamá.', margin, h - 11);
+
+  const fileName = `resumen-cotizaciones-${q.cedula || q.quote_ref}.pdf`;
+  doc.save(fileName);
 }
 
 // ════════════════════════════════════════════
@@ -408,10 +595,11 @@ function QuoteDetail({ quote }: { quote: AdmCotQuote }) {
 
       <div className="flex justify-end">
         <button
-          onClick={(e) => { e.stopPropagation(); downloadQuotePdf(quote); }}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-[#010139] text-white text-xs font-medium rounded-lg hover:bg-[#020270] transition-colors cursor-pointer"
+          onClick={(e) => { e.stopPropagation(); downloadClientSummaryPdf(quote); }}
+          className="p-2 bg-[#010139] text-white rounded-lg hover:bg-[#020270] transition-colors cursor-pointer"
+          title="Descargar resumen de cotizaciones"
         >
-          <FaDownload className="text-white" /> <span className="text-white">Descargar PDF</span>
+          <FaDownload className="text-sm text-white" />
         </button>
       </div>
     </div>
