@@ -494,16 +494,36 @@ function ChatView({
 // CONFIG PANEL
 // ════════════════════════════════════════════
 
+interface MasterUser {
+  id: string;
+  name: string;
+  email: string;
+  avatar_url: string | null;
+}
+
 function ConfigPanel({
   thread, onClose, onAssign, onChangeStatus, assigning,
 }: {
   thread: ChatThread;
   onClose: () => void;
-  onAssign: (target: 'ai' | 'self') => void;
+  onAssign: (target: 'ai' | { user_id: string }) => void;
   onChangeStatus: (status: string) => void;
   assigning: boolean;
 }) {
   const classification = thread.metadata?.last_classification;
+  const [masters, setMasters] = useState<MasterUser[]>([]);
+  const [loadingMasters, setLoadingMasters] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoadingMasters(true);
+    fetch('/api/chats/masters')
+      .then(r => r.json())
+      .then(json => { if (!cancelled && json.success) setMasters(json.data); })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setLoadingMasters(false); });
+    return () => { cancelled = true; };
+  }, []);
 
   return (
     <div className="flex flex-col h-full bg-white border-l border-gray-200">
@@ -520,22 +540,7 @@ function ConfigPanel({
         <div>
           <h4 className="text-xs font-bold text-gray-700 mb-2">Asignación</h4>
           <div className="space-y-2">
-            <button
-              onClick={() => onAssign('self')}
-              disabled={assigning || thread.assigned_type === 'master'}
-              className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg border text-xs font-medium cursor-pointer transition-colors ${
-                thread.assigned_type === 'master'
-                  ? 'border-blue-500 bg-blue-50 text-blue-700'
-                  : 'border-gray-200 hover:border-blue-300 text-gray-700'
-              }`}>
-              <FaUserTie className={thread.assigned_type === 'master' ? 'text-blue-500' : 'text-gray-400'} />
-              <div className="text-left">
-                <p>Asignarme esta conversación</p>
-                <p className="text-[10px] text-gray-400">Desactiva LISSA AI</p>
-              </div>
-              {thread.assigned_type === 'master' && <FaCheck className="ml-auto text-blue-500" />}
-            </button>
-
+            {/* LISSA AI */}
             <button
               onClick={() => onAssign('ai')}
               disabled={assigning || (thread.assigned_type === 'ai' && thread.ai_enabled)}
@@ -546,11 +551,53 @@ function ConfigPanel({
               }`}>
               <FaRobot className={thread.assigned_type === 'ai' ? 'text-purple-500' : 'text-gray-400'} />
               <div className="text-left">
-                <p>Reasignar a LISSA AI</p>
-                <p className="text-[10px] text-gray-400">Activa respuesta automática</p>
+                <p>LISSA AI</p>
+                <p className="text-[10px] text-gray-400">Respuesta automática</p>
               </div>
               {thread.assigned_type === 'ai' && <FaCheck className="ml-auto text-purple-500" />}
             </button>
+
+            {/* Master users list */}
+            <div className="border border-gray-200 rounded-lg overflow-hidden">
+              <div className="px-3 py-1.5 bg-gray-50 border-b border-gray-200">
+                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Asignar a Master</span>
+              </div>
+              {loadingMasters ? (
+                <div className="px-3 py-4 text-center">
+                  <FaSync className="animate-spin text-gray-300 mx-auto text-xs" />
+                </div>
+              ) : masters.length === 0 ? (
+                <p className="px-3 py-3 text-[10px] text-gray-400 text-center">No se encontraron masters</p>
+              ) : (
+                <div className="max-h-40 overflow-y-auto">
+                  {masters.map(m => {
+                    const isAssigned = thread.assigned_type === 'master' && thread.assigned_master_user_id === m.id;
+                    return (
+                      <button
+                        key={m.id}
+                        onClick={() => onAssign({ user_id: m.id })}
+                        disabled={assigning || isAssigned}
+                        className={`w-full flex items-center gap-2 px-3 py-2 text-left text-xs transition-colors cursor-pointer ${
+                          isAssigned
+                            ? 'bg-blue-50 text-blue-700'
+                            : 'hover:bg-gray-50 text-gray-700'
+                        }`}>
+                        <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 text-[10px] font-bold ${
+                          isAssigned ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-600'
+                        }`}>
+                          {m.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium truncate">{m.name}</p>
+                          <p className="text-[10px] text-gray-400 truncate">{m.email}</p>
+                        </div>
+                        {isAssigned && <FaCheck className="text-blue-500 flex-shrink-0" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -755,7 +802,7 @@ export default function AdmCotChats() {
   };
 
   // Assign
-  const handleAssign = async (target: 'ai' | 'self') => {
+  const handleAssign = async (target: 'ai' | { user_id: string }) => {
     if (!selectedThreadId) return;
     setAssigning(true);
     try {
@@ -764,7 +811,7 @@ export default function AdmCotChats() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           thread_id: selectedThreadId,
-          assign_to: target === 'ai' ? 'ai' : undefined,
+          assign_to: target === 'ai' ? 'ai' : target,
         }),
       });
       await fetchThreadDetail(selectedThreadId);
