@@ -23,6 +23,7 @@ import SignaturePad from '@/components/cotizadores/SignaturePad';
 import Image from 'next/image';
 import { buscarOcupacion } from '@/lib/fedpa/catalogos-complementarios';
 import { trackQuoteEmitted, trackQuoteFailed, trackStepUpdate } from '@/lib/adm-cot/track-quote';
+import { createPaymentOnEmission } from '@/lib/adm-cot/create-payment-on-emission';
 import { formatISPolicyNumber } from '@/lib/utils/policy-number';
 
 // 4 steps for DT (no inspection, no cuotas — payment modal handles contado vs cuotas)
@@ -323,6 +324,17 @@ export default function EmitirDanosTercerosPage() {
           phone: emissionData.telefono || emissionData.celular,
         });
         
+        // ═══ ADM COT: Auto-create pending payment + recurrence ═══
+        createPaymentOnEmission({
+          insurer: 'FEDPA',
+          policyNumber: emisionResult.nroPoliza || emisionResult.poliza || '',
+          insuredName: `${emissionData.primerNombre} ${emissionData.primerApellido}`,
+          cedula: emissionData.cedula,
+          totalPremium: selectedPaymentMode === 'cuotas' ? selectedInstallmentsTotal : (selectedPlan.annualPremium || 0),
+          installments: selectedInstallmentsCount,
+          ramo: 'AUTO',
+        });
+
         // ═══ ENVIAR BIENVENIDA AL CLIENTE POR CORREO ═══
         toast.info('Enviando confirmación por correo...');
         try {
@@ -524,6 +536,17 @@ export default function EmitirDanosTercerosPage() {
           cedula: emissionData.cedula,
           email: emissionData.email,
           phone: emissionData.telefono || emissionData.celular,
+        });
+
+        // ═══ ADM COT: Auto-create pending payment + recurrence ═══
+        createPaymentOnEmission({
+          insurer: 'INTERNACIONAL',
+          policyNumber: emisionResult.nroPoliza || '',
+          insuredName: `${emissionData.primerNombre} ${emissionData.primerApellido}`,
+          cedula: emissionData.cedula,
+          totalPremium: selectedPlan.annualPremium || 0,
+          installments: 1,
+          ramo: 'AUTO',
         });
 
         // ═══ ENVIAR EXPEDIENTE Y BIENVENIDA POR CORREO ═══

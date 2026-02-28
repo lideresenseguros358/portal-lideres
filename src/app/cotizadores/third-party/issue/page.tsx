@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import ThirdPartyIssuanceForm from '@/components/quotes/ThirdPartyIssuanceForm';
 import { AUTO_THIRD_PARTY_INSURERS } from '@/lib/constants/auto-quotes';
 import { formatISPolicyNumber } from '@/lib/utils/policy-number';
+import { createPaymentOnEmission } from '@/lib/adm-cot/create-payment-on-emission';
 
 export default function ThirdPartyIssuePage() {
   const router = useRouter();
@@ -96,6 +97,17 @@ export default function ThirdPartyIssuePage() {
         // ═══ Prefix IS policy number with 1-30- ═══
         emisionResult.nroPoliza = formatISPolicyNumber(emisionResult.nroPoliza);
 
+        // ═══ ADM COT: Auto-create pending payment ═══
+        createPaymentOnEmission({
+          insurer: 'INTERNACIONAL',
+          policyNumber: emisionResult.nroPoliza || '',
+          insuredName: `${formData.firstName} ${formData.lastName}`,
+          cedula: formData.nationalId,
+          totalPremium: plan.annualPremium || 0,
+          installments: 1,
+          ramo: 'AUTO',
+        });
+
         toast.dismiss();
         toast.success(`¡Póliza emitida! Nº ${emisionResult.nroPoliza}`);
         
@@ -170,6 +182,17 @@ export default function ThirdPartyIssuePage() {
           throw new Error(emisionResult.error || 'Error al emitir póliza');
         }
         
+        // ═══ ADM COT: Auto-create pending payment ═══
+        createPaymentOnEmission({
+          insurer: 'FEDPA',
+          policyNumber: emisionResult.poliza || emisionResult.nroPoliza || '',
+          insuredName: `${formData.firstName} ${formData.lastName}`,
+          cedula: formData.nationalId,
+          totalPremium: plan.annualPremium || 0,
+          installments: 1,
+          ramo: 'AUTO',
+        });
+
         toast.dismiss();
         toast.success(`¡Póliza emitida! Nº ${emisionResult.poliza || emisionResult.nroPoliza}`);
         
