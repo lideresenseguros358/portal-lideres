@@ -1343,7 +1343,7 @@ export async function actionCreateDraftFortnight(payload: unknown) {
         period_start: parsed.period_start,
         period_end: parsed.period_end,
         status: 'DRAFT',
-        notify_brokers: false,
+        notify_brokers: true,
         created_by: userId,
       } satisfies FortnightIns])
       .select()

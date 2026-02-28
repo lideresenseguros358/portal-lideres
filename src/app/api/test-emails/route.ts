@@ -8,7 +8,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { sendEmail } from '@/server/email/sendEmail';
 import { renderEmailTemplate } from '@/server/email/renderer';
-import { verifyConnection } from '@/server/email/mailer';
 
 const TEST_EMAIL = 'javiersamudio@lideresenseguros.com';
 
@@ -289,12 +288,11 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // 1. Verificar conexión SMTP primero
-    console.log(`[TEST-EMAIL] Verificando conexión SMTP ${fromType}...`);
-    const isConnected = await verifyConnection(fromType);
-    if (!isConnected) {
+    // 1. Verificar que ZeptoMail API key esté configurada
+    const apiKey = process.env.ZEPTO_API_KEY || process.env.ZEPTO_SMTP_PASS || '';
+    if (!apiKey) {
       return NextResponse.json(
-        { success: false, error: `No se pudo conectar al servidor SMTP ${fromType}` },
+        { success: false, error: 'ZEPTO_API_KEY no está configurada' },
         { status: 500 }
       );
     }
@@ -356,23 +354,19 @@ export async function POST(request: NextRequest) {
  */
 export async function GET() {
   try {
-    console.log('[TEST-EMAIL] Verificando conexiones SMTP...');
-    
-    const portalStatus = await verifyConnection('PORTAL');
-    const tramitesStatus = await verifyConnection('TRAMITES');
+    const apiKey = process.env.ZEPTO_API_KEY || process.env.ZEPTO_SMTP_PASS || '';
+    const sender = process.env.ZEPTO_SENDER || 'portal@lideresenseguros.com';
     
     return NextResponse.json({
       success: true,
-      smtp: {
-        portal: portalStatus ? 'connected' : 'disconnected',
-        tramites: tramitesStatus ? 'connected' : 'disconnected',
-      },
-      host: process.env.ZEPTO_SMTP_HOST || 'smtp.zeptomail.com',
-      port: process.env.ZEPTO_SMTP_PORT || '465',
+      transport: 'zepto-api',
+      configured: !!apiKey,
+      sender,
+      apiUrl: 'https://api.zeptomail.com/v1.1/email',
     });
     
   } catch (error: any) {
-    console.error('[TEST-EMAIL] Error verificando SMTP:', error);
+    console.error('[TEST-EMAIL] Error:', error);
     return NextResponse.json(
       { success: false, error: error.message },
       { status: 500 }

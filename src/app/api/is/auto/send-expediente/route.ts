@@ -6,11 +6,61 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createHash } from 'crypto';
-import { getTransport, getFromAddress } from '@/server/email/mailer';
 import { generateInspectionPdf } from '@/lib/is/inspection-pdf';
 import { generateISQuotePdf } from '@/lib/is/quote-pdf';
 import { generateAuthorizationPdf } from '@/lib/authorization-pdf';
 import { guardarDocumentosExpediente } from '@/lib/storage/expediente-server';
+
+// ZeptoMail REST API for sending emails with attachments
+const ZEPTO_API_URL = 'https://api.zeptomail.com/v1.1/email';
+
+async function sendZeptoWithAttachments(opts: {
+  to: string | string[];
+  subject: string;
+  html: string;
+  attachments?: Array<{ filename: string; content: Buffer; contentType: string }>;
+}): Promise<{ ok: boolean; messageId: string }> {
+  const apiKey = process.env.ZEPTO_API_KEY || process.env.ZEPTO_SMTP_PASS || '';
+  const sender = process.env.ZEPTO_SENDER || 'portal@lideresenseguros.com';
+  const senderName = process.env.ZEPTO_SENDER_NAME || 'Líderes en Seguros';
+
+  const toArr = Array.isArray(opts.to) ? opts.to : [opts.to];
+  const recipients = toArr.map(addr => ({ email_address: { address: addr, name: addr } }));
+
+  const body: Record<string, any> = {
+    from: { address: sender, name: senderName },
+    to: recipients,
+    subject: opts.subject,
+    htmlbody: opts.html,
+    textbody: '',
+  };
+
+  if (opts.attachments && opts.attachments.length > 0) {
+    body.attachments = opts.attachments.map(att => ({
+      name: att.filename,
+      content: att.content.toString('base64'),
+      mime_type: att.contentType,
+    }));
+  }
+
+  const res = await fetch(ZEPTO_API_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Zoho-encrtoken ${apiKey}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`ZeptoMail API error (${res.status}): ${errText.substring(0, 300)}`);
+  }
+
+  const data = await res.json();
+  const messageId = data?.data?.[0]?.message_id || data?.request_id || 'unknown';
+  return { ok: true, messageId };
+}
 
 // Expediente recipients
 const OFFICE_EMAIL = 'contacto@lideresenseguros.com';
@@ -272,9 +322,7 @@ export async function POST(request: NextRequest) {
       insurerName,
     });
     
-    // Send emails via PORTAL SMTP
-    const transport = getTransport('PORTAL');
-    const fromAddress = getFromAddress('PORTAL');
+    // Send emails via ZeptoMail REST API
     let isMailMessageId = '';
 
     // ═══ EMAIL 1: EXPEDIENTE PARA ASEGURADORA (solo Internacional) ═══
@@ -283,16 +331,11 @@ export async function POST(request: NextRequest) {
     if (isIS) {
       try {
         console.log('[IS EXPEDIENTE] Enviando expediente a Internacional...', isRecipients);
-        const isMailResult = await transport.sendMail({
-          from: fromAddress,
-          to: isRecipients.join(', '),
+        const isMailResult = await sendZeptoWithAttachments({
+          to: isRecipients,
           subject: `Expediente de Emisión - ${coberturaLabel} - ${nombreCompleto} - ${clientData.cedula}${nroPoliza ? ` - Póliza ${nroPoliza}` : ''}`,
           html: htmlBody,
-          attachments: attachments.map(att => ({
-            filename: att.filename,
-            content: att.content,
-            contentType: att.contentType,
-          })),
+          attachments,
         });
         isMailMessageId = isMailResult.messageId;
         console.log('[IS EXPEDIENTE] ✅ Correo expediente IS enviado:', isMailMessageId);
@@ -346,16 +389,11 @@ export async function POST(request: NextRequest) {
       });
 
       console.log('[IS EXPEDIENTE] Enviando expediente portal a:', PORTAL_RECIPIENT);
-      await transport.sendMail({
-        from: fromAddress,
+      await sendZeptoWithAttachments({
         to: PORTAL_RECIPIENT,
         subject: `Expediente Portal - ${insurerName} - ${coberturaLabel} - ${nombreCompleto} - ${clientData.cedula}${nroPoliza ? ` - Póliza ${nroPoliza}` : ''}`,
         html: portalHtml,
-        attachments: portalAttachments.map(att => ({
-          filename: att.filename,
-          content: att.content,
-          contentType: att.contentType,
-        })),
+        attachments: portalAttachments,
       });
       console.log('[IS EXPEDIENTE] ✅ Expediente portal enviado a:', PORTAL_RECIPIENT);
     } catch (portalMailError: any) {
@@ -391,8 +429,7 @@ export async function POST(request: NextRequest) {
       const welcomeSubject = `¡Bienvenido! Tu póliza ha sido emitida - ${coberturaLabel}${nroPoliza ? ` - Póliza ${nroPoliza}` : ''}`;
       
       // Send welcome email to client's real email (fallback to office if no email)
-      const welcomeResult = await transport.sendMail({
-        from: fromAddress,
+      const welcomeResult = await sendZeptoWithAttachments({
         to: welcomeRecipient,
         subject: welcomeSubject,
         html: welcomeHtml,

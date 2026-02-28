@@ -2,20 +2,21 @@
  * WHATSAPP ENDPOINT — Twilio Webhook
  * ====================================
  * Receives incoming WhatsApp messages from Twilio.
- * Processes via shared chatProcessor pipeline.
- * Responds via Twilio REST API.
+ * Processes via ADM COT Chat Engine pipeline:
+ *   save → classify (Vertex AI) → escalate (if urgent) → AI reply (if enabled) → send via Twilio
  * 
  * Security:
  * - Twilio signature validation
  * - Input sanitization
  * - Rate limiting per phone
+ * - Message deduplication
  */
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { processMessage } from '@/lib/chatProcessor';
+import { processInboundMessage } from '@/lib/chat/chat-engine';
 import crypto from 'crypto';
 
 const TWILIO_AUTH_TOKEN = process.env.TWILIO_AUTH_TOKEN || '';
@@ -207,7 +208,9 @@ export async function POST(request: NextRequest) {
     const params = new URLSearchParams(rawBody);
     const messageBody = params.get('Body') || '';
     const from = params.get('From') || ''; // whatsapp:+507XXXXXXXX
+    const to = params.get('To') || '';
     const profileName = params.get('ProfileName') || null;
+    const messageSid = params.get('MessageSid') || null;
 
     console.log('[WHATSAPP] From:', from, '| Profile:', profileName, '| Message:', messageBody.substring(0, 100));
 
@@ -218,24 +221,33 @@ export async function POST(request: NextRequest) {
 
     // Rate limit
     const phone = from.replace(/^whatsapp:/i, '');
+    const toPhone = to.replace(/^whatsapp:/i, '');
     if (!checkRateLimit(phone)) {
       console.warn('[WHATSAPP] Rate limited:', phone);
       await sendTwilioReply(from, 'Ha enviado muchos mensajes en poco tiempo. Por favor espere un momento antes de intentar de nuevo.');
       return twimlResponse();
     }
 
-    // Process message through pipeline
-    console.log('[WHATSAPP] Processing via chatProcessor...');
-    const result = await processMessage({
-      message: messageBody,
+    // Process through ADM COT Chat Engine pipeline
+    console.log('[WHATSAPP] Processing via chat-engine...');
+    const result = await processInboundMessage({
+      fromPhone: phone,
+      toPhone: toPhone || TWILIO_WHATSAPP_NUMBER.replace(/^whatsapp:/i, ''),
+      body: messageBody,
+      profileName: profileName || undefined,
+      providerMessageId: messageSid || undefined,
       channel: 'whatsapp',
-      phone,
     });
-    console.log('[WHATSAPP] Intent:', result.intent, '| Escalated:', result.escalated, '| LogId:', result.logId);
 
-    // Send reply via Twilio
-    const sent = await sendTwilioReply(from, result.reply);
-    console.log('[WHATSAPP] Reply sent:', sent, '| Duration:', Date.now() - startTime, 'ms');
+    console.log('[WHATSAPP] Thread:', result.threadId, '| Category:', result.classification.category, '| Severity:', result.classification.severity);
+
+    // If AI generated a reply, send it via Twilio
+    if (result.aiReply && result.aiReplySent) {
+      const sent = await sendTwilioReply(from, result.aiReply);
+      console.log('[WHATSAPP] AI reply sent:', sent, '| Duration:', Date.now() - startTime, 'ms');
+    } else {
+      console.log('[WHATSAPP] No AI reply (ai_enabled=false or assigned to master). Duration:', Date.now() - startTime, 'ms');
+    }
 
     // Always return empty TwiML to Twilio
     return twimlResponse();

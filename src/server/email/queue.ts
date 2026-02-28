@@ -1,9 +1,9 @@
 /**
- * SISTEMA DE COLA Y RATE-LIMITING PARA SMTP
- * ==========================================
+ * SISTEMA DE COLA Y RATE-LIMITING PARA ZEPTO API
+ * ================================================
  * Implementa envío serializado con intervalos seguros para ZeptoMail
  * 
- * ZEPTOMAIL SMTP:
+ * ZEPTOMAIL API:
  * - Diseñado para envío transaccional masivo
  * - Límites mucho más altos que Zoho (miles/hora)
  * - Soporta envío rápido pero mantenemos serialización por seguridad

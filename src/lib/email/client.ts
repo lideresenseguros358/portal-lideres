@@ -1,11 +1,11 @@
 /**
- * Email Client - ZeptoMail SMTP
- * ==============================
- * Configuración centralizada para envío de emails vía ZeptoMail.
- * Todos los correos salen por portal@lideresenseguros.com vía ZeptoMail SMTP
+ * Email Client — ZeptoMail REST API
+ * ===================================
+ * Configuración centralizada para envío de emails vía ZeptoMail REST API.
+ * Todos los correos salen por portal@lideresenseguros.com
  */
 
-import { getTransport, getFromAddress } from '@/server/email/mailer';
+const ZEPTO_API_URL = 'https://api.zeptomail.com/v1.1/email';
 
 // Configuración por defecto
 export const EMAIL_CONFIG = {
@@ -41,25 +41,67 @@ export interface SendEmailOptions {
 }
 
 /**
- * Función helper para enviar emails vía ZeptoMail SMTP
+ * Función helper para enviar emails vía ZeptoMail REST API
  */
 export async function sendEmail(options: SendEmailOptions) {
   try {
-    const transport = getTransport('PORTAL');
-    const from = getFromAddress('PORTAL');
+    const apiKey = process.env.ZEPTO_API_KEY || process.env.ZEPTO_SMTP_PASS || '';
+    const sender = process.env.ZEPTO_SENDER || 'portal@lideresenseguros.com';
+    const senderName = process.env.ZEPTO_SENDER_NAME || 'Líderes en Seguros';
 
-    const info = await transport.sendMail({
-      from,
-      to: options.to,
-      cc: options.cc,
-      bcc: options.bcc,
+    if (!apiKey) {
+      console.error('[EMAIL-CLIENT] No ZEPTO_API_KEY configured');
+      return { success: false, error: 'ZEPTO_API_KEY not configured' };
+    }
+
+    const toAddrs = Array.isArray(options.to) ? options.to : [options.to];
+    const recipients = toAddrs.map(addr => ({
+      email_address: { address: addr, name: addr },
+    }));
+
+    const ccRecipients = options.cc
+      ? (Array.isArray(options.cc) ? options.cc : [options.cc]).map(addr => ({
+          email_address: { address: addr, name: addr },
+        }))
+      : undefined;
+
+    const bccRecipients = options.bcc
+      ? (Array.isArray(options.bcc) ? options.bcc : [options.bcc]).map(addr => ({
+          email_address: { address: addr, name: addr },
+        }))
+      : undefined;
+
+    const body: Record<string, any> = {
+      from: { address: sender, name: senderName },
+      to: recipients,
       subject: options.subject,
-      html: options.html,
-      text: options.text,
-      replyTo: options.replyTo || EMAIL_CONFIG.replyTo,
+      htmlbody: options.html,
+      textbody: options.text || '',
+    };
+
+    if (ccRecipients && ccRecipients.length > 0) body.cc = ccRecipients;
+    if (bccRecipients && bccRecipients.length > 0) body.bcc = bccRecipients;
+    if (options.replyTo) body.reply_to = [{ address: options.replyTo }];
+
+    const res = await fetch(ZEPTO_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Zoho-encrtoken ${apiKey}`,
+      },
+      body: JSON.stringify(body),
     });
 
-    return { success: true, data: { id: info.messageId } };
+    if (res.ok) {
+      const data = await res.json();
+      const messageId = data?.data?.[0]?.message_id || data?.request_id || 'unknown';
+      console.log(`[EMAIL-CLIENT] ✓ Sent via ZeptoMail API. MessageId: ${messageId}`);
+      return { success: true, data: { id: messageId } };
+    }
+
+    const errText = await res.text();
+    console.error(`[EMAIL-CLIENT] ZeptoMail API error (${res.status}):`, errText.substring(0, 300));
+    return { success: false, error: `HTTP ${res.status}: ${errText.substring(0, 200)}` };
   } catch (error) {
     console.error('[EMAIL-CLIENT] Error enviando email vía ZeptoMail:', error);
     return { success: false, error };

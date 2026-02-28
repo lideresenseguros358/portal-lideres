@@ -60,7 +60,7 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedBroker, setSelectedBroker] = useState<{ id: string; name: string } | null>(null);
   const [recalculationKey, setRecalculationKey] = useState(0);
-  const [notifyBrokers, setNotifyBrokers] = useState(initialDraft?.notify_brokers ?? false);
+  const [notifyBrokers, setNotifyBrokers] = useState(initialDraft?.notify_brokers ?? true);
   const [isTogglingNotify, setIsTogglingNotify] = useState(false);
 
   const forceRecalculate = () => setRecalculationKey(prev => prev + 1);
@@ -69,7 +69,7 @@ export default function NewFortnightTab({ role, brokerId, draftFortnight: initia
   useEffect(() => {
     console.log('Draft fortnight changed:', initialDraft);
     setDraftFortnight(initialDraft);
-    setNotifyBrokers(initialDraft?.notify_brokers ?? false);
+    setNotifyBrokers(initialDraft?.notify_brokers ?? true);
   }, [initialDraft]);
 
   const loadImportedReports = useCallback(async () => {

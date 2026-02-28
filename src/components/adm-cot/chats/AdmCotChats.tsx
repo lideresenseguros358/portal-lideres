@@ -1,294 +1,620 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   FaSearch,
   FaComments,
-  FaChevronRight,
   FaExclamationTriangle,
   FaRobot,
   FaUser,
   FaPhone,
-  FaEnvelope,
-  FaIdCard,
   FaMapMarkerAlt,
-  FaTimesCircle,
-  FaArrowUp,
-  FaCheckCircle,
-  FaLock,
   FaTimes,
   FaSync,
-  FaTasks,
   FaWhatsapp,
-  FaGlobe,
+  FaPaperPlane,
+  FaArrowLeft,
+  FaUserTie,
+  FaCog,
+  FaTag,
+  FaRedoAlt,
+  FaCheck,
+  FaBolt,
 } from 'react-icons/fa';
-import { maskIp, maskCedula } from '@/types/adm-cot.types';
+import type { ChatThread, ChatMessage } from '@/types/chat.types';
 
 // ════════════════════════════════════════════
 // HELPERS
 // ════════════════════════════════════════════
 
-const apiGet = async (params: Record<string, string>) => {
-  const q = new URLSearchParams(params).toString();
-  const r = await fetch(`/api/adm-cot/chat?${q}`);
-  return r.json();
-};
-const apiPost = async (action: string, data: Record<string, any>) => {
-  const r = await fetch('/api/adm-cot/chat', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action, data }),
-  });
-  return r.json();
-};
+const fmtTime = (d: string | null) =>
+  d ? new Date(d).toLocaleString('es-PA', { hour: '2-digit', minute: '2-digit', hour12: true }) : '';
 const fmtDate = (d: string | null) =>
   d ? new Date(d).toLocaleString('es-PA', { dateStyle: 'short', timeStyle: 'short' }) : '—';
+const fmtRelative = (d: string | null) => {
+  if (!d) return '';
+  const diff = Date.now() - new Date(d).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'ahora';
+  if (mins < 60) return `${mins}m`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h`;
+  const days = Math.floor(hrs / 24);
+  return `${days}d`;
+};
 
-function StatusBadge({ status }: { status: string }) {
-  const m: Record<string, { bg: string; text: string }> = {
-    OPEN: { bg: 'bg-green-100', text: 'text-green-800' },
-    ESCALATED: { bg: 'bg-red-100', text: 'text-red-800' },
-    CLOSED: { bg: 'bg-gray-200', text: 'text-gray-600' },
-  };
-  const s = m[status] || { bg: 'bg-gray-100', text: 'text-gray-600' };
-  return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${s.bg} ${s.text}`}>
-      {status === 'ESCALATED' && <FaArrowUp className="mr-1" />}
-      {status}
-    </span>
-  );
-}
-
-function ClassBadge({ classification }: { classification: string }) {
-  const fallback = { bg: 'bg-blue-100', text: 'text-blue-800', label: 'Consulta' };
+function CategoryBadge({ category }: { category: string }) {
+  const fallback = { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Simple' };
   const m: Record<string, { bg: string; text: string; label: string }> = {
-    CONSULTA: fallback,
-    COTIZACION: { bg: 'bg-indigo-100', text: 'text-indigo-800', label: 'Cotización' },
-    SOPORTE: { bg: 'bg-amber-100', text: 'text-amber-800', label: 'Soporte' },
-    QUEJA: { bg: 'bg-red-100', text: 'text-red-800', label: 'Queja' },
+    simple: fallback,
+    lead: { bg: 'bg-emerald-100', text: 'text-emerald-700', label: 'Lead' },
+    urgent: { bg: 'bg-red-100', text: 'text-red-700', label: 'Urgente' },
   };
-  const s = m[classification] ?? fallback;
+  const s = m[category] ?? fallback;
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${s.bg} ${s.text}`}>
-      {classification === 'QUEJA' && <FaExclamationTriangle className="mr-1" />}
+    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold ${s.bg} ${s.text}`}>
+      {category === 'urgent' && <FaExclamationTriangle className="mr-0.5 text-[8px]" />}
+      {category === 'lead' && <FaBolt className="mr-0.5 text-[8px]" />}
       {s.label}
     </span>
   );
 }
 
-function SourceIcon({ source }: { source: string }) {
-  return source === 'WHATSAPP'
-    ? <FaWhatsapp className="text-green-500" title="WhatsApp" />
-    : <FaGlobe className="text-blue-500" title="Portal" />;
+function StatusBadge({ status }: { status: string }) {
+  const m: Record<string, { bg: string; text: string }> = {
+    open: { bg: 'bg-green-100', text: 'text-green-700' },
+    pending: { bg: 'bg-amber-100', text: 'text-amber-700' },
+    urgent: { bg: 'bg-red-100', text: 'text-red-700' },
+    closed: { bg: 'bg-gray-200', text: 'text-gray-600' },
+  };
+  const s = m[status] || { bg: 'bg-gray-100', text: 'text-gray-600' };
+  return (
+    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold ${s.bg} ${s.text}`}>
+      {status}
+    </span>
+  );
+}
+
+function AssignedBadge({ type, aiEnabled }: { type: string; aiEnabled: boolean }) {
+  if (type === 'ai') {
+    return (
+      <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-100 text-purple-700">
+        <FaRobot className="text-[8px]" /> LISSA AI
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700">
+      <FaUserTie className="text-[8px]" /> Master
+    </span>
+  );
 }
 
 // ════════════════════════════════════════════
-// DETAIL PANEL
+// THREAD LIST
 // ════════════════════════════════════════════
 
-function ChatDetailPanel({ convId, onClose, onAction }: { convId: string; onClose: () => void; onAction: () => void }) {
-  const [conv, setConv] = useState<any>(null);
-  const [messages, setMessages] = useState<any[]>([]);
-  const [tasks, setTasks] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    (async () => {
-      setLoading(true);
-      const res = await apiGet({ tab: 'detail', id: convId });
-      if (res.success) {
-        setConv(res.data.conversation);
-        setMessages(res.data.messages);
-        setTasks(res.data.tasks);
-      }
-      setLoading(false);
-    })();
-  }, [convId]);
-
-  const handleClose = async () => {
-    await apiPost('close_conversation', { conversation_id: convId });
-    onAction();
-    onClose();
-  };
-
-  const handleResolveTask = async (taskId: string) => {
-    await apiPost('resolve_task', { task_id: taskId });
-    const res = await apiGet({ tab: 'detail', id: convId });
-    if (res.success) setTasks(res.data.tasks);
-    onAction();
-  };
-
-  if (loading || !conv) {
-    return (
-      <div className="fixed inset-0 z-50 flex justify-end">
-        <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose} />
-        <div className="relative w-full max-w-xl bg-white shadow-2xl flex items-center justify-center">
-          <FaSync className="animate-spin text-2xl text-gray-300" />
-        </div>
-      </div>
-    );
-  }
-
+function ThreadList({
+  threads, summary, loading, selectedId,
+  onSelect, onRefresh,
+  search, setSearch, filterStatus, setFilterStatus, filterCategory, setFilterCategory,
+}: {
+  threads: ChatThread[]; summary: any; loading: boolean; selectedId: string | null;
+  onSelect: (id: string) => void; onRefresh: () => void;
+  search: string; setSearch: (v: string) => void;
+  filterStatus: string; setFilterStatus: (v: string) => void;
+  filterCategory: string; setFilterCategory: (v: string) => void;
+}) {
   return (
-    <div className="fixed inset-0 z-50 flex justify-end">
-      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={onClose} />
-
-      <div className="relative w-full max-w-xl bg-white shadow-2xl flex flex-col">
-        {/* Header */}
-        <div className="sticky top-0 bg-[#010139] text-white px-6 py-4 z-10">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <SourceIcon source={conv.source} />
-                <StatusBadge status={conv.status} />
-                <ClassBadge classification={conv.classification} />
-                {conv.is_complex && (
-                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-500 text-white">
-                    <FaExclamationTriangle className="mr-1" /> COMPLEJA
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-blue-300">
-                {conv.client_name || 'Anónimo'} · {conv.region || '—'}
-              </p>
-            </div>
-            <button onClick={onClose} className="text-white hover:text-blue-200 text-lg cursor-pointer">
-              <FaTimesCircle />
+    <div className="flex flex-col h-full bg-white">
+      {/* Top bar */}
+      <div className="p-3 border-b border-gray-200 space-y-2">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-bold text-[#010139]">💬 Chats</h2>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-gray-400">{summary.total || 0} conv.</span>
+            <button onClick={onRefresh} className="text-gray-400 hover:text-[#010139] cursor-pointer">
+              <FaSync className={`text-xs ${loading ? 'animate-spin' : ''}`} />
             </button>
           </div>
         </div>
 
-        {/* Contact Info */}
-        <div className="grid grid-cols-2 gap-2 p-4 border-b border-gray-200 bg-gray-50">
-          <div className="flex items-center gap-2 text-xs text-gray-600">
-            <FaPhone className="text-gray-400" /> {conv.phone || '—'}
-          </div>
-          <div className="flex items-center gap-2 text-xs text-gray-600">
-            <FaEnvelope className="text-gray-400" /> {conv.email || '—'}
-          </div>
-          <div className="flex items-center gap-2 text-xs text-gray-600">
-            <FaIdCard className="text-gray-400" /> {maskCedula(conv.cedula)}
-          </div>
-          <div className="flex items-center gap-2 text-xs text-gray-600">
-            <FaMapMarkerAlt className="text-gray-400" /> {conv.region || '—'}
-          </div>
-          {conv.ip_address && (
-            <div className="flex items-center gap-2 text-xs text-gray-400 col-span-2">
-              <FaLock className="text-gray-300" /> IP: {maskIp(conv.ip_address)}
-            </div>
-          )}
+        {/* Search */}
+        <div className="relative">
+          <FaSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-[10px]" />
+          <input type="text" placeholder="Buscar..."
+            value={search} onChange={e => setSearch(e.target.value)}
+            className="w-full pl-7 pr-2 py-1.5 text-xs border border-gray-200 rounded-lg outline-none focus:ring-1 focus:ring-[#010139]/30" />
         </div>
 
-        {/* AI Summary */}
-        {conv.ai_summary && (
-          <div className="p-4 bg-purple-50 border-b border-purple-200">
-            <div className="flex items-center gap-2 mb-1">
-              <FaRobot className="text-purple-500" />
-              <span className="text-xs font-bold text-purple-800">Resumen IA</span>
-            </div>
-            <p className="text-xs text-purple-700 leading-relaxed">{conv.ai_summary}</p>
-          </div>
-        )}
+        {/* Quick filters */}
+        <div className="flex gap-1 overflow-x-auto">
+          {[
+            { label: 'Todos', value: '' },
+            { label: `🔴 Urgente${summary.urgent ? ` (${summary.urgent})` : ''}`, value: 'urgent' },
+            { label: `Abierto${summary.open ? ` (${summary.open})` : ''}`, value: 'open' },
+            { label: 'Cerrado', value: 'closed' },
+          ].map(f => (
+            <button key={f.value}
+              onClick={() => setFilterStatus(filterStatus === f.value ? '' : f.value)}
+              className={`whitespace-nowrap px-2 py-1 text-[10px] font-medium rounded-full cursor-pointer transition-colors ${
+                filterStatus === f.value
+                  ? 'bg-[#010139] text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}>
+              {f.label}
+            </button>
+          ))}
+        </div>
+        <div className="flex gap-1">
+          {[
+            { label: 'Simple', value: 'simple' },
+            { label: 'Lead', value: 'lead' },
+            { label: 'Urgente', value: 'urgent' },
+          ].map(f => (
+            <button key={f.value}
+              onClick={() => setFilterCategory(filterCategory === f.value ? '' : f.value)}
+              className={`whitespace-nowrap px-2 py-1 text-[10px] font-medium rounded-full cursor-pointer transition-colors ${
+                filterCategory === f.value
+                  ? 'bg-[#8AAA19] text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}>
+              {f.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
-        {/* Escalation warning */}
-        {conv.status === 'ESCALATED' && (
-          <div className="p-3 bg-red-50 border-b border-red-200 flex items-start gap-2">
-            <FaExclamationTriangle className="text-red-500 mt-0.5" />
-            <div>
-              <p className="text-xs font-bold text-red-800">Conversación Escalada</p>
-              <p className="text-[10px] text-red-600">{conv.escalated_reason || 'Queja compleja detectada'}</p>
-              <p className="text-[10px] text-red-500 mt-0.5">Escalada: {fmtDate(conv.escalated_at)}</p>
-            </div>
-          </div>
-        )}
+      {/* Summary bar */}
+      <div className="flex gap-1 px-3 py-2 border-b border-gray-100 bg-gray-50 text-[10px]">
+        <span className="text-gray-400">No leídos: <strong className="text-[#010139]">{summary.unread || 0}</strong></span>
+        <span className="text-gray-300">|</span>
+        <span className="text-gray-400">AI: <strong>{summary.ai || 0}</strong></span>
+        <span className="text-gray-300">|</span>
+        <span className="text-gray-400">Master: <strong>{summary.master || 0}</strong></span>
+      </div>
 
-        {/* Tasks */}
-        {tasks.length > 0 && (
-          <div className="p-3 border-b border-gray-200 bg-amber-50">
-            <div className="flex items-center gap-2 mb-2">
-              <FaTasks className="text-amber-600" />
-              <span className="text-xs font-bold text-amber-800">Tareas ({tasks.length})</span>
-            </div>
-            {tasks.map((t: any) => (
-              <div key={t.id} className="flex items-center justify-between text-xs mb-1">
-                <div>
-                  <span className={`inline-flex px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                    t.priority === 'URGENTE' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'
-                  }`}>{t.priority}</span>
-                  <span className={`ml-2 ${t.status === 'RESOLVED' ? 'line-through text-gray-400' : 'text-gray-700'}`}>
-                    {t.summary || 'Sin resumen'}
+      {/* Thread list */}
+      <div className="flex-1 overflow-y-auto">
+        {threads.length === 0 ? (
+          <div className="py-16 text-center">
+            <FaComments className="text-3xl text-gray-300 mx-auto mb-3" />
+            <p className="text-xs text-gray-500">Sin conversaciones</p>
+            <p className="text-[10px] text-gray-400 mt-1">Las conversaciones se crean al recibir mensajes de WhatsApp</p>
+          </div>
+        ) : (
+          threads.map(t => (
+            <div key={t.id}
+              onClick={() => onSelect(t.id)}
+              className={`flex items-start gap-3 px-3 py-3 cursor-pointer transition-colors border-b border-gray-50 ${
+                selectedId === t.id ? 'bg-blue-50' : 'hover:bg-gray-50'
+              } ${t.category === 'urgent' ? 'border-l-4 border-l-red-500' : ''}`}>
+
+              {/* Avatar */}
+              <div className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 ${
+                t.category === 'urgent' ? 'bg-red-100' : t.category === 'lead' ? 'bg-emerald-100' : 'bg-gray-100'
+              }`}>
+                {t.category === 'urgent'
+                  ? <FaExclamationTriangle className="text-red-500 text-sm" />
+                  : <FaWhatsapp className="text-green-500 text-sm" />}
+              </div>
+
+              {/* Content */}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between mb-0.5">
+                  <span className="text-xs font-semibold text-[#010139] truncate">
+                    {t.client_name || t.phone_e164}
                   </span>
-                  <span className={`ml-2 text-[10px] ${
-                    t.status === 'OPEN' ? 'text-amber-600' : t.status === 'RESOLVED' ? 'text-green-600' : 'text-blue-600'
-                  }`}>[{t.status}]</span>
+                  <span className="text-[10px] text-gray-400 flex-shrink-0 ml-2">
+                    {fmtRelative(t.last_message_at)}
+                  </span>
                 </div>
-                {t.status !== 'RESOLVED' && (
-                  <button onClick={() => handleResolveTask(t.id)}
-                    className="text-[10px] text-green-600 hover:text-green-800 cursor-pointer flex items-center gap-1">
-                    <FaCheckCircle /> Resolver
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
 
-        {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
-          {messages.length === 0 ? (
-            <div className="text-center py-8 text-gray-400">
-              <FaComments className="text-3xl mx-auto mb-2" />
-              <p className="text-sm">Sin mensajes registrados</p>
-            </div>
-          ) : (
-            messages.map((msg: any) => (
-              <div key={msg.id} className={`flex gap-2 ${msg.role === 'USER' ? 'justify-end' : 'justify-start'}`}>
-                {msg.role !== 'USER' && (
-                  <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${
-                    msg.role === 'SYSTEM' ? 'bg-amber-100' : 'bg-purple-100'
-                  }`}>
-                    {msg.role === 'SYSTEM' ? <FaLock className="text-amber-500 text-[10px]" /> : <FaRobot className="text-purple-500 text-[10px]" />}
-                  </div>
-                )}
-                <div className={`max-w-[80%] rounded-xl px-3 py-2 text-xs ${
-                  msg.role === 'USER' ? 'bg-[#010139] text-white'
-                    : msg.role === 'SYSTEM' ? 'bg-amber-50 border border-amber-200 text-amber-800'
-                    : 'bg-gray-100 text-gray-700'
-                }`}>
-                  <p className="whitespace-pre-wrap">{msg.content}</p>
-                  <p className={`text-[9px] mt-1 ${msg.role === 'USER' ? 'text-blue-300' : 'text-gray-400'}`}>
-                    {fmtDate(msg.created_at)}
-                    {msg.tokens_used > 0 && ` · ${msg.tokens_used} tokens`}
-                  </p>
+                <p className="text-[11px] text-gray-500 truncate mb-1">
+                  {t.last_message_preview || 'Sin mensajes'}
+                </p>
+
+                <div className="flex items-center gap-1 flex-wrap">
+                  <CategoryBadge category={t.category} />
+                  <AssignedBadge type={t.assigned_type} aiEnabled={t.ai_enabled} />
+                  {t.unread_count_master > 0 && (
+                    <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#010139] text-white text-[10px] font-bold">
+                      {t.unread_count_master}
+                    </span>
+                  )}
                 </div>
-                {msg.role === 'USER' && (
-                  <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-                    <FaUser className="text-blue-500 text-[10px]" />
-                  </div>
-                )}
               </div>
-            ))
-          )}
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════
+// CHAT VIEW
+// ════════════════════════════════════════════
+
+function ChatView({
+  thread, messages, loading, onBack, onRefresh,
+  onSend, sending, onToggleConfig,
+}: {
+  thread: ChatThread | null;
+  messages: ChatMessage[];
+  loading: boolean;
+  onBack: () => void;
+  onRefresh: () => void;
+  onSend: (body: string) => void;
+  sending: boolean;
+  onToggleConfig: () => void;
+}) {
+  const [input, setInput] = useState('');
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [messages]);
+
+  const handleSend = () => {
+    if (!input.trim() || sending) return;
+    onSend(input.trim());
+    setInput('');
+  };
+
+  if (!thread) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full bg-gray-50 text-gray-400">
+        <FaComments className="text-5xl mb-4" />
+        <p className="text-sm font-medium">Selecciona una conversación</p>
+        <p className="text-xs mt-1">Elige un chat del panel izquierdo</p>
+      </div>
+    );
+  }
+
+  const classification = thread.metadata?.last_classification;
+
+  return (
+    <div className="flex flex-col h-full bg-white">
+      {/* Chat header */}
+      <div className="bg-[#010139] text-white px-4 py-3 flex items-center gap-3">
+        <button onClick={onBack} className="lg:hidden text-white cursor-pointer">
+          <FaArrowLeft className="text-white" />
+        </button>
+
+        <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
+          thread.category === 'urgent' ? 'bg-red-500' : 'bg-white/20'
+        }`}>
+          {thread.category === 'urgent'
+            ? <FaExclamationTriangle className="text-white text-xs" />
+            : <FaWhatsapp className="text-white text-xs" />}
         </div>
 
-        {/* Footer actions */}
-        <div className="border-t border-gray-200 px-4 py-3 bg-gray-50">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-[10px] text-gray-400">
-              <FaLock />
-              <span>Mensajes almacenados completos · IP mascarada en UI</span>
-            </div>
-            {conv.status !== 'CLOSED' && (
-              <button onClick={handleClose}
-                className="px-3 py-1.5 bg-gray-600 text-white text-[10px] font-medium rounded-lg cursor-pointer">
-                <span className="text-white">Marcar Resuelto</span>
-              </button>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold truncate">{thread.client_name || thread.phone_e164}</span>
+            <CategoryBadge category={thread.category} />
+          </div>
+          <div className="flex items-center gap-2 text-[10px] text-blue-300">
+            <FaPhone className="text-[8px]" /> {thread.phone_e164}
+            {thread.region && <><span>·</span><FaMapMarkerAlt className="text-[8px]" /> {thread.region}</>}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button onClick={onRefresh} className="text-white/60 hover:text-white cursor-pointer">
+            <FaSync className={`text-xs text-white ${loading ? 'animate-spin' : ''}`} />
+          </button>
+          <button onClick={onToggleConfig} className="text-white/60 hover:text-white cursor-pointer">
+            <FaCog className="text-sm text-white" />
+          </button>
+        </div>
+      </div>
+
+      {/* Urgent banner */}
+      {thread.category === 'urgent' && (
+        <div className="bg-red-50 border-b border-red-200 px-4 py-2 flex items-start gap-2">
+          <FaExclamationTriangle className="text-red-500 mt-0.5 text-xs" />
+          <div>
+            <p className="text-xs font-bold text-red-800">🔴 CASO URGENTE — Severidad: {thread.severity?.toUpperCase()}</p>
+            {classification?.executive_summary && (
+              <ul className="text-[10px] text-red-700 mt-1 list-disc list-inside">
+                {classification.executive_summary.map((s: string, i: number) => <li key={i}>{s}</li>)}
+              </ul>
+            )}
+            {classification?.suggested_next_step && (
+              <p className="text-[10px] text-red-600 mt-1 font-medium">→ {classification.suggested_next_step}</p>
             )}
           </div>
-          <p className="text-[10px] text-gray-400 mt-1">
-            Creada: {fmtDate(conv.created_at)}
-            {conv.closed_at && ` · Cerrada: ${fmtDate(conv.closed_at)}`}
-          </p>
         </div>
+      )}
+
+      {/* AI Summary for non-urgent */}
+      {thread.category !== 'urgent' && classification?.executive_summary?.length > 0 && (
+        <div className="bg-purple-50 border-b border-purple-100 px-4 py-2">
+          <div className="flex items-center gap-1 mb-1">
+            <FaRobot className="text-purple-500 text-[10px]" />
+            <span className="text-[10px] font-bold text-purple-700">Resumen IA</span>
+          </div>
+          <ul className="text-[10px] text-purple-600 list-disc list-inside">
+            {classification.executive_summary.map((s: string, i: number) => <li key={i}>{s}</li>)}
+          </ul>
+        </div>
+      )}
+
+      {/* Mode indicator */}
+      <div className="flex items-center justify-between px-4 py-1.5 bg-gray-50 border-b border-gray-100">
+        <div className="flex items-center gap-2">
+          <AssignedBadge type={thread.assigned_type} aiEnabled={thread.ai_enabled} />
+          {thread.tags && thread.tags.length > 0 && (
+            <div className="flex items-center gap-1">
+              <FaTag className="text-[8px] text-gray-400" />
+              {(thread.tags as string[]).slice(0, 3).map((tag, i) => (
+                <span key={i} className="text-[9px] bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded">{tag}</span>
+              ))}
+            </div>
+          )}
+        </div>
+        <StatusBadge status={thread.status} />
+      </div>
+
+      {/* Messages */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-3 bg-gray-50">
+        {messages.length === 0 && !loading ? (
+          <div className="text-center py-12 text-gray-400">
+            <FaComments className="text-3xl mx-auto mb-2" />
+            <p className="text-xs">Sin mensajes</p>
+          </div>
+        ) : (
+          messages.map((msg) => {
+            const isInbound = msg.direction === 'inbound';
+            const isSystem = msg.provider === 'system';
+            const isAi = msg.ai_generated;
+
+            if (isSystem) {
+              return (
+                <div key={msg.id} className="flex justify-center">
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5 text-[10px] text-amber-700 max-w-[80%] text-center">
+                    {msg.body}
+                    <span className="block text-[9px] text-amber-400 mt-0.5">{fmtTime(msg.created_at)}</span>
+                  </div>
+                </div>
+              );
+            }
+
+            return (
+              <div key={msg.id} className={`flex ${isInbound ? 'justify-start' : 'justify-end'}`}>
+                <div className={`max-w-[80%] rounded-2xl px-3.5 py-2.5 ${
+                  isInbound
+                    ? 'bg-white border border-gray-200 text-gray-800 rounded-bl-md'
+                    : isAi
+                      ? 'bg-purple-600 text-white rounded-br-md'
+                      : 'bg-[#010139] text-white rounded-br-md'
+                }`}>
+                  {/* Sender label */}
+                  <div className={`flex items-center gap-1 mb-1 text-[9px] font-bold ${
+                    isInbound ? 'text-gray-500' : 'text-white/70'
+                  }`}>
+                    {isInbound ? (
+                      <><FaUser className="text-[7px]" /> Cliente</>
+                    ) : isAi ? (
+                      <><FaRobot className="text-[7px]" /> LISSA AI</>
+                    ) : (
+                      <><FaUserTie className="text-[7px]" /> Portal</>
+                    )}
+                  </div>
+
+                  <p className="text-xs whitespace-pre-wrap leading-relaxed">{msg.body}</p>
+
+                  <div className={`flex items-center justify-end gap-2 mt-1.5 text-[9px] ${
+                    isInbound ? 'text-gray-400' : 'text-white/50'
+                  }`}>
+                    {fmtTime(msg.created_at)}
+                    {msg.tokens && msg.tokens > 0 && <span>· {msg.tokens}t</span>}
+                    {msg.latency_ms && msg.latency_ms > 0 && <span>· {msg.latency_ms}ms</span>}
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
+        {loading && (
+          <div className="flex justify-center py-4">
+            <FaSync className="animate-spin text-gray-300" />
+          </div>
+        )}
+      </div>
+
+      {/* Input bar */}
+      {thread.status !== 'closed' && (
+        <div className="border-t border-gray-200 px-3 py-2 bg-white">
+          <div className="flex items-end gap-2">
+            <textarea
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+              placeholder={thread.assigned_type === 'ai' ? 'AI activa — escribe para enviar manualmente...' : 'Escribe un mensaje...'}
+              rows={1}
+              className="flex-1 resize-none border border-gray-200 rounded-xl px-3 py-2 text-xs outline-none focus:ring-1 focus:ring-[#010139]/30 max-h-24"
+            />
+            <button
+              onClick={handleSend}
+              disabled={!input.trim() || sending}
+              className="w-9 h-9 flex items-center justify-center rounded-full bg-[#010139] text-white disabled:opacity-40 cursor-pointer flex-shrink-0">
+              <FaPaperPlane className="text-xs text-white" />
+            </button>
+          </div>
+          {thread.assigned_type === 'ai' && thread.ai_enabled && (
+            <p className="text-[10px] text-purple-500 mt-1">🤖 LISSA AI está respondiendo automáticamente</p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════
+// CONFIG PANEL
+// ════════════════════════════════════════════
+
+function ConfigPanel({
+  thread, onClose, onAssign, onChangeStatus, assigning,
+}: {
+  thread: ChatThread;
+  onClose: () => void;
+  onAssign: (target: 'ai' | 'self') => void;
+  onChangeStatus: (status: string) => void;
+  assigning: boolean;
+}) {
+  const classification = thread.metadata?.last_classification;
+
+  return (
+    <div className="flex flex-col h-full bg-white border-l border-gray-200">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200">
+        <h3 className="text-sm font-bold text-[#010139]">Configuración</h3>
+        <button onClick={onClose} className="text-gray-400 hover:text-gray-600 cursor-pointer">
+          <FaTimes />
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {/* Assignment */}
+        <div>
+          <h4 className="text-xs font-bold text-gray-700 mb-2">Asignación</h4>
+          <div className="space-y-2">
+            <button
+              onClick={() => onAssign('self')}
+              disabled={assigning || thread.assigned_type === 'master'}
+              className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg border text-xs font-medium cursor-pointer transition-colors ${
+                thread.assigned_type === 'master'
+                  ? 'border-blue-500 bg-blue-50 text-blue-700'
+                  : 'border-gray-200 hover:border-blue-300 text-gray-700'
+              }`}>
+              <FaUserTie className={thread.assigned_type === 'master' ? 'text-blue-500' : 'text-gray-400'} />
+              <div className="text-left">
+                <p>Asignarme esta conversación</p>
+                <p className="text-[10px] text-gray-400">Desactiva LISSA AI</p>
+              </div>
+              {thread.assigned_type === 'master' && <FaCheck className="ml-auto text-blue-500" />}
+            </button>
+
+            <button
+              onClick={() => onAssign('ai')}
+              disabled={assigning || (thread.assigned_type === 'ai' && thread.ai_enabled)}
+              className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-lg border text-xs font-medium cursor-pointer transition-colors ${
+                thread.assigned_type === 'ai'
+                  ? 'border-purple-500 bg-purple-50 text-purple-700'
+                  : 'border-gray-200 hover:border-purple-300 text-gray-700'
+              }`}>
+              <FaRobot className={thread.assigned_type === 'ai' ? 'text-purple-500' : 'text-gray-400'} />
+              <div className="text-left">
+                <p>Reasignar a LISSA AI</p>
+                <p className="text-[10px] text-gray-400">Activa respuesta automática</p>
+              </div>
+              {thread.assigned_type === 'ai' && <FaCheck className="ml-auto text-purple-500" />}
+            </button>
+          </div>
+        </div>
+
+        {/* Status */}
+        <div>
+          <h4 className="text-xs font-bold text-gray-700 mb-2">Estado</h4>
+          <div className="grid grid-cols-2 gap-2">
+            {['open', 'pending', 'urgent', 'closed'].map(s => (
+              <button key={s}
+                onClick={() => onChangeStatus(s)}
+                className={`px-2 py-1.5 rounded-lg text-[10px] font-bold border cursor-pointer transition-colors ${
+                  thread.status === s
+                    ? s === 'urgent' ? 'bg-red-100 border-red-300 text-red-700' :
+                      s === 'closed' ? 'bg-gray-200 border-gray-300 text-gray-700' :
+                      'bg-green-100 border-green-300 text-green-700'
+                    : 'bg-gray-50 border-gray-200 text-gray-500 hover:bg-gray-100'
+                }`}>
+                {s.toUpperCase()}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Classification detail */}
+        {classification && (
+          <div>
+            <h4 className="text-xs font-bold text-gray-700 mb-2">Clasificación IA</h4>
+            <div className="bg-gray-50 rounded-lg p-3 space-y-2 text-[10px]">
+              <div className="flex justify-between">
+                <span className="text-gray-500">Intent:</span>
+                <span className="font-medium text-gray-700">{classification.intent || '—'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Categoría:</span>
+                <CategoryBadge category={thread.category} />
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Severidad:</span>
+                <span className={`font-bold ${
+                  thread.severity === 'high' ? 'text-red-600' :
+                  thread.severity === 'medium' ? 'text-amber-600' : 'text-green-600'
+                }`}>{thread.severity?.toUpperCase()}</span>
+              </div>
+              {classification.suggested_next_step && (
+                <div className="border-t border-gray-200 pt-2">
+                  <span className="text-gray-500 block mb-1">Acción sugerida:</span>
+                  <p className="text-gray-700">{classification.suggested_next_step}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Tags */}
+        {thread.tags && (thread.tags as string[]).length > 0 && (
+          <div>
+            <h4 className="text-xs font-bold text-gray-700 mb-2">Tags</h4>
+            <div className="flex flex-wrap gap-1">
+              {(thread.tags as string[]).map((tag, i) => (
+                <span key={i} className="px-2 py-1 bg-gray-100 text-gray-600 rounded-full text-[10px]">
+                  <FaTag className="inline mr-1 text-[8px]" />{tag}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Thread info */}
+        <div>
+          <h4 className="text-xs font-bold text-gray-700 mb-2">Info</h4>
+          <div className="bg-gray-50 rounded-lg p-3 space-y-1.5 text-[10px]">
+            <div className="flex justify-between">
+              <span className="text-gray-500">Thread ID:</span>
+              <span className="font-mono text-gray-600 text-[9px]">{thread.id.substring(0, 8)}...</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-500">Canal:</span>
+              <span className="text-gray-700">{thread.channel}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-500">Creado:</span>
+              <span className="text-gray-700">{fmtDate(thread.created_at)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-500">Último msg:</span>
+              <span className="text-gray-700">{fmtDate(thread.last_message_at)}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Re-escalate button */}
+        {thread.category === 'urgent' && (
+          <button
+            className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-red-600 text-white rounded-lg text-xs font-bold cursor-pointer hover:bg-red-700 transition-colors">
+            <FaRedoAlt className="text-white" />
+            <span className="text-white">Re-enviar Escalamiento</span>
+          </button>
+        )}
       </div>
     </div>
   );
@@ -299,144 +625,207 @@ function ChatDetailPanel({ convId, onClose, onAction }: { convId: string; onClos
 // ════════════════════════════════════════════
 
 export default function AdmCotChats() {
-  const [conversations, setConversations] = useState<any[]>([]);
+  const searchParams = useSearchParams();
+
+  const [threads, setThreads] = useState<ChatThread[]>([]);
   const [summary, setSummary] = useState<any>({});
-  const [loading, setLoading] = useState(false);
-  const [selectedConvId, setSelectedConvId] = useState<string | null>(null);
+  const [loadingThreads, setLoadingThreads] = useState(false);
+
+  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(searchParams.get('thread'));
+  const [selectedThread, setSelectedThread] = useState<ChatThread | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+
+  const [showConfig, setShowConfig] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [assigning, setAssigning] = useState(false);
 
   // Filters
   const [search, setSearch] = useState('');
-  const [status, setStatus] = useState('');
-  const [classification, setClassification] = useState('');
-  const [isComplex, setIsComplex] = useState('');
-  const [source, setSource] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+  const [filterCategory, setFilterCategory] = useState('');
 
-  const fetchConversations = useCallback(async () => {
-    setLoading(true);
-    const params: Record<string, string> = { tab: 'conversations' };
-    if (search) params.search = search;
-    if (status) params.status = status;
-    if (classification) params.classification = classification;
-    if (isComplex) params.is_complex = isComplex;
-    if (source) params.source = source;
-    const res = await apiGet(params);
-    if (res.success) {
-      setConversations(res.data.rows);
-      setSummary(res.data.summary);
+  // Fetch threads
+  const fetchThreads = useCallback(async () => {
+    setLoadingThreads(true);
+    try {
+      const params: Record<string, string> = {};
+      if (search) params.search = search;
+      if (filterStatus) params.status = filterStatus;
+      if (filterCategory) params.category = filterCategory;
+      const q = new URLSearchParams(params).toString();
+      const res = await fetch(`/api/chats/threads?${q}`);
+      const json = await res.json();
+      if (json.success) {
+        setThreads(json.data.rows);
+        setSummary(json.data.summary);
+      }
+    } catch (err) {
+      console.error('Failed to fetch threads:', err);
     }
-    setLoading(false);
-  }, [search, status, classification, isComplex, source]);
+    setLoadingThreads(false);
+  }, [search, filterStatus, filterCategory]);
 
-  useEffect(() => { fetchConversations(); }, [fetchConversations]);
+  useEffect(() => { fetchThreads(); }, [fetchThreads]);
 
-  const clearFilters = () => {
-    setSearch(''); setStatus(''); setClassification(''); setIsComplex(''); setSource('');
+  // Auto-refresh every 15s
+  useEffect(() => {
+    const interval = setInterval(fetchThreads, 15000);
+    return () => clearInterval(interval);
+  }, [fetchThreads]);
+
+  // Fetch thread detail + messages
+  const fetchThreadDetail = useCallback(async (id: string) => {
+    setLoadingMessages(true);
+    try {
+      const res = await fetch(`/api/chats/thread/${id}`);
+      const json = await res.json();
+      if (json.success) {
+        setSelectedThread(json.data.thread);
+        setMessages(json.data.messages);
+      }
+    } catch (err) {
+      console.error('Failed to fetch thread:', err);
+    }
+    setLoadingMessages(false);
+  }, []);
+
+  useEffect(() => {
+    if (selectedThreadId) {
+      fetchThreadDetail(selectedThreadId);
+      // Auto-refresh messages every 10s when viewing
+      const interval = setInterval(() => fetchThreadDetail(selectedThreadId), 10000);
+      return () => clearInterval(interval);
+    } else {
+      setSelectedThread(null);
+      setMessages([]);
+    }
+  }, [selectedThreadId, fetchThreadDetail]);
+
+  // Send manual message
+  const handleSend = async (body: string) => {
+    if (!selectedThreadId) return;
+    setSending(true);
+    try {
+      await fetch('/api/chats/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ thread_id: selectedThreadId, body }),
+      });
+      await fetchThreadDetail(selectedThreadId);
+      fetchThreads();
+    } catch (err) {
+      console.error('Send failed:', err);
+    }
+    setSending(false);
+  };
+
+  // Assign
+  const handleAssign = async (target: 'ai' | 'self') => {
+    if (!selectedThreadId) return;
+    setAssigning(true);
+    try {
+      await fetch('/api/chats/assign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          thread_id: selectedThreadId,
+          assign_to: target === 'ai' ? 'ai' : undefined,
+        }),
+      });
+      await fetchThreadDetail(selectedThreadId);
+      fetchThreads();
+    } catch (err) {
+      console.error('Assign failed:', err);
+    }
+    setAssigning(false);
+  };
+
+  // Change status
+  const handleChangeStatus = async (status: string) => {
+    if (!selectedThreadId) return;
+    try {
+      await fetch(`/api/chats/thread/${selectedThreadId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+      await fetchThreadDetail(selectedThreadId);
+      fetchThreads();
+    } catch {}
+  };
+
+  const selectThread = (id: string) => {
+    setSelectedThreadId(id);
+    setShowConfig(false);
+  };
+
+  const goBackToList = () => {
+    setSelectedThreadId(null);
+    setShowConfig(false);
   };
 
   return (
-    <div className="space-y-4">
-      {/* Header */}
+    <div className="space-y-3">
+      {/* Title */}
       <div>
-        <h2 className="text-lg font-bold text-[#010139]">Seguimiento de Chats</h2>
-        <p className="text-xs text-gray-500">Conversaciones con IA, clasificación automática, escalamiento y tareas</p>
+        <h2 className="text-lg font-bold text-[#010139]">Centro de Chats</h2>
+        <p className="text-xs text-gray-500">WhatsApp + LISSA AI · Clasificación automática · Escalamiento urgente</p>
       </div>
 
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-        {[
-          { label: 'Total', value: summary.total || 0, bg: 'bg-gray-50', border: 'border-gray-200', color: 'text-gray-500' },
-          { label: 'Abiertos', value: summary.open || 0, bg: 'bg-green-50', border: 'border-green-200', color: 'text-green-600' },
-          { label: 'Escalados', value: summary.escalated || 0, bg: 'bg-red-50', border: 'border-red-200', color: 'text-red-600' },
-          { label: 'Cerrados', value: summary.closed || 0, bg: 'bg-gray-50', border: 'border-gray-200', color: 'text-gray-500' },
-          { label: 'Complejas', value: summary.complex || 0, bg: 'bg-red-50', border: 'border-red-200', color: 'text-red-600' },
-        ].map(c => (
-          <div key={c.label} className={`${c.bg} border ${c.border} rounded-xl p-3`}>
-            <p className={`text-[10px] font-semibold uppercase ${c.color}`}>{c.label}</p>
-            <p className="text-xl font-bold text-[#010139]">{c.value}</p>
+      {/* Main layout */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-lg overflow-hidden" style={{ height: 'calc(100vh - 260px)', minHeight: '500px' }}>
+        <div className="flex h-full">
+          {/* Left: Thread List */}
+          <div className={`w-full lg:w-80 xl:w-96 flex-shrink-0 border-r border-gray-200 ${
+            selectedThreadId ? 'hidden lg:flex lg:flex-col' : 'flex flex-col'
+          }`}>
+            <ThreadList
+              threads={threads}
+              summary={summary}
+              loading={loadingThreads}
+              selectedId={selectedThreadId}
+              onSelect={selectThread}
+              onRefresh={fetchThreads}
+              search={search}
+              setSearch={setSearch}
+              filterStatus={filterStatus}
+              setFilterStatus={setFilterStatus}
+              filterCategory={filterCategory}
+              setFilterCategory={setFilterCategory}
+            />
           </div>
-        ))}
-      </div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative flex-1 min-w-[200px]">
-          <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs" />
-          <input type="text" placeholder="Buscar nombre, teléfono, email, cédula..."
-            value={search} onChange={e => setSearch(e.target.value)}
-            onKeyDown={e => e.key === 'Enter' && fetchConversations()}
-            className="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-[#010139]/20" />
+          {/* Center: Chat View */}
+          <div className={`flex-1 ${
+            selectedThreadId ? 'flex flex-col' : 'hidden lg:flex lg:flex-col'
+          }`}>
+            <ChatView
+              thread={selectedThread}
+              messages={messages}
+              loading={loadingMessages}
+              onBack={goBackToList}
+              onRefresh={() => selectedThreadId && fetchThreadDetail(selectedThreadId)}
+              onSend={handleSend}
+              sending={sending}
+              onToggleConfig={() => setShowConfig(!showConfig)}
+            />
+          </div>
+
+          {/* Right: Config Panel */}
+          {showConfig && selectedThread && (
+            <div className="w-72 xl:w-80 flex-shrink-0 hidden md:flex md:flex-col">
+              <ConfigPanel
+                thread={selectedThread}
+                onClose={() => setShowConfig(false)}
+                onAssign={handleAssign}
+                onChangeStatus={handleChangeStatus}
+                assigning={assigning}
+              />
+            </div>
+          )}
         </div>
-        <select value={status} onChange={e => setStatus(e.target.value)} className="text-xs border border-gray-300 rounded-lg px-2 py-1.5">
-          <option value="">Estado</option><option value="OPEN">Abierto</option><option value="ESCALATED">Escalado</option><option value="CLOSED">Cerrado</option>
-        </select>
-        <select value={classification} onChange={e => setClassification(e.target.value)} className="text-xs border border-gray-300 rounded-lg px-2 py-1.5">
-          <option value="">Clasificación</option><option value="CONSULTA">Consulta</option><option value="COTIZACION">Cotización</option><option value="SOPORTE">Soporte</option><option value="QUEJA">Queja</option>
-        </select>
-        <select value={isComplex} onChange={e => setIsComplex(e.target.value)} className="text-xs border border-gray-300 rounded-lg px-2 py-1.5">
-          <option value="">Compleja</option><option value="true">Sí</option><option value="false">No</option>
-        </select>
-        <select value={source} onChange={e => setSource(e.target.value)} className="text-xs border border-gray-300 rounded-lg px-2 py-1.5">
-          <option value="">Origen</option><option value="PORTAL">Portal</option><option value="WHATSAPP">WhatsApp</option>
-        </select>
-        <button onClick={clearFilters} className="text-xs text-gray-400 hover:text-red-500 cursor-pointer"><FaTimes /></button>
-        <button onClick={fetchConversations}
-          className="px-3 py-1.5 bg-[#010139] text-white text-xs font-medium rounded-lg flex items-center gap-1 cursor-pointer">
-          <FaSync className={`text-white ${loading ? 'animate-spin' : ''}`} /> <span className="text-white">Buscar</span>
-        </button>
       </div>
-
-      {/* Conversations list */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        {conversations.length === 0 ? (
-          <div className="py-16 text-center">
-            <FaComments className="text-4xl text-gray-300 mx-auto mb-3" />
-            <p className="text-sm text-gray-500 font-medium">No hay conversaciones registradas</p>
-            <p className="text-xs text-gray-400 mt-1">Las conversaciones se crean al procesar mensajes via /api/adm-cot/chat/process</p>
-          </div>
-        ) : (
-          <div className="divide-y divide-gray-100">
-            {conversations.map((c: any) => (
-              <div key={c.id}
-                className={`flex items-center gap-4 px-4 py-3 hover:bg-gray-50 transition-colors cursor-pointer ${
-                  c.status === 'ESCALATED' ? 'border-l-4 border-red-500' : c.is_complex ? 'border-l-4 border-amber-400' : ''
-                }`}
-                onClick={() => setSelectedConvId(c.id)}>
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
-                  c.status === 'ESCALATED' ? 'bg-red-100' : c.is_complex ? 'bg-amber-100' : 'bg-blue-100'
-                }`}>
-                  {c.status === 'ESCALATED' ? <FaExclamationTriangle className="text-red-500" />
-                    : c.is_complex ? <FaExclamationTriangle className="text-amber-500" />
-                    : <SourceIcon source={c.source} />}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                    <span className="text-xs font-medium text-[#010139]">{c.client_name || c.phone || c.email || 'Anónimo'}</span>
-                    <ClassBadge classification={c.classification} />
-                    <StatusBadge status={c.status} />
-                    {c.is_complex && (
-                      <span className="text-[9px] bg-red-500 text-white px-1.5 py-0.5 rounded font-bold">COMPLEJA</span>
-                    )}
-                  </div>
-                  <p className="text-[10px] text-gray-500 truncate">{c.ai_summary || 'Sin resumen'}</p>
-                  <p className="text-[10px] text-gray-400 mt-0.5">
-                    {c.source} · {c.region || '—'} · {fmtDate(c.created_at)}
-                  </p>
-                </div>
-                <FaChevronRight className="text-gray-400 text-xs flex-shrink-0" />
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Detail panel */}
-      {selectedConvId && (
-        <ChatDetailPanel
-          convId={selectedConvId}
-          onClose={() => setSelectedConvId(null)}
-          onAction={fetchConversations}
-        />
-      )}
     </div>
   );
 }

@@ -1,11 +1,15 @@
 /**
- * FUNCIÓN CENTRAL DE ENVÍO DE CORREOS
- * ====================================
- * Maneja envío, dedupe, logging y errores
+ * FUNCIÓN CENTRAL DE ENVÍO DE CORREOS — ZeptoMail REST API
+ * =========================================================
+ * Maneja envío, dedupe, logging y errores.
+ * Todos los correos salen vía ZeptoMail REST API (no SMTP).
+ * 
+ * Env vars:
+ *   ZEPTO_API_KEY  — ZeptoMail Send Mail Token (or ZEPTO_SMTP_PASS as fallback)
+ *   ZEPTO_SENDER   — Sender email (default: portal@lideresenseguros.com)
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { getTransport, getFromAddress } from './mailer';
 import { checkDedupe } from './dedupe';
 import { htmlToText } from './renderer';
 import type { SendEmailParams, EmailLogRecord } from './types';
@@ -15,8 +19,93 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+const ZEPTO_API_URL = 'https://api.zeptomail.com/v1.1/email';
+const MAX_RETRIES = 3;
+const BACKOFF_BASE_MS = 1_000;
+
+function getZeptoConfig() {
+  const apiKey = process.env.ZEPTO_API_KEY || process.env.ZEPTO_SMTP_PASS || '';
+  const sender = process.env.ZEPTO_SENDER || 'portal@lideresenseguros.com';
+  const senderName = process.env.ZEPTO_SENDER_NAME || 'Líderes en Seguros';
+  return { apiKey, sender, senderName };
+}
+
+function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)); }
+
 /**
- * Enviar correo electrónico
+ * Low-level ZeptoMail REST send with retries + backoff.
+ * Returns { ok, messageId, error }.
+ */
+async function zeptoSend(
+  to: string | string[],
+  subject: string,
+  htmlBody: string,
+  textBody: string,
+): Promise<{ ok: boolean; messageId?: string; error?: string }> {
+  const { apiKey, sender, senderName } = getZeptoConfig();
+
+  if (!apiKey) {
+    console.error('[EMAIL-ZEPTO] No ZEPTO_API_KEY configured');
+    return { ok: false, error: 'ZEPTO_API_KEY not configured' };
+  }
+
+  const recipients = (Array.isArray(to) ? to : [to]).map(addr => ({
+    email_address: { address: addr, name: addr },
+  }));
+
+  const body = {
+    from: { address: sender, name: senderName },
+    to: recipients,
+    subject,
+    htmlbody: htmlBody,
+    textbody: textBody,
+  };
+
+  let lastError = '';
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const res = await fetch(ZEPTO_API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Zoho-encrtoken ${apiKey}`,
+        },
+        body: JSON.stringify(body),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const messageId = data?.data?.[0]?.message_id || data?.request_id || 'unknown';
+        console.log(`[EMAIL-ZEPTO] ✓ Sent (attempt ${attempt}). MessageId: ${messageId}`);
+        return { ok: true, messageId };
+      }
+
+      const errText = await res.text();
+      lastError = `HTTP ${res.status}: ${errText.substring(0, 300)}`;
+      console.error(`[EMAIL-ZEPTO] Attempt ${attempt} failed:`, lastError);
+
+      // Don't retry client errors (except 429 rate limit)
+      if (res.status >= 400 && res.status < 500 && res.status !== 429) {
+        return { ok: false, error: lastError };
+      }
+    } catch (err: any) {
+      lastError = err.message || 'Network error';
+      console.error(`[EMAIL-ZEPTO] Attempt ${attempt} exception:`, lastError);
+    }
+
+    if (attempt < MAX_RETRIES) {
+      const delay = BACKOFF_BASE_MS * Math.pow(2, attempt - 1);
+      console.log(`[EMAIL-ZEPTO] Waiting ${delay}ms before retry...`);
+      await sleep(delay);
+    }
+  }
+
+  return { ok: false, error: lastError };
+}
+
+/**
+ * Enviar correo electrónico vía ZeptoMail REST API
  */
 export async function sendEmail(params: SendEmailParams): Promise<{
   success: boolean;
@@ -26,7 +115,7 @@ export async function sendEmail(params: SendEmailParams): Promise<{
 }> {
   const { to, subject, html, text, fromType, dedupeKey, metadata, template } = params;
 
-  console.log('[EMAIL] ========== INICIANDO ENVÍO ==========');
+  console.log('[EMAIL] ========== INICIANDO ENVÍO (ZeptoMail API) ==========');
   console.log('[EMAIL] To:', to);
   console.log('[EMAIL] Subject:', subject);
   console.log('[EMAIL] Template:', template || 'N/A');
@@ -41,7 +130,6 @@ export async function sendEmail(params: SendEmailParams): Promise<{
       if (isDuplicate) {
         console.log(`[EMAIL] ⚠️ Correo duplicado omitido: ${dedupeKey}`);
         
-        // Registrar como skipped
         await logEmail({
           to: Array.isArray(to) ? to.join(',') : to,
           subject,
@@ -57,62 +145,56 @@ export async function sendEmail(params: SendEmailParams): Promise<{
       console.log('[EMAIL] ✓ No es duplicado, continuando...');
     }
 
-    // 2. Obtener transporte y dirección FROM
-    console.log('[EMAIL] Obteniendo transporte SMTP...');
-    const transport = getTransport(fromType);
-    const from = getFromAddress(fromType);
-    console.log('[EMAIL] From:', from);
-
-    // 3. Generar texto plano si no se proporcionó
-    console.log('[EMAIL] Generando texto plano...');
+    // 2. Generar texto plano si no se proporcionó
     const plainText = text || htmlToText(html);
-    console.log('[EMAIL] HTML length:', html.length, 'chars');
-    console.log('[EMAIL] Text length:', plainText.length, 'chars');
+    console.log('[EMAIL] HTML length:', html.length, '| Text length:', plainText.length);
 
-    // 4. Enviar correo
-    console.log('[EMAIL] Enviando correo vía SMTP...');
-    const info = await transport.sendMail({
-      from,
-      to,
-      subject,
-      html,
-      text: plainText,
-    });
+    // 3. Enviar correo vía ZeptoMail REST API
+    console.log('[EMAIL] Enviando vía ZeptoMail REST API...');
+    const result = await zeptoSend(to, subject, html, plainText);
 
-    console.log(`[EMAIL] ✓ Enviado correctamente`);
-    console.log('[EMAIL] MessageId:', info.messageId);
-    console.log('[EMAIL] Response:', info.response);
+    if (result.ok) {
+      console.log(`[EMAIL] ✓ Enviado correctamente. MessageId: ${result.messageId}`);
 
-    // 5. Registrar éxito en DB
-    console.log('[EMAIL] Registrando en email_logs...');
+      await logEmail({
+        to: Array.isArray(to) ? to.join(',') : to,
+        subject,
+        template: template || null,
+        dedupe_key: dedupeKey || null,
+        status: 'sent',
+        error: null,
+        metadata: {
+          messageId: result.messageId,
+          fromType,
+          transport: 'zepto-api',
+          ...(metadata || {}),
+        },
+      });
+      console.log('[EMAIL] ========== ENVÍO COMPLETADO ==========');
+      return { success: true, messageId: result.messageId };
+    }
+
+    // Failed after retries
+    console.error('[EMAIL] ✗ ERROR ENVIANDO CORREO:', result.error);
+
     await logEmail({
       to: Array.isArray(to) ? to.join(',') : to,
       subject,
       template: template || null,
       dedupe_key: dedupeKey || null,
-      status: 'sent',
-      error: null,
+      status: 'failed',
+      error: result.error || 'Unknown error',
       metadata: {
-        messageId: info.messageId,
-        fromType,
+        transport: 'zepto-api',
         ...(metadata || {}),
       },
     });
-    console.log('[EMAIL] ✓ Log registrado exitosamente');
-    console.log('[EMAIL] ========== ENVÍO COMPLETADO ==========');
-
-    return { success: true, messageId: info.messageId };
+    console.log('[EMAIL] ========== ENVÍO FALLIDO ==========');
+    return { success: false, error: result.error };
 
   } catch (error: any) {
-    console.error('[EMAIL] ✗ ERROR ENVIANDO CORREO');
-    console.error('[EMAIL] Error message:', error.message);
-    console.error('[EMAIL] Error code:', error.code);
-    console.error('[EMAIL] Error command:', error.command);
-    console.error('[EMAIL] Error stack:', error.stack);
-    console.error('[EMAIL] Full error:', JSON.stringify(error, null, 2));
+    console.error('[EMAIL] ✗ EXCEPCIÓN INESPERADA:', error.message);
 
-    // Registrar fallo en DB
-    console.log('[EMAIL] Registrando error en email_logs...');
     await logEmail({
       to: Array.isArray(to) ? to.join(',') : to,
       subject,
@@ -121,12 +203,10 @@ export async function sendEmail(params: SendEmailParams): Promise<{
       status: 'failed',
       error: error.message || 'Unknown error',
       metadata: {
-        errorCode: error.code,
-        errorCommand: error.command,
+        transport: 'zepto-api',
         ...(metadata || {}),
       },
     });
-    console.log('[EMAIL] ========== ENVÍO FALLIDO ==========');
 
     return { success: false, error: error.message };
   }
