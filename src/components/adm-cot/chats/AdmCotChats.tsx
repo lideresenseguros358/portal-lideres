@@ -122,10 +122,10 @@ function ThreadList({
 
         {/* Search */}
         <div className="relative">
-          <FaSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-[10px]" />
+          <FaSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-[10px] pointer-events-none" />
           <input type="text" placeholder="Buscar..."
             value={search} onChange={e => setSearch(e.target.value)}
-            className="w-full pl-7 pr-2 py-1.5 text-xs border border-gray-200 rounded-lg outline-none focus:ring-1 focus:ring-[#010139]/30" />
+            className="w-full pl-8 pr-2 py-1.5 text-xs border border-gray-200 rounded-lg outline-none focus:ring-1 focus:ring-[#010139]/30" />
         </div>
 
         {/* Filters: Todos + Urgente pill + dropdown */}

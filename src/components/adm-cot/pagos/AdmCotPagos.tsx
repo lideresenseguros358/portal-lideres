@@ -164,10 +164,10 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-3 space-y-2">
         <div className="flex items-center gap-2">
           <div className="relative flex-1 min-w-0">
-            <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs" />
+            <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs pointer-events-none" />
             <input type="text" placeholder="Buscar cliente, póliza..." value={search}
               onChange={e => setSearch(e.target.value)} onKeyDown={e => e.key === 'Enter' && fetchPayments()}
-              className="w-full pl-8 pr-3 py-2 text-sm sm:text-xs border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-[#010139]/20" />
+              className="w-full pl-9 pr-3 py-2 text-sm sm:text-xs border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-[#010139]/20" />
           </div>
           <button onClick={() => setShowFilters(!showFilters)}
             className={`p-2 rounded-lg transition-colors cursor-pointer flex-shrink-0 ${showFilters ? 'bg-[#010139] text-white' : 'text-gray-500 hover:bg-gray-100'}`} title="Filtros">

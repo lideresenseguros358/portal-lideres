@@ -842,11 +842,11 @@ export default function AdmCotCotizaciones() {
         {/* Row 1: Search + Actions */}
         <div className="flex items-center gap-2">
           <div className="relative flex-1 min-w-0">
-            <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs" />
+            <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs pointer-events-none" />
             <input type="text" placeholder="Buscar nombre, cédula, email..."
               value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && fetchQuotes(1)}
-              className="w-full pl-8 pr-3 py-2 text-sm sm:text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#010139]/20 focus:border-[#010139] outline-none" />
+              className="w-full pl-9 pr-3 py-2 text-sm sm:text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#010139]/20 focus:border-[#010139] outline-none" />
           </div>
           <button onClick={() => setShowAdvanced(!showAdvanced)}
             className={`p-2 rounded-lg transition-colors cursor-pointer flex-shrink-0 ${showAdvanced ? 'bg-[#010139] text-white' : 'text-gray-500 hover:bg-gray-100'}`} title="Filtros">
