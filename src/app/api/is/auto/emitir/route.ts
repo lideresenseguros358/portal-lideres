@@ -94,16 +94,16 @@ export async function POST(request: NextRequest) {
       cachedInsurerId = insurer.id;
     }
     
-    // Obtener broker_id de oficina (cached after first call)
+    // Obtener broker_id de portal (cached after first call)
     if (!cachedBrokerId) {
       const { data: oficinaBroker } = await supabase
         .from('brokers')
         .select('p_id')
-        .eq('email', 'contacto@lideresenseguros.com')
+        .eq('email', 'portal@lideresenseguros.com')
         .single();
       if (!oficinaBroker) {
         return NextResponse.json(
-          { success: false, error: 'No se encontró broker oficina (contacto@lideresenseguros.com)' },
+          { success: false, error: 'No se encontró broker portal (portal@lideresenseguros.com)' },
           { status: 500 }
         );
       }

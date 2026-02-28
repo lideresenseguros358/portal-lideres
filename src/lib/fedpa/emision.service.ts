@@ -159,11 +159,11 @@ export async function crearClienteYPolizaFEDPA(
   try {
     const supabase = getSupabaseAdmin();
     
-    // 1. Buscar broker "oficina" (contacto@lideresenseguros.com)
+    // 1. Buscar broker "portal" (portal@lideresenseguros.com)
     const { data: oficinaBroker } = await supabase
       .from('brokers')
       .select('id')
-      .eq('email', 'contacto@lideresenseguros.com')
+      .eq('email', 'portal@lideresenseguros.com')
       .single();
     
     if (!oficinaBroker) {
