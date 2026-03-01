@@ -1,5 +1,5 @@
-import OpsMorosidadTab from '@/components/operaciones/morosidad/OpsMorosidadTab';
+import MorosidadPage from '@/components/operaciones/morosidad/MorosidadPage';
 
 export default function OperacionesMorosidadPage() {
-  return <OpsMorosidadTab />;
+  return <MorosidadPage />;
 }

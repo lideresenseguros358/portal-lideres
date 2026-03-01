@@ -159,3 +159,41 @@ textarea:not([data-no-uppercase]) {
 .animate-slide-up-fan {
   animation: slideUpFan 0.25s ease-out backwards;
 }
+
+/* ── Operaciones Microinteractions ── */
+@keyframes ops-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+@keyframes ops-slide-in-right {
+  from { transform: translateX(12px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+@keyframes ops-slide-in-top {
+  from { transform: translateY(-6px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@keyframes ops-scale-in {
+  from { transform: scale(0.95); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
+.ops-skeleton {
+  animation: ops-pulse 1.8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+.ops-toast-enter {
+  animation: ops-slide-in-right 0.25s ease-out forwards;
+}
+.ops-dropdown-enter {
+  animation: ops-slide-in-top 0.15s ease-out forwards;
+}
+.ops-card-enter {
+  animation: ops-scale-in 0.2s ease-out forwards;
+}
+.ops-hover-lift {
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.ops-hover-lift:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}

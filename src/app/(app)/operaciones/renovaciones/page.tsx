@@ -1,5 +1,5 @@
-import OpsRenovacionesTab from '@/components/operaciones/renovaciones/OpsRenovacionesTab';
+import RenovacionesInbox from '@/components/operaciones/renovaciones/RenovacionesInbox';
 
 export default function OperacionesRenovacionesPage() {
-  return <OpsRenovacionesTab />;
+  return <RenovacionesInbox />;
 }

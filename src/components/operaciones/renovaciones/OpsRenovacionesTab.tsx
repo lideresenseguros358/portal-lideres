@@ -13,17 +13,17 @@ import {
   FaBan,
   FaEye,
 } from 'react-icons/fa';
-import type { RenewalStatus } from '@/types/operaciones.types';
+import type { OpsCaseStatus } from '@/types/operaciones.types';
 
-function StatusBadge({ status }: { status: RenewalStatus }) {
-  const m: Record<RenewalStatus, { bg: string; text: string }> = {
-    PENDIENTE: { bg: 'bg-amber-100', text: 'text-amber-800' },
-    EN_REVISION: { bg: 'bg-blue-100', text: 'text-blue-800' },
-    APLAZADO: { bg: 'bg-orange-100', text: 'text-orange-800' },
-    RENOVADO: { bg: 'bg-green-100', text: 'text-green-800' },
-    CANCELADO: { bg: 'bg-red-100', text: 'text-red-800' },
+function StatusBadge({ status }: { status: OpsCaseStatus }) {
+  const m: Partial<Record<OpsCaseStatus, { bg: string; text: string }>> = {
+    pendiente: { bg: 'bg-amber-100', text: 'text-amber-800' },
+    en_revision: { bg: 'bg-blue-100', text: 'text-blue-800' },
+    aplazado: { bg: 'bg-orange-100', text: 'text-orange-800' },
+    cerrado_renovado: { bg: 'bg-green-100', text: 'text-green-800' },
+    cerrado_cancelado: { bg: 'bg-red-100', text: 'text-red-800' },
   };
-  const s = m[status] || { bg: 'bg-gray-100', text: 'text-gray-600' };
+  const s = m[status] ?? { bg: 'bg-gray-100', text: 'text-gray-600' };
   return <span className={`${s.bg} ${s.text} px-2 py-0.5 rounded-full text-[10px] font-bold`}>{status.replace('_', ' ')}</span>;
 }
 

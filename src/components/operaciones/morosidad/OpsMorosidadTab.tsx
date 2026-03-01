@@ -11,14 +11,14 @@ import {
   FaBan,
   FaExclamationCircle,
 } from 'react-icons/fa';
-import type { MorosidadStatus } from '@/types/operaciones.types';
+import type { OpsMorosidadStatus } from '@/types/operaciones.types';
 
-function StatusBadge({ status }: { status: MorosidadStatus }) {
-  const m: Record<MorosidadStatus, { bg: string; text: string }> = {
-    AL_DIA: { bg: 'bg-green-100', text: 'text-green-800' },
-    ATRASADO: { bg: 'bg-red-100', text: 'text-red-800' },
-    PAGO_RECIBIDO: { bg: 'bg-blue-100', text: 'text-blue-800' },
-    CANCELADO: { bg: 'bg-gray-100', text: 'text-gray-800' },
+function StatusBadge({ status }: { status: OpsMorosidadStatus }) {
+  const m: Record<OpsMorosidadStatus, { bg: string; text: string }> = {
+    al_dia: { bg: 'bg-green-100', text: 'text-green-800' },
+    atrasado: { bg: 'bg-red-100', text: 'text-red-800' },
+    pago_recibido: { bg: 'bg-blue-100', text: 'text-blue-800' },
+    cancelado: { bg: 'bg-gray-100', text: 'text-gray-800' },
   };
   const s = m[status] || { bg: 'bg-gray-100', text: 'text-gray-600' };
   return <span className={`${s.bg} ${s.text} px-2 py-0.5 rounded-full text-[10px] font-bold`}>{status.replace('_', ' ')}</span>;

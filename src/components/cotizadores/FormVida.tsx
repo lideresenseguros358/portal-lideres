@@ -11,6 +11,7 @@ import { useUppercaseInputs } from '@/lib/cotizadores/hooks/useUppercaseInputs';
 import { useOnline } from '@/lib/cotizadores/hooks/useOnline';
 import OfflineBanner from './OfflineBanner';
 import type { VidaQuoteInput } from '@/lib/cotizadores/types';
+import { createPetitionFromQuote } from '@/lib/operaciones/createPetitionFromQuote';
 
 export default function FormVida() {
   const router = useRouter();
@@ -22,6 +23,7 @@ export default function FormVida() {
     fumador: false
   });
 
+  const [contactData, setContactData] = useState({ nombre: '', email: '', telefono: '' });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const validate = (): boolean => {
@@ -50,6 +52,19 @@ export default function FormVida() {
     console.log('[Analytics] start_form:', { policyType: 'VIDA', data: formData });
     
     sessionStorage.setItem('quoteInput', JSON.stringify(formData));
+
+    // Create petition in ops_cases (fire-and-forget)
+    if (contactData.nombre.trim()) {
+      createPetitionFromQuote({
+        client_name: contactData.nombre.trim(),
+        client_email: contactData.email.trim() || undefined,
+        client_phone: contactData.telefono.trim() || undefined,
+        ramo: 'vida',
+        details: { ...formData },
+        source: 'COTIZADOR_VIDA',
+      });
+    }
+
     router.push('/cotizadores/comparar');
   };
 
@@ -195,6 +210,44 @@ export default function FormVida() {
               placeholder="INGENIERO"
             />
             <p className="text-xs text-gray-500 mt-1">Puede afectar la evaluación de riesgo</p>
+          </div>
+
+          {/* Datos de Contacto */}
+          <div className="border-2 border-[#8AAA19]/30 rounded-xl p-5 space-y-4 bg-[#8AAA19]/5">
+            <h3 className="text-sm font-bold text-[#010139]">Datos de Contacto (opcional)</h3>
+            <p className="text-xs text-gray-500 -mt-2">Si deseas que un asesor te contacte con la cotización</p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Nombre</label>
+                <input
+                  type="text"
+                  value={contactData.nombre}
+                  onChange={createUppercaseHandler((e) => setContactData({ ...contactData, nombre: e.target.value }))}
+                  className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none text-sm"
+                  placeholder="NOMBRE COMPLETO"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Email</label>
+                <input
+                  type="email"
+                  value={contactData.email}
+                  onChange={(e) => setContactData({ ...contactData, email: e.target.value })}
+                  className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none text-sm"
+                  placeholder="correo@ejemplo.com"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Teléfono</label>
+                <input
+                  type="tel"
+                  value={contactData.telefono}
+                  onChange={(e) => setContactData({ ...contactData, telefono: e.target.value })}
+                  className="w-full px-3 py-2.5 border-2 border-gray-300 rounded-lg focus:border-[#8AAA19] focus:outline-none text-sm"
+                  placeholder="6000-0000"
+                />
+              </div>
+            </div>
           </div>
 
           {/* Nota informativa */}

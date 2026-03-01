@@ -59,41 +59,66 @@ export async function POST(req: NextRequest) {
 
       case 'get_session_summary': {
         const { user_id, date } = body;
-        // Get all session blocks for a user on a given date
-        const { data, error } = await supabase
-          .from('ops_activity_log')
-          .select('session_block_id, action_type, created_at')
+        // Get DB session blocks for a user on a given date
+        const { data: sessions, error: sessErr } = await supabase
+          .from('ops_user_sessions')
+          .select('*')
           .eq('user_id', user_id)
-          .gte('created_at', `${date}T00:00:00`)
-          .lte('created_at', `${date}T23:59:59`)
-          .order('created_at', { ascending: true });
+          .gte('session_start', `${date}T00:00:00`)
+          .lte('session_start', `${date}T23:59:59`)
+          .order('session_start', { ascending: true });
 
-        if (error) throw error;
-
-        // Group by session blocks, compute hours per block
-        const blocks: Record<string, { start: string; end: string; productive_actions: number }> = {};
-        data?.forEach((row: any) => {
-          const bid = row.session_block_id || 'unknown';
-          if (!blocks[bid]) {
-            blocks[bid] = { start: row.created_at, end: row.created_at, productive_actions: 0 };
-          }
-          blocks[bid].end = row.created_at;
-          if (row.action_type !== 'navigation' && row.action_type !== 'session_start' && row.action_type !== 'session_end') {
-            blocks[bid].productive_actions++;
-          }
-        });
+        if (sessErr) throw sessErr;
 
         let totalHours = 0;
-        Object.values(blocks).forEach(b => {
-          const diff = (new Date(b.end).getTime() - new Date(b.start).getTime()) / (1000 * 60 * 60);
-          totalHours += diff;
+        (sessions ?? []).forEach((s: any) => {
+          totalHours += (s.duration_minutes || 0) / 60;
         });
 
         return NextResponse.json({
           success: true,
-          blocks: Object.entries(blocks).map(([id, b]) => ({ id, ...b })),
+          blocks: sessions || [],
           totalHours: Math.round(totalHours * 100) / 100,
         });
+      }
+
+      case 'start_session_block': {
+        const { user_id, block_id } = body;
+        if (!user_id || !block_id) {
+          return NextResponse.json({ error: 'Missing user_id or block_id' }, { status: 400 });
+        }
+        const { data: sessionId, error: startErr } = await supabase.rpc('ops_start_session_block', {
+          p_user_id: user_id,
+          p_block_id: block_id,
+        });
+        if (startErr) throw startErr;
+        return NextResponse.json({ success: true, session_id: sessionId });
+      }
+
+      case 'close_session_block': {
+        const { user_id, block_id } = body;
+        if (!user_id || !block_id) {
+          return NextResponse.json({ error: 'Missing user_id or block_id' }, { status: 400 });
+        }
+        const { data: closed, error: closeErr } = await supabase.rpc('ops_close_session_block', {
+          p_user_id: user_id,
+          p_block_id: block_id,
+        });
+        if (closeErr) throw closeErr;
+        return NextResponse.json({ success: true, closed });
+      }
+
+      case 'mark_first_response': {
+        const { case_id, user_id } = body;
+        if (!case_id) {
+          return NextResponse.json({ error: 'Missing case_id' }, { status: 400 });
+        }
+        const { data: marked, error: markErr } = await supabase.rpc('ops_mark_first_response', {
+          p_case_id: case_id,
+          p_user_id: user_id || null,
+        });
+        if (markErr) throw markErr;
+        return NextResponse.json({ success: true, marked });
       }
 
       default:

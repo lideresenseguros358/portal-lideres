@@ -1,6 +1,10 @@
 {
   "crons": [
     {
+      "path": "/api/cron/ops-imap-sync",
+      "schedule": "* * * * *"
+    },
+    {
       "path": "/api/cron/imap-ingest",
       "schedule": "*/3 * * * *"
     },
@@ -47,6 +51,18 @@
     {
       "path": "/api/cron/adm-cot-recurrencia",
       "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/ops-ai-eval-urgencies",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/ops-metrics-nightly",
+      "schedule": "55 23 * * *"
+    },
+    {
+      "path": "/api/cron/ops-sla-check",
+      "schedule": "*/30 * * * *"
     }
   ]
 }

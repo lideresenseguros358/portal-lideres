@@ -1,5 +1,5 @@
-import OpsLogsTab from '@/components/operaciones/logs/OpsLogsTab';
+import OpsAuditoriaTab from '@/components/operaciones/logs/OpsAuditoriaTab';
 
 export default function OperacionesLogsPage() {
-  return <OpsLogsTab />;
+  return <OpsAuditoriaTab />;
 }

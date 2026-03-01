@@ -1,5 +1,5 @@
-import OpsUrgenciasTab from '@/components/operaciones/urgencias/OpsUrgenciasTab';
+import UrgenciasInbox from '@/components/operaciones/urgencias/UrgenciasInbox';
 
 export default function OperacionesUrgenciasPage() {
-  return <OpsUrgenciasTab />;
+  return <UrgenciasInbox />;
 }
