@@ -69,7 +69,7 @@ async function zeptoSend(
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Zoho-encrtoken ${apiKey}`,
+          'Authorization': apiKey,
         },
         body: JSON.stringify(body),
       });

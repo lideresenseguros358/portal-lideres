@@ -70,7 +70,7 @@ export async function sendZeptoEmail(params: ZeptoSendParams): Promise<ZeptoSend
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Zoho-encrtoken ${apiKey}`,
+          'Authorization': apiKey,
         },
         body: JSON.stringify(requestBody),
       });

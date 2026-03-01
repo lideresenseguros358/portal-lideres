@@ -9,7 +9,7 @@
 
 import { useState } from 'react';
 import { toast } from 'sonner';
-import { FaEnvelope, FaCheckCircle, FaTimesCircle, FaSpinner } from 'react-icons/fa';
+import { FaEnvelope, FaCheckCircle, FaTimesCircle, FaSpinner, FaPaperPlane, FaServer, FaCog } from 'react-icons/fa';
 
 interface EmailTest {
   template: string;
@@ -175,31 +175,63 @@ const EMAIL_TESTS: EmailTest[] = [
 
 export default function CorreosPage() {
   const [loading, setLoading] = useState<string | null>(null);
-  const [smtpStatus, setSmtpStatus] = useState<any>(null);
-  const [checkingSMTP, setCheckingSMTP] = useState(false);
+  const [envStatus, setEnvStatus] = useState<any>(null);
+  const [checkingEnv, setCheckingEnv] = useState(false);
+  const [quickTestResult, setQuickTestResult] = useState<any>(null);
+  const [quickTestLoading, setQuickTestLoading] = useState(false);
 
-  // Verificar estado SMTP
-  const checkSMTPStatus = async () => {
-    setCheckingSMTP(true);
+  // Verificar estado Zepto API
+  const checkEnvStatus = async () => {
+    setCheckingEnv(true);
     try {
-      const response = await fetch('/api/test-emails');
+      const response = await fetch('/api/email/test');
       const data = await response.json();
-      setSmtpStatus(data);
+      setEnvStatus(data);
       
-      if (data.success) {
-        toast.success('Estado SMTP verificado');
+      if (data.configured) {
+        toast.success('Zepto API configurado correctamente');
       } else {
-        toast.error('Error verificando SMTP');
+        toast.error('Zepto API no configurado');
       }
     } catch (error) {
-      console.error('Error checking SMTP:', error);
-      toast.error('Error al verificar estado SMTP');
+      console.error('Error checking env:', error);
+      toast.error('Error al verificar estado');
     } finally {
-      setCheckingSMTP(false);
+      setCheckingEnv(false);
     }
   };
 
-  // Enviar correo de prueba
+  // Quick test via /api/email/test
+  const sendQuickTest = async () => {
+    setQuickTestLoading(true);
+    setQuickTestResult(null);
+    try {
+      const response = await fetch('/api/email/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const data = await response.json();
+      setQuickTestResult(data);
+      
+      if (data.success) {
+        toast.success('Correo de prueba enviado exitosamente', {
+          description: `Provider: ${data.provider} | Env: ${data.vercel_env}`,
+        });
+      } else {
+        toast.error(`Error: ${data.error_code || 'UNKNOWN'}`, {
+          description: data.error_message || 'Error desconocido',
+        });
+      }
+    } catch (error: any) {
+      setQuickTestResult({ success: false, error_message: error.message });
+      toast.error('Error de red al enviar prueba');
+    } finally {
+      setQuickTestLoading(false);
+    }
+  };
+
+  // Enviar correo de prueba (template-based, uses legacy /api/test-emails)
   const sendTestEmail = async (test: EmailTest) => {
     setLoading(test.template);
     
@@ -217,7 +249,7 @@ export default function CorreosPage() {
       
       if (data.success) {
         toast.success(`✓ Correo enviado: ${test.name}`, {
-          description: `Revisa javiersamudio@lideresenseguros.com`,
+          description: `Provider: zepto-api | Destino: javiersamudio@lideresenseguros.com`,
         });
       } else {
         toast.error(`✗ Error: ${test.name}`, {
@@ -252,60 +284,122 @@ export default function CorreosPage() {
                 Prueba todos los correos automáticos del portal. Todos se enviarán a{' '}
                 <span className="font-semibold text-[#010139]">javiersamudio@lideresenseguros.com</span>
               </p>
+              <p className="text-xs text-gray-400 mt-1">
+                Provider: <span className="font-mono font-medium text-[#010139]">Zepto API</span> |
+                Remitente: <span className="font-mono font-medium text-[#010139]">portal@lideresenseguros.com</span>
+              </p>
             </div>
             
-            <button
-              onClick={checkSMTPStatus}
-              disabled={checkingSMTP}
-              className="flex items-center gap-2 px-6 py-3 bg-[#010139] text-white rounded-lg hover:bg-[#020270] transition-all disabled:opacity-50"
-            >
-              {checkingSMTP ? (
-                <>
-                  <FaSpinner className="animate-spin text-white" />
-                  Verificando...
-                </>
-              ) : (
-                <>
-                  <FaCheckCircle className="text-white" />
-                  Verificar Estado SMTP
-                </>
-              )}
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={checkEnvStatus}
+                disabled={checkingEnv}
+                className="flex items-center gap-2 px-5 py-3 bg-[#010139] text-white rounded-lg hover:bg-[#020270] transition-all disabled:opacity-50 cursor-pointer"
+              >
+                {checkingEnv ? (
+                  <>
+                    <FaSpinner className="animate-spin text-white" />
+                    Verificando...
+                  </>
+                ) : (
+                  <>
+                    <FaCog className="text-white" />
+                    Verificar Configuración
+                  </>
+                )}
+              </button>
+              <button
+                onClick={sendQuickTest}
+                disabled={quickTestLoading}
+                className="flex items-center gap-2 px-5 py-3 bg-[#8AAA19] text-white rounded-lg hover:bg-[#7a9916] transition-all disabled:opacity-50 cursor-pointer"
+              >
+                {quickTestLoading ? (
+                  <>
+                    <FaSpinner className="animate-spin text-white" />
+                    Enviando...
+                  </>
+                ) : (
+                  <>
+                    <FaPaperPlane className="text-white" />
+                    Enviar Prueba Rápida
+                  </>
+                )}
+              </button>
+            </div>
           </div>
           
-          {/* SMTP Status */}
-          {smtpStatus && (
-            <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-              <p className="text-sm font-semibold text-gray-700 mb-2">Estado de Conexión SMTP:</p>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+          {/* Env Status Panel */}
+          {envStatus && (
+            <div className={`mt-4 p-4 rounded-lg border ${envStatus.configured ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+              <p className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                <FaServer className={envStatus.configured ? 'text-green-600' : 'text-red-600'} />
+                Estado de Zepto API
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
                 <div className="flex items-center gap-2">
-                  <span className="font-medium text-gray-600">Portal:</span>
-                  {smtpStatus.smtp?.portal === 'connected' ? (
-                    <span className="flex items-center gap-1 text-green-600">
-                      <FaCheckCircle className="text-green-600" /> Conectado
-                    </span>
+                  <span className="font-medium text-gray-600">Provider:</span>
+                  <span className="font-mono text-[#010139] font-bold">{envStatus.provider}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-gray-600">Entorno:</span>
+                  <span className="font-mono text-[#010139]">{envStatus.vercel_env}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-gray-600">API Key:</span>
+                  {envStatus.hasApiKey ? (
+                    <span className="flex items-center gap-1 text-green-600"><FaCheckCircle className="text-green-600" /> Presente</span>
                   ) : (
-                    <span className="flex items-center gap-1 text-red-600">
-                      <FaTimesCircle className="text-red-600" /> Desconectado
-                    </span>
+                    <span className="flex items-center gap-1 text-red-600"><FaTimesCircle className="text-red-600" /> Falta</span>
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="font-medium text-gray-600">Trámites:</span>
-                  {smtpStatus.smtp?.tramites === 'connected' ? (
-                    <span className="flex items-center gap-1 text-green-600">
-                      <FaCheckCircle className="text-green-600" /> Conectado
-                    </span>
+                  <span className="font-medium text-gray-600">Sender:</span>
+                  {envStatus.hasSender ? (
+                    <span className="flex items-center gap-1 text-green-600"><FaCheckCircle className="text-green-600" /> {envStatus.sender}</span>
                   ) : (
-                    <span className="flex items-center gap-1 text-red-600">
-                      <FaTimesCircle className="text-red-600" /> Desconectado
-                    </span>
+                    <span className="flex items-center gap-1 text-red-600"><FaTimesCircle className="text-red-600" /> Falta</span>
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="font-medium text-gray-600">Host:</span>
-                  <span className="text-gray-800">{smtpStatus.host}:{smtpStatus.port}</span>
+                  <span className="font-medium text-gray-600">Sender Name:</span>
+                  {envStatus.hasSenderName ? (
+                    <span className="flex items-center gap-1 text-green-600"><FaCheckCircle className="text-green-600" /> {envStatus.senderName}</span>
+                  ) : (
+                    <span className="flex items-center gap-1 text-amber-600"><FaTimesCircle className="text-amber-600" /> Default</span>
+                  )}
                 </div>
+                <div className="flex items-center gap-2">
+                  <span className="font-medium text-gray-600">API URL:</span>
+                  <span className="font-mono text-xs text-gray-500">{envStatus.apiUrl}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Quick Test Result Panel */}
+          {quickTestResult && (
+            <div className={`mt-4 p-4 rounded-lg border ${quickTestResult.success ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+              <p className={`text-sm font-bold mb-2 flex items-center gap-2 ${quickTestResult.success ? 'text-green-800' : 'text-red-800'}`}>
+                {quickTestResult.success ? <><FaCheckCircle className="text-green-600" /> Correo enviado exitosamente</> : <><FaTimesCircle className="text-red-600" /> Error enviando correo</>}
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                <div><span className="text-gray-500">Provider:</span> <span className="font-mono font-bold">{quickTestResult.provider || '—'}</span></div>
+                <div><span className="text-gray-500">Entorno:</span> <span className="font-mono">{quickTestResult.vercel_env || '—'}</span></div>
+                {quickTestResult.message_id && (
+                  <div><span className="text-gray-500">Message ID:</span> <span className="font-mono">{quickTestResult.message_id}</span></div>
+                )}
+                {quickTestResult.recipient && (
+                  <div><span className="text-gray-500">Destinatario:</span> <span className="font-mono">{quickTestResult.recipient}</span></div>
+                )}
+                {quickTestResult.error_code && (
+                  <div className="md:col-span-2"><span className="text-gray-500">Error Code:</span> <span className="font-mono font-bold text-red-700">{quickTestResult.error_code}</span></div>
+                )}
+                {quickTestResult.error_message && (
+                  <div className="md:col-span-2"><span className="text-gray-500">Error:</span> <span className="font-mono text-red-700 break-all">{quickTestResult.error_message}</span></div>
+                )}
+                {quickTestResult.missing_vars && (
+                  <div className="md:col-span-2"><span className="text-gray-500">Variables faltantes:</span> <span className="font-mono text-red-700">{quickTestResult.missing_vars.join(', ')}</span></div>
+                )}
               </div>
             </div>
           )}
@@ -376,9 +470,12 @@ export default function CorreosPage() {
           <ul className="text-sm text-yellow-800 space-y-2">
             <li>• Todos los correos se envían con datos ficticios de prueba</li>
             <li>• El destinatario siempre será: javiersamudio@lideresenseguros.com</li>
+            <li>• Provider: <strong>Zepto API</strong> (REST, no SMTP)</li>
+            <li>• Remitente: <strong>portal@lideresenseguros.com</strong></li>
             <li>• Los correos marcados como "(Cron Job)" normalmente se envían automáticamente</li>
-            <li>• Revisa los logs del terminal para debugging detallado de SMTP</li>
-            <li>• Si un correo falla, verifica la configuración SMTP en las variables de entorno</li>
+            <li>• Revisa los logs de Vercel para debugging detallado del envío</li>
+            <li>• Si un correo falla, usa el botón "Verificar Configuración" para diagnosticar</li>
+            <li>• Variables requeridas en Vercel: <code className="text-xs bg-yellow-100 px-1 rounded">ZEPTO_API_KEY</code>, <code className="text-xs bg-yellow-100 px-1 rounded">ZEPTO_SENDER</code>, <code className="text-xs bg-yellow-100 px-1 rounded">ZEPTO_SENDER_NAME</code></li>
           </ul>
         </div>
       </div>
