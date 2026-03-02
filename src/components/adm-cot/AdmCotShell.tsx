@@ -92,8 +92,8 @@ export default function AdmCotShell({ children }: Props) {
             >
               <Icon size={14} className={`sm:hidden ${isActive ? 'text-white' : 'text-gray-600'}`} />
               <Icon size={16} className={`hidden sm:block ${isActive ? 'text-white' : 'text-gray-600'}`} />
-              <span className="hidden sm:inline">{item.label}</span>
-              <span className="sm:hidden">{item.shortLabel}</span>
+              <span className={`hidden sm:inline ${isActive ? 'text-white' : 'text-gray-600'}`}>{item.label}</span>
+              <span className={`sm:hidden ${isActive ? 'text-white' : 'text-gray-600'}`}>{item.shortLabel}</span>
               {item.badgeKey && badges[item.badgeKey] > 0 && (
                 <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
                   isActive ? 'bg-[#8AAA19]' : 'bg-red-500 text-white'

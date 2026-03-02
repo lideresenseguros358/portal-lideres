@@ -350,22 +350,37 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
   const handleSave = () => {
     const validRefs = references.filter(ref => ref.reference_number.trim());
     const wasOriginallyBrokerDeduction = initialBrokerDeduction && metadata.advance_id;
+    const paymentMethodChanged = wasOriginallyBrokerDeduction && paymentMethod !== 'broker_deduction';
     
-    // Case A: Still marked as broker deduction but user added references
-    // → Show modal to confirm converting to bank transfer and deleting advance
-    if (wasOriginallyBrokerDeduction && validRefs.length > 0 && isBrokerDeduction) {
-      setShowDeleteAdvanceModal(true);
-      return;
-    }
+    // Only prompt about deleting the advance when the payment method ACTUALLY changed
+    // from broker_deduction to bank_transfer. If the user is just editing notes,
+    // client name, or other fields without changing the payment method, save normally.
     
-    // Case B: User already switched radio to bank_transfer from broker_deduction
+    // Case A: User explicitly switched radio to bank_transfer from broker_deduction
     // → Show modal to confirm deleting the advance before saving
-    if (wasOriginallyBrokerDeduction && !isBrokerDeduction && validRefs.length > 0) {
+    if (paymentMethodChanged && validRefs.length > 0) {
       setShowDeleteAdvanceModal(true);
       return;
     }
     
-    // Normal save
+    // Case B: Still marked as broker deduction and user added NEW references
+    // (indicating intent to change payment method even without toggling the radio)
+    // Only trigger if there are NEW references that didn't exist before
+    if (wasOriginallyBrokerDeduction && isBrokerDeduction && validRefs.length > 0) {
+      // Check if references are actually new (not just loaded from DB)
+      const hadOriginalReferences = payment.payment_references?.length > 0;
+      const originalRefNumbers = new Set(
+        (payment.payment_references || []).map((r: any) => r.reference_number)
+      );
+      const hasNewReferences = validRefs.some(ref => !originalRefNumbers.has(ref.reference_number));
+      
+      if (hasNewReferences && !hadOriginalReferences) {
+        setShowDeleteAdvanceModal(true);
+        return;
+      }
+    }
+    
+    // Normal save — no payment method change, just editing fields like notes
     doSave(false);
   };
 

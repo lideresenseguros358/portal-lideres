@@ -2448,6 +2448,151 @@ export async function actionUpdatePendingPaymentFull(paymentId: string, updates:
   }
 }
 
+// Pagar Anticipado: habilitar/deshabilitar un pago pendiente de descuento a corredor
+// para que pueda marcarse como pagado antes de que el adelanto se descuente.
+// Agrega una nota con fecha al adelanto vinculado. Reversible.
+export async function actionToggleEarlyPayment(paymentId: string, enable: boolean) {
+  try {
+    const supabaseServer = await getSupabaseServer();
+    const { data: userData } = await supabaseServer.auth.getUser();
+
+    if (!userData || !userData.user) {
+      return { ok: false, error: 'Usuario no autenticado' };
+    }
+
+    const supabase = await getSupabaseAdmin();
+
+    // Buscar el pago pendiente
+    const { data: payment, error: fetchError } = await supabase
+      .from('pending_payments')
+      .select('id, notes, client_name, amount_to_pay, can_be_paid, status')
+      .eq('id', paymentId)
+      .eq('status', 'pending')
+      .single();
+
+    if (fetchError || !payment) {
+      return { ok: false, error: 'Pago pendiente no encontrado' };
+    }
+
+    // Parsear metadata
+    let metadata: any = {};
+    try {
+      if (typeof payment.notes === 'object' && payment.notes !== null) {
+        metadata = payment.notes;
+      } else if (typeof payment.notes === 'string') {
+        metadata = JSON.parse(payment.notes);
+      }
+    } catch {
+      metadata = {};
+    }
+
+    // Verificar que sea descuento a corredor
+    const isDescuento = metadata.is_auto_advance === true || !!metadata.advance_id;
+    if (!isDescuento) {
+      return { ok: false, error: 'Este pago no es un descuento a corredor' };
+    }
+
+    const advanceId = metadata.advance_id;
+    const now = new Date().toISOString();
+    const userName = userData.user.email || userData.user.id;
+
+    if (enable) {
+      // HABILITAR pago anticipado
+      // 1. Marcar can_be_paid = true y guardar flag en metadata
+      const updatedMetadata = {
+        ...metadata,
+        early_payment: true,
+        early_payment_date: now,
+        early_payment_by: userName,
+      };
+
+      const { error: updateError } = await supabase
+        .from('pending_payments')
+        .update({
+          can_be_paid: true,
+          notes: JSON.stringify(updatedMetadata),
+        } satisfies TablesUpdate<'pending_payments'>)
+        .eq('id', paymentId);
+
+      if (updateError) throw updateError;
+
+      // 2. Agregar nota al adelanto vinculado
+      if (advanceId) {
+        const { data: advance } = await supabase
+          .from('advances')
+          .select('reason')
+          .eq('id', advanceId)
+          .single();
+
+        if (advance) {
+          const currentReason = (advance as any).reason || '';
+          const earlyNote = `[PAGO ANTICIPADO ${new Date().toLocaleDateString('es-PA')}] Habilitado por ${userName}`;
+          const newReason = currentReason
+            ? `${currentReason}\n${earlyNote}`
+            : earlyNote;
+
+          await supabase
+            .from('advances')
+            .update({ reason: newReason } satisfies TablesUpdate<'advances'>)
+            .eq('id', advanceId);
+        }
+      }
+
+      revalidatePath('/(app)/checks');
+      return { ok: true, message: 'Pago anticipado habilitado. Ahora puede marcarse como pagado.' };
+    } else {
+      // DESHABILITAR (revertir) pago anticipado
+      // Solo permitir si aún no se marcó como pagado
+      if (payment.status !== 'pending') {
+        return { ok: false, error: 'No se puede revertir, el pago ya fue procesado' };
+      }
+
+      // 1. Marcar can_be_paid = false y quitar flag
+      const { early_payment, early_payment_date, early_payment_by, ...cleanMetadata } = metadata;
+
+      const { error: updateError } = await supabase
+        .from('pending_payments')
+        .update({
+          can_be_paid: false,
+          notes: JSON.stringify(cleanMetadata),
+        } satisfies TablesUpdate<'pending_payments'>)
+        .eq('id', paymentId);
+
+      if (updateError) throw updateError;
+
+      // 2. Quitar nota del adelanto
+      if (advanceId) {
+        const { data: advance } = await supabase
+          .from('advances')
+          .select('reason')
+          .eq('id', advanceId)
+          .single();
+
+        if (advance) {
+          const currentReason = (advance as any).reason || '';
+          // Quitar líneas que contienen [PAGO ANTICIPADO]
+          const cleanedReason = currentReason
+            .split('\n')
+            .filter((line: string) => !line.includes('[PAGO ANTICIPADO'))
+            .join('\n')
+            .trim();
+
+          await supabase
+            .from('advances')
+            .update({ reason: cleanedReason } satisfies TablesUpdate<'advances'>)
+            .eq('id', advanceId);
+        }
+      }
+
+      revalidatePath('/(app)/checks');
+      return { ok: true, message: 'Pago anticipado revertido. El pago queda bloqueado hasta que se complete el descuento.' };
+    }
+  } catch (error: any) {
+    console.error('Error toggling early payment:', error);
+    return { ok: false, error: error.message };
+  }
+}
+
 // Sincronizar pagos pendientes con adelantos pagados (para casos existentes)
 export async function actionSyncPendingPaymentsWithAdvances() {
   try {
