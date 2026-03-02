@@ -792,7 +792,7 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
 
           {/* Referencias Bancarias - Solo visible si método es transferencia */}
           {paymentMethod === 'bank_transfer' && (
-            <div className="border-2 border-gray-200 rounded-lg p-3 sm:p-4">
+            <div className="border-2 border-gray-200 rounded-lg p-2 sm:p-4 overflow-hidden">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-semibold text-sm sm:text-base text-gray-700">🏦 Referencias Bancarias</h3>
                 <button
@@ -806,7 +806,7 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
               
               <div className="space-y-3">
                 {references.map((ref, index) => (
-                  <div key={index} className="p-3 border border-gray-200 rounded-lg bg-gray-50 space-y-2 overflow-hidden">
+                  <div key={index} className="p-2 sm:p-3 border border-gray-200 rounded-lg bg-gray-50 space-y-2 overflow-hidden">
                     {/* Referencia + estado */}
                     <div className="relative">
                       <label className="block text-xs font-medium text-gray-500 mb-1">Referencia</label>
