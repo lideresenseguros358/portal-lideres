@@ -856,8 +856,7 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
                               setReferences(newRefs);
                             }
                           }}
-                          style={{ minWidth: 0 }}
-                          className={`w-full px-2 sm:px-3 py-2 border-2 rounded-lg text-xs sm:text-sm focus:border-[#8AAA19] focus:outline-none ${
+                          className={`w-full min-w-0 px-2 sm:px-3 py-2 border-2 rounded-lg text-xs sm:text-sm focus:border-[#8AAA19] focus:outline-none appearance-none ${
                             ref.exists_in_bank ? 'border-green-300 bg-green-50' : 'border-gray-300'
                           }`}
                         />
