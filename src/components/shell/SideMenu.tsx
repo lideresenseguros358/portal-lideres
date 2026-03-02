@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import Image from "next/image";
@@ -29,6 +30,7 @@ import {
   FaShieldAlt,
   FaHeadset,
 } from "react-icons/fa";
+import CotizadoresHubModal from "./CotizadoresHubModal";
 
 type MenuRole = "MASTER" | "BROKER";
 
@@ -36,6 +38,7 @@ interface MenuItem {
   label: string;
   href: string;
   icon: React.ReactNode;
+  isHub?: boolean;
 }
 
 const menuItems: Record<MenuRole, MenuItem[]> = {
@@ -49,9 +52,7 @@ const menuItems: Record<MenuRole, MenuItem[]> = {
     { label: "Pendientes", href: "/cases", icon: <FaClock /> },
     { label: "Descargas", href: "/downloads", icon: <FaDownload /> },
     { label: "Guías", href: "/guides", icon: <FaBookOpen /> },
-    { label: "Cotizadores", href: "/cotizadores", icon: <FaCalculator /> },
-    { label: "ADM COT", href: "/adm-cot", icon: <FaShieldAlt /> },
-    { label: "Operaciones", href: "/operaciones", icon: <FaHeadset /> },
+    { label: "Cotizadores", href: "/cotizadores", icon: <FaCalculator />, isHub: true },
     { label: "Agenda", href: "/agenda", icon: <FaCalendarAlt /> },
     { label: "Producción", href: "/production", icon: <FaChartBar /> },
     { label: "Corredores", href: "/brokers", icon: <FaUserTie /> },
@@ -78,6 +79,10 @@ interface SideMenuProps {
 export default function SideMenu({ role }: SideMenuProps) {
   const pathname = usePathname();
   const items = menuItems[role] || menuItems.BROKER;
+  const [hubOpen, setHubOpen] = useState(false);
+
+  // For the hub item, highlight if we're on any of the 3 hub pages
+  const isHubActive = pathname.startsWith('/cotizadores') || pathname.startsWith('/operaciones') || pathname.startsWith('/adm-cot');
 
   return (
     <>
@@ -98,6 +103,20 @@ export default function SideMenu({ role }: SideMenuProps) {
         <nav className="side-menu__nav">
           <ul>
             {items.map((item) => {
+              if (item.isHub) {
+                return (
+                  <li key={item.href} className={isHubActive ? "active" : ""}>
+                    <button
+                      onClick={() => setHubOpen(true)}
+                      style={{ width: '100%', background: 'none', border: 'none', cursor: 'pointer' }}
+                    >
+                      <span className="icon">{item.icon}</span>
+                      <span className="label">{item.label}</span>
+                    </button>
+                  </li>
+                );
+              }
+
               const isActive = pathname === item.href || (item.href !== '/dashboard' && pathname.startsWith(item.href + '/'));
               
               return (
@@ -119,6 +138,8 @@ export default function SideMenu({ role }: SideMenuProps) {
           </ul>
         </nav>
       </aside>
+
+      <CotizadoresHubModal open={hubOpen} onClose={() => setHubOpen(false)} />
 
       <style>{`
         .side-menu {
@@ -167,7 +188,8 @@ export default function SideMenu({ role }: SideMenuProps) {
           gap: 4px;
         }
 
-        .side-menu__nav a {
+        .side-menu__nav a,
+        .side-menu__nav button {
           display: flex;
           align-items: center;
           gap: 14px;
@@ -179,22 +201,27 @@ export default function SideMenu({ role }: SideMenuProps) {
           font-size: 12px;
         }
 
-        .side-menu__nav a .icon {
+        .side-menu__nav a .icon,
+        .side-menu__nav button .icon {
           font-size: 18px;
           width: 24px;
           text-align: center;
         }
 
-        .side-menu__nav a .label {
+        .side-menu__nav a .label,
+        .side-menu__nav button .label {
           flex: 1;
+          text-align: left;
         }
 
-        .side-menu__nav a:hover {
+        .side-menu__nav a:hover,
+        .side-menu__nav button:hover {
           transform: scale(1.03);
           color: #8aaa19;
         }
 
-        .side-menu__nav li.active a {
+        .side-menu__nav li.active a,
+        .side-menu__nav li.active button {
           color: #8aaa19;
         }
 

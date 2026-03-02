@@ -73,7 +73,7 @@ export default function OpsUrgenciasTab() {
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Buscar por cliente, categoría..."
-              className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-lg"
+              className="w-full pl-10 pr-3 py-2 text-sm border border-gray-300 rounded-lg"
             />
           </div>
           <button onClick={() => setShowFilters(f => !f)}

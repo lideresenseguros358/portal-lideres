@@ -99,50 +99,49 @@ export default function RenCaseList({
   return (
     <div className="flex flex-col h-full bg-white">
       {/* Top bar */}
-      <div className="px-4 pt-4 pb-3 border-b border-gray-100 space-y-2.5 flex-shrink-0">
+      <div className="px-3 sm:px-4 pt-3 sm:pt-4 pb-3 border-b border-gray-100 space-y-2.5 flex-shrink-0">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-[#010139] tracking-tight">Renovaciones</h2>
+          <h2 className="text-sm sm:text-base font-bold text-[#010139] tracking-tight">Renovaciones</h2>
           <div className="flex items-center gap-2">
-            <span className="text-[10px] text-gray-400 tabular-nums">{counts.total_active || 0} activas</span>
-            <button onClick={onRefresh} className="text-gray-300 hover:text-[#010139] transition-colors duration-150 cursor-pointer">
-              <FaSync className={`text-[10px] ${loading ? 'animate-spin' : ''}`} />
+            <span className="text-[10px] sm:text-xs text-gray-400 tabular-nums">{counts.total_active || 0} activas</span>
+            <button onClick={onRefresh} className="p-1 rounded-md text-gray-300 hover:text-[#010139] hover:bg-gray-50 transition-colors duration-150 cursor-pointer">
+              <FaSync className={`text-xs ${loading ? 'animate-spin' : ''}`} />
             </button>
           </div>
         </div>
 
         {/* Search */}
         <div className="relative">
-          <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300 text-[10px] pointer-events-none" />
+          <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300 text-xs pointer-events-none" />
           <input
             type="text"
             placeholder="Buscar cliente, póliza, ticket..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-8 pr-3 py-2 text-xs border border-gray-200 rounded-lg outline-none focus:border-[#010139]/30 focus:ring-1 focus:ring-[#010139]/10 transition-all duration-150 placeholder:text-gray-300"
+            className="w-full pl-10 pr-3 py-2 sm:py-2.5 text-sm border border-gray-200 rounded-lg outline-none focus:border-[#010139]/30 focus:ring-1 focus:ring-[#010139]/10 transition-all duration-150 placeholder:text-gray-300"
           />
         </div>
 
-        {/* Filter pills */}
-        <div className="flex items-center gap-1.5 flex-wrap">
+        {/* Filter pills + status dropdown */}
+        <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto pb-0.5">
           {filters.map((f) => (
             <button
               key={f.key}
               onClick={() => setActiveFilter(f.key === activeFilter ? 'all' : f.key)}
-              className={`inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-medium rounded-full cursor-pointer transition-all duration-150 ${
+              className={`inline-flex items-center gap-1 px-2.5 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs font-semibold rounded-full cursor-pointer transition-all duration-150 flex-shrink-0 ${
                 activeFilter === f.key ? f.activeColor : f.color + ' hover:opacity-80'
               }`}
             >
               {f.label}
-              {f.count !== undefined && <span className="text-[9px] opacity-70">({f.count})</span>}
+              {f.count !== undefined && <span className="opacity-70">({f.count})</span>}
             </button>
           ))}
-          {/* Status dropdown */}
           <select
             value={RENEWAL_STATUSES.includes(activeFilter as OpsCaseStatus) ? activeFilter : ''}
             onChange={(e) => setActiveFilter((e.target.value || 'all') as FilterKey)}
-            className="appearance-none px-2.5 py-1 text-[10px] font-medium rounded-full border border-gray-200 bg-white text-gray-500 cursor-pointer outline-none hover:border-gray-300 transition-colors duration-150"
+            className="appearance-none px-2.5 sm:px-3 py-1 sm:py-1.5 text-[11px] sm:text-xs font-semibold rounded-full border border-gray-200 bg-white text-gray-500 cursor-pointer outline-none hover:border-gray-300 transition-colors duration-150 flex-shrink-0"
           >
-            <option value="">Estado...</option>
+            <option value="">Estado</option>
             {RENEWAL_STATUSES.map((s) => (
               <option key={s} value={s}>
                 {STATUS_LABELS[s]} {counts[s] !== undefined ? `(${counts[s]})` : ''}
@@ -150,19 +149,6 @@ export default function RenCaseList({
             ))}
           </select>
         </div>
-      </div>
-
-      {/* Summary micro bar */}
-      <div className="flex items-center gap-4 px-4 py-1.5 border-b border-gray-50 bg-gray-50/50 text-[10px] flex-shrink-0">
-        <span className="inline-flex items-center gap-1.5 text-gray-400">
-          <span className="w-1.5 h-1.5 rounded-full bg-amber-400" /> Pend <strong className="text-gray-600">{counts.pendiente || 0}</strong>
-        </span>
-        <span className="inline-flex items-center gap-1.5 text-gray-400">
-          <span className="w-1.5 h-1.5 rounded-full bg-blue-400" /> Rev <strong className="text-gray-600">{counts.en_revision || 0}</strong>
-        </span>
-        <span className="inline-flex items-center gap-1.5 text-gray-400">
-          <span className="w-1.5 h-1.5 rounded-full bg-red-400" /> SLA <strong className="text-gray-600">{counts.sla_breached || 0}</strong>
-        </span>
       </div>
 
       {/* List */}

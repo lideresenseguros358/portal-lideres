@@ -192,7 +192,7 @@ function PendientesTab({ onRefresh }: { onRefresh: () => void }) {
             <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs pointer-events-none" />
             <input type="text" placeholder="Buscar cliente, póliza..." value={search}
               onChange={e => setSearch(e.target.value)} onKeyDown={e => e.key === 'Enter' && fetchPayments()}
-              className="w-full pl-9 pr-3 py-2 text-sm sm:text-xs border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-[#010139]/20" />
+              className="w-full pl-10 pr-3 py-2 text-sm sm:text-xs border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-[#010139]/20" />
           </div>
           <button onClick={() => setShowFilters(!showFilters)}
             className={`p-2 rounded-lg transition-colors cursor-pointer flex-shrink-0 ${showFilters ? 'bg-[#010139] text-white' : 'text-gray-500 hover:bg-gray-100'}`} title="Filtros">
@@ -968,10 +968,10 @@ export default function AdmCotPagos() {
   return (
     <div className="space-y-4">
       {/* Sub-tabs */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-1.5 flex gap-1 overflow-x-auto">
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-1.5 sm:p-2 flex gap-1.5 sm:gap-2 overflow-x-auto">
         {TABS.map(tab => (
           <button key={tab.key} onClick={() => setActiveTab(tab.key)}
-            className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 text-xs font-medium rounded-lg whitespace-nowrap transition-all cursor-pointer flex-1 justify-center ${
+            className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-semibold rounded-lg whitespace-nowrap transition-all cursor-pointer flex-1 justify-center ${
               activeTab === tab.key
                 ? 'bg-gradient-to-r from-[#010139] to-[#020270] text-white shadow-md'
                 : 'text-gray-500 hover:bg-gray-50 hover:text-gray-700'

@@ -365,7 +365,7 @@ export default function OpsAuditoriaTab() {
               value={q}
               onChange={e => { setQ(e.target.value); setQuickFilter(null); }}
               placeholder="Buscar por usuario, ticket, evento..."
-              className="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:ring-1 focus:ring-[#010139]/10 focus:border-gray-300 outline-none transition-all duration-150"
+              className="w-full pl-10 pr-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:ring-1 focus:ring-[#010139]/10 focus:border-gray-300 outline-none transition-all duration-150"
             />
           </div>
           <button onClick={() => setShowFilters(f => !f)}

@@ -34,18 +34,29 @@ export async function GET(req: NextRequest) {
     const supabase = getSupabaseAdmin() as any;
     const { searchParams } = new URL(req.url);
 
-    // ── Notes for a policy ──
+    // ── Notes for a policy (read from ops_activity_log, not ops_notes which has FK to ops_cases) ──
     const view = searchParams.get('view');
     if (view === 'notes') {
       const policyId = searchParams.get('policy_id');
       if (!policyId) return NextResponse.json({ error: 'policy_id required' }, { status: 400 });
       const { data } = await supabase
-        .from('ops_notes')
-        .select('id, case_id, user_id, note, note_type, created_at')
-        .eq('case_id', policyId)
+        .from('ops_activity_log')
+        .select('id, user_id, action_type, metadata, created_at')
+        .eq('entity_type', 'policy')
+        .eq('entity_id', policyId)
+        .in('action_type', ['morosidad_note', 'morosidad_follow_up'])
         .order('created_at', { ascending: false });
 
-      const notes = data || [];
+      const rows = data || [];
+      const notes = rows.map((r: any) => ({
+        id: r.id,
+        case_id: policyId,
+        user_id: r.user_id,
+        note: r.metadata?.note || (r.action_type === 'morosidad_follow_up' ? 'Marcado en seguimiento por master.' : ''),
+        note_type: r.metadata?.note_type || r.action_type,
+        created_at: r.created_at,
+      }));
+
       if (notes.length > 0) {
         const userIds = [...new Set(notes.map((n: any) => n.user_id).filter(Boolean))];
         if (userIds.length > 0) {
@@ -243,57 +254,37 @@ ${mergedBody.replace(/\n/g, '<br/>')}
         return NextResponse.json(json);
       }
 
-      // ── Add note (reuses ops_notes) ──
+      // ── Add note (uses ops_activity_log — ops_notes has FK to ops_cases, not policies) ──
       case 'add_note': {
         const { policy_id, note, note_type } = body;
         if (!note || note.trim().length < 10) {
           return NextResponse.json({ error: 'Nota mínima: 10 caracteres' }, { status: 400 });
         }
 
-        const { error } = await supabase.from('ops_notes').insert({
-          case_id: policy_id, // reuse case_id column for policy_id
+        const { error } = await supabase.from('ops_activity_log').insert({
           user_id: userId,
-          note: note.trim(),
-          note_type: note_type || 'morosidad',
+          action_type: 'morosidad_note',
+          entity_type: 'policy',
+          entity_id: policy_id,
+          metadata: { note: note.trim(), note_type: note_type || 'morosidad' },
         });
         if (error) throw error;
-
-        try {
-          await supabase.from('ops_activity_log').insert({
-            user_id: userId,
-            action_type: 'status_change',
-            entity_type: 'policy',
-            entity_id: policy_id,
-            metadata: { action: 'morosidad_note_added', note_type: note_type || 'morosidad' },
-          });
-        } catch { /* non-fatal */ }
 
         return NextResponse.json({ success: true });
       }
 
-      // ── Mark follow-up ──
+      // ── Mark follow-up (uses ops_activity_log — ops_notes has FK to ops_cases, not policies) ──
       case 'mark_follow_up': {
         const { policy_id } = body;
 
-        // Add a note marking follow-up
-        try {
-          await supabase.from('ops_notes').insert({
-            case_id: policy_id,
-            user_id: userId,
-            note: 'Marcado en seguimiento por master.',
-            note_type: 'seguimiento',
-          });
-        } catch { /* non-fatal */ }
-
-        try {
-          await supabase.from('ops_activity_log').insert({
-            user_id: userId,
-            action_type: 'status_change',
-            entity_type: 'policy',
-            entity_id: policy_id,
-            metadata: { action: 'morosidad_follow_up' },
-          });
-        } catch { /* non-fatal */ }
+        const { error } = await supabase.from('ops_activity_log').insert({
+          user_id: userId,
+          action_type: 'morosidad_follow_up',
+          entity_type: 'policy',
+          entity_id: policy_id,
+          metadata: { note: 'Marcado en seguimiento por master.', note_type: 'seguimiento' },
+        });
+        if (error) throw error;
 
         return NextResponse.json({ success: true });
       }

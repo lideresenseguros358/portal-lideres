@@ -266,7 +266,7 @@ export default function AdmCotExpedientes() {
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && updateFilter('search', searchTerm || undefined)}
-              className="w-full pl-8 pr-3 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#010139]/20 focus:border-[#010139] outline-none"
+              className="w-full pl-10 pr-3 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#010139]/20 focus:border-[#010139] outline-none"
             />
           </div>
           <select

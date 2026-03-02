@@ -458,32 +458,32 @@ export default function OpsConfigTab() {
           {/* Business hours */}
           <div className="border-t border-gray-100 pt-3">
             <p className="text-xs font-bold text-[#010139] mb-2">Horario Laboral</p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label className="block text-[10px] text-gray-500 font-semibold mb-1">Inicio</label>
+                <label className="block text-[11px] sm:text-[10px] text-gray-500 font-semibold mb-1">Inicio</label>
                 <input
                   type="time"
                   value={bh.start || '08:00'}
                   onChange={e => setVal('business_hours', { ...bh, start: e.target.value })}
-                  className="w-full text-sm border border-gray-300 rounded-lg px-2 py-1.5 outline-none"
+                  className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2.5 sm:py-1.5 outline-none focus:ring-1 focus:ring-[#010139]/30"
                 />
               </div>
               <div>
-                <label className="block text-[10px] text-gray-500 font-semibold mb-1">Fin</label>
+                <label className="block text-[11px] sm:text-[10px] text-gray-500 font-semibold mb-1">Fin</label>
                 <input
                   type="time"
                   value={bh.end || '18:00'}
                   onChange={e => setVal('business_hours', { ...bh, end: e.target.value })}
-                  className="w-full text-sm border border-gray-300 rounded-lg px-2 py-1.5 outline-none"
+                  className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2.5 sm:py-1.5 outline-none focus:ring-1 focus:ring-[#010139]/30"
                 />
               </div>
               <div>
-                <label className="block text-[10px] text-gray-500 font-semibold mb-1">Zona Horaria</label>
+                <label className="block text-[11px] sm:text-[10px] text-gray-500 font-semibold mb-1">Zona Horaria</label>
                 <input
                   type="text"
                   value={bh.timezone || 'America/Panama'}
                   readOnly
-                  className="w-full text-sm border border-gray-200 rounded-lg px-2 py-1.5 bg-gray-50 text-gray-500"
+                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 sm:py-1.5 bg-gray-50 text-gray-500"
                 />
               </div>
             </div>

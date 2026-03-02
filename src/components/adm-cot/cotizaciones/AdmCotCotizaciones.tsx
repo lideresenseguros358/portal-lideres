@@ -902,7 +902,7 @@ export default function AdmCotCotizaciones() {
             <input type="text" placeholder="Buscar nombre, cédula, email..."
               value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && fetchQuotes(1)}
-              className="w-full pl-9 pr-3 py-2 text-sm sm:text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#010139]/20 focus:border-[#010139] outline-none" />
+              className="w-full pl-10 pr-3 py-2 text-sm sm:text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#010139]/20 focus:border-[#010139] outline-none" />
           </div>
           <button onClick={() => setShowAdvanced(!showAdvanced)}
             className={`p-2 rounded-lg transition-colors cursor-pointer flex-shrink-0 ${showAdvanced ? 'bg-[#010139] text-white' : 'text-gray-500 hover:bg-gray-100'}`} title="Filtros">

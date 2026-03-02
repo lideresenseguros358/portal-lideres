@@ -38,7 +38,7 @@ export default function OpsLogsTab() {
               value={search}
               onChange={e => setSearch(e.target.value)}
               placeholder="Buscar por usuario, entidad, evento..."
-              className="w-full pl-9 pr-3 py-2 text-sm border border-gray-300 rounded-lg"
+              className="w-full pl-10 pr-3 py-2 text-sm border border-gray-300 rounded-lg"
             />
           </div>
           <button onClick={() => setShowFilters(f => !f)}
@@ -56,8 +56,8 @@ export default function OpsLogsTab() {
           </button>
         </div>
         {showFilters && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-gray-100">
-            <select value={entityFilter} onChange={e => setEntityFilter(e.target.value)} className="w-full text-sm sm:text-xs border border-gray-300 rounded-lg px-2 py-2 sm:py-1.5">
+          <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 pt-2 border-t border-gray-100">
+            <select value={entityFilter} onChange={e => setEntityFilter(e.target.value)} className="w-full text-sm sm:text-xs border border-gray-300 rounded-lg px-3 py-2.5 sm:py-1.5">
               <option value="">Tipo Entidad</option>
               <option value="renewal">Renovación</option>
               <option value="petition">Petición</option>
@@ -68,14 +68,14 @@ export default function OpsLogsTab() {
               <option value="session">Sesión</option>
             </select>
             <div className="relative">
-              <FaCalendarAlt className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs pointer-events-none" />
+              <FaCalendarAlt className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs pointer-events-none" />
               <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-                className="w-full pl-7 pr-2 py-2 sm:py-1.5 text-sm sm:text-xs border border-gray-300 rounded-lg" placeholder="Desde" />
+                className="w-full pl-9 pr-2 py-2.5 sm:py-1.5 text-sm sm:text-xs border border-gray-300 rounded-lg" placeholder="Desde" />
             </div>
             <div className="relative">
-              <FaCalendarAlt className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-400 text-xs pointer-events-none" />
+              <FaCalendarAlt className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs pointer-events-none" />
               <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
-                className="w-full pl-7 pr-2 py-2 sm:py-1.5 text-sm sm:text-xs border border-gray-300 rounded-lg" placeholder="Hasta" />
+                className="w-full pl-9 pr-2 py-2.5 sm:py-1.5 text-sm sm:text-xs border border-gray-300 rounded-lg" placeholder="Hasta" />
             </div>
           </div>
         )}

@@ -337,6 +337,7 @@ export default function MorosidadPage() {
 
       case 'send_individual':
         if (!row.client_email) { addToast('Cliente sin correo', 'error'); return; }
+        addToast(`Enviando aviso a ${row.client_name}...`);
         try {
           const res = await fetch('/api/operaciones/morosidad', {
             method: 'POST',
@@ -364,13 +365,15 @@ export default function MorosidadPage() {
 
       case 'follow_up':
         try {
-          await fetch('/api/operaciones/morosidad', {
+          const fRes = await fetch('/api/operaciones/morosidad', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'mark_follow_up', policy_id: row.policy_id }),
           });
-          addToast('Marcado en seguimiento');
-        } catch { addToast('Error', 'error'); }
+          const fJson = await fRes.json();
+          if (fJson.success) addToast('Marcado en seguimiento');
+          else addToast(fJson.error || 'Error al marcar seguimiento', 'error');
+        } catch { addToast('Error de conexión', 'error'); }
         break;
     }
   };
@@ -442,7 +445,7 @@ export default function MorosidadPage() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar por cliente, póliza..."
-              className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:border-[#010139]/30 focus:ring-1 focus:ring-[#010139]/10 transition-all duration-150 placeholder:text-gray-300"
+              className="w-full pl-10 pr-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:border-[#010139]/30 focus:ring-1 focus:ring-[#010139]/10 transition-all duration-150 placeholder:text-gray-300"
             />
           </div>
           <button

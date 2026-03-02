@@ -16,22 +16,22 @@ import { useOpsKeyboard } from '../shared/ops-ui';
 
 function MetricsBar({ counts }: { counts: Counts }) {
   const metrics = [
-    { label: 'Activas', value: counts.total_active || 0, color: 'text-[#010139]', bg: 'bg-[#010139]/5' },
-    { label: 'Pendientes', value: counts.pendiente || 0, color: 'text-amber-600', bg: 'bg-amber-50' },
-    { label: 'En Revisión', value: counts.en_revision || 0, color: 'text-blue-600', bg: 'bg-blue-50' },
-    { label: 'Aplazadas', value: counts.aplazado || 0, color: 'text-purple-600', bg: 'bg-purple-50' },
-    { label: 'SLA Vencido', value: counts.sla_breached || 0, color: 'text-red-600', bg: 'bg-red-50' },
-    { label: 'Sin Resp.', value: counts.no_first_response || 0, color: 'text-orange-600', bg: 'bg-orange-50' },
-    { label: 'Renovadas', value: counts.cerrado_renovado || 0, color: 'text-green-600', bg: 'bg-green-50' },
-    { label: 'Canceladas', value: counts.cerrado_cancelado || 0, color: 'text-red-600', bg: 'bg-red-50' },
+    { label: 'Activas', value: counts.total_active || 0, color: 'text-[#010139]', dot: 'bg-[#010139]' },
+    { label: 'Pendientes', value: counts.pendiente || 0, color: 'text-amber-600', dot: 'bg-amber-400' },
+    { label: 'Revisión', value: counts.en_revision || 0, color: 'text-blue-600', dot: 'bg-blue-400' },
+    { label: 'Aplazadas', value: counts.aplazado || 0, color: 'text-purple-600', dot: 'bg-purple-400' },
+    { label: 'SLA', value: counts.sla_breached || 0, color: 'text-red-600', dot: 'bg-red-400' },
+    { label: 'Sin resp.', value: counts.no_first_response || 0, color: 'text-orange-600', dot: 'bg-orange-400' },
+    { label: 'Renovadas', value: counts.cerrado_renovado || 0, color: 'text-green-600', dot: 'bg-green-400' },
+    { label: 'Canceladas', value: counts.cerrado_cancelado || 0, color: 'text-red-600', dot: 'bg-red-400' },
   ];
 
   return (
-    <div className="flex items-center gap-1.5 px-3 py-2 bg-white border border-gray-100 rounded-xl overflow-x-auto flex-shrink-0">
+    <div className="grid grid-cols-4 sm:grid-cols-8 gap-1 sm:gap-1.5">
       {metrics.map((m) => (
-        <div key={m.label} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg ${m.bg} flex-shrink-0`}>
-          <span className={`text-sm font-bold ${m.color}`}>{m.value}</span>
-          <span className="text-[9px] text-gray-400 font-medium">{m.label}</span>
+        <div key={m.label} className="flex flex-col items-center py-1.5 px-1 rounded-lg bg-gray-50/80">
+          <span className={`text-sm sm:text-base font-bold tabular-nums ${m.color}`}>{m.value}</span>
+          <span className="text-[8px] sm:text-[9px] text-gray-400 font-medium leading-tight text-center">{m.label}</span>
         </div>
       ))}
     </div>
@@ -262,33 +262,33 @@ export default function RenovacionesInbox() {
 
   return (
     <div className="flex flex-col h-[calc(100vh-120px)] gap-3">
-      {/* Tab switcher + Metrics header */}
-      <div className="flex items-center gap-3 flex-shrink-0">
-        <div className="flex items-center bg-gray-50 rounded-lg p-0.5 border border-gray-100">
-          <button
-            onClick={() => setActiveTab('inbox')}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-md cursor-pointer transition-all duration-150 ${
-              activeTab === 'inbox'
-                ? 'bg-[#010139] text-white shadow-sm'
-                : 'text-gray-400 hover:text-gray-600'
-            }`}
-          >
-            Bandeja
-          </button>
-          <button
-            onClick={() => setActiveTab('unclassified')}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-md cursor-pointer transition-all duration-150 ${
-              activeTab === 'unclassified'
-                ? 'bg-amber-500 text-white shadow-sm'
-                : 'text-gray-400 hover:text-gray-600'
-            }`}
-          >
-            No Clasificados
-          </button>
+      {/* Tab switcher + Metrics */}
+      <div className="flex flex-col gap-2.5 flex-shrink-0">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center bg-gray-50 rounded-lg p-0.5 border border-gray-100">
+            <button
+              onClick={() => setActiveTab('inbox')}
+              className={`px-4 py-2 text-xs sm:text-sm font-semibold rounded-md cursor-pointer transition-all duration-150 ${
+                activeTab === 'inbox'
+                  ? 'bg-[#010139] text-white shadow-sm'
+                  : 'text-gray-400 hover:text-gray-600'
+              }`}
+            >
+              Bandeja
+            </button>
+            <button
+              onClick={() => setActiveTab('unclassified')}
+              className={`px-4 py-2 text-xs sm:text-sm font-semibold rounded-md cursor-pointer transition-all duration-150 ${
+                activeTab === 'unclassified'
+                  ? 'bg-amber-500 text-white shadow-sm'
+                  : 'text-gray-400 hover:text-gray-600'
+              }`}
+            >
+              No Clasificados
+            </button>
+          </div>
         </div>
-        <div className="flex-1">
-          <MetricsBar counts={counts} />
-        </div>
+        <MetricsBar counts={counts} />
       </div>
 
       {/* Inbox or Unclassified */}
