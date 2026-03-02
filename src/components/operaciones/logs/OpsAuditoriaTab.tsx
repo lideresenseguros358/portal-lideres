@@ -359,13 +359,13 @@ export default function OpsAuditoriaTab() {
         {/* Row 1: Search + buttons */}
         <div className="flex items-center gap-1.5">
           <div className="flex-1 relative">
-            <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300 text-[10px] pointer-events-none" />
+            <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
             <input
               type="text"
               value={q}
               onChange={e => { setQ(e.target.value); setQuickFilter(null); }}
               placeholder="Buscar por usuario, ticket, evento..."
-              className="w-full pl-10 pr-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:ring-1 focus:ring-[#010139]/10 focus:border-gray-300 outline-none transition-all duration-150"
+              className="w-full pl-10 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-1 focus:ring-[#010139]/20 outline-none transition-all duration-150"
             />
           </div>
           <button onClick={() => setShowFilters(f => !f)}

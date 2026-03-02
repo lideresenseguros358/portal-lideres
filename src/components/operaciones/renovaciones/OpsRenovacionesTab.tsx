@@ -55,7 +55,7 @@ export default function OpsRenovacionesTab() {
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-3 space-y-2">
         <div className="flex items-center gap-2">
           <div className="flex-1 relative">
-            <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs pointer-events-none" />
+            <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
             <input
               type="text"
               value={search}
