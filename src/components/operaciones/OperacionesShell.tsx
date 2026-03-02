@@ -98,8 +98,8 @@ export default function OperacionesShell({ children }: Props) {
                   : 'text-gray-600 hover:bg-gray-100'
               }`}
             >
-              <Icon size={14} className="sm:hidden" />
-              <Icon size={16} className="hidden sm:block" />
+              <Icon size={14} className={`sm:hidden ${isActive ? 'text-white' : 'text-gray-600'}`} />
+              <Icon size={16} className={`hidden sm:block ${isActive ? 'text-white' : 'text-gray-600'}`} />
               <span className="hidden sm:inline">{item.label}</span>
               <span className="sm:hidden">{item.shortLabel}</span>
               {item.badgeKey && badges[item.badgeKey] > 0 && (
