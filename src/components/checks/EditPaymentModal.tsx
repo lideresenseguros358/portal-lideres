@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { FaTimes, FaSave, FaPlus, FaTrash, FaCheckCircle, FaExclamationTriangle, FaSpinner } from 'react-icons/fa';
 import { toast } from 'sonner';
-import { actionUpdatePendingPaymentFull, actionGetInsurers, actionGetBankTransfers, actionValidateReferences } from '@/app/(app)/checks/actions';
+import { actionUpdatePendingPaymentFull, actionGetInsurers, actionGetBankTransfers, actionValidateReferences, actionToggleEarlyPayment } from '@/app/(app)/checks/actions';
 import { createUppercaseHandler, uppercaseInputClass } from '@/lib/utils/uppercase';
 import { supabaseClient } from '@/lib/supabase/client';
 
@@ -68,12 +68,15 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
     reference_number: string;
     date: string;
     amount: string;
-    amount_to_use: string;
     exists_in_bank?: boolean;
     validating?: boolean;
     status?: string | null;
     remaining_amount?: number;
   }>>([]);
+
+  // Pagar anticipado state (for broker deduction payments)
+  const [earlyPaymentEnabled, setEarlyPaymentEnabled] = useState<boolean>(metadata.early_payment === true);
+  const [togglingEarlyPayment, setTogglingEarlyPayment] = useState(false);
 
   // Divisiones (si el pago original tenía divisiones)
   const [hasDivisions, setHasDivisions] = useState(false);
@@ -112,16 +115,13 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
       setReferences(data.map(ref => ({
         reference_number: ref.reference_number || '',
         date: (ref.date || new Date().toISOString().split('T')[0]) as string,
-        amount: ref.amount?.toString() || '',
-        amount_to_use: ref.amount_to_use?.toString() || ref.amount?.toString() || ''
+        amount: ref.amount?.toString() || ''
       })));
     } else {
-      // Si no hay referencias, inicializar con una vacía
       setReferences([{
         reference_number: '',
         date: new Date().toISOString().split('T')[0] as string,
-        amount: '',
-        amount_to_use: ''
+        amount: ''
       }]);
     }
   };
@@ -187,7 +187,8 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
               exists_in_bank: validated?.exists || false,
               status: details.status || null,
               remaining_amount: details.remaining_amount || 0,
-              amount: validated?.exists && details.amount ? details.amount.toString() : updated[index].amount
+              amount: validated?.exists && details.amount ? details.amount.toString() : updated[index].amount,
+              date: validated?.exists && details.date ? details.date : updated[index].date
             };
           }
           return updated;
@@ -326,7 +327,7 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
           reference_number: ref.reference_number,
           date: ref.date,
           amount: parseFloat(ref.amount),
-          amount_to_use: parseFloat(ref.amount_to_use || ref.amount)
+          amount_to_use: parseFloat(ref.amount)
         })),
         divisions: hasDivisions ? divisions.filter(div => parseFloat(div.amount || '0') > 0) : undefined,
         is_broker_deduction: effectiveIsBrokerDeduction,
@@ -388,8 +389,7 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
     setReferences([...references, {
       reference_number: '',
       date: new Date().toISOString().split('T')[0] as string,
-      amount: '',
-      amount_to_use: ''
+      amount: ''
     }]);
   };
 
@@ -649,12 +649,10 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
                       } else {
                         setPaymentMethod('bank_transfer');
                         setIsBrokerDeduction(false);
-                        // Auto-limpiar referencias y notas al cambiar de método
                         setReferences([{
                           reference_number: '',
                           date: new Date().toISOString().split('T')[0] as string,
-                          amount: '',
-                          amount_to_use: ''
+                          amount: ''
                         }]);
                         setFormData(prev => ({ ...prev, notes: '' }));
                       }
@@ -689,12 +687,10 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
                     onChange={() => {
                       setPaymentMethod('broker_deduction');
                       setIsBrokerDeduction(true);
-                      // Auto-limpiar referencias y notas al cambiar a descuento
                       setReferences([{
                         reference_number: '',
                         date: new Date().toISOString().split('T')[0] as string,
-                        amount: '',
-                        amount_to_use: ''
+                        amount: ''
                       }]);
                       setFormData(prev => ({ ...prev, notes: '' }));
                     }}
@@ -740,14 +736,53 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
                         </p>
                       </div>
                       
-                      <div className="p-3 bg-blue-50 border-l-4 border-blue-500 rounded-r">
-                        <p className="text-xs sm:text-sm text-blue-800 font-semibold">
-                          🔄 Sincronización automática
-                        </p>
-                        <p className="text-xs text-blue-700 mt-1">
-                          El adelanto se actualizará automáticamente si cambias el monto
-                        </p>
-                      </div>
+                      {/* Pagar Anticipado checkbox */}
+                      {metadata.advance_id && (
+                        <div className={`p-3 rounded-lg border-2 transition-colors ${
+                          earlyPaymentEnabled 
+                            ? 'bg-amber-50 border-amber-300' 
+                            : 'bg-gray-50 border-gray-200'
+                        }`}>
+                          <label className="flex items-start gap-3 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={earlyPaymentEnabled}
+                              disabled={togglingEarlyPayment}
+                              onChange={async (e) => {
+                                const enable = e.target.checked;
+                                setTogglingEarlyPayment(true);
+                                try {
+                                  const result = await actionToggleEarlyPayment(payment.id, enable);
+                                  if (result.ok) {
+                                    setEarlyPaymentEnabled(enable);
+                                    toast.success(result.message);
+                                  } else {
+                                    toast.error(result.error || 'Error');
+                                  }
+                                } catch (err: any) {
+                                  toast.error(err.message);
+                                } finally {
+                                  setTogglingEarlyPayment(false);
+                                }
+                              }}
+                              className="mt-0.5 w-5 h-5 text-amber-600 rounded focus:ring-amber-500 flex-shrink-0"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-sm font-bold text-gray-800">⚡ Pagar Anticipado</span>
+                                {togglingEarlyPayment && <FaSpinner className="text-amber-500 animate-spin flex-shrink-0" size={14} />}
+                                {earlyPaymentEnabled && !togglingEarlyPayment && (
+                                  <span className="text-[10px] bg-amber-500 text-white px-2 py-0.5 rounded-full font-bold">HABILITADO</span>
+                                )}
+                              </div>
+                              <p className="text-xs text-gray-600 mt-1">
+                                Permite marcar este pago como pagado sin esperar que se complete el descuento al corredor.
+                                El adelanto vinculado se mantiene activo.
+                              </p>
+                            </div>
+                          </label>
+                        </div>
+                      )}
                     </>
                   )}
                 </div>
@@ -758,76 +793,76 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
           {/* Referencias Bancarias - Solo visible si método es transferencia */}
           {paymentMethod === 'bank_transfer' && (
             <div className="border-2 border-gray-200 rounded-lg p-3 sm:p-4">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0 mb-3 sm:mb-4">
+              <div className="flex items-center justify-between mb-3">
                 <h3 className="font-semibold text-sm sm:text-base text-gray-700">🏦 Referencias Bancarias</h3>
                 <button
                   type="button"
                   onClick={addReference}
-                  className="px-3 py-2 bg-[#8AAA19] text-white rounded-lg text-xs sm:text-sm hover:bg-[#7a9916] transition flex items-center justify-center gap-1 w-full sm:w-auto"
+                  className="px-3 py-1.5 bg-[#8AAA19] text-white rounded-lg text-xs hover:bg-[#7a9916] transition flex items-center gap-1"
                 >
-                  <FaPlus className="text-white" /> <span className="text-white">Agregar Referencia</span>
+                  <FaPlus size={10} /> Agregar
                 </button>
               </div>
               
-              {/* Labels para desktop */}
-              <div className="hidden md:grid md:grid-cols-12 gap-2 mb-2 text-xs font-semibold text-gray-600">
-                <div className="col-span-4">Referencia</div>
-                <div className="col-span-3">Fecha</div>
-                <div className="col-span-2">Monto</div>
-                <div className="col-span-2">A Usar</div>
-                <div className="col-span-1"></div>
-              </div>
-              
-              {references.map((ref, index) => (
-                <div key={index} className="mb-3 sm:mb-2">
-                  {/* Layout mobile - vertical */}
-                  <div className="md:hidden space-y-2 p-3 border-2 border-gray-200 rounded-lg bg-gray-50">
+              <div className="space-y-3">
+                {references.map((ref, index) => (
+                  <div key={index} className="p-3 border border-gray-200 rounded-lg bg-gray-50 space-y-2">
+                    {/* Referencia + estado */}
                     <div className="relative">
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Referencia</label>
-                      <input
-                        type="text"
-                        placeholder="# Referencia"
-                        value={ref.reference_number}
-                        onChange={(e) => {
-                          const newRefs = [...references];
-                          if (newRefs[index]) {
-                            newRefs[index].reference_number = e.target.value;
-                            setReferences(newRefs);
-                            validateReference(index, e.target.value);
-                          }
-                        }}
-                        list="available-references"
-                        className="w-full px-3 py-2 pr-8 border rounded text-sm"
-                      />
-                      <div className="absolute right-2 top-8">
-                        {ref.validating && <FaSpinner className="text-blue-500 animate-spin" size={16} />}
-                        {!ref.validating && ref.exists_in_bank && <FaCheckCircle className="text-green-600" size={16} />}
-                        {!ref.validating && ref.exists_in_bank === false && ref.reference_number && <FaExclamationTriangle className="text-red-600" size={16} />}
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Referencia</label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          placeholder="# Referencia"
+                          value={ref.reference_number}
+                          onChange={(e) => {
+                            const newRefs = [...references];
+                            if (newRefs[index]) {
+                              newRefs[index].reference_number = e.target.value;
+                              setReferences(newRefs);
+                              validateReference(index, e.target.value);
+                            }
+                          }}
+                          list="available-references"
+                          className="w-full px-3 py-2 pr-9 border-2 border-gray-300 rounded-lg text-sm focus:border-[#8AAA19] focus:outline-none"
+                        />
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center">
+                          {ref.validating && <FaSpinner className="text-blue-500 animate-spin" size={14} />}
+                          {!ref.validating && ref.exists_in_bank && <FaCheckCircle className="text-green-500" size={14} />}
+                          {!ref.validating && ref.exists_in_bank === false && ref.reference_number && <FaExclamationTriangle className="text-red-500" size={14} />}
+                        </div>
                       </div>
                       {!ref.validating && ref.exists_in_bank && ref.remaining_amount !== undefined && (
-                        <p className="text-xs text-gray-600 mt-1">Disponible: ${ref.remaining_amount.toFixed(2)}</p>
+                        <p className="text-[11px] text-green-700 mt-1 font-medium">✓ Conciliada — Disponible: ${ref.remaining_amount.toFixed(2)}</p>
+                      )}
+                      {!ref.validating && ref.exists_in_bank === false && ref.reference_number && (
+                        <p className="text-[11px] text-red-600 mt-1 font-medium">✗ No encontrada en historial bancario</p>
                       )}
                     </div>
-                    
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">Fecha</label>
-                      <input
-                        type="date"
-                        value={ref.date}
-                        onChange={(e) => {
-                          const newRefs = [...references];
-                          if (newRefs[index]) {
-                            newRefs[index].date = e.target.value;
-                            setReferences(newRefs);
-                          }
-                        }}
-                        className="w-full px-3 py-2 border rounded text-sm"
-                      />
-                    </div>
-                    
+
+                    {/* Fecha y Monto en fila */}
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <label className="block text-xs font-medium text-gray-600 mb-1">Monto</label>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">
+                          Fecha {ref.exists_in_bank && <span className="text-green-600 text-[10px]">(auto)</span>}
+                        </label>
+                        <input
+                          type="date"
+                          value={ref.date}
+                          onChange={(e) => {
+                            const newRefs = [...references];
+                            if (newRefs[index]) {
+                              newRefs[index].date = e.target.value;
+                              setReferences(newRefs);
+                            }
+                          }}
+                          className={`w-full px-3 py-2 border-2 rounded-lg text-sm focus:border-[#8AAA19] focus:outline-none ${
+                            ref.exists_in_bank ? 'border-green-300 bg-green-50' : 'border-gray-300'
+                          }`}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-1">Monto</label>
                         <input
                           type="number"
                           step="0.01"
@@ -837,135 +872,31 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
                             const newRefs = [...references];
                             if (newRefs[index]) {
                               newRefs[index].amount = e.target.value;
-                              if (!newRefs[index].amount_to_use) {
-                                newRefs[index].amount_to_use = e.target.value;
-                              }
                               setReferences(newRefs);
                             }
                           }}
-                          className="w-full px-3 py-2 border rounded text-sm"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-600 mb-1">A Usar</label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          placeholder="0.00"
-                          value={ref.amount_to_use}
-                          onChange={(e) => {
-                            const newRefs = [...references];
-                            if (newRefs[index]) {
-                              newRefs[index].amount_to_use = e.target.value;
-                              setReferences(newRefs);
-                            }
-                          }}
-                          className="w-full px-3 py-2 border rounded text-sm"
+                          onWheel={(e) => e.currentTarget.blur()}
+                          className={`w-full px-3 py-2 border-2 rounded-lg text-sm focus:border-[#8AAA19] focus:outline-none ${
+                            ref.exists_in_bank ? 'border-green-300 bg-green-50' : 'border-gray-300'
+                          }`}
                         />
                       </div>
                     </div>
-                    
+
+                    {/* Eliminar referencia */}
                     {references.length > 1 && (
                       <button
                         type="button"
                         onClick={() => removeReference(index)}
-                        className="w-full px-3 py-2 text-red-500 hover:bg-red-50 rounded transition flex items-center justify-center gap-1 text-sm"
+                        className="w-full px-3 py-1.5 text-red-500 hover:bg-red-50 rounded-lg transition flex items-center justify-center gap-1.5 text-xs border border-transparent hover:border-red-200"
                       >
-                        <FaTrash /> Eliminar
+                        <FaTrash size={10} /> Eliminar referencia
                       </button>
                     )}
                   </div>
-                  
-                  {/* Layout desktop - horizontal */}
-                  <div className="hidden md:grid md:grid-cols-12 gap-2">
-                    <div className="col-span-4 relative">
-                      <input
-                        type="text"
-                        placeholder="# Referencia"
-                        value={ref.reference_number}
-                        onChange={(e) => {
-                          const newRefs = [...references];
-                          if (newRefs[index]) {
-                            newRefs[index].reference_number = e.target.value;
-                            setReferences(newRefs);
-                            validateReference(index, e.target.value);
-                          }
-                        }}
-                        list="available-references"
-                        className="w-full px-3 py-2 pr-8 border rounded text-sm"
-                      />
-                      <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
-                        {ref.validating && <FaSpinner className="text-blue-500 animate-spin" size={16} />}
-                        {!ref.validating && ref.exists_in_bank && <FaCheckCircle className="text-green-600" size={16} />}
-                        {!ref.validating && ref.exists_in_bank === false && ref.reference_number && <FaExclamationTriangle className="text-red-600" size={16} />}
-                      </div>
-                      {!ref.validating && ref.exists_in_bank && ref.remaining_amount !== undefined && (
-                        <p className="text-xs text-gray-600 mt-1">Disponible: ${ref.remaining_amount.toFixed(2)}</p>
-                      )}
-                    </div>
-                    <div className="col-span-3">
-                      <input
-                        type="date"
-                        value={ref.date}
-                        onChange={(e) => {
-                          const newRefs = [...references];
-                          if (newRefs[index]) {
-                            newRefs[index].date = e.target.value;
-                            setReferences(newRefs);
-                          }
-                        }}
-                        className="w-full px-3 py-2 border rounded text-sm"
-                      />
-                    </div>
-                    <div className="col-span-2">
-                      <input
-                        type="number"
-                        step="0.01"
-                        placeholder="Monto"
-                        value={ref.amount}
-                        onChange={(e) => {
-                          const newRefs = [...references];
-                          if (newRefs[index]) {
-                            newRefs[index].amount = e.target.value;
-                            if (!newRefs[index].amount_to_use) {
-                              newRefs[index].amount_to_use = e.target.value;
-                            }
-                            setReferences(newRefs);
-                          }
-                        }}
-                        className="w-full px-3 py-2 border rounded text-sm"
-                      />
-                    </div>
-                    <div className="col-span-2">
-                      <input
-                        type="number"
-                        step="0.01"
-                        placeholder="A usar"
-                        value={ref.amount_to_use}
-                        onChange={(e) => {
-                          const newRefs = [...references];
-                          if (newRefs[index]) {
-                            newRefs[index].amount_to_use = e.target.value;
-                            setReferences(newRefs);
-                          }
-                        }}
-                        className="w-full px-3 py-2 border rounded text-sm"
-                      />
-                    </div>
-                    <div className="col-span-1 flex items-center justify-center">
-                      {references.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => removeReference(index)}
-                          className="p-2 text-red-500 hover:bg-red-50 rounded transition"
-                        >
-                          <FaTrash />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
+
               <datalist id="available-references">
                 {availableReferences.map((ref) => (
                   <option key={ref.id} value={ref.reference_number} />
@@ -1262,8 +1193,7 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
                   setReferences([{
                     reference_number: '',
                     date: new Date().toISOString().split('T')[0] as string,
-                    amount: '',
-                    amount_to_use: ''
+                    amount: ''
                   }]);
                   setFormData(prev => ({ ...prev, notes: '' }));
                   toast.info('Ahora agrega una referencia bancaria y guarda para eliminar la deuda');

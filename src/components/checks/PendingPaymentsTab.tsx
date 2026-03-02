@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { FaPlus, FaCheckCircle, FaExclamationTriangle, FaFileDownload, FaEdit, FaTrash, FaSearch, FaTimes } from 'react-icons/fa';
-import { actionGetPendingPaymentsNew, actionMarkPaymentsAsPaidNew, actionDeletePendingPayment, actionSyncPendingPaymentsWithAdvances, actionToggleEarlyPayment } from '@/app/(app)/checks/actions';
+import { actionGetPendingPaymentsNew, actionMarkPaymentsAsPaidNew, actionDeletePendingPayment, actionSyncPendingPaymentsWithAdvances } from '@/app/(app)/checks/actions';
 import { supabaseClient } from '@/lib/supabase/client';
 import { toast } from 'sonner';
 import UnpaidReferenceModal from './UnpaidReferenceModal';
@@ -1241,30 +1241,6 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
     }
   };
 
-  const handleToggleEarlyPayment = async (paymentId: string, enable: boolean) => {
-    const payment = payments.find(p => p.id === paymentId);
-    if (!payment) return;
-
-    const action = enable ? 'habilitar pago anticipado' : 'revertir pago anticipado';
-    if (!confirm(
-      enable
-        ? `¿Habilitar pago anticipado para "${payment.client_name}"?\n\nEsto permite marcar el pago como pagado antes de que se complete el descuento al corredor.`
-        : `¿Revertir pago anticipado para "${payment.client_name}"?\n\nEl pago volverá a estar bloqueado hasta que se complete el descuento.`
-    )) return;
-
-    try {
-      const result = await actionToggleEarlyPayment(paymentId, enable);
-      if (result.ok) {
-        toast.success(result.message);
-        await loadPayments();
-      } else {
-        toast.error(`Error al ${action}`, { description: result.error });
-      }
-    } catch (error: any) {
-      toast.error(`Error al ${action}`, { description: error.message });
-    }
-  };
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -1874,39 +1850,6 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
                   <div className="flex flex-wrap items-center gap-2">
                     <StatusBadge payment={payment} />
 
-                    {/* Botón Pagar Anticipado para descuentos a corredor */}
-                    {(() => {
-                      if (!isDescuentoACorredor(payment)) return null;
-                      const meta = typeof payment.notes === 'string' ? JSON.parse(payment.notes) : payment.notes;
-                      const isEarlyPayment = meta?.early_payment === true;
-                      const isBlocked = !payment.can_be_paid;
-
-                      if (isBlocked) {
-                        return (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleToggleEarlyPayment(payment.id, true); }}
-                            className="px-2.5 py-1 bg-amber-50 text-amber-700 border border-amber-300 rounded-full text-[11px] font-semibold hover:bg-amber-100 hover:border-amber-400 transition-colors"
-                            title="Habilitar pago anticipado sin esperar el descuento"
-                          >
-                            ⚡ Pagar Anticipado
-                          </button>
-                        );
-                      }
-                      if (isEarlyPayment) {
-                        return (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleToggleEarlyPayment(payment.id, false); }}
-                            className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-300 rounded-full text-[11px] font-semibold hover:bg-red-50 hover:text-red-600 hover:border-red-300 transition-colors group"
-                            title="Revertir pago anticipado"
-                          >
-                            <span className="group-hover:hidden">⚡ Anticipado</span>
-                            <span className="hidden group-hover:inline">↩ Revertir</span>
-                          </button>
-                        );
-                      }
-                      return null;
-                    })()}
-
                     {/* Etiqueta de motivo del pago */}
                     {(() => {
                       // Parsear metadata
@@ -2112,36 +2055,6 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
                             return null;
                           })()}
 
-                          {/* ⚡ PAGAR ANTICIPADO - Solo para descuentos a corredor */}
-                          {(() => {
-                            if (!isDescuentoACorredor(payment)) return null;
-                            const meta = typeof payment.notes === 'string' ? JSON.parse(payment.notes) : payment.notes;
-                            const isEarlyPayment = meta?.early_payment === true;
-                            const isBlocked = !payment.can_be_paid;
-
-                            if (isBlocked) {
-                              return (
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); handleToggleEarlyPayment(payment.id, true); }}
-                                  className="w-full py-3 px-4 bg-gradient-to-r from-amber-50 to-amber-100 text-amber-800 border-2 border-amber-300 rounded-xl text-sm font-bold hover:from-amber-100 hover:to-amber-200 transition-all shadow-md flex items-center justify-center gap-2"
-                                >
-                                  ⚡ Habilitar Pago Anticipado
-                                </button>
-                              );
-                            }
-                            if (isEarlyPayment) {
-                              return (
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); handleToggleEarlyPayment(payment.id, false); }}
-                                  className="w-full py-3 px-4 bg-gradient-to-r from-emerald-50 to-emerald-100 text-emerald-800 border-2 border-emerald-300 rounded-xl text-sm font-bold hover:from-red-50 hover:to-red-100 hover:text-red-700 hover:border-red-300 transition-all shadow-md flex items-center justify-center gap-2"
-                                >
-                                  ⚡ Anticipado — Toca para revertir
-                                </button>
-                              );
-                            }
-                            return null;
-                          })()}
-
                           {/* 🏷️ ESTADO Y FECHA */}
                           <div className="grid grid-cols-2 gap-3">
                             <div className="bg-gradient-to-br from-indigo-100 to-indigo-50 border-2 border-indigo-400 rounded-xl p-4 shadow-lg">
@@ -2305,41 +2218,7 @@ export default function PendingPaymentsTab({ onOpenWizard, onPaymentPaid, refres
 
                     {/* Status badge - Solo desktop */}
                     <div className="hidden lg:flex items-center justify-between">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <StatusBadge payment={payment} />
-                        {/* Botón Pagar Anticipado para descuentos a corredor */}
-                        {(() => {
-                          if (!isDescuentoACorredor(payment)) return null;
-                          const meta = typeof payment.notes === 'string' ? JSON.parse(payment.notes) : payment.notes;
-                          const isEarlyPayment = meta?.early_payment === true;
-                          const isBlocked = !payment.can_be_paid;
-
-                          if (isBlocked) {
-                            return (
-                              <button
-                                onClick={(e) => { e.stopPropagation(); handleToggleEarlyPayment(payment.id, true); }}
-                                className="px-2.5 py-1 bg-amber-50 text-amber-700 border border-amber-300 rounded-full text-[11px] font-semibold hover:bg-amber-100 hover:border-amber-400 transition-colors"
-                                title="Habilitar pago anticipado sin esperar el descuento"
-                              >
-                                ⚡ Pagar Anticipado
-                              </button>
-                            );
-                          }
-                          if (isEarlyPayment) {
-                            return (
-                              <button
-                                onClick={(e) => { e.stopPropagation(); handleToggleEarlyPayment(payment.id, false); }}
-                                className="px-2.5 py-1 bg-emerald-50 text-emerald-700 border border-emerald-300 rounded-full text-[11px] font-semibold hover:bg-red-50 hover:text-red-600 hover:border-red-300 transition-colors group"
-                                title="Revertir pago anticipado"
-                              >
-                                <span className="group-hover:hidden">⚡ Anticipado</span>
-                                <span className="hidden group-hover:inline">↩ Revertir</span>
-                              </button>
-                            );
-                          }
-                          return null;
-                        })()}
-                      </div>
+                      <StatusBadge payment={payment} />
                       <div className="text-xs text-gray-500">
                         {(() => {
                           // Determinar qué fecha mostrar según el tipo de pago
