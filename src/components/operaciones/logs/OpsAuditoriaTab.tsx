@@ -416,23 +416,27 @@ export default function OpsAuditoriaTab() {
 
         {/* Row 3: Date range */}
         <div className="flex items-center gap-1.5 flex-wrap">
-          <div className="relative">
-            <FaCalendarAlt className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-300 text-[9px] pointer-events-none" />
+          <div className="flex items-center gap-2 border-2 border-gray-200 rounded-lg focus-within:border-[#8AAA19] focus-within:ring-2 focus-within:ring-[#8AAA19]/20 bg-white px-3 py-2">
+            <div className="flex-shrink-0 text-gray-400">
+              <FaCalendarAlt size={12} />
+            </div>
             <input
               type="date"
               value={dateFrom}
               onChange={e => { setDateFrom(e.target.value); setQuickFilter(null); }}
-              className="pl-6 pr-2 py-1 text-[10px] border border-gray-200 rounded-lg focus:ring-1 focus:ring-[#010139]/10 focus:border-gray-300 outline-none transition-all duration-150"
+              className="flex-1 min-w-0 border-0 focus:outline-none focus:ring-0 text-gray-700 text-sm bg-transparent p-0"
             />
           </div>
-          <span className="text-[10px] text-gray-300">—</span>
-          <div className="relative">
-            <FaCalendarAlt className="absolute left-2 top-1/2 -translate-y-1/2 text-gray-300 text-[9px] pointer-events-none" />
+          <span className="text-sm text-gray-400">—</span>
+          <div className="flex items-center gap-2 border-2 border-gray-200 rounded-lg focus-within:border-[#8AAA19] focus-within:ring-2 focus-within:ring-[#8AAA19]/20 bg-white px-3 py-2">
+            <div className="flex-shrink-0 text-gray-400">
+              <FaCalendarAlt size={12} />
+            </div>
             <input
               type="date"
               value={dateTo}
               onChange={e => { setDateTo(e.target.value); setQuickFilter(null); }}
-              className="pl-6 pr-2 py-1 text-[10px] border border-gray-200 rounded-lg focus:ring-1 focus:ring-[#010139]/10 focus:border-gray-300 outline-none transition-all duration-150"
+              className="flex-1 min-w-0 border-0 focus:outline-none focus:ring-0 text-gray-700 text-sm bg-transparent p-0"
             />
           </div>
           {onlyCritical && (

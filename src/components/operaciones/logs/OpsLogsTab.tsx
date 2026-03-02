@@ -59,7 +59,7 @@ export default function OpsLogsTab() {
         </div>
         {showFilters && (
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 pt-2 border-t border-gray-100">
-            <select value={entityFilter} onChange={e => setEntityFilter(e.target.value)} className="w-full text-sm sm:text-xs border border-gray-300 rounded-lg px-3 py-2.5 sm:py-1.5">
+            <select value={entityFilter} onChange={e => setEntityFilter(e.target.value)} className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2">
               <option value="">Tipo Entidad</option>
               <option value="renewal">Renovación</option>
               <option value="petition">Petición</option>
@@ -69,15 +69,19 @@ export default function OpsLogsTab() {
               <option value="policy">Póliza</option>
               <option value="session">Sesión</option>
             </select>
-            <div className="relative">
-              <FaCalendarAlt className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs pointer-events-none" />
+            <div className="flex items-center gap-2 border-2 border-gray-200 rounded-lg focus-within:border-[#8AAA19] focus-within:ring-2 focus-within:ring-[#8AAA19]/20 bg-white px-3 py-2">
+              <div className="flex-shrink-0 text-gray-400">
+                <FaCalendarAlt size={12} />
+              </div>
               <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-                className="w-full pl-9 pr-2 py-2.5 sm:py-1.5 text-sm sm:text-xs border border-gray-300 rounded-lg" placeholder="Desde" />
+                className="flex-1 min-w-0 border-0 focus:outline-none focus:ring-0 text-gray-700 text-sm bg-transparent p-0" />
             </div>
-            <div className="relative">
-              <FaCalendarAlt className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs pointer-events-none" />
+            <div className="flex items-center gap-2 border-2 border-gray-200 rounded-lg focus-within:border-[#8AAA19] focus-within:ring-2 focus-within:ring-[#8AAA19]/20 bg-white px-3 py-2">
+              <div className="flex-shrink-0 text-gray-400">
+                <FaCalendarAlt size={12} />
+              </div>
               <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
-                className="w-full pl-9 pr-2 py-2.5 sm:py-1.5 text-sm sm:text-xs border border-gray-300 rounded-lg" placeholder="Hasta" />
+                className="flex-1 min-w-0 border-0 focus:outline-none focus:ring-0 text-gray-700 text-sm bg-transparent p-0" />
             </div>
           </div>
         )}

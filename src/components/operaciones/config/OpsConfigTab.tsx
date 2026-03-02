@@ -460,30 +460,40 @@ export default function OpsConfigTab() {
             <p className="text-xs font-bold text-[#010139] mb-2">Horario Laboral</p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div>
-                <label className="block text-[11px] sm:text-[10px] text-gray-500 font-semibold mb-1">Inicio</label>
-                <input
-                  type="time"
-                  value={bh.start || '08:00'}
-                  onChange={e => setVal('business_hours', { ...bh, start: e.target.value })}
-                  className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2.5 sm:py-1.5 outline-none focus:ring-1 focus:ring-[#010139]/30"
-                />
+                <label className="block text-xs text-gray-500 font-semibold mb-1">Inicio</label>
+                <div className="flex items-center gap-2 border-2 border-gray-200 rounded-lg focus-within:border-[#8AAA19] focus-within:ring-2 focus-within:ring-[#8AAA19]/20 bg-white px-3 py-2">
+                  <div className="flex-shrink-0 text-gray-400">
+                    <FaClock size={12} />
+                  </div>
+                  <input
+                    type="time"
+                    value={bh.start || '08:00'}
+                    onChange={e => setVal('business_hours', { ...bh, start: e.target.value })}
+                    className="flex-1 min-w-0 border-0 focus:outline-none focus:ring-0 text-gray-700 text-sm bg-transparent p-0"
+                  />
+                </div>
               </div>
               <div>
-                <label className="block text-[11px] sm:text-[10px] text-gray-500 font-semibold mb-1">Fin</label>
-                <input
-                  type="time"
-                  value={bh.end || '18:00'}
-                  onChange={e => setVal('business_hours', { ...bh, end: e.target.value })}
-                  className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2.5 sm:py-1.5 outline-none focus:ring-1 focus:ring-[#010139]/30"
-                />
+                <label className="block text-xs text-gray-500 font-semibold mb-1">Fin</label>
+                <div className="flex items-center gap-2 border-2 border-gray-200 rounded-lg focus-within:border-[#8AAA19] focus-within:ring-2 focus-within:ring-[#8AAA19]/20 bg-white px-3 py-2">
+                  <div className="flex-shrink-0 text-gray-400">
+                    <FaClock size={12} />
+                  </div>
+                  <input
+                    type="time"
+                    value={bh.end || '18:00'}
+                    onChange={e => setVal('business_hours', { ...bh, end: e.target.value })}
+                    className="flex-1 min-w-0 border-0 focus:outline-none focus:ring-0 text-gray-700 text-sm bg-transparent p-0"
+                  />
+                </div>
               </div>
               <div>
-                <label className="block text-[11px] sm:text-[10px] text-gray-500 font-semibold mb-1">Zona Horaria</label>
+                <label className="block text-xs text-gray-500 font-semibold mb-1">Zona Horaria</label>
                 <input
                   type="text"
                   value={bh.timezone || 'America/Panama'}
                   readOnly
-                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2.5 sm:py-1.5 bg-gray-50 text-gray-500"
+                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 bg-gray-50 text-gray-500"
                 />
               </div>
             </div>
