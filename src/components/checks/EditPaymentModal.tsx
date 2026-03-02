@@ -841,7 +841,7 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
                     </div>
 
                     {/* Fecha y Monto en fila */}
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       <div>
                         <label className="block text-xs font-medium text-gray-500 mb-1">
                           Fecha {ref.exists_in_bank && <span className="text-green-600 text-[10px]">(auto)</span>}
