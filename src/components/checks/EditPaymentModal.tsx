@@ -806,7 +806,7 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
               
               <div className="space-y-3">
                 {references.map((ref, index) => (
-                  <div key={index} className="p-3 border border-gray-200 rounded-lg bg-gray-50 space-y-2">
+                  <div key={index} className="p-3 border border-gray-200 rounded-lg bg-gray-50 space-y-2 overflow-hidden">
                     {/* Referencia + estado */}
                     <div className="relative">
                       <label className="block text-xs font-medium text-gray-500 mb-1">Referencia</label>
@@ -856,7 +856,8 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
                               setReferences(newRefs);
                             }
                           }}
-                          className={`w-full max-w-full px-2 sm:px-3 py-2 border-2 rounded-lg text-xs sm:text-sm focus:border-[#8AAA19] focus:outline-none ${
+                          style={{ minWidth: 0 }}
+                          className={`w-full px-2 sm:px-3 py-2 border-2 rounded-lg text-xs sm:text-sm focus:border-[#8AAA19] focus:outline-none ${
                             ref.exists_in_bank ? 'border-green-300 bg-green-50' : 'border-gray-300'
                           }`}
                         />
