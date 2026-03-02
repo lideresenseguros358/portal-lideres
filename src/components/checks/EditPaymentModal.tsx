@@ -842,7 +842,7 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
 
                     {/* Fecha y Monto en fila */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                      <div>
+                      <div className="min-w-0">
                         <label className="block text-xs font-medium text-gray-500 mb-1">
                           Fecha {ref.exists_in_bank && <span className="text-green-600 text-[10px]">(auto)</span>}
                         </label>
@@ -856,7 +856,7 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
                               setReferences(newRefs);
                             }
                           }}
-                          className={`w-full px-3 py-2 border-2 rounded-lg text-sm focus:border-[#8AAA19] focus:outline-none ${
+                          className={`w-full max-w-full px-2 sm:px-3 py-2 border-2 rounded-lg text-xs sm:text-sm focus:border-[#8AAA19] focus:outline-none ${
                             ref.exists_in_bank ? 'border-green-300 bg-green-50' : 'border-gray-300'
                           }`}
                         />
