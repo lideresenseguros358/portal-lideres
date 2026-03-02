@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { isGet } from '@/lib/is/http-client';
 import { IS_ENDPOINTS, type ISEnvironment } from '@/lib/is/config';
 import { URBANIZACIONES_FALLBACK } from '@/lib/is/urbanizaciones-fallback';
+import { PROVINCIAS_FALLBACK } from '@/lib/is/provincias-fallback';
 
 // In-memory cache for address catalogs (24h TTL — these rarely change)
 const addressCache = new Map<string, { data: any; exp: number }>();
@@ -26,9 +27,9 @@ export async function GET(request: NextRequest) {
 
     switch (tipo) {
       case 'provincias': {
-        const codpais = searchParams.get('codpais') || '1';
-        endpoint = `${IS_ENDPOINTS.PROVINCIAS}/${codpais}`;
-        break;
+        // Provincias de Panamá son estáticas — usar fallback local para carga instantánea
+        // y evitar latencia del token IS + API call en cada carga de formulario
+        return NextResponse.json({ success: true, data: PROVINCIAS_FALLBACK, source: 'fallback' });
       }
       case 'distritos': {
         const codpais = searchParams.get('codpais') || '1';
@@ -79,9 +80,6 @@ export async function GET(request: NextRequest) {
     // IS retorna campos diferentes por tipo de catálogo
     let normalized: { DATO: number; TEXTO: string }[] = [];
     switch (tipo) {
-      case 'provincias':
-        normalized = rawData.map((r: any) => ({ DATO: r.codigoProvincia, TEXTO: r.nombreProvincia }));
-        break;
       case 'distritos':
         normalized = rawData
           .filter((r: any) => r.nombreDistrito && r.nombreDistrito !== 'NO' && r.nombreDistrito !== 'NO USA')

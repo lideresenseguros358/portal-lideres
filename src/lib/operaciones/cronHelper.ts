@@ -84,7 +84,9 @@ export async function completeCronRun(
   }
 
   // Release lock
-  await ctx.supabase.rpc('ops_release_cron_lock', { p_job_name: ctx.jobName }).catch(() => {});
+  try {
+    await ctx.supabase.rpc('ops_release_cron_lock', { p_job_name: ctx.jobName });
+  } catch { /* ignore — lock may not exist yet */ }
 }
 
 /**
@@ -108,7 +110,9 @@ export async function failCronRun(
       .eq('id', ctx.runId);
   }
 
-  await ctx.supabase.rpc('ops_release_cron_lock', { p_job_name: ctx.jobName }).catch(() => {});
+  try {
+    await ctx.supabase.rpc('ops_release_cron_lock', { p_job_name: ctx.jobName });
+  } catch { /* ignore — lock may not exist yet */ }
 }
 
 /**

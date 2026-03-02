@@ -272,7 +272,8 @@ export async function POST(request: NextRequest) {
           last_step: 'confirmacion',
         };
 
-        // Update cedula/email/phone if provided (may have been entered during emission)
+        // Update client data if provided (may have been entered during emission)
+        if (data.client_name) updates.client_name = sanitizeString(data.client_name, 200);
         if (data.cedula) updates.cedula = sanitizeString(data.cedula, 30);
         if (data.email) updates.email = sanitizeString(data.email, 200);
         if (data.phone) updates.phone = sanitizeString(data.phone, 30);
@@ -314,18 +315,26 @@ export async function POST(request: NextRequest) {
         const v = validateUpdatePayload(data);
         if (!v.valid) return NextResponse.json({ error: v.error }, { status: 400 });
 
+        const failUpdates: Record<string, any> = {
+          status: 'ABANDONADA',
+          last_step: sanitizeString(data.last_step, 50) || 'emitir',
+          quote_payload: {
+            ...(typeof data.existing_payload === 'object' ? data.existing_payload : {}),
+            error_code: sanitizeString(data.error_code, 50),
+            error_message: sanitizeString(data.error_message, 500),
+            error_endpoint: sanitizeString(data.error_endpoint, 200),
+          },
+        };
+
+        // Save client data captured before abandonment
+        if (data.client_name) failUpdates.client_name = sanitizeString(data.client_name, 200);
+        if (data.cedula) failUpdates.cedula = sanitizeString(data.cedula, 30);
+        if (data.email) failUpdates.email = sanitizeString(data.email, 200);
+        if (data.phone) failUpdates.phone = sanitizeString(data.phone, 30);
+
         const { error } = await supabase
           .from('adm_cot_quotes')
-          .update({
-            status: 'FALLIDA',
-            last_step: sanitizeString(data.last_step, 50) || 'emitir',
-            quote_payload: {
-              ...(typeof data.existing_payload === 'object' ? data.existing_payload : {}),
-              error_code: sanitizeString(data.error_code, 50),
-              error_message: sanitizeString(data.error_message, 500),
-              error_endpoint: sanitizeString(data.error_endpoint, 200),
-            },
-          })
+          .update(failUpdates)
           .eq('quote_ref', data.quote_ref)
           .eq('insurer', data.insurer)
           .order('quoted_at', { ascending: false })
@@ -359,9 +368,20 @@ export async function POST(request: NextRequest) {
         const currentSteps = Array.isArray(existing?.steps_log) ? (existing.steps_log as any[]) : [];
         currentSteps.push({ step: stepName, ts: new Date().toISOString() });
 
+        const stepUpdates: Record<string, any> = {
+          last_step: stepName,
+          steps_log: currentSteps.slice(-50),
+        };
+
+        // Save client data when available (e.g. after emission-data step)
+        if (data.client_name) stepUpdates.client_name = sanitizeString(data.client_name, 200);
+        if (data.cedula) stepUpdates.cedula = sanitizeString(data.cedula, 30);
+        if (data.email) stepUpdates.email = sanitizeString(data.email, 200);
+        if (data.phone) stepUpdates.phone = sanitizeString(data.phone, 30);
+
         const { error } = await supabase
           .from('adm_cot_quotes')
-          .update({ last_step: stepName, steps_log: currentSteps.slice(-50) })
+          .update(stepUpdates)
           .eq('quote_ref', data.quote_ref)
           .eq('insurer', data.insurer)
           .order('quoted_at', { ascending: false })

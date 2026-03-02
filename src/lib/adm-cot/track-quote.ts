@@ -101,6 +101,7 @@ export function trackQuoteEmitted(params: {
   quoteRef: string;
   insurer: string;
   policyNumber?: string;
+  clientName?: string;
   cedula?: string;
   email?: string;
   phone?: string;
@@ -109,6 +110,7 @@ export function trackQuoteEmitted(params: {
     quote_ref: params.quoteRef,
     insurer: params.insurer,
     policy_number: params.policyNumber || null,
+    client_name: params.clientName || null,
     cedula: params.cedula || null,
     email: params.email || null,
     phone: params.phone || null,
@@ -124,6 +126,10 @@ export function trackQuoteFailed(params: {
   errorMessage?: string;
   errorEndpoint?: string;
   lastStep?: string;
+  clientName?: string;
+  cedula?: string;
+  email?: string;
+  phone?: string;
 }) {
   trackCall('quote_failed', {
     quote_ref: params.quoteRef,
@@ -131,6 +137,10 @@ export function trackQuoteFailed(params: {
     error_message: params.errorMessage || null,
     error_endpoint: params.errorEndpoint || null,
     last_step: params.lastStep || 'emitir',
+    client_name: params.clientName || null,
+    cedula: params.cedula || null,
+    email: params.email || null,
+    phone: params.phone || null,
   });
 }
 
@@ -141,10 +151,18 @@ export function trackStepUpdate(params: {
   quoteRef: string;
   insurer: string;
   step: string;
+  clientName?: string;
+  cedula?: string;
+  email?: string;
+  phone?: string;
 }) {
   trackCall('step_update', {
     quote_ref: params.quoteRef,
     insurer: params.insurer,
     step: params.step,
+    client_name: params.clientName || null,
+    cedula: params.cedula || null,
+    email: params.email || null,
+    phone: params.phone || null,
   });
 }

@@ -215,6 +215,42 @@ export type Database = {
           },
         ]
       }
+      adm_cot_audit_log: {
+        Row: {
+          created_at: string
+          detail: Json | null
+          entity_id: string | null
+          entity_type: string | null
+          event_type: string
+          id: string
+          ip_address: string | null
+          region: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          detail?: Json | null
+          entity_id?: string | null
+          entity_type?: string | null
+          event_type: string
+          id?: string
+          ip_address?: string | null
+          region?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          detail?: Json | null
+          entity_id?: string | null
+          entity_type?: string | null
+          event_type?: string
+          id?: string
+          ip_address?: string | null
+          region?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       adm_cot_bank_history: {
         Row: {
           amount: number
@@ -264,6 +300,51 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      adm_cot_bank_transfers: {
+        Row: {
+          bank_name: string
+          created_at: string
+          id: string
+          imported_by: string | null
+          metadata: Json | null
+          notes: string | null
+          reference_number: string
+          remaining_amount: number
+          status: string
+          transfer_amount: number
+          transfer_date: string
+          updated_at: string
+        }
+        Insert: {
+          bank_name: string
+          created_at?: string
+          id?: string
+          imported_by?: string | null
+          metadata?: Json | null
+          notes?: string | null
+          reference_number: string
+          remaining_amount: number
+          status?: string
+          transfer_amount: number
+          transfer_date: string
+          updated_at?: string
+        }
+        Update: {
+          bank_name?: string
+          created_at?: string
+          id?: string
+          imported_by?: string | null
+          metadata?: Json | null
+          notes?: string | null
+          reference_number?: string
+          remaining_amount?: number
+          status?: string
+          transfer_amount?: number
+          transfer_date?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       adm_cot_chats: {
         Row: {
@@ -327,6 +408,75 @@ export type Database = {
           started_at?: string
           status?: string
           task_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      adm_cot_conversations: {
+        Row: {
+          ai_summary: string | null
+          cedula: string | null
+          classification: string | null
+          client_name: string | null
+          closed_at: string | null
+          closed_by: string | null
+          created_at: string
+          email: string | null
+          escalated_at: string | null
+          escalated_reason: string | null
+          id: string
+          ip_address: string | null
+          is_complex: boolean
+          metadata: Json | null
+          phone: string | null
+          region: string | null
+          session_id: string | null
+          source: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          ai_summary?: string | null
+          cedula?: string | null
+          classification?: string | null
+          client_name?: string | null
+          closed_at?: string | null
+          closed_by?: string | null
+          created_at?: string
+          email?: string | null
+          escalated_at?: string | null
+          escalated_reason?: string | null
+          id?: string
+          ip_address?: string | null
+          is_complex?: boolean
+          metadata?: Json | null
+          phone?: string | null
+          region?: string | null
+          session_id?: string | null
+          source?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          ai_summary?: string | null
+          cedula?: string | null
+          classification?: string | null
+          client_name?: string | null
+          closed_at?: string | null
+          closed_by?: string | null
+          created_at?: string
+          email?: string | null
+          escalated_at?: string | null
+          escalated_reason?: string | null
+          id?: string
+          ip_address?: string | null
+          is_complex?: boolean
+          metadata?: Json | null
+          phone?: string | null
+          region?: string | null
+          session_id?: string | null
+          source?: string
+          status?: string
           updated_at?: string
         }
         Relationships: []
@@ -507,6 +657,132 @@ export type Database = {
         }
         Relationships: []
       }
+      adm_cot_messages: {
+        Row: {
+          content: string
+          conversation_id: string
+          created_at: string
+          id: string
+          metadata: Json | null
+          role: string
+          tokens_used: number | null
+        }
+        Insert: {
+          content: string
+          conversation_id: string
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          role: string
+          tokens_used?: number | null
+        }
+        Update: {
+          content?: string
+          conversation_id?: string
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          role?: string
+          tokens_used?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "adm_cot_messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "adm_cot_conversations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      adm_cot_payment_group_items: {
+        Row: {
+          amount_applied: number
+          created_at: string
+          group_id: string
+          id: string
+          insurer: string
+          pending_payment_id: string
+        }
+        Insert: {
+          amount_applied: number
+          created_at?: string
+          group_id: string
+          id?: string
+          insurer: string
+          pending_payment_id: string
+        }
+        Update: {
+          amount_applied?: number
+          created_at?: string
+          group_id?: string
+          id?: string
+          insurer?: string
+          pending_payment_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "adm_cot_payment_group_items_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "adm_cot_payment_groups"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "adm_cot_payment_group_items_pending_payment_id_fkey"
+            columns: ["pending_payment_id"]
+            isOneToOne: false
+            referencedRelation: "adm_cot_payments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "adm_cot_payment_group_items_pending_payment_id_fkey"
+            columns: ["pending_payment_id"]
+            isOneToOne: false
+            referencedRelation: "ops_morosidad_view"
+            referencedColumns: ["payment_id"]
+          },
+        ]
+      }
+      adm_cot_payment_group_references: {
+        Row: {
+          amount_used: number
+          bank_transfer_id: string
+          created_at: string
+          group_id: string
+          id: string
+        }
+        Insert: {
+          amount_used: number
+          bank_transfer_id: string
+          created_at?: string
+          group_id: string
+          id?: string
+        }
+        Update: {
+          amount_used?: number
+          bank_transfer_id?: string
+          created_at?: string
+          group_id?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "adm_cot_payment_group_references_bank_transfer_id_fkey"
+            columns: ["bank_transfer_id"]
+            isOneToOne: false
+            referencedRelation: "adm_cot_bank_transfers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "adm_cot_payment_group_references_group_id_fkey"
+            columns: ["group_id"]
+            isOneToOne: false
+            referencedRelation: "adm_cot_payment_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       adm_cot_payment_groups: {
         Row: {
           bank_reference: string | null
@@ -519,6 +795,7 @@ export type Database = {
           payment_date: string | null
           status: string
           total_amount: number
+          total_selected_amount: number | null
           updated_at: string
         }
         Insert: {
@@ -532,6 +809,7 @@ export type Database = {
           payment_date?: string | null
           status?: string
           total_amount?: number
+          total_selected_amount?: number | null
           updated_at?: string
         }
         Update: {
@@ -545,6 +823,7 @@ export type Database = {
           payment_date?: string | null
           status?: string
           total_amount?: number
+          total_selected_amount?: number | null
           updated_at?: string
         }
         Relationships: []
@@ -656,6 +935,7 @@ export type Database = {
       }
       adm_cot_quotes: {
         Row: {
+          abandonment_email_sent_at: string | null
           annual_premium: number | null
           cedula: string | null
           client_name: string
@@ -682,6 +962,7 @@ export type Database = {
           vehicle_info: Json | null
         }
         Insert: {
+          abandonment_email_sent_at?: string | null
           annual_premium?: number | null
           cedula?: string | null
           client_name: string
@@ -708,6 +989,7 @@ export type Database = {
           vehicle_info?: Json | null
         }
         Update: {
+          abandonment_email_sent_at?: string | null
           annual_premium?: number | null
           cedula?: string | null
           client_name?: string
@@ -808,6 +1090,56 @@ export type Database = {
             columns: ["expediente_id"]
             isOneToOne: false
             referencedRelation: "adm_cot_expedientes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      adm_cot_tasks: {
+        Row: {
+          assigned_to: string | null
+          conversation_id: string
+          created_at: string
+          id: string
+          metadata: Json | null
+          priority: string
+          resolved_at: string | null
+          resolved_by: string | null
+          status: string
+          summary: string | null
+          updated_at: string
+        }
+        Insert: {
+          assigned_to?: string | null
+          conversation_id: string
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          priority?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+          summary?: string | null
+          updated_at?: string
+        }
+        Update: {
+          assigned_to?: string | null
+          conversation_id?: string
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          priority?: string
+          resolved_at?: string | null
+          resolved_by?: string | null
+          status?: string
+          summary?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "adm_cot_tasks_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "adm_cot_conversations"
             referencedColumns: ["id"]
           },
         ]
@@ -2569,6 +2901,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "cases_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "ops_morosidad_view"
+            referencedColumns: ["client_id"]
+          },
+          {
             foreignKeyName: "cases_created_by_fkey"
             columns: ["created_by"]
             isOneToOne: false
@@ -2581,6 +2920,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "clients"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cases_created_client_id_fkey"
+            columns: ["created_client_id"]
+            isOneToOne: false
+            referencedRelation: "ops_morosidad_view"
+            referencedColumns: ["client_id"]
           },
           {
             foreignKeyName: "cases_derived_from_case_id_fkey"
@@ -2607,6 +2953,13 @@ export type Database = {
             foreignKeyName: "cases_policy_id_fkey"
             columns: ["policy_id"]
             isOneToOne: false
+            referencedRelation: "ops_morosidad_view"
+            referencedColumns: ["policy_id"]
+          },
+          {
+            foreignKeyName: "cases_policy_id_fkey"
+            columns: ["policy_id"]
+            isOneToOne: false
             referencedRelation: "policies"
             referencedColumns: ["id"]
           },
@@ -2616,6 +2969,252 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "profiles"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_events: {
+        Row: {
+          actor_user_id: string | null
+          created_at: string | null
+          event_type: string
+          id: string
+          payload: Json | null
+          thread_id: string
+        }
+        Insert: {
+          actor_user_id?: string | null
+          created_at?: string | null
+          event_type: string
+          id?: string
+          payload?: Json | null
+          thread_id: string
+        }
+        Update: {
+          actor_user_id?: string | null
+          created_at?: string | null
+          event_type?: string
+          id?: string
+          payload?: Json | null
+          thread_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_events_actor_user_id_fkey"
+            columns: ["actor_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_events_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "chat_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_interactions: {
+        Row: {
+          channel: string
+          client_id: string | null
+          created_at: string
+          escalated: boolean
+          id: string
+          intent: string | null
+          ip_address: string | null
+          message: string
+          metadata: Json | null
+          phone: string | null
+          response: string | null
+          session_id: string | null
+        }
+        Insert: {
+          channel: string
+          client_id?: string | null
+          created_at?: string
+          escalated?: boolean
+          id?: string
+          intent?: string | null
+          ip_address?: string | null
+          message: string
+          metadata?: Json | null
+          phone?: string | null
+          response?: string | null
+          session_id?: string | null
+        }
+        Update: {
+          channel?: string
+          client_id?: string | null
+          created_at?: string
+          escalated?: boolean
+          id?: string
+          intent?: string | null
+          ip_address?: string | null
+          message?: string
+          metadata?: Json | null
+          phone?: string | null
+          response?: string | null
+          session_id?: string | null
+        }
+        Relationships: []
+      }
+      chat_messages: {
+        Row: {
+          ai_generated: boolean | null
+          ai_model: string | null
+          attachments: Json | null
+          body: string
+          category_snapshot: string | null
+          created_at: string | null
+          direction: string
+          from_phone: string | null
+          id: string
+          intent: string | null
+          latency_ms: number | null
+          provider: string
+          provider_message_id: string | null
+          severity_snapshot: string | null
+          thread_id: string
+          to_phone: string | null
+          tokens: number | null
+        }
+        Insert: {
+          ai_generated?: boolean | null
+          ai_model?: string | null
+          attachments?: Json | null
+          body: string
+          category_snapshot?: string | null
+          created_at?: string | null
+          direction: string
+          from_phone?: string | null
+          id?: string
+          intent?: string | null
+          latency_ms?: number | null
+          provider?: string
+          provider_message_id?: string | null
+          severity_snapshot?: string | null
+          thread_id: string
+          to_phone?: string | null
+          tokens?: number | null
+        }
+        Update: {
+          ai_generated?: boolean | null
+          ai_model?: string | null
+          attachments?: Json | null
+          body?: string
+          category_snapshot?: string | null
+          created_at?: string | null
+          direction?: string
+          from_phone?: string | null
+          id?: string
+          intent?: string | null
+          latency_ms?: number | null
+          provider?: string
+          provider_message_id?: string | null
+          severity_snapshot?: string | null
+          thread_id?: string
+          to_phone?: string | null
+          tokens?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_messages_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "chat_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chat_threads: {
+        Row: {
+          ai_enabled: boolean
+          assigned_master_user_id: string | null
+          assigned_type: string
+          category: string
+          channel: string
+          client_id: string | null
+          client_name: string | null
+          created_at: string | null
+          external_thread_key: string | null
+          id: string
+          last_message_at: string | null
+          last_message_preview: string | null
+          metadata: Json | null
+          phone_e164: string
+          region: string | null
+          severity: string | null
+          status: string
+          tags: Json | null
+          unread_count_master: number
+          updated_at: string | null
+        }
+        Insert: {
+          ai_enabled?: boolean
+          assigned_master_user_id?: string | null
+          assigned_type?: string
+          category?: string
+          channel?: string
+          client_id?: string | null
+          client_name?: string | null
+          created_at?: string | null
+          external_thread_key?: string | null
+          id?: string
+          last_message_at?: string | null
+          last_message_preview?: string | null
+          metadata?: Json | null
+          phone_e164: string
+          region?: string | null
+          severity?: string | null
+          status?: string
+          tags?: Json | null
+          unread_count_master?: number
+          updated_at?: string | null
+        }
+        Update: {
+          ai_enabled?: boolean
+          assigned_master_user_id?: string | null
+          assigned_type?: string
+          category?: string
+          channel?: string
+          client_id?: string | null
+          client_name?: string | null
+          created_at?: string | null
+          external_thread_key?: string | null
+          id?: string
+          last_message_at?: string | null
+          last_message_preview?: string | null
+          metadata?: Json | null
+          phone_e164?: string
+          region?: string | null
+          severity?: string | null
+          status?: string
+          tags?: Json | null
+          unread_count_master?: number
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chat_threads_assigned_master_user_id_fkey"
+            columns: ["assigned_master_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_threads_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chat_threads_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "ops_morosidad_view"
+            referencedColumns: ["client_id"]
           },
         ]
       }
@@ -3763,6 +4362,20 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "expediente_documents_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "ops_morosidad_view"
+            referencedColumns: ["client_id"]
+          },
+          {
+            foreignKeyName: "expediente_documents_policy_id_fkey"
+            columns: ["policy_id"]
+            isOneToOne: false
+            referencedRelation: "ops_morosidad_view"
+            referencedColumns: ["policy_id"]
+          },
+          {
             foreignKeyName: "expediente_documents_policy_id_fkey"
             columns: ["policy_id"]
             isOneToOne: false
@@ -3962,6 +4575,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "fortnight_details_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "ops_morosidad_view"
+            referencedColumns: ["client_id"]
+          },
+          {
             foreignKeyName: "fortnight_details_fortnight_id_fkey"
             columns: ["fortnight_id"]
             isOneToOne: false
@@ -3974,6 +4594,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "insurers"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fortnight_details_policy_id_fkey"
+            columns: ["policy_id"]
+            isOneToOne: false
+            referencedRelation: "ops_morosidad_view"
+            referencedColumns: ["policy_id"]
           },
           {
             foreignKeyName: "fortnight_details_policy_id_fkey"
@@ -4430,6 +5057,48 @@ export type Database = {
           subject_normalized?: string | null
           thread_references?: string | null
           to_emails?: Json | null
+        }
+        Relationships: []
+      }
+      insurance_companies: {
+        Row: {
+          active: boolean
+          code: string | null
+          created_at: string
+          customer_service_phone: string | null
+          emergency_phone: string | null
+          id: string
+          metadata: Json | null
+          name: string
+          updated_at: string
+          website: string | null
+          whatsapp_number: string | null
+        }
+        Insert: {
+          active?: boolean
+          code?: string | null
+          created_at?: string
+          customer_service_phone?: string | null
+          emergency_phone?: string | null
+          id?: string
+          metadata?: Json | null
+          name: string
+          updated_at?: string
+          website?: string | null
+          whatsapp_number?: string | null
+        }
+        Update: {
+          active?: boolean
+          code?: string | null
+          created_at?: string
+          customer_service_phone?: string | null
+          emergency_phone?: string | null
+          id?: string
+          metadata?: Json | null
+          name?: string
+          updated_at?: string
+          website?: string | null
+          whatsapp_number?: string | null
         }
         Relationships: []
       }
@@ -4998,6 +5667,963 @@ export type Database = {
           },
         ]
       }
+      ops_activity_log: {
+        Row: {
+          action_type: string
+          created_at: string | null
+          entity_id: string | null
+          entity_type: string | null
+          id: string
+          metadata: Json | null
+          session_block_id: string | null
+          user_id: string
+        }
+        Insert: {
+          action_type: string
+          created_at?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          metadata?: Json | null
+          session_block_id?: string | null
+          user_id: string
+        }
+        Update: {
+          action_type?: string
+          created_at?: string | null
+          entity_id?: string | null
+          entity_type?: string | null
+          id?: string
+          metadata?: Json | null
+          session_block_id?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      ops_ai_evaluations: {
+        Row: {
+          case_id: string | null
+          created_at: string
+          effectiveness_score: number
+          escalation_recommended: boolean
+          evaluated_at: string
+          evaluator_version: string
+          evidence: Json | null
+          final_sentiment_label: string
+          final_sentiment_score: number
+          id: string
+          rationale: string | null
+          source_id: string | null
+          source_type: string
+          unresolved_signals: Json | null
+        }
+        Insert: {
+          case_id?: string | null
+          created_at?: string
+          effectiveness_score?: number
+          escalation_recommended?: boolean
+          evaluated_at?: string
+          evaluator_version?: string
+          evidence?: Json | null
+          final_sentiment_label?: string
+          final_sentiment_score?: number
+          id?: string
+          rationale?: string | null
+          source_id?: string | null
+          source_type?: string
+          unresolved_signals?: Json | null
+        }
+        Update: {
+          case_id?: string | null
+          created_at?: string
+          effectiveness_score?: number
+          escalation_recommended?: boolean
+          evaluated_at?: string
+          evaluator_version?: string
+          evidence?: Json | null
+          final_sentiment_label?: string
+          final_sentiment_score?: number
+          id?: string
+          rationale?: string | null
+          source_id?: string | null
+          source_type?: string
+          unresolved_signals?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ops_ai_evaluations_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "ops_cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ops_ai_memory_items: {
+        Row: {
+          confidence: number
+          content: string
+          created_at: string
+          created_by: string
+          domain: string
+          id: string
+          last_used_at: string | null
+          metadata: Json | null
+          tags: string[] | null
+          title: string
+        }
+        Insert: {
+          confidence?: number
+          content: string
+          created_at?: string
+          created_by?: string
+          domain?: string
+          id?: string
+          last_used_at?: string | null
+          metadata?: Json | null
+          tags?: string[] | null
+          title: string
+        }
+        Update: {
+          confidence?: number
+          content?: string
+          created_at?: string
+          created_by?: string
+          domain?: string
+          id?: string
+          last_used_at?: string | null
+          metadata?: Json | null
+          tags?: string[] | null
+          title?: string
+        }
+        Relationships: []
+      }
+      ops_ai_training_events: {
+        Row: {
+          case_id: string | null
+          created_at: string
+          error: string | null
+          event_type: string
+          id: string
+          model_name: string | null
+          model_provider: string | null
+          payload: Json | null
+          success: boolean
+        }
+        Insert: {
+          case_id?: string | null
+          created_at?: string
+          error?: string | null
+          event_type: string
+          id?: string
+          model_name?: string | null
+          model_provider?: string | null
+          payload?: Json | null
+          success?: boolean
+        }
+        Update: {
+          case_id?: string | null
+          created_at?: string
+          error?: string | null
+          event_type?: string
+          id?: string
+          model_name?: string | null
+          model_provider?: string | null
+          payload?: Json | null
+          success?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ops_ai_training_events_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "ops_cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ops_audit_log: {
+        Row: {
+          after_data: Json | null
+          before_data: Json | null
+          created_at: string | null
+          detail: Json | null
+          entity_id: string | null
+          entity_type: string | null
+          event_type: string
+          id: string
+          user_id: string | null
+        }
+        Insert: {
+          after_data?: Json | null
+          before_data?: Json | null
+          created_at?: string | null
+          detail?: Json | null
+          entity_id?: string | null
+          entity_type?: string | null
+          event_type: string
+          id?: string
+          user_id?: string | null
+        }
+        Update: {
+          after_data?: Json | null
+          before_data?: Json | null
+          created_at?: string | null
+          detail?: Json | null
+          entity_id?: string | null
+          entity_type?: string | null
+          event_type?: string
+          id?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      ops_case_history: {
+        Row: {
+          after_state: Json | null
+          before_state: Json | null
+          case_id: string
+          change_type: string
+          changed_by: string | null
+          created_at: string | null
+          id: string
+          related_message_id: string | null
+        }
+        Insert: {
+          after_state?: Json | null
+          before_state?: Json | null
+          case_id: string
+          change_type: string
+          changed_by?: string | null
+          created_at?: string | null
+          id?: string
+          related_message_id?: string | null
+        }
+        Update: {
+          after_state?: Json | null
+          before_state?: Json | null
+          case_id?: string
+          change_type?: string
+          changed_by?: string | null
+          created_at?: string | null
+          id?: string
+          related_message_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ops_case_history_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "ops_cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ops_case_messages: {
+        Row: {
+          body_html: string | null
+          body_text: string | null
+          case_id: string | null
+          created_at: string
+          direction: Database["public"]["Enums"]["ops_message_direction"]
+          from_email: string
+          id: string
+          in_reply_to: string | null
+          message_id: string
+          metadata: Json | null
+          provider: Database["public"]["Enums"]["ops_message_provider"]
+          received_at: string
+          references: string | null
+          subject: string
+          to_emails: string[] | null
+          unclassified: boolean
+        }
+        Insert: {
+          body_html?: string | null
+          body_text?: string | null
+          case_id?: string | null
+          created_at?: string
+          direction: Database["public"]["Enums"]["ops_message_direction"]
+          from_email: string
+          id?: string
+          in_reply_to?: string | null
+          message_id: string
+          metadata?: Json | null
+          provider: Database["public"]["Enums"]["ops_message_provider"]
+          received_at: string
+          references?: string | null
+          subject?: string
+          to_emails?: string[] | null
+          unclassified?: boolean
+        }
+        Update: {
+          body_html?: string | null
+          body_text?: string | null
+          case_id?: string | null
+          created_at?: string
+          direction?: Database["public"]["Enums"]["ops_message_direction"]
+          from_email?: string
+          id?: string
+          in_reply_to?: string | null
+          message_id?: string
+          metadata?: Json | null
+          provider?: Database["public"]["Enums"]["ops_message_provider"]
+          received_at?: string
+          references?: string | null
+          subject?: string
+          to_emails?: string[] | null
+          unclassified?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ops_case_messages_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "ops_cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ops_cases: {
+        Row: {
+          aplazado_until: string | null
+          assigned_master_id: string | null
+          cancellation_reason: string | null
+          case_type: Database["public"]["Enums"]["ops_case_type_enum"]
+          category: string | null
+          cedula: string | null
+          chat_thread_id: string | null
+          client_email: string | null
+          client_id: string | null
+          client_name: string | null
+          client_phone: string | null
+          closed_at: string | null
+          created_at: string | null
+          details: Json | null
+          first_response_at: string | null
+          id: string
+          insurer_name: string | null
+          last_email_summary: string | null
+          new_end_date: string | null
+          new_start_date: string | null
+          policy_id: string | null
+          policy_number: string | null
+          ramo: string | null
+          renewal_date: string | null
+          severity: string | null
+          sla_breached: boolean | null
+          source: string | null
+          status: Database["public"]["Enums"]["ops_case_status_enum"]
+          ticket: string
+          updated_at: string | null
+          urgency_flag: boolean | null
+        }
+        Insert: {
+          aplazado_until?: string | null
+          assigned_master_id?: string | null
+          cancellation_reason?: string | null
+          case_type: Database["public"]["Enums"]["ops_case_type_enum"]
+          category?: string | null
+          cedula?: string | null
+          chat_thread_id?: string | null
+          client_email?: string | null
+          client_id?: string | null
+          client_name?: string | null
+          client_phone?: string | null
+          closed_at?: string | null
+          created_at?: string | null
+          details?: Json | null
+          first_response_at?: string | null
+          id?: string
+          insurer_name?: string | null
+          last_email_summary?: string | null
+          new_end_date?: string | null
+          new_start_date?: string | null
+          policy_id?: string | null
+          policy_number?: string | null
+          ramo?: string | null
+          renewal_date?: string | null
+          severity?: string | null
+          sla_breached?: boolean | null
+          source?: string | null
+          status?: Database["public"]["Enums"]["ops_case_status_enum"]
+          ticket: string
+          updated_at?: string | null
+          urgency_flag?: boolean | null
+        }
+        Update: {
+          aplazado_until?: string | null
+          assigned_master_id?: string | null
+          cancellation_reason?: string | null
+          case_type?: Database["public"]["Enums"]["ops_case_type_enum"]
+          category?: string | null
+          cedula?: string | null
+          chat_thread_id?: string | null
+          client_email?: string | null
+          client_id?: string | null
+          client_name?: string | null
+          client_phone?: string | null
+          closed_at?: string | null
+          created_at?: string | null
+          details?: Json | null
+          first_response_at?: string | null
+          id?: string
+          insurer_name?: string | null
+          last_email_summary?: string | null
+          new_end_date?: string | null
+          new_start_date?: string | null
+          policy_id?: string | null
+          policy_number?: string | null
+          ramo?: string | null
+          renewal_date?: string | null
+          severity?: string | null
+          sla_breached?: boolean | null
+          source?: string | null
+          status?: Database["public"]["Enums"]["ops_case_status_enum"]
+          ticket?: string
+          updated_at?: string | null
+          urgency_flag?: boolean | null
+        }
+        Relationships: []
+      }
+      ops_config: {
+        Row: {
+          description: string | null
+          id: string
+          key: string
+          updated_at: string | null
+          updated_by: string | null
+          value: Json
+        }
+        Insert: {
+          description?: string | null
+          id?: string
+          key: string
+          updated_at?: string | null
+          updated_by?: string | null
+          value?: Json
+        }
+        Update: {
+          description?: string | null
+          id?: string
+          key?: string
+          updated_at?: string | null
+          updated_by?: string | null
+          value?: Json
+        }
+        Relationships: []
+      }
+      ops_cron_locks: {
+        Row: {
+          job_name: string
+          locked_at: string | null
+          locked_by: string | null
+        }
+        Insert: {
+          job_name: string
+          locked_at?: string | null
+          locked_by?: string | null
+        }
+        Update: {
+          job_name?: string
+          locked_at?: string | null
+          locked_by?: string | null
+        }
+        Relationships: []
+      }
+      ops_email_messages: {
+        Row: {
+          body_html: string | null
+          body_text: string | null
+          created_at: string | null
+          direction: string
+          from_email: string
+          has_attachments: boolean | null
+          id: string
+          in_reply_to: string | null
+          message_id_header: string | null
+          subject: string | null
+          thread_id: string
+          to_email: string
+        }
+        Insert: {
+          body_html?: string | null
+          body_text?: string | null
+          created_at?: string | null
+          direction: string
+          from_email: string
+          has_attachments?: boolean | null
+          id?: string
+          in_reply_to?: string | null
+          message_id_header?: string | null
+          subject?: string | null
+          thread_id: string
+          to_email: string
+        }
+        Update: {
+          body_html?: string | null
+          body_text?: string | null
+          created_at?: string | null
+          direction?: string
+          from_email?: string
+          has_attachments?: boolean | null
+          id?: string
+          in_reply_to?: string | null
+          message_id_header?: string | null
+          subject?: string | null
+          thread_id?: string
+          to_email?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ops_email_messages_thread_id_fkey"
+            columns: ["thread_id"]
+            isOneToOne: false
+            referencedRelation: "ops_email_threads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ops_email_templates: {
+        Row: {
+          body_html: string
+          body_text: string
+          id: string
+          label: string
+          merge_vars: string[] | null
+          subject: string
+          template_key: string
+          updated_at: string | null
+          updated_by: string | null
+        }
+        Insert: {
+          body_html?: string
+          body_text?: string
+          id?: string
+          label: string
+          merge_vars?: string[] | null
+          subject?: string
+          template_key: string
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Update: {
+          body_html?: string
+          body_text?: string
+          id?: string
+          label?: string
+          merge_vars?: string[] | null
+          subject?: string
+          template_key?: string
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      ops_email_threads: {
+        Row: {
+          created_at: string | null
+          from_email: string | null
+          id: string
+          last_message_at: string | null
+          status: string
+          subject: string
+          ticket_id: string | null
+          ticket_type: string | null
+          to_email: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          from_email?: string | null
+          id?: string
+          last_message_at?: string | null
+          status?: string
+          subject: string
+          ticket_id?: string | null
+          ticket_type?: string | null
+          to_email?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          from_email?: string | null
+          id?: string
+          last_message_at?: string | null
+          status?: string
+          subject?: string
+          ticket_id?: string | null
+          ticket_type?: string | null
+          to_email?: string | null
+        }
+        Relationships: []
+      }
+      ops_metrics_daily: {
+        Row: {
+          cases_handled: number | null
+          conversions_count: number | null
+          date: string
+          emissions_confirmed: number | null
+          hours_worked: number | null
+          id: string
+          low_productivity: boolean | null
+          petitions_handled: number | null
+          productivity_score: number | null
+          renewals_handled: number | null
+          sla_breaches: number | null
+          unresolved_cases: number | null
+          urgencies_effectiveness_avg: number | null
+          urgencies_handled: number | null
+          urgencies_negative_outcomes: number | null
+          user_id: string
+        }
+        Insert: {
+          cases_handled?: number | null
+          conversions_count?: number | null
+          date: string
+          emissions_confirmed?: number | null
+          hours_worked?: number | null
+          id?: string
+          low_productivity?: boolean | null
+          petitions_handled?: number | null
+          productivity_score?: number | null
+          renewals_handled?: number | null
+          sla_breaches?: number | null
+          unresolved_cases?: number | null
+          urgencies_effectiveness_avg?: number | null
+          urgencies_handled?: number | null
+          urgencies_negative_outcomes?: number | null
+          user_id: string
+        }
+        Update: {
+          cases_handled?: number | null
+          conversions_count?: number | null
+          date?: string
+          emissions_confirmed?: number | null
+          hours_worked?: number | null
+          id?: string
+          low_productivity?: boolean | null
+          petitions_handled?: number | null
+          productivity_score?: number | null
+          renewals_handled?: number | null
+          sla_breaches?: number | null
+          unresolved_cases?: number | null
+          urgencies_effectiveness_avg?: number | null
+          urgencies_handled?: number | null
+          urgencies_negative_outcomes?: number | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      ops_notes: {
+        Row: {
+          case_id: string | null
+          created_at: string
+          id: string
+          note: string
+          note_type: string
+          user_id: string | null
+        }
+        Insert: {
+          case_id?: string | null
+          created_at?: string
+          id?: string
+          note: string
+          note_type?: string
+          user_id?: string | null
+        }
+        Update: {
+          case_id?: string | null
+          created_at?: string
+          id?: string
+          note?: string
+          note_type?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ops_notes_case_id_fkey"
+            columns: ["case_id"]
+            isOneToOne: false
+            referencedRelation: "ops_cases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ops_petitions: {
+        Row: {
+          assigned_to: string | null
+          cedula: string | null
+          client_email: string | null
+          client_name: string
+          client_phone: string | null
+          created_at: string | null
+          details: Json | null
+          id: string
+          ramo: string
+          source: string | null
+          status: string
+          ticket_number: string
+          updated_at: string | null
+        }
+        Insert: {
+          assigned_to?: string | null
+          cedula?: string | null
+          client_email?: string | null
+          client_name: string
+          client_phone?: string | null
+          created_at?: string | null
+          details?: Json | null
+          id?: string
+          ramo: string
+          source?: string | null
+          status?: string
+          ticket_number: string
+          updated_at?: string | null
+        }
+        Update: {
+          assigned_to?: string | null
+          cedula?: string | null
+          client_email?: string | null
+          client_name?: string
+          client_phone?: string | null
+          created_at?: string | null
+          details?: Json | null
+          id?: string
+          ramo?: string
+          source?: string | null
+          status?: string
+          ticket_number?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      ops_productivity_flags: {
+        Row: {
+          actual_cases: number | null
+          date: string
+          id: string
+          low_productivity: boolean | null
+          monthly_avg_cases: number | null
+          note: string | null
+          threshold_pct: number | null
+          user_id: string
+        }
+        Insert: {
+          actual_cases?: number | null
+          date: string
+          id?: string
+          low_productivity?: boolean | null
+          monthly_avg_cases?: number | null
+          note?: string | null
+          threshold_pct?: number | null
+          user_id: string
+        }
+        Update: {
+          actual_cases?: number | null
+          date?: string
+          id?: string
+          low_productivity?: boolean | null
+          monthly_avg_cases?: number | null
+          note?: string | null
+          threshold_pct?: number | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      ops_renewals: {
+        Row: {
+          assigned_to: string | null
+          cancellation_reason: string | null
+          client_id: string | null
+          client_name: string
+          created_at: string | null
+          id: string
+          insurer_id: string | null
+          insurer_name: string | null
+          last_email_summary: string | null
+          new_end_date: string | null
+          new_start_date: string | null
+          policy_id: string | null
+          policy_number: string
+          postponed_date: string | null
+          renewal_date: string
+          status: string
+          ticket_number: string
+          updated_at: string | null
+        }
+        Insert: {
+          assigned_to?: string | null
+          cancellation_reason?: string | null
+          client_id?: string | null
+          client_name: string
+          created_at?: string | null
+          id?: string
+          insurer_id?: string | null
+          insurer_name?: string | null
+          last_email_summary?: string | null
+          new_end_date?: string | null
+          new_start_date?: string | null
+          policy_id?: string | null
+          policy_number: string
+          postponed_date?: string | null
+          renewal_date: string
+          status?: string
+          ticket_number: string
+          updated_at?: string | null
+        }
+        Update: {
+          assigned_to?: string | null
+          cancellation_reason?: string | null
+          client_id?: string | null
+          client_name?: string
+          created_at?: string | null
+          id?: string
+          insurer_id?: string | null
+          insurer_name?: string | null
+          last_email_summary?: string | null
+          new_end_date?: string | null
+          new_start_date?: string | null
+          policy_id?: string | null
+          policy_number?: string
+          postponed_date?: string | null
+          renewal_date?: string
+          status?: string
+          ticket_number?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      ops_team_metrics: {
+        Row: {
+          avg_daily_hours: number | null
+          conversion_rate: number | null
+          created_at: string | null
+          emissions_made: number | null
+          id: string
+          period_end: string
+          period_start: string
+          period_type: string
+          quotes_made: number | null
+          renewals_handled: number | null
+          total_hours: number | null
+          unattended_cases: number | null
+          unproductive_days: number | null
+          urgencies_handled: number | null
+          urgency_effectiveness: number | null
+          user_id: string
+          user_name: string | null
+        }
+        Insert: {
+          avg_daily_hours?: number | null
+          conversion_rate?: number | null
+          created_at?: string | null
+          emissions_made?: number | null
+          id?: string
+          period_end: string
+          period_start: string
+          period_type: string
+          quotes_made?: number | null
+          renewals_handled?: number | null
+          total_hours?: number | null
+          unattended_cases?: number | null
+          unproductive_days?: number | null
+          urgencies_handled?: number | null
+          urgency_effectiveness?: number | null
+          user_id: string
+          user_name?: string | null
+        }
+        Update: {
+          avg_daily_hours?: number | null
+          conversion_rate?: number | null
+          created_at?: string | null
+          emissions_made?: number | null
+          id?: string
+          period_end?: string
+          period_start?: string
+          period_type?: string
+          quotes_made?: number | null
+          renewals_handled?: number | null
+          total_hours?: number | null
+          unattended_cases?: number | null
+          unproductive_days?: number | null
+          urgencies_handled?: number | null
+          urgency_effectiveness?: number | null
+          user_id?: string
+          user_name?: string | null
+        }
+        Relationships: []
+      }
+      ops_urgencies: {
+        Row: {
+          assigned_to: string | null
+          category: string | null
+          chat_thread_id: string | null
+          client_name: string | null
+          created_at: string | null
+          first_response_at: string | null
+          id: string
+          resolution_sentiment: string | null
+          severity: string
+          sla_deadline: string | null
+          status: string
+          updated_at: string | null
+        }
+        Insert: {
+          assigned_to?: string | null
+          category?: string | null
+          chat_thread_id?: string | null
+          client_name?: string | null
+          created_at?: string | null
+          first_response_at?: string | null
+          id?: string
+          resolution_sentiment?: string | null
+          severity?: string
+          sla_deadline?: string | null
+          status?: string
+          updated_at?: string | null
+        }
+        Update: {
+          assigned_to?: string | null
+          category?: string | null
+          chat_thread_id?: string | null
+          client_name?: string | null
+          created_at?: string | null
+          first_response_at?: string | null
+          id?: string
+          resolution_sentiment?: string | null
+          severity?: string
+          sla_deadline?: string | null
+          status?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      ops_user_sessions: {
+        Row: {
+          block_id: string | null
+          duration_minutes: number | null
+          id: string
+          session_end: string | null
+          session_start: string
+          user_id: string
+        }
+        Insert: {
+          block_id?: string | null
+          duration_minutes?: number | null
+          id?: string
+          session_end?: string | null
+          session_start?: string
+          user_id: string
+        }
+        Update: {
+          block_id?: string | null
+          duration_minutes?: number | null
+          id?: string
+          session_end?: string | null
+          session_start?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       payment_details: {
         Row: {
           amount_used: number
@@ -5354,6 +6980,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "policies_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "ops_morosidad_view"
+            referencedColumns: ["client_id"]
+          },
+          {
             foreignKeyName: "policies_insurer_id_fkey"
             columns: ["insurer_id"]
             isOneToOne: false
@@ -5415,6 +7048,50 @@ export type Database = {
             columns: ["linked_download_section"]
             isOneToOne: false
             referencedRelation: "download_sections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      portal_notifications: {
+        Row: {
+          body: string | null
+          created_at: string | null
+          id: string
+          link: string | null
+          read_at: string | null
+          target_role: string | null
+          target_user_id: string | null
+          title: string
+          type: string
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string | null
+          id?: string
+          link?: string | null
+          read_at?: string | null
+          target_role?: string | null
+          target_user_id?: string | null
+          title: string
+          type: string
+        }
+        Update: {
+          body?: string | null
+          created_at?: string | null
+          id?: string
+          link?: string | null
+          read_at?: string | null
+          target_role?: string | null
+          target_user_id?: string | null
+          title?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "portal_notifications_target_user_id_fkey"
+            columns: ["target_user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -5898,11 +7575,25 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "temp_client_import_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "ops_morosidad_view"
+            referencedColumns: ["client_id"]
+          },
+          {
             foreignKeyName: "temp_client_import_insurer_id_fkey"
             columns: ["insurer_id"]
             isOneToOne: false
             referencedRelation: "insurers"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "temp_client_import_policy_id_fkey"
+            columns: ["policy_id"]
+            isOneToOne: false
+            referencedRelation: "ops_morosidad_view"
+            referencedColumns: ["policy_id"]
           },
           {
             foreignKeyName: "temp_client_import_policy_id_fkey"
@@ -6834,6 +8525,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "cases_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "ops_morosidad_view"
+            referencedColumns: ["client_id"]
+          },
+          {
             foreignKeyName: "cases_created_by_fkey"
             columns: ["created_by"]
             isOneToOne: false
@@ -6846,6 +8544,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "insurers"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cases_policy_id_fkey"
+            columns: ["policy_id"]
+            isOneToOne: false
+            referencedRelation: "ops_morosidad_view"
+            referencedColumns: ["policy_id"]
           },
           {
             foreignKeyName: "cases_policy_id_fkey"
@@ -6944,6 +8649,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "fortnight_details_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "ops_morosidad_view"
+            referencedColumns: ["client_id"]
+          },
+          {
             foreignKeyName: "fortnight_details_fortnight_id_fkey"
             columns: ["fortnight_id"]
             isOneToOne: false
@@ -6961,6 +8673,13 @@ export type Database = {
             foreignKeyName: "fortnight_details_policy_id_fkey"
             columns: ["policy_id"]
             isOneToOne: false
+            referencedRelation: "ops_morosidad_view"
+            referencedColumns: ["policy_id"]
+          },
+          {
+            foreignKeyName: "fortnight_details_policy_id_fkey"
+            columns: ["policy_id"]
+            isOneToOne: false
             referencedRelation: "policies"
             referencedColumns: ["id"]
           },
@@ -6972,6 +8691,36 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      ops_morosidad_view: {
+        Row: {
+          cedula: string | null
+          client_email: string | null
+          client_id: string | null
+          client_name: string | null
+          client_phone: string | null
+          days_overdue: number | null
+          installment_amount: number | null
+          insurer_name: string | null
+          is_recurring: boolean | null
+          morosidad_status: string | null
+          next_due_date: string | null
+          payment_amount: number | null
+          payment_date: string | null
+          payment_id: string | null
+          payment_status: string | null
+          policy_id: string | null
+          policy_number: string | null
+          policy_status:
+            | Database["public"]["Enums"]["policy_status_enum"]
+            | null
+          ramo: string | null
+          recurrence_id: string | null
+          recurrence_status: string | null
+          renewal_date: string | null
+          total_installments: number | null
+        }
+        Relationships: []
       }
       v_claims_full: {
         Row: {
@@ -7079,6 +8828,19 @@ export type Database = {
     }
     Functions: {
       _rnd_money: { Args: { hi: number; lo: number }; Returns: number }
+      adm_cot_confirm_group: {
+        Args: {
+          p_group_id: string
+          p_items: Json
+          p_references: Json
+          p_user_id: string
+        }
+        Returns: Json
+      }
+      adm_cot_post_group: {
+        Args: { p_group_id: string; p_user_id: string }
+        Returns: Json
+      }
       app_broker_id: { Args: never; Returns: string }
       approve_claims_and_create_preliminary: {
         Args: {
@@ -7092,6 +8854,7 @@ export type Database = {
           success: boolean
         }[]
       }
+      assign_case_equilibrado: { Args: { p_case_id: string }; Returns: string }
       assign_pending_to_office_after_3m: { Args: never; Returns: number }
       auto_trash_expired_cases: { Args: never; Returns: number }
       bulk_import_clients_policies: {
@@ -7108,6 +8871,10 @@ export type Database = {
       }
       calculate_bank_group_total: {
         Args: { p_group_id: string }
+        Returns: number
+      }
+      calculate_business_hours: {
+        Args: { p_end: string; p_start: string }
         Returns: number
       }
       calculate_effective_sla_date: {
@@ -7306,6 +9073,46 @@ export type Database = {
         Returns: undefined
       }
       normalize_name: { Args: { text_input: string }; Returns: string }
+      ops_acquire_cron_lock: {
+        Args: { p_cooldown_seconds?: number; p_job_name: string }
+        Returns: boolean
+      }
+      ops_aggregate_daily_metrics: {
+        Args: { p_date?: string }
+        Returns: number
+      }
+      ops_check_sla: {
+        Args: never
+        Returns: {
+          case_id: string
+          case_type: Database["public"]["Enums"]["ops_case_type_enum"]
+          hours_elapsed: number
+        }[]
+      }
+      ops_close_session_block: {
+        Args: { p_block_id: string; p_user_id: string }
+        Returns: boolean
+      }
+      ops_detect_low_productivity: {
+        Args: { p_date?: string }
+        Returns: number
+      }
+      ops_mark_first_response: {
+        Args: { p_case_id: string; p_user_id: string }
+        Returns: boolean
+      }
+      ops_release_cron_lock: {
+        Args: { p_job_name: string }
+        Returns: undefined
+      }
+      ops_start_session_block: {
+        Args: { p_block_id: string; p_user_id: string }
+        Returns: string
+      }
+      ops_update_conversion_rate: {
+        Args: { p_date?: string; p_user_id: string }
+        Returns: number
+      }
       pause_case_sla: { Args: { p_case_id: string }; Returns: undefined }
       profile_sync_from_auth: {
         Args: { p_user_id: string }
@@ -7464,6 +9271,26 @@ export type Database = {
         | "other"
         | "carnet_renewal"
         | "agenda_event"
+      ops_case_status_enum:
+        | "pendiente"
+        | "en_revision"
+        | "aplazado"
+        | "cerrado_renovado"
+        | "cerrado_cancelado"
+        | "en_gestion"
+        | "enviado"
+        | "cerrado"
+        | "perdido"
+        | "en_atencion"
+        | "resuelto"
+      ops_case_type_enum: "renovacion" | "peticion" | "urgencia"
+      ops_message_direction: "inbound" | "outbound"
+      ops_message_provider: "zoho_imap" | "zepto"
+      ops_morosidad_status_enum:
+        | "al_dia"
+        | "atrasado"
+        | "pago_recibido"
+        | "cancelado"
       policy_status_enum: "ACTIVA" | "CANCELADA" | "VENCIDA"
       policy_type_enum:
         | "AUTO"
@@ -7674,6 +9501,28 @@ export const Constants = {
         "other",
         "carnet_renewal",
         "agenda_event",
+      ],
+      ops_case_status_enum: [
+        "pendiente",
+        "en_revision",
+        "aplazado",
+        "cerrado_renovado",
+        "cerrado_cancelado",
+        "en_gestion",
+        "enviado",
+        "cerrado",
+        "perdido",
+        "en_atencion",
+        "resuelto",
+      ],
+      ops_case_type_enum: ["renovacion", "peticion", "urgencia"],
+      ops_message_direction: ["inbound", "outbound"],
+      ops_message_provider: ["zoho_imap", "zepto"],
+      ops_morosidad_status_enum: [
+        "al_dia",
+        "atrasado",
+        "pago_recibido",
+        "cancelado",
       ],
       policy_status_enum: ["ACTIVA", "CANCELADA", "VENCIDA"],
       policy_type_enum: [

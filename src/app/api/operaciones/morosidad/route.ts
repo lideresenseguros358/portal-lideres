@@ -202,19 +202,21 @@ ${mergedBody.replace(/\n/g, '<br/>')}
           if (result.success) {
             sent++;
             // Log each send
-            await supabase.from('ops_activity_log').insert({
-              user_id: userId,
-              action_type: 'status_change',
-              entity_type: 'policy',
-              entity_id: row.policy_id,
-              metadata: {
-                action: 'morosidad_email_sent',
-                client_email: row.client_email,
-                policy_number: row.policy_number,
-                monto: row.payment_amount || row.installment_amount,
-                zepto_message_id: result.messageId,
-              },
-            }).catch(() => {});
+            try {
+              await supabase.from('ops_activity_log').insert({
+                user_id: userId,
+                action_type: 'status_change',
+                entity_type: 'policy',
+                entity_id: row.policy_id,
+                metadata: {
+                  action: 'morosidad_email_sent',
+                  client_email: row.client_email,
+                  policy_number: row.policy_number,
+                  monto: row.payment_amount || row.installment_amount,
+                  zepto_message_id: result.messageId,
+                },
+              });
+            } catch { /* non-fatal */ }
           } else {
             failed++;
             errors.push(`${row.policy_number}: ${result.error}`);
@@ -256,13 +258,15 @@ ${mergedBody.replace(/\n/g, '<br/>')}
         });
         if (error) throw error;
 
-        await supabase.from('ops_activity_log').insert({
-          user_id: userId,
-          action_type: 'status_change',
-          entity_type: 'policy',
-          entity_id: policy_id,
-          metadata: { action: 'morosidad_note_added', note_type: note_type || 'morosidad' },
-        }).catch(() => {});
+        try {
+          await supabase.from('ops_activity_log').insert({
+            user_id: userId,
+            action_type: 'status_change',
+            entity_type: 'policy',
+            entity_id: policy_id,
+            metadata: { action: 'morosidad_note_added', note_type: note_type || 'morosidad' },
+          });
+        } catch { /* non-fatal */ }
 
         return NextResponse.json({ success: true });
       }
@@ -272,20 +276,24 @@ ${mergedBody.replace(/\n/g, '<br/>')}
         const { policy_id } = body;
 
         // Add a note marking follow-up
-        await supabase.from('ops_notes').insert({
-          case_id: policy_id,
-          user_id: userId,
-          note: 'Marcado en seguimiento por master.',
-          note_type: 'seguimiento',
-        }).catch(() => {});
+        try {
+          await supabase.from('ops_notes').insert({
+            case_id: policy_id,
+            user_id: userId,
+            note: 'Marcado en seguimiento por master.',
+            note_type: 'seguimiento',
+          });
+        } catch { /* non-fatal */ }
 
-        await supabase.from('ops_activity_log').insert({
-          user_id: userId,
-          action_type: 'status_change',
-          entity_type: 'policy',
-          entity_id: policy_id,
-          metadata: { action: 'morosidad_follow_up' },
-        }).catch(() => {});
+        try {
+          await supabase.from('ops_activity_log').insert({
+            user_id: userId,
+            action_type: 'status_change',
+            entity_type: 'policy',
+            entity_id: policy_id,
+            metadata: { action: 'morosidad_follow_up' },
+          });
+        } catch { /* non-fatal */ }
 
         return NextResponse.json({ success: true });
       }
@@ -310,14 +318,16 @@ ${mergedBody.replace(/\n/g, '<br/>')}
             .limit(1);
 
           if (!recent || recent.length === 0) {
-            await supabase.from('portal_notifications').insert({
-              type: 'chat_urgent',
-              title: `🔴 Morosidad crítica: ${row.client_name || row.policy_number}`,
-              body: `Póliza ${row.policy_number} con ${row.days_overdue} días de atraso.`,
-              link: `/operaciones/morosidad?policy=${row.policy_id}`,
-              target_role: 'master',
-              target_user_id: null,
-            }).catch(() => {});
+            try {
+              await supabase.from('portal_notifications').insert({
+                type: 'chat_urgent',
+                title: `🔴 Morosidad crítica: ${row.client_name || row.policy_number}`,
+                body: `Póliza ${row.policy_number} con ${row.days_overdue} días de atraso.`,
+                link: `/operaciones/morosidad?policy=${row.policy_id}`,
+                target_role: 'master',
+                target_user_id: null,
+              });
+            } catch { /* non-fatal */ }
             notified++;
           }
         }

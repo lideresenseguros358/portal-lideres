@@ -145,14 +145,16 @@ export async function POST(request: Request) {
         .limit(1);
 
       if (!recent || recent.length === 0) {
-        await supabase.from('portal_notifications').insert({
-          type: 'chat_urgent',
-          title: `🔴 Morosidad crítica: ${row.client_name || row.policy_number}`,
-          body: `Póliza ${row.policy_number} con ${row.days_overdue} días de atraso.`,
-          link: `/operaciones/morosidad?policy=${row.policy_id}`,
-          target_role: 'master',
-          target_user_id: null,
-        }).catch(() => {});
+        try {
+          await supabase.from('portal_notifications').insert({
+            type: 'chat_urgent',
+            title: `🔴 Morosidad crítica: ${row.client_name || row.policy_number}`,
+            body: `Póliza ${row.policy_number} con ${row.days_overdue} días de atraso.`,
+            link: `/operaciones/morosidad?policy=${row.policy_id}`,
+            target_role: 'master',
+            target_user_id: null,
+          });
+        } catch { /* non-fatal */ }
         morosidad30dayNotified++;
       }
     }
@@ -220,7 +222,7 @@ export async function POST(request: Request) {
     // Try to fail the cron run if ctx exists
     try {
       const supabase = getSupabaseAdmin() as any;
-      await supabase.rpc('ops_release_cron_lock', { p_job_name: JOB_NAME }).catch(() => {});
+      try { await supabase.rpc('ops_release_cron_lock', { p_job_name: JOB_NAME }); } catch { /* ignore */ }
     } catch { /* */ }
     return NextResponse.json({
       error: 'Internal server error',

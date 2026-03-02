@@ -418,19 +418,21 @@ export async function POST(req: NextRequest) {
       const buffer = await wb.xlsx.writeBuffer();
 
       // Log export
-      await supabase.from('ops_activity_log').insert({
-        user_id: userId,
-        action_type: 'status_change',
-        entity_type: 'config',
-        entity_id: 'audit_export',
-        metadata: {
-          action: 'audit_export_xlsx',
-          from, to,
-          rows: feedRows.length,
-          scope,
-          case_id: filterCaseId || null,
-        },
-      }).catch(() => {});
+      try {
+        await supabase.from('ops_activity_log').insert({
+          user_id: userId,
+          action_type: 'status_change',
+          entity_type: 'config',
+          entity_id: 'audit_export',
+          metadata: {
+            action: 'audit_export_xlsx',
+            from, to,
+            rows: feedRows.length,
+            scope,
+            case_id: filterCaseId || null,
+          },
+        });
+      } catch { /* non-fatal */ }
 
       return new NextResponse(buffer as ArrayBuffer, {
         status: 200,
@@ -544,18 +546,20 @@ ${criticalEvents.map(e => `<tr><td>${e.ts}</td><td class="critical">${e.label}</
 </html>`;
 
       // Log export
-      await supabase.from('ops_activity_log').insert({
-        user_id: userId,
-        action_type: 'status_change',
-        entity_type: 'config',
-        entity_id: 'audit_export',
-        metadata: {
-          action: 'audit_export_pdf',
-          from, to,
-          scope,
-          case_id: filterCaseId || null,
-        },
-      }).catch(() => {});
+      try {
+        await supabase.from('ops_activity_log').insert({
+          user_id: userId,
+          action_type: 'status_change',
+          entity_type: 'config',
+          entity_id: 'audit_export',
+          metadata: {
+            action: 'audit_export_pdf',
+            from, to,
+            scope,
+            case_id: filterCaseId || null,
+          },
+        });
+      } catch { /* non-fatal */ }
 
       // Return as downloadable HTML report (print-ready)
       return new NextResponse(html, {

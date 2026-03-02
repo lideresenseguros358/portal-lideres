@@ -227,14 +227,18 @@ async function downloadClientSummaryPdf(q: AdmCotQuote) {
     margin: { left: margin, right: margin },
     head: [['Aseguradora', 'Plan', 'Cobertura', 'Prima Anual', 'Estado', '']],
     body: tableBody,
-    styles: { fontSize: 7.5, cellPadding: 2.5 },
-    headStyles: { fillColor: [1, 1, 57], textColor: 255, fontSize: 8 },
+    styles: { fontSize: 7, cellPadding: 2, overflow: 'linebreak' },
+    headStyles: { fillColor: [1, 1, 57], textColor: 255, fontSize: 7.5 },
     alternateRowStyles: { fillColor: [248, 248, 248] },
     columnStyles: {
-      0: { fontStyle: 'bold', cellWidth: 32 },
-      3: { halign: 'right', fontStyle: 'bold' },
-      5: { textColor: [138, 170, 25], fontStyle: 'bold', cellWidth: 30 },
+      0: { fontStyle: 'bold', cellWidth: 30 },
+      1: { cellWidth: 40 },
+      2: { cellWidth: 30 },
+      3: { halign: 'right', fontStyle: 'bold', cellWidth: 25 },
+      4: { cellWidth: 22 },
+      5: { textColor: [138, 170, 25], fontStyle: 'bold', cellWidth: 28 },
     },
+    tableWidth: w - margin * 2,
     didParseCell: (data: any) => {
       // Highlight emitted row with green background
       if (data.section === 'body' && data.row.raw) {
@@ -295,6 +299,37 @@ async function downloadClientSummaryPdf(q: AdmCotQuote) {
     y += 34;
   }
 
+  // ── SECTION: ABANDONMENT DETAIL (if any abandoned) ──
+  const abandonedQuotes = allQuotes.filter(r => r.status === 'ABANDONADA');
+  if (abandonedQuotes.length > 0) {
+    if (y > h - 60) { doc.addPage(); y = 20; }
+
+    doc.setFillColor(255, 243, 224);
+    const abBoxH = 12 + abandonedQuotes.length * 14;
+    doc.rect(margin, y, w - margin * 2, abBoxH, 'F');
+    doc.setDrawColor(245, 158, 11);
+    doc.setLineWidth(0.5);
+    doc.rect(margin, y, w - margin * 2, abBoxH, 'S');
+
+    doc.setFontSize(9);
+    doc.setTextColor(180, 83, 9);
+    doc.text('COTIZACIONES ABANDONADAS', margin + 4, y + 7);
+
+    let abY = y + 14;
+    for (const ab of abandonedQuotes) {
+      doc.setFontSize(7.5);
+      doc.setTextColor(60, 60, 60);
+      const abStep = ab.last_step || 'inicio';
+      const abErr = (ab.quote_payload as any)?.error_message || '';
+      const abText = `${ab.insurer} — ${ab.plan_name || '—'} | Abandonó en: ${abStep}${abErr ? ` | ${abErr}` : ''}`;
+      const lines = doc.splitTextToSize(abText, w - margin * 2 - 8);
+      doc.text(lines, margin + 4, abY);
+      abY += lines.length * 4 + 2;
+    }
+
+    y += abBoxH + 6;
+  }
+
   // ── SECTION: QUOTE DETAIL PER INSURER (individual details) ──
   if (y > h - 50) { doc.addPage(); y = 20; }
 
@@ -303,20 +338,24 @@ async function downloadClientSummaryPdf(q: AdmCotQuote) {
   doc.text('DETALLE POR COTIZACIÓN', margin, y + 4);
   y += 10;
 
+  const maxTextW = w - margin * 2 - 8;
+
   for (const r of allQuotes) {
     if (y > h - 45) { doc.addPage(); y = 20; }
 
     const isEmitted = r.status === 'EMITIDA';
+    const isAbandoned = r.status === 'ABANDONADA';
     // Card outline
-    doc.setFillColor(isEmitted ? 232 : 255, isEmitted ? 245 : 255, isEmitted ? 215 : 255);
-    doc.setDrawColor(isEmitted ? 138 : 200, isEmitted ? 170 : 200, isEmitted ? 25 : 200);
+    doc.setFillColor(isEmitted ? 232 : isAbandoned ? 255 : 255, isEmitted ? 245 : isAbandoned ? 243 : 255, isEmitted ? 215 : isAbandoned ? 224 : 255);
+    doc.setDrawColor(isEmitted ? 138 : isAbandoned ? 245 : 200, isEmitted ? 170 : isAbandoned ? 158 : 200, isEmitted ? 25 : isAbandoned ? 11 : 200);
     doc.setLineWidth(isEmitted ? 0.5 : 0.3);
     doc.rect(margin, y, w - margin * 2, 28, 'FD');
 
-    // Ref + insurer
+    // Ref + insurer (truncated)
     doc.setFontSize(8);
     doc.setTextColor(1, 1, 57);
-    doc.text(`${r.insurer} — ${r.plan_name || '—'}`, margin + 4, y + 7);
+    const headerText = `${r.insurer} — ${r.plan_name || '—'}`;
+    doc.text(headerText.substring(0, 60), margin + 4, y + 7);
     doc.setFontSize(6.5);
     doc.setTextColor(120, 120, 120);
     doc.text(`Ref: ${r.quote_ref}`, margin + 4, y + 13);
@@ -326,7 +365,7 @@ async function downloadClientSummaryPdf(q: AdmCotQuote) {
       COTIZADA: [59, 130, 246],   // blue
       EMITIDA: [34, 197, 94],    // green
       FALLIDA: [239, 68, 68],    // red
-      ABANDONADA: [156, 163, 175], // gray
+      ABANDONADA: [245, 158, 11], // amber
     };
     const sc = statusColors[r.status] || [100, 100, 100];
     doc.setTextColor(sc[0]!, sc[1]!, sc[2]!);
@@ -338,6 +377,11 @@ async function downloadClientSummaryPdf(q: AdmCotQuote) {
       doc.setFontSize(7);
       doc.text('✓ SELECCIONADO', w - margin - 4, y + 13, { align: 'right' });
     }
+    if (isAbandoned) {
+      doc.setTextColor(180, 83, 9);
+      doc.setFontSize(6.5);
+      doc.text(`Abandonó en: ${r.last_step || '—'}`, w - margin - 4, y + 13, { align: 'right' });
+    }
 
     // Prima + details
     doc.setFontSize(8);
@@ -347,12 +391,13 @@ async function downloadClientSummaryPdf(q: AdmCotQuote) {
     doc.text(`Cobertura: ${r.coverage_type || r.ramo || '—'}`, margin + (w - margin * 2) * 0.4, y + 20);
     doc.text(`Fecha: ${fmtDateTime(r.quoted_at)}`, margin + 4, y + 26);
 
-    // Steps
+    // Steps (truncated to prevent overflow)
     if (r.steps_log && r.steps_log.length > 0) {
       const stepsStr = r.steps_log.map(s => s.step).join(' → ');
+      const truncSteps = stepsStr.length > 50 ? stepsStr.substring(0, 47) + '...' : stepsStr;
       doc.setFontSize(6);
       doc.setTextColor(150, 150, 150);
-      doc.text(`Pasos: ${stepsStr}`, margin + (w - margin * 2) * 0.4, y + 26);
+      doc.text(`Pasos: ${truncSteps}`, margin + (w - margin * 2) * 0.4, y + 26);
     }
 
     y += 32;
@@ -547,6 +592,17 @@ function QuoteDetail({ quote }: { quote: AdmCotQuote }) {
                 <p><span className="font-medium text-gray-500">Fecha:</span> {quote.emitted_at ? fmtFull(quote.emitted_at) : '—'}</p>
                 {quote.quoted_at && quote.emitted_at && (
                   <p><span className="font-medium text-gray-500">Tiempo:</span> {Math.round((new Date(quote.emitted_at).getTime() - new Date(quote.quoted_at).getTime()) / 60000)} min</p>
+                )}
+              </>
+            ) : quote.status === 'ABANDONADA' ? (
+              <>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <FaExclamationTriangle className="text-amber-500 text-[10px]" />
+                  <p className="text-amber-600 font-semibold text-[11px]">Proceso Abandonado</p>
+                </div>
+                <p><span className="font-medium text-gray-500">Último paso:</span> <span className="font-semibold text-amber-700">{quote.last_step || '—'}</span></p>
+                {(quote.quote_payload as any)?.error_message && (
+                  <p><span className="font-medium text-gray-500">Motivo:</span> {(quote.quote_payload as any).error_message}</p>
                 )}
               </>
             ) : quote.status === 'FALLIDA' ? (

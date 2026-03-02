@@ -25,6 +25,7 @@ import { buscarOcupacion } from '@/lib/fedpa/catalogos-complementarios';
 import { trackQuoteEmitted, trackQuoteFailed, trackStepUpdate } from '@/lib/adm-cot/track-quote';
 import { createPaymentOnEmission } from '@/lib/adm-cot/create-payment-on-emission';
 import { formatISPolicyNumber } from '@/lib/utils/policy-number';
+import EmissionLoadingModal from '@/components/cotizadores/EmissionLoadingModal';
 
 // 4 steps for DT (no inspection, no cuotas — payment modal handles contado vs cuotas)
 const DT_STEPS: BreadcrumbStepDef[] = [
@@ -61,6 +62,12 @@ export default function EmitirDanosTercerosPage() {
   const signatureRef = useRef<string>('');
   const [showSignaturePad, setShowSignaturePad] = useState(false);
   const [showTermsModal, setShowTermsModal] = useState(false);
+
+  // ═══ Emission Loading Modal state ═══
+  const [showEmissionModal, setShowEmissionModal] = useState(false);
+  const [emissionProgress, setEmissionProgress] = useState(0);
+  const [emissionStep, setEmissionStep] = useState('');
+  const [emissionError, setEmissionError] = useState<string | null>(null);
 
   // ═══ ADM COT: Helper to get quote ref for step tracking ═══
   const getTrackingInfo = () => {
@@ -113,6 +120,10 @@ export default function EmitirDanosTercerosPage() {
           insurer: t.insurer,
           errorMessage: 'Proceso abandonado por el usuario',
           lastStep: step,
+          clientName: `${emissionData.primerNombre || ''} ${emissionData.primerApellido || ''}`.trim() || undefined,
+          cedula: emissionData.cedula || undefined,
+          email: emissionData.email || undefined,
+          phone: emissionData.telefono || emissionData.celular || undefined,
         });
       }
     };
@@ -161,9 +172,16 @@ export default function EmitirDanosTercerosPage() {
   const handleEmissionDataComplete = (data: EmissionData) => {
     setEmissionData(data);
     setCompletedSteps(prev => [...prev.filter(s => s !== 'emission-data'), 'emission-data']);
-    // ═══ ADM COT: Track step ═══
+    // ═══ ADM COT: Track step + save client data ═══
     const t = getTrackingInfo();
-    trackStepUpdate({ ...t, step: 'emission-data' });
+    trackStepUpdate({
+      ...t,
+      step: 'emission-data',
+      clientName: `${data.primerNombre || ''} ${data.primerApellido || ''}`.trim() || undefined,
+      cedula: data.cedula || undefined,
+      email: data.email || undefined,
+      phone: data.telefono || data.celular || undefined,
+    });
     goToStep('vehicle');
     toast.success('Datos guardados correctamente');
   };
@@ -206,12 +224,18 @@ export default function EmitirDanosTercerosPage() {
   const handleConfirmEmission = async () => {
     if (isConfirming) return;
     setIsConfirming(true);
+    setShowEmissionModal(true);
+    setEmissionProgress(0);
+    setEmissionStep('Preparando datos del cliente...');
+    setEmissionError(null);
 
     try {
       const isFedpaReal = selectedPlan?._isReal && (selectedPlan?._isFEDPA || selectedPlan?.insurerName?.includes('FEDPA'));
       const isInternacionalReal = selectedPlan?._isReal && selectedPlan?.insurerName?.includes('INTERNACIONAL');
 
       if (!emissionData) throw new Error('Faltan datos del asegurado');
+      setEmissionProgress(5);
+      setEmissionStep('Validando información del vehículo...');
 
       // ═══════════════════════════════════════════════════════
       // EMISIÓN FEDPA — Daños a Terceros
@@ -260,7 +284,8 @@ export default function EmitirDanosTercerosPage() {
         // Note: Emisor Externo (2021) crear_poliza_auto_cc_externos is
         // broken on FEDPA's server (ORA-01400 even with manual example data).
         // EmisorPlan is the ONLY working emission path.
-        toast.info('Subiendo documentos...');
+        setEmissionProgress(15);
+        setEmissionStep('Subiendo documentos a la aseguradora...');
         const docsFormData = new FormData();
         docsFormData.append('environment', 'DEV');
         if (emissionData.cedulaFile) {
@@ -291,7 +316,8 @@ export default function EmitirDanosTercerosPage() {
         }
 
         console.log('[EMISIÓN DT FEDPA] Documentos subidos (EmisorPlan):', docsResponseData.idDoc);
-        toast.info('Emitiendo póliza...');
+        setEmissionProgress(35);
+        setEmissionStep('Emitiendo póliza con FEDPA...');
         const emisionResponse = await fetch('/api/fedpa/emision', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -312,6 +338,8 @@ export default function EmitirDanosTercerosPage() {
         emisionResult = emisionResponseData;
 
         console.log(`[EMISIÓN DT FEDPA] Póliza emitida (${usedMethod}):`, emisionResult.nroPoliza || emisionResult.poliza);
+        setEmissionProgress(60);
+        setEmissionStep('Póliza emitida — guardando en sistema...');
 
         // ═══ ADM COT: Track successful FEDPA DT emission ═══
         const tFedpa = getTrackingInfo();
@@ -319,6 +347,7 @@ export default function EmitirDanosTercerosPage() {
           quoteRef: tFedpa.quoteRef,
           insurer: 'FEDPA',
           policyNumber: emisionResult.nroPoliza || emisionResult.poliza,
+          clientName: `${emissionData.primerNombre || ''} ${emissionData.primerApellido || ''}`.trim(),
           cedula: emissionData.cedula,
           email: emissionData.email,
           phone: emissionData.telefono || emissionData.celular,
@@ -336,7 +365,8 @@ export default function EmitirDanosTercerosPage() {
         });
 
         // ═══ ENVIAR BIENVENIDA AL CLIENTE POR CORREO ═══
-        toast.info('Enviando confirmación por correo...');
+        setEmissionProgress(75);
+        setEmissionStep('Enviando expediente y bienvenida por correo...');
         try {
           const welcomeForm = new FormData();
           welcomeForm.append('tipoCobertura', 'DT');
@@ -422,6 +452,8 @@ export default function EmitirDanosTercerosPage() {
           console.error('[FEDPA DT] Error enviando bienvenida:', welcomeErr);
         }
 
+        setEmissionProgress(92);
+        setEmissionStep('Preparando confirmación...');
         sessionStorage.setItem('emittedPolicy', JSON.stringify({
           nroPoliza: emisionResult.nroPoliza || emisionResult.poliza,
           insurer: 'FEDPA Seguros',
@@ -439,15 +471,16 @@ export default function EmitirDanosTercerosPage() {
         }));
         sessionStorage.removeItem('thirdPartyQuote');
         sessionStorage.removeItem('selectedQuote');
-        toast.success(`¡Póliza emitida! Nº ${emisionResult.nroPoliza || emisionResult.poliza}`);
-        router.push('/cotizadores/confirmacion');
+        setEmissionProgress(100);
+        setEmissionStep('¡Emisión completada!');
 
       // ═══════════════════════════════════════════════════════
       // EMISIÓN INTERNACIONAL — Daños a Terceros
       // ═══════════════════════════════════════════════════════
       } else if (isInternacionalReal) {
         console.log('[EMISIÓN DT INTERNACIONAL] Iniciando emisión con API real...');
-        toast.info('Emitiendo póliza...');
+        setEmissionProgress(15);
+        setEmissionStep('Conectando con Internacional de Seguros...');
 
         const emisionResponse = await fetch('/api/is/auto/emitir', {
           method: 'POST',
@@ -526,6 +559,8 @@ export default function EmitirDanosTercerosPage() {
         // ═══ Prefix IS policy number with 1-30- ═══
         emisionResult.nroPoliza = formatISPolicyNumber(emisionResult.nroPoliza);
         console.log('[EMISIÓN DT INTERNACIONAL] Póliza emitida:', emisionResult.nroPoliza);
+        setEmissionProgress(55);
+        setEmissionStep('Póliza emitida — guardando en sistema...');
 
         // ═══ ADM COT: Track successful IS DT emission ═══
         const tIs = getTrackingInfo();
@@ -533,6 +568,7 @@ export default function EmitirDanosTercerosPage() {
           quoteRef: tIs.quoteRef,
           insurer: 'INTERNACIONAL',
           policyNumber: emisionResult.nroPoliza,
+          clientName: `${emissionData.primerNombre || ''} ${emissionData.primerApellido || ''}`.trim(),
           cedula: emissionData.cedula,
           email: emissionData.email,
           phone: emissionData.telefono || emissionData.celular,
@@ -550,7 +586,8 @@ export default function EmitirDanosTercerosPage() {
         });
 
         // ═══ ENVIAR EXPEDIENTE Y BIENVENIDA POR CORREO ═══
-        toast.info('Enviando expediente por correo...');
+        setEmissionProgress(75);
+        setEmissionStep('Enviando expediente y bienvenida por correo...');
         try {
           const expedienteForm = new FormData();
           expedienteForm.append('tipoCobertura', 'DT');
@@ -650,6 +687,8 @@ export default function EmitirDanosTercerosPage() {
           toast.warning('Póliza emitida pero hubo un error enviando el expediente por correo');
         }
 
+        setEmissionProgress(92);
+        setEmissionStep('Preparando confirmación...');
         sessionStorage.setItem('emittedPolicy', JSON.stringify({
           nroPoliza: emisionResult.nroPoliza,
           pdfUrl: emisionResult.pdfUrl,
@@ -671,8 +710,8 @@ export default function EmitirDanosTercerosPage() {
         sessionStorage.removeItem('selectedQuote');
         sessionStorage.removeItem('thirdPartyQuote');
         
-        toast.success(`¡Póliza emitida! Nº ${emisionResult.nroPoliza}`);
-        router.push('/cotizadores/confirmacion');
+        setEmissionProgress(100);
+        setEmissionStep('¡Emisión completada!');
 
       // ═══════════════════════════════════════════════════════
       // OTRAS ASEGURADORAS — Flujo simulado (futuras integraciones)
@@ -700,7 +739,7 @@ export default function EmitirDanosTercerosPage() {
       }
     } catch (error: any) {
       console.error('Error emitiendo:', error);
-      toast.error(error.message || 'Error al emitir la póliza');
+      setEmissionError(error.message || 'Error al emitir la póliza');
       // ═══ ADM COT: Track DT emission failure ═══
       const tFail = getTrackingInfo();
       trackQuoteFailed({
@@ -708,9 +747,24 @@ export default function EmitirDanosTercerosPage() {
         insurer: tFail.insurer,
         errorMessage: error.message,
         lastStep: step,
+        clientName: emissionData ? `${emissionData.primerNombre || ''} ${emissionData.primerApellido || ''}`.trim() : undefined,
+        cedula: emissionData?.cedula || undefined,
+        email: emissionData?.email || undefined,
+        phone: emissionData?.telefono || emissionData?.celular || undefined,
       });
       setIsConfirming(false);
     }
+  };
+
+  const handleEmissionModalClose = () => {
+    setShowEmissionModal(false);
+    setEmissionError(null);
+    setIsConfirming(false);
+  };
+
+  const handleEmissionModalComplete = () => {
+    setShowEmissionModal(false);
+    router.push('/cotizadores/confirmacion');
   };
 
   if (loading) return <LoadingSkeleton />;
@@ -1220,6 +1274,16 @@ export default function EmitirDanosTercerosPage() {
             onCancel={() => setShowSignaturePad(false)}
           />
         )}
+
+        {/* Emission Loading Modal with Mascot */}
+        <EmissionLoadingModal
+          isOpen={showEmissionModal}
+          progress={emissionProgress}
+          currentStep={emissionStep}
+          error={emissionError}
+          onClose={handleEmissionModalClose}
+          onComplete={handleEmissionModalComplete}
+        />
       </div>
     );
   }

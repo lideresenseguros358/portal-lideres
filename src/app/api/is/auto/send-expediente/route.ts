@@ -10,6 +10,7 @@ import { generateInspectionPdf } from '@/lib/is/inspection-pdf';
 import { generateISQuotePdf } from '@/lib/is/quote-pdf';
 import { generateAuthorizationPdf } from '@/lib/authorization-pdf';
 import { guardarDocumentosExpediente } from '@/lib/storage/expediente-server';
+import { getSupabaseAdmin } from '@/lib/supabase/admin';
 
 // ZeptoMail REST API for sending emails with attachments
 const ZEPTO_API_URL = 'https://api.zeptomail.com/v1.1/email';
@@ -442,7 +443,64 @@ export async function POST(request: NextRequest) {
     // ═══ GUARDAR DOCUMENTOS EN EXPEDIENTE (Supabase Storage) ═══
     let expedienteSaved: string[] = [];
     let expedienteErrors: string[] = [];
-    if (clientId && policyId) {
+    let resolvedClientId = clientId;
+    let resolvedPolicyId = policyId;
+
+    // Fallback: look up clientId/policyId by cédula and nroPoliza if not provided
+    if ((!resolvedClientId || !resolvedPolicyId) && clientData.cedula) {
+      try {
+        const sbAdmin = getSupabaseAdmin();
+        console.log('[IS EXPEDIENTE] clientId/policyId no proporcionados, buscando por cédula:', clientData.cedula);
+
+        if (!resolvedClientId) {
+          const { data: foundClient } = await sbAdmin
+            .from('clients')
+            .select('id')
+            .eq('national_id', clientData.cedula)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (foundClient) {
+            resolvedClientId = foundClient.id;
+            console.log('[IS EXPEDIENTE] Cliente encontrado por cédula:', resolvedClientId);
+          }
+        }
+
+        if (resolvedClientId && !resolvedPolicyId && nroPoliza) {
+          const { data: foundPolicy } = await sbAdmin
+            .from('policies')
+            .select('id')
+            .eq('client_id', resolvedClientId)
+            .eq('policy_number', nroPoliza)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (foundPolicy) {
+            resolvedPolicyId = foundPolicy.id;
+            console.log('[IS EXPEDIENTE] Póliza encontrada por nroPoliza:', resolvedPolicyId);
+          }
+        }
+
+        // If still no policyId, try latest policy for this client
+        if (resolvedClientId && !resolvedPolicyId) {
+          const { data: latestPolicy } = await sbAdmin
+            .from('policies')
+            .select('id')
+            .eq('client_id', resolvedClientId)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (latestPolicy) {
+            resolvedPolicyId = latestPolicy.id;
+            console.log('[IS EXPEDIENTE] Póliza más reciente encontrada:', resolvedPolicyId);
+          }
+        }
+      } catch (lookupErr: any) {
+        console.warn('[IS EXPEDIENTE] Error buscando clientId/policyId:', lookupErr.message);
+      }
+    }
+
+    if (resolvedClientId && resolvedPolicyId) {
       try {
         // Download policy PDF from pdfUrl if available
         let polizaPdfBuffer: Buffer | null = null;
@@ -464,6 +522,8 @@ export async function POST(request: NextRequest) {
         }
 
         console.log('[IS EXPEDIENTE] Docs disponibles para expediente:', {
+          clientId: resolvedClientId,
+          policyId: resolvedPolicyId,
           cedula: !!(cedulaBuffer && cedulaFile),
           licencia: !!(licenciaBuffer && licenciaFile),
           registroVehicular: !!(registroBuffer && registroVehicularFile),
@@ -474,8 +534,8 @@ export async function POST(request: NextRequest) {
         const polizaPdfFilename = `caratula_poliza_${clientData.cedula}${nroPoliza ? `_${nroPoliza}` : ''}.pdf`;
 
         const expedienteResult = await guardarDocumentosExpediente({
-          clientId,
-          policyId,
+          clientId: resolvedClientId,
+          policyId: resolvedPolicyId,
           cedula: cedulaBuffer && cedulaFile ? { buffer: cedulaBuffer, fileName: cedulaFile.name, mimeType: cedulaFile.type } : undefined,
           licencia: licenciaBuffer && licenciaFile ? { buffer: licenciaBuffer, fileName: licenciaFile.name, mimeType: licenciaFile.type } : undefined,
           registroVehicular: registroBuffer && registroVehicularFile ? { buffer: registroBuffer, fileName: registroVehicularFile.name, mimeType: registroVehicularFile.type } : undefined,
@@ -494,7 +554,7 @@ export async function POST(request: NextRequest) {
         console.error('[IS EXPEDIENTE] Error guardando documentos en expediente:', expError.message);
       }
     } else {
-      console.warn('[IS EXPEDIENTE] ⚠️ Sin clientId/policyId, no se guardan documentos en expediente');
+      console.warn('[IS EXPEDIENTE] ⚠️ No se pudo resolver clientId/policyId — cedula:', clientData.cedula, 'nroPoliza:', nroPoliza);
     }
 
     // Audit metadata for the due diligence PDF

@@ -77,26 +77,50 @@ function ActionDropdown({ row, onAction }: {
   onAction: (action: string, row: OpsMorosidadRow) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+      if (
+        menuRef.current && !menuRef.current.contains(e.target as Node) &&
+        btnRef.current && !btnRef.current.contains(e.target as Node)
+      ) setOpen(false);
     };
-    document.addEventListener('mousedown', handler);
+    if (open) document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, []);
+  }, [open]);
+
+  const toggle = () => {
+    if (!open && btnRef.current) {
+      const rect = btnRef.current.getBoundingClientRect();
+      const menuW = 192;
+      const menuH = 180;
+      const top = rect.bottom + 4 + menuH > window.innerHeight
+        ? rect.top - menuH - 4
+        : rect.bottom + 4;
+      const left = Math.min(rect.right - menuW, window.innerWidth - menuW - 8);
+      setPos({ top, left });
+    }
+    setOpen(!open);
+  };
 
   return (
-    <div ref={ref} className="relative">
+    <>
       <button
-        onClick={() => setOpen(!open)}
+        ref={btnRef}
+        onClick={toggle}
         className="p-1.5 rounded-md text-gray-300 hover:text-gray-500 hover:bg-gray-50 cursor-pointer transition-all duration-150"
       >
         <FaEllipsisV className="text-[10px]" />
       </button>
       {open && (
-        <div className="absolute right-0 top-full mt-1 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-20 py-1 animate-in fade-in slide-in-from-top-1 duration-150">
+        <div
+          ref={menuRef}
+          className="fixed w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-[9999] py-1 ops-dropdown-enter"
+          style={{ top: pos.top, left: pos.left }}
+        >
           <button
             onClick={() => { onAction('view_payments', row); setOpen(false); }}
             className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 cursor-pointer flex items-center gap-2 transition-colors duration-100"
@@ -126,7 +150,7 @@ function ActionDropdown({ row, onAction }: {
           </button>
         </div>
       )}
-    </div>
+    </>
   );
 }
 

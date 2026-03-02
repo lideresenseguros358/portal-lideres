@@ -22,6 +22,7 @@ import { trackQuoteEmitted, trackQuoteFailed, trackStepUpdate } from '@/lib/adm-
 import { createPaymentOnEmission } from '@/lib/adm-cot/create-payment-on-emission';
 import { buscarOcupacion } from '@/lib/fedpa/catalogos-complementarios';
 import { formatISPolicyNumber } from '@/lib/utils/policy-number';
+import EmissionLoadingModal from '@/components/cotizadores/EmissionLoadingModal';
 
 export default function EmitirPage() {
   // A7: Scroll to top al montar
@@ -47,6 +48,12 @@ export default function EmitirPage() {
   const signatureRef = useRef<string>('');
   const [showSignaturePad, setShowSignaturePad] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
+
+  // ═══ Emission Loading Modal state ═══
+  const [showEmissionModal, setShowEmissionModal] = useState(false);
+  const [emissionProgress, setEmissionProgress] = useState(0);
+  const [emissionStep, setEmissionStep] = useState('');
+  const [emissionError, setEmissionError] = useState<string | null>(null);
 
   useEffect(() => {
     const loadData = () => {
@@ -97,6 +104,10 @@ export default function EmitirPage() {
             insurer: t.insurer,
             errorMessage: 'Proceso abandonado por el usuario',
             lastStep: step,
+            clientName: `${emissionData.primerNombre || ''} ${emissionData.primerApellido || ''}`.trim() || undefined,
+            cedula: emissionData.cedula || undefined,
+            email: emissionData.email || undefined,
+            phone: emissionData.telefono || emissionData.celular || undefined,
           });
         }
       }
@@ -127,9 +138,16 @@ export default function EmitirPage() {
     // Marcar paso completado
     setCompletedSteps(prev => [...prev, 'emission-data']);
     
-    // ═══ ADM COT: Track step ═══
+    // ═══ ADM COT: Track step + save client data ═══
     const t = getTrackingInfo();
-    if (t) trackStepUpdate({ ...t, step: 'emission-data' });
+    if (t) trackStepUpdate({
+      ...t,
+      step: 'emission-data',
+      clientName: `${data.primerNombre || ''} ${data.primerApellido || ''}`.trim() || undefined,
+      cedula: data.cedula || undefined,
+      email: data.email || undefined,
+      phone: data.telefono || data.celular || undefined,
+    });
     
     // Ir a datos del vehículo
     router.push('/cotizadores/emitir?step=vehicle');
@@ -205,6 +223,10 @@ export default function EmitirPage() {
     if (isConfirming) return; // Prevent double-click
     try {
       setIsConfirming(true);
+      setShowEmissionModal(true);
+      setEmissionProgress(0);
+      setEmissionStep('Preparando datos del cliente...');
+      setEmissionError(null);
       
       // Detectar aseguradora
       const isFedpaReal = selectedPlan?._isReal && selectedPlan?.insurerName?.includes('FEDPA');
@@ -213,6 +235,8 @@ export default function EmitirPage() {
       // EMISIÓN FEDPA
       if (isFedpaReal) {
         console.log('[EMISIÓN FEDPA] Iniciando emisión con API real...');
+        setEmissionProgress(5);
+        setEmissionStep('Validando datos de emisión...');
         
         if (!emissionData || !inspectionPhotos.length) {
           throw new Error('Faltan datos de emisión o fotos de inspección');
@@ -255,7 +279,8 @@ export default function EmitirPage() {
         // ── EmisorPlan (2024): upload docs → emitirpoliza ──
         let emisionResult: any = null;
 
-        toast.info('Subiendo documentos...');
+        setEmissionProgress(15);
+        setEmissionStep('Subiendo documentos a la aseguradora...');
         const docsFormData = new FormData();
         docsFormData.append('environment', 'DEV');
         docsFormData.append('documento_identidad', emissionData.cedulaFile!, emissionData.cedulaFile!.name || 'documento_identidad.pdf');
@@ -285,7 +310,8 @@ export default function EmitirPage() {
         }
 
         console.log('[EMISIÓN CC FEDPA] Documentos subidos (EmisorPlan):', docsResponseData.idDoc);
-        toast.info('Emitiendo póliza...');
+        setEmissionProgress(35);
+        setEmissionStep('Emitiendo póliza con FEDPA...');
         const emisionResponse = await fetch('/api/fedpa/emision', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -306,12 +332,14 @@ export default function EmitirPage() {
         emisionResult = emisionResponseData;
 
         console.log('[EMISIÓN CC FEDPA] Póliza emitida:', emisionResult.nroPoliza || emisionResult.poliza);
+        setEmissionProgress(55);
+        setEmissionStep('Póliza emitida — guardando en sistema...');
         
         // ═══ ADM COT: Track successful FEDPA emission ═══
         const fedpaRef = selectedPlan?._idCotizacion;
         if (fedpaRef) {
           const planSuffix = selectedPlan?.planType === 'premium' ? 'P' : 'B';
-          trackQuoteEmitted({ quoteRef: `FEDPA-${fedpaRef}-${planSuffix}`, insurer: 'FEDPA', policyNumber: emisionResult.nroPoliza || emisionResult.poliza, cedula: emissionData.cedula, email: emissionData.email, phone: emissionData.telefono || emissionData.celular });
+          trackQuoteEmitted({ quoteRef: `FEDPA-${fedpaRef}-${planSuffix}`, insurer: 'FEDPA', policyNumber: emisionResult.nroPoliza || emisionResult.poliza, clientName: `${emissionData.primerNombre || ''} ${emissionData.primerApellido || ''}`.trim(), cedula: emissionData.cedula, email: emissionData.email, phone: emissionData.telefono || emissionData.celular });
         }
         
         // ═══ ADM COT: Auto-create pending payment + recurrence ═══
@@ -326,7 +354,8 @@ export default function EmitirPage() {
         });
         
         // ═══ ENVIAR BIENVENIDA AL CLIENTE POR CORREO ═══
-        toast.info('Enviando confirmación por correo...');
+        setEmissionProgress(75);
+        setEmissionStep('Enviando expediente y bienvenida por correo...');
         try {
           const welcomeForm = new FormData();
           welcomeForm.append('tipoCobertura', 'CC');
@@ -410,6 +439,8 @@ export default function EmitirPage() {
           console.error('[FEDPA CC] Error enviando bienvenida:', welcomeErr);
         }
         
+        setEmissionProgress(92);
+        setEmissionStep('Preparando confirmación...');
         sessionStorage.setItem('emittedPolicy', JSON.stringify({
           nroPoliza: emisionResult.nroPoliza || emisionResult.poliza,
           insurer: 'FEDPA Seguros',
@@ -426,11 +457,13 @@ export default function EmitirPage() {
           method: 'emisor_plan',
         }));
         
-        toast.success(`¡Póliza FEDPA emitida! Nº ${emisionResult.nroPoliza || emisionResult.poliza}`);
-        router.push('/cotizadores/confirmacion');
+        setEmissionProgress(100);
+        setEmissionStep('¡Emisión completada!');
         
       } else if (isInternacionalReal) {
         console.log('[EMISIÓN INTERNACIONAL] Iniciando emisión con API real...');
+        setEmissionProgress(10);
+        setEmissionStep('Validando datos de emisión...');
         
         if (!emissionData) {
           throw new Error('Faltan datos de emisión');
@@ -444,7 +477,8 @@ export default function EmitirPage() {
         }
         
         // Emitir con API real de INTERNACIONAL
-        toast.info('Emitiendo póliza...');
+        setEmissionProgress(20);
+        setEmissionStep('Conectando con Internacional de Seguros...');
         const emisionResponse = await fetch('/api/is/auto/emitir', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -523,12 +557,14 @@ export default function EmitirPage() {
         // ═══ Prefix IS policy number with 1-30- ═══
         emisionResult.nroPoliza = formatISPolicyNumber(emisionResult.nroPoliza);
         console.log('[EMISION INTERNACIONAL] Póliza emitida:', emisionResult.nroPoliza);
+        setEmissionProgress(55);
+        setEmissionStep('Póliza emitida — guardando en sistema...');
         
         // ═══ ADM COT: Track successful IS emission ═══
         const isRef = selectedPlan?._idCotizacion;
         if (isRef) {
           const planSuffix = selectedPlan?.planType === 'premium' ? 'P' : 'B';
-          trackQuoteEmitted({ quoteRef: `IS-${isRef}-${planSuffix}`, insurer: 'INTERNACIONAL', policyNumber: emisionResult.nroPoliza, cedula: emissionData.cedula, email: emissionData.email, phone: emissionData.telefono || emissionData.celular });
+          trackQuoteEmitted({ quoteRef: `IS-${isRef}-${planSuffix}`, insurer: 'INTERNACIONAL', policyNumber: emisionResult.nroPoliza, clientName: `${emissionData.primerNombre || ''} ${emissionData.primerApellido || ''}`.trim(), cedula: emissionData.cedula, email: emissionData.email, phone: emissionData.telefono || emissionData.celular });
         }
         
         // ═══ ADM COT: Auto-create pending payment + recurrence ═══
@@ -543,7 +579,8 @@ export default function EmitirPage() {
         });
         
         // ═══ ENVIAR EXPEDIENTE POR CORREO ═══
-        toast.info('Enviando expediente por correo...');
+        setEmissionProgress(75);
+        setEmissionStep('Enviando expediente y bienvenida por correo...');
         try {
           const expedienteForm = new FormData();
           expedienteForm.append('tipoCobertura', isCC ? 'CC' : 'DT');
@@ -670,6 +707,8 @@ export default function EmitirPage() {
         }
         
         // Guardar datos completos de la póliza para la confirmación y carátula
+        setEmissionProgress(92);
+        setEmissionStep('Preparando confirmación...');
         sessionStorage.setItem('emittedPolicy', JSON.stringify({
           nroPoliza: emisionResult.nroPoliza,
           pdfUrl: emisionResult.pdfUrl,
@@ -690,8 +729,8 @@ export default function EmitirPage() {
         // Limpiar cotización usada para evitar re-emisión con idPv stale
         sessionStorage.removeItem('selectedQuote');
         
-        toast.success(`¡Póliza emitida! Nº ${emisionResult.nroPoliza}`);
-        router.push('/cotizadores/confirmacion');
+        setEmissionProgress(100);
+        setEmissionStep('¡Emisión completada!');
         
       } else {
         // Otras aseguradoras - Flujo simulado (futuras integraciones)
@@ -713,13 +752,13 @@ export default function EmitirPage() {
           isDemo: true,
         }));
         
-        toast.success('¡Póliza emitida exitosamente! (Demo)');
-        router.push('/cotizadores/confirmacion');
+        setEmissionProgress(100);
+        setEmissionStep('¡Emisión completada!');
       }
       
     } catch (error: any) {
-      console.error('Error emitiendo p\u00f3liza:', error);
-      toast.error(error.message || 'Error al emitir p\u00f3liza');
+      console.error('Error emitiendo póliza:', error);
+      setEmissionError(error.message || 'Error al emitir póliza');
       // ═══ ADM COT: Track emission failure ═══
       const refId = selectedPlan?._idCotizacion;
       if (refId) {
@@ -727,10 +766,30 @@ export default function EmitirPage() {
         const prefix = isFedpa ? 'FEDPA' : 'IS';
         const insurer = isFedpa ? 'FEDPA' : 'INTERNACIONAL';
         const planSuffix = selectedPlan?.planType === 'premium' ? 'P' : 'B';
-        trackQuoteFailed({ quoteRef: `${prefix}-${refId}-${planSuffix}`, insurer, errorMessage: error.message, lastStep: step });
+        trackQuoteFailed({
+          quoteRef: `${prefix}-${refId}-${planSuffix}`,
+          insurer,
+          errorMessage: error.message,
+          lastStep: step,
+          clientName: emissionData ? `${emissionData.primerNombre || ''} ${emissionData.primerApellido || ''}`.trim() : undefined,
+          cedula: emissionData?.cedula || undefined,
+          email: emissionData?.email || undefined,
+          phone: emissionData?.telefono || emissionData?.celular || undefined,
+        });
       }
       setIsConfirming(false);
     }
+  };
+
+  const handleEmissionModalClose = () => {
+    setShowEmissionModal(false);
+    setEmissionError(null);
+    setIsConfirming(false);
+  };
+
+  const handleEmissionModalComplete = () => {
+    setShowEmissionModal(false);
+    router.push('/cotizadores/confirmacion');
   };
 
   if (loading) return <LoadingSkeleton />;
@@ -1048,6 +1107,16 @@ export default function EmitirPage() {
             onCancel={() => setShowSignaturePad(false)}
           />
         )}
+
+        {/* Emission Loading Modal with Mascot */}
+        <EmissionLoadingModal
+          isOpen={showEmissionModal}
+          progress={emissionProgress}
+          currentStep={emissionStep}
+          error={emissionError}
+          onClose={handleEmissionModalClose}
+          onComplete={handleEmissionModalComplete}
+        />
       </div>
     );
   }

@@ -123,7 +123,7 @@ export async function POST(request: Request) {
     console.error('Unexpected error in ops-ai-eval-urgencies cron:', error);
     try {
       const sb = getSupabaseAdmin() as any;
-      await sb.rpc('ops_release_cron_lock', { p_job_name: JOB_NAME }).catch(() => {});
+      try { await sb.rpc('ops_release_cron_lock', { p_job_name: JOB_NAME }); } catch { /* ignore */ }
     } catch { /* */ }
     return NextResponse.json({
       error: 'Internal server error',

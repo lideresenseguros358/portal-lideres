@@ -218,15 +218,17 @@ Evalúa la efectividad de la atención.`;
     return { success: true, evaluationId: evalRow?.id };
   } catch (err: any) {
     // Log failure
-    await supabase.from('ops_ai_training_events').insert({
-      case_id: input.caseId,
-      event_type: 'score_case',
-      payload: { error: err.message },
-      model_provider: provider.name,
-      model_name: null,
-      success: false,
-      error: err.message,
-    }).catch(() => {});
+    try {
+      await supabase.from('ops_ai_training_events').insert({
+        case_id: input.caseId,
+        event_type: 'score_case',
+        payload: { error: err.message },
+        model_provider: provider.name,
+        model_name: null,
+        success: false,
+        error: err.message,
+      });
+    } catch { /* non-fatal */ }
 
     console.error('[AI-EVAL] evaluateUrgencyEffectiveness error:', err.message);
     return { success: false, error: err.message };

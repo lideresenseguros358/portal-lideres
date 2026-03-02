@@ -131,18 +131,20 @@ export async function POST(req: NextRequest) {
         if (error) throw error;
 
         // Log change
-        await supabase.from('ops_activity_log').insert({
-          user_id: userId,
-          action_type: 'status_change',
-          entity_type: 'config',
-          entity_id: key,
-          metadata: {
-            action: 'ops_config_updated',
-            key,
-            before: oldValue,
-            after: value,
-          },
-        }).catch(() => {});
+        try {
+          await supabase.from('ops_activity_log').insert({
+            user_id: userId,
+            action_type: 'status_change',
+            entity_type: 'config',
+            entity_id: key,
+            metadata: {
+              action: 'ops_config_updated',
+              key,
+              before: oldValue,
+              after: value,
+            },
+          });
+        } catch { /* non-fatal */ }
 
         return NextResponse.json({ success: true });
       }
@@ -179,17 +181,19 @@ export async function POST(req: NextRequest) {
 
         // Single audit log for bulk update
         if (changes.length > 0) {
-          await supabase.from('ops_activity_log').insert({
-            user_id: userId,
-            action_type: 'status_change',
-            entity_type: 'config',
-            entity_id: 'bulk',
-            metadata: {
-              action: 'ops_config_bulk_updated',
-              changes_count: changes.length,
-              changes,
-            },
-          }).catch(() => {});
+          try {
+            await supabase.from('ops_activity_log').insert({
+              user_id: userId,
+              action_type: 'status_change',
+              entity_type: 'config',
+              entity_id: 'bulk',
+              metadata: {
+                action: 'ops_config_bulk_updated',
+                changes_count: changes.length,
+                changes,
+              },
+            });
+          } catch { /* non-fatal */ }
         }
 
         return NextResponse.json({ success: true, changes_count: changes.length });
@@ -212,13 +216,15 @@ export async function POST(req: NextRequest) {
           .eq('template_key', template_key);
         if (error) throw error;
 
-        await supabase.from('ops_activity_log').insert({
-          user_id: userId,
-          action_type: 'status_change',
-          entity_type: 'config',
-          entity_id: template_key,
-          metadata: { action: 'ops_template_updated', template_key },
-        }).catch(() => {});
+        try {
+          await supabase.from('ops_activity_log').insert({
+            user_id: userId,
+            action_type: 'status_change',
+            entity_type: 'config',
+            entity_id: template_key,
+            metadata: { action: 'ops_template_updated', template_key },
+          });
+        } catch { /* non-fatal */ }
 
         return NextResponse.json({ success: true });
       }

@@ -186,26 +186,30 @@ export async function POST(req: NextRequest) {
         }).select().single();
         if (error) throw error;
 
-        await supabase.rpc('assign_case_equilibrado', { p_case_id: data.id }).catch(() => {});
+        try { await supabase.rpc('assign_case_equilibrado', { p_case_id: data.id }); } catch { /* non-fatal */ }
 
         // Notification for all masters
-        await supabase.from('portal_notifications').insert({
-          type: 'chat_urgent',
-          title: `🚨 Nueva urgencia: ${client_name || ticket}`,
-          body: `Categoría: ${category || 'N/A'} — Severidad: ${severity || 'N/A'}`,
-          link: `/operaciones/urgencias`,
-          target_role: 'master',
-          target_user_id: null,
-        }).catch(() => {});
+        try {
+          await supabase.from('portal_notifications').insert({
+            type: 'chat_urgent',
+            title: `🚨 Nueva urgencia: ${client_name || ticket}`,
+            body: `Categoría: ${category || 'N/A'} — Severidad: ${severity || 'N/A'}`,
+            link: `/operaciones/urgencias`,
+            target_role: 'master',
+            target_user_id: null,
+          });
+        } catch { /* non-fatal */ }
 
         // Activity log
-        await supabase.from('ops_activity_log').insert({
-          user_id: userId,
-          action_type: 'case_created',
-          entity_type: 'case',
-          entity_id: data.id,
-          metadata: { ticket, case_type: CASE_TYPE, severity, category },
-        }).catch(() => {});
+        try {
+          await supabase.from('ops_activity_log').insert({
+            user_id: userId,
+            action_type: 'case_created',
+            entity_type: 'case',
+            entity_id: data.id,
+            metadata: { ticket, case_type: CASE_TYPE, severity, category },
+          });
+        } catch { /* non-fatal */ }
 
         return NextResponse.json({ success: true, data });
       }
@@ -248,27 +252,31 @@ export async function POST(req: NextRequest) {
 
         // Mark first response on en_atencion
         if (newStatus === 'en_atencion') {
-          await supabase.rpc('ops_mark_first_response', { p_case_id: id, p_user_id: userId }).catch(() => {});
+          try { await supabase.rpc('ops_mark_first_response', { p_case_id: id, p_user_id: userId }); } catch { /* non-fatal */ }
         }
 
         // Save mandatory note
         if (note && note.trim().length >= 10) {
-          await supabase.from('ops_notes').insert({
-            case_id: id,
-            user_id: userId,
-            note: note.trim(),
-            note_type: newStatus === 'cerrado' ? 'cierre' : (caseRow.sla_breached ? 'sla_breached' : 'status_change'),
-          }).catch(() => {});
+          try {
+            await supabase.from('ops_notes').insert({
+              case_id: id,
+              user_id: userId,
+              note: note.trim(),
+              note_type: newStatus === 'cerrado' ? 'cierre' : (caseRow.sla_breached ? 'sla_breached' : 'status_change'),
+            });
+          } catch { /* non-fatal */ }
         }
 
         // Activity log
-        await supabase.from('ops_activity_log').insert({
-          user_id: userId,
-          action_type: 'status_change',
-          entity_type: 'case',
-          entity_id: id,
-          metadata: { from: caseRow.status, to: newStatus, note: note || null },
-        }).catch(() => {});
+        try {
+          await supabase.from('ops_activity_log').insert({
+            user_id: userId,
+            action_type: 'status_change',
+            entity_type: 'case',
+            entity_id: id,
+            metadata: { from: caseRow.status, to: newStatus, note: note || null },
+          });
+        } catch { /* non-fatal */ }
 
         // Fire-and-forget AI evaluation on close/resolve
         if (newStatus === 'resuelto' || newStatus === 'cerrado') {
@@ -288,23 +296,27 @@ export async function POST(req: NextRequest) {
         const { error } = await supabase.from('ops_cases').update({ assigned_master_id: master_id }).eq('id', case_id);
         if (error) throw error;
 
-        await supabase.from('ops_activity_log').insert({
-          user_id: userId,
-          action_type: 'reassignment',
-          entity_type: 'case',
-          entity_id: case_id,
-          metadata: { from: prev?.assigned_master_id, to: master_id },
-        }).catch(() => {});
+        try {
+          await supabase.from('ops_activity_log').insert({
+            user_id: userId,
+            action_type: 'reassignment',
+            entity_type: 'case',
+            entity_id: case_id,
+            metadata: { from: prev?.assigned_master_id, to: master_id },
+          });
+        } catch { /* non-fatal */ }
 
         // Notify new assignee
-        await supabase.from('portal_notifications').insert({
-          type: 'chat_urgent',
-          title: '🚨 Urgencia reasignada a ti',
-          body: 'Se te ha asignado un caso urgente. Revisa la bandeja de urgencias.',
-          link: '/operaciones/urgencias',
-          target_role: null,
-          target_user_id: master_id,
-        }).catch(() => {});
+        try {
+          await supabase.from('portal_notifications').insert({
+            type: 'chat_urgent',
+            title: '🚨 Urgencia reasignada a ti',
+            body: 'Se te ha asignado un caso urgente. Revisa la bandeja de urgencias.',
+            link: '/operaciones/urgencias',
+            target_role: null,
+            target_user_id: master_id,
+          });
+        } catch { /* non-fatal */ }
 
         return NextResponse.json({ success: true });
       }
@@ -324,13 +336,15 @@ export async function POST(req: NextRequest) {
         });
         if (error) throw error;
 
-        await supabase.from('ops_activity_log').insert({
-          user_id: userId,
-          action_type: 'case_note_added',
-          entity_type: 'case',
-          entity_id: case_id,
-          metadata: { note_type: note_type || 'manual' },
-        }).catch(() => {});
+        try {
+          await supabase.from('ops_activity_log').insert({
+            user_id: userId,
+            action_type: 'case_note_added',
+            entity_type: 'case',
+            entity_id: case_id,
+            metadata: { note_type: note_type || 'manual' },
+          });
+        } catch { /* non-fatal */ }
 
         return NextResponse.json({ success: true });
       }
@@ -338,13 +352,15 @@ export async function POST(req: NextRequest) {
       // ── Log chat open (deep link) ──
       case 'log_chat_open': {
         const { case_id, chat_thread_id } = body;
-        await supabase.from('ops_activity_log').insert({
-          user_id: userId,
-          action_type: 'navigation',
-          entity_type: 'case',
-          entity_id: case_id,
-          metadata: { action: 'open_adm_cot_chat', chat_thread_id },
-        }).catch(() => {});
+        try {
+          await supabase.from('ops_activity_log').insert({
+            user_id: userId,
+            action_type: 'navigation',
+            entity_type: 'case',
+            entity_id: case_id,
+            metadata: { action: 'open_adm_cot_chat', chat_thread_id },
+          });
+        } catch { /* non-fatal */ }
 
         return NextResponse.json({ success: true });
       }
@@ -365,13 +381,15 @@ export async function POST(req: NextRequest) {
           sourceId: caseRow?.chat_thread_id,
         });
 
-        await supabase.from('ops_activity_log').insert({
-          user_id: userId,
-          action_type: 'status_change',
-          entity_type: 'case',
-          entity_id: case_id,
-          metadata: { action: 'ai_case_scored', manual: true, success: result.success },
-        }).catch(() => {});
+        try {
+          await supabase.from('ops_activity_log').insert({
+            user_id: userId,
+            action_type: 'status_change',
+            entity_type: 'case',
+            entity_id: case_id,
+            metadata: { action: 'ai_case_scored', manual: true, success: result.success },
+          });
+        } catch { /* non-fatal */ }
 
         return NextResponse.json({ success: result.success, evaluationId: result.evaluationId, error: result.error });
       }

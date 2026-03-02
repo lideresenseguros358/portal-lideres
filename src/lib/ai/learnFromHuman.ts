@@ -221,15 +221,17 @@ Extrae el conocimiento de las respuestas humanas.`;
 
     return { success: true, memoryId: memoryRow?.id };
   } catch (err: any) {
-    await supabase.from('ops_ai_training_events').insert({
-      case_id: caseId,
-      event_type: 'learn_from_human_reply',
-      payload: { error: err.message },
-      model_provider: provider.name,
-      model_name: null,
-      success: false,
-      error: err.message,
-    }).catch(() => {});
+    try {
+      await supabase.from('ops_ai_training_events').insert({
+        case_id: caseId,
+        event_type: 'learn_from_human_reply',
+        payload: { error: err.message },
+        model_provider: provider.name,
+        model_name: null,
+        success: false,
+        error: err.message,
+      });
+    } catch { /* non-fatal */ }
 
     console.error('[AI-LEARN] learnFromHumanIntervention error:', err.message);
     return { success: false, error: err.message };
