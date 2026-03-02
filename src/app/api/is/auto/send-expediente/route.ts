@@ -48,7 +48,7 @@ async function sendZeptoWithAttachments(opts: {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Zoho-encrtoken ${apiKey}`,
+      'Authorization': apiKey,
     },
     body: JSON.stringify(body),
   });
@@ -86,7 +86,10 @@ export async function POST(request: NextRequest) {
     const insurerName = formData.get('insurerName') as string || 'Internacional de Seguros';
     const clientId = formData.get('clientId') as string || '';
     const policyId = formData.get('policyId') as string || '';
-    const isDev = environment !== 'production';
+    // Use server-side env to determine prod vs dev (client always sends 'development')
+    const serverEnv = process.env.VERCEL_ENV || process.env.NODE_ENV || 'development';
+    const isProduction = serverEnv === 'production';
+    const isDev = !isProduction;
     
     if (!clientDataStr || !vehicleDataStr) {
       return NextResponse.json({ error: 'Faltan datos del cliente o vehículo' }, { status: 400 });
@@ -99,9 +102,9 @@ export async function POST(request: NextRequest) {
     
     const isCC = tipoCobertura === 'CC';
     const isIS = (insurerName || '').toUpperCase().includes('INTERNACIONAL');
-    const isRecipients = environment === 'production' ? IS_RECIPIENTS_PROD : IS_RECIPIENTS_DEV;
+    const isRecipients = isProduction ? IS_RECIPIENTS_PROD : IS_RECIPIENTS_DEV;
     
-    console.log(`[IS EXPEDIENTE] Tipo: ${tipoCobertura}, Aseguradora: ${insurerName}, IS: ${isIS}, Env: ${environment}`);
+    console.log(`[IS EXPEDIENTE] Tipo: ${tipoCobertura}, Aseguradora: ${insurerName}, IS: ${isIS}, ServerEnv: ${serverEnv}, ClientEnv: ${environment}, IsProduction: ${isProduction}`);
     
     // Collect file attachments
     const attachments: Array<{ filename: string; content: Buffer; contentType: string }> = [];
