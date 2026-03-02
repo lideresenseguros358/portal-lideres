@@ -60,10 +60,10 @@ export default function OperacionesShell({ children }: Props) {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-[#010139] flex items-center gap-3 flex-wrap">
+          <h1 className="text-3xl sm:text-4xl font-bold text-[#010139] mb-2 flex items-center gap-3 flex-wrap">
             ⚙️ Operaciones
           </h1>
-          <p className="text-sm sm:text-base text-gray-600">
+          <p className="text-gray-600 text-base sm:text-lg">
             Centro de operaciones y gestión integral
           </p>
         </div>
@@ -92,23 +92,23 @@ export default function OperacionesShell({ children }: Props) {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex-1 min-w-[70px] sm:min-w-[120px] flex items-center justify-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2.5 sm:py-3 rounded-xl font-semibold transition-all whitespace-nowrap text-xs sm:text-base ${
+              className={`flex-1 min-w-[140px] flex items-center justify-center gap-2 px-3 sm:px-4 py-2.5 sm:py-3 rounded-xl font-semibold transition-all whitespace-nowrap text-sm sm:text-base ${
                 isActive
                   ? 'bg-gradient-to-r from-[#010139] to-[#020270] text-white shadow-lg'
                   : 'text-gray-600 hover:bg-gray-100'
               }`}
             >
-              <span className="relative">
-                <Icon size={14} className={`sm:hidden flex-shrink-0 ${isActive ? 'text-white' : ''}`} />
-                <Icon size={16} className={`hidden sm:block flex-shrink-0 ${isActive ? 'text-white' : ''}`} />
-                {item.badgeKey && badges[item.badgeKey] > 0 && (
-                  <span className="absolute -top-1.5 -right-1.5 flex items-center justify-center min-w-[16px] h-4 px-1 rounded-full bg-red-500 text-[9px] font-bold text-white leading-none shadow-sm">
-                    {badges[item.badgeKey] > 99 ? '99+' : badges[item.badgeKey]}
-                  </span>
-                )}
-              </span>
-              <span className={`hidden sm:inline ${isActive ? 'text-white' : ''}`}>{item.label}</span>
-              <span className={`sm:hidden ${isActive ? 'text-white' : ''}`}>{item.shortLabel}</span>
+              <Icon size={14} className="sm:hidden" />
+              <Icon size={16} className="hidden sm:block" />
+              <span className="hidden sm:inline">{item.label}</span>
+              <span className="sm:hidden">{item.shortLabel}</span>
+              {item.badgeKey && badges[item.badgeKey] > 0 && (
+                <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                  isActive ? 'bg-[#8AAA19]' : 'bg-red-500 text-white'
+                }`}>
+                  {badges[item.badgeKey] > 99 ? '99+' : badges[item.badgeKey]}
+                </span>
+              )}
             </Link>
           );
         })}
