@@ -258,15 +258,17 @@ export default function AdmCotExpedientes() {
       {/* Filters */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
         <div className="flex flex-wrap items-center gap-3">
-          <div className="relative flex-1 min-w-[200px]">
-            <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+          <div className="flex-1 min-w-[200px] flex items-center gap-2 border-2 border-gray-200 rounded-lg focus-within:border-[#8AAA19] focus-within:ring-2 focus-within:ring-[#8AAA19]/20 bg-white px-3 py-2">
+            <div className="flex-shrink-0 text-gray-400">
+              <FaSearch size={14} />
+            </div>
             <input
               type="text"
               placeholder="Buscar por nombre, cédula, póliza..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && updateFilter('search', searchTerm || undefined)}
-              className="w-full pl-10 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-1 focus:ring-[#010139]/20 outline-none"
+              className="flex-1 min-w-0 border-0 focus:outline-none focus:ring-0 text-gray-700 placeholder-gray-400 text-sm bg-transparent p-0"
             />
           </div>
           <select
