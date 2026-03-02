@@ -37,6 +37,8 @@
   display: flex;
   flex-direction: column;
   max-height: 90vh;
+  overflow-x: hidden;
+  box-sizing: border-box;
 }
 
 /* ============================================
@@ -90,6 +92,7 @@
 .standard-modal-content {
   padding: 1.5rem;
   overflow-y: auto;
+  overflow-x: hidden;
   flex: 1;
   min-height: 0; /* Importante para que funcione el scroll */
 }
