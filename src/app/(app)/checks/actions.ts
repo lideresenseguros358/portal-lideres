@@ -1098,8 +1098,8 @@ export async function actionGetPendingPaymentsNew(filters?: {
       }
     }
     
-    // TERCERO: Obtener los pagos actualizados
-    let query = supabase
+    // TERCERO: Obtener los pagos actualizados (usar admin para evitar que RLS oculte can_be_paid)
+    let query = supabaseAdmin
       .from('pending_payments')
       .select(`
         *,
@@ -1118,7 +1118,7 @@ export async function actionGetPendingPaymentsNew(filters?: {
     // Aplicar filtro adicional si se especifica
     if (filters?.status && filters.status !== 'pending') {
       // Si se solicita otro status, cambiar el filtro
-      query = supabase
+      query = supabaseAdmin
         .from('pending_payments')
         .select(`
           *,
