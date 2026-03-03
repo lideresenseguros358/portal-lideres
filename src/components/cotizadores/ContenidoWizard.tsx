@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { FaArrowLeft, FaArrowRight, FaCheck, FaSpinner, FaInfoCircle, FaChevronDown, FaChevronUp, FaPlus, FaTrash, FaExclamationTriangle } from 'react-icons/fa';
 import { createPetitionFromQuote } from '@/lib/operaciones/createPetitionFromQuote';
+import { SECURITY_MEASURES } from '@/lib/constants/securityMeasures';
 
 // ═══════════════════════════════════════════════════════════════════
 // TYPES
@@ -47,25 +48,6 @@ interface AddressCatalogItem {
   TEXTO: string;
 }
 
-interface SecurityOption {
-  id: string;
-  label: string;
-  icon: string;
-  tooltip: string;
-}
-
-const SECURITY_OPTIONS: SecurityOption[] = [
-  { id: 'alarma_robo', label: 'Alarma contra robo', icon: '🔔', tooltip: 'Sistema de alarma monitoreado o local contra intrusión' },
-  { id: 'alarma_incendio', label: 'Alarma contra incendio', icon: '🔥', tooltip: 'Detectores de humo y/o calor conectados a panel de alarma' },
-  { id: 'extintores', label: 'Extintores', icon: '🧯', tooltip: 'Extintores portátiles vigentes en la propiedad' },
-  { id: 'rociadores', label: 'Sistema de rociadores', icon: '💧', tooltip: 'Sistema automático de rociadores (sprinklers) contra incendio' },
-  { id: 'camaras', label: 'Cámaras de seguridad', icon: '📹', tooltip: 'Sistema CCTV o cámaras de vigilancia' },
-  { id: 'vigilancia', label: 'Vigilancia 24h', icon: '👮', tooltip: 'Servicio de seguridad privada o garita con vigilante permanente' },
-  { id: 'cerca_electrica', label: 'Cerca eléctrica / concertina', icon: '⚡', tooltip: 'Perímetro con cerca eléctrica o alambre de púas/concertina' },
-  { id: 'puerta_seguridad', label: 'Puerta de seguridad', icon: '🚪', tooltip: 'Puerta blindada o reforzada en acceso principal' },
-  { id: 'detector_gas', label: 'Detector de gas', icon: '🌡️', tooltip: 'Detector de fuga de gas GLP o natural' },
-  { id: 'gabinete_manguera', label: 'Gabinete con manguera', icon: '🧑‍🚒', tooltip: 'Gabinete contra incendio con manguera en el edificio' },
-];
 
 const TOTAL_STEPS = 5;
 
@@ -256,7 +238,7 @@ export default function ContenidoWizard() {
     }
 
     if (s === 3) {
-      if (data.seguridad.length === 0) e.seguridad = 'Selecciona al menos 1 sistema de seguridad';
+      if (data.seguridad.length === 0) e.seguridad = 'Debes seleccionar al menos una medida de seguridad.';
     }
 
     if (s === 4) {
@@ -336,7 +318,10 @@ export default function ContenidoWizard() {
       const corrName = corregimientos.find(c => String(c.DATO) === data.corregimiento)?.TEXTO || data.corregimiento;
       const urbName = urbanizaciones.find(u => String(u.DATO) === data.barriada)?.TEXTO || data.barriada;
       const valorNum = parseFloat(data.valorContenido) || 0;
-      const seguridadLabels = data.seguridad.map(id => SECURITY_OPTIONS.find(o => o.id === id)?.label || id);
+      const seguridadMeta = data.seguridad.map(key => {
+        const m = SECURITY_MEASURES.find(o => o.key === key);
+        return { key, label: m?.label || key };
+      });
 
       const tipoViviendaLabel = data.tipoVivienda === 'casa' ? 'Casa' : 'Apartamento';
       let direccionDetalle = '';
@@ -366,8 +351,8 @@ export default function ContenidoWizard() {
         `Tipo de vivienda: ${tipoViviendaLabel}`,
         `Detalle: ${sanitizeHTML(direccionDetalle)}`,
         '',
-        '── SISTEMAS DE SEGURIDAD ──',
-        ...seguridadLabels.map(s => `  ✓ ${sanitizeHTML(s)}`),
+        '── MEDIDAS DE SEGURIDAD ──',
+        ...seguridadMeta.map(s => `  • ${sanitizeHTML(s.label)}`),
         '',
         '── VALOR DEL CONTENIDO ──',
         `Valor estimado: $${formatUSD(valorNum)}`,
@@ -428,8 +413,7 @@ export default function ContenidoWizard() {
             ...(data.tipoVivienda === 'casa' ? { calle: data.calle, numero_casa: data.numeroCasa } : {}),
             ...(data.tipoVivienda === 'apartamento' ? { nombre_edificio: data.nombreEdificio, piso: data.piso, numero_apto: data.numeroApto } : {}),
           },
-          seguridad: data.seguridad,
-          seguridad_labels: seguridadLabels,
+          security_measures: seguridadMeta,
           valor_contenido: valorNum,
           tiene_articulos_alto_valor: !!data.tieneArticulosAltoValor,
           articulos_alto_valor: articulosMeta,
@@ -611,34 +595,29 @@ export default function ContenidoWizard() {
   }
 
   function renderStep3() {
-    const toggleSecurity = (id: string) => {
+    const toggleSecurity = (key: string) => {
       setData(prev => ({
         ...prev,
-        seguridad: prev.seguridad.includes(id) ? prev.seguridad.filter(s => s !== id) : [...prev.seguridad, id],
+        seguridad: prev.seguridad.includes(key) ? prev.seguridad.filter(s => s !== key) : [...prev.seguridad, key],
       }));
     };
 
     return (
       <div className="space-y-4">
         <p className="text-sm text-gray-500">
-          Selecciona los sistemas de seguridad que tiene la propiedad. <strong className="text-[#010139]">Mínimo 1 obligatorio.</strong>
+          Selecciona las medidas de seguridad con las que cuenta la propiedad <strong className="text-[#010139]">(mínimo 1)</strong>.
         </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {SECURITY_OPTIONS.map((opt) => {
-            const selected = data.seguridad.includes(opt.id);
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {SECURITY_MEASURES.map((m) => {
+            const selected = data.seguridad.includes(m.key);
             return (
-              <button key={opt.id} type="button" onClick={() => toggleSecurity(opt.id)}
-                className={`relative flex items-start gap-3 p-4 rounded-xl border-2 text-left transition-all ${selected ? 'border-[#8AAA19] bg-[#8AAA19]/5 shadow-sm' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
-                <div className={`flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center mt-0.5 transition-all ${selected ? 'bg-[#8AAA19] border-[#8AAA19]' : 'border-gray-300 bg-white'}`}>
+              <button key={m.key} type="button" onClick={() => toggleSecurity(m.key)}
+                className={`flex items-center gap-2.5 p-3 rounded-xl border-2 text-left transition-all ${selected ? 'border-[#8AAA19] bg-[#8AAA19]/5 shadow-sm' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
+                <div className={`flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${selected ? 'bg-[#8AAA19] border-[#8AAA19]' : 'border-gray-300 bg-white'}`}>
                   {selected && <FaCheck size={10} className="text-white" />}
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg">{opt.icon}</span>
-                    <span className={`text-sm font-semibold ${selected ? 'text-[#010139]' : 'text-gray-700'}`}>{opt.label}</span>
-                  </div>
-                  <p className="text-[11px] text-gray-500 mt-1 leading-snug">{opt.tooltip}</p>
-                </div>
+                <span className="text-base flex-shrink-0">{m.icon}</span>
+                <span className={`text-xs font-semibold leading-tight ${selected ? 'text-[#010139]' : 'text-gray-700'}`}>{m.label}</span>
               </button>
             );
           })}
@@ -646,7 +625,7 @@ export default function ContenidoWizard() {
         {errors.seguridad && <p className="text-red-500 text-xs mt-1 font-medium">{errors.seguridad}</p>}
         {data.seguridad.length > 0 && (
           <div className="flex items-center gap-2 text-sm font-semibold text-[#8AAA19]">
-            <FaCheck size={12} /> {data.seguridad.length} sistema{data.seguridad.length !== 1 ? 's' : ''} seleccionado{data.seguridad.length !== 1 ? 's' : ''}
+            <FaCheck size={12} /> {data.seguridad.length} medida{data.seguridad.length !== 1 ? 's' : ''} seleccionada{data.seguridad.length !== 1 ? 's' : ''}
           </div>
         )}
       </div>
@@ -791,7 +770,7 @@ export default function ContenidoWizard() {
     const distName = distritos.find(d => String(d.DATO) === data.distrito)?.TEXTO || data.distrito;
     const corrName = corregimientos.find(c => String(c.DATO) === data.corregimiento)?.TEXTO || data.corregimiento;
     const urbName = urbanizaciones.find(u => String(u.DATO) === data.barriada)?.TEXTO || data.barriada;
-    const seguridadLabels = data.seguridad.map(id => SECURITY_OPTIONS.find(o => o.id === id)?.label || id);
+    const seguridadLabels = data.seguridad.map(key => SECURITY_MEASURES.find(o => o.key === key)?.label || key);
     const valorNum = parseFloat(data.valorContenido) || 0;
 
     const tipoViviendaLabel = data.tipoVivienda === 'casa' ? 'Casa' : 'Apartamento';
@@ -825,8 +804,8 @@ export default function ContenidoWizard() {
               { label: 'Tipo', value: tipoViviendaLabel },
               { label: 'Detalle', value: direccionDetalle },
             ].filter(Boolean) as any} />
-            <SummarySection title="Sistemas de seguridad" onEdit={() => goToStep(3)} items={
-              seguridadLabels.map(s => ({ label: '✓', value: s }))
+            <SummarySection title="Medidas de seguridad" onEdit={() => goToStep(3)} items={
+              seguridadLabels.map(s => ({ label: '•', value: s }))
             } />
             <SummarySection title="Valor del contenido" onEdit={() => goToStep(4)} items={[
               { label: 'Contenido', value: `$${formatUSD(valorNum)}` },
@@ -858,7 +837,7 @@ export default function ContenidoWizard() {
   const stepTitles = [
     'Datos del cliente',
     'Dirección residencial',
-    'Sistemas de seguridad',
+    'Medidas de seguridad',
     'Valor del contenido',
     'Resumen y enviar',
   ];
