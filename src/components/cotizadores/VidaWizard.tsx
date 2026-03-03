@@ -948,42 +948,6 @@ export default function VidaWizard() {
           {errors.tiposPropuesta && <p className="text-red-500 text-xs mt-1 font-medium">{errors.tiposPropuesta}</p>}
         </div>
 
-        {/* Resumen */}
-        <div className="bg-gray-50 rounded-xl border-2 border-gray-200 overflow-hidden">
-          <div className="bg-[#010139] px-4 py-3">
-            <h4 className="text-white font-bold text-sm">Resumen de tu solicitud</h4>
-          </div>
-          <div className="p-4 space-y-3 text-sm">
-            <SummarySection title="Datos personales" onEdit={() => goToStep(1)} items={[
-              { label: 'Nombre', value: `${data.nombre} ${data.apellido}` },
-              { label: 'Nacimiento', value: `${data.fechaNacimiento} (${edad} años)` },
-              { label: 'Celular', value: data.celular },
-              { label: 'Correo', value: data.correo },
-              { label: 'Nacionalidad', value: data.nacionalidad },
-            ]} />
-            <SummarySection title="Trabajo e ingresos" onEdit={() => goToStep(2)} items={[
-              { label: 'Ocupación', value: data.ocupacion },
-              { label: 'Trabaja en', value: data.lugarTrabajo },
-              { label: 'Salario mensual', value: `$${formatUSD(salarioNum)}` },
-            ]} />
-            <SummarySection title="Dirección" onEdit={() => goToStep(3)} items={[
-              { label: 'Ubicación', value: [provName, distName, corrName].filter(Boolean).join(', ') },
-              urbName ? { label: 'Barriada', value: urbName } : null,
-              data.direccionReferencias ? { label: 'Ref.', value: data.direccionReferencias } : null,
-            ].filter(Boolean) as any} />
-            <SummarySection title="Salud" onEdit={() => goToStep(4)} items={[
-              { label: 'Altura / Peso', value: `${data.altura}m / ${data.peso} lbs` },
-              { label: 'Enfermedad', value: data.tieneEnfermedad ? `Sí — ${data.descripcionEnfermedad}` : 'No' },
-              { label: 'Fumador', value: !data.haFumadoAlgunaVez ? 'Nunca' : (data.fumaActualmente ? 'Sí, actualmente' : `No — Dejó: ${data.ultimaVezFumo}`) },
-            ]} />
-            <SummarySection title="Cobertura" onEdit={() => goToStep(5)} items={[
-              { label: 'Seguro actual', value: data.tieneSeguroVida ? `Sí — ${data.companiaSeguroActual} ($${formatUSD(parseFloat(data.sumaAseguradaActual) || 0)})` : 'No' },
-              { label: 'Hipoteca', value: data.esCubrirHipoteca ? `Sí — ${data.aniosHipoteca} años` : 'No' },
-              { label: 'Suma solicitada', value: `$${formatUSD(parseFloat(data.sumaAseguradaSolicitada) || 0)}` },
-            ]} />
-          </div>
-        </div>
-
         {/* Confirmación */}
         <label className={`flex items-start gap-3 p-4 rounded-xl border-2 cursor-pointer transition-all ${
           data.confirmaInformacion ? 'border-[#8AAA19] bg-[#8AAA19]/5' : 'border-gray-200 bg-white'
@@ -1138,6 +1102,50 @@ export default function VidaWizard() {
           {step === 6 && renderStep6()}
         </div>
       </div>
+
+      {/* Summary Card — shown below step card on step 6 */}
+      {step === 6 && (() => {
+        const provName = provincias.find(p => String(p.DATO) === data.provincia)?.TEXTO || data.provincia;
+        const distName = distritos.find(d => String(d.DATO) === data.distrito)?.TEXTO || data.distrito;
+        const corrName = corregimientos.find(c => String(c.DATO) === data.corregimiento)?.TEXTO || data.corregimiento;
+        const urbName = urbanizaciones.find(u => String(u.DATO) === data.barriada)?.TEXTO || data.barriada;
+        return (
+          <div className="bg-gray-50 rounded-2xl border-2 border-gray-200 overflow-hidden mb-6">
+            <div className="bg-[#010139] px-4 py-3">
+              <h4 className="text-white font-bold text-sm">Resumen de tu solicitud</h4>
+            </div>
+            <div className="p-4 space-y-3 text-sm">
+              <SummarySection title="Datos personales" onEdit={() => goToStep(1)} items={[
+                { label: 'Nombre', value: `${data.nombre} ${data.apellido}` },
+                { label: 'Nacimiento', value: `${data.fechaNacimiento} (${edad} años)` },
+                { label: 'Celular', value: data.celular },
+                { label: 'Correo', value: data.correo },
+                { label: 'Nacionalidad', value: data.nacionalidad },
+              ]} />
+              <SummarySection title="Trabajo e ingresos" onEdit={() => goToStep(2)} items={[
+                { label: 'Ocupación', value: data.ocupacion },
+                { label: 'Trabaja en', value: data.lugarTrabajo },
+                { label: 'Salario mensual', value: `$${formatUSD(salarioNum)}` },
+              ]} />
+              <SummarySection title="Dirección" onEdit={() => goToStep(3)} items={[
+                { label: 'Ubicación', value: [provName, distName, corrName].filter(Boolean).join(', ') },
+                urbName ? { label: 'Barriada', value: urbName } : null,
+                data.direccionReferencias ? { label: 'Ref.', value: data.direccionReferencias } : null,
+              ].filter(Boolean) as any} />
+              <SummarySection title="Salud" onEdit={() => goToStep(4)} items={[
+                { label: 'Altura / Peso', value: `${data.altura}m / ${data.peso} lbs` },
+                { label: 'Enfermedad', value: data.tieneEnfermedad ? `Sí — ${data.descripcionEnfermedad}` : 'No' },
+                { label: 'Fumador', value: !data.haFumadoAlgunaVez ? 'Nunca' : (data.fumaActualmente ? 'Sí, actualmente' : `No — Dejó: ${data.ultimaVezFumo}`) },
+              ]} />
+              <SummarySection title="Cobertura" onEdit={() => goToStep(5)} items={[
+                { label: 'Seguro actual', value: data.tieneSeguroVida ? `Sí — ${data.companiaSeguroActual} ($${formatUSD(parseFloat(data.sumaAseguradaActual) || 0)})` : 'No' },
+                { label: 'Hipoteca', value: data.esCubrirHipoteca ? `Sí — ${data.aniosHipoteca} años` : 'No' },
+                { label: 'Suma solicitada', value: `$${formatUSD(parseFloat(data.sumaAseguradaSolicitada) || 0)}` },
+              ]} />
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Navigation */}
       <div className="flex items-center gap-3 mt-2">
