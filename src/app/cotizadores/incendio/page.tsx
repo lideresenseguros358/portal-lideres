@@ -1,9 +1,9 @@
 /**
- * Página de Cotización - Incendio
+ * Página de Cotización - Incendio (Wizard)
  */
 
 import { Suspense } from 'react';
-import FormIncendio from '@/components/cotizadores/FormIncendio';
+import IncendioWizard from '@/components/cotizadores/IncendioWizard';
 import LoadingSkeleton from '@/components/cotizadores/LoadingSkeleton';
 
 export const metadata = {
@@ -14,7 +14,7 @@ export const metadata = {
 export default function CotizarIncendioPage() {
   return (
     <Suspense fallback={<LoadingSkeleton />}>
-      <FormIncendio />
+      <IncendioWizard />
     </Suspense>
   );
 }
