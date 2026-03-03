@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { FaSearch, FaPlus, FaDownload, FaEnvelope, FaFilter, FaList, FaThLarge, FaTrash } from 'react-icons/fa';
 import { toast } from 'sonner';
 import { actionGetCases, actionDeleteCase, actionUpdateCase, actionUpdateCaseStatus } from '@/app/(app)/cases/actions';
@@ -114,6 +114,18 @@ export default function CasesMainClient({ userProfile, brokers, insurers, renova
   useEffect(() => {
     loadCases();
     loadStats();
+  }, [loadCases, loadStats]);
+
+  // Auto-refresh every 30 seconds so new cases appear
+  const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  useEffect(() => {
+    refreshIntervalRef.current = setInterval(() => {
+      loadCases();
+      loadStats();
+    }, 30000);
+    return () => {
+      if (refreshIntervalRef.current) clearInterval(refreshIntervalRef.current);
+    };
   }, [loadCases, loadStats]);
 
   useEffect(() => {
@@ -517,8 +529,8 @@ export default function CasesMainClient({ userProfile, brokers, insurers, renova
         )}
       </div>
 
-      {/* Unclassified emails panel — only for SIN_CLASIFICAR tab */}
-      {activeTab === 'SIN_CLASIFICAR' && userProfile.role === 'master' && (
+      {/* Unclassified emails panel — visible on all section tabs for master */}
+      {activeTab !== 'RENOVACIONES_LISSA' && userProfile.role === 'master' && (
         <div className="mt-4">
           <UnclassifiedEmailsUI />
         </div>

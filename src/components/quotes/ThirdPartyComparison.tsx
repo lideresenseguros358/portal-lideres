@@ -79,7 +79,7 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
                   endoso: fallback.endoso || apiPlan.endoso,
                   endosoPdf: fallback.endosoPdf || apiPlan.endosoPdf,
                   endosoBenefits: (fallback.endosoBenefits && fallback.endosoBenefits.length > 0) ? fallback.endosoBenefits : apiPlan.endosoBenefits,
-                  planCode: fedpaData.planCode || fallback.planCode || 426,
+                  planCode: apiPlan.emissionPlanCode || fedpaData.planCode || fallback.planCode || 1000,
                   includedCoverages: apiPlan.includedCoverages || fallback.includedCoverages,
                   idCotizacion: apiPlan.idCotizacion || fallback.idCotizacion,
                 };
@@ -190,7 +190,7 @@ export default function ThirdPartyComparison({ onSelectPlan }: ThirdPartyCompari
       sessionStorage.setItem('thirdPartyQuote', JSON.stringify({
         insurerId: insurer.id, insurerName: insurer.name, planType: type,
         annualPremium: plan.annualPremium, isRealAPI: true, isFEDPA: true,
-        idCotizacion: plan.idCotizacion, planCode: plan.planCode || 426,
+        idCotizacion: plan.idCotizacion, planCode: plan.emissionPlanCode || plan.planCode || 1000,
         includedCoverages: plan.includedCoverages, endosoPdf: plan.endosoPdf,
         installments: plan.installments, opcion: plan.opcion,
       }));

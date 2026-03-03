@@ -45,10 +45,10 @@ function createTestJpeg(filename: string): File {
   return new File([bytes], filename, { type: 'image/jpeg' });
 }
 
-// DT Básico — Plan 426, Prima $130 (from auto-quotes.ts constants)
+// DT Básico — Plan 1000 (EmisorPlan 2024), Prima $130
 function buildDTPayload(idDoc: string): EmitirPolizaRequest {
   return {
-    Plan: 426,
+    Plan: 1000,
     idDoc,
     PrimerNombre: 'JUAN',
     PrimerApellido: 'PRUEBA',
@@ -195,7 +195,7 @@ export async function GET(request: NextRequest) {
 
       const dtResult = await emitirPoliza(dtPayload, env);
       results.steps.push({
-        step: '3a', name: 'Emisión DT (Plan 426, $130)',
+        step: '3a', name: 'Emisión DT (Plan 1000, $130)',
         success: dtResult.success,
         response: dtResult,
       });

@@ -247,7 +247,7 @@ export default function EmitirDanosTercerosPage() {
 
         const emisionCommon = {
           IdCotizacion: tpQuote?.idCotizacion || '',
-          Plan: selectedPlan._planCode || 426,
+          Plan: selectedPlan._planCode || 1000,
           PrimerNombre: emissionData.primerNombre,
           PrimerApellido: emissionData.primerApellido,
           SegundoNombre: emissionData.segundoNombre || '',

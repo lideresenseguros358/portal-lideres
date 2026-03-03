@@ -1,16 +1,19 @@
 /**
  * Endpoint: Descargar Carátula PDF de Póliza FEDPA
- * GET /api/fedpa/polizas/{poliza}/caratula
+ * POST /api/fedpa/polizas/{poliza}/caratula
  * 
- * Intenta obtener el PDF desde FEDPA Swagger.
- * Si no existe endpoint en FEDPA, devuelve error CARATULA_ENDPOINT_NOT_FOUND_IN_SWAGGER.
+ * FedPa EmisorPlan (2024) endpoint: POST /api/caratulaPoliza
+ * Requires the same payload as /api/emitirpoliza (InformacionEmisionPoliza schema).
+ * Returns PDF binary.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { obtenerClienteAutenticado } from '@/lib/fedpa/auth.service';
 import type { FedpaEnvironment } from '@/lib/fedpa/config';
 
-export async function GET(
+const CARATULA_ENDPOINT = '/api/caratulaPoliza';
+
+export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ poliza: string }> }
 ) {
@@ -18,8 +21,8 @@ export async function GET(
   
   try {
     const { poliza } = await params;
-    const { searchParams } = new URL(request.url);
-    const environment = (searchParams.get('environment') || 'PROD') as FedpaEnvironment;
+    const body = await request.json();
+    const environment = (body.environment || 'PROD') as FedpaEnvironment;
     
     if (!poliza) {
       return NextResponse.json(
@@ -45,58 +48,50 @@ export async function GET(
       );
     }
     
-    // Intentar endpoint de carátula en FEDPA
-    // Posibles rutas según Swagger: /api/caratula/{nroPoliza}, /api/poliza/caratula/{nroPoliza}
-    const possibleEndpoints = [
-      `/api/caratula/${poliza}`,
-      `/api/poliza/caratula/${poliza}`,
-      `/api/polizas/caratula/${poliza}`,
-      `/api/emitirpoliza/caratula/${poliza}`,
-    ];
+    // POST /api/caratulaPoliza with the emission payload
+    const { environment: _env, ...emissionData } = body;
     
-    for (const endpoint of possibleEndpoints) {
-      try {
-        console.log(`[API FEDPA Carátula] ${requestId} Probando endpoint: ${endpoint}`);
-        
-        const response = await clientResult.client.getRaw(endpoint);
-        
-        if (response && response.ok) {
-          const contentType = response.headers.get('content-type') || '';
-          
-          if (contentType.includes('application/pdf')) {
-            console.log(`[API FEDPA Carátula] ${requestId} PDF encontrado en ${endpoint}`);
-            
-            const pdfBuffer = await response.arrayBuffer();
-            
-            return new NextResponse(pdfBuffer, {
-              status: 200,
-              headers: {
-                'Content-Type': 'application/pdf',
-                'Content-Disposition': `attachment; filename="caratula_${poliza}.pdf"`,
-                'X-Request-Id': requestId,
-              },
-            });
-          }
-        }
-      } catch {
-        // Endpoint no existe, probar siguiente
-        continue;
-      }
+    console.log(`[API FEDPA Carátula] ${requestId} POST ${CARATULA_ENDPOINT} con payload de emisión`);
+    
+    const response = await clientResult.client.postRaw(CARATULA_ENDPOINT, emissionData);
+    
+    const contentType = response.headers.get('content-type') || '';
+    
+    if (response.ok && contentType.includes('application/pdf')) {
+      console.log(`[API FEDPA Carátula] ${requestId} ✅ PDF recibido (${response.headers.get('content-length') || '?'} bytes)`);
+      
+      const pdfBuffer = await response.arrayBuffer();
+      
+      return new NextResponse(pdfBuffer, {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': `attachment; filename="caratula_${poliza}.pdf"`,
+          'X-Request-Id': requestId,
+        },
+      });
     }
     
-    // Ningún endpoint devolvió PDF
-    console.warn(`[API FEDPA Carátula] ${requestId} No se encontró endpoint de carátula en FEDPA Swagger`);
+    // If not PDF, try to parse as JSON error
+    let errorMsg = `HTTP ${response.status}`;
+    try {
+      const errorData = await response.json();
+      errorMsg = errorData.msg || errorData.message || errorData.error || errorMsg;
+      console.error(`[API FEDPA Carátula] ${requestId} Error JSON:`, errorData);
+    } catch {
+      const textBody = await response.text();
+      errorMsg = textBody.substring(0, 200) || errorMsg;
+      console.error(`[API FEDPA Carátula] ${requestId} Error texto:`, errorMsg);
+    }
     
     return NextResponse.json(
       {
         success: false,
-        code: 'CARATULA_ENDPOINT_NOT_FOUND_IN_SWAGGER',
-        error: `No se encontró endpoint de carátula PDF en FEDPA para la póliza ${poliza}. Contacte a FEDPA para verificar disponibilidad.`,
+        error: `Error obteniendo carátula: ${errorMsg}`,
         poliza,
         requestId,
-        hint: 'Este endpoint puede no estar disponible en la versión actual de la API FEDPA.',
       },
-      { status: 404 }
+      { status: response.status || 400 }
     );
   } catch (error: any) {
     console.error(`[API FEDPA Carátula] ${requestId} Error:`, error);
@@ -105,4 +100,21 @@ export async function GET(
       { status: 500 }
     );
   }
+}
+
+// Keep GET for backward compatibility — redirects to info message
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ poliza: string }> }
+) {
+  const { poliza } = await params;
+  return NextResponse.json(
+    {
+      success: false,
+      error: 'Use POST with the emission payload to get the carátula PDF. GET is not supported by FedPa.',
+      poliza,
+      hint: 'POST /api/fedpa/polizas/{poliza}/caratula with the same body used for emission.',
+    },
+    { status: 405 }
+  );
 }

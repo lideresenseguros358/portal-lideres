@@ -2,9 +2,10 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { FaArrowLeft, FaArrowRight, FaCheck, FaSpinner, FaInfoCircle, FaChevronDown, FaChevronUp } from 'react-icons/fa';
+import { FaArrowLeft, FaArrowRight, FaCheck, FaSpinner, FaInfoCircle, FaChevronDown, FaChevronUp, FaUser, FaBriefcase, FaHome, FaHeartbeat, FaShieldAlt, FaClipboardCheck } from 'react-icons/fa';
 import { createPetitionFromQuote } from '@/lib/operaciones/createPetitionFromQuote';
 import EmissionProgressBar from '@/components/cotizadores/EmissionProgressBar';
+import EmissionBreadcrumb, { type BreadcrumbStepDef } from '@/components/cotizadores/EmissionBreadcrumb';
 
 // ═══════════════════════════════════════════════════════════════════
 // TYPES
@@ -63,7 +64,7 @@ const INITIAL_DATA: VidaFormData = {
   fechaNacimiento: '',
   celular: '',
   correo: '',
-  nacionalidad: 'Panameña',
+  nacionalidad: 'Panamá',
   ocupacion: '',
   lugarTrabajo: '',
   funcionesTrabajo: '',
@@ -602,7 +603,211 @@ export default function VidaWizard() {
         </div>
         <WizardInputField label="Celular" name="celular" type="tel" inputMode="tel" placeholder="+507 6000-0000" hint="Formato: +507 y número local" data={data} errors={errors} onUpdate={update} />
         <WizardInputField label="Correo electrónico" name="correo" type="email" inputMode="email" placeholder="correo@ejemplo.com" data={data} errors={errors} onUpdate={update} />
-        <WizardInputField label="Nacionalidad" name="nacionalidad" placeholder="Panameña" data={data} errors={errors} onUpdate={update} />
+        {/* Nacionalidad */}
+        <div>
+          <label className="block text-sm font-semibold text-gray-700 mb-2">
+            Nacionalidad <span className="text-red-500">*</span>
+          </label>
+          <select
+            value={data.nacionalidad}
+            onChange={(e) => update({ nacionalidad: e.target.value })}
+            className="w-full px-3 py-2.5 md:px-4 md:py-3 text-base border-2 border-gray-300 focus:border-[#8AAA19] rounded-lg focus:outline-none bg-white"
+            style={{ minHeight: '50px' }}
+          >
+            <option value="">Seleccionar</option>
+            <option value="Panamá">Panamá</option>
+            <option disabled>──────────</option>
+            <option value="Afganistán">Afganistán</option>
+            <option value="Albania">Albania</option>
+            <option value="Alemania">Alemania</option>
+            <option value="Andorra">Andorra</option>
+            <option value="Angola">Angola</option>
+            <option value="Antigua y Barbuda">Antigua y Barbuda</option>
+            <option value="Arabia Saudita">Arabia Saudita</option>
+            <option value="Argelia">Argelia</option>
+            <option value="Argentina">Argentina</option>
+            <option value="Armenia">Armenia</option>
+            <option value="Australia">Australia</option>
+            <option value="Austria">Austria</option>
+            <option value="Azerbaiyán">Azerbaiyán</option>
+            <option value="Bahamas">Bahamas</option>
+            <option value="Bangladés">Bangladés</option>
+            <option value="Barbados">Barbados</option>
+            <option value="Baréin">Baréin</option>
+            <option value="Bélgica">Bélgica</option>
+            <option value="Belice">Belice</option>
+            <option value="Benín">Benín</option>
+            <option value="Bielorrusia">Bielorrusia</option>
+            <option value="Birmania">Birmania</option>
+            <option value="Bolivia">Bolivia</option>
+            <option value="Bosnia y Herzegovina">Bosnia y Herzegovina</option>
+            <option value="Botsuana">Botsuana</option>
+            <option value="Brasil">Brasil</option>
+            <option value="Brunéi">Brunéi</option>
+            <option value="Bulgaria">Bulgaria</option>
+            <option value="Burkina Faso">Burkina Faso</option>
+            <option value="Burundi">Burundi</option>
+            <option value="Bután">Bután</option>
+            <option value="Cabo Verde">Cabo Verde</option>
+            <option value="Camboya">Camboya</option>
+            <option value="Camerún">Camerún</option>
+            <option value="Canadá">Canadá</option>
+            <option value="Catar">Catar</option>
+            <option value="Chad">Chad</option>
+            <option value="Chile">Chile</option>
+            <option value="China">China</option>
+            <option value="Chipre">Chipre</option>
+            <option value="Colombia">Colombia</option>
+            <option value="Comoras">Comoras</option>
+            <option value="Corea del Norte">Corea del Norte</option>
+            <option value="Corea del Sur">Corea del Sur</option>
+            <option value="Costa de Marfil">Costa de Marfil</option>
+            <option value="Costa Rica">Costa Rica</option>
+            <option value="Croacia">Croacia</option>
+            <option value="Cuba">Cuba</option>
+            <option value="Dinamarca">Dinamarca</option>
+            <option value="Dominica">Dominica</option>
+            <option value="Ecuador">Ecuador</option>
+            <option value="Egipto">Egipto</option>
+            <option value="El Salvador">El Salvador</option>
+            <option value="Emiratos Árabes Unidos">Emiratos Árabes Unidos</option>
+            <option value="Eritrea">Eritrea</option>
+            <option value="Eslovaquia">Eslovaquia</option>
+            <option value="Eslovenia">Eslovenia</option>
+            <option value="España">España</option>
+            <option value="Estados Unidos">Estados Unidos</option>
+            <option value="Estonia">Estonia</option>
+            <option value="Etiopía">Etiopía</option>
+            <option value="Filipinas">Filipinas</option>
+            <option value="Finlandia">Finlandia</option>
+            <option value="Fiyi">Fiyi</option>
+            <option value="Francia">Francia</option>
+            <option value="Gabón">Gabón</option>
+            <option value="Gambia">Gambia</option>
+            <option value="Georgia">Georgia</option>
+            <option value="Ghana">Ghana</option>
+            <option value="Granada">Granada</option>
+            <option value="Grecia">Grecia</option>
+            <option value="Guatemala">Guatemala</option>
+            <option value="Guinea">Guinea</option>
+            <option value="Guinea Ecuatorial">Guinea Ecuatorial</option>
+            <option value="Guinea-Bisáu">Guinea-Bisáu</option>
+            <option value="Guyana">Guyana</option>
+            <option value="Haití">Haití</option>
+            <option value="Honduras">Honduras</option>
+            <option value="Hungría">Hungría</option>
+            <option value="India">India</option>
+            <option value="Indonesia">Indonesia</option>
+            <option value="Irak">Irak</option>
+            <option value="Irán">Irán</option>
+            <option value="Irlanda">Irlanda</option>
+            <option value="Islandia">Islandia</option>
+            <option value="Israel">Israel</option>
+            <option value="Italia">Italia</option>
+            <option value="Jamaica">Jamaica</option>
+            <option value="Japón">Japón</option>
+            <option value="Jordania">Jordania</option>
+            <option value="Kazajistán">Kazajistán</option>
+            <option value="Kenia">Kenia</option>
+            <option value="Kirguistán">Kirguistán</option>
+            <option value="Kiribati">Kiribati</option>
+            <option value="Kuwait">Kuwait</option>
+            <option value="Laos">Laos</option>
+            <option value="Lesoto">Lesoto</option>
+            <option value="Letonia">Letonia</option>
+            <option value="Líbano">Líbano</option>
+            <option value="Liberia">Liberia</option>
+            <option value="Libia">Libia</option>
+            <option value="Liechtenstein">Liechtenstein</option>
+            <option value="Lituania">Lituania</option>
+            <option value="Luxemburgo">Luxemburgo</option>
+            <option value="Madagascar">Madagascar</option>
+            <option value="Malasia">Malasia</option>
+            <option value="Malaui">Malaui</option>
+            <option value="Maldivas">Maldivas</option>
+            <option value="Malí">Malí</option>
+            <option value="Malta">Malta</option>
+            <option value="Marruecos">Marruecos</option>
+            <option value="Mauricio">Mauricio</option>
+            <option value="Mauritania">Mauritania</option>
+            <option value="México">México</option>
+            <option value="Micronesia">Micronesia</option>
+            <option value="Moldavia">Moldavia</option>
+            <option value="Mónaco">Mónaco</option>
+            <option value="Mongolia">Mongolia</option>
+            <option value="Montenegro">Montenegro</option>
+            <option value="Mozambique">Mozambique</option>
+            <option value="Namibia">Namibia</option>
+            <option value="Nauru">Nauru</option>
+            <option value="Nepal">Nepal</option>
+            <option value="Nicaragua">Nicaragua</option>
+            <option value="Níger">Níger</option>
+            <option value="Nigeria">Nigeria</option>
+            <option value="Noruega">Noruega</option>
+            <option value="Nueva Zelanda">Nueva Zelanda</option>
+            <option value="Omán">Omán</option>
+            <option value="Países Bajos">Países Bajos</option>
+            <option value="Pakistán">Pakistán</option>
+            <option value="Palaos">Palaos</option>
+            <option value="Paraguay">Paraguay</option>
+            <option value="Perú">Perú</option>
+            <option value="Polonia">Polonia</option>
+            <option value="Portugal">Portugal</option>
+            <option value="Reino Unido">Reino Unido</option>
+            <option value="República Centroafricana">República Centroafricana</option>
+            <option value="República Checa">República Checa</option>
+            <option value="República del Congo">República del Congo</option>
+            <option value="República Democrática del Congo">República Democrática del Congo</option>
+            <option value="República Dominicana">República Dominicana</option>
+            <option value="Ruanda">Ruanda</option>
+            <option value="Rumanía">Rumanía</option>
+            <option value="Rusia">Rusia</option>
+            <option value="Samoa">Samoa</option>
+            <option value="San Cristóbal y Nieves">San Cristóbal y Nieves</option>
+            <option value="San Marino">San Marino</option>
+            <option value="San Vicente y las Granadinas">San Vicente y las Granadinas</option>
+            <option value="Santa Lucía">Santa Lucía</option>
+            <option value="Santo Tomé y Príncipe">Santo Tomé y Príncipe</option>
+            <option value="Senegal">Senegal</option>
+            <option value="Serbia">Serbia</option>
+            <option value="Seychelles">Seychelles</option>
+            <option value="Sierra Leona">Sierra Leona</option>
+            <option value="Singapur">Singapur</option>
+            <option value="Siria">Siria</option>
+            <option value="Somalia">Somalia</option>
+            <option value="Sri Lanka">Sri Lanka</option>
+            <option value="Suazilandia">Suazilandia</option>
+            <option value="Sudáfrica">Sudáfrica</option>
+            <option value="Sudán">Sudán</option>
+            <option value="Sudán del Sur">Sudán del Sur</option>
+            <option value="Suecia">Suecia</option>
+            <option value="Suiza">Suiza</option>
+            <option value="Surinam">Surinam</option>
+            <option value="Tailandia">Tailandia</option>
+            <option value="Tanzania">Tanzania</option>
+            <option value="Tayikistán">Tayikistán</option>
+            <option value="Timor Oriental">Timor Oriental</option>
+            <option value="Togo">Togo</option>
+            <option value="Tonga">Tonga</option>
+            <option value="Trinidad y Tobago">Trinidad y Tobago</option>
+            <option value="Túnez">Túnez</option>
+            <option value="Turkmenistán">Turkmenistán</option>
+            <option value="Turquía">Turquía</option>
+            <option value="Tuvalu">Tuvalu</option>
+            <option value="Ucrania">Ucrania</option>
+            <option value="Uganda">Uganda</option>
+            <option value="Uruguay">Uruguay</option>
+            <option value="Uzbekistán">Uzbekistán</option>
+            <option value="Vanuatu">Vanuatu</option>
+            <option value="Venezuela">Venezuela</option>
+            <option value="Vietnam">Vietnam</option>
+            <option value="Yemen">Yemen</option>
+            <option value="Yibuti">Yibuti</option>
+            <option value="Zambia">Zambia</option>
+            <option value="Zimbabue">Zimbabue</option>
+          </select>
+          {errors.nacionalidad && <p className="text-xs text-red-500 mt-1">{errors.nacionalidad}</p>}
+        </div>
       </div>
     );
   }
@@ -971,134 +1176,74 @@ export default function VidaWizard() {
   // RENDER
   // ═══════════════════════════════════════════════════════════════
 
-  const stepTitles = [
-    'Datos personales',
-    'Trabajo e ingresos',
-    'Dirección residencial',
-    'Datos físicos y salud',
-    'Cobertura y objetivo',
-    'Tipo de propuesta y resumen',
+  const VIDA_STEPS: BreadcrumbStepDef[] = [
+    { key: 'payment' as any,       label: 'Datos personales',        shortLabel: 'Personal',   icon: FaUser },
+    { key: 'emission-data' as any, label: 'Trabajo e ingresos',      shortLabel: 'Trabajo',    icon: FaBriefcase },
+    { key: 'vehicle' as any,       label: 'Dirección residencial',   shortLabel: 'Dirección',  icon: FaHome },
+    { key: 'inspection' as any,    label: 'Datos físicos y salud',   shortLabel: 'Salud',      icon: FaHeartbeat },
+    { key: 'payment-info' as any,  label: 'Cobertura y objetivo',    shortLabel: 'Cobertura',  icon: FaShieldAlt },
+    { key: 'review' as any,        label: 'Propuesta y resumen',     shortLabel: 'Resumen',    icon: FaClipboardCheck },
   ];
 
-  const stepIcons = ['👤', '💼', '🏠', '🏥', '🛡️', '📋'];
+  const stepKeyByNumber = (n: number) => VIDA_STEPS[n - 1]?.key ?? 'payment';
+  const completedStepKeys = VIDA_STEPS.slice(0, step - 1).map(s => s.key);
+
+  const stepTitles = VIDA_STEPS.map(s => s.label);
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-6 sm:py-10" ref={formRef}>
-      {/* Back to Cotizadores */}
-      <button
-        type="button"
-        onClick={() => router.push('/cotizadores')}
-        className="flex items-center gap-2 text-sm font-semibold text-gray-500 hover:text-[#010139] transition-colors mb-4"
-      >
-        <FaArrowLeft size={12} /> Volver a Cotizadores
-      </button>
-
-      {/* Header */}
-      <div className="mb-6 sm:mb-8">
-        <h1 className="text-2xl sm:text-3xl font-bold text-[#010139] mb-1">
-          Cotiza tu Seguro de Vida
-        </h1>
-        <p className="text-sm text-gray-500">
-          Completa el formulario y recibirás tu cotización por correo en 24 horas.
-        </p>
-      </div>
-
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100" ref={formRef}>
       {/* Progress Bar */}
-      <EmissionProgressBar currentStep={step} totalSteps={TOTAL_STEPS} />
-
-      {/* Step Breadcrumb */}
-      <div className="mb-6">
-        {/* Desktop */}
-        <div className="hidden sm:flex items-center justify-between">
-          {stepTitles.map((title, i) => {
-            const num = i + 1;
-            const isCompleted = num < step;
-            const isCurrent = num === step;
-            const isLast = num === TOTAL_STEPS;
-            return (
-              <div key={num} className="flex items-center flex-1">
-                <button
-                  type="button"
-                  onClick={() => goToStep(num)}
-                  disabled={num > step}
-                  className={`flex flex-col items-center gap-1.5 px-2 py-1.5 rounded-xl transition-all flex-1 ${
-                    isCurrent ? 'scale-105' : num > step ? 'opacity-40 cursor-not-allowed' : 'hover:bg-gray-50 cursor-pointer'
-                  }`}
-                >
-                  <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm transition-all shadow-sm ${
-                    isCurrent
-                      ? 'bg-gradient-to-br from-[#8AAA19] to-[#6d8814] text-white shadow-md scale-110'
-                      : isCompleted
-                      ? 'bg-green-500 text-white'
-                      : 'bg-gray-200 text-gray-500'
-                  }`}>
-                    {isCompleted ? (
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
-                    ) : (
-                      <span>{stepIcons[i]}</span>
-                    )}
-                  </div>
-                  <span className={`text-[11px] font-semibold text-center leading-tight ${
-                    isCurrent ? 'text-[#8AAA19]' : isCompleted ? 'text-green-600' : 'text-gray-400'
-                  }`}>{title}</span>
-                </button>
-                {!isLast && (
-                  <div className={`flex-shrink-0 w-4 h-0.5 mx-1 rounded ${
-                    isCompleted ? 'bg-green-400' : 'bg-gray-200'
-                  }`} />
-                )}
-              </div>
-            );
-          })}
-        </div>
-        {/* Mobile */}
-        <div className="sm:hidden flex items-center gap-2 overflow-x-auto pb-1">
-          {stepTitles.map((title, i) => {
-            const num = i + 1;
-            const isCompleted = num < step;
-            const isCurrent = num === step;
-            return (
-              <button
-                key={num}
-                type="button"
-                onClick={() => goToStep(num)}
-                disabled={num > step}
-                className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
-                  isCurrent
-                    ? 'bg-[#8AAA19] text-white shadow-md'
-                    : isCompleted
-                    ? 'bg-green-50 text-green-700'
-                    : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                }`}
-              >
-                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${
-                  isCurrent ? 'bg-white/30' : isCompleted ? 'bg-green-200' : 'bg-gray-200'
-                }`}>
-                  {isCompleted ? '✓' : stepIcons[i]}
-                </span>
-                {title}
-              </button>
-            );
-          })}
-        </div>
+      <div className="pt-6">
+        <EmissionProgressBar currentStep={step} totalSteps={TOTAL_STEPS} />
       </div>
 
-      {/* Step Card */}
-      <div className="bg-white rounded-2xl shadow-lg border-2 border-gray-100 p-5 sm:p-7 mb-6">
-        <div className="flex items-center gap-2 mb-5">
-          <span className="text-xl">{stepIcons[step - 1]}</span>
-          <h2 className="text-lg font-bold text-[#010139]">{stepTitles[step - 1]}</h2>
-        </div>
+      {/* Breadcrumb — identical to emisor auto */}
+      <EmissionBreadcrumb
+        currentStep={stepKeyByNumber(step) as any}
+        completedSteps={completedStepKeys as any}
+        steps={VIDA_STEPS as any}
+        onStepClick={(key: any) => {
+          const idx = VIDA_STEPS.findIndex(s => s.key === key);
+          if (idx !== -1 && idx + 1 < step) goToStep(idx + 1);
+        }}
+      />
 
-        <div className={`transition-all duration-300 ${direction === 'forward' ? 'animate-slideInRight' : 'animate-slideInLeft'}`}>
-          {step === 1 && renderStep1()}
-          {step === 2 && renderStep2()}
-          {step === 3 && renderStep3()}
-          {step === 4 && renderStep4()}
-          {step === 5 && renderStep5()}
-          {step === 6 && renderStep6()}
-        </div>
-      </div>
+      {/* Content */}
+      <div className="py-8 px-4">
+        <div className="max-w-2xl mx-auto">
+
+          {/* Back button */}
+          <div className="mb-6">
+            <button
+              type="button"
+              onClick={() => router.push('/cotizadores')}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border-2 border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-colors"
+            >
+              <FaArrowLeft size={12} /> Volver a Cotizadores
+            </button>
+          </div>
+
+          {/* Header */}
+          <div className="mb-6">
+            <h1 className="text-2xl sm:text-3xl font-bold text-[#010139] mb-1">Cotiza tu Seguro de Vida</h1>
+            <p className="text-sm text-gray-500">Completa el formulario y recibirás tu cotización por correo en 24 horas.</p>
+          </div>
+
+          {/* Step Card */}
+          <div className="bg-white rounded-2xl shadow-lg border-2 border-gray-100 p-5 sm:p-7 mb-6">
+            <div className="flex items-center gap-2 mb-5">
+              {(() => { const Icon = VIDA_STEPS[step - 1]?.icon; return Icon ? <Icon className="text-xl text-[#8AAA19]" /> : null; })()}
+              <h2 className="text-lg font-bold text-[#010139]">{stepTitles[step - 1]}</h2>
+            </div>
+            <div className={`transition-all duration-300 ${direction === 'forward' ? 'animate-slideInRight' : 'animate-slideInLeft'}`}>
+              {step === 1 && renderStep1()}
+              {step === 2 && renderStep2()}
+              {step === 3 && renderStep3()}
+              {step === 4 && renderStep4()}
+              {step === 5 && renderStep5()}
+              {step === 6 && renderStep6()}
+            </div>
+          </div>
 
       {/* Summary Card — shown below step card on step 6 */}
       {step === 6 && (() => {
@@ -1144,40 +1289,43 @@ export default function VidaWizard() {
         );
       })()}
 
-      {/* Navigation */}
-      <div className="flex items-center gap-3 mt-2">
-        {step > 1 ? (
-          <button
-            type="button"
-            onClick={goBack}
-            className="flex items-center justify-center gap-2 flex-1 sm:flex-none sm:px-8 py-4 rounded-2xl text-base font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 active:scale-95 transition-all"
-          >
-            <FaArrowLeft size={14} /> Atrás
-          </button>
-        ) : <div className="flex-1 sm:flex-none" />}
+          {/* Navigation */}
+          <div className="flex items-center gap-3 mt-2">
+            {step > 1 ? (
+              <button
+                type="button"
+                onClick={goBack}
+                className="w-full py-4 px-6 rounded-xl font-bold text-lg flex items-center justify-center gap-3 transition-all duration-200 bg-white border-2 border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400"
+              >
+                <FaArrowLeft size={16} /> Atrás
+              </button>
+            ) : <div className="w-full" />}
 
-        {step < TOTAL_STEPS ? (
-          <button
-            type="button"
-            onClick={goNext}
-            className="flex items-center justify-center gap-2 flex-1 py-4 rounded-2xl text-base font-bold text-white bg-gradient-to-r from-[#8AAA19] to-[#6d8814] hover:from-[#7a9416] hover:to-[#5e7510] active:scale-95 transition-all shadow-lg"
-          >
-            Siguiente <FaArrowRight size={14} />
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={submitting}
-            className="flex items-center justify-center gap-2 flex-1 py-4 rounded-2xl text-base font-bold text-white bg-gradient-to-r from-[#8AAA19] to-[#6d8814] hover:from-[#7a9416] hover:to-[#5e7510] active:scale-95 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {submitting ? (
-              <><FaSpinner className="animate-spin" size={16} /> Enviando...</>
+            {step < TOTAL_STEPS ? (
+              <button
+                type="button"
+                onClick={goNext}
+                className="w-full py-4 px-6 rounded-xl font-bold text-lg flex items-center justify-center gap-3 transition-all duration-200 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white hover:shadow-2xl hover:scale-105"
+              >
+                Siguiente <FaArrowRight size={16} />
+              </button>
             ) : (
-              <><FaCheck size={14} /> Enviar solicitud</>
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={submitting}
+                className="w-full py-4 px-6 rounded-xl font-bold text-lg flex items-center justify-center gap-3 transition-all duration-200 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white hover:shadow-2xl hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:hover:shadow-none"
+              >
+                {submitting ? (
+                  <><FaSpinner className="animate-spin" size={18} /> Enviando...</>
+                ) : (
+                  <><FaCheck size={16} /> Enviar solicitud</>
+                )}
+              </button>
             )}
-          </button>
-        )}
+          </div>
+
+        </div>
       </div>
     </div>
   );

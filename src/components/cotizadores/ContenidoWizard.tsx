@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { FaArrowLeft, FaArrowRight, FaCheck, FaSpinner, FaInfoCircle, FaChevronDown, FaChevronUp, FaPlus, FaTrash, FaExclamationTriangle } from 'react-icons/fa';
+import { FaArrowLeft, FaArrowRight, FaCheck, FaSpinner, FaInfoCircle, FaChevronDown, FaChevronUp, FaPlus, FaTrash, FaExclamationTriangle, FaUser, FaHome, FaLock, FaDollarSign, FaClipboardCheck } from 'react-icons/fa';
 import { createPetitionFromQuote } from '@/lib/operaciones/createPetitionFromQuote';
 import { SECURITY_MEASURES } from '@/lib/constants/securityMeasures';
 import EmissionProgressBar from '@/components/cotizadores/EmissionProgressBar';
+import EmissionBreadcrumb, { type BreadcrumbStepDef } from '@/components/cotizadores/EmissionBreadcrumb';
 
 // ═══════════════════════════════════════════════════════════════════
 // TYPES
@@ -857,156 +858,104 @@ export default function ContenidoWizard() {
   // RENDER
   // ═══════════════════════════════════════════════════════════════
 
-  const stepTitles = [
-    'Datos del cliente',
-    'Dirección residencial',
-    'Medidas de seguridad',
-    'Valor del contenido',
-    'Resumen y enviar',
+  const CONTENIDO_STEPS: BreadcrumbStepDef[] = [
+    { key: 'payment' as any,       label: 'Datos del cliente',       shortLabel: 'Cliente',    icon: FaUser },
+    { key: 'emission-data' as any, label: 'Dirección residencial',   shortLabel: 'Dirección',  icon: FaHome },
+    { key: 'vehicle' as any,       label: 'Medidas de seguridad',    shortLabel: 'Seguridad',  icon: FaLock },
+    { key: 'inspection' as any,    label: 'Valor del contenido',     shortLabel: 'Valor',      icon: FaDollarSign },
+    { key: 'payment-info' as any,  label: 'Resumen y enviar',        shortLabel: 'Resumen',    icon: FaClipboardCheck },
   ];
 
-  const stepIcons = ['👤', '🏠', '🔒', '🛋️', '📋'];
+  const stepKeyByNumber = (n: number) => CONTENIDO_STEPS[n - 1]?.key ?? 'payment';
+  const completedStepKeys = CONTENIDO_STEPS.slice(0, step - 1).map(s => s.key);
+  const stepTitles = CONTENIDO_STEPS.map(s => s.label);
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-6 sm:py-10" ref={formRef}>
-      {/* Back to Cotizadores */}
-      <button
-        type="button"
-        onClick={() => router.push('/cotizadores')}
-        className="flex items-center gap-2 text-sm font-semibold text-gray-500 hover:text-[#010139] transition-colors mb-4"
-      >
-        <FaArrowLeft size={12} /> Volver a Cotizadores
-      </button>
-
-      <div className="mb-6 sm:mb-8">
-        <h1 className="text-2xl sm:text-3xl font-bold text-[#010139] mb-1">Cotiza tu Seguro de Contenido/Hogar</h1>
-        <p className="text-sm text-gray-500">Completa el formulario y recibirás tu cotización por correo en 24 horas.</p>
-      </div>
-
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100" ref={formRef}>
       {/* Progress Bar */}
-      <EmissionProgressBar currentStep={step} totalSteps={TOTAL_STEPS} />
+      <div className="pt-6">
+        <EmissionProgressBar currentStep={step} totalSteps={TOTAL_STEPS} />
+      </div>
 
-      {/* Step Breadcrumb */}
-      <div className="mb-6">
-        {/* Desktop */}
-        <div className="hidden sm:flex items-center justify-between">
-          {stepTitles.map((title, i) => {
-            const num = i + 1;
-            const isCompleted = num < step;
-            const isCurrent = num === step;
-            const isLast = num === TOTAL_STEPS;
-            return (
-              <div key={num} className="flex items-center flex-1">
-                <button
-                  type="button"
-                  onClick={() => goToStep(num)}
-                  disabled={num > step}
-                  className={`flex flex-col items-center gap-1.5 px-2 py-1.5 rounded-xl transition-all flex-1 ${
-                    isCurrent ? 'scale-105' : num > step ? 'opacity-40 cursor-not-allowed' : 'hover:bg-gray-50 cursor-pointer'
-                  }`}
-                >
-                  <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm transition-all shadow-sm ${
-                    isCurrent
-                      ? 'bg-gradient-to-br from-[#8AAA19] to-[#6d8814] text-white shadow-md scale-110'
-                      : isCompleted
-                      ? 'bg-green-500 text-white'
-                      : 'bg-gray-200 text-gray-500'
-                  }`}>
-                    {isCompleted ? (
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
-                    ) : (
-                      <span>{stepIcons[i]}</span>
-                    )}
-                  </div>
-                  <span className={`text-[11px] font-semibold text-center leading-tight ${
-                    isCurrent ? 'text-[#8AAA19]' : isCompleted ? 'text-green-600' : 'text-gray-400'
-                  }`}>{title}</span>
-                </button>
-                {!isLast && (
-                  <div className={`flex-shrink-0 w-4 h-0.5 mx-1 rounded ${
-                    isCompleted ? 'bg-green-400' : 'bg-gray-200'
-                  }`} />
-                )}
-              </div>
-            );
-          })}
-        </div>
-        {/* Mobile */}
-        <div className="sm:hidden flex items-center gap-2 overflow-x-auto pb-1">
-          {stepTitles.map((title, i) => {
-            const num = i + 1;
-            const isCompleted = num < step;
-            const isCurrent = num === step;
-            return (
+      {/* Breadcrumb */}
+      <EmissionBreadcrumb
+        currentStep={stepKeyByNumber(step) as any}
+        completedSteps={completedStepKeys as any}
+        steps={CONTENIDO_STEPS as any}
+        onStepClick={(key: any) => {
+          const idx = CONTENIDO_STEPS.findIndex(s => s.key === key);
+          if (idx !== -1 && idx + 1 < step) goToStep(idx + 1);
+        }}
+      />
+
+      {/* Content */}
+      <div className="py-8 px-4">
+        <div className="max-w-2xl mx-auto">
+
+          {/* Back button */}
+          <div className="mb-6">
+            <button
+              type="button"
+              onClick={() => router.push('/cotizadores')}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-700 bg-white border-2 border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-colors"
+            >
+              <FaArrowLeft size={12} /> Volver a Cotizadores
+            </button>
+          </div>
+
+          {/* Header */}
+          <div className="mb-6">
+            <h1 className="text-2xl sm:text-3xl font-bold text-[#010139] mb-1">Cotiza tu Seguro de Contenido/Hogar</h1>
+            <p className="text-sm text-gray-500">Completa el formulario y recibirás tu cotización por correo en 24 horas.</p>
+          </div>
+
+          {/* Step Card */}
+          <div className="bg-white rounded-2xl shadow-lg border-2 border-gray-100 p-5 sm:p-7 mb-6">
+            <div className="flex items-center gap-2 mb-5">
+              {(() => { const Icon = CONTENIDO_STEPS[step - 1]?.icon; return Icon ? <Icon className="text-xl text-[#8AAA19]" /> : null; })()}
+              <h2 className="text-lg font-bold text-[#010139]">{stepTitles[step - 1]}</h2>
+            </div>
+            <div className={`transition-all duration-300 ${direction === 'forward' ? 'animate-slideInRight' : 'animate-slideInLeft'}`}>
+              {step === 1 && renderStep1()}
+              {step === 2 && renderStep2()}
+              {step === 3 && renderStep3()}
+              {step === 4 && renderStep4()}
+              {step === 5 && renderStep5()}
+            </div>
+          </div>
+
+          {/* Navigation */}
+          <div className="flex items-center gap-3 mt-2">
+            {step > 1 ? (
               <button
-                key={num}
                 type="button"
-                onClick={() => goToStep(num)}
-                disabled={num > step}
-                className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
-                  isCurrent
-                    ? 'bg-[#8AAA19] text-white shadow-md'
-                    : isCompleted
-                    ? 'bg-green-50 text-green-700'
-                    : 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                }`}
+                onClick={goBack}
+                className="w-full py-4 px-6 rounded-xl font-bold text-lg flex items-center justify-center gap-3 transition-all duration-200 bg-white border-2 border-gray-300 text-gray-700 hover:bg-gray-50 hover:border-gray-400"
               >
-                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${
-                  isCurrent ? 'bg-white/30' : isCompleted ? 'bg-green-200' : 'bg-gray-200'
-                }`}>
-                  {isCompleted ? '✓' : stepIcons[i]}
-                </span>
-                {title}
+                <FaArrowLeft size={16} /> Atrás
               </button>
-            );
-          })}
-        </div>
-      </div>
+            ) : <div className="w-full" />}
+            {step < TOTAL_STEPS ? (
+              <button
+                type="button"
+                onClick={goNext}
+                className="w-full py-4 px-6 rounded-xl font-bold text-lg flex items-center justify-center gap-3 transition-all duration-200 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white hover:shadow-2xl hover:scale-105"
+              >
+                Siguiente <FaArrowRight size={16} />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleSubmit}
+                disabled={submitting}
+                className="w-full py-4 px-6 rounded-xl font-bold text-lg flex items-center justify-center gap-3 transition-all duration-200 bg-gradient-to-r from-[#8AAA19] to-[#6d8814] text-white hover:shadow-2xl hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:hover:shadow-none"
+              >
+                {submitting ? (<><FaSpinner className="animate-spin" size={18} /> Enviando...</>) : (<><FaCheck size={16} /> Enviar solicitud</>)}
+              </button>
+            )}
+          </div>
 
-      {/* Step Card */}
-      <div className="bg-white rounded-2xl shadow-lg border-2 border-gray-100 p-5 sm:p-7 mb-6">
-        <div className="flex items-center gap-2 mb-5">
-          <span className="text-xl">{stepIcons[step - 1]}</span>
-          <h2 className="text-lg font-bold text-[#010139]">{stepTitles[step - 1]}</h2>
         </div>
-        <div className={`transition-all duration-300 ${direction === 'forward' ? 'animate-slideInRight' : 'animate-slideInLeft'}`}>
-          {step === 1 && renderStep1()}
-          {step === 2 && renderStep2()}
-          {step === 3 && renderStep3()}
-          {step === 4 && renderStep4()}
-          {step === 5 && renderStep5()}
-        </div>
-      </div>
-
-      {/* Navigation */}
-      <div className="flex items-center gap-3 mt-2">
-        {step > 1 ? (
-          <button
-            type="button"
-            onClick={goBack}
-            className="flex items-center justify-center gap-2 flex-1 sm:flex-none sm:px-8 py-4 rounded-2xl text-base font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 active:scale-95 transition-all"
-          >
-            <FaArrowLeft size={14} /> Atrás
-          </button>
-        ) : <div className="flex-1 sm:flex-none" />}
-        {step < TOTAL_STEPS ? (
-          <button
-            type="button"
-            onClick={goNext}
-            className="flex items-center justify-center gap-2 flex-1 py-4 rounded-2xl text-base font-bold text-white bg-gradient-to-r from-[#8AAA19] to-[#6d8814] hover:from-[#7a9416] hover:to-[#5e7510] active:scale-95 transition-all shadow-lg"
-          >
-            Siguiente <FaArrowRight size={14} />
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={submitting}
-            className="flex items-center justify-center gap-2 flex-1 py-4 rounded-2xl text-base font-bold text-white bg-gradient-to-r from-[#8AAA19] to-[#6d8814] hover:from-[#7a9416] hover:to-[#5e7510] active:scale-95 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {submitting ? (<><FaSpinner className="animate-spin" size={16} /> Enviando...</>) : (<><FaCheck size={14} /> Enviar solicitud</>)}
-          </button>
-        )}
       </div>
     </div>
   );

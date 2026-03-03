@@ -79,13 +79,17 @@ export async function emitirPoliza(
     vigencia: `${resultado.desde} - ${resultado.hasta}`,
   });
   
-  // Guardar en BD (Supabase) - COMENTADO: tabla fedpa_emisiones no existe, usamos policies
-  // try {
-  //   await guardarEmisionBD(request, resultado, env);
-  // } catch (dbError) {
-  //   console.warn('[FEDPA Emisión] No se pudo guardar en BD:', dbError);
-  //   // No fallar la emisión si BD falla
-  // }
+  // Trigger carátula generation (FedPa sends PDF via email)
+  try {
+    console.log('[FEDPA Emisión] Solicitando carátula para póliza:', resultado.poliza);
+    const caratulaResponse = await clientResult.client.post(
+      EMISOR_PLAN_ENDPOINTS.CARATULA_POLIZA,
+      normalizedRequest
+    );
+    console.log('[FEDPA Emisión] Carátula response:', JSON.stringify(caratulaResponse.data).substring(0, 200));
+  } catch (caratulaErr: any) {
+    console.warn('[FEDPA Emisión] No se pudo solicitar carátula (no bloquea emisión):', caratulaErr.message);
+  }
   
   return resultado;
 }

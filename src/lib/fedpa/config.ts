@@ -48,6 +48,9 @@ export const EMISOR_PLAN_ENDPOINTS = {
   
   // Emisión
   EMITIR_POLIZA: '/api/emitirpoliza',
+  
+  // Carátula (genera/envía PDF de la póliza)
+  CARATULA_POLIZA: '/api/caratulaPoliza',
 } as const;
 
 // ============================================

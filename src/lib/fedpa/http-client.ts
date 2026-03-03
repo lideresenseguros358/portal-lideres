@@ -173,6 +173,23 @@ export class FedpaHttpClient {
       },
     });
   }
+
+  // ============================================
+  // POST Raw (para respuestas binarias como PDFs)
+  // ============================================
+
+  async postRaw(endpoint: string, body?: any): Promise<Response> {
+    const url = `${this.baseUrl}${endpoint}`;
+
+    return fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(this.token && { 'Authorization': `Bearer ${this.token}` }),
+      },
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  }
 }
 
 // ============================================

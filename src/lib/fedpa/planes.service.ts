@@ -4,7 +4,7 @@
  * Fallback: Emisor Externo (2021) con Usuario/Clave en query params
  */
 
-import { FEDPA_CONFIG, EMISOR_EXTERNO_ENDPOINTS, FedpaEnvironment } from './config';
+import { FEDPA_CONFIG, EMISOR_EXTERNO_ENDPOINTS, EMISOR_PLAN_ENDPOINTS, FedpaEnvironment } from './config';
 import { createFedpaClient } from './http-client';
 import type { PlanesResponse, BeneficiosResponse } from './types';
 
@@ -103,19 +103,57 @@ async function obtenerBeneficiosEmisorExterno(planId: number, env: FedpaEnvironm
 }
 
 // ============================================
+// PRIMARIO: EmisorPlan (2024) - Requiere Bearer token
+// Devuelve prima, impuestos, coberturas y usos
+// ============================================
+
+async function obtenerPlanesEmisorPlan(env: FedpaEnvironment): Promise<PlanesResponse> {
+  console.log('[FEDPA Planes] Intentando EmisorPlan (2024) con Bearer token...');
+  const { obtenerClienteAutenticado } = await import('./auth.service');
+  const clientResult = await obtenerClienteAutenticado(env);
+  if (!clientResult.success || !clientResult.client) {
+    console.warn('[FEDPA Planes EmisorPlan] No se pudo autenticar:', clientResult.error);
+    return { success: false, error: clientResult.error || 'No se pudo autenticar' };
+  }
+
+  const response = await clientResult.client.get(EMISOR_PLAN_ENDPOINTS.PLANES);
+  if (!response.success) {
+    console.error('[FEDPA Planes EmisorPlan] Error:', response.error);
+    return {
+      success: false,
+      error: typeof response.error === 'string' ? response.error : 'Error obteniendo planes (EmisorPlan)',
+    };
+  }
+
+  const rawPlanes = Array.isArray(response.data) ? response.data : [];
+  console.log('[FEDPA Planes EmisorPlan] ✅ Planes obtenidos:', rawPlanes.length);
+  if (rawPlanes.length > 0) {
+    console.log('[FEDPA Planes EmisorPlan] Ejemplo plan:', JSON.stringify(rawPlanes[0]).substring(0, 300));
+  }
+
+  return { success: true, data: rawPlanes };
+}
+
+// ============================================
 // OBTENER PLANES
-// Usa Emisor Externo (2021) directamente - NO requiere token
-// EmisorPlan (2024) tiene problema de token "Ya existe" que causa delays de 3+ segundos
+// Primario: EmisorPlan (2024) con token — devuelve prima, impuestos, coberturas
+// Fallback: Emisor Externo (2021) sin token — solo plan IDs y nombres
 // ============================================
 
 /**
  * Obtener lista de planes disponibles con coberturas y usos
- * Usa Emisor Externo (2021) que autentica con Usuario/Clave en query params
+ * Intenta EmisorPlan primero, cae a Emisor Externo si falla
  */
 export async function obtenerPlanes(
   env: FedpaEnvironment = 'PROD'
 ): Promise<PlanesResponse> {
-  console.log('[FEDPA Planes] Obteniendo planes (Emisor Externo)...');
+  // Intentar EmisorPlan primero (más datos)
+  const emisorPlanResult = await obtenerPlanesEmisorPlan(env);
+  if (emisorPlanResult.success && emisorPlanResult.data && emisorPlanResult.data.length > 0) {
+    return emisorPlanResult;
+  }
+  // Fallback a Emisor Externo
+  console.log('[FEDPA Planes] Fallback a Emisor Externo...');
   return obtenerPlanesEmisorExterno(env);
 }
 

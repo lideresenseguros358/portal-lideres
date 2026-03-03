@@ -62,6 +62,11 @@ export default function UnclassifiedEmailsUI() {
     loadEmails();
   }, [loadEmails]);
 
+  // Don't render anything when there are no emails (eliminates duplicate empty state)
+  if (!loading && emails.length === 0) {
+    return null;
+  }
+
   return (
     <div className="bg-white rounded-xl shadow-lg border-2 border-gray-100 p-4 sm:p-6 mb-4">
       {/* Header */}
@@ -86,15 +91,9 @@ export default function UnclassifiedEmailsUI() {
       </div>
 
       {loading ? (
-        <div className="text-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#010139] mx-auto" />
-          <p className="text-gray-500 mt-3 text-sm">Cargando correos...</p>
-        </div>
-      ) : emails.length === 0 ? (
-        <div className="text-center py-8 border-2 border-dashed border-gray-200 rounded-xl">
-          <FaCheckCircle className="text-4xl text-green-400 mx-auto mb-3" />
-          <p className="text-gray-600 font-semibold">No hay correos pendientes</p>
-          <p className="text-gray-400 text-sm mt-1">Todos los correos han sido procesados</p>
+        <div className="text-center py-4">
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#010139] mx-auto" />
+          <p className="text-gray-500 mt-2 text-sm">Cargando correos...</p>
         </div>
       ) : (
         <div className="space-y-3">

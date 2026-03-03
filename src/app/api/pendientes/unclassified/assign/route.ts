@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { action, email_id, case_id, classification_id } = body;
+  const { action, email_id, case_id, classification_id, section, client_name, notes } = body;
 
   if (!email_id || !action) {
     return NextResponse.json({ error: 'Missing email_id or action' }, { status: 400 });
@@ -98,12 +98,19 @@ export async function POST(request: NextRequest) {
       const { data: newCase, error: caseErr } = await supabase
         .from('cases')
         .insert({
+          section: section || 'SIN_CLASIFICAR',
+          status: 'PENDIENTE_REVISION',
+          client_name: client_name || null,
+          notes: notes || `Correo de: ${email.from_email}\nAsunto: ${email.subject}`,
+          canal: 'EMAIL',
           estado_simple: 'Sin clasificar',
           ramo_bucket: 'desconocido',
           detected_broker_email: email.from_email,
           ai_classification: null,
           ai_confidence: 0,
           special_flags: ['manual_creation'],
+          is_deleted: false,
+          seen_by_broker: false,
         })
         .select()
         .single();

@@ -40,6 +40,7 @@ export interface AutoThirdPartyPlan {
   endosoPdf?: string;
   endosoBenefits?: string[];
   planCode?: number;
+  emissionPlanCode?: number;
   includedCoverages?: string[];
   idCotizacion?: string | number;
 }
@@ -129,7 +130,7 @@ export const AUTO_THIRD_PARTY_INSURERS: AutoInsurer[] = [
     basicPlan: {
       name: 'Plan Básico',
       opcion: 'A',
-      planCode: 426,
+      planCode: 1000,
       endoso: 'Endoso de Asistencia',
       endosoPdf: '/API FEDPA/ENDOSO ASIST BASICO.pdf',
       endosoBenefits: [
@@ -169,7 +170,7 @@ export const AUTO_THIRD_PARTY_INSURERS: AutoInsurer[] = [
     premiumPlan: {
       name: 'Plan VIP',
       opcion: 'C',
-      planCode: 426,
+      planCode: 1002,
       endoso: 'Endoso de Asistencia',
       endosoPdf: '/API FEDPA/ENDOSO ASIST VIP.pdf',
       endosoBenefits: [

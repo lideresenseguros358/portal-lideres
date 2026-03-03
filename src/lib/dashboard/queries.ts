@@ -782,34 +782,47 @@ export async function getBrokerOfTheMonth(): Promise<{ brokerName: string; month
     .eq("year", targetYear)
     .eq("month", targetMonth); // month es INTEGER 1-12
   
-  // FALLBACK: Si no hay datos del mes objetivo, buscar el último mes con datos del año anterior
+  // FALLBACK: Si no hay datos del mes objetivo, buscar hacia atrás mes por mes
   if (!data || data.length === 0) {
     console.log('[BROKER OF THE MONTH] No hay datos para el mes', { targetYear, targetMonth });
     
-    // Buscar último mes con datos del año anterior
-    const { data: lastMonthData } = await supabase
-      .from("production")
-      .select(`
-        broker_id,
-        bruto,
-        month,
-        brokers!production_broker_id_fkey (
-          id,
-          name
-        )
-      `)
-      .eq("year", currentYear - 1)
-      .order("month", { ascending: false })
-      .limit(100);
+    // Buscar hacia atrás hasta 12 meses
+    let searchMonth = targetMonth;
+    let searchYear = targetYear;
+    let found = false;
     
-    if (lastMonthData && lastMonthData.length > 0) {
-      // Obtener el mes más reciente
-      const lastMonth = Math.max(...lastMonthData.map((d: any) => d.month));
-      data = lastMonthData.filter((d: any) => d.month === lastMonth);
-      targetMonth = lastMonth;
-      targetYear = currentYear - 1;
-      console.log('[BROKER OF THE MONTH] Usando fallback:', { targetYear, targetMonth, dataLength: data.length });
-    } else {
+    for (let i = 0; i < 12; i++) {
+      // Retroceder un mes
+      searchMonth -= 1;
+      if (searchMonth < 1) {
+        searchMonth = 12;
+        searchYear -= 1;
+      }
+      
+      const { data: fallbackData } = await supabase
+        .from("production")
+        .select(`
+          broker_id,
+          bruto,
+          brokers!production_broker_id_fkey (
+            id,
+            name
+          )
+        `)
+        .eq("year", searchYear)
+        .eq("month", searchMonth);
+      
+      if (fallbackData && fallbackData.length > 0) {
+        data = fallbackData;
+        targetMonth = searchMonth;
+        targetYear = searchYear;
+        found = true;
+        console.log('[BROKER OF THE MONTH] Usando fallback:', { targetYear, targetMonth, dataLength: data.length });
+        break;
+      }
+    }
+    
+    if (!found) {
       return null;
     }
   }

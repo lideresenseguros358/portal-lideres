@@ -61,7 +61,7 @@ export default function ThirdPartyPage() {
         annualPremium: plan.annualPremium,
         _isReal: true,
         _isFEDPA: true,
-        _planCode: plan.planCode || 426,
+        _planCode: plan.emissionPlanCode || plan.planCode || 1000,
         _includedCoverages: plan.includedCoverages,
         _endosoPdf: plan.endosoPdf,
         _paymentMode: paymentMode,
