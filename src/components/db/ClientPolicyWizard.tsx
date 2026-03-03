@@ -12,11 +12,22 @@ import NationalIdInput from '@/components/ui/NationalIdInput';
 import PolicyNumberInput from '@/components/ui/PolicyNumberInput';
 import { normalizeToUpperCase } from '@/lib/utils/normalize-text';
 
+interface PrefillData {
+  client_name?: string;
+  email?: string;
+  phone?: string;
+  cedula?: string;
+  ramo?: string;
+  broker_email?: string;
+  notas?: string;
+}
+
 interface WizardProps {
   onClose: () => void;
   onSuccess: () => void;
   role: string;
   userEmail: string;
+  prefillData?: PrefillData;
 }
 
 interface FormData {
@@ -39,7 +50,7 @@ interface FormData {
   percent_override: string;
 }
 
-export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail }: WizardProps) {
+export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail, prefillData }: WizardProps) {
   const contentRef = useRef<HTMLDivElement>(null);
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -67,19 +78,19 @@ export default function ClientPolicyWizard({ onClose, onSuccess, role, userEmail
   const today = getTodayLocalDate();
   
   const [formData, setFormData] = useState<FormData>({
-    client_name: '',
-    national_id: '',
-    email: '',
-    phone: '',
+    client_name: prefillData?.client_name || '',
+    national_id: prefillData?.cedula || '',
+    email: prefillData?.email || '',
+    phone: prefillData?.phone || '',
     birth_date: '',
     policy_number: '',
     insurer_id: '',
-    ramo: '',
+    ramo: prefillData?.ramo || '',
     start_date: today || '',
     renewal_date: '',
     status: 'ACTIVA',
-    notas: '',
-    broker_email: role === 'broker' ? userEmail : '',
+    notas: prefillData?.notas || '',
+    broker_email: prefillData?.broker_email || (role === 'broker' ? userEmail : ''),
     percent_override: '',
   });
 

@@ -288,8 +288,9 @@ export async function GET(req: NextRequest) {
         .select('id, action_type, entity_type, entity_id, created_at, metadata')
         .eq('user_id', userId)
         .in('action_type', [
-          'status_change', 'case_assigned', 'petition_converted_to_emission',
+          'status_change', 'case_assigned', 'case_created', 'petition_converted_to_emission',
           'cancellation_confirmed', 'renewal_confirmed', 'email_sent', 'first_response',
+          'imap_manual_assign', 'imap_manual_discard',
         ])
         .order('created_at', { ascending: false })
         .limit(100);

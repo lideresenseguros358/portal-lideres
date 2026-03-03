@@ -83,11 +83,66 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
     const { action, message_id, case_id, user_id } = body as {
-      action: 'assign' | 'discard';
+      action: 'assign' | 'discard' | 'record_outbound';
       message_id: string;
       case_id?: string;
       user_id?: string;
     };
+
+    // Handle record_outbound first (doesn't require message_id)
+    if (action === 'record_outbound') {
+      const { case_id: outCaseId, subject, body_html, body_text, from_email, to_emails, message_id_header } = body as any;
+      if (!outCaseId) {
+        return NextResponse.json({ error: 'case_id required for record_outbound' }, { status: 400 });
+      }
+
+      // Insert outbound message record
+      const { error: insErr } = await (supabase as any)
+        .from('ops_case_messages')
+        .insert({
+          case_id: outCaseId,
+          unclassified: false,
+          direction: 'outbound',
+          provider: 'zepto',
+          message_id: message_id_header || `outbound-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+          from_email: from_email || 'portal@lideresenseguros.com',
+          to_emails: to_emails || [],
+          subject: subject || '',
+          body_text: body_text || null,
+          body_html: body_html || null,
+          received_at: new Date().toISOString(),
+          metadata: { sent_by: user_id || null },
+        });
+
+      if (insErr) throw insErr;
+
+      // Mark first_response_at if null
+      const { data: caseRow } = await (supabase as any)
+        .from('ops_cases')
+        .select('first_response_at')
+        .eq('id', outCaseId)
+        .single();
+
+      if (caseRow && !caseRow.first_response_at) {
+        await (supabase as any)
+          .from('ops_cases')
+          .update({ first_response_at: new Date().toISOString() })
+          .eq('id', outCaseId);
+
+        // Log first response
+        await (supabase as any).from('ops_activity_log').insert({
+          user_id: user_id || null,
+          action_type: 'first_response',
+          entity_type: 'case',
+          entity_id: outCaseId,
+          metadata: { triggered_by: 'outbound_email' },
+        });
+
+        console.log(`[API messages] first_response_at marked for case ${outCaseId}`);
+      }
+
+      return NextResponse.json({ success: true, action: 'outbound_recorded' });
+    }
 
     if (!action || !message_id) {
       return NextResponse.json(
@@ -190,61 +245,6 @@ export async function POST(request: NextRequest) {
       });
 
       return NextResponse.json({ success: true, action: 'discarded' });
-    }
-
-    if (action === 'record_outbound') {
-      // Record an outbound email sent from the UI and mark first_response_at if needed
-      const { case_id: outCaseId, subject, body_html, body_text, from_email, to_emails, message_id_header } = body as any;
-      if (!outCaseId) {
-        return NextResponse.json({ error: 'case_id required for record_outbound' }, { status: 400 });
-      }
-
-      // Insert outbound message record
-      const { error: insErr } = await (supabase as any)
-        .from('ops_case_messages')
-        .insert({
-          case_id: outCaseId,
-          unclassified: false,
-          direction: 'outbound',
-          provider: 'zepto',
-          message_id: message_id_header || `outbound-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-          from_email: from_email || 'portal@lideresenseguros.com',
-          to_emails: to_emails || [],
-          subject: subject || '',
-          body_text: body_text || null,
-          body_html: body_html || null,
-          received_at: new Date().toISOString(),
-          metadata: { sent_by: user_id || null },
-        });
-
-      if (insErr) throw insErr;
-
-      // Mark first_response_at if null
-      const { data: caseRow } = await (supabase as any)
-        .from('ops_cases')
-        .select('first_response_at')
-        .eq('id', outCaseId)
-        .single();
-
-      if (caseRow && !caseRow.first_response_at) {
-        await (supabase as any)
-          .from('ops_cases')
-          .update({ first_response_at: new Date().toISOString() })
-          .eq('id', outCaseId);
-
-        // Log first response
-        await (supabase as any).from('ops_activity_log').insert({
-          user_id: user_id || null,
-          action_type: 'first_response',
-          entity_type: 'case',
-          entity_id: outCaseId,
-          metadata: { triggered_by: 'outbound_email' },
-        });
-
-        console.log(`[API messages] first_response_at marked for case ${outCaseId}`);
-      }
-
-      return NextResponse.json({ success: true, action: 'outbound_recorded' });
     }
 
     return NextResponse.json({ error: 'Invalid action' }, { status: 400 });

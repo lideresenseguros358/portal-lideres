@@ -9,6 +9,9 @@ import { LostReasonModal, ConvertToEmissionModal } from './PetModals';
 import PetHistoryDrawer from './PetHistoryDrawer';
 import UnclassifiedMessages from '../renovaciones/UnclassifiedMessages';
 import { useOpsKeyboard } from '../shared/ops-ui';
+import dynamic from 'next/dynamic';
+
+const ClientPolicyWizard = dynamic(() => import('@/components/db/ClientPolicyWizard'), { ssr: false });
 
 // ════════════════════════════════════════════
 // METRICS HEADER BAR
@@ -86,6 +89,10 @@ export default function PeticionesInbox() {
   const [showConvertModal, setShowConvertModal] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [modalSaving, setModalSaving] = useState(false);
+
+  // ── New Client Wizard (after convert-to-emission) ──
+  const [showNewClientWizard, setShowNewClientWizard] = useState(false);
+  const [wizardPrefill, setWizardPrefill] = useState<any>(null);
 
   // ── Toast ──
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -219,9 +226,19 @@ export default function PeticionesInbox() {
       'Petición convertida a emisión exitosamente'
     ).then((result) => {
       setShowConvertModal(false);
-      if (result?.converted) {
-        // TODO: Open new client wizard with result.caseData
-        console.log('[PeticionesInbox] Converted — caseData:', result.caseData);
+      if (result?.converted && result.caseData) {
+        const cd = result.caseData;
+        const ramoMap: Record<string, string> = { vida: 'VIDA', incendio: 'INCENDIO', hogar: 'HOGAR', auto: 'AUTO' };
+        setWizardPrefill({
+          client_name: cd.client_name || '',
+          email: cd.client_email || '',
+          phone: cd.client_phone || '',
+          cedula: cd.cedula || '',
+          ramo: ramoMap[(cd.ramo || '').toLowerCase()] || '',
+          broker_email: 'portal@lideresenseguros.com',
+          notas: `Convertido desde Petición ${cd.ticket || ''}`,
+        });
+        setShowNewClientWizard(true);
       }
     });
   };
@@ -231,12 +248,58 @@ export default function PeticionesInbox() {
     apiAction({ action: 'reassign', case_id: selectedCase.id, master_id: masterId }, 'Caso reasignado');
   };
 
-  const handleSendEmail = (body: string, template: string) => {
+  const handleSendEmail = async (body: string, template: string) => {
     if (!selectedCase) return;
-    apiAction(
-      { action: 'update_status', id: selectedCase.id, status: selectedCase.status },
-      'Correo registrado en bitácora'
-    );
+    const c = selectedCase;
+    const ramoKey = (c.ramo || '').toLowerCase();
+    const ramoLabel = ({ vida: 'Vida', incendio: 'Incendio', hogar: 'Hogar' } as Record<string, string>)[ramoKey] || c.ramo || '';
+    const subject = `[${c.ticket}] Cotización ${ramoLabel} — ${c.client_name || ''}`;
+
+    // 1. Record outbound message in ops_case_messages (marks first_response_at if needed)
+    try {
+      await fetch('/api/operaciones/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'record_outbound',
+          case_id: c.id,
+          subject,
+          body_text: body,
+          to_emails: c.client_email ? [c.client_email] : [],
+          from_email: 'portal@lideresenseguros.com',
+        }),
+      });
+    } catch (err) {
+      console.error('[PeticionesInbox] record_outbound failed:', err);
+    }
+
+    // 2. Log email_sent activity
+    try {
+      await fetch('/api/operaciones/activity', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'log_activity',
+          action_type: 'email_sent',
+          entity_type: 'case',
+          entity_id: c.id,
+          metadata: { ticket: c.ticket, template, to: c.client_email, subject },
+        }),
+      });
+    } catch (err) {
+      console.error('[PeticionesInbox] log email_sent failed:', err);
+    }
+
+    // 3. If status is pendiente, auto-transition to en_gestion (first response)
+    if (c.status === 'pendiente') {
+      await apiAction(
+        { action: 'update_status', id: c.id, status: 'en_gestion' },
+        'Correo enviado — caso pasó a En Gestión'
+      );
+    } else {
+      setToast({ message: 'Correo registrado en bitácora', type: 'success' });
+      refresh();
+    }
   };
 
   const hasMore = cases.length < total;
@@ -359,6 +422,22 @@ export default function PeticionesInbox() {
         onClose={() => setShowHistory(false)}
         caseId={selectedId}
       />
+
+      {/* ── New Client Wizard (after convert-to-emission) ── */}
+      {showNewClientWizard && (
+        <ClientPolicyWizard
+          onClose={() => { setShowNewClientWizard(false); setWizardPrefill(null); }}
+          onSuccess={() => {
+            setShowNewClientWizard(false);
+            setWizardPrefill(null);
+            setToast({ message: 'Cliente registrado exitosamente desde petición', type: 'success' });
+            refresh();
+          }}
+          role="master"
+          userEmail="portal@lideresenseguros.com"
+          prefillData={wizardPrefill}
+        />
+      )}
 
       {/* ── Toast ── */}
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}

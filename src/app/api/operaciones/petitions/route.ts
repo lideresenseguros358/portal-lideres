@@ -295,17 +295,28 @@ export async function POST(req: NextRequest) {
       // ── Reassign ──
       case 'reassign': {
         const { case_id, master_id, user_id } = body;
+        const { data: current } = await supabase.from('ops_cases').select('assigned_master_id').eq('id', case_id).single();
+        const beforeMaster = current?.assigned_master_id;
+
         const { error } = await supabase.from('ops_cases')
           .update({ assigned_master_id: master_id })
           .eq('id', case_id).eq('case_type', CASE_TYPE);
         if (error) throw error;
+
+        await supabase.from('ops_case_history').insert({
+          case_id,
+          changed_by: user_id || null,
+          change_type: 'reassignment',
+          before_state: { assigned_master_id: beforeMaster },
+          after_state: { assigned_master_id: master_id },
+        });
 
         await supabase.from('ops_activity_log').insert({
           user_id: user_id || null,
           action_type: 'case_assigned',
           entity_type: 'case',
           entity_id: case_id,
-          metadata: { assigned_to: master_id },
+          metadata: { from: beforeMaster, assigned_to: master_id },
         });
 
         return NextResponse.json({ success: true });
