@@ -2355,15 +2355,28 @@ function getPaymentState(payment: any) {
     } as const;
   }
   
-  // Si hay errores (referencias no conciliadas que NO son "otro banco"), mostrar rojo
-  const hasErrors = !isDescuentoCorredor && payment.payment_references?.some((ref: any) => !ref.exists_in_bank);
-  if (hasErrors || !payment.can_be_paid) {
-    return {
-      key: 'blocked',
-      label: isDescuentoCorredor ? 'Adelanto pendiente' : 'Referencia no conciliada',
-      badgeClass: 'bg-red-100 text-red-800 border-red-300',
-      blocked: true,
-    } as const;
+  // Para descuento a corredor: bloqueado SOLO si can_be_paid !== true
+  if (isDescuentoCorredor) {
+    if (payment.can_be_paid !== true) {
+      return {
+        key: 'blocked',
+        label: 'Adelanto pendiente',
+        badgeClass: 'bg-red-100 text-red-800 border-red-300',
+        blocked: true,
+      } as const;
+    }
+    // can_be_paid === true (pago anticipado habilitado o adelanto ya pagado) → no bloqueado, continuar
+  } else {
+    // Para pagos normales: bloqueado si hay referencias no conciliadas o can_be_paid es falso
+    const hasErrors = payment.payment_references?.some((ref: any) => !ref.exists_in_bank);
+    if (hasErrors || !payment.can_be_paid) {
+      return {
+        key: 'blocked',
+        label: 'Referencia no conciliada',
+        badgeClass: 'bg-red-100 text-red-800 border-red-300',
+        blocked: true,
+      } as const;
+    }
   }
 
   if (payment.defer_until && new Date(payment.defer_until) > now) {
