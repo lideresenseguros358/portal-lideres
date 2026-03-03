@@ -14,6 +14,7 @@ import EmitidoConfirmModal from '@/components/cases/EmitidoConfirmModal';
 import { CASE_SECTION_LABELS } from '@/lib/constants/cases';
 import { exportCasesByBrokerPDF } from '@/lib/utils/exportCasesPDF';
 import dynamic from 'next/dynamic';
+import UnclassifiedEmailsUI from '@/components/cases/UnclassifiedEmailsUI';
 
 const RenovacionesLissaClient = dynamic(() => import('../../app/(app)/renovaciones-lissa/RenovacionesLissaClient'), {
   ssr: false,
@@ -425,38 +426,33 @@ export default function CasesMainClient({ userProfile, brokers, insurers, renova
         </div>
 
         {/* Tabs */}
-        <div className="mt-6 bg-gray-50 rounded-xl p-3 sm:p-4">
-          <div className="flex gap-2 overflow-x-auto scrollbar-hide">
-            {tabs.map(tab => (
-              <button
-                key={tab.key}
-                onClick={() => handleTabChange(tab.key)}
-                className={`
-                  px-4 py-2.5 rounded-lg font-semibold whitespace-nowrap transition-all duration-200 flex items-center gap-2 min-w-fit
-                  ${tab.key === 'RENOVACIONES_LISSA' && activeTab === tab.key
-                    ? 'bg-gradient-to-r from-orange-500 to-yellow-500 text-white shadow-md'
-                    : tab.key === 'RENOVACIONES_LISSA'
-                    ? 'bg-gradient-to-r from-orange-400 to-yellow-400 text-white hover:from-orange-500 hover:to-yellow-500 shadow-sm'
-                    : activeTab === tab.key 
-                    ? 'bg-[#010139] text-white shadow-md' 
-                    : 'bg-white text-gray-700 hover:bg-gray-100 border border-gray-200 hover:border-gray-300'
-                  }
-                `}
-              >
-                {tab.label}
-                {tab.badge > 0 && (
-                  <span className={`ml-2 px-2 py-0.5 rounded-full text-xs font-bold
-                    ${tab.key === 'RENOVACIONES_LISSA' 
-                      ? (activeTab === tab.key ? 'bg-white text-orange-600' : 'bg-white text-orange-500')
-                      : (activeTab === tab.key ? 'bg-[#8AAA19] text-white' : 'bg-gray-300 text-gray-700')
-                    }
-                  `}>
-                    {tab.badge}
-                  </span>
-                )}
-              </button>
-            ))}
-          </div>
+        <div className="mt-6 bg-white rounded-2xl shadow-lg p-2 flex gap-2 overflow-x-auto">
+          {tabs.map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => handleTabChange(tab.key)}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold whitespace-nowrap transition-all duration-200 text-sm sm:text-base ${
+                tab.key === 'RENOVACIONES_LISSA' && activeTab === tab.key
+                  ? 'bg-gradient-to-r from-orange-500 to-yellow-500 text-white shadow-lg'
+                  : tab.key === 'RENOVACIONES_LISSA'
+                  ? 'bg-gradient-to-r from-orange-400 to-yellow-400 text-white hover:from-orange-500 hover:to-yellow-500'
+                  : activeTab === tab.key
+                  ? 'bg-gradient-to-r from-[#010139] to-[#020270] text-white shadow-lg'
+                  : 'text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              {tab.label}
+              {tab.badge > 0 && (
+                <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${
+                  tab.key === 'RENOVACIONES_LISSA'
+                    ? (activeTab === tab.key ? 'bg-white text-orange-600' : 'bg-white text-orange-500')
+                    : (activeTab === tab.key ? 'bg-[#8AAA19] text-white' : 'bg-gray-200 text-gray-700')
+                }`}>
+                  {tab.badge}
+                </span>
+              )}
+            </button>
+          ))}
         </div>
 
         {/* Filters (Mobile Dropdown, Desktop Inline) */}
@@ -520,6 +516,13 @@ export default function CasesMainClient({ userProfile, brokers, insurers, renova
           </div>
         )}
       </div>
+
+      {/* Unclassified emails panel — only for SIN_CLASIFICAR tab */}
+      {activeTab === 'SIN_CLASIFICAR' && userProfile.role === 'master' && (
+        <div className="mt-4">
+          <UnclassifiedEmailsUI />
+        </div>
+      )}
 
       {/* Cases List, Kanban or Renovaciones LISSA */}
       {activeTab === 'RENOVACIONES_LISSA' ? (

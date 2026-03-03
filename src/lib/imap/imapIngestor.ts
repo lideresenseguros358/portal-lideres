@@ -11,7 +11,7 @@
  * 7. Actualizar estado de procesamiento
  */
 
-import { createClient } from '@/lib/supabase/server';
+import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import {
   createImapConnection,
   fetchMessagesInWindow,
@@ -144,7 +144,7 @@ export async function runIngestionCycle(): Promise<IngestionResult> {
  * Procesa un mensaje individual
  */
 async function processMessage(msg: EmailMessage): Promise<any> {
-  const supabase = await createClient();
+  const supabase = getSupabaseAdmin();
 
   // 1. Deduplicar por message-id
   // @ts-ignore - tabla nueva, database.types.ts pendiente de actualizar

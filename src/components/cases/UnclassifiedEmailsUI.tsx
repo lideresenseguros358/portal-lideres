@@ -1,503 +1,333 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { FaEnvelope, FaCheckCircle, FaTimes, FaExclamationCircle, FaClock, FaPlus } from 'react-icons/fa';
+import { useState, useEffect, useCallback } from 'react';
+import { FaEnvelope, FaCheckCircle, FaTimes, FaExclamationCircle, FaClock, FaPlus, FaRobot, FaSync, FaChevronDown, FaChevronUp } from 'react-icons/fa';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
-interface UnclassifiedEmail {
+interface InboundEmail {
   id: string;
-  message_id?: string | null;
-  thread_id?: string | null;
-  from_email: string;
-  from_name?: string | null;
-  subject?: string | null;
-  body_text?: string | null;
-  received_at: string;
-  grouped_until?: string | null;
-  assigned_to_case_id?: string | null;
-  status: 'PENDING' | 'GROUPED' | 'ASSIGNED' | 'DISCARDED';
-  confidence_score?: number | null;
+  message_id: string;
+  from_email: string | null;
+  from_name: string | null;
+  subject: string | null;
+  date_sent: string | null;
+  attachments_count: number | null;
+  processed_status: string;
+  body_text: string | null;
+  ai_suggestion?: {
+    id: string;
+    json_result: any;
+    created_at: string;
+  } | null;
+}
+
+interface SinClasificarCase {
+  id: string;
+  ticket: string | null;
+  estado_simple: string | null;
   created_at: string;
+  detected_broker_email: string | null;
+  ai_classification: any;
+  ai_confidence: number | null;
 }
 
 export default function UnclassifiedEmailsUI() {
-  const [emails, setEmails] = useState<UnclassifiedEmail[]>([]);
+  const [emails, setEmails] = useState<InboundEmail[]>([]);
+  const [sinClasificarCases, setSinClasificarCases] = useState<SinClasificarCase[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedEmail, setSelectedEmail] = useState<UnclassifiedEmail | null>(null);
-  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [showNewCaseModal, setShowNewCaseModal] = useState(false);
+  const [selectedEmail, setSelectedEmail] = useState<InboundEmail | null>(null);
+
+  const loadEmails = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/pendientes/unclassified');
+      if (!res.ok) {
+        toast.error('Error cargando emails sin clasificar');
+        return;
+      }
+      const data = await res.json();
+      setEmails(data.unlinked_emails || []);
+      setSinClasificarCases(data.sin_clasificar_cases || []);
+    } catch (err) {
+      toast.error('Error de red al cargar emails');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     loadEmails();
-  }, []);
-
-  const loadEmails = async () => {
-    setLoading(true);
-    
-    // TODO: Implementar server action para obtener emails sin clasificar
-    // const result = await actionGetUnclassifiedEmails();
-    
-    // Mock data por ahora
-    setEmails([
-      {
-        id: '1',
-        from_email: 'cliente@example.com',
-        from_name: 'Juan Pérez',
-        subject: 'Consulta sobre renovación de póliza',
-        body_text: 'Hola, quisiera renovar mi póliza de auto...',
-        received_at: new Date().toISOString(),
-        grouped_until: new Date(Date.now() + 20 * 60 * 60 * 1000).toISOString(),
-        status: 'PENDING',
-        confidence_score: 0.75,
-        created_at: new Date().toISOString(),
-      },
-    ]);
-    
-    setLoading(false);
-  };
-
-  // Agrupar emails por thread_id o por similaridad
-  const groupedEmails = emails.reduce((groups, email) => {
-    const key = email.thread_id || email.id;
-    if (!groups[key]) {
-      groups[key] = [];
-    }
-    groups[key].push(email);
-    return groups;
-  }, {} as Record<string, UnclassifiedEmail[]>);
+  }, [loadEmails]);
 
   return (
-    <div className="space-y-6">
+    <div className="bg-white rounded-xl shadow-lg border-2 border-gray-100 p-4 sm:p-6 mb-4">
       {/* Header */}
-      <div className="bg-gradient-to-r from-orange-50 to-white rounded-xl p-6 border-l-4 border-orange-500 shadow-md">
-        <div className="flex items-center gap-3 mb-2">
-          <FaEnvelope className="text-2xl text-orange-600" />
-          <h2 className="text-2xl font-bold text-[#010139]">
-            📧 Emails Sin Clasificar
-          </h2>
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <FaEnvelope className="text-orange-500 text-xl" />
+          <div>
+            <h2 className="text-lg font-bold text-[#010139]">
+              Correos sin clasificar
+            </h2>
+            <p className="text-xs text-gray-500">
+              Correos entrantes que no pudieron ser clasificados automáticamente
+            </p>
+          </div>
         </div>
-        <p className="text-gray-600">
-          Emails que el sistema no pudo clasificar automáticamente. Ventana de agrupación: 24 horas.
-        </p>
+        <button
+          onClick={loadEmails}
+          className="flex items-center gap-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg text-sm font-semibold transition-colors"
+        >
+          <FaSync size={12} /> Actualizar
+        </button>
       </div>
 
-      {/* Info Card */}
-      <div className="bg-blue-50 border-l-4 border-blue-500 rounded-lg p-4">
-        <h3 className="font-bold text-blue-900 mb-2">ℹ️ ¿Cómo funciona?</h3>
-        <ul className="text-sm text-blue-700 space-y-1 ml-4">
-          <li>• Los emails se agrupan automáticamente durante 24 horas desde su recepción</li>
-          <li>• Emails similares (mismo thread o remitente) se agrupan juntos</li>
-          <li>• Pasadas las 24 horas, debes asignarlos manualmente a un caso</li>
-          <li>• Puedes crear un nuevo caso o asignar a uno existente</li>
-          <li>• También puedes descartar emails que no son relevantes</li>
-        </ul>
-      </div>
-
-      {/* Emails List */}
       {loading ? (
-        <div className="text-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#010139] mx-auto"></div>
-          <p className="text-gray-500 mt-4">Cargando emails...</p>
+        <div className="text-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#010139] mx-auto" />
+          <p className="text-gray-500 mt-3 text-sm">Cargando correos...</p>
         </div>
-      ) : Object.keys(groupedEmails).length === 0 ? (
-        <div className="bg-white rounded-xl shadow-lg p-12 text-center">
-          <FaCheckCircle className="text-6xl text-green-400 mx-auto mb-4" />
-          <h3 className="text-xl font-bold text-gray-900 mb-2">
-            No hay emails sin clasificar
-          </h3>
-          <p className="text-gray-500">
-            Todos los emails han sido procesados correctamente
-          </p>
+      ) : emails.length === 0 ? (
+        <div className="text-center py-8 border-2 border-dashed border-gray-200 rounded-xl">
+          <FaCheckCircle className="text-4xl text-green-400 mx-auto mb-3" />
+          <p className="text-gray-600 font-semibold">No hay correos pendientes</p>
+          <p className="text-gray-400 text-sm mt-1">Todos los correos han sido procesados</p>
         </div>
       ) : (
-        <div className="space-y-4">
-          {Object.entries(groupedEmails).map(([groupId, groupEmails]) => (
-            <EmailGroup
-              key={groupId}
-              emails={groupEmails}
-              onAssign={(email) => {
+        <div className="space-y-3">
+          {emails.map((email) => (
+            <EmailRow
+              key={email.id}
+              email={email}
+              onAssign={() => {
                 setSelectedEmail(email);
-                setShowAssignModal(true);
+                setShowNewCaseModal(true);
               }}
-              onDiscard={(emailId) => handleDiscard(emailId)}
               onReload={loadEmails}
             />
           ))}
         </div>
       )}
 
-      {/* Assignment Modal */}
-      {showAssignModal && selectedEmail && (
-        <AssignmentModal
+      {/* Assign modal */}
+      {showNewCaseModal && selectedEmail && (
+        <AssignEmailModal
           email={selectedEmail}
-          onClose={() => {
-            setShowAssignModal(false);
-            setSelectedEmail(null);
-          }}
-          onSuccess={() => {
-            setShowAssignModal(false);
-            setSelectedEmail(null);
-            loadEmails();
-          }}
+          onClose={() => { setShowNewCaseModal(false); setSelectedEmail(null); }}
+          onSuccess={() => { setShowNewCaseModal(false); setSelectedEmail(null); loadEmails(); }}
         />
       )}
     </div>
   );
-
-  function handleDiscard(emailId: string) {
-    toast.info('Descartando email...');
-    // TODO: Implementar server action
-  }
 }
 
 // =====================================================
-// EMAIL GROUP
+// EMAIL ROW
 // =====================================================
 
-function EmailGroup({
-  emails,
+function EmailRow({
+  email,
   onAssign,
-  onDiscard,
   onReload,
 }: {
-  emails: UnclassifiedEmail[];
-  onAssign: (email: UnclassifiedEmail) => void;
-  onDiscard: (emailId: string) => void;
+  email: InboundEmail;
+  onAssign: () => void;
   onReload: () => void;
 }) {
-  const [expanded, setExpanded] = useState(true);
-  
-  if (emails.length === 0) return null;
-  
-  const primaryEmail = emails[0];
-  if (!primaryEmail) return null;
-  
-  const isExpired = primaryEmail.grouped_until ? new Date(primaryEmail.grouped_until) < new Date() : true;
+  const [expanded, setExpanded] = useState(false);
+  const ai = email.ai_suggestion?.json_result;
+  const confidence = ai?.confidence ?? null;
+
+  const dateSent = email.date_sent ? new Date(email.date_sent) : null;
 
   return (
-    <div className={`bg-white rounded-xl shadow-lg overflow-hidden border-2 ${
-      isExpired ? 'border-red-400' : 'border-orange-400'
-    }`}>
-      {/* Group Header */}
-      <div className={`p-4 ${
-        isExpired 
-          ? 'bg-gradient-to-r from-red-50 to-red-100' 
-          : 'bg-gradient-to-r from-orange-50 to-orange-100'
-      }`}>
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-start gap-3 flex-1">
-            <div className={`p-2 rounded-lg ${
-              isExpired ? 'bg-red-200' : 'bg-orange-200'
-            }`}>
-              {isExpired ? (
-                <FaExclamationCircle className="text-red-600 text-xl" />
-              ) : (
-                <FaClock className="text-orange-600 text-xl" />
+    <div className="border-2 border-orange-200 rounded-xl bg-orange-50 overflow-hidden">
+      <div className="p-3 sm:p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap mb-1">
+              <span className="font-bold text-[#010139] text-sm">
+                {email.from_name || email.from_email || 'Remitente desconocido'}
+              </span>
+              {email.from_name && email.from_email && (
+                <span className="text-xs text-gray-500">&lt;{email.from_email}&gt;</span>
               )}
-            </div>
-
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-1">
-                <h3 className="font-bold text-[#010139]">
-                  {primaryEmail.from_name || primaryEmail.from_email}
-                </h3>
-                {emails.length > 1 && (
-                  <span className="bg-blue-100 text-blue-800 text-xs font-bold px-2 py-1 rounded-full">
-                    {emails.length} emails
-                  </span>
-                )}
-              </div>
-
-              <p className="text-sm text-gray-600 mb-1">
-                {primaryEmail.from_email}
-              </p>
-
-              {primaryEmail.subject && (
-                <p className="text-sm text-gray-800 font-semibold mb-2">
-                  {primaryEmail.subject}
-                </p>
-              )}
-
-              <div className="flex items-center gap-4 text-xs">
-                <span className="text-gray-500">
-                  Recibido: {format(new Date(primaryEmail.received_at), 'PPp', { locale: es })}
+              {email.attachments_count !== null && email.attachments_count > 0 && (
+                <span className="bg-blue-100 text-blue-700 text-xs px-2 py-0.5 rounded-full font-semibold">
+                  {email.attachments_count} adjunto{email.attachments_count > 1 ? 's' : ''}
                 </span>
-                {primaryEmail.grouped_until && (
-                  <span className={`font-bold ${
-                    isExpired ? 'text-red-600' : 'text-orange-600'
-                  }`}>
-                    {isExpired 
-                      ? '⚠️ Ventana expirada - Requiere asignación manual'
-                      : `⏱️ Agrupando hasta: ${format(new Date(primaryEmail.grouped_until), 'PPp', { locale: es })}`
-                    }
-                  </span>
-                )}
-              </div>
-
-              {primaryEmail.confidence_score !== null && primaryEmail.confidence_score !== undefined && (
-                <div className="mt-2">
-                  <span className="text-xs text-gray-600">
-                    Confianza IA: {Math.round(primaryEmail.confidence_score * 100)}%
-                  </span>
-                  <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
-                    <div
-                      className={`h-2 rounded-full ${
-                        primaryEmail.confidence_score >= 0.8 
-                          ? 'bg-green-500' 
-                          : primaryEmail.confidence_score >= 0.5 
-                          ? 'bg-yellow-500' 
-                          : 'bg-red-500'
-                      }`}
-                      style={{ width: `${primaryEmail.confidence_score * 100}%` }}
-                    />
-                  </div>
-                </div>
+              )}
+              {email.processed_status === 'error' && (
+                <span className="bg-red-100 text-red-700 text-xs px-2 py-0.5 rounded-full font-semibold flex items-center gap-1">
+                  <FaExclamationCircle size={10} /> Error
+                </span>
               )}
             </div>
-          </div>
-
-          {/* Actions */}
-          <div className="flex gap-2">
-            <button
-              onClick={() => onAssign(primaryEmail)}
-              className="bg-[#8AAA19] text-white px-4 py-2 rounded-lg font-semibold hover:bg-[#6d8814] transition-colors text-sm flex items-center gap-2"
-            >
-              <FaPlus className="text-white" /> Asignar
-            </button>
-            <button
-              onClick={() => {
-                if (confirm('¿Descartar este email?')) {
-                  onDiscard(primaryEmail.id);
-                }
-              }}
-              className="bg-red-500 text-white px-4 py-2 rounded-lg font-semibold hover:bg-red-600 transition-colors text-sm flex items-center gap-2"
-            >
-              <FaTimes className="text-white" /> Descartar
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Email Body Preview */}
-      {expanded && primaryEmail.body_text && (
-        <div className="p-4 border-t border-gray-200 bg-gray-50">
-          <p className="text-sm text-gray-700 whitespace-pre-wrap line-clamp-6">
-            {primaryEmail.body_text}
-          </p>
-          {primaryEmail.body_text.length > 500 && (
-            <button className="text-xs text-blue-600 hover:text-blue-800 font-semibold mt-2">
-              Ver completo →
-            </button>
-          )}
-        </div>
-      )}
-
-      {/* Multiple Emails in Group */}
-      {emails.length > 1 && expanded && (
-        <div className="p-4 border-t border-gray-200 bg-white">
-          <p className="text-sm font-bold text-gray-700 mb-2">
-            Emails agrupados ({emails.length}):
-          </p>
-          <div className="space-y-2">
-            {emails.slice(1).map((email, idx) => (
-              <div key={email.id} className="text-sm text-gray-600 border-l-2 border-blue-400 pl-3">
-                {email.subject || 'Sin asunto'} - {format(new Date(email.received_at), 'PPp', { locale: es })}
+            <p className="text-sm font-semibold text-gray-800 truncate">
+              {email.subject || '(sin asunto)'}
+            </p>
+            {dateSent && (
+              <p className="text-xs text-gray-400 mt-0.5">
+                {format(dateSent, "d MMM yyyy, HH:mm", { locale: es })}
+              </p>
+            )}
+            {/* AI suggestion badge */}
+            {ai && confidence !== null && (
+              <div className="flex items-center gap-2 mt-1.5">
+                <FaRobot size={11} className="text-purple-500" />
+                <span className="text-xs text-purple-700 font-semibold">
+                  IA: {ai.ramo || ai.ramo_bucket || '—'} · {ai.case_type || '—'}
+                </span>
+                <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
+                  confidence >= 0.8 ? 'bg-green-100 text-green-700' :
+                  confidence >= 0.5 ? 'bg-yellow-100 text-yellow-700' :
+                  'bg-red-100 text-red-700'
+                }`}>
+                  {Math.round(confidence * 100)}%
+                </span>
               </div>
-            ))}
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 flex-shrink-0">
+            {email.body_text && (
+              <button
+                onClick={() => setExpanded(v => !v)}
+                className="p-2 rounded-lg text-gray-500 hover:bg-orange-100 transition-colors"
+              >
+                {expanded ? <FaChevronUp size={12} /> : <FaChevronDown size={12} />}
+              </button>
+            )}
+            <button
+              onClick={onAssign}
+              className="flex items-center gap-1.5 px-3 py-2 bg-gradient-to-r from-[#010139] to-[#020270] text-white rounded-lg text-xs font-bold hover:opacity-90 transition-opacity"
+            >
+              <FaPlus size={10} /> Crear caso
+            </button>
           </div>
         </div>
-      )}
+
+        {expanded && email.body_text && (
+          <div className="mt-3 pt-3 border-t border-orange-200">
+            <p className="text-sm text-gray-700 whitespace-pre-wrap line-clamp-8 font-mono text-xs bg-white rounded-lg p-3 border border-gray-200">
+              {email.body_text}
+            </p>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
 // =====================================================
-// ASSIGNMENT MODAL
+// ASSIGN EMAIL MODAL — creates a case from the email
 // =====================================================
 
-function AssignmentModal({
+function AssignEmailModal({
   email,
   onClose,
   onSuccess,
 }: {
-  email: UnclassifiedEmail;
+  email: InboundEmail;
   onClose: () => void;
   onSuccess: () => void;
 }) {
-  const [assignmentType, setAssignmentType] = useState<'existing' | 'new'>('new');
-  const [selectedCaseId, setSelectedCaseId] = useState('');
-  const [formData, setFormData] = useState({
-    ramo_code: '',
-    aseguradora_code: '',
-    tramite_code: '',
-    broker_id: '',
-  });
+  const [section, setSection] = useState('SIN_CLASIFICAR');
+  const [clientName, setClientName] = useState('');
+  const [notes, setNotes] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (assignmentType === 'new') {
-      // TODO: Crear nuevo caso desde email
-      toast.success('Caso creado y email asignado');
-    } else {
-      // TODO: Asignar a caso existente
-      toast.success('Email asignado al caso existente');
+    setSubmitting(true);
+    try {
+      const res = await fetch('/api/pendientes/unclassified/assign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'create',
+          email_id: email.id,
+          section,
+          client_name: clientName || undefined,
+          notes: notes || `Correo de: ${email.from_email}\nAsunto: ${email.subject}`,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        toast.error(err.error || 'Error al crear caso');
+        return;
+      }
+      toast.success('Caso creado y correo asignado');
+      onSuccess();
+    } catch {
+      toast.error('Error de red');
+    } finally {
+      setSubmitting(false);
     }
-    
-    onSuccess();
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4 overflow-y-auto">
-      <div className="bg-white rounded-2xl max-w-2xl w-full shadow-2xl my-8">
-        <div className="bg-gradient-to-r from-[#010139] to-[#020270] text-white p-6 rounded-t-2xl">
-          <h3 className="text-xl font-bold">Asignar Email a Caso</h3>
-          <p className="text-sm text-blue-100 mt-1">De: {email.from_email}</p>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl">
+        <div className="bg-gradient-to-r from-[#010139] to-[#020270] text-white p-5 rounded-t-2xl">
+          <h3 className="text-lg font-bold">Crear caso desde correo</h3>
+          <p className="text-sm text-blue-200 mt-0.5 truncate">De: {email.from_email}</p>
         </div>
-
-        <form onSubmit={handleSubmit} className="p-6 space-y-6">
-          {/* Email Preview */}
-          <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-            <p className="text-sm font-bold text-gray-700 mb-2">
-              {email.subject || 'Sin asunto'}
-            </p>
-            <p className="text-sm text-gray-600 line-clamp-4">
-              {email.body_text || 'Sin contenido'}
-            </p>
+        <form onSubmit={handleSubmit} className="p-5 space-y-4">
+          <div className="bg-gray-50 rounded-lg p-3 border border-gray-200 text-sm">
+            <p className="font-semibold text-gray-800">{email.subject || '(sin asunto)'}</p>
+            {email.body_text && (
+              <p className="text-gray-500 mt-1 line-clamp-3 text-xs">{email.body_text}</p>
+            )}
           </div>
 
-          {/* Assignment Type */}
-          <div className="bg-blue-50 rounded-lg p-4">
-            <label className="block text-sm font-bold text-gray-700 mb-3">
-              Tipo de asignación
-            </label>
-            <div className="space-y-2">
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="radio"
-                  name="assignmentType"
-                  value="new"
-                  checked={assignmentType === 'new'}
-                  onChange={(e) => setAssignmentType(e.target.value as 'existing' | 'new')}
-                  className="w-4 h-4"
-                />
-                <span className="font-semibold">Crear nuevo caso</span>
-              </label>
-              <label className="flex items-center gap-3 cursor-pointer">
-                <input
-                  type="radio"
-                  name="assignmentType"
-                  value="existing"
-                  checked={assignmentType === 'existing'}
-                  onChange={(e) => setAssignmentType(e.target.value as 'existing' | 'new')}
-                  className="w-4 h-4"
-                />
-                <span className="font-semibold">Asignar a caso existente</span>
-              </label>
-            </div>
-          </div>
-
-          {/* New Case Form */}
-          {assignmentType === 'new' && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">
-                    Ramo
-                  </label>
-                  <select
-                    value={formData.ramo_code}
-                    onChange={(e) => setFormData({ ...formData, ramo_code: e.target.value })}
-                    className="w-full border-2 border-gray-300 rounded-lg px-3 py-2 focus:border-[#8AAA19] focus:outline-none"
-                    required
-                  >
-                    <option value="">Seleccionar...</option>
-                    <option value="01">01 - Autos</option>
-                    <option value="02">02 - Incendio</option>
-                    <option value="03">03 - Vida</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">
-                    Aseguradora
-                  </label>
-                  <select
-                    value={formData.aseguradora_code}
-                    onChange={(e) => setFormData({ ...formData, aseguradora_code: e.target.value })}
-                    className="w-full border-2 border-gray-300 rounded-lg px-3 py-2 focus:border-[#8AAA19] focus:outline-none"
-                    required
-                  >
-                    <option value="">Seleccionar...</option>
-                    <option value="01">01 - ASSA</option>
-                    <option value="02">02 - SURA</option>
-                    <option value="03">03 - ANCON</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">
-                    Trámite
-                  </label>
-                  <select
-                    value={formData.tramite_code}
-                    onChange={(e) => setFormData({ ...formData, tramite_code: e.target.value })}
-                    className="w-full border-2 border-gray-300 rounded-lg px-3 py-2 focus:border-[#8AAA19] focus:outline-none"
-                    required
-                  >
-                    <option value="">Seleccionar...</option>
-                    <option value="1">1 - Emisión</option>
-                    <option value="2">2 - Renovación</option>
-                    <option value="3">3 - Siniestro</option>
-                  </select>
-                </div>
-              </div>
-
-              {formData.ramo_code && formData.aseguradora_code && formData.tramite_code && (
-                <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                  <p className="text-sm font-bold text-green-900">
-                    Preview de ticket que se generará:
-                  </p>
-                  <p className="text-lg font-mono font-bold text-green-700 mt-1">
-                    2601{formData.ramo_code}{formData.aseguradora_code}{formData.tramite_code.padStart(2, '0')}001
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Existing Case Selection */}
-          {assignmentType === 'existing' && (
-            <div>
-              <label className="block text-sm font-bold text-gray-700 mb-2">
-                Buscar caso existente
-              </label>
-              <input
-                type="text"
-                placeholder="Buscar por ticket, cliente o póliza..."
-                className="w-full border-2 border-gray-300 rounded-lg px-4 py-2 focus:border-[#8AAA19] focus:outline-none"
-              />
-              <p className="text-xs text-gray-500 mt-2">
-                Escribe para buscar casos existentes
-              </p>
-            </div>
-          )}
-
-          {/* Buttons */}
-          <div className="flex justify-end gap-3 pt-4 border-t">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 rounded-lg font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors"
+          <div>
+            <label className="block text-sm font-bold text-gray-700 mb-1">Sección</label>
+            <select
+              value={section}
+              onChange={e => setSection(e.target.value)}
+              className="w-full border-2 border-gray-300 rounded-lg px-3 py-2.5 text-base focus:border-[#8AAA19] focus:outline-none"
             >
+              <option value="SIN_CLASIFICAR">Sin clasificar</option>
+              <option value="VIDA_ASSA">Vida ASSA</option>
+              <option value="RAMOS_GENERALES">Ramos Generales</option>
+              <option value="OTROS_PERSONAS">Ramo Personas</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-bold text-gray-700 mb-1">Nombre del cliente (opcional)</label>
+            <input
+              type="text"
+              value={clientName}
+              onChange={e => setClientName(e.target.value)}
+              placeholder="Nombre del asegurado..."
+              className="w-full border-2 border-gray-300 rounded-lg px-3 py-2.5 text-base focus:border-[#8AAA19] focus:outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-bold text-gray-700 mb-1">Notas (opcional)</label>
+            <textarea
+              value={notes}
+              onChange={e => setNotes(e.target.value)}
+              rows={2}
+              placeholder="Observaciones..."
+              className="w-full border-2 border-gray-300 rounded-lg px-3 py-2.5 text-base focus:border-[#8AAA19] focus:outline-none resize-none"
+            />
+          </div>
+
+          <div className="flex justify-end gap-3 pt-2 border-t">
+            <button type="button" onClick={onClose}
+              className="px-4 py-2 rounded-lg font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors">
               Cancelar
             </button>
-            <button
-              type="submit"
-              className="bg-[#010139] text-white px-4 py-2 rounded-lg font-semibold hover:bg-[#020270] transition-colors"
-            >
-              Asignar Email
+            <button type="submit" disabled={submitting}
+              className="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-[#010139] to-[#020270] text-white rounded-lg font-bold hover:opacity-90 transition-opacity disabled:opacity-50">
+              {submitting ? 'Creando...' : <><FaPlus size={12} /> Crear caso</>}
             </button>
           </div>
         </form>

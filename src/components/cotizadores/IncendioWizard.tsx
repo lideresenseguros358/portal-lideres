@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { FaArrowLeft, FaArrowRight, FaCheck, FaSpinner, FaInfoCircle, FaChevronDown, FaChevronUp } from 'react-icons/fa';
 import { createPetitionFromQuote } from '@/lib/operaciones/createPetitionFromQuote';
 import { SECURITY_MEASURES } from '@/lib/constants/securityMeasures';
+import EmissionProgressBar from '@/components/cotizadores/EmissionProgressBar';
 
 // ═══════════════════════════════════════════════════════════════════
 // TYPES
@@ -92,6 +93,33 @@ function sanitizeHTML(str: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// STABLE INPUT FIELD (defined outside component to prevent re-mount)
+// ═══════════════════════════════════════════════════════════════════
+
+function StableInputField({ label, name, type = 'text', placeholder, required = true, hint, inputMode, value, onChange, error, ...props }: any) {
+  return (
+    <div>
+      <label className="block text-sm font-semibold text-gray-700 mb-1.5">
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
+      <input
+        type={type}
+        inputMode={inputMode}
+        value={value || ''}
+        onChange={onChange}
+        placeholder={placeholder}
+        className={`w-full px-4 py-3 border-2 rounded-xl text-base focus:outline-none transition-colors appearance-none min-w-0 ${
+          error ? 'border-red-400 bg-red-50 focus:border-red-500' : 'border-gray-200 bg-white focus:border-[#8AAA19]'
+        }`}
+        {...props}
+      />
+      {error && <p className="text-red-500 text-xs mt-1 font-medium">{error}</p>}
+      {hint && !error && <p className="text-gray-400 text-xs mt-1">{hint}</p>}
+    </div>
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -382,25 +410,14 @@ export default function IncendioWizard() {
   // SHARED UI COMPONENTS
   // ═══════════════════════════════════════════════════════════════
 
-  const InputField = ({ label, name, type = 'text', placeholder, required = true, hint, inputMode, ...props }: any) => (
-    <div>
-      <label className="block text-sm font-semibold text-gray-700 mb-1.5">
-        {label} {required && <span className="text-red-500">*</span>}
-      </label>
-      <input
-        type={type}
-        inputMode={inputMode}
-        value={(data as any)[name] || ''}
-        onChange={(e) => update({ [name]: e.target.value })}
-        placeholder={placeholder}
-        className={`w-full px-4 py-3 border-2 rounded-xl text-base focus:outline-none transition-colors appearance-none min-w-0 ${
-          errors[name] ? 'border-red-400 bg-red-50 focus:border-red-500' : 'border-gray-200 bg-white focus:border-[#8AAA19]'
-        }`}
-        {...props}
-      />
-      {errors[name] && <p className="text-red-500 text-xs mt-1 font-medium">{errors[name]}</p>}
-      {hint && !errors[name] && <p className="text-gray-400 text-xs mt-1">{hint}</p>}
-    </div>
+  const InputField = ({ name, ...props }: any) => (
+    <StableInputField
+      name={name}
+      value={(data as any)[name]}
+      onChange={(e: React.ChangeEvent<HTMLInputElement>) => update({ [name]: e.target.value })}
+      error={errors[name]}
+      {...props}
+    />
   );
 
   // ═══════════════════════════════════════════════════════════════
@@ -775,39 +792,7 @@ export default function IncendioWizard() {
       </div>
 
       {/* Progress Bar */}
-      <div className="mb-6 sm:mb-8">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-bold text-[#8AAA19]">
-            Paso {step} de {TOTAL_STEPS}
-          </span>
-          <span className="text-xs text-gray-400">{stepTitles[step - 1]}</span>
-        </div>
-        <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-          <div
-            className="h-full bg-gradient-to-r from-[#010139] to-[#8AAA19] rounded-full transition-all duration-500 ease-out"
-            style={{ width: `${(step / TOTAL_STEPS) * 100}%` }}
-          />
-        </div>
-        {/* Step dots */}
-        <div className="flex justify-between mt-2">
-          {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
-            <button
-              key={i}
-              onClick={() => i + 1 < step && goToStep(i + 1)}
-              disabled={i + 1 > step}
-              className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full text-xs font-bold flex items-center justify-center transition-all ${
-                i + 1 === step
-                  ? 'bg-[#010139] text-white shadow-lg scale-110'
-                  : i + 1 < step
-                  ? 'bg-[#8AAA19] text-white cursor-pointer hover:scale-105'
-                  : 'bg-gray-100 text-gray-400'
-              }`}
-            >
-              {i + 1 < step ? <FaCheck size={10} /> : stepIcons[i]}
-            </button>
-          ))}
-        </div>
-      </div>
+      <EmissionProgressBar currentStep={step} totalSteps={TOTAL_STEPS} />
 
       {/* Step Card */}
       <div className="bg-white rounded-2xl shadow-lg border-2 border-gray-100 p-5 sm:p-7 mb-6">
@@ -841,7 +826,7 @@ export default function IncendioWizard() {
           <button
             type="button"
             onClick={goNext}
-            className="flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold text-white bg-gradient-to-r from-[#010139] to-[#8AAA19] hover:opacity-90 transition-opacity shadow-lg"
+            className="flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold text-white bg-[#8AAA19] hover:bg-[#6d8814] transition-colors shadow-lg"
           >
             Siguiente <FaArrowRight size={12} />
           </button>
@@ -850,7 +835,7 @@ export default function IncendioWizard() {
             type="button"
             onClick={handleSubmit}
             disabled={submitting}
-            className="flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold text-white bg-gradient-to-r from-[#010139] to-[#8AAA19] hover:opacity-90 transition-opacity shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold text-white bg-[#8AAA19] hover:bg-[#6d8814] transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {submitting ? (
               <>

@@ -507,14 +507,26 @@ export function AdvancesManagementModal({
                               <div className="flex-1">
                                 <div className="flex items-start justify-between">
                                   <div>
-                                    <p className="font-semibold text-[#010139]">
-                                      {advance.reason}
-                                      {advance.is_recurring && (
-                                        <span className="ml-2 text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                                          Recurrente
-                                        </span>
-                                      )}
-                                    </p>
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                        <p className="font-semibold text-[#010139]">
+                                          {advance.reason}
+                                        </p>
+                                        {advance.is_recurring && (
+                                          <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded font-semibold">
+                                            Recurrente
+                                          </span>
+                                        )}
+                                        {advance.status === 'paid' && (
+                                          <span className="inline-flex items-center gap-1 text-xs bg-green-600 text-white px-2.5 py-1 rounded-full font-bold shadow-sm">
+                                            ✓ PAGADO
+                                          </span>
+                                        )}
+                                        {advance.status === 'partial' && (
+                                          <span className="inline-flex items-center gap-1 text-xs bg-yellow-500 text-white px-2.5 py-1 rounded-full font-bold shadow-sm">
+                                            PARCIAL
+                                          </span>
+                                        )}
+                                      </div>
                                     <p className="text-sm text-gray-600 mt-1">
                                       Total: ${initialAmount.toFixed(2)} | 
                                       Pagado: ${(advance.total_paid || 0).toFixed(2)} | 
@@ -618,11 +630,16 @@ export function AdvancesManagementModal({
                           >
                             <div className="flex items-start justify-between mb-2">
                               <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-2">
+                                <div className="flex items-center gap-2 flex-wrap mb-2">
                                   <p className="font-bold text-[#010139] text-lg">{advance.reason}</p>
                                   {advance.is_recurring && (
                                     <span className="text-xs bg-purple-100 text-purple-800 px-2 py-1 rounded font-semibold">
                                       🔁 Recurrente
+                                    </span>
+                                  )}
+                                  {advance.status === 'paid' && (
+                                    <span className="inline-flex items-center gap-1 text-xs bg-green-600 text-white px-3 py-1 rounded-full font-bold shadow">
+                                      ✓ PAGADO — Descontar en próxima quincena
                                     </span>
                                   )}
                                 </div>

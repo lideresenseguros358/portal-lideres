@@ -10,7 +10,7 @@
  * - Tracking de historial y audit logs
  */
 
-import { createClient } from '@/lib/supabase/server';
+import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import type { EmailClassificationResult } from '@/lib/vertex/vertexClient';
 import type { PendientesClassificationResult } from '@/lib/vertex/pendientesClassifier';
 import { getCurrentAAMM } from '@/lib/timezone/time';
@@ -41,7 +41,7 @@ export interface CaseCreationResult {
 export async function processInboundEmail(
   input: CaseCreationInput
 ): Promise<CaseCreationResult> {
-  const supabase = await createClient();
+  const supabase = getSupabaseAdmin();
 
   try {
     // 1. Determinar broker asignado (puede ser null para externos)
@@ -96,9 +96,18 @@ export async function processInboundEmail(
     // 4. Crear nuevo caso
     const isProvisional = shouldBeProvisional(input.aiClassification);
 
+    // Map ramo_bucket to section enum so cases appear in actionGetCases
+    const sectionFromBucket = (bucket: string): string => {
+      if (bucket === 'vida_assa') return 'VIDA_ASSA';
+      if (bucket === 'ramos_generales') return 'RAMOS_GENERALES';
+      if (bucket === 'ramo_personas') return 'OTROS_PERSONAS';
+      return 'SIN_CLASIFICAR';
+    };
+
     const caseData: any = {
       broker_id: brokerId || null, // Permitir null para externos
       assigned_master_id: masterId,
+      section: isProvisional ? 'SIN_CLASIFICAR' : sectionFromBucket(input.aiClassification.ramo_bucket || ''),
       ramo_bucket: input.aiClassification.ramo_bucket,
       ramo_code: input.aiClassification.ramo_code,
       aseguradora_code: input.aiClassification.aseguradora_code,

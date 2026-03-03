@@ -756,6 +756,8 @@ export default function EditPaymentModal({ payment, onClose, onSuccess }: EditPa
                                   if (result.ok) {
                                     setEarlyPaymentEnabled(enable);
                                     toast.success(result.message);
+                                    // Reload list so can_be_paid reflects in PendingPaymentsTab
+                                    onSuccess();
                                   } else {
                                     toast.error(result.error || 'Error');
                                   }
