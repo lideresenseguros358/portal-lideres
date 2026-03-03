@@ -26,6 +26,7 @@ import { Card } from '@/components/ui/card';
 import { Search, Filter, X, RefreshCw } from 'lucide-react';
 import CaseBoard from '@/components/pendientes/CaseBoard';
 import CaseDetailModal from '@/components/pendientes/CaseDetailModal';
+import PendUnclassifiedMessages from '@/components/pendientes/PendUnclassifiedMessages';
 import type { CasoPendiente, EstadoSimple, RamoBucket, CaseEmail, CaseHistoryEvent } from '@/types/pendientes';
 import dynamic from 'next/dynamic';
 
@@ -281,6 +282,13 @@ export default function PendientesClient({
 
           {/* Contenido de tabs */}
           <TabsContent value={activeTab} className="mt-0">
+            {/* Panel de correos sin clasificar (solo en tab desconocido, solo masters) */}
+            {activeTab === 'desconocido' && isMaster && (
+              <div className="mb-6">
+                <PendUnclassifiedMessages isMaster={isMaster} />
+              </div>
+            )}
+
             {casosFiltrados.length === 0 ? (
               <Card className="p-12 text-center">
                 <p className="text-gray-400 text-lg">

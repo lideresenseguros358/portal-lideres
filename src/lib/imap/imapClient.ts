@@ -51,10 +51,12 @@ export interface EmailAttachment {
 }
 
 /**
- * Crea conexión IMAP a Zoho
+ * Crea conexión IMAP a Zoho.
+ * If no config is provided, falls back to ZOHO_IMAP_USER / ZOHO_IMAP_PASS env vars.
+ * Pass an explicit config (e.g. from getZohoImapConfigTramites()) for tramites@.
  */
-export async function createImapConnection(): Promise<ImapFlow> {
-  const config: ImapConfig = {
+export async function createImapConnection(overrideConfig?: ImapConfig): Promise<ImapFlow> {
+  const config: ImapConfig = overrideConfig ?? {
     host: process.env.ZOHO_IMAP_HOST || 'imap.zoho.com',
     port: Number(process.env.ZOHO_IMAP_PORT) || 993,
     secure: true,

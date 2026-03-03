@@ -12,6 +12,7 @@
 
 import { createClient } from '@/lib/supabase/server';
 import type { EmailClassificationResult } from '@/lib/vertex/vertexClient';
+import type { PendientesClassificationResult } from '@/lib/vertex/pendientesClassifier';
 import { getCurrentAAMM } from '@/lib/timezone/time';
 import { notifyCaseCreated } from '@/lib/email/pendientes';
 import { logImapDebug } from '@/lib/debug/imapLogger';
@@ -22,6 +23,8 @@ export interface CaseCreationInput {
   emailFrom: string;
   emailCc: string[];
   emailSubject: string;
+  /** Enhanced Pendientes classification (optional — used for ticket exceptions) */
+  pendientesClassification?: PendientesClassificationResult;
 }
 
 export interface CaseCreationResult {
@@ -151,10 +154,27 @@ export async function processInboundEmail(
       confidence: input.aiClassification.confidence,
     });
 
-    // 7. Generar ticket si NO es provisional
+    // 7. Generar ticket si NO es provisional y NO es excepción de ticket
     let ticket: string | undefined;
-    if (!isProvisional && canGenerateTicket(input.aiClassification)) {
+    const ticketException = input.pendientesClassification?.ticket_exception_reason || null;
+    const ticketRequired = input.pendientesClassification?.ticket_required ?? true;
+
+    if (!isProvisional && ticketRequired && canGenerateTicket(input.aiClassification)) {
       ticket = await generateTicket(supabase, newCase.id, input.aiClassification);
+    } else if (ticketException) {
+      // Log the ticket exception (ASSA Vida Regular / ASSA Salud)
+      console.log(`[CASE ENGINE] Ticket exception: ${ticketException} — case ${newCase.id}`);
+      await createHistoryEvent(supabase, newCase.id, 'ticket_exception', {
+        reason: ticketException,
+        ticket_required: false,
+      });
+      // Store special flag
+      await supabase
+        .from('cases')
+        .update({
+          special_flags: [...(caseData.special_flags || []), `no_ticket:${ticketException}`],
+        })
+        .eq('id', newCase.id);
     }
 
     // 8. Audit log

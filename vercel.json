@@ -6,7 +6,7 @@
     },
     {
       "path": "/api/cron/imap-ingest",
-      "schedule": "*/3 * * * *"
+      "schedule": "* * * * *"
     },
     {
       "path": "/api/cron/scheduler",

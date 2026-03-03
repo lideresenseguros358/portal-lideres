@@ -22,6 +22,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { 
   X, 
   Mail, 
@@ -32,7 +33,9 @@ import {
   User,
   Building,
   Clock,
-  RefreshCw
+  RefreshCw,
+  CheckCircle2,
+  Sparkles,
 } from 'lucide-react';
 import type { CasoPendiente, CaseEmail, CaseHistoryEvent } from '@/types/pendientes';
 import { formatDatePanama } from '@/lib/timezone/time';
@@ -57,6 +60,39 @@ export default function CaseDetailModal({
 }: CaseDetailModalProps) {
   const [activeTab, setActiveTab] = useState('info');
   const [updating, setUpdating] = useState(false);
+
+  // Emitido flow state
+  const [showEmitidoFlow, setShowEmitidoFlow] = useState(false);
+  const [policyNumber, setPolicyNumber] = useState('');
+  const [emitidoNotes, setEmitidoNotes] = useState('');
+  const [emitidoLoading, setEmitidoLoading] = useState(false);
+  const [emitidoError, setEmitidoError] = useState<string | null>(null);
+
+  const handleEmitidoSubmit = async () => {
+    if (!caso || !policyNumber.trim()) {
+      setEmitidoError('El número de póliza es requerido');
+      return;
+    }
+    setEmitidoLoading(true);
+    setEmitidoError(null);
+    try {
+      const res = await fetch(`/api/pendientes/casos/${caso.id}/emitido-flow`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ policy_number: policyNumber.trim(), notes: emitidoNotes.trim() || undefined }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || 'Error');
+      }
+      // Success — reload to reflect changes
+      window.location.reload();
+    } catch (err: any) {
+      setEmitidoError(err.message);
+    } finally {
+      setEmitidoLoading(false);
+    }
+  };
 
   if (!caso) return null;
 
@@ -182,7 +218,8 @@ export default function CaseDetailModal({
               {caso.ai_classification && (
                 <Card className="p-6 bg-blue-50">
                   <h3 className="font-bold text-lg mb-4 flex items-center gap-2">
-                    🤖 Clasificación por IA
+                    <Sparkles className="w-5 h-5 text-purple-500" />
+                    Clasificación por IA
                   </h3>
                   <div className="space-y-2 text-sm">
                     <p>
@@ -200,6 +237,75 @@ export default function CaseDetailModal({
                       </p>
                     )}
                   </div>
+                </Card>
+              )}
+
+              {/* Emitido → Preliminar BD Flow (solo master) */}
+              {isMaster && caso.estado_simple !== 'Cerrado aprobado' && caso.estado_simple !== 'Cerrado rechazado' && (
+                <Card className="p-6 border-2 border-dashed border-green-300 bg-green-50/50">
+                  <h3 className="font-bold text-lg mb-3 flex items-center gap-2">
+                    <CheckCircle2 className="w-5 h-5 text-green-600" />
+                    Marcar como Emitido
+                  </h3>
+
+                  {!showEmitidoFlow ? (
+                    <Button
+                      variant="outline"
+                      className="border-green-500 text-green-700 hover:bg-green-100"
+                      onClick={() => setShowEmitidoFlow(true)}
+                    >
+                      <CheckCircle2 className="w-4 h-4 mr-2" />
+                      Iniciar flujo Emitido → Preliminar BD
+                    </Button>
+                  ) : (
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-sm font-semibold text-gray-700 block mb-1">
+                          Número de Póliza <span className="text-red-500">*</span>
+                        </label>
+                        <Input
+                          placeholder="Ej: 01-01-12345-00"
+                          value={policyNumber}
+                          onChange={e => setPolicyNumber(e.target.value)}
+                          className="max-w-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-sm font-semibold text-gray-700 block mb-1">
+                          Notas (opcional)
+                        </label>
+                        <Input
+                          placeholder="Notas adicionales sobre la emisión..."
+                          value={emitidoNotes}
+                          onChange={e => setEmitidoNotes(e.target.value)}
+                          className="max-w-sm"
+                        />
+                      </div>
+                      {emitidoError && (
+                        <p className="text-red-600 text-sm font-medium">{emitidoError}</p>
+                      )}
+                      <div className="flex gap-2">
+                        <Button
+                          className="bg-green-600 hover:bg-green-700 text-white"
+                          disabled={emitidoLoading || !policyNumber.trim()}
+                          onClick={handleEmitidoSubmit}
+                        >
+                          {emitidoLoading ? 'Guardando...' : 'Confirmar Emisión'}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          onClick={() => {
+                            setShowEmitidoFlow(false);
+                            setPolicyNumber('');
+                            setEmitidoNotes('');
+                            setEmitidoError(null);
+                          }}
+                        >
+                          Cancelar
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </Card>
               )}
             </TabsContent>

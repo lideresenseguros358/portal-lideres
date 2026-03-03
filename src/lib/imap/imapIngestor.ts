@@ -18,7 +18,10 @@ import {
   closeImapConnection,
   type EmailMessage,
 } from './imapClient';
+import { getZohoImapConfigTramites } from '@/lib/email/zohoImapConfigTramites';
 import { classifyInboundEmail } from '@/lib/vertex/vertexClient';
+import { classifyPendientesEmail } from '@/lib/vertex/pendientesClassifier';
+import { saveAiClassification, applyStatusIfConfident } from '@/lib/vertex/pendientesAiPersistence';
 import { processInboundEmail } from '@/lib/cases/caseEngine';
 import { logImapDebug } from '@/lib/debug/imapLogger';
 
@@ -65,9 +68,10 @@ export async function runIngestionCycle(): Promise<IngestionResult> {
       payload: { windowMinutes, maxMessages, folder },
     });
 
-    // 1. Conectar a IMAP
-    client = await createImapConnection();
-    console.log('[INGESTOR] IMAP connection established');
+    // 1. Conectar a IMAP (tramites@lideresenseguros.com)
+    const imapConfig = getZohoImapConfigTramites();
+    client = await createImapConnection(imapConfig);
+    console.log('[INGESTOR] IMAP connection established (tramites@)');
 
     await logImapDebug({
       stage: 'imap_connect',
@@ -211,7 +215,18 @@ async function processMessage(msg: EmailMessage): Promise<any> {
   // TODO: Implementar guardado en Supabase Storage si es necesario
   // Por ahora solo metadata
 
-  // 4. Clasificar con Vertex AI
+  // 4. Clasificar con Vertex AI (enhanced Pendientes classifier)
+  const pendAi = await classifyPendientesEmail({
+    subject: msg.subject,
+    body_text: msg.bodyTextNormalized,
+    from_email: msg.from?.email || '',
+    cc_emails: msg.cc.map(c => c.email),
+    attachments_summary: msg.attachments.map(a => `${a.filename} (${a.sizeBytes} bytes)`).join(', '),
+  });
+
+  console.log(`[INGESTOR] Pend AI: type=${pendAi.case_type} ramo=${pendAi.ramo} aseg=${pendAi.aseguradora} ticket_req=${pendAi.ticket_required} conf=${pendAi.confidence}`);
+
+  // Build base classifier result for backward compatibility with caseEngine
   const aiResult = await classifyInboundEmail({
     subject: msg.subject,
     body_text_normalized: msg.bodyTextNormalized,
@@ -220,30 +235,59 @@ async function processMessage(msg: EmailMessage): Promise<any> {
     attachments_summary: msg.attachments.map(a => `${a.filename} (${a.sizeBytes} bytes)`).join(', '),
   });
 
-  console.log(`[INGESTOR] AI classification: bucket=${aiResult.ramo_bucket}, confidence=${aiResult.confidence}`);
+  // Merge enhanced fields into base result
+  if (pendAi.confidence > 0) {
+    aiResult.ramo_bucket = pendAi.ramo_bucket;
+    aiResult.confidence = pendAi.confidence;
+    aiResult.broker_email_detected = pendAi.broker_email_detected || aiResult.broker_email_detected;
+  }
 
   await logImapDebug({
     messageId: msg.messageId,
     inboundEmailId: inboundEmail.id,
     stage: 'ai_classify',
     status: 'success',
-    message: 'Clasificación AI completada',
+    message: 'Clasificación AI completada (enhanced)',
     payload: {
       ramo_bucket: aiResult.ramo_bucket,
       confidence: aiResult.confidence,
-      missing_fields: aiResult.missing_fields,
-      broker_detected: aiResult.broker_email_detected,
+      pend_case_type: pendAi.case_type,
+      pend_ramo: pendAi.ramo,
+      pend_aseguradora: pendAi.aseguradora,
+      ticket_required: pendAi.ticket_required,
+      ticket_exception: pendAi.ticket_exception_reason,
+      suggested_status: pendAi.suggested_status,
+      status_confidence: pendAi.status_confidence,
+      policy_number: pendAi.policy_number,
+      attachments_detected: pendAi.attachments.detected,
+      attachments_missing: pendAi.attachments.missing_expected,
     },
   });
 
-  // 5. Crear/vincular caso
+  // 5. Crear/vincular caso (pass enhanced classification for ticket exceptions)
   const caseResult = await processInboundEmail({
     inboundEmailId: inboundEmail.id,
     aiClassification: aiResult,
     emailFrom: msg.from?.email || '',
     emailCc: msg.cc.map(c => c.email),
     emailSubject: msg.subject,
+    pendientesClassification: pendAi,
   });
+
+  // 5b. Save enhanced AI classification to pend_ai_classifications
+  const classId = await saveAiClassification({
+    caseId: caseResult.caseId || null,
+    messageId: msg.messageId,
+    result: pendAi,
+  });
+
+  // 5c. Auto-apply status if confidence >= 0.80 and case was created
+  if (caseResult.caseId && classId && pendAi.status_confidence >= 0.80) {
+    const autoResult = await applyStatusIfConfident(caseResult.caseId, classId, pendAi);
+    if (autoResult.applied) {
+      console.log(`[INGESTOR] Auto-applied status '${autoResult.newStatus}' to case ${caseResult.caseId}`);
+    }
+  }
 
   // 6. Actualizar estado de inbound_email
   const newStatus = caseResult.success ? 'linked' : 'error';
