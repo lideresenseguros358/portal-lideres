@@ -1,9 +1,9 @@
 /**
- * Página de Cotización - Contenido
+ * Página de Cotización - Contenido/Hogar (Wizard)
  */
 
 import { Suspense } from 'react';
-import FormContenido from '@/components/cotizadores/FormContenido';
+import ContenidoWizard from '@/components/cotizadores/ContenidoWizard';
 import LoadingSkeleton from '@/components/cotizadores/LoadingSkeleton';
 
 export const metadata = {
@@ -14,7 +14,7 @@ export const metadata = {
 export default function CotizarContenidoPage() {
   return (
     <Suspense fallback={<LoadingSkeleton />}>
-      <FormContenido />
+      <ContenidoWizard />
     </Suspense>
   );
 }
