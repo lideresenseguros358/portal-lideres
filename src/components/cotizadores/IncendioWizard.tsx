@@ -123,6 +123,22 @@ function StableInputField({ label, name, type = 'text', placeholder, required = 
 }
 
 // ═══════════════════════════════════════════════════════════════════
+// INPUT FIELD OUTSIDE COMPONENT (prevents remount on every keystroke)
+// ═══════════════════════════════════════════════════════════════════
+
+function WizardInputField({ name, data, errors, onUpdate, ...props }: any) {
+  return (
+    <StableInputField
+      name={name}
+      value={(data as any)[name] ?? ''}
+      onChange={(e: React.ChangeEvent<HTMLInputElement>) => onUpdate({ [name]: e.target.value })}
+      error={errors[name]}
+      {...props}
+    />
+  );
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════════════
 
@@ -411,13 +427,7 @@ export default function IncendioWizard() {
   // ═══════════════════════════════════════════════════════════════
 
   const InputField = ({ name, ...props }: any) => (
-    <StableInputField
-      name={name}
-      value={(data as any)[name]}
-      onChange={(e: React.ChangeEvent<HTMLInputElement>) => update({ [name]: e.target.value })}
-      error={errors[name]}
-      {...props}
-    />
+    <WizardInputField name={name} data={data} errors={errors} onUpdate={update} {...props} />
   );
 
   // ═══════════════════════════════════════════════════════════════
