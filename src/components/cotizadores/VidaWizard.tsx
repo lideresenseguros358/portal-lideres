@@ -1036,6 +1036,83 @@ export default function VidaWizard() {
       {/* Progress Bar */}
       <EmissionProgressBar currentStep={step} totalSteps={TOTAL_STEPS} />
 
+      {/* Step Breadcrumb */}
+      <div className="mb-6">
+        {/* Desktop */}
+        <div className="hidden sm:flex items-center justify-between">
+          {stepTitles.map((title, i) => {
+            const num = i + 1;
+            const isCompleted = num < step;
+            const isCurrent = num === step;
+            const isLast = num === TOTAL_STEPS;
+            return (
+              <div key={num} className="flex items-center flex-1">
+                <button
+                  type="button"
+                  onClick={() => goToStep(num)}
+                  disabled={num > step}
+                  className={`flex flex-col items-center gap-1.5 px-2 py-1.5 rounded-xl transition-all flex-1 ${
+                    isCurrent ? 'scale-105' : num > step ? 'opacity-40 cursor-not-allowed' : 'hover:bg-gray-50 cursor-pointer'
+                  }`}
+                >
+                  <div className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-sm transition-all shadow-sm ${
+                    isCurrent
+                      ? 'bg-gradient-to-br from-[#8AAA19] to-[#6d8814] text-white shadow-md scale-110'
+                      : isCompleted
+                      ? 'bg-green-500 text-white'
+                      : 'bg-gray-200 text-gray-500'
+                  }`}>
+                    {isCompleted ? (
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>
+                    ) : (
+                      <span>{stepIcons[i]}</span>
+                    )}
+                  </div>
+                  <span className={`text-[11px] font-semibold text-center leading-tight ${
+                    isCurrent ? 'text-[#8AAA19]' : isCompleted ? 'text-green-600' : 'text-gray-400'
+                  }`}>{title}</span>
+                </button>
+                {!isLast && (
+                  <div className={`flex-shrink-0 w-4 h-0.5 mx-1 rounded ${
+                    isCompleted ? 'bg-green-400' : 'bg-gray-200'
+                  }`} />
+                )}
+              </div>
+            );
+          })}
+        </div>
+        {/* Mobile */}
+        <div className="sm:hidden flex items-center gap-2 overflow-x-auto pb-1">
+          {stepTitles.map((title, i) => {
+            const num = i + 1;
+            const isCompleted = num < step;
+            const isCurrent = num === step;
+            return (
+              <button
+                key={num}
+                type="button"
+                onClick={() => goToStep(num)}
+                disabled={num > step}
+                className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-all ${
+                  isCurrent
+                    ? 'bg-[#8AAA19] text-white shadow-md'
+                    : isCompleted
+                    ? 'bg-green-50 text-green-700'
+                    : 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                }`}
+              >
+                <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${
+                  isCurrent ? 'bg-white/30' : isCompleted ? 'bg-green-200' : 'bg-gray-200'
+                }`}>
+                  {isCompleted ? '✓' : stepIcons[i]}
+                </span>
+                {title}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Step Card */}
       <div className="bg-white rounded-2xl shadow-lg border-2 border-gray-100 p-5 sm:p-7 mb-6">
         <div className="flex items-center gap-2 mb-5">
@@ -1054,40 +1131,36 @@ export default function VidaWizard() {
       </div>
 
       {/* Navigation */}
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex items-center gap-3 mt-2">
         {step > 1 ? (
           <button
             type="button"
             onClick={goBack}
-            className="flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors"
+            className="flex items-center justify-center gap-2 flex-1 sm:flex-none sm:px-8 py-4 rounded-2xl text-base font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 active:scale-95 transition-all"
           >
-            <FaArrowLeft size={12} /> Atrás
+            <FaArrowLeft size={14} /> Atrás
           </button>
-        ) : <div />}
+        ) : <div className="flex-1 sm:flex-none" />}
 
         {step < TOTAL_STEPS ? (
           <button
             type="button"
             onClick={goNext}
-            className="flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold text-white bg-[#8AAA19] hover:bg-[#6d8814] transition-colors shadow-lg"
+            className="flex items-center justify-center gap-2 flex-1 py-4 rounded-2xl text-base font-bold text-white bg-gradient-to-r from-[#8AAA19] to-[#6d8814] hover:from-[#7a9416] hover:to-[#5e7510] active:scale-95 transition-all shadow-lg"
           >
-            Siguiente <FaArrowRight size={12} />
+            Siguiente <FaArrowRight size={14} />
           </button>
         ) : (
           <button
             type="button"
             onClick={handleSubmit}
             disabled={submitting}
-            className="flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold text-white bg-[#8AAA19] hover:bg-[#6d8814] transition-colors shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center justify-center gap-2 flex-1 py-4 rounded-2xl text-base font-bold text-white bg-gradient-to-r from-[#8AAA19] to-[#6d8814] hover:from-[#7a9416] hover:to-[#5e7510] active:scale-95 transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {submitting ? (
-              <>
-                <FaSpinner className="animate-spin" size={14} /> Enviando...
-              </>
+              <><FaSpinner className="animate-spin" size={16} /> Enviando...</>
             ) : (
-              <>
-                Enviar solicitud <FaCheck size={12} />
-              </>
+              <><FaCheck size={14} /> Enviar solicitud</>
             )}
           </button>
         )}
