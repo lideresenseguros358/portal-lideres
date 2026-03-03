@@ -873,6 +873,15 @@ export default function ContenidoWizard() {
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6 sm:py-10" ref={formRef}>
+      {/* Back to Cotizadores */}
+      <button
+        type="button"
+        onClick={() => router.push('/cotizadores')}
+        className="flex items-center gap-2 text-sm font-semibold text-gray-500 hover:text-[#010139] transition-colors mb-4"
+      >
+        <FaArrowLeft size={12} /> Volver a Cotizadores
+      </button>
+
       <div className="mb-6 sm:mb-8">
         <h1 className="text-2xl sm:text-3xl font-bold text-[#010139] mb-1">Cotiza tu Seguro de Contenido/Hogar</h1>
         <p className="text-sm text-gray-500">Completa el formulario y recibirás tu cotización por correo en 24 horas.</p>

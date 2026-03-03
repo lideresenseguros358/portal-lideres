@@ -24,7 +24,7 @@ const policyTypes = [
     id: 'vida',
     title: 'Vida',
     description: 'Protección familiar garantizada',
-    badge: 'Termino',
+    badge: 'Termino y Ahorros',
     icon: FaHeart,
     href: '/cotizadores/vida',
     gradient: 'from-[#010139] to-[#020270]',

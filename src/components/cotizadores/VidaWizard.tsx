@@ -1023,6 +1023,15 @@ export default function VidaWizard() {
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6 sm:py-10" ref={formRef}>
+      {/* Back to Cotizadores */}
+      <button
+        type="button"
+        onClick={() => router.push('/cotizadores')}
+        className="flex items-center gap-2 text-sm font-semibold text-gray-500 hover:text-[#010139] transition-colors mb-4"
+      >
+        <FaArrowLeft size={12} /> Volver a Cotizadores
+      </button>
+
       {/* Header */}
       <div className="mb-6 sm:mb-8">
         <h1 className="text-2xl sm:text-3xl font-bold text-[#010139] mb-1">
