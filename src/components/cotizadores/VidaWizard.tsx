@@ -540,10 +540,6 @@ export default function VidaWizard() {
   // SHARED UI COMPONENTS
   // ═══════════════════════════════════════════════════════════════
 
-  const InputField = ({ name, ...props }: any) => (
-    <WizardInputField name={name} data={data} errors={errors} onUpdate={update} {...props} />
-  );
-
   const YesNoCards = ({ name, label, value }: { name: string; label: string; value: boolean | null }) => (
     <div>
       <label className="block text-sm font-semibold text-gray-700 mb-2">{label} <span className="text-red-500">*</span></label>
@@ -583,8 +579,8 @@ export default function VidaWizard() {
     return (
       <div className="space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <InputField label="Nombre" name="nombre" placeholder="Juan" />
-          <InputField label="Apellido" name="apellido" placeholder="Pérez" />
+          <WizardInputField label="Nombre" name="nombre" placeholder="Juan" data={data} errors={errors} onUpdate={update} />
+          <WizardInputField label="Apellido" name="apellido" placeholder="Pérez" data={data} errors={errors} onUpdate={update} />
         </div>
         <div>
           <label className="block text-sm font-semibold text-gray-700 mb-1.5">
@@ -604,9 +600,9 @@ export default function VidaWizard() {
           )}
           {errors.fechaNacimiento && <p className="text-red-500 text-xs mt-1 font-medium">{errors.fechaNacimiento}</p>}
         </div>
-        <InputField label="Celular" name="celular" type="tel" inputMode="tel" placeholder="+507 6000-0000" hint="Formato: +507 y número local" />
-        <InputField label="Correo electrónico" name="correo" type="email" inputMode="email" placeholder="correo@ejemplo.com" />
-        <InputField label="Nacionalidad" name="nacionalidad" placeholder="Panameña" />
+        <WizardInputField label="Celular" name="celular" type="tel" inputMode="tel" placeholder="+507 6000-0000" hint="Formato: +507 y número local" data={data} errors={errors} onUpdate={update} />
+        <WizardInputField label="Correo electrónico" name="correo" type="email" inputMode="email" placeholder="correo@ejemplo.com" data={data} errors={errors} onUpdate={update} />
+        <WizardInputField label="Nacionalidad" name="nacionalidad" placeholder="Panameña" data={data} errors={errors} onUpdate={update} />
       </div>
     );
   }
@@ -614,8 +610,8 @@ export default function VidaWizard() {
   function renderStep2() {
     return (
       <div className="space-y-4">
-        <InputField label="Ocupación actual" name="ocupacion" placeholder="Ingeniero Civil" />
-        <InputField label="¿Dónde trabaja?" name="lugarTrabajo" placeholder="Empresa ABC" />
+        <WizardInputField label="Ocupación actual" name="ocupacion" placeholder="Ingeniero Civil" data={data} errors={errors} onUpdate={update} />
+        <WizardInputField label="¿Dónde trabaja?" name="lugarTrabajo" placeholder="Empresa ABC" data={data} errors={errors} onUpdate={update} />
         <div>
           <label className="block text-sm font-semibold text-gray-700 mb-1.5">
             Describa sus funciones <span className="text-red-500">*</span>
@@ -740,7 +736,7 @@ export default function VidaWizard() {
         </div>
 
         {/* Dirección / Referencias */}
-        <InputField label="Dirección / referencias" name="direccionReferencias" placeholder="Calle principal, edificio azul, piso 3" required={false} />
+        <WizardInputField label="Dirección / referencias" name="direccionReferencias" placeholder="Calle principal, edificio azul, piso 3" required={false} data={data} errors={errors} onUpdate={update} />
       </div>
     );
   }
@@ -749,8 +745,8 @@ export default function VidaWizard() {
     return (
       <div className="space-y-5">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <InputField label="Altura (metros)" name="altura" type="number" inputMode="decimal" placeholder="1.75" hint="Ej: 1.75" step="0.01" min="0.5" max="2.5" />
-          <InputField label="Peso (libras)" name="peso" type="number" inputMode="numeric" placeholder="180" hint="Ej: 180" step="1" min="30" max="600" />
+          <WizardInputField label="Altura (metros)" name="altura" type="number" inputMode="decimal" placeholder="1.75" hint="Ej: 1.75" step="0.01" min="0.5" max="2.5" data={data} errors={errors} onUpdate={update} />
+          <WizardInputField label="Peso (libras)" name="peso" type="number" inputMode="numeric" placeholder="180" hint="Ej: 180" step="1" min="30" max="600" data={data} errors={errors} onUpdate={update} />
         </div>
 
         {/* Enfermedad */}
@@ -794,10 +790,11 @@ export default function VidaWizard() {
         )}
         {data.haFumadoAlgunaVez && data.fumaActualmente === false && (
           <div className="animate-fadeIn">
-            <InputField
+            <WizardInputField
               label="¿Cuándo fue la última vez que fumó?"
               name="ultimaVezFumo"
               placeholder="Ej: Hace 3 años"
+              data={data} errors={errors} onUpdate={update}
             />
           </div>
         )}
@@ -812,7 +809,7 @@ export default function VidaWizard() {
         <YesNoCards name="tieneSeguroVida" label="¿Tiene ya seguro de vida?" value={data.tieneSeguroVida} />
         {data.tieneSeguroVida && (
           <div className="animate-fadeIn space-y-4 bg-gray-50 rounded-xl p-4 border border-gray-100">
-            <InputField label="Compañía aseguradora" name="companiaSeguroActual" placeholder="ASSA, Mapfre, etc." />
+            <WizardInputField label="Compañía aseguradora" name="companiaSeguroActual" placeholder="ASSA, Mapfre, etc." data={data} errors={errors} onUpdate={update} />
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-1.5">
                 Suma asegurada actual (USD) <span className="text-red-500">*</span>
@@ -840,7 +837,7 @@ export default function VidaWizard() {
         <YesNoCards name="esCubrirHipoteca" label="¿La póliza es para cubrir una hipoteca?" value={data.esCubrirHipoteca} />
         {data.esCubrirHipoteca && (
           <div className="animate-fadeIn">
-            <InputField label="¿A cuántos años es la hipoteca?" name="aniosHipoteca" type="number" inputMode="numeric" placeholder="20" />
+            <WizardInputField label="¿A cuántos años es la hipoteca?" name="aniosHipoteca" type="number" inputMode="numeric" placeholder="20" data={data} errors={errors} onUpdate={update} />
           </div>
         )}
 

@@ -487,10 +487,6 @@ export default function ContenidoWizard() {
   // SHARED UI
   // ═══════════════════════════════════════════════════════════════
 
-  const InputField = ({ name, ...props }: any) => (
-    <WizardInputField name={name} data={data} errors={errors} onUpdate={update} {...props} />
-  );
-
   // ═══════════════════════════════════════════════════════════════
   // STEP RENDERERS
   // ═══════════════════════════════════════════════════════════════
@@ -499,8 +495,8 @@ export default function ContenidoWizard() {
     return (
       <div className="space-y-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <InputField label="Nombre" name="nombre" placeholder="Juan" />
-          <InputField label="Apellido" name="apellido" placeholder="Pérez" />
+          <WizardInputField label="Nombre" name="nombre" placeholder="Juan" data={data} errors={errors} onUpdate={update} />
+          <WizardInputField label="Apellido" name="apellido" placeholder="Pérez" data={data} errors={errors} onUpdate={update} />
         </div>
         <div>
           <label className="block text-sm font-semibold text-gray-700 mb-1.5">
@@ -518,8 +514,8 @@ export default function ContenidoWizard() {
           {edad > 0 && <p className="text-sm text-[#8AAA19] font-semibold mt-1">Edad: {edad} años</p>}
           {errors.fechaNacimiento && <p className="text-red-500 text-xs mt-1 font-medium">{errors.fechaNacimiento}</p>}
         </div>
-        <InputField label="Celular" name="celular" type="tel" inputMode="tel" placeholder="+507 6000-0000" hint="Formato: +507 y número local" />
-        <InputField label="Correo electrónico" name="correo" type="email" inputMode="email" placeholder="correo@ejemplo.com" />
+        <WizardInputField label="Celular" name="celular" type="tel" inputMode="tel" placeholder="+507 6000-0000" hint="Formato: +507 y número local" data={data} errors={errors} onUpdate={update} />
+        <WizardInputField label="Correo electrónico" name="correo" type="email" inputMode="email" placeholder="correo@ejemplo.com" data={data} errors={errors} onUpdate={update} />
       </div>
     );
   }
@@ -603,17 +599,17 @@ export default function ContenidoWizard() {
 
         {data.tipoVivienda === 'casa' && (
           <div className="animate-fadeIn space-y-4 bg-gray-50 rounded-xl p-4 border border-gray-100">
-            <InputField label="Calle" name="calle" placeholder="Calle principal" />
-            <InputField label="Número de casa" name="numeroCasa" placeholder="123" />
+            <WizardInputField label="Calle" name="calle" placeholder="Calle principal" data={data} errors={errors} onUpdate={update} />
+            <WizardInputField label="Número de casa" name="numeroCasa" placeholder="123" data={data} errors={errors} onUpdate={update} />
           </div>
         )}
 
         {data.tipoVivienda === 'apartamento' && (
           <div className="animate-fadeIn space-y-4 bg-gray-50 rounded-xl p-4 border border-gray-100">
-            <InputField label="Nombre del edificio" name="nombreEdificio" placeholder="Torre del Sol" />
+            <WizardInputField label="Nombre del edificio" name="nombreEdificio" placeholder="Torre del Sol" data={data} errors={errors} onUpdate={update} />
             <div className="grid grid-cols-2 gap-3">
-              <InputField label="Piso" name="piso" placeholder="15" />
-              <InputField label="N° de apartamento" name="numeroApto" placeholder="15A" />
+              <WizardInputField label="Piso" name="piso" placeholder="15" data={data} errors={errors} onUpdate={update} />
+              <WizardInputField label="N° de apartamento" name="numeroApto" placeholder="15A" data={data} errors={errors} onUpdate={update} />
             </div>
           </div>
         )}
