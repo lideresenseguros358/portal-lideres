@@ -104,11 +104,33 @@ export async function processInboundEmail(
       return 'SIN_CLASIFICAR';
     };
 
+    // Use pendientesClassification for richer data when available
+    const pend = input.pendientesClassification;
+    // Prefer pendientes ramo_bucket if confidence is decent (>= 0.5)
+    const effectiveBucket = (pend && pend.confidence >= 0.5 && pend.ramo_bucket !== 'desconocido')
+      ? pend.ramo_bucket
+      : input.aiClassification.ramo_bucket;
+
+    // Map case_type to management_type label
+    const caseTypeToManagement = (ct: string): string => {
+      const map: Record<string, string> = {
+        emision: 'Emisión',
+        reclamo: 'Reclamo',
+        modificacion: 'Modificación',
+        cambio_corredor: 'Cambio de Corredor',
+        cotizacion: 'Cotización',
+        cancelacion: 'Cancelación',
+        rehabilitacion: 'Rehabilitación',
+        otro: 'Otro',
+      };
+      return map[ct] || ct || '';
+    };
+
     const caseData: any = {
       broker_id: brokerId || null, // Permitir null para externos
       assigned_master_id: masterId,
-      section: isProvisional ? 'SIN_CLASIFICAR' : sectionFromBucket(input.aiClassification.ramo_bucket || ''),
-      ramo_bucket: input.aiClassification.ramo_bucket,
+      section: isProvisional ? 'SIN_CLASIFICAR' : sectionFromBucket(effectiveBucket || ''),
+      ramo_bucket: effectiveBucket || input.aiClassification.ramo_bucket,
       ramo_code: input.aiClassification.ramo_code,
       aseguradora_code: input.aiClassification.aseguradora_code,
       tramite_code: input.aiClassification.tramite_code,
@@ -121,6 +143,12 @@ export async function processInboundEmail(
         ? [input.aiClassification.case_special_flag]
         : [],
       detected_broker_email: input.aiClassification.broker_email_detected,
+      // Populate from AI-detected entities
+      client_name: pend?.detected_entities?.client_name || null,
+      national_id: pend?.detected_entities?.cedula || null,
+      management_type: pend ? caseTypeToManagement(pend.case_type) : null,
+      ctype: pend?.case_type || null,
+      policy_number: pend?.policy_number || null,
     };
 
     const { data: newCase, error: caseError } = await supabase

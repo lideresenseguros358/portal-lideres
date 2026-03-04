@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { action, email_id, case_id, classification_id, section, client_name, notes } = body;
+  const { action, email_id, case_id, classification_id, section, client_name, national_id, management_type, ctype, policy_number, notes } = body;
 
   if (!email_id || !action) {
     return NextResponse.json({ error: 'Missing email_id or action' }, { status: 400 });
@@ -95,16 +95,23 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Email not found' }, { status: 404 });
       }
 
+      const effectiveSection = section || 'SIN_CLASIFICAR';
+      const isClassified = effectiveSection !== 'SIN_CLASIFICAR';
+
       const { data: newCase, error: caseErr } = await supabase
         .from('cases')
         .insert({
-          section: section || 'SIN_CLASIFICAR',
+          section: effectiveSection,
           status: 'PENDIENTE_REVISION',
           client_name: client_name || null,
+          national_id: national_id || null,
+          management_type: management_type || null,
+          ctype: ctype || null,
+          policy_number: policy_number || null,
           notes: notes || `Correo de: ${email.from_email}\nAsunto: ${email.subject}`,
           canal: 'EMAIL',
-          estado_simple: 'Sin clasificar',
-          ramo_bucket: 'desconocido',
+          estado_simple: isClassified ? 'Nuevo' : 'Sin clasificar',
+          ramo_bucket: isClassified ? effectiveSection.toLowerCase() : 'desconocido',
           detected_broker_email: email.from_email,
           ai_classification: null,
           ai_confidence: 0,

@@ -529,8 +529,8 @@ export default function CasesMainClient({ userProfile, brokers, insurers, renova
         )}
       </div>
 
-      {/* Unclassified emails panel — visible on all section tabs for master */}
-      {activeTab !== 'RENOVACIONES_LISSA' && userProfile.role === 'master' && (
+      {/* Unclassified emails panel — only visible on SIN_CLASIFICAR tab for master */}
+      {activeTab === 'SIN_CLASIFICAR' && userProfile.role === 'master' && (
         <div className="mt-4">
           <UnclassifiedEmailsUI />
         </div>
