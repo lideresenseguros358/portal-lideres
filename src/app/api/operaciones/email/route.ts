@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { emailService } from '@/lib/email/emailService';
-import { buildPaymentLinkEmail, buildCaseNotificationEmail } from '@/lib/email/templates/OpsEmailTemplates';
+import { buildPaymentLinkEmail, buildCaseNotificationEmail, wrapInBrandedTemplate } from '@/lib/email/templates/OpsEmailTemplates';
 import { logActivity } from '@/lib/operaciones/logActivity';
 
 // ═══════════════════════════════════════════════════════
@@ -62,11 +62,13 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: 'to_email and subject required' }, { status: 400 });
         }
 
-        // Send via Zepto
+        // Wrap in branded template, then send via Zepto
+        const rawHtml = body_html || `<p>${(body_text || '').replace(/\n/g, '<br/>')}</p>`;
+        const brandedHtml = wrapInBrandedTemplate(rawHtml);
         const sendResult = await emailService.send({
           to: to_email,
           subject,
-          html: body_html || `<p>${(body_text || '').replace(/\n/g, '<br/>')}</p>`,
+          html: brandedHtml,
           text: body_text,
         });
 

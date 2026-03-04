@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { sendZeptoEmail, type ZeptoAttachment } from '@/lib/email/zepto-api';
+import { wrapInBrandedTemplate } from '@/lib/email/templates/OpsEmailTemplates';
 
 export const runtime = 'nodejs';
 
@@ -155,10 +156,11 @@ export async function POST(request: NextRequest) {
 
       // ── Actually send the email via ZeptoMail ──
       if (recipientList.length > 0 && recipientList[0]) {
-        // Build plain HTML wrapper if only body_text was provided
+        // Build body content from text or html
         const bodyContent = body_html
           || `<div style="font-family:Arial,sans-serif;font-size:14px;color:#333;white-space:pre-wrap;">${(body_text || '').replace(/\n/g, '<br/>')}</div>`;
-        const html = bodyContent + signatureHtml;
+        // Wrap in branded template (logo + footer + regulatory cintillo)
+        const html = wrapInBrandedTemplate(bodyContent + signatureHtml);
 
         for (const recipientEmail of recipientList) {
           const result = await sendZeptoEmail({

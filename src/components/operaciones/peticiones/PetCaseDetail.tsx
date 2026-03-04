@@ -25,6 +25,7 @@ import {
   FaTag,
   FaUser,
   FaPhone,
+  FaLink,
 } from 'react-icons/fa';
 import type { OpsCaseMessage } from '@/types/operaciones.types';
 import type { OpsCase, OpsCaseStatus } from '@/types/operaciones.types';
@@ -263,6 +264,7 @@ interface CaseDetailProps {
   onReassign: (masterId: string) => void;
   onShowHistory: () => void;
   onSendEmail: (body: string, template: string, attachments?: File[]) => void;
+  onSendPaymentLink: (paymentLink: string) => void;
   onViewQuote?: () => void;
   masters: MasterUser[];
 }
@@ -270,13 +272,15 @@ interface CaseDetailProps {
 export default function PetCaseDetail({
   caseData, loading, onBack, onRefresh,
   onStatusChange, onMarkLost, onConvertToEmission, onReassign,
-  onShowHistory, onSendEmail, onViewQuote, masters,
+  onShowHistory, onSendEmail, onSendPaymentLink, onViewQuote, masters,
 }: CaseDetailProps) {
   const [showReassign, setShowReassign] = useState(false);
   const [composerOpen, setComposerOpen] = useState(false);
   const [emailBody, setEmailBody] = useState('');
   const [emailTemplate, setEmailTemplate] = useState('');
   const [attachments, setAttachments] = useState<File[]>([]);
+  const [paymentLinkOpen, setPaymentLinkOpen] = useState(false);
+  const [paymentLink, setPaymentLink] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   if (!caseData) {
@@ -607,6 +611,48 @@ export default function PetCaseDetail({
             </div>
           )}
         </div>
+
+        {/* ── Payment Link ── */}
+        {!isClosed && (
+          <div className="border border-gray-100 rounded-lg overflow-hidden">
+            <button
+              onClick={() => setPaymentLinkOpen(!paymentLinkOpen)}
+              className="w-full flex items-center justify-between px-3 py-2 hover:bg-gray-50/80 cursor-pointer transition-colors duration-150"
+            >
+              <div className="flex items-center gap-2">
+                <FaLink className="text-gray-300 text-[10px]" />
+                <span className="text-xs font-medium text-gray-600">Enviar Enlace de Pago</span>
+              </div>
+              <FaChevronDown className={`text-gray-300 text-[10px] transition-transform duration-200 ${paymentLinkOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {paymentLinkOpen && (
+              <div className="p-3 space-y-3 border-t border-gray-50">
+                <p className="text-[10px] text-gray-400">Pega el enlace de pago. Se enviará al cliente con la plantilla de pago corporativa.</p>
+                <div className="flex items-center gap-2 text-[10px] text-gray-400">
+                  <span className="font-medium">Para:</span>
+                  <span>{c.client_email || 'Sin email del cliente'}</span>
+                </div>
+                <input
+                  type="url"
+                  value={paymentLink}
+                  onChange={(e) => setPaymentLink(e.target.value)}
+                  placeholder="https://pago.example.com/..."
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs outline-none focus:ring-1 focus:ring-[#010139]/10 focus:border-gray-300 transition-all duration-150"
+                />
+                <div className="flex items-center justify-end">
+                  <button
+                    onClick={() => { onSendPaymentLink(paymentLink.trim()); setPaymentLink(''); setPaymentLinkOpen(false); }}
+                    disabled={!paymentLink.trim() || !c.client_email}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#8AAA19] text-white rounded-lg text-xs font-semibold cursor-pointer hover:bg-[#7a9916] disabled:opacity-40 transition-colors duration-150"
+                  >
+                    <FaLink className="text-[10px]" /> Enviar Enlace de Pago
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Last email summary */}
         {c.last_email_summary && (

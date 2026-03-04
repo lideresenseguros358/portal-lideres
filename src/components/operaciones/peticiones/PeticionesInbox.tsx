@@ -326,6 +326,40 @@ export default function PeticionesInbox() {
     }
   };
 
+  const handleSendPaymentLink = async (paymentLinkUrl: string) => {
+    if (!selectedCase || !selectedCase.client_email) {
+      setToast({ message: 'No hay email del cliente para enviar', type: 'error' });
+      return;
+    }
+    try {
+      const res = await fetch('/api/operaciones/email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'send_payment_link',
+          to_email: selectedCase.client_email,
+          client_name: selectedCase.client_name || 'Cliente',
+          policy_number: selectedCase.policy_number,
+          insurer_name: selectedCase.insurer_name,
+          ticket: selectedCase.ticket,
+          case_type: 'peticion',
+          payment_link: paymentLinkUrl,
+          case_id: selectedCase.id,
+          user_id: null,
+        }),
+      });
+      const json = await res.json();
+      if (json.email_sent) {
+        setToast({ message: 'Enlace de pago enviado exitosamente', type: 'success' });
+        refresh();
+      } else {
+        setToast({ message: json.email_error || 'Error al enviar enlace', type: 'error' });
+      }
+    } catch (err) {
+      setToast({ message: 'Error al enviar enlace de pago', type: 'error' });
+    }
+  };
+
   const hasMore = cases.length < total;
 
   // ── Keyboard shortcuts ──
@@ -413,6 +447,7 @@ export default function PeticionesInbox() {
             onReassign={handleReassign}
             onShowHistory={() => setShowHistory(true)}
             onSendEmail={handleSendEmail}
+            onSendPaymentLink={handleSendPaymentLink}
             onViewQuote={() => setShowQuoteModal(true)}
             masters={masters}
           />

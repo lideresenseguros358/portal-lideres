@@ -2,34 +2,88 @@
  * Operaciones Email Templates
  * ===========================
  * HTML email templates for ops case communications.
- * - Payment link: sends a payment link to the client
- * - Case notification: generic case update notification
+ * Unified branded template with:
+ *   - Office logo + header
+ *   - Consistent styling
+ *   - Regulatory footer (Superintendencia de Seguros)
+ *
+ * Templates:
+ *   - Payment link: sends a payment link to the client
+ *   - Case notification: generic case update notification
+ *   - Generic branded wrapper (for raw emails too)
  */
 
 const BRAND_COLOR = '#010139';
 const ACCENT_COLOR = '#8AAA19';
+const LOGO_URL = 'https://portal.lideresenseguros.com/logo_alternativo.png';
+const PORTAL_URL = 'https://portal.lideresenseguros.com';
+const REGULATORY_TEXT = 'Regulado y Supervisado por la Superintendencia de Seguros y Reaseguros de Panamá — Licencia PJ750';
 
 const baseWrapper = (content: string) => `
 <!DOCTYPE html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="font-family:'Segoe UI',Arial,sans-serif;margin:0;padding:0;background:#f4f5f7;">
-  <div style="max-width:600px;margin:0 auto;background:white;border-radius:8px;overflow:hidden;margin-top:24px;margin-bottom:24px;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
-    <!-- Header -->
-    <div style="background:${BRAND_COLOR};padding:24px 32px;">
-      <h1 style="margin:0;color:white;font-size:20px;font-weight:700;">Líderes en Seguros</h1>
-      <p style="margin:4px 0 0;color:rgba(255,255,255,0.8);font-size:12px;">Gestión integral de seguros</p>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Líderes en Seguros</title>
+</head>
+<body style="font-family:'Segoe UI',Tahoma,Arial,sans-serif;margin:0;padding:0;background:#f0f2f5;-webkit-font-smoothing:antialiased;">
+  <!-- Outer wrapper -->
+  <div style="max-width:640px;margin:0 auto;padding:24px 16px;">
+
+    <!-- Main card -->
+    <div style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.08);">
+
+      <!-- Header with logo -->
+      <div style="background:linear-gradient(135deg, ${BRAND_COLOR} 0%, #020270 100%);padding:28px 32px;text-align:center;">
+        <a href="${PORTAL_URL}" target="_blank" style="text-decoration:none;">
+          <img src="${LOGO_URL}" alt="Líderes en Seguros" width="180" style="display:inline-block;max-width:180px;height:auto;" />
+        </a>
+      </div>
+
+      <!-- Accent bar -->
+      <div style="height:4px;background:linear-gradient(90deg, ${ACCENT_COLOR} 0%, #b8d430 100%);"></div>
+
+      <!-- Body content -->
+      <div style="padding:32px 32px 28px;">
+        ${content}
+      </div>
+
+      <!-- Signature / Closing -->
+      <div style="padding:0 32px 24px;">
+        <div style="border-top:1px solid #e5e7eb;padding-top:20px;">
+          <p style="margin:0;font-size:14px;color:#374151;font-weight:600;">Líderes en Seguros, S.A.</p>
+          <p style="margin:4px 0 0;font-size:13px;color:#6b7280;">Tel: 223-2373 | contacto@lideresenseguros.com</p>
+          <p style="margin:2px 0 0;font-size:13px;color:#6b7280;">
+            <a href="${PORTAL_URL}" style="color:${BRAND_COLOR};text-decoration:none;">portal.lideresenseguros.com</a>
+          </p>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div style="background:#f9fafb;padding:16px 32px;border-top:1px solid #e5e7eb;">
+        <p style="margin:0;font-size:11px;color:#9ca3af;text-align:center;line-height:1.5;">
+          Este correo fue generado automáticamente desde el portal de Líderes en Seguros.<br/>
+          Si tiene dudas, puede responder directamente a este correo.
+        </p>
+      </div>
+
     </div>
-    <!-- Body -->
-    <div style="padding:28px 32px;">
-      ${content}
+
+    <!-- Regulatory cintillo (outside card, below) -->
+    <div style="text-align:center;padding:16px 8px 4px;">
+      <p style="margin:0;font-size:10px;color:#9ca3af;line-height:1.4;letter-spacing:0.2px;">
+        ${REGULATORY_TEXT}
+      </p>
     </div>
-    <!-- Footer -->
-    <div style="padding:16px 32px;border-top:1px solid #e5e7eb;font-size:11px;color:#9ca3af;">
-      <p style="margin:0;">Líderes en Seguros, S.A. — Panamá</p>
-      <p style="margin:4px 0 0;">Este correo fue generado automáticamente. Si tiene dudas, responda a este correo.</p>
-    </div>
+
   </div>
 </body></html>`;
+
+/**
+ * Wraps any raw HTML content in the branded template.
+ * Use this for the generic send_email action so ALL outbound emails get branding.
+ */
+export function wrapInBrandedTemplate(bodyHtml: string): string {
+  return baseWrapper(bodyHtml);
+}
 
 // ════════════════════════════════════════════
 // PAYMENT LINK EMAIL
