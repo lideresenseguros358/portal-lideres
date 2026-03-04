@@ -679,8 +679,8 @@ export default function IncendioWizard() {
             </div>
           </div>
 
-          <div className="relative">
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-base sm:text-lg leading-none pointer-events-none select-none">$</span>
+          <div className={`flex items-center gap-2 px-4 py-4 border-2 rounded-xl transition-colors ${errors.valorBien ? 'border-red-400 bg-red-50' : 'border-[#8AAA19]/40 bg-white focus-within:border-[#8AAA19]'}`}>
+            <span className="flex-shrink-0 text-gray-400 font-bold text-base sm:text-lg select-none">$</span>
             <input
               type="text"
               inputMode="numeric"
@@ -688,9 +688,7 @@ export default function IncendioWizard() {
               onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ''); update({ valorBien: v }); }}
               placeholder="Valor de la estructura"
               onWheel={(e) => e.currentTarget.blur()}
-              className={`w-full pl-10 pr-4 py-4 border-2 rounded-xl text-lg font-bold focus:outline-none transition-colors appearance-none ${
-                errors.valorBien ? 'border-red-400 bg-red-50' : 'border-[#8AAA19]/40 bg-white focus:border-[#8AAA19]'
-              }`}
+              className="flex-1 min-w-0 p-0 border-0 bg-transparent text-lg font-bold focus:outline-none focus:ring-0 appearance-none"
             />
           </div>
           {errors.valorBien && <p className="text-red-500 text-xs mt-1.5 font-medium">{errors.valorBien}</p>}

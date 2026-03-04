@@ -836,8 +836,8 @@ export default function VidaWizard() {
           <label className="block text-sm font-semibold text-gray-700 mb-1.5">
             Salario mensual (USD) <span className="text-red-500">*</span>
           </label>
-          <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-semibold text-sm sm:text-base leading-none pointer-events-none select-none">$</span>
+          <div className={`flex items-center gap-2 px-3 py-3 border-2 rounded-xl transition-colors ${errors.salarioMensual ? 'border-red-400 bg-red-50 focus-within:border-red-500' : 'border-gray-200 bg-white focus-within:border-[#8AAA19]'}`}>
+            <span className="flex-shrink-0 text-gray-400 font-semibold text-sm sm:text-base select-none">$</span>
             <input
               type="text"
               inputMode="decimal"
@@ -845,9 +845,7 @@ export default function VidaWizard() {
               onChange={(e) => { const v = e.target.value.replace(/[^0-9.]/g, ''); update({ salarioMensual: v }); }}
               placeholder="1500"
               onWheel={(e) => e.currentTarget.blur()}
-              className={`w-full pl-8 pr-4 py-3 border-2 rounded-xl text-base focus:outline-none transition-colors appearance-none ${
-                errors.salarioMensual ? 'border-red-400 bg-red-50 focus:border-red-500' : 'border-gray-200 bg-white focus:border-[#8AAA19]'
-              }`}
+              className="flex-1 min-w-0 p-0 border-0 bg-transparent text-base focus:outline-none focus:ring-0 appearance-none"
             />
           </div>
           {errors.salarioMensual && <p className="text-red-500 text-xs mt-1 font-medium">{errors.salarioMensual}</p>}
@@ -1017,8 +1015,8 @@ export default function VidaWizard() {
               <label className="block text-sm font-semibold text-gray-700 mb-1.5">
                 Suma asegurada actual (USD) <span className="text-red-500">*</span>
               </label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-semibold text-sm sm:text-base leading-none pointer-events-none select-none">$</span>
+              <div className={`flex items-center gap-2 px-3 py-3 border-2 rounded-xl transition-colors ${errors.sumaAseguradaActual ? 'border-red-400 bg-red-50' : 'border-gray-200 bg-white focus-within:border-[#8AAA19]'}`}>
+                <span className="flex-shrink-0 text-gray-400 font-semibold text-sm sm:text-base select-none">$</span>
                 <input
                   type="text"
                   inputMode="numeric"
@@ -1026,9 +1024,7 @@ export default function VidaWizard() {
                   onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ''); update({ sumaAseguradaActual: v }); }}
                   placeholder="50000"
                   onWheel={(e) => e.currentTarget.blur()}
-                  className={`w-full pl-8 pr-4 py-3 border-2 rounded-xl text-base focus:outline-none transition-colors appearance-none ${
-                    errors.sumaAseguradaActual ? 'border-red-400 bg-red-50' : 'border-gray-200 focus:border-[#8AAA19]'
-                  }`}
+                  className="flex-1 min-w-0 p-0 border-0 bg-transparent text-base focus:outline-none focus:ring-0 appearance-none"
                 />
               </div>
               {errors.sumaAseguradaActual && <p className="text-red-500 text-xs mt-1 font-medium">{errors.sumaAseguradaActual}</p>}
@@ -1077,8 +1073,8 @@ export default function VidaWizard() {
             </div>
           )}
 
-          <div className="relative">
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-base sm:text-lg leading-none pointer-events-none select-none">$</span>
+          <div className={`flex items-center gap-2 px-4 py-4 border-2 rounded-xl transition-colors ${errors.sumaAseguradaSolicitada ? 'border-red-400 bg-red-50' : 'border-[#8AAA19]/40 bg-white focus-within:border-[#8AAA19]'}`}>
+            <span className="flex-shrink-0 text-gray-400 font-bold text-base sm:text-lg select-none">$</span>
             <input
               type="text"
               inputMode="numeric"
@@ -1086,9 +1082,7 @@ export default function VidaWizard() {
               onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ''); update({ sumaAseguradaSolicitada: v }); }}
               placeholder="Suma asegurada"
               onWheel={(e) => e.currentTarget.blur()}
-              className={`w-full pl-10 pr-4 py-4 border-2 rounded-xl text-lg font-bold focus:outline-none transition-colors appearance-none ${
-                errors.sumaAseguradaSolicitada ? 'border-red-400 bg-red-50' : 'border-[#8AAA19]/40 bg-white focus:border-[#8AAA19]'
-              }`}
+              className="flex-1 min-w-0 p-0 border-0 bg-transparent text-lg font-bold focus:outline-none focus:ring-0 appearance-none"
             />
           </div>
           {errors.sumaAseguradaSolicitada && <p className="text-red-500 text-xs mt-1.5 font-medium">{errors.sumaAseguradaSolicitada}</p>}

@@ -685,8 +685,8 @@ export default function ContenidoWizard() {
               </div>
             </div>
           </div>
-          <div className="relative">
-            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 font-bold text-base sm:text-lg leading-none pointer-events-none select-none">$</span>
+          <div className={`flex items-center gap-2 px-4 py-4 border-2 rounded-xl transition-colors ${errors.valorContenido ? 'border-red-400 bg-red-50' : 'border-[#8AAA19]/40 bg-white focus-within:border-[#8AAA19]'}`}>
+            <span className="flex-shrink-0 text-gray-400 font-bold text-base sm:text-lg select-none">$</span>
             <input
               type="text"
               inputMode="numeric"
@@ -694,7 +694,7 @@ export default function ContenidoWizard() {
               onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ''); update({ valorContenido: v }); }}
               placeholder="Valor estimado del contenido"
               onWheel={(e) => e.currentTarget.blur()}
-              className={`w-full pl-10 pr-4 py-4 border-2 rounded-xl text-lg font-bold focus:outline-none transition-colors appearance-none ${errors.valorContenido ? 'border-red-400 bg-red-50' : 'border-[#8AAA19]/40 bg-white focus:border-[#8AAA19]'}`}
+              className="flex-1 min-w-0 p-0 border-0 bg-transparent text-lg font-bold focus:outline-none focus:ring-0 appearance-none"
             />
           </div>
           {errors.valorContenido && <p className="text-red-500 text-xs mt-1.5 font-medium">{errors.valorContenido}</p>}
@@ -753,8 +753,8 @@ export default function ContenidoWizard() {
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 mb-1">Valor (USD) <span className="text-red-500">*</span></label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 font-semibold text-xs sm:text-sm leading-none pointer-events-none select-none">$</span>
+                  <div className={`flex items-center gap-1.5 px-3 py-2.5 border-2 rounded-lg transition-colors ${errors[`art_val_${i}`] ? 'border-red-400 bg-red-50' : 'border-gray-200 bg-white focus-within:border-[#8AAA19]'}`}>
+                    <span className="flex-shrink-0 text-gray-400 font-semibold text-xs sm:text-sm select-none">$</span>
                     <input
                       type="text"
                       inputMode="numeric"
@@ -762,7 +762,7 @@ export default function ContenidoWizard() {
                       onChange={(e) => { const v = e.target.value.replace(/[^0-9]/g, ''); updateArticulo(i, 'valor', v); }}
                       placeholder="2500"
                       onWheel={(e) => e.currentTarget.blur()}
-                      className={`w-full pl-7 pr-3 py-2.5 border-2 rounded-lg text-sm font-semibold focus:outline-none transition-colors appearance-none ${errors[`art_val_${i}`] ? 'border-red-400 bg-red-50' : 'border-gray-200 bg-white focus:border-[#8AAA19]'}`}
+                      className="flex-1 min-w-0 p-0 border-0 bg-transparent text-sm font-semibold focus:outline-none focus:ring-0 appearance-none"
                     />
                   </div>
                   {errors[`art_val_${i}`] && <p className="text-red-500 text-[11px] mt-0.5">{errors[`art_val_${i}`]}</p>}
