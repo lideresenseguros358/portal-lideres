@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
 import { getSupabaseAdmin } from '@/lib/supabase/admin';
 import { RENEWAL_STATUSES } from '@/types/operaciones.types';
 
@@ -7,6 +9,19 @@ import { RENEWAL_STATUSES } from '@/types/operaciones.types';
 // ═══════════════════════════════════════════════════════
 
 const CASE_TYPE = 'renovacion';
+
+async function getCurrentUserId(): Promise<string | null> {
+  try {
+    const cookieStore = await cookies();
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      { cookies: { getAll() { return cookieStore.getAll(); }, setAll() {} } } as any,
+    );
+    const { data: { user } } = await supabase.auth.getUser();
+    return user?.id || null;
+  } catch { return null; }
+}
 
 const VALID_TRANSITIONS: Record<string, string[]> = {
   pendiente: ['en_revision'],
@@ -127,23 +142,31 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: 'Motivo de cancelación obligatorio' }, { status: 400 });
         }
 
+        // Resolve current user from session
+        const currentUserId = await getCurrentUserId() || user_id || null;
+
         const update: Record<string, any> = { status };
         if (status === 'aplazado' && aplazado_until) update.aplazado_until = aplazado_until;
         if (status === 'cerrado_cancelado' && cancellation_reason) update.cancellation_reason = cancellation_reason;
         if (status === 'cerrado_renovado' || status === 'cerrado_cancelado') update.closed_at = new Date().toISOString();
+
+        // Auto-assign case to the user who changed status
+        if (currentUserId) {
+          update.assigned_master_id = currentUserId;
+        }
 
         const { error } = await supabase.from('ops_cases').update(update).eq('id', id).eq('case_type', CASE_TYPE);
         if (error) throw error;
 
         // Mark first response if transitioning to en_revision
         if (status === 'en_revision') {
-          await supabase.rpc('ops_mark_first_response', { p_case_id: id, p_user_id: user_id || null });
+          await supabase.rpc('ops_mark_first_response', { p_case_id: id, p_user_id: currentUserId });
         }
 
         // Log history
         await supabase.from('ops_case_history').insert({
           case_id: id,
-          changed_by: user_id || null,
+          changed_by: currentUserId,
           change_type: 'status_change',
           before_state: { status: beforeStatus },
           after_state: { status },
@@ -151,7 +174,7 @@ export async function POST(req: NextRequest) {
 
         // Log activity
         await supabase.from('ops_activity_log').insert({
-          user_id: user_id || null,
+          user_id: currentUserId,
           action_type: 'status_change',
           entity_type: 'case',
           entity_id: id,

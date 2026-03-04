@@ -350,6 +350,7 @@ export default function UrgenciasInbox() {
           subject: `[${selectedCase.ticket}] Urgencia — ${selectedCase.client_name || 'Cliente'}`,
           body_html: `<p>${body.replace(/\n/g, '<br/>')}</p>`,
           body_text: body,
+          case_id: selectedCase.id,
           user_id: null,
         }),
       });

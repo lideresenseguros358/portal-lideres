@@ -247,6 +247,11 @@ export async function POST(req: NextRequest) {
           update.closed_at = new Date().toISOString();
         }
 
+        // Auto-assign case to the user who changed status
+        if (userId) {
+          update.assigned_master_id = userId;
+        }
+
         const { error: updErr } = await supabase.from('ops_cases').update(update).eq('id', id);
         if (updErr) throw updErr;
 

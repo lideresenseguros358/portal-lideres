@@ -56,14 +56,41 @@ export async function POST(req: NextRequest) {
 
     switch (action) {
       case 'send_email': {
-        const { thread_id, to_email, subject, body_html, body_text, user_id } = body;
+        const { thread_id, to_email, subject, body_html, body_text, case_id, user_id } = body;
 
         if (!to_email || !subject) {
           return NextResponse.json({ error: 'to_email and subject required' }, { status: 400 });
         }
 
+        // Resolve assigned master from case for signature
+        let masterSignatureHtml = '';
+        if (case_id) {
+          try {
+            const { data: caseRow } = await supabase
+              .from('ops_cases')
+              .select('assigned_master_id')
+              .eq('id', case_id)
+              .single();
+            if (caseRow?.assigned_master_id) {
+              const { data: profile } = await supabase
+                .from('profiles')
+                .select('full_name, email')
+                .eq('id', caseRow.assigned_master_id)
+                .single();
+              if (profile) {
+                masterSignatureHtml = `
+<div style="margin-top:24px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:13px;color:#6b7280;font-family:Arial,sans-serif;">
+  <p style="margin:0 0 4px;"><strong style="color:#010139;">${profile.full_name || 'Equipo Líderes en Seguros'}</strong></p>
+  ${profile.email ? `<p style="margin:0 0 4px;"><a href="mailto:${profile.email}" style="color:#010139;text-decoration:none;">${profile.email}</a></p>` : ''}
+  <p style="margin:8px 0 0;font-size:12px;color:#9ca3af;">Líderes en Seguros, S.A. | portal.lideresenseguros.com</p>
+</div>`;
+              }
+            }
+          } catch { /* non-fatal */ }
+        }
+
         // Wrap in branded template, then send via Zepto
-        const rawHtml = body_html || `<p>${(body_text || '').replace(/\n/g, '<br/>')}</p>`;
+        const rawHtml = (body_html || `<p>${(body_text || '').replace(/\n/g, '<br/>')}</p>`) + masterSignatureHtml;
         const brandedHtml = wrapInBrandedTemplate(rawHtml);
         const sendResult = await emailService.send({
           to: to_email,

@@ -143,13 +143,37 @@ export async function POST(request: NextRequest) {
         console.log(`[API messages] ${zeptoAttachments.length} attachment(s): ${zeptoAttachments.map(a => a.name).join(', ')}`);
       }
 
+      // ── Resolve assigned master from case if not provided by frontend ──
+      let resolvedMasterName = master_name || null;
+      let resolvedMasterEmail = master_email || null;
+      if (!resolvedMasterName && !resolvedMasterEmail) {
+        try {
+          const { data: caseRow } = await (supabase as any)
+            .from('ops_cases')
+            .select('assigned_master_id')
+            .eq('id', outCaseId)
+            .single();
+          if (caseRow?.assigned_master_id) {
+            const { data: profile } = await (supabase as any)
+              .from('profiles')
+              .select('full_name, email')
+              .eq('id', caseRow.assigned_master_id)
+              .single();
+            if (profile) {
+              resolvedMasterName = profile.full_name || null;
+              resolvedMasterEmail = profile.email || null;
+            }
+          }
+        } catch { /* non-fatal */ }
+      }
+
       // ── Build master signature block ──
       let signatureHtml = '';
-      if (master_name || master_email) {
+      if (resolvedMasterName || resolvedMasterEmail) {
         signatureHtml = `
 <div style="margin-top:24px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:13px;color:#6b7280;font-family:Arial,sans-serif;">
-  <p style="margin:0 0 4px;"><strong style="color:#010139;">${master_name || 'Equipo Líderes en Seguros'}</strong></p>
-  ${master_email ? `<p style="margin:0 0 4px;"><a href="mailto:${master_email}" style="color:#010139;text-decoration:none;">${master_email}</a></p>` : ''}
+  <p style="margin:0 0 4px;"><strong style="color:#010139;">${resolvedMasterName || 'Equipo Líderes en Seguros'}</strong></p>
+  ${resolvedMasterEmail ? `<p style="margin:0 0 4px;"><a href="mailto:${resolvedMasterEmail}" style="color:#010139;text-decoration:none;">${resolvedMasterEmail}</a></p>` : ''}
   <p style="margin:8px 0 0;font-size:12px;color:#9ca3af;">Líderes en Seguros, S.A. | portal.lideresenseguros.com</p>
 </div>`;
       }
